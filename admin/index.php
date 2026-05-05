@@ -37,6 +37,7 @@ $firstName = trim((string) (explode(' ', $user['full_name'])[0] ?? ''));
             <a href="/quote-history/index.php">Quote History</a>
             <a href="/customer-manager/index.php">Customer Manager</a>
             <a href="/admin/pricing.php">Price Lists</a>
+            <a href="/admin/users.php">Users</a>
             <a href="/admin/settings.php">Settings</a>
         </nav>
 
