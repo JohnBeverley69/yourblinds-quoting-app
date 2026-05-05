@@ -94,4 +94,16 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ---------------------------------------------------------------------------
+// Composer autoloader — present once `composer install` has been run.
+// Pages that depend on a Composer package (e.g. PHPMailer) should defensively
+// check class_exists() before using it, so a fresh checkout without vendor/
+// fails with a clear error rather than a fatal.
+// ---------------------------------------------------------------------------
+$composerAutoload = APP_ROOT . '/vendor/autoload.php';
+if (is_readable($composerAutoload)) {
+    require_once $composerAutoload;
+}
+unset($composerAutoload);
+
 require_once APP_ROOT . '/db.php';

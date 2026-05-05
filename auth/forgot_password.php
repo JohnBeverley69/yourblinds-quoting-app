@@ -4,6 +4,9 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/middleware.php';
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
+
 $message = null;
 $error   = null;
 $email   = '';
@@ -16,7 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
-        // Look up an active user, but do NOT reveal whether the address is registered.
         $stmt = db()->prepare(
             'SELECT id FROM client_users WHERE email = ? AND active = 1 LIMIT 1'
         );
@@ -37,28 +39,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
             $resetUrl = "{$scheme}://{$host}/auth/reset_password.php?token={$token}";
 
+            // In dev, also log the URL so testing works without a real SMTP relay.
             $appEnv = strtolower(env('APP_ENV', 'production') ?? 'production');
             if (in_array($appEnv, ['development', 'dev', 'local'], true)) {
                 error_log("[YourBlinds] Password reset URL for {$email}: {$resetUrl}");
             }
 
-            $subject = 'Reset your YourBlinds password';
-            $body    = "Hello,\n\n"
-                     . "We received a request to reset the password for your YourBlinds account.\n\n"
-                     . "Use the link below to choose a new password (valid for 1 hour):\n"
-                     . $resetUrl . "\n\n"
-                     . "If you didn't ask to reset your password, you can safely ignore this email.\n\n"
-                     . "— YourBlinds";
-            $headers = "From: noreply@yourblinds.uk\r\n"
-                     . "Reply-To: noreply@yourblinds.uk\r\n"
-                     . "Content-Type: text/plain; charset=utf-8\r\n";
-
-            // TODO: replace mail() with PHPMailer/SMTP once email config is wired up.
-            @mail($email, $subject, $body, $headers);
+            send_password_reset_email($email, $resetUrl);
         }
 
         // Same response whether or not the email matched — prevents enumeration.
         $message = 'If that email is registered with us, a password reset link is on its way.';
+    }
+}
+
+/**
+ * Send the reset link via SMTP (PHPMailer). Failures are logged, never surfaced
+ * to the visitor — the public response stays uniform.
+ */
+function send_password_reset_email(string $to, string $resetUrl): void
+{
+    if (!class_exists(PHPMailer::class)) {
+        error_log('[YourBlinds] PHPMailer not installed — run "composer install" to enable email sending.');
+        return;
+    }
+
+    $host     = (string) (env('MAIL_HOST',      'mail.authsmtp.com') ?? 'mail.authsmtp.com');
+    $port     = (int)    (env('MAIL_PORT',      '2525')               ?? 2525);
+    $username = (string) (env('MAIL_USERNAME',  '')                   ?? '');
+    $password = (string) (env('MAIL_PASS',      '')                   ?? '');
+    $from     = (string) (env('MAIL_FROM',      'noreply@yourblinds.uk') ?? 'noreply@yourblinds.uk');
+    $fromName = (string) (env('MAIL_FROM_NAME', 'YourBlinds')         ?? 'YourBlinds');
+
+    if ($host === '' || $username === '' || $password === '') {
+        error_log('[YourBlinds] SMTP not configured — set MAIL_HOST / MAIL_USERNAME / MAIL_PASS in .env');
+        return;
+    }
+
+    $body = "Hello,\n\n"
+          . "We received a request to reset the password for your YourBlinds account.\n\n"
+          . "Use the link below to choose a new password (valid for 1 hour):\n"
+          . $resetUrl . "\n\n"
+          . "If you didn't ask to reset your password, you can safely ignore this email.\n\n"
+          . "— YourBlinds";
+
+    try {
+        $mailer = new PHPMailer(true);
+        $mailer->isSMTP();
+        $mailer->Host       = $host;
+        $mailer->Port       = $port;
+        $mailer->SMTPAuth   = true;
+        $mailer->Username   = $username;
+        $mailer->Password   = $password;
+        // STARTTLS works on the AuthSMTP submission ports (2525/587).
+        // For port 465 use PHPMailer::ENCRYPTION_SMTPS.
+        $mailer->SMTPSecure = $port === 465
+            ? PHPMailer::ENCRYPTION_SMTPS
+            : PHPMailer::ENCRYPTION_STARTTLS;
+        $mailer->CharSet    = 'UTF-8';
+        $mailer->Timeout    = 10;
+
+        $mailer->setFrom($from, $fromName);
+        $mailer->addAddress($to);
+        $mailer->addReplyTo($from, $fromName);
+
+        $mailer->Subject = 'Reset your YourBlinds password';
+        $mailer->Body    = $body;
+
+        $mailer->send();
+    } catch (PHPMailerException $e) {
+        error_log('[YourBlinds] PHPMailer error: ' . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('[YourBlinds] Email send failed: ' . $e->getMessage());
     }
 }
 ?><!doctype html>
