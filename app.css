@@ -345,6 +345,89 @@ a { color: #2563eb; }
 .alert-info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
 
 /* ===========================================================================
+   Filter tabs (status filtering on list pages)
+   =========================================================================== */
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #e5e7eb;
+}
+.tabs .tab {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+}
+.tabs .tab:hover { color: #111827; }
+.tabs .tab.active {
+    color: #1f3b5b;
+    font-weight: 600;
+    border-bottom-color: #1f3b5b;
+}
+.tabs .tab-count {
+    opacity: 0.6;
+    font-weight: 500;
+    margin-left: 0.25rem;
+}
+
+/* ===========================================================================
+   Detail / definition layouts (used on quote view pages)
+   =========================================================================== */
+.detail-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 0.5rem;
+}
+.detail-cols h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+}
+.detail-cols dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 0.25rem 1rem;
+    font-size: 0.9375rem;
+}
+.detail-cols dt {
+    color: #6b7280;
+    font-weight: 500;
+}
+.detail-cols dd { margin: 0; color: #111827; }
+.detail-cols dd.address-line { white-space: pre-line; }
+
+@media (max-width: 600px) {
+    .detail-cols { grid-template-columns: 1fr; gap: 1.25rem; }
+    .detail-cols dl { grid-template-columns: 100px 1fr; }
+}
+
+.totals-row td {
+    font-weight: 600;
+    background: #f9fafb;
+}
+.totals-row td.label {
+    text-align: right;
+    color: #6b7280;
+    font-weight: 500;
+}
+.totals-row.grand td {
+    font-size: 1.0625rem;
+    color: #111827;
+}
+
+.pre-line { white-space: pre-line; }
+
+/* ===========================================================================
    "Coming soon" placeholder
    =========================================================================== */
 .placeholder {
