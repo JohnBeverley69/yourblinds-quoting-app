@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# --- Claude Code local state ---
+.claude/
+
 # --- Local-only data ---
 # Production / legacy DB dumps live locally, never in source control
 database/live_dump*.sql

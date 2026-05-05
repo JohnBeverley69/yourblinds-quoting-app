@@ -1,0 +1,134 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../bootstrap.php';
+require __DIR__ . '/middleware.php';
+
+// Already logged in? Bounce straight to the dashboard.
+if (is_logged_in()) {
+    redirect_after_login();
+}
+
+$error      = null;
+$identifier = '';
+$next       = (string) ($_GET['next'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+
+    $identifier = trim((string) ($_POST['identifier'] ?? ''));
+    $password   = (string) ($_POST['password'] ?? '');
+    $next       = (string) ($_POST['next'] ?? '');
+    $ip         = client_ip();
+
+    // Rate limit BEFORE we touch the DB — defends against enumeration timing.
+    if (rate_limited($ip)) {
+        $error = 'Too many failed attempts. Please wait a few minutes and try again.';
+    } elseif ($identifier === '' || $password === '') {
+        $error = 'Please enter your username or email and password.';
+    } else {
+        $stmt = db()->prepare(
+            'SELECT u.id, u.client_id, u.full_name, u.password_hash,
+                    u.role, u.active,
+                    c.company_name
+               FROM client_users u
+               JOIN clients c ON c.id = u.client_id
+              WHERE (u.email = :id OR u.username = :id)
+              LIMIT 1'
+        );
+        $stmt->execute(['id' => $identifier]);
+        $user = $stmt->fetch();
+
+        $valid = $user
+              && (int) $user['active'] === 1
+              && password_verify($password, (string) $user['password_hash']);
+
+        record_login_attempt($ip, $identifier, $valid);
+
+        if ($valid) {
+            // Session fixation defence: regenerate ID at the privilege boundary.
+            session_regenerate_id(true);
+
+            $_SESSION['user_id']      = (int) $user['id'];
+            $_SESSION['client_id']    = (int) $user['client_id'];
+            $_SESSION['role']         = (string) $user['role'];
+            $_SESSION['company_name'] = (string) $user['company_name'];
+            $_SESSION['full_name']    = (string) $user['full_name'];
+
+            // Best-effort last-login update; don't fail login if this errors.
+            try {
+                db()->prepare('UPDATE client_users SET last_login_at = NOW() WHERE id = ?')
+                    ->execute([$user['id']]);
+            } catch (Throwable $e) {
+                error_log('last_login_at update failed: ' . $e->getMessage());
+            }
+
+            redirect_after_login();
+        } else {
+            // Generic message — do not reveal which of identifier / password was wrong.
+            $error = 'Invalid username/email or password.';
+        }
+    }
+}
+?><!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in &middot; YourBlinds</title>
+    <link rel="stylesheet" href="/auth/auth.css">
+</head>
+<body>
+    <main class="auth-card" role="main">
+        <div class="auth-brand">
+            <span class="auth-brand-mark">Your<span class="accent">Blinds</span></span>
+            <span class="auth-brand-tag">Trade Quoting Portal</span>
+        </div>
+
+        <h1>Sign in to your account</h1>
+        <p class="auth-subtitle">Enter your credentials to continue.</p>
+
+        <?php if ($error !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e($error) ?></div>
+        <?php endif; ?>
+
+        <form method="post" action="/auth/login.php" novalidate autocomplete="on">
+            <?= csrf_field() ?>
+            <?php if ($next !== ''): ?>
+                <input type="hidden" name="next" value="<?= e($next) ?>">
+            <?php endif; ?>
+
+            <div class="field">
+                <label for="identifier">Username or email</label>
+                <input
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    autocomplete="username"
+                    autofocus
+                    required
+                    value="<?= e($identifier) ?>">
+            </div>
+
+            <div class="field">
+                <div class="field-row">
+                    <label for="password">Password</label>
+                    <a href="/auth/forgot_password.php">Forgot?</a>
+                </div>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required>
+            </div>
+
+            <button type="submit">Sign in</button>
+        </form>
+
+        <p class="auth-meta">
+            &copy; <?= date('Y') ?> YourBlinds. All rights reserved.
+        </p>
+    </main>
+</body>
+</html>

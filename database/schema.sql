@@ -29,6 +29,8 @@ DROP TABLE IF EXISTS price_tables;
 DROP TABLE IF EXISTS vertical_fabrics;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS product_groups;
+DROP TABLE IF EXISTS password_resets;
+DROP TABLE IF EXISTS login_attempts;
 DROP TABLE IF EXISTS client_settings;
 DROP TABLE IF EXISTS client_users;
 DROP TABLE IF EXISTS clients;
@@ -107,6 +109,50 @@ CREATE TABLE client_settings (
     UNIQUE KEY uniq_client_settings_client (client_id),
     CONSTRAINT fk_client_settings_client
         FOREIGN KEY (client_id) REFERENCES clients(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- AUTH OPERATIONAL TABLES
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- login_attempts
+-- One row per login attempt (success or fail). Used for IP rate limiting:
+--   "no more than N failed attempts from this IP within the last M seconds".
+-- Cleaned up periodically via cron / scheduled DELETE.
+-- ---------------------------------------------------------------------------
+CREATE TABLE login_attempts (
+    id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    ip_address  VARCHAR(45)     NOT NULL,
+    identifier  VARCHAR(190)        NULL,
+    successful  TINYINT(1)      NOT NULL DEFAULT 0,
+    user_agent  VARCHAR(255)        NULL,
+    created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_login_attempts_ip_time (ip_address, created_at),
+    KEY idx_login_attempts_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- password_resets
+-- One-time tokens for password reset. The plaintext token is sent via email;
+-- only the SHA-256 hash is stored here, so a DB read does not yield usable
+-- tokens. Tokens expire after 1 hour and are single-use.
+-- ---------------------------------------------------------------------------
+CREATE TABLE password_resets (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED NOT NULL,
+    token_hash  CHAR(64)     NOT NULL,
+    expires_at  DATETIME     NOT NULL,
+    used_at     DATETIME         NULL,
+    created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uniq_password_resets_token (token_hash),
+    KEY idx_password_resets_user (user_id),
+    KEY idx_password_resets_expires (expires_at),
+    CONSTRAINT fk_password_resets_user
+        FOREIGN KEY (user_id) REFERENCES client_users(id)
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
