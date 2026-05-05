@@ -16,23 +16,69 @@
 --   8. Live DB dump still pending — adjust column types if it disagrees
 -- =============================================================================
 
-SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
+-- ---------------------------------------------------------------------------
+-- Safe to run on a live database that may already contain these tables.
+-- FK checks are disabled at the very top so DROPs in any order succeed,
+-- and re-enabled at the very bottom once everything is rebuilt.
+--
+-- The DROP order below is ALSO valid without FK disabling: every table is
+-- dropped after every table that references it (i.e. children before
+-- parents). The two safety mechanisms are belt-and-braces.
+--
+-- Dependency map (child  ->  parents it FKs to):
+--   quote_items      -> quotes, products, price_tables, price_table_rows, vertical_fabrics
+--   quotes           -> clients, client_users, customers
+--   customers        -> clients
+--   client_markups   -> clients, products
+--   client_discounts -> clients, products
+--   price_table_rows -> price_tables
+--   price_tables     -> clients, products
+--   vertical_fabrics -> clients
+--   products         -> clients, product_groups
+--   product_groups   -> clients
+--   password_resets  -> client_users
+--   login_attempts   -> (none)
+--   client_settings  -> clients
+--   client_users     -> clients
+--   clients          -> (root)
+-- ---------------------------------------------------------------------------
 
+SET FOREIGN_KEY_CHECKS = 0;
+SET NAMES utf8mb4;
+
+-- Leaves first
 DROP TABLE IF EXISTS quote_items;
+
+-- Tables only referenced by quote_items
 DROP TABLE IF EXISTS quotes;
+DROP TABLE IF EXISTS price_table_rows;
+DROP TABLE IF EXISTS vertical_fabrics;
+
+-- customers was referenced by quotes
 DROP TABLE IF EXISTS customers;
+
+-- per-(client, product) leaves
 DROP TABLE IF EXISTS client_markups;
 DROP TABLE IF EXISTS client_discounts;
-DROP TABLE IF EXISTS price_table_rows;
+
+-- price_tables was referenced by price_table_rows + quote_items
 DROP TABLE IF EXISTS price_tables;
-DROP TABLE IF EXISTS vertical_fabrics;
+
+-- products was referenced by client_markups, client_discounts, price_tables, quote_items
 DROP TABLE IF EXISTS products;
+
+-- product_groups was referenced by products
 DROP TABLE IF EXISTS product_groups;
+
+-- auth operational tables
 DROP TABLE IF EXISTS password_resets;
 DROP TABLE IF EXISTS login_attempts;
+
+-- client-owned config / users (referenced by quotes, password_resets — both gone)
 DROP TABLE IF EXISTS client_settings;
 DROP TABLE IF EXISTS client_users;
+
+-- root parent — drop last
 DROP TABLE IF EXISTS clients;
 
 -- ===========================================================================
