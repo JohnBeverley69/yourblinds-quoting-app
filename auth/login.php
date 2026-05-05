@@ -27,16 +27,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($identifier === '' || $password === '') {
         $error = 'Please enter your username or email and password.';
     } else {
+        // Two positional placeholders — MySQL native prepares (EMULATE_PREPARES=false)
+        // require one slot per occurrence, so the same value is bound twice.
         $stmt = db()->prepare(
             'SELECT u.id, u.client_id, u.full_name, u.password_hash,
                     u.role, u.active,
                     c.company_name
                FROM client_users u
                JOIN clients c ON c.id = u.client_id
-              WHERE (u.email = :id OR u.username = :id)
+              WHERE u.email = ? OR u.username = ?
               LIMIT 1'
         );
-        $stmt->execute(['id' => $identifier]);
+        $stmt->execute([$identifier, $identifier]);
         $user = $stmt->fetch();
 
         $valid = $user

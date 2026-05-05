@@ -56,10 +56,10 @@ INSERT INTO client_users (id, client_id, username, full_name, first_name, last_n
                           can_view_all_customer_jobs, can_view_costs, active) VALUES
 (1, 1, 'bristol',   'Helen Carter',   'Helen',  'Carter',
  'helen@bristolblinds.co.uk',
- '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 1, 1, 1, 1, 1),
+ '$2y$10$MYUrovlB4ScyT1J6UbbxMuBo.kWp9r914ygbw9oLvzZUWAwtCRF9S', 'admin', 1, 1, 1, 1, 1),
 (2, 2, 'yorkshire', 'Andrew Pickering','Andrew','Pickering',
  'andrew@yorkshirewindows.co.uk',
- '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 1, 1, 1, 1, 1);
+ '$2y$10$MYUrovlB4ScyT1J6UbbxMuBo.kWp9r914ygbw9oLvzZUWAwtCRF9S', 'admin', 1, 1, 1, 1, 1);
 
 -- ---------------------------------------------------------------------------
 -- Client settings
