@@ -1,0 +1,38 @@
+# --- Secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- Local-only data ---
+# Production / legacy DB dumps live locally, never in source control
+database/live_dump*.sql
+database/*_dump*.sql
+database/*.dump
+
+# --- Dependencies ---
+/vendor/
+/node_modules/
+
+# --- Build / cache ---
+/cache/
+/tmp/
+*.log
+
+# --- User uploads (runtime data, not source) ---
+/uploads/
+/public/uploads/
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Composer ---
+composer.phar
