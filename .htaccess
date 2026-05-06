@@ -1,0 +1,23 @@
+# Block direct access to .env and .env.example (and any .env* variants)
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+# Block direct access to other sensitive dotfiles and config files
+<FilesMatch "^(\.htaccess|\.gitignore|\.gitattributes|composer\.json|composer\.lock|package\.json|package-lock\.json|yarn\.lock|README\.md|CHANGELOG\.md)$">
+    Require all denied
+</FilesMatch>
+
+# Block direct access to .sql files
+<FilesMatch "\.sql$">
+    Require all denied
+</FilesMatch>
+
+# Block direct access to the database folder
+RedirectMatch 403 ^/database(/|$)
+
+# Block direct access to the vendor folder
+RedirectMatch 403 ^/vendor(/|$)
+
+# Block direct access to the .git folder
+RedirectMatch 403 ^/\.git(/|$)
