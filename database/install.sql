@@ -13,6 +13,7 @@ SET NAMES utf8mb4;
 -- ---------------------------------------------------------------------------
 DROP TABLE IF EXISTS login_attempts;
 DROP TABLE IF EXISTS password_resets;
+DROP TABLE IF EXISTS appointments;
 DROP TABLE IF EXISTS quote_items;
 DROP TABLE IF EXISTS quotes;
 DROP TABLE IF EXISTS client_markups;
@@ -80,6 +81,12 @@ CREATE TABLE client_users (
     can_view_costs              TINYINT(1)   NOT NULL DEFAULT 0,
     active                      TINYINT(1)   NOT NULL DEFAULT 1,
     last_login_at               DATETIME         NULL,
+    -- Home address: starting point for route planning between appointments.
+    home_address1               VARCHAR(150)     NULL,
+    home_address2               VARCHAR(150)     NULL,
+    home_town                   VARCHAR(100)     NULL,
+    home_county                 VARCHAR(100)     NULL,
+    home_postcode               VARCHAR(20)      NULL,
     created_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -405,6 +412,51 @@ CREATE TABLE quote_items (
         ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT fk_quote_items_vertical_fabric
         FOREIGN KEY (vertical_fabric_id) REFERENCES vertical_fabrics(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- APPOINTMENTS  (calendar bookings: surveys, fittings, etc.)
+-- ===========================================================================
+
+CREATE TABLE appointments (
+    id                          INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    client_id                   INT UNSIGNED  NOT NULL,
+    client_user_id              INT UNSIGNED      NULL,
+    customer_id                 INT UNSIGNED      NULL,
+    title                       VARCHAR(150)  NOT NULL,
+    appointment_date            DATE          NOT NULL,
+    appointment_time            TIME          NOT NULL,
+    duration_minutes            SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+    installation_address1       VARCHAR(150)      NULL,
+    installation_address2       VARCHAR(150)      NULL,
+    installation_town           VARCHAR(100)      NULL,
+    installation_county         VARCHAR(100)      NULL,
+    installation_postcode       VARCHAR(20)       NULL,
+    different_billing_address   TINYINT(1)    NOT NULL DEFAULT 0,
+    billing_address1            VARCHAR(150)      NULL,
+    billing_address2            VARCHAR(150)      NULL,
+    billing_town                VARCHAR(100)      NULL,
+    billing_county              VARCHAR(100)      NULL,
+    billing_postcode            VARCHAR(20)       NULL,
+    notes                       TEXT              NULL,
+    status                      ENUM('booked','completed','cancelled','no_show')
+                                              NOT NULL DEFAULT 'booked',
+    created_at                  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_appointments_client_date (client_id, appointment_date),
+    KEY idx_appointments_client_status (client_id, status),
+    KEY idx_appointments_client_user (client_user_id),
+    KEY idx_appointments_customer (customer_id),
+    CONSTRAINT fk_appointments_client
+        FOREIGN KEY (client_id) REFERENCES clients(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_appointments_client_user
+        FOREIGN KEY (client_user_id) REFERENCES client_users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_appointments_customer
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
         ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

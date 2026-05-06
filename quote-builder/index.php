@@ -33,6 +33,7 @@ $isAdmin   = $user['role'] === 'admin';
         </div>
 
         <nav class="app-sidebar-nav">
+            <a href="/calendar/index.php">Calendar</a>
             <a href="/quote-builder/index.php" class="active">Dashboard</a>
             <a href="/quote-builder/new.php">New Quote</a>
             <a href="/quote-history/index.php">Quote History</a>

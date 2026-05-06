@@ -32,6 +32,7 @@ $firstName = trim((string) (explode(' ', $user['full_name'])[0] ?? ''));
         </div>
 
         <nav class="app-sidebar-nav">
+            <a href="/calendar/index.php">Calendar</a>
             <a href="/admin/index.php" class="active">Dashboard</a>
             <a href="/quote-builder/index.php">Quote Builder</a>
             <a href="/quote-history/index.php">Quote History</a>

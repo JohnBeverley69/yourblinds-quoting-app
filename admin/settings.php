@@ -128,6 +128,7 @@ $settings = $settingsStmt->fetch() ?: [
             <div class="app-sidebar-user-meta"><?= e($user['company_name']) ?> &middot; <?= e($user['role']) ?></div>
         </div>
         <nav class="app-sidebar-nav">
+            <a href="/calendar/index.php">Calendar</a>
             <a href="/admin/index.php">Dashboard</a>
             <a href="/quote-builder/index.php">Quote Builder</a>
             <a href="/quote-history/index.php">Quote History</a>

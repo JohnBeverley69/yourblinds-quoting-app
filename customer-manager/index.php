@@ -69,6 +69,7 @@ $dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
             </div>
         </div>
         <nav class="app-sidebar-nav">
+            <a href="/calendar/index.php">Calendar</a>
             <a href="<?= e($dashHref) ?>">Dashboard</a>
             <a href="/quote-builder/new.php">New Quote</a>
             <a href="/quote-history/index.php">Quote History</a>

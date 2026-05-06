@@ -143,8 +143,6 @@ function redirect_after_login(): void
         header('Location: ' . $next);
         exit;
     }
-    $role   = $_SESSION['role'] ?? '';
-    $target = $role === 'admin' ? '/admin/index.php' : '/quote-builder/index.php';
-    header('Location: ' . $target);
+    header('Location: /calendar/index.php');
     exit;
 }
