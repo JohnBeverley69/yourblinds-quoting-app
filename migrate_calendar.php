@@ -15,12 +15,14 @@ declare(strict_types=1);
  * checks INFORMATION_SCHEMA before each ALTER. It works on MySQL 5.7+ and 8.x.
  */
 
-require __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/bootstrap.php';
 
 if (PHP_SAPI !== 'cli') {
-    require __DIR__ . '/../auth/middleware.php';
+    require_once __DIR__ . '/auth/middleware.php';
     requireAdmin();
-    header('Content-Type: text/plain; charset=utf-8');
+    if (!headers_sent()) {
+        header('Content-Type: text/plain; charset=utf-8');
+    }
 }
 
 $log = static function (string $msg): void {
