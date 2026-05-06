@@ -60,6 +60,12 @@ function env(string $key, ?string $default = null): ?string
 }
 
 // ---------------------------------------------------------------------------
+// Third-party API keys exposed as constants for readability at call sites.
+// Empty string when unset so consumers can branch on `=== ''` rather than null.
+// ---------------------------------------------------------------------------
+define('GOOGLE_MAPS_API_KEY', (string) env('GOOGLE_MAPS_API_KEY', ''));
+
+// ---------------------------------------------------------------------------
 // Timezone & error reporting
 // ---------------------------------------------------------------------------
 date_default_timezone_set(env('APP_TIMEZONE', 'Europe/London') ?? 'Europe/London');
