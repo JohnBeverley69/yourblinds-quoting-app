@@ -450,51 +450,66 @@ a { color: #2563eb; }
 }
 
 /* ===========================================================================
-   Mobile — sidebar collapses to a top bar with horizontal nav
+   Mobile navigation drawer
+   On phones/tablets the sidebar becomes a slide-in drawer behind a gear
+   button (top-right). Pure CSS via the checkbox-toggle pattern — no JS.
    =========================================================================== */
+.nav-toggle-input { display: none; }
+.nav-fab,
+.nav-close,
+.nav-backdrop { display: none; }
+
 @media (max-width: 768px) {
     .app-shell { flex-direction: column; min-height: auto; }
+
     .app-sidebar {
-        width: 100%;
-        flex-direction: row;
-        flex-wrap: wrap;
+        position: fixed;
+        top: 0;
+        right: 0;
+        transform: translateX(100%);
+        width: min(280px, 85vw);
+        height: 100vh;
+        padding: 0;
+        transition: transform 0.25s ease;
+        z-index: 1001;
+        overflow-y: auto;
+    }
+    .nav-toggle-input:checked ~ .app-sidebar {
+        transform: translateX(0);
+    }
+
+    .nav-fab,
+    .nav-close {
+        position: fixed;
+        top: 0.625rem;
+        right: 0.625rem;
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        background: #1f3b5b;
+        color: #fff;
+        cursor: pointer;
+        z-index: 1002;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         align-items: center;
-        padding: 0;
+        justify-content: center;
+        border: 0;
     }
-    .app-sidebar-brand {
-        border-bottom: 0;
-        padding: 0.875rem 1rem;
-        flex: 1;
-        min-width: 0;
+    .nav-fab { display: inline-flex; }
+    .nav-fab:hover,
+    .nav-close:hover { background: #16294a; }
+    .nav-toggle-input:checked ~ .nav-fab { display: none; }
+    .nav-toggle-input:checked ~ .nav-close { display: inline-flex; }
+
+    .nav-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 1000;
     }
-    .app-brand-tag { display: none; }
-    .app-sidebar-user { display: none; }
-    .app-sidebar-foot {
-        order: 2;
-        border-top: 0;
-        padding: 0.875rem 1rem;
-    }
-    .app-sidebar-nav {
-        order: 3;
-        width: 100%;
-        padding: 0;
-        white-space: nowrap;
-        overflow-x: auto;
-        border-top: 1px solid rgba(255,255,255,0.1);
-    }
-    .app-sidebar-nav a {
-        display: inline-block;
-        padding: 0.625rem 1rem;
-        border-left: 0;
-        border-bottom: 3px solid transparent;
-        font-size: 0.875rem;
-    }
-    .app-sidebar-nav a.active {
-        border-left: 0;
-        border-bottom-color: #93c5fd;
-        background: transparent;
-    }
-    .app-main { padding: 1.25rem; }
+    .nav-toggle-input:checked ~ .nav-backdrop { display: block; }
+
+    .app-main { padding: 1.25rem; padding-top: 3.75rem; }
     .page-title { font-size: 1.25rem; }
     .form-row,
     .form-row.cols-3 { grid-template-columns: 1fr; }

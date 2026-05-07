@@ -10,6 +10,14 @@ $user     = current_user();
 $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
+// Accept ?date=YYYY-MM-DD from the calendar grid; fall back to today
+// if missing or malformed. Strict format check via createFromFormat('!Y-m-d')
+// rejects sloppy inputs like '2026-5-1' or '2026-13-40'.
+$qsDate      = (string) ($_GET['date'] ?? '');
+$defaultDate = ($qsDate !== '' && DateTimeImmutable::createFromFormat('!Y-m-d', $qsDate) !== false)
+    ? $qsDate
+    : (new DateTimeImmutable('today'))->format('Y-m-d');
+
 // Form defaults — refilled from $_POST after a validation error.
 $f = [
     'customer_name'             => '',
@@ -26,7 +34,7 @@ $f = [
     'billing_town'              => '',
     'billing_county'            => '',
     'billing_postcode'          => '',
-    'appointment_date'          => (new DateTimeImmutable('today'))->format('Y-m-d'),
+    'appointment_date'          => $defaultDate,
     'appointment_time'          => '09:00',
     'duration_minutes'          => 60,
     'assigned_to'               => $user['user_id'],
@@ -243,6 +251,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 <div class="app-shell">
+    <input type="checkbox" id="navToggle" class="nav-toggle-input">
+    <label class="nav-fab" for="navToggle" aria-label="Open menu" tabindex="0">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </label>
+    <label class="nav-close" for="navToggle" aria-label="Close menu" tabindex="0">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </label>
+    <label class="nav-backdrop" for="navToggle" aria-hidden="true"></label>
     <aside class="app-sidebar" aria-label="Primary navigation">
         <div class="app-sidebar-brand">
             <a href="/calendar/index.php" class="app-brand-mark">Your<span class="accent">Blinds</span></a>

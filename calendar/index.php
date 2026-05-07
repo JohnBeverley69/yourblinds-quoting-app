@@ -175,11 +175,34 @@ $fmtTime = static function (string $time): string {
         }
         .cal-cell.is-other-month { background: #f9fafb; }
         .cal-cell.is-today { background: #eff6ff; }
+        .cal-cell-add {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            text-decoration: none;
+            border-radius: inherit;
+        }
+        .cal-cell-add::after {
+            content: "+";
+            position: absolute;
+            bottom: 0.25rem;
+            right: 0.5rem;
+            color: #1f3b5b;
+            font-size: 1.25rem;
+            font-weight: 600;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+        }
+        .cal-cell:hover .cal-cell-add::after { opacity: 0.45; }
+        .cal-cell.is-other-month .cal-cell-add { display: none; }
         .cal-day-num {
             font-size: 0.875rem;
             font-weight: 600;
             color: #6b7280;
             line-height: 1;
+            pointer-events: none;
         }
         .cal-cell.is-today .cal-day-num {
             color: #fff;
@@ -196,6 +219,8 @@ $fmtTime = static function (string $time): string {
             flex-direction: column;
             gap: 0.25rem;
             overflow: hidden;
+            position: relative;
+            z-index: 2;
         }
         .cal-appt {
             display: block;
@@ -246,7 +271,10 @@ $fmtTime = static function (string $time): string {
                 border-bottom: 1px solid #e5e7eb;
             }
             .cal-cell.is-other-month { display: none; }
-            .cal-cell:empty { display: none; }
+            /* Each current-month cell now contains a click-to-create overlay,
+               so :empty no longer matches. Use :has() so the mobile list still
+               shows only days with appointments (plus today). */
+            .cal-cell:not(.is-today):not(:has(.cal-appts)) { display: none; }
             .cal-day-num::after {
                 content: attr(data-weekday);
                 font-weight: 400;
@@ -258,6 +286,14 @@ $fmtTime = static function (string $time): string {
 </head>
 <body>
 <div class="app-shell">
+    <input type="checkbox" id="navToggle" class="nav-toggle-input">
+    <label class="nav-fab" for="navToggle" aria-label="Open menu" tabindex="0">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </label>
+    <label class="nav-close" for="navToggle" aria-label="Close menu" tabindex="0">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </label>
+    <label class="nav-backdrop" for="navToggle" aria-hidden="true"></label>
     <aside class="app-sidebar" aria-label="Primary navigation">
         <div class="app-sidebar-brand">
             <a href="/calendar/index.php" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
@@ -343,6 +379,9 @@ $fmtTime = static function (string $time): string {
                         $appts     = $byDate[$iso] ?? [];
                     ?>
                     <div class="cal-cell<?= $isToday ? ' is-today' : '' ?>" role="gridcell">
+                        <a class="cal-cell-add"
+                           href="/calendar/new.php?date=<?= e($iso) ?>"
+                           aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
                         <span class="cal-day-num" data-weekday="<?= e($weekday3) ?>"><?= $d ?></span>
                         <?php if ($appts): ?>
                             <div class="cal-appts">
