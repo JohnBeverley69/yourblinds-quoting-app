@@ -272,10 +272,6 @@ $activeNav = 'calendar';
                 border-bottom: 1px solid #e5e7eb;
             }
             .cal-cell.is-other-month { display: none; }
-            /* Each current-month cell now contains a click-to-create overlay,
-               so :empty no longer matches. Use :has() so the mobile list still
-               shows only days with appointments (plus today). */
-            .cal-cell:not(.is-today):not(:has(.cal-appts)) { display: none; }
             .cal-day-num::after {
                 content: attr(data-weekday);
                 font-weight: 400;
