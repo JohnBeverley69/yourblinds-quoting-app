@@ -19,5 +19,8 @@ RedirectMatch 403 ^/database(/|$)
 # Block direct access to the vendor folder
 RedirectMatch 403 ^/vendor(/|$)
 
+# Block direct access to the _partials folder (server-side includes only)
+RedirectMatch 403 ^/_partials(/|$)
+
 # Block direct access to the .git folder
 RedirectMatch 403 ^/\.git(/|$)
