@@ -32,15 +32,16 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f     = ['name' => '', 'is_required' => 1, 'sort_order' => 0];
+$f = ['name' => '', 'is_required' => 1, 'sort_order' => 0, 'parent_choice_id' => 0];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
-    $f['name']        = trim((string) ($_POST['name'] ?? ''));
-    $f['is_required'] = !empty($_POST['is_required']) ? 1 : 0;
-    $f['sort_order']  = (int) ($_POST['sort_order'] ?? 0);
+    $f['name']             = trim((string) ($_POST['name'] ?? ''));
+    $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
+    $f['sort_order']       = (int) ($_POST['sort_order'] ?? 0);
+    $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
@@ -50,10 +51,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         try {
             $stmt = db()->prepare(
                 'INSERT INTO product_extras
-                   (client_id, product_id, name, is_required, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, 1)'
+                   (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)'
             );
-            $stmt->execute([$clientId, $productId, $f['name'], $f['is_required'], $f['sort_order']]);
+            $stmt->execute([
+                $clientId,
+                $productId,
+                $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
+                $f['name'],
+                $f['is_required'],
+                $f['sort_order'],
+            ]);
             $newId = (int) db()->lastInsertId();
             $_SESSION['flash_success'] = 'Extra "' . $f['name'] . '" added.';
             header('Location: /admin/products/extra.php?id=' . $newId);
@@ -68,12 +76,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
+// All choices in this product (across all extras) — these are the candidates
+// for parent_choice_id. Grouped + labelled so the dropdown is readable.
+$choiceStmt = db()->prepare(
+    'SELECT c.id, c.label, e.name AS extra_name
+       FROM product_extra_choices c
+       JOIN product_extras e ON e.id = c.product_extra_id
+      WHERE e.product_id = ? AND e.client_id = ?
+   ORDER BY e.name, c.sort_order, c.label'
+);
+$choiceStmt->execute([$productId, $clientId]);
+$availableChoices = $choiceStmt->fetchAll();
+
 $rows = db()->prepare(
     'SELECT e.id, e.name, e.is_required, e.sort_order, e.active, e.updated_at,
+            e.parent_choice_id,
+            pc.label AS parent_choice_label,
+            pe.name  AS parent_extra_name,
             (SELECT COUNT(*) FROM product_extra_choices c WHERE c.product_extra_id = e.id) AS choice_count
        FROM product_extras e
+       LEFT JOIN product_extra_choices pc ON pc.id = e.parent_choice_id
+       LEFT JOIN product_extras        pe ON pe.id = pc.product_extra_id
       WHERE e.product_id = ? AND e.client_id = ?
-   ORDER BY e.sort_order, e.name'
+   ORDER BY (e.parent_choice_id IS NOT NULL), e.sort_order, e.name'
 );
 $rows->execute([$productId, $clientId]);
 $extras = $rows->fetchAll();
@@ -116,6 +141,16 @@ $activeNav = 'products';
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
+        .conditional-row td:first-child { padding-left: 2rem; position: relative; }
+        .conditional-row td:first-child::before {
+            content: '↳'; position: absolute; left: 0.625rem; color: #9ca3af;
+            font-size: 1.125rem; line-height: 1;
+        }
+        .parent-cond {
+            display: block; color: #6b7280; font-size: 0.8125rem;
+            margin-top: 0.125rem; font-weight: 400;
+        }
+        .parent-cond strong { color: #4b5563; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -185,6 +220,24 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="parent_choice_id">Appears when</label>
+                        <select id="parent_choice_id" name="parent_choice_id">
+                            <option value="0">— Always visible —</option>
+                            <?php foreach ($availableChoices as $c): ?>
+                                <option value="<?= (int) $c['id'] ?>"
+                                    <?= ((int) $f['parent_choice_id']) === (int) $c['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Optional — pick a choice to make this extra only show when that choice is selected.
+                        </small>
+                    </div>
+                </div>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add extra</button>
                 </div>
@@ -216,13 +269,21 @@ $activeNav = 'products';
                         </thead>
                         <tbody>
                             <?php foreach ($extras as $x): ?>
-                                <tr>
+                                <tr<?= !empty($x['parent_choice_id']) ? ' class="conditional-row"' : '' ?>>
                                     <td>
                                         <span class="extra-name"><?= e((string) $x['name']) ?></span>
                                         <?php if ((int) $x['is_required'] === 1): ?>
                                             <span class="req-pill">Required</span>
                                         <?php else: ?>
                                             <span class="opt-pill">Optional</span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($x['parent_choice_id'])): ?>
+                                            <span class="parent-cond">
+                                                Appears when
+                                                <strong><?= e((string) ($x['parent_extra_name'] ?? '')) ?>
+                                                = <?= e((string) ($x['parent_choice_label'] ?? '')) ?></strong>
+                                                is selected
+                                            </span>
                                         <?php endif; ?>
                                     </td>
                                     <td class="num">

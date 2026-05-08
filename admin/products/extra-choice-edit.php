@@ -17,7 +17,8 @@ if ($id <= 0) {
 
 // Tenant-scoped lookup of the choice + parents.
 $loadStmt = db()->prepare(
-    'SELECT c.id, c.product_extra_id, c.label, c.price_delta, c.price_percent,
+    'SELECT c.id, c.product_extra_id, c.system_id, c.label,
+            c.price_delta, c.price_percent, c.price_per_metre,
             c.is_default, c.sort_order, c.active,
             e.name AS extra_name, e.product_id, e.client_id,
             p.name AS product_name
@@ -37,24 +38,28 @@ if (!$choice) {
 }
 
 $f = [
-    'label'         => (string) $choice['label'],
-    'price_delta'   => (string) $choice['price_delta'],
-    'price_percent' => (string) $choice['price_percent'],
-    'is_default'    => (int)    $choice['is_default'],
-    'sort_order'    => (int)    $choice['sort_order'],
-    'active'        => (int)    $choice['active'],
+    'label'           => (string) $choice['label'],
+    'price_delta'     => (string) $choice['price_delta'],
+    'price_percent'   => (string) $choice['price_percent'],
+    'price_per_metre' => (string) $choice['price_per_metre'],
+    'is_default'      => (int)    $choice['is_default'],
+    'sort_order'      => (int)    $choice['sort_order'],
+    'active'          => (int)    $choice['active'],
+    'system_id'       => (int) ($choice['system_id'] ?? 0),
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['label']         = trim((string) ($_POST['label'] ?? ''));
-    $f['price_delta']   = trim((string) ($_POST['price_delta']   ?? '0'));
-    $f['price_percent'] = trim((string) ($_POST['price_percent'] ?? '0'));
-    $f['is_default']    = !empty($_POST['is_default']) ? 1 : 0;
-    $f['sort_order']    = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']        = !empty($_POST['active']) ? 1 : 0;
+    $f['label']           = trim((string) ($_POST['label'] ?? ''));
+    $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
+    $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
+    $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
+    $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
+    $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']          = !empty($_POST['active']) ? 1 : 0;
+    $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -64,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Flat surcharge must be a number.';
     } elseif (!is_numeric($f['price_percent'])) {
         $error = 'Percent surcharge must be a number.';
+    } elseif (!is_numeric($f['price_per_metre'])) {
+        $error = 'Per-metre surcharge must be a number.';
     } else {
         try {
             $pdo = db();
@@ -79,14 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $u = $pdo->prepare(
                 'UPDATE product_extra_choices
-                    SET label = ?, price_delta = ?, price_percent = ?,
+                    SET label = ?, system_id = ?,
+                        price_delta = ?, price_percent = ?, price_per_metre = ?,
                         is_default = ?, sort_order = ?, active = ?
                   WHERE id = ?'
             );
             $u->execute([
                 $f['label'],
+                $f['system_id'] > 0 ? $f['system_id'] : null,
                 (float) $f['price_delta'],
                 (float) $f['price_percent'],
+                (float) $f['price_per_metre'],
                 $f['is_default'],
                 $f['sort_order'],
                 $f['active'],
@@ -103,6 +113,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Systems available on the parent product.
+$sysStmt = db()->prepare(
+    'SELECT id, name FROM product_systems
+      WHERE product_id = ? AND client_id = ?
+   ORDER BY sort_order, name'
+);
+$sysStmt->execute([(int) $choice['product_id'], $clientId]);
+$systems = $sysStmt->fetchAll();
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -161,14 +180,37 @@ $activeNav = 'products';
 
                 <div class="form-row cols-3">
                     <div class="form-group">
-                        <label for="price_delta">Flat surcharge (£)</label>
+                        <label for="price_delta">Flat (£)</label>
                         <input id="price_delta" name="price_delta" type="number"
                                step="0.01" value="<?= e((string) $f['price_delta']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="price_percent">Percent surcharge (%)</label>
+                        <label for="price_percent">Percent (%)</label>
                         <input id="price_percent" name="price_percent" type="number"
                                step="0.01" value="<?= e((string) $f['price_percent']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="price_per_metre">Per metre (£/m)</label>
+                        <input id="price_per_metre" name="price_per_metre" type="number"
+                               step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="system_id">System (optional)</label>
+                        <select id="system_id" name="system_id">
+                            <option value="0">— All systems —</option>
+                            <?php foreach ($systems as $s): ?>
+                                <option value="<?= (int) $s['id'] ?>"
+                                    <?= ((int) $f['system_id']) === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Limit this choice to one system (e.g. Champagne only on Vogue). Leave as "All systems" if it's available everywhere.
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="sort_order">Sort order</label>

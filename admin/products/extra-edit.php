@@ -16,7 +16,8 @@ if ($id <= 0) {
 }
 
 $loadStmt = db()->prepare(
-    'SELECT e.id, e.product_id, e.name, e.is_required, e.sort_order, e.active,
+    'SELECT e.id, e.product_id, e.parent_choice_id, e.name, e.is_required,
+            e.sort_order, e.active,
             p.name AS product_name
        FROM product_extras e
        JOIN products p ON p.id = e.product_id
@@ -33,20 +34,22 @@ if (!$extra) {
 }
 
 $f = [
-    'name'        => (string) $extra['name'],
-    'is_required' => (int)    $extra['is_required'],
-    'sort_order'  => (int)    $extra['sort_order'],
-    'active'      => (int)    $extra['active'],
+    'name'             => (string) $extra['name'],
+    'is_required'      => (int)    $extra['is_required'],
+    'sort_order'       => (int)    $extra['sort_order'],
+    'active'           => (int)    $extra['active'],
+    'parent_choice_id' => (int) ($extra['parent_choice_id'] ?? 0),
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']        = trim((string) ($_POST['name'] ?? ''));
-    $f['is_required'] = !empty($_POST['is_required']) ? 1 : 0;
-    $f['sort_order']  = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']      = !empty($_POST['active']) ? 1 : 0;
+    $f['name']             = trim((string) ($_POST['name'] ?? ''));
+    $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
+    $f['sort_order']       = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']           = !empty($_POST['active']) ? 1 : 0;
+    $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
@@ -56,11 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $u = db()->prepare(
                 'UPDATE product_extras
-                    SET name = ?, is_required = ?, sort_order = ?, active = ?
+                    SET name = ?, is_required = ?, sort_order = ?, active = ?,
+                        parent_choice_id = ?
                   WHERE id = ? AND client_id = ?'
             );
             $u->execute([
                 $f['name'], $f['is_required'], $f['sort_order'], $f['active'],
+                $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
                 $id, $clientId,
             ]);
             $_SESSION['flash_success'] = 'Extra updated.';
@@ -75,6 +80,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// All choices in this product (excluding self's own choices, to avoid loops).
+$choiceStmt = db()->prepare(
+    'SELECT c.id, c.label, e.name AS extra_name
+       FROM product_extra_choices c
+       JOIN product_extras e ON e.id = c.product_extra_id
+      WHERE e.product_id = ? AND e.client_id = ? AND e.id != ?
+   ORDER BY e.name, c.sort_order, c.label'
+);
+$choiceStmt->execute([(int) $extra['product_id'], $clientId, $id]);
+$availableChoices = $choiceStmt->fetchAll();
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -135,6 +151,24 @@ $activeNav = 'products';
                         <label for="sort_order">Sort order</label>
                         <input id="sort_order" name="sort_order" type="number"
                                value="<?= (int) $f['sort_order'] ?>">
+                    </div>
+                </div>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="parent_choice_id">Appears when</label>
+                        <select id="parent_choice_id" name="parent_choice_id">
+                            <option value="0">— Always visible —</option>
+                            <?php foreach ($availableChoices as $c): ?>
+                                <option value="<?= (int) $c['id'] ?>"
+                                    <?= ((int) $f['parent_choice_id']) === (int) $c['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Optional — pick a choice from elsewhere in this product to make this extra only show when that choice is selected.
+                        </small>
                     </div>
                 </div>
 

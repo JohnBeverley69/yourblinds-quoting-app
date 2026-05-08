@@ -38,22 +38,26 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $f = [
-    'label'         => '',
-    'price_delta'   => '0.00',
-    'price_percent' => '0.00',
-    'is_default'    => 0,
-    'sort_order'    => 0,
+    'label'           => '',
+    'price_delta'     => '0.00',
+    'price_percent'   => '0.00',
+    'price_per_metre' => '0.00',
+    'is_default'      => 0,
+    'sort_order'      => 0,
+    'system_id'       => 0,
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create_choice') {
     csrf_check();
 
-    $f['label']         = trim((string) ($_POST['label'] ?? ''));
-    $f['price_delta']   = trim((string) ($_POST['price_delta']   ?? '0'));
-    $f['price_percent'] = trim((string) ($_POST['price_percent'] ?? '0'));
-    $f['is_default']    = !empty($_POST['is_default']) ? 1 : 0;
-    $f['sort_order']    = (int) ($_POST['sort_order'] ?? 0);
+    $f['label']           = trim((string) ($_POST['label'] ?? ''));
+    $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
+    $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
+    $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
+    $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
+    $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
+    $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -63,6 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'Flat surcharge must be a number.';
     } elseif (!is_numeric($f['price_percent'])) {
         $error = 'Percent surcharge must be a number.';
+    } elseif (!is_numeric($f['price_per_metre'])) {
+        $error = 'Per-metre surcharge must be a number.';
     } else {
         try {
             $pdo = db();
@@ -78,15 +84,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
             $ins = $pdo->prepare(
                 'INSERT INTO product_extra_choices
-                   (product_extra_id, label, price_delta, price_percent,
+                   (product_extra_id, system_id, label,
+                    price_delta, price_percent, price_per_metre,
                     is_default, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, 1)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
             );
             $ins->execute([
                 $extraId,
+                $f['system_id'] > 0 ? $f['system_id'] : null,
                 $f['label'],
                 (float) $f['price_delta'],
                 (float) $f['price_percent'],
+                (float) $f['price_per_metre'],
                 $f['is_default'],
                 $f['sort_order'],
             ]);
@@ -130,13 +139,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 }
 
 $rows = db()->prepare(
-    'SELECT id, label, price_delta, price_percent, is_default, sort_order, active
-       FROM product_extra_choices
-      WHERE product_extra_id = ?
-   ORDER BY is_default DESC, sort_order, label'
+    'SELECT c.id, c.label, c.system_id,
+            c.price_delta, c.price_percent, c.price_per_metre,
+            c.is_default, c.sort_order, c.active,
+            s.name AS system_name
+       FROM product_extra_choices c
+       LEFT JOIN product_systems s ON s.id = c.system_id
+      WHERE c.product_extra_id = ?
+   ORDER BY c.is_default DESC, c.sort_order, c.label'
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
+
+// Systems available on this product, for the system dropdown.
+$sysStmt = db()->prepare(
+    'SELECT id, name FROM product_systems
+      WHERE product_id = ? AND client_id = ?
+   ORDER BY sort_order, name'
+);
+$sysStmt->execute([(int) $extra['product_id'], $clientId]);
+$systems = $sysStmt->fetchAll();
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -148,7 +170,11 @@ $activeNav = 'products';
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1fr 0.75fr; align-items: end; }
-        @media (max-width: 900px) { .form-row.cols-5 { grid-template-columns: 1fr; } }
+        .form-row.cols-3-row2 { grid-template-columns: 1fr 1fr 1fr; align-items: end; }
+        @media (max-width: 900px) {
+            .form-row.cols-5,
+            .form-row.cols-3-row2 { grid-template-columns: 1fr; }
+        }
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
@@ -173,6 +199,12 @@ $activeNav = 'products';
         .default-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 700; color: #fff; background: #16a34a;
+            border-radius: 999px; margin-left: 0.5rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .system-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #fff; background: #1f3b5b;
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
@@ -215,9 +247,12 @@ $activeNav = 'products';
                 <h2 class="section-title">Add choice</h2>
             </div>
             <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
-                Either surcharge field can stay 0 if the choice is free. Use <strong>£</strong>
-                for a flat add-on (e.g. Motor +£45) or <strong>%</strong> for a percentage on the
-                base price (e.g. Blackout lining +15%). Both can apply to the same choice.
+                Three independent surcharge modes; any (or none) can apply per choice.
+                <strong>Flat £</strong> = fixed add-on (e.g. Motor +£45).
+                <strong>Percent %</strong> = on the base price (e.g. Blackout +15%).
+                <strong>£/metre</strong> = multiplied by the blind width in metres
+                (e.g. Champagne headrail at £8/m → on a 2.4m wide blind = +£19.20).
+                Use <strong>System</strong> to limit a choice to one system (e.g. Champagne only on Vogue).
             </p>
             <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
                   class="form" novalidate>
@@ -242,9 +277,9 @@ $activeNav = 'products';
                                step="0.01" value="<?= e((string) $f['price_percent']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="sort_order">Sort</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>">
+                        <label for="price_per_metre">£/metre</label>
+                        <input id="price_per_metre" name="price_per_metre" type="number"
+                               step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
                     </div>
                     <div class="form-group">
                         <label class="checkbox-row" for="is_default">
@@ -253,6 +288,27 @@ $activeNav = 'products';
                             Default
                         </label>
                     </div>
+                </div>
+
+                <div class="form-row cols-3-row2">
+                    <div class="form-group">
+                        <label for="system_id">System (optional)</label>
+                        <select id="system_id" name="system_id">
+                            <option value="0">— All systems —</option>
+                            <?php foreach ($systems as $s): ?>
+                                <option value="<?= (int) $s['id'] ?>"
+                                    <?= ((int) $f['system_id']) === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sort_order">Sort order</label>
+                        <input id="sort_order" name="sort_order" type="number"
+                               value="<?= (int) $f['sort_order'] ?>">
+                    </div>
+                    <div class="form-group">&nbsp;</div>
                 </div>
 
                 <div class="form-actions">
@@ -291,14 +347,19 @@ $activeNav = 'products';
                                         <?php if ((int) $c['is_default'] === 1): ?>
                                             <span class="default-pill">Default</span>
                                         <?php endif; ?>
+                                        <?php if (!empty($c['system_name'])): ?>
+                                            <span class="system-pill"><?= e((string) $c['system_name']) ?> only</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="price-impact">
                                         <?php
-                                            $delta   = (float) $c['price_delta'];
-                                            $percent = (float) $c['price_percent'];
+                                            $delta    = (float) $c['price_delta'];
+                                            $percent  = (float) $c['price_percent'];
+                                            $perMetre = (float) $c['price_per_metre'];
                                             $bits = [];
-                                            if ($delta != 0)   { $bits[] = ($delta > 0 ? '+' : '') . '£' . number_format($delta, 2); }
-                                            if ($percent != 0) { $bits[] = ($percent > 0 ? '+' : '') . number_format($percent, 2) . '%'; }
+                                            if ($delta    != 0) { $bits[] = ($delta > 0 ? '+' : '') . '£' . number_format($delta, 2); }
+                                            if ($perMetre != 0) { $bits[] = ($perMetre > 0 ? '+' : '') . '£' . number_format($perMetre, 2) . '/m'; }
+                                            if ($percent  != 0) { $bits[] = ($percent > 0 ? '+' : '') . number_format($percent, 2) . '%'; }
                                         ?>
                                         <?php if ($bits): ?>
                                             <strong><?= e(implode(' and ', $bits)) ?></strong>
