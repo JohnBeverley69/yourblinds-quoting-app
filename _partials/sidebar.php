@@ -58,9 +58,9 @@ $navLinks = [
             </div>
         </div>
         <nav class="app-sidebar-nav">
-<?php foreach ($navLinks as $key => [$href, $label, $show]): ?>
-<?php if (!$show) continue; ?>
-            <a href="<?= e($href) ?>"<?= $key === $activeNav ? ' class="active"' : '' ?>><?= e($label) ?></a>
+<?php foreach ($navLinks as $navKey => [$navHref, $navLabel, $navShow]): ?>
+<?php if (!$navShow) continue; ?>
+            <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
 <?php endforeach; ?>
         </nav>
         <div class="app-sidebar-foot">
