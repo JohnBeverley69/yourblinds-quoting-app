@@ -65,13 +65,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
+// Mark a system as default — only one per product.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'set_default') {
+    csrf_check();
+    $targetId = (int) ($_POST['id'] ?? 0);
+    if ($targetId > 0) {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            // Clear default on all systems of this product, then set on target.
+            $clear = $pdo->prepare(
+                'UPDATE product_systems SET is_default = 0
+                  WHERE product_id = ? AND client_id = ?'
+            );
+            $clear->execute([$productId, $clientId]);
+            $set = $pdo->prepare(
+                'UPDATE product_systems SET is_default = 1
+                  WHERE id = ? AND product_id = ? AND client_id = ?'
+            );
+            $set->execute([$targetId, $productId, $clientId]);
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Default system updated.';
+            header('Location: /admin/products/systems.php?product_id=' . $productId);
+            exit;
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not set default: ' . $e->getMessage();
+            header('Location: /admin/products/systems.php?product_id=' . $productId);
+            exit;
+        }
+    }
+}
+
 // List systems for this product, with price-table counts.
 $rows = db()->prepare(
-    'SELECT s.id, s.name, s.sort_order, s.active, s.updated_at,
+    'SELECT s.id, s.name, s.sort_order, s.active, s.is_default, s.updated_at,
             (SELECT COUNT(*) FROM price_tables t WHERE t.system_id = s.id) AS table_count
        FROM product_systems s
       WHERE s.product_id = ? AND s.client_id = ?
-   ORDER BY s.sort_order, s.name'
+   ORDER BY s.is_default DESC, s.sort_order, s.name'
 );
 $rows->execute([$productId, $clientId]);
 $systems = $rows->fetchAll();
@@ -99,6 +131,12 @@ $activeNav = 'products';
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 600; color: #6b7280; background: #f3f4f6;
+            border-radius: 999px; margin-left: 0.5rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .default-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #fff; background: #16a34a;
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
@@ -193,6 +231,9 @@ $activeNav = 'products';
                                 <tr>
                                     <td>
                                         <span class="system-name"><?= e((string) $s['name']) ?></span>
+                                        <?php if ((int) $s['is_default'] === 1): ?>
+                                            <span class="default-pill">Default</span>
+                                        <?php endif; ?>
                                         <?php if ((int) $s['active'] !== 1): ?>
                                             <span class="inactive-pill">Inactive</span>
                                         <?php endif; ?>
@@ -209,6 +250,19 @@ $activeNav = 'products';
                                         <a href="/admin/products/price-tables.php?system_id=<?= (int) $s['id'] ?>">
                                             Price tables &rarr;
                                         </a>
+                                        <?php if ((int) $s['is_default'] !== 1): ?>
+                                            <form method="post"
+                                                  action="/admin/products/systems.php?product_id=<?= (int) $productId ?>"
+                                                  style="display:inline;margin:0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="set_default">
+                                                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                                                <button type="submit"
+                                                        style="font-size:0.875rem;color:#1f3b5b;background:transparent;border:0;cursor:pointer;padding:0;margin-left:0.5rem;">
+                                                    Set default
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                         <form method="post" action="/admin/products/system-delete.php"
                                               onsubmit="return confirm('Delete system <?= e(addslashes((string) $s['name'])) ?>? This wipes its <?= (int) $s['table_count'] ?> price tables (and all their cells) too.');">
                                             <?= csrf_field() ?>
