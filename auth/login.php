@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // require one slot per occurrence, so the same value is bound twice.
         $stmt = db()->prepare(
             'SELECT u.id, u.client_id, u.full_name, u.password_hash,
-                    u.role, u.active,
+                    u.role, u.active, u.is_super_admin,
                     c.company_name
                FROM client_users u
                JOIN clients c ON c.id = u.client_id
@@ -51,11 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Session fixation defence: regenerate ID at the privilege boundary.
             session_regenerate_id(true);
 
-            $_SESSION['user_id']      = (int) $user['id'];
-            $_SESSION['client_id']    = (int) $user['client_id'];
-            $_SESSION['role']         = (string) $user['role'];
-            $_SESSION['company_name'] = (string) $user['company_name'];
-            $_SESSION['full_name']    = (string) $user['full_name'];
+            $_SESSION['user_id']        = (int) $user['id'];
+            $_SESSION['client_id']      = (int) $user['client_id'];
+            $_SESSION['role']           = (string) $user['role'];
+            $_SESSION['company_name']   = (string) $user['company_name'];
+            $_SESSION['full_name']      = (string) $user['full_name'];
+            $_SESSION['is_super_admin'] = (int) ($user['is_super_admin'] ?? 0) === 1;
 
             // Best-effort last-login update; don't fail login if this errors.
             try {

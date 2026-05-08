@@ -58,10 +58,12 @@ $stmt = db()->prepare(
             c.phone AS cust_phone,
             u.id        AS assignee_id,
             u.full_name AS assignee_name,
-            u.email     AS assignee_email
+            u.email     AS assignee_email,
+            COALESCE(s.feature_maps, 0) AS feature_maps
        FROM appointments a
-  LEFT JOIN customers    c ON c.id = a.customer_id
-  LEFT JOIN client_users u ON u.id = a.client_user_id
+  LEFT JOIN customers       c ON c.id = a.customer_id
+  LEFT JOIN client_users    u ON u.id = a.client_user_id
+  LEFT JOIN client_settings s ON s.client_id = a.client_id
       WHERE a.id = ? AND a.client_id = ?'
 );
 $stmt->execute([$id, $clientId]);
@@ -101,6 +103,16 @@ $instParts = array_values(array_filter([
     $appt['installation_county']   ?? null,
     $appt['installation_postcode'] ?? null,
 ], static fn ($v) => $v !== null && $v !== ''));
+
+// "Let's Go" maps link — only when this client has the maps add-on enabled
+// AND we have enough address to navigate to. Hands off to whatever maps app
+// the device prefers (Google Maps, Apple Maps via the universal URL).
+$mapsEnabled = ((int) ($appt['feature_maps'] ?? 0)) === 1;
+$mapsUrl     = '';
+if ($mapsEnabled && $instParts) {
+    $mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination='
+             . urlencode(implode(', ', $instParts));
+}
 
 $billingDifferent = (int) ($appt['different_billing_address'] ?? 0) === 1;
 $billParts = $billingDifferent ? array_values(array_filter([
@@ -210,8 +222,13 @@ $activeNav = 'calendar';
                 </p>
             </div>
             <div class="actions-bar">
+                <?php if ($mapsUrl !== ''): ?>
+                    <a href="<?= e($mapsUrl) ?>"
+                       class="btn btn-primary"
+                       target="_blank" rel="noopener">Let's Go &rarr;</a>
+                <?php endif; ?>
                 <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
-                   class="btn btn-primary">Start quote</a>
+                   class="btn <?= $mapsUrl !== '' ? 'btn-secondary' : 'btn-primary' ?>">Start quote</a>
                 <a href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                    class="btn btn-secondary">Edit</a>
             </div>

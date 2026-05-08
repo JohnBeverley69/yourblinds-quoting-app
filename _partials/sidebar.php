@@ -18,10 +18,11 @@ declare(strict_types=1);
  *                      customers, pricing, users, settings. Empty = no highlight.
  */
 
-$isAdmin   = $isAdmin   ?? (($user['role'] ?? '') === 'admin');
-$dashHref  = $dashHref  ?? ($isAdmin ? '/admin/index.php' : '/quote-builder/index.php');
-$dashTag   = $dashTag   ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
-$activeNav = $activeNav ?? '';
+$isAdmin      = $isAdmin      ?? (($user['role'] ?? '') === 'admin');
+$isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
+$dashHref     = $dashHref     ?? ($isAdmin ? '/admin/index.php' : '/quote-builder/index.php');
+$dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
+$activeNav    = $activeNav    ?? '';
 
 // [href, label, visible]. Order = display order.
 $navLinks = [
@@ -33,6 +34,7 @@ $navLinks = [
     'pricing'       => ['/admin/pricing.php',          'Price Lists',   $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
+    'master-admin'  => ['/master-admin/index.php',     'Master Admin',  $isSuperAdmin],
 ];
 ?>
     <input type="checkbox" id="navToggle" class="nav-toggle-input">

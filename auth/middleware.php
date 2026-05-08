@@ -25,12 +25,18 @@ function current_user(): ?array
         return null;
     }
     return [
-        'user_id'      => (int) $_SESSION['user_id'],
-        'client_id'    => (int) $_SESSION['client_id'],
-        'role'         => (string) $_SESSION['role'],
-        'company_name' => (string) ($_SESSION['company_name'] ?? ''),
-        'full_name'    => (string) ($_SESSION['full_name'] ?? ''),
+        'user_id'        => (int) $_SESSION['user_id'],
+        'client_id'      => (int) $_SESSION['client_id'],
+        'role'           => (string) $_SESSION['role'],
+        'company_name'   => (string) ($_SESSION['company_name'] ?? ''),
+        'full_name'      => (string) ($_SESSION['full_name'] ?? ''),
+        'is_super_admin' => (bool) ($_SESSION['is_super_admin'] ?? false),
     ];
+}
+
+function is_super_admin(): bool
+{
+    return (bool) ($_SESSION['is_super_admin'] ?? false);
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +68,18 @@ function requireRole(array $roles): void
 function requireAdmin(): void
 {
     requireRole(['admin']);
+}
+
+function requireSuperAdmin(): void
+{
+    requireLogin();
+    if (!is_super_admin()) {
+        http_response_code(403);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+           . '<h1>403 Forbidden</h1><p>Master admin access required.</p>';
+        exit;
+    }
 }
 
 // ---------------------------------------------------------------------------
