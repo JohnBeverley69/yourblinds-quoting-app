@@ -174,6 +174,8 @@ $activeNav = 'products';
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                 </p>
             </div>
+            <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Import from Excel</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>
