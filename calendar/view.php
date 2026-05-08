@@ -104,14 +104,16 @@ $instParts = array_values(array_filter([
     $appt['installation_postcode'] ?? null,
 ], static fn ($v) => $v !== null && $v !== ''));
 
-// "Let's Go" maps link — only when this client has the maps add-on enabled
-// AND we have enough address to navigate to. Hands off to whatever maps app
-// the device prefers (Google Maps, Apple Maps via the universal URL).
-$mapsEnabled = ((int) ($appt['feature_maps'] ?? 0)) === 1;
-$mapsUrl     = '';
+// Maps add-on — when this client has feature_maps enabled and we have at
+// least one address line, expose deep-links to both Google Maps and Waze.
+// Both URLs hand off to the app if installed, otherwise the web equivalent.
+$mapsEnabled   = ((int) ($appt['feature_maps'] ?? 0)) === 1;
+$googleMapsUrl = '';
+$wazeUrl       = '';
 if ($mapsEnabled && $instParts) {
-    $mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination='
-             . urlencode(implode(', ', $instParts));
+    $destination   = urlencode(implode(', ', $instParts));
+    $googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' . $destination;
+    $wazeUrl       = 'https://waze.com/ul?q=' . $destination . '&navigate=yes';
 }
 
 $billingDifferent = (int) ($appt['different_billing_address'] ?? 0) === 1;
@@ -222,10 +224,13 @@ $activeNav = 'calendar';
                 </p>
             </div>
             <div class="actions-bar">
-                <?php if ($mapsUrl !== ''): ?>
-                    <a href="<?= e($mapsUrl) ?>"
+                <?php if ($googleMapsUrl !== ''): ?>
+                    <a href="<?= e($googleMapsUrl) ?>"
                        class="btn btn-success"
-                       target="_blank" rel="noopener">Let's Go &rarr;</a>
+                       target="_blank" rel="noopener">Google Maps &rarr;</a>
+                    <a href="<?= e($wazeUrl) ?>"
+                       class="btn btn-success"
+                       target="_blank" rel="noopener">Waze &rarr;</a>
                 <?php endif; ?>
                 <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
                    class="btn btn-primary">Start quote</a>
