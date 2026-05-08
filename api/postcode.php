@@ -4,10 +4,14 @@ declare(strict_types=1);
 /**
  * Server-side proxy for getAddress.io postcode lookup.
  *
- * Why a proxy and not a direct browser call?
- * - The API key never leaves the server (request originates from the host)
- * - Auth + per-client feature-flag check is enforced
- * - We can rate-limit and log abuse if it ever matters
+ * Two actions:
+ *   ?action=autocomplete&term=BS1+4ST  -> returns { suggestions: [{id, address}, ...] }
+ *   ?action=get&id=ABCDEF              -> returns { line1, line2, town, county, postcode }
+ *
+ * Why a proxy?
+ *   - The API key never leaves the server
+ *   - Auth + per-client feature-flag check is enforced
+ *   - We can rate-limit or log abuse later
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -41,72 +45,128 @@ if (GETADDRESS_API_KEY === '') {
     exit;
 }
 
-// Normalise input: strip whitespace, uppercase. Loose UK-postcode regex
-// (rejects obvious junk; getAddress.io will validate further).
-$raw      = (string) ($_GET['postcode'] ?? '');
-$postcode = strtoupper(preg_replace('/\s+/', '', $raw) ?? '');
-if ($postcode === ''
-    || !preg_match('/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/', $postcode)
-) {
+$action = (string) ($_GET['action'] ?? 'autocomplete');
+
+if ($action === 'autocomplete') {
+    autocomplete();
+} elseif ($action === 'get') {
+    getById();
+} else {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid UK postcode.']);
-    exit;
+    echo json_encode(['error' => 'Unknown action.']);
 }
 
-$url = 'https://api.getAddress.io/find/' . urlencode($postcode)
-     . '?api-key=' . urlencode(GETADDRESS_API_KEY)
-     . '&expand=true';
+// ---------------------------------------------------------------------------
 
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT        => 10,
-    CURLOPT_USERAGENT      => 'YourBlinds/1.0 (+postcode-lookup)',
-    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-]);
-$body   = curl_exec($ch);
-$status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$err    = curl_error($ch);
-curl_close($ch);
-
-if ($body === false || $err !== '') {
-    http_response_code(502);
-    echo json_encode(['error' => 'Address service unreachable.']);
-    exit;
-}
-
-if ($status === 404) {
-    // No matches — not an error, just return empty list.
-    echo json_encode(['addresses' => []]);
-    exit;
-}
-
-if ($status !== 200) {
-    http_response_code(502);
-    echo json_encode(['error' => 'Address service returned ' . $status . '.']);
-    exit;
-}
-
-$data = json_decode((string) $body, true);
-if (!is_array($data) || !isset($data['addresses']) || !is_array($data['addresses'])) {
-    http_response_code(502);
-    echo json_encode(['error' => 'Unexpected response from address service.']);
-    exit;
-}
-
-$out      = [];
-$displayP = strtoupper((string) ($data['postcode'] ?? $postcode));
-foreach ($data['addresses'] as $a) {
-    if (!is_array($a)) {
-        continue;
+function autocomplete(): void
+{
+    $raw  = (string) ($_GET['term'] ?? '');
+    $term = trim($raw);
+    if ($term === '' || strlen($term) < 2) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Search term required (min 2 characters).']);
+        return;
     }
-    $out[] = [
-        'line1'    => trim((string) ($a['line_1']       ?? '')),
-        'line2'    => trim((string) ($a['line_2']       ?? '')),
-        'town'     => trim((string) ($a['town_or_city'] ?? '')),
-        'county'   => trim((string) ($a['county']       ?? '')),
-        'postcode' => $displayP,
-    ];
+    if (strlen($term) > 100) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Search term too long.']);
+        return;
+    }
+
+    $url = 'https://api.getAddress.io/autocomplete/' . rawurlencode($term)
+         . '?api-key=' . urlencode(GETADDRESS_API_KEY)
+         . '&top=20&all=true';
+
+    [$status, $data] = call_getaddress($url);
+    if ($status === null) {
+        return; // call_getaddress already emitted the JSON error
+    }
+
+    if ($status !== 200) {
+        http_response_code(502);
+        echo json_encode(['error' => 'Address service returned ' . $status . '.']);
+        return;
+    }
+
+    $suggestions = is_array($data['suggestions'] ?? null) ? $data['suggestions'] : [];
+    $out = [];
+    foreach ($suggestions as $s) {
+        if (!is_array($s)) {
+            continue;
+        }
+        $id = (string) ($s['id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $out[] = [
+            'id'      => $id,
+            'address' => (string) ($s['address'] ?? ''),
+        ];
+    }
+    echo json_encode(['suggestions' => $out]);
 }
 
-echo json_encode(['addresses' => $out]);
+function getById(): void
+{
+    $raw = (string) ($_GET['id'] ?? '');
+    $id  = trim($raw);
+    // getAddress.io ids are short alnum tokens with dashes/underscores. Be strict.
+    if ($id === '' || !preg_match('/^[A-Za-z0-9_\-]{1,80}$/', $id)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid address id.']);
+        return;
+    }
+
+    $url = 'https://api.getAddress.io/get/' . rawurlencode($id)
+         . '?api-key=' . urlencode(GETADDRESS_API_KEY);
+
+    [$status, $data] = call_getaddress($url);
+    if ($status === null) {
+        return;
+    }
+
+    if ($status !== 200) {
+        http_response_code(502);
+        echo json_encode(['error' => 'Address service returned ' . $status . '.']);
+        return;
+    }
+
+    echo json_encode([
+        'line1'    => trim((string) ($data['line_1']       ?? '')),
+        'line2'    => trim((string) ($data['line_2']       ?? '')),
+        'town'     => trim((string) ($data['town_or_city'] ?? '')),
+        'county'   => trim((string) ($data['county']       ?? '')),
+        'postcode' => strtoupper(trim((string) ($data['postcode'] ?? ''))),
+    ]);
+}
+
+/**
+ * Returns [status, decoded body] on success, [null, null] after emitting an
+ * error response on transport failure (so the caller can simply early-return).
+ */
+function call_getaddress(string $url): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_USERAGENT      => 'YourBlinds/1.0 (+postcode-lookup)',
+        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+    ]);
+    $body   = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err    = curl_error($ch);
+    curl_close($ch);
+
+    if ($body === false || $err !== '') {
+        http_response_code(502);
+        echo json_encode(['error' => 'Address service unreachable.']);
+        return [null, null];
+    }
+
+    $decoded = json_decode((string) $body, true);
+    if (!is_array($decoded)) {
+        $decoded = [];
+    }
+    return [(int) $status, $decoded];
+}
