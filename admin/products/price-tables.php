@@ -144,6 +144,8 @@ $activeNav = 'products';
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
                 </p>
             </div>
+            <a href="/admin/products/price-tables-bulk-import.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Bulk import (multiple bands)</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>
