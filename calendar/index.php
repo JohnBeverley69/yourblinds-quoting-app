@@ -67,6 +67,13 @@ foreach ($stmt->fetchAll() as $row) {
 $dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
 $dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
 
+// Whether to surface the "Today's run" link in the page header.
+$mapsStmt = db()->prepare(
+    'SELECT COALESCE(feature_maps, 0) FROM client_settings WHERE client_id = ?'
+);
+$mapsStmt->execute([$clientId]);
+$mapsEnabled = ((int) $mapsStmt->fetchColumn()) === 1;
+
 $weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 $fmtTime = static function (string $time): string {
@@ -293,7 +300,12 @@ $activeNav = 'calendar';
                     Appointments for <?= e($user['company_name']) ?>.
                 </p>
             </div>
-            <a href="/calendar/new.php" class="btn btn-primary">+ Book Appointment</a>
+            <div class="actions-bar">
+                <?php if ($mapsEnabled): ?>
+                    <a href="/calendar/run.php" class="btn btn-success">Today's run &rarr;</a>
+                <?php endif; ?>
+                <a href="/calendar/new.php" class="btn btn-primary">+ Book Appointment</a>
+            </div>
         </div>
 
         <section class="section">
