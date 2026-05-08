@@ -15,23 +15,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 csrf_check();
 
-$user     = current_user();
-$id       = (int) ($_POST['id']        ?? 0);
-$systemId = (int) ($_POST['system_id'] ?? 0);
+$user      = current_user();
+$id        = (int) ($_POST['id']         ?? 0);
+$productId = (int) ($_POST['product_id'] ?? 0);
 
 if ($id > 0) {
-    // FK cascades wipe price_table_rows for this table.
+    // FK cascades wipe price_tables and price_table_rows for this system.
     $stmt = db()->prepare(
-        'DELETE FROM price_tables WHERE id = ? AND client_id = ?'
+        'DELETE FROM product_systems WHERE id = ? AND client_id = ?'
     );
     $stmt->execute([$id, $user['client_id']]);
     if ($stmt->rowCount() > 0) {
-        $_SESSION['flash_success'] = 'Price table deleted.';
+        $_SESSION['flash_success'] = 'System deleted.';
     }
 }
 
-if ($systemId > 0) {
-    header('Location: /admin/products/price-tables.php?system_id=' . $systemId);
+if ($productId > 0) {
+    header('Location: /admin/products/systems.php?product_id=' . $productId);
 } else {
     header('Location: /admin/products/index.php');
 }

@@ -15,12 +15,14 @@ if ($tableId <= 0) {
     exit;
 }
 
-// Tenant-scoped lookup of the table + its parent product.
+// Tenant-scoped lookup of the table + its parent system + product.
 $loadStmt = db()->prepare(
-    'SELECT t.id, t.product_id, t.band_code, t.name, t.notes, t.active,
-            p.name AS product_name
+    'SELECT t.id, t.product_id, t.system_id, t.band_code, t.name, t.notes, t.active,
+            p.name AS product_name,
+            s.name AS system_name
        FROM price_tables t
-       JOIN products p ON p.id = t.product_id
+       JOIN products        p ON p.id = t.product_id
+       JOIN product_systems s ON s.id = t.system_id
       WHERE t.id = ? AND t.client_id = ?'
 );
 $loadStmt->execute([$tableId, $clientId]);
@@ -107,6 +109,7 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $sheet->freezePane('B2');
 
     $filename = preg_replace('/[^A-Za-z0-9_\- ]/', '', (string) $table['product_name'])
+              . ' - ' . preg_replace('/[^A-Za-z0-9_\- ]/', '', (string) $table['system_name'])
               . ' - Band ' . $table['band_code'] . '.xlsx';
 
     while (ob_get_level() > 0) { ob_end_clean(); }
@@ -273,14 +276,16 @@ $activeNav = 'products';
         <div class="page-header">
             <div>
                 <h1 class="page-title">
-                    <?= e((string) $table['product_name']) ?> &mdash; Band <?= e((string) $table['band_code']) ?>
+                    <?= e((string) $table['product_name']) ?>
+                    / <?= e((string) $table['system_name']) ?>
+                    &mdash; Band <?= e((string) $table['band_code']) ?>
                     <?php if (!empty($table['name'])): ?>
                         <span style="color:#6b7280;font-weight:400;font-size:1rem">&mdash; <?= e((string) $table['name']) ?></span>
                     <?php endif; ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/price-tables.php?product_id=<?= (int) $table['product_id'] ?>">
-                        &larr; All price tables for <?= e((string) $table['product_name']) ?>
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>">
+                        &larr; All <?= e((string) $table['system_name']) ?> price tables
                     </a>
                 </p>
             </div>
@@ -357,7 +362,7 @@ $activeNav = 'products';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Upload &amp; replace</button>
-                    <a href="/admin/products/price-tables.php?product_id=<?= (int) $table['product_id'] ?>"
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>"
                        class="btn btn-secondary">Cancel</a>
                 </div>
             </form>

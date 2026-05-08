@@ -17,7 +17,7 @@ $rows = db()->prepare(
     'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at,
             (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS option_count,
             (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id) AS extra_count,
-            (SELECT COUNT(*) FROM price_tables    t WHERE t.product_id = p.id) AS table_count
+            (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id) AS system_count
        FROM products p
       WHERE p.client_id = ?
    ORDER BY p.sort_order, p.name'
@@ -91,8 +91,8 @@ $activeNav = 'products';
                             <tr>
                                 <th>Name</th>
                                 <th class="num">Fabrics</th>
+                                <th class="num">Systems</th>
                                 <th class="num">Extras</th>
-                                <th class="num">Price tables</th>
                                 <th>Updated</th>
                                 <th></th>
                             </tr>
@@ -111,12 +111,12 @@ $activeNav = 'products';
                                             <?= (int) $p['option_count'] ?>
                                         </a>
                                     </td>
-                                    <td class="num"><?= (int) $p['extra_count']  ?></td>
                                     <td class="num">
-                                        <a href="/admin/products/price-tables.php?product_id=<?= (int) $p['id'] ?>">
-                                            <?= (int) $p['table_count'] ?>
+                                        <a href="/admin/products/systems.php?product_id=<?= (int) $p['id'] ?>">
+                                            <?= (int) $p['system_count'] ?>
                                         </a>
                                     </td>
+                                    <td class="num"><?= (int) $p['extra_count']  ?></td>
                                     <td class="meta-cell">
                                         <?= e((string) $p['updated_at']) ?>
                                     </td>

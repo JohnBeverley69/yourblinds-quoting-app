@@ -9,34 +9,36 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$productId = (int) ($_GET['product_id'] ?? 0);
-if ($productId <= 0) {
+$systemId = (int) ($_GET['system_id'] ?? 0);
+if ($systemId <= 0) {
     header('Location: /admin/products/index.php');
     exit;
 }
 
-$pStmt = db()->prepare(
-    'SELECT id, name FROM products WHERE id = ? AND client_id = ?'
+// Tenant-scoped lookup of the system + its parent product.
+$sysStmt = db()->prepare(
+    'SELECT s.id, s.name AS system_name, s.product_id,
+            p.name AS product_name
+       FROM product_systems s
+       JOIN products p ON p.id = s.product_id
+      WHERE s.id = ? AND s.client_id = ?'
 );
-$pStmt->execute([$productId, $clientId]);
-$product = $pStmt->fetch();
+$sysStmt->execute([$systemId, $clientId]);
+$system = $sysStmt->fetch();
 
-if (!$product) {
+if (!$system) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-       . '<h1>Product not found</h1>';
+       . '<h1>System not found</h1>';
     exit;
 }
+$productId = (int) $system['product_id'];
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f = [
-    'band_code' => '',
-    'name'      => '',
-    'notes'     => '',
-];
+$f = ['band_code' => '', 'name' => '', 'notes' => ''];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
@@ -45,7 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['band_code','name','notes'] as $k) {
         $f[$k] = trim((string) ($_POST[$k] ?? ''));
     }
-    // Normalise: strip leading 'Band ' if user typed it.
     $f['band_code'] = preg_replace('/^band\s+/i', '', $f['band_code']);
 
     if ($f['band_code'] === '') {
@@ -56,12 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         try {
             $stmt = db()->prepare(
                 'INSERT INTO price_tables
-                   (client_id, product_id, band_code, name, notes, active)
-                 VALUES (?, ?, ?, ?, ?, 1)'
+                   (client_id, product_id, system_id, band_code, name, notes, active)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)'
             );
             $stmt->execute([
                 $clientId,
                 $productId,
+                $systemId,
                 strtoupper($f['band_code']),
                 $f['name']  !== '' ? $f['name']  : null,
                 $f['notes'] !== '' ? $f['notes'] : null,
@@ -71,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             header('Location: /admin/products/price-table.php?id=' . $newId);
             exit;
         } catch (Throwable $e) {
-            if (str_contains($e->getMessage(), 'uniq_price_table_product_band')) {
-                $error = 'A price table for that band already exists for this product.';
+            if (str_contains($e->getMessage(), 'uniq_price_table_product_system_band')) {
+                $error = 'A price table for that band already exists in this system.';
             } else {
                 $error = 'Could not create: ' . $e->getMessage();
             }
@@ -80,13 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
-// List existing tables, sorted with the same AAA → AA → A → B → C... rule
-// used on the fabrics page.
 $rows = db()->prepare(
     "SELECT t.id, t.band_code, t.name, t.notes, t.active, t.updated_at,
             (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
        FROM price_tables t
-      WHERE t.product_id = ? AND t.client_id = ?
+      WHERE t.system_id = ? AND t.client_id = ?
    ORDER BY
         CASE
             WHEN t.band_code = 'AAA' THEN 1
@@ -96,7 +96,7 @@ $rows = db()->prepare(
         END,
         t.band_code"
 );
-$rows->execute([$productId, $clientId]);
+$rows->execute([$systemId, $clientId]);
 $tables = $rows->fetchAll();
 
 $activeNav = 'products';
@@ -105,7 +105,7 @@ $activeNav = 'products';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e((string) $product['name']) ?> &middot; Price tables &middot; YourBlinds</title>
+    <title><?= e((string) $system['product_name']) ?> &middot; <?= e((string) $system['system_name']) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-row.cols-3-narrow { grid-template-columns: 1fr 2fr 3fr; }
@@ -134,17 +134,16 @@ $activeNav = 'products';
         <div class="page-header">
             <div>
                 <h1 class="page-title">
-                    <?= e((string) $product['name']) ?> &mdash; Price tables
+                    <?= e((string) $system['product_name']) ?>
+                    &mdash; <?= e((string) $system['system_name']) ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/index.php">&larr; All products</a>
-                    &middot;
-                    <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
+                    <a href="/admin/products/systems.php?product_id=<?= (int) $productId ?>">&larr; All systems</a>
                     &middot;
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
                 </p>
             </div>
-            <a href="/admin/products/price-tables-bulk-import.php?product_id=<?= (int) $productId ?>"
+            <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
                class="btn btn-secondary">Bulk import (multiple bands)</a>
         </div>
 
@@ -163,7 +162,7 @@ $activeNav = 'products';
                 <h2 class="section-title">Add price table</h2>
             </div>
             <form method="post"
-                  action="/admin/products/price-tables.php?product_id=<?= (int) $productId ?>"
+                  action="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
                   class="form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="create">
@@ -179,7 +178,7 @@ $activeNav = 'products';
                         <label for="name">Name</label>
                         <input id="name" name="name" type="text" maxlength="150"
                                value="<?= e((string) $f['name']) ?>"
-                               placeholder="e.g. 2026 Vertical Band A">
+                               placeholder="e.g. 2026 Slim Line Band A">
                     </div>
                     <div class="form-group">
                         <label for="notes">Notes</label>
@@ -202,9 +201,10 @@ $activeNav = 'products';
 
             <?php if (!$tables): ?>
                 <div class="placeholder">
-                    <p class="placeholder-title">No price tables yet</p>
+                    <p class="placeholder-title">No price tables in this system yet</p>
                     <p class="placeholder-body">
-                        Create one per fabric band. Each price table holds a width × drop matrix of prices.
+                        Add one per fabric band. Or use <strong>Bulk import</strong> at the
+                        top right to load every band from one Excel file in a single shot.
                     </p>
                 </div>
             <?php else: ?>
@@ -238,7 +238,7 @@ $activeNav = 'products';
                                               onsubmit="return confirm('Delete the Band <?= e(addslashes((string) $t['band_code'])) ?> price table? This wipes its <?= (int) $t['row_count'] ?> cells too.');">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
-                                            <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                                            <input type="hidden" name="system_id" value="<?= (int) $systemId ?>">
                                             <button type="submit">Delete</button>
                                         </form>
                                     </td>

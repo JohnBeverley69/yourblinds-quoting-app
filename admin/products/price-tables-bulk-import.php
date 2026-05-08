@@ -9,24 +9,29 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
-if ($productId <= 0) {
+$systemId = (int) ($_GET['system_id'] ?? $_POST['system_id'] ?? 0);
+if ($systemId <= 0) {
     header('Location: /admin/products/index.php');
     exit;
 }
 
-$pStmt = db()->prepare(
-    'SELECT id, name FROM products WHERE id = ? AND client_id = ?'
+$sysStmt = db()->prepare(
+    'SELECT s.id, s.name AS system_name, s.product_id,
+            p.name AS product_name
+       FROM product_systems s
+       JOIN products p ON p.id = s.product_id
+      WHERE s.id = ? AND s.client_id = ?'
 );
-$pStmt->execute([$productId, $clientId]);
-$product = $pStmt->fetch();
+$sysStmt->execute([$systemId, $clientId]);
+$system = $sysStmt->fetch();
 
-if (!$product) {
+if (!$system) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-       . '<h1>Product not found</h1>';
+       . '<h1>System not found</h1>';
     exit;
 }
+$productId = (int) $system['product_id'];
 
 $summary = null;
 $error   = null;
@@ -44,7 +49,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ss     = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
             $bands  = [];
 
-            // We scan every sheet — some suppliers ship bands per-tab too.
             foreach ($ss->getAllSheets() as $sheet) {
                 $rows = $sheet->toArray(null, true, true, true);
                 $bands = array_merge($bands, parse_band_blocks($rows));
@@ -59,28 +63,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $insertedBands = [];
                     foreach ($bands as $band) {
                         $code = strtoupper($band['code']);
-                        // Find or create the price_table for this product+band.
+                        // Find or create the price_table for this product+system+band.
                         $find = $pdo->prepare(
                             'SELECT id FROM price_tables
-                              WHERE client_id = ? AND product_id = ? AND band_code = ?'
+                              WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ?'
                         );
-                        $find->execute([$clientId, $productId, $code]);
+                        $find->execute([$clientId, $productId, $systemId, $code]);
                         $tableId = (int) ($find->fetchColumn() ?: 0);
                         if ($tableId === 0) {
                             $ins = $pdo->prepare(
                                 'INSERT INTO price_tables
-                                   (client_id, product_id, band_code, name, active)
-                                 VALUES (?, ?, ?, ?, 1)'
+                                   (client_id, product_id, system_id, band_code, name, active)
+                                 VALUES (?, ?, ?, ?, ?, 1)'
                             );
                             $ins->execute([
                                 $clientId,
                                 $productId,
+                                $systemId,
                                 $code,
                                 'Imported ' . date('Y-m-d'),
                             ]);
                             $tableId = (int) $pdo->lastInsertId();
                         }
-                        // Wipe + insert this band's cells.
                         $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
                         $del->execute([$tableId]);
                         $cellIns = $pdo->prepare(
@@ -91,10 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         foreach ($band['cells'] as [$w, $d, $p]) {
                             $cellIns->execute([$tableId, $w, $d, $p]);
                         }
-                        $insertedBands[] = [
-                            'code'  => $code,
-                            'cells' => count($band['cells']),
-                        ];
+                        $insertedBands[] = ['code' => $code, 'cells' => count($band['cells'])];
                     }
                     $pdo->commit();
                     $summary = ['bands' => $insertedBands];
@@ -125,7 +126,7 @@ function parse_band_blocks(array $rows): array
     $current   = null;
     $widths    = [];
     $cells     = [];
-    $expecting = 'band';   // band | widths | maybeInches | data
+    $expecting = 'band';
 
     $finalise = function () use (&$bands, &$current, &$cells) {
         if ($current !== null && $cells) {
@@ -137,10 +138,7 @@ function parse_band_blocks(array $rows): array
 
     foreach ($rows as $rowNum => $row) {
         $a = trim((string) ($row['A'] ?? ''));
-        $b = trim((string) ($row['B'] ?? ''));
 
-        // Tolerant band-header detection: "Band X", "Bnad X", "BAND XYZ" all match.
-        // Captures the trailing uppercase letters as the band code.
         if (preg_match('/^B\w+\s+([A-Z]+)\s*$/i', $a, $m)) {
             $finalise();
             $current   = strtoupper($m[1]);
@@ -149,16 +147,13 @@ function parse_band_blocks(array $rows): array
             continue;
         }
 
-        if ($current === null) {
-            continue; // outside any band section
-        }
+        if ($current === null) continue;
 
         if ($expecting === 'widths') {
-            // Capture all numeric values from column C onwards as widths (in metres).
             foreach ($row as $col => $val) {
                 if ($col === 'A' || $col === 'B') continue;
                 if (is_numeric($val) && (float) $val > 0) {
-                    $widths[$col] = (int) round((float) $val * 1000); // m → mm
+                    $widths[$col] = (int) round((float) $val * 1000);
                 }
             }
             if ($widths) {
@@ -168,25 +163,18 @@ function parse_band_blocks(array $rows): array
         }
 
         if ($expecting === 'maybeInches') {
-            // Skip the inches-reference row if it's there. Detect by B="Ins" or
-            // by the row containing things like 31.50''. If the row looks like
-            // a real data row (A is numeric), treat as data instead.
-            $aIsNumeric = is_numeric($a);
-            if (!$aIsNumeric) {
+            if (!is_numeric($a)) {
                 $expecting = 'data';
                 continue;
             }
-            // Fall through to data handling.
             $expecting = 'data';
         }
 
         if ($expecting === 'data') {
             if ($a === '' || !is_numeric($a)) {
-                // End of this band's data block.
                 $finalise();
                 $widths    = [];
                 $expecting = 'band';
-                // Re-process this row in case it's the next band header.
                 if (preg_match('/^B\w+\s+([A-Z]+)\s*$/i', $a, $m)) {
                     $current   = strtoupper($m[1]);
                     $widths    = [];
@@ -214,7 +202,7 @@ $activeNav = 'products';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bulk import price tables &middot; YourBlinds</title>
+    <title>Bulk import &middot; <?= e((string) $system['system_name']) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .tip-box {
@@ -242,11 +230,13 @@ $activeNav = 'products';
         <div class="page-header">
             <div>
                 <h1 class="page-title">
-                    Bulk import price tables &mdash; <?= e((string) $product['name']) ?>
+                    Bulk import &mdash;
+                    <?= e((string) $system['product_name']) ?>
+                    / <?= e((string) $system['system_name']) ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/price-tables.php?product_id=<?= (int) $productId ?>">
-                        &larr; All price tables
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>">
+                        &larr; Back to <?= e((string) $system['system_name']) ?> price tables
                     </a>
                 </p>
             </div>
@@ -259,7 +249,8 @@ $activeNav = 'products';
         <?php if ($summary !== null): ?>
             <div class="alert alert-success" role="status">
                 Imported <strong><?= count($summary['bands']) ?></strong>
-                band<?= count($summary['bands']) === 1 ? '' : 's' ?>:
+                band<?= count($summary['bands']) === 1 ? '' : 's' ?>
+                into <strong><?= e((string) $system['system_name']) ?></strong>:
             </div>
             <div class="section">
                 <ul class="summary-list">
@@ -271,7 +262,7 @@ $activeNav = 'products';
                     <?php endforeach; ?>
                 </ul>
                 <div class="form-actions" style="margin-top:1rem">
-                    <a href="/admin/products/price-tables.php?product_id=<?= (int) $productId ?>"
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
                        class="btn btn-primary">View price tables</a>
                 </div>
             </div>
@@ -290,7 +281,7 @@ $activeNav = 'products';
                     <li>Data rows: drop in metres in column A, prices in £ across the width columns</li>
                 </ul>
                 Multiple band blocks can be stacked vertically in one sheet, or spread across multiple sheets — both work.
-                <strong>Re-importing replaces</strong> any existing rows for each band.
+                <strong>Re-importing replaces</strong> any existing rows for each band <em>within this system</em>.
             </div>
         </section>
 
@@ -302,7 +293,7 @@ $activeNav = 'products';
                   action="/admin/products/price-tables-bulk-import.php"
                   enctype="multipart/form-data">
                 <?= csrf_field() ?>
-                <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                <input type="hidden" name="system_id" value="<?= (int) $systemId ?>">
 
                 <div class="form-row full">
                     <div class="form-group">
@@ -315,7 +306,7 @@ $activeNav = 'products';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Upload &amp; import all bands</button>
-                    <a href="/admin/products/price-tables.php?product_id=<?= (int) $productId ?>"
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
                        class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
