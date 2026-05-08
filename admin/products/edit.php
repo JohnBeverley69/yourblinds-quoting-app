@@ -170,6 +170,20 @@ $activeNav = 'products';
                 </div>
             </form>
         </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Manage</h2>
+            </div>
+            <div class="actions-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/admin/products/options.php?product_id=<?= (int) $id ?>"
+                   class="btn btn-secondary">
+                    <?= e((string) $f['option_label']) ?>s &rarr;
+                </a>
+                <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2c">Extras (soon)</span>
+                <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2d">Price tables (soon)</span>
+            </div>
+        </section>
     </main>
 </div>
 

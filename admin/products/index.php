@@ -108,7 +108,11 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                     </td>
                                     <td><?= e((string) $p['option_label']) ?></td>
-                                    <td class="num"><?= (int) $p['option_count'] ?></td>
+                                    <td class="num">
+                                        <a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>">
+                                            <?= (int) $p['option_count'] ?>
+                                        </a>
+                                    </td>
                                     <td class="num"><?= (int) $p['extra_count']  ?></td>
                                     <td class="num"><?= (int) $p['table_count']  ?></td>
                                     <td class="meta-cell">
