@@ -129,6 +129,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                 $skipped  = 0;
                 $blank    = 0;
                 $rowErrs  = [];
+                // Header-ish strings that should never end up as a data row, even
+                // if they appear past row 1 (e.g. when the user pasted multiple
+                // sub-header rows along with their data).
+                $headerLikeBand = ['BAND', 'BAND CODE', 'BANDCODE'];
+                $headerLikeName = ['FABRIC', 'FABRIC NAME', 'NAME', 'SLAT', 'SLAT TYPE'];
+
                 foreach ($rows as $rowNum => $row) {
                     if ($rowNum === 1) continue; // header
                     $band = trim((string) ($row[$colMap['band']] ?? ''));
@@ -136,6 +142,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                     if ($band === '' && $name === '') { $blank++; continue; }
                     if ($band === '' || $name === '') {
                         $rowErrs[] = "Row $rowNum: missing " . ($band === '' ? 'band' : 'name');
+                        continue;
+                    }
+                    // Sub-header detection: skip rows where the band or name looks
+                    // like a column title (common when pasting from multi-section
+                    // supplier sheets that have repeated 'Fabric / Band' rows).
+                    if (in_array(strtoupper($band), $headerLikeBand, true)
+                     || in_array(strtoupper($name), $headerLikeName, true)) {
+                        $blank++;
                         continue;
                     }
                     $supplier = isset($colMap['supplier']) ? trim((string) ($row[$colMap['supplier']] ?? '')) : '';
