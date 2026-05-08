@@ -114,20 +114,13 @@ $activeNav = 'products';
                 <div class="form-row">
                     <div class="form-group">
                         <label for="option_label">Option label <span class="required">*</span></label>
-                        <select id="option_label" name="option_label">
-                            <?php
-                                $stdLabels = ['Fabric', 'Slat type'];
-                                $current   = $f['option_label'];
-                                $isCustom  = !in_array($current, $stdLabels, true) && $current !== '';
-                            ?>
-                            <option value="Fabric"    <?= $current === 'Fabric'    ? 'selected' : '' ?>>Fabric</option>
-                            <option value="Slat type" <?= $current === 'Slat type' ? 'selected' : '' ?>>Slat type</option>
-                            <option value="__custom"  <?= $isCustom ? 'selected' : '' ?>>Other (specify)…</option>
-                        </select>
-                        <input type="text" id="option_label_custom" name="option_label_custom"
-                               maxlength="50" style="margin-top: 0.5rem;<?= $isCustom ? '' : 'display:none;' ?>"
-                               value="<?= $isCustom ? e((string) $current) : '' ?>"
-                               placeholder="Custom label">
+                        <input id="option_label" name="option_label" type="text"
+                               required maxlength="50"
+                               value="<?= e((string) $f['option_label']) ?>"
+                               placeholder="Fabric">
+                        <small style="color:#6b7280;font-size:0.8125rem;">
+                            Drives the picker label in the quote builder. Usually "Fabric"; use "Slat type" for woods/faux venetians.
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="sort_order">Sort order</label>
@@ -150,36 +143,5 @@ $activeNav = 'products';
     </main>
 </div>
 
-<script>
-(function () {
-    var sel    = document.getElementById('option_label');
-    var custom = document.getElementById('option_label_custom');
-    if (!sel || !custom) return;
-    function sync() {
-        if (sel.value === '__custom') {
-            custom.style.display = '';
-            custom.required = true;
-            // Submit hook: replace the select's name with the custom value.
-            sel.form.addEventListener('submit', writeBack, { once: false });
-        } else {
-            custom.style.display = 'none';
-            custom.required = false;
-        }
-    }
-    function writeBack(e) {
-        if (sel.value === '__custom') {
-            // Repurpose the hidden field write: stash custom value as option_label.
-            var realInput = document.createElement('input');
-            realInput.type = 'hidden';
-            realInput.name = 'option_label';
-            realInput.value = custom.value.trim() || 'Other';
-            sel.form.appendChild(realInput);
-            sel.disabled = true; // so its '__custom' value isn't posted
-        }
-    }
-    sel.addEventListener('change', sync);
-    sync();
-})();
-</script>
 </body>
 </html>
