@@ -2,13 +2,9 @@
 /**
  * Postcode lookup widget — populates the installation address fields
  * (installation_address1/2, installation_town, installation_county,
- * installation_postcode) from a getAddress.io result.
+ * installation_postcode) from a Postcoder lookup result.
  *
- * Two-step flow:
- *   1. POST term to /api/postcode.php?action=autocomplete
- *      -> renders a dropdown of matching addresses
- *   2. On selection, fetch /api/postcode.php?action=get&id=<id>
- *      -> populate the form fields with the full address
+ * Single-call flow: postcode -> list of full addresses -> user picks one.
  *
  * Caller is responsible for gating inclusion behind feature_postcode_lookup.
  * Drop the include just inside the "Installation address" fieldset.
@@ -19,7 +15,7 @@
         <label for="postcode_lookup_input">Find by postcode</label>
         <input type="text" id="postcode_lookup_input"
                placeholder="e.g. BS1 4ST"
-               autocomplete="off" maxlength="20">
+               autocomplete="off" maxlength="8">
     </div>
     <div class="form-group" style="margin-bottom: 0;">
         <button type="button" id="postcode_lookup_btn" class="btn btn-secondary">Find address</button>
@@ -49,6 +45,8 @@
     var errEl   = document.getElementById('postcode_lookup_error');
     if (!input || !btn || !results || !sel || !errEl) return;
 
+    var cache = [];
+
     function setError(msg) {
         if (msg) {
             errEl.textContent = msg;
@@ -66,15 +64,15 @@
     }
 
     function lookup() {
-        var term = (input.value || '').trim();
-        if (!term) { setError('Enter a postcode first.'); return; }
+        var pc = (input.value || '').trim();
+        if (!pc) { setError('Enter a postcode first.'); return; }
 
         setError('');
         btn.disabled = true;
         var origLabel = btn.textContent;
         btn.textContent = 'Finding…';
 
-        fetch('/api/postcode.php?action=autocomplete&term=' + encodeURIComponent(term), {
+        fetch('/api/postcode.php?postcode=' + encodeURIComponent(pc), {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
         }).then(function (res) {
@@ -84,24 +82,25 @@
                 setError((r.data && r.data.error) || 'Lookup failed.');
                 return;
             }
-            var suggestions = (r.data && r.data.suggestions) || [];
+            cache = (r.data && r.data.addresses) || [];
             sel.innerHTML = '';
-            if (!suggestions.length) {
+            if (!cache.length) {
                 setError('No addresses found for that postcode.');
                 return;
             }
-            // First option is a placeholder so the change event fires reliably
-            // even when there's only one real suggestion.
+            // Placeholder so the change event fires reliably even when there's
+            // only one real suggestion.
             var ph = document.createElement('option');
             ph.value = '';
             ph.textContent = '— Pick one —';
             ph.disabled = true;
             ph.selected = true;
             sel.appendChild(ph);
-            suggestions.forEach(function (s) {
+            cache.forEach(function (a, i) {
                 var opt = document.createElement('option');
-                opt.value = s.id;
-                opt.textContent = s.address;
+                opt.value = String(i);
+                opt.textContent = [a.line1, a.line2, a.town, a.postcode]
+                    .filter(function (p) { return p; }).join(', ');
                 sel.appendChild(opt);
             });
             results.style.display = 'block';
@@ -111,34 +110,6 @@
         }).finally(function () {
             btn.disabled = false;
             btn.textContent = origLabel;
-        });
-    }
-
-    function fetchDetails(id) {
-        if (!id) return;
-        sel.disabled = true;
-
-        fetch('/api/postcode.php?action=get&id=' + encodeURIComponent(id), {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' }
-        }).then(function (res) {
-            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
-        }).then(function (r) {
-            if (!r.ok) {
-                setError((r.data && r.data.error) || 'Could not fetch address details.');
-                return;
-            }
-            var a = r.data || {};
-            setField('installation_address1', a.line1);
-            setField('installation_address2', a.line2);
-            setField('installation_town',     a.town);
-            setField('installation_county',   a.county);
-            setField('installation_postcode', a.postcode);
-            setError('');
-        }).catch(function () {
-            setError('Could not fetch address details. Please try again.');
-        }).finally(function () {
-            sel.disabled = false;
         });
     }
 
@@ -152,9 +123,16 @@
         }
     });
 
-    // Selecting an address triggers the second API call.
+    // Apply selection to the address fields.
     sel.addEventListener('change', function () {
-        fetchDetails(sel.value);
+        var idx = parseInt(sel.value, 10);
+        if (isNaN(idx) || !cache[idx]) return;
+        var a = cache[idx];
+        setField('installation_address1', a.line1);
+        setField('installation_address2', a.line2);
+        setField('installation_town',     a.town);
+        setField('installation_county',   a.county);
+        setField('installation_postcode', a.postcode);
     });
 })();
 </script>
