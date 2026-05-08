@@ -35,8 +35,8 @@ if (!$option) {
     exit;
 }
 
-$label  = (string) $option['option_label'];
-$labelL = strtolower($label);
+$label  = 'Fabric';
+$labelL = 'fabric';
 
 $f = [
     'band_code'     => (string) $option['band_code'],

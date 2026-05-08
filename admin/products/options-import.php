@@ -28,8 +28,9 @@ if (!$product) {
     exit;
 }
 
-$label  = (string) $product['option_label'];   // "Fabric" / "Slat type"
-$labelL = strtolower($label);
+// Hardcoded — see options.php for rationale.
+$label  = 'Fabric';
+$labelL = 'fabric';
 
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 

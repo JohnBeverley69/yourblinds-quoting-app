@@ -10,39 +10,34 @@ $user     = current_user();
 $clientId = $user['client_id'];
 
 $f = [
-    'name'         => '',
-    'option_label' => 'Fabric',
-    'sort_order'   => 0,
-    'active'       => 1,
+    'name'       => '',
+    'sort_order' => 0,
+    'active'     => 1,
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']         = trim((string) ($_POST['name']         ?? ''));
-    $f['option_label'] = trim((string) ($_POST['option_label'] ?? 'Fabric'));
-    $f['sort_order']   = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']       = !empty($_POST['active']) ? 1 : 0;
+    $f['name']       = trim((string) ($_POST['name'] ?? ''));
+    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']     = !empty($_POST['active']) ? 1 : 0;
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Product name is too long (max 150 characters).';
-    } elseif ($f['option_label'] === '') {
-        $error = 'Option label is required (e.g. "Fabric" or "Slat type").';
-    } elseif (strlen($f['option_label']) > 50) {
-        $error = 'Option label is too long (max 50 characters).';
     } else {
         try {
+            // option_label uses the schema default ('Fabric') — no longer
+            // settable from the form.
             $stmt = db()->prepare(
-                'INSERT INTO products (client_id, name, option_label, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO products (client_id, name, sort_order, active)
+                 VALUES (?, ?, ?, ?)'
             );
             $stmt->execute([
                 $clientId,
                 $f['name'],
-                $f['option_label'],
                 $f['sort_order'],
                 $f['active'],
             ]);
@@ -112,16 +107,6 @@ $activeNav = 'products';
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label for="option_label">Option label <span class="required">*</span></label>
-                        <input id="option_label" name="option_label" type="text"
-                               required maxlength="50"
-                               value="<?= e((string) $f['option_label']) ?>"
-                               placeholder="Fabric">
-                        <small style="color:#6b7280;font-size:0.8125rem;">
-                            Drives the picker label in the quote builder. Usually "Fabric"; use "Slat type" for woods/faux venetians.
-                        </small>
-                    </div>
                     <div class="form-group">
                         <label for="sort_order">Sort order</label>
                         <input id="sort_order" name="sort_order" type="number" value="<?= (int) $f['sort_order'] ?>">

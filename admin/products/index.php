@@ -14,7 +14,7 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $rows = db()->prepare(
-    'SELECT p.id, p.name, p.option_label, p.sort_order, p.active, p.updated_at,
+    'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at,
             (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS option_count,
             (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id) AS extra_count,
             (SELECT COUNT(*) FROM price_tables    t WHERE t.product_id = p.id) AS table_count
@@ -90,8 +90,7 @@ $activeNav = 'products';
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Option label</th>
-                                <th class="num">Options</th>
+                                <th class="num">Fabrics</th>
                                 <th class="num">Extras</th>
                                 <th class="num">Price tables</th>
                                 <th>Updated</th>
@@ -107,7 +106,6 @@ $activeNav = 'products';
                                             <span class="inactive-pill">Inactive</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= e((string) $p['option_label']) ?></td>
                                     <td class="num">
                                         <a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>">
                                             <?= (int) $p['option_count'] ?>

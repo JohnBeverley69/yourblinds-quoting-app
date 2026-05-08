@@ -31,8 +31,11 @@ if (!$product) {
     exit;
 }
 
-$label  = (string) $product['option_label'];        // "Fabric" / "Slat type"
-$labelL = strtolower($label);                       // "fabric" / "slat type"
+// Hardcoded for now. The product's option_label column still exists if we
+// later need per-product labels (e.g. "Slat type" for woods/faux venetians),
+// but the UI just says "Fabric" to keep things simple.
+$label  = 'Fabric';
+$labelL = 'fabric';
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;

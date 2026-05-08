@@ -31,39 +31,35 @@ if (!$product) {
 }
 
 $f = [
-    'name'         => (string) $product['name'],
-    'option_label' => (string) $product['option_label'],
-    'sort_order'   => (int)    $product['sort_order'],
-    'active'       => (int)    $product['active'],
+    'name'       => (string) $product['name'],
+    'sort_order' => (int)    $product['sort_order'],
+    'active'     => (int)    $product['active'],
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']         = trim((string) ($_POST['name']         ?? ''));
-    $f['option_label'] = trim((string) ($_POST['option_label'] ?? 'Fabric'));
-    $f['sort_order']   = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']       = !empty($_POST['active']) ? 1 : 0;
+    $f['name']       = trim((string) ($_POST['name'] ?? ''));
+    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']     = !empty($_POST['active']) ? 1 : 0;
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Product name is too long (max 150 characters).';
-    } elseif ($f['option_label'] === '') {
-        $error = 'Option label is required.';
-    } elseif (strlen($f['option_label']) > 50) {
-        $error = 'Option label is too long (max 50 characters).';
     } else {
         try {
+            // option_label is no longer set from the form — left at the
+            // schema default. Force any stale 'Master Admin'-style values
+            // back to 'Fabric' here too so display lines up immediately.
             $u = db()->prepare(
-                'UPDATE products
-                    SET name = ?, option_label = ?, sort_order = ?, active = ?
-                  WHERE id = ? AND client_id = ?'
+                "UPDATE products
+                    SET name = ?, sort_order = ?, active = ?, option_label = 'Fabric'
+                  WHERE id = ? AND client_id = ?"
             );
             $u->execute([
                 $f['name'],
-                $f['option_label'],
                 $f['sort_order'],
                 $f['active'],
                 $id,
@@ -136,16 +132,6 @@ $activeNav = 'products';
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="option_label">Option label <span class="required">*</span></label>
-                        <input id="option_label" name="option_label" type="text"
-                               required maxlength="50"
-                               value="<?= e((string) $f['option_label']) ?>"
-                               placeholder="Fabric">
-                        <small style="color:#6b7280;font-size:0.8125rem;">
-                            Drives the picker label in the quote builder. Usually "Fabric"; use "Slat type" for woods/faux venetians.
-                        </small>
-                    </div>
-                    <div class="form-group">
                         <label for="sort_order">Sort order</label>
                         <input id="sort_order" name="sort_order" type="number" value="<?= (int) $f['sort_order'] ?>">
                     </div>
@@ -171,7 +157,7 @@ $activeNav = 'products';
             <div class="actions-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <a href="/admin/products/options.php?product_id=<?= (int) $id ?>"
                    class="btn btn-secondary">
-                    <?= e((string) $f['option_label']) ?>s &rarr;
+                    Fabrics &rarr;
                 </a>
                 <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2c">Extras (soon)</span>
                 <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2d">Price tables (soon)</span>
