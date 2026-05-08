@@ -74,8 +74,7 @@ function autocomplete(): void
     }
 
     $url = 'https://api.getAddress.io/autocomplete/' . rawurlencode($term)
-         . '?api-key=' . urlencode(GETADDRESS_API_KEY)
-         . '&top=20&all=true';
+         . '?top=20&all=true';
 
     [$status, $data] = call_getaddress($url);
     if ($status === null) {
@@ -117,8 +116,7 @@ function getById(): void
         return;
     }
 
-    $url = 'https://api.getAddress.io/get/' . rawurlencode($id)
-         . '?api-key=' . urlencode(GETADDRESS_API_KEY);
+    $url = 'https://api.getAddress.io/get/' . rawurlencode($id);
 
     [$status, $data] = call_getaddress($url);
     if ($status === null) {
@@ -151,7 +149,10 @@ function call_getaddress(string $url): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_USERAGENT      => 'YourBlinds/1.0 (+postcode-lookup)',
-        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+        CURLOPT_HTTPHEADER     => [
+            'Accept: application/json',
+            'Authorization: api-key ' . GETADDRESS_API_KEY,
+        ],
     ]);
     $body   = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
