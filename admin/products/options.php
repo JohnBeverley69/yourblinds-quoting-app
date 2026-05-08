@@ -165,6 +165,13 @@ $activeNav = 'products';
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
+        .bulk-bar {
+            display: flex; align-items: center; gap: 0.75rem;
+            margin-bottom: 0.75rem; flex-wrap: wrap;
+        }
+        .bulk-bar .selected-count { font-size: 0.875rem; color: #6b7280; }
+        .row-check { width: 1%; text-align: center; }
+        .row-check input { width: 18px; height: 18px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -260,49 +267,130 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Band</th>
-                                <th><?= e($label) ?></th>
-                                <th>Colour</th>
-                                <th>Supplier</th>
-                                <th>Code</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($options as $o): ?>
-                                <tr>
-                                    <td><span class="band-pill"><?= e((string) $o['band_code']) ?></span></td>
-                                    <td>
-                                        <?= e((string) $o['name']) ?>
-                                        <?php if ((int) $o['active'] !== 1): ?>
-                                            <span class="inactive-pill">Inactive</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= e((string) ($o['colour'] ?? '')) ?></td>
-                                    <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
-                                    <td><?= e((string) ($o['code'] ?? '')) ?></td>
-                                    <td class="row-actions">
-                                        <a href="/admin/products/option-edit.php?id=<?= (int) $o['id'] ?>">Edit</a>
-                                        <form method="post" action="/admin/products/option-delete.php"
-                                              onsubmit="return confirm('Delete <?= e(addslashes((string) $o['name'])) ?>?');">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= (int) $o['id'] ?>">
-                                            <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
-                                            <button type="submit">Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <div class="bulk-bar">
+                    <button type="button" id="bulk-delete-btn"
+                            class="btn btn-secondary btn-sm" disabled>
+                        Delete selected
+                    </button>
+                    <span class="selected-count" id="bulk-count">No rows selected</span>
                 </div>
+                <form id="bulk-form" method="post" action="/admin/products/option-delete.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th class="row-check">
+                                        <input type="checkbox" id="check-all"
+                                               aria-label="Select all">
+                                    </th>
+                                    <th>Band</th>
+                                    <th><?= e($label) ?></th>
+                                    <th>Colour</th>
+                                    <th>Supplier</th>
+                                    <th>Code</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($options as $o): ?>
+                                    <tr>
+                                        <td class="row-check">
+                                            <input type="checkbox" class="row-checkbox"
+                                                   name="ids[]" value="<?= (int) $o['id'] ?>"
+                                                   aria-label="Select <?= e((string) $o['name']) ?>">
+                                        </td>
+                                        <td><span class="band-pill"><?= e((string) $o['band_code']) ?></span></td>
+                                        <td>
+                                            <?= e((string) $o['name']) ?>
+                                            <?php if ((int) $o['active'] !== 1): ?>
+                                                <span class="inactive-pill">Inactive</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= e((string) ($o['colour'] ?? '')) ?></td>
+                                        <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
+                                        <td><?= e((string) ($o['code'] ?? '')) ?></td>
+                                        <td class="row-actions">
+                                            <a href="/admin/products/option-edit.php?id=<?= (int) $o['id'] ?>">Edit</a>
+                                            <button type="button" class="row-delete"
+                                                    data-id="<?= (int) $o['id'] ?>"
+                                                    data-name="<?= e((string) $o['name']) ?>"
+                                                    style="font-size:0.875rem;color:#b91c1c;background:transparent;border:0;cursor:pointer;padding:0;margin-left:0.5rem;">
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
             <?php endif; ?>
         </section>
     </main>
 </div>
+
+<script>
+(function () {
+    var form = document.getElementById('bulk-form');
+    if (!form) return;
+    var checkAll = document.getElementById('check-all');
+    var rowBoxes = form.querySelectorAll('.row-checkbox');
+    var btn      = document.getElementById('bulk-delete-btn');
+    var counter  = document.getElementById('bulk-count');
+
+    function checkedIds() {
+        var ids = [];
+        rowBoxes.forEach(function (cb) { if (cb.checked) ids.push(cb.value); });
+        return ids;
+    }
+
+    function refresh() {
+        var ids = checkedIds();
+        var n   = ids.length;
+        btn.disabled = n === 0;
+        if (n === 0) {
+            counter.textContent = 'No rows selected';
+        } else {
+            counter.textContent = n + ' row' + (n === 1 ? '' : 's') + ' selected';
+        }
+        if (checkAll) {
+            checkAll.checked       = (n > 0 && n === rowBoxes.length);
+            checkAll.indeterminate = (n > 0 && n < rowBoxes.length);
+        }
+    }
+
+    if (checkAll) {
+        checkAll.addEventListener('change', function () {
+            rowBoxes.forEach(function (cb) { cb.checked = checkAll.checked; });
+            refresh();
+        });
+    }
+    rowBoxes.forEach(function (cb) { cb.addEventListener('change', refresh); });
+
+    btn.addEventListener('click', function () {
+        var n = checkedIds().length;
+        if (n === 0) return;
+        if (confirm('Delete ' + n + ' selected row' + (n === 1 ? '' : 's') + '? This cannot be undone.')) {
+            form.submit();
+        }
+    });
+
+    // Per-row Delete buttons reuse the same bulk form: clear all checkboxes,
+    // tick just the target, confirm, submit.
+    document.querySelectorAll('.row-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id   = btn.getAttribute('data-id');
+            var name = btn.getAttribute('data-name');
+            if (!confirm('Delete ' + name + '?')) return;
+            rowBoxes.forEach(function (cb) { cb.checked = (cb.value === id); });
+            form.submit();
+        });
+    });
+
+    refresh();
+})();
+</script>
 </body>
 </html>

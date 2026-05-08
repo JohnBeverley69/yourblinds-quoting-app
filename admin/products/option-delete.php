@@ -16,16 +16,31 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user      = current_user();
-$id        = (int) ($_POST['id']         ?? 0);
 $productId = (int) ($_POST['product_id'] ?? 0);
 
-if ($id > 0) {
+// Accept either ?id=N (single-row delete from per-row forms) or ?ids[]=N&ids[]=M
+// (bulk delete from the checkbox toolbar). Filter to positive ints.
+$rawIds = [];
+if (isset($_POST['id'])) {
+    $rawIds[] = (int) $_POST['id'];
+}
+if (isset($_POST['ids']) && is_array($_POST['ids'])) {
+    foreach ($_POST['ids'] as $i) { $rawIds[] = (int) $i; }
+}
+$ids = array_values(array_unique(array_filter($rawIds, static fn ($i) => $i > 0)));
+
+if ($ids) {
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $stmt = db()->prepare(
-        'DELETE FROM product_options WHERE id = ? AND client_id = ?'
+        "DELETE FROM product_options
+          WHERE id IN ($placeholders) AND client_id = ?"
     );
-    $stmt->execute([$id, $user['client_id']]);
-    if ($stmt->rowCount() > 0) {
-        $_SESSION['flash_success'] = 'Option deleted.';
+    $stmt->execute(array_merge($ids, [$user['client_id']]));
+    $deleted = $stmt->rowCount();
+    if ($deleted > 0) {
+        $_SESSION['flash_success'] = $deleted === 1
+            ? 'Option deleted.'
+            : "$deleted options deleted.";
     }
 }
 
