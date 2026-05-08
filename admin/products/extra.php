@@ -1,0 +1,339 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../../bootstrap.php';
+require __DIR__ . '/../../auth/middleware.php';
+
+requireAdmin();
+
+$user     = current_user();
+$clientId = $user['client_id'];
+
+$extraId = (int) ($_GET['id'] ?? $_POST['extra_id'] ?? 0);
+if ($extraId <= 0) {
+    header('Location: /admin/products/index.php');
+    exit;
+}
+
+// Tenant-scoped lookup of the extra + its parent product.
+$loadStmt = db()->prepare(
+    'SELECT e.id, e.product_id, e.name, e.is_required, e.active,
+            p.name AS product_name
+       FROM product_extras e
+       JOIN products p ON p.id = e.product_id
+      WHERE e.id = ? AND e.client_id = ?'
+);
+$loadStmt->execute([$extraId, $clientId]);
+$extra = $loadStmt->fetch();
+
+if (!$extra) {
+    http_response_code(404);
+    echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+       . '<h1>Extra not found</h1>';
+    exit;
+}
+
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+$f = [
+    'label'         => '',
+    'price_delta'   => '0.00',
+    'price_percent' => '0.00',
+    'is_default'    => 0,
+    'sort_order'    => 0,
+];
+$error = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create_choice') {
+    csrf_check();
+
+    $f['label']         = trim((string) ($_POST['label'] ?? ''));
+    $f['price_delta']   = trim((string) ($_POST['price_delta']   ?? '0'));
+    $f['price_percent'] = trim((string) ($_POST['price_percent'] ?? '0'));
+    $f['is_default']    = !empty($_POST['is_default']) ? 1 : 0;
+    $f['sort_order']    = (int) ($_POST['sort_order'] ?? 0);
+
+    if ($f['label'] === '') {
+        $error = 'Label is required.';
+    } elseif (strlen($f['label']) > 150) {
+        $error = 'Label is too long (max 150 chars).';
+    } elseif (!is_numeric($f['price_delta'])) {
+        $error = 'Flat surcharge must be a number.';
+    } elseif (!is_numeric($f['price_percent'])) {
+        $error = 'Percent surcharge must be a number.';
+    } else {
+        try {
+            $pdo = db();
+            $pdo->beginTransaction();
+
+            // If marking this as default, clear default on all sibling choices first.
+            if ($f['is_default'] === 1) {
+                $clear = $pdo->prepare(
+                    'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
+                );
+                $clear->execute([$extraId]);
+            }
+
+            $ins = $pdo->prepare(
+                'INSERT INTO product_extra_choices
+                   (product_extra_id, label, price_delta, price_percent,
+                    is_default, sort_order, active)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)'
+            );
+            $ins->execute([
+                $extraId,
+                $f['label'],
+                (float) $f['price_delta'],
+                (float) $f['price_percent'],
+                $f['is_default'],
+                $f['sort_order'],
+            ]);
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Choice "' . $f['label'] . '" added.';
+            header('Location: /admin/products/extra.php?id=' . $extraId);
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $error = 'Could not add: ' . $e->getMessage();
+        }
+    }
+}
+
+// Mark a choice as default — only one default per extra.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'set_default_choice') {
+    csrf_check();
+    $targetId = (int) ($_POST['choice_id'] ?? 0);
+    if ($targetId > 0) {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $clear = $pdo->prepare(
+                'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
+            );
+            $clear->execute([$extraId]);
+            $set = $pdo->prepare(
+                'UPDATE product_extra_choices SET is_default = 1
+                  WHERE id = ? AND product_extra_id = ?'
+            );
+            $set->execute([$targetId, $extraId]);
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Default choice updated.';
+            header('Location: /admin/products/extra.php?id=' . $extraId);
+            exit;
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not set default: ' . $e->getMessage();
+        }
+    }
+}
+
+$rows = db()->prepare(
+    'SELECT id, label, price_delta, price_percent, is_default, sort_order, active
+       FROM product_extra_choices
+      WHERE product_extra_id = ?
+   ORDER BY is_default DESC, sort_order, label'
+);
+$rows->execute([$extraId]);
+$choices = $rows->fetchAll();
+
+$activeNav = 'products';
+?><!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= e((string) $extra['name']) ?> &middot; Choices &middot; YourBlinds</title>
+    <link rel="stylesheet" href="/app.css">
+    <style>
+        .form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1fr 0.75fr; align-items: end; }
+        @media (max-width: 900px) { .form-row.cols-5 { grid-template-columns: 1fr; } }
+        .form-group input[type="number"] {
+            width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
+            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+        }
+        .checkbox-row {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            padding: 0.5625rem 0; margin: 0;
+        }
+        .checkbox-row input { width: 18px; height: 18px; }
+        .row-actions { white-space: nowrap; }
+        .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
+        .row-actions form { display: inline; margin: 0; }
+        .row-actions button {
+            font-size: 0.875rem; color: #b91c1c; background: transparent;
+            border: 0; cursor: pointer; padding: 0; margin-left: 0.5rem;
+        }
+        .row-actions button.set-default {
+            color: #1f3b5b;
+        }
+        .row-actions button:hover { text-decoration: underline; }
+        .default-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #fff; background: #16a34a;
+            border-radius: 999px; margin-left: 0.5rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .price-impact { color: #6b7280; font-size: 0.875rem; }
+        .price-impact strong { color: #111827; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <?php require __DIR__ . '/../../_partials/sidebar.php'; ?>
+
+    <main class="app-main">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">
+                    <?= e((string) $extra['product_name']) ?> / <?= e((string) $extra['name']) ?>
+                </h1>
+                <p class="page-subtitle">
+                    <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>">
+                        &larr; All extras for <?= e((string) $extra['product_name']) ?>
+                    </a>
+                    &middot;
+                    <a href="/admin/products/extra-edit.php?id=<?= (int) $extraId ?>">Edit extra</a>
+                </p>
+            </div>
+        </div>
+
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+        <?php if ($error !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e($error) ?></div>
+        <?php endif; ?>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Add choice</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+                Either surcharge field can stay 0 if the choice is free. Use <strong>£</strong>
+                for a flat add-on (e.g. Motor +£45) or <strong>%</strong> for a percentage on the
+                base price (e.g. Blackout lining +15%). Both can apply to the same choice.
+            </p>
+            <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
+                  class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="create_choice">
+
+                <div class="form-row cols-5">
+                    <div class="form-group">
+                        <label for="label">Label <span class="required">*</span></label>
+                        <input id="label" name="label" type="text"
+                               required maxlength="150" autofocus
+                               value="<?= e((string) $f['label']) ?>" placeholder="e.g. Left">
+                    </div>
+                    <div class="form-group">
+                        <label for="price_delta">Flat £</label>
+                        <input id="price_delta" name="price_delta" type="number"
+                               step="0.01" value="<?= e((string) $f['price_delta']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="price_percent">Percent %</label>
+                        <input id="price_percent" name="price_percent" type="number"
+                               step="0.01" value="<?= e((string) $f['price_percent']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="sort_order">Sort</label>
+                        <input id="sort_order" name="sort_order" type="number"
+                               value="<?= (int) $f['sort_order'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-row" for="is_default">
+                            <input type="checkbox" id="is_default" name="is_default" value="1"
+                                   <?= $f['is_default'] === 1 ? 'checked' : '' ?>>
+                            Default
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Add choice</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Choices (<?= count($choices) ?>)</h2>
+            </div>
+
+            <?php if (!$choices): ?>
+                <div class="placeholder">
+                    <p class="placeholder-title">No choices yet</p>
+                    <p class="placeholder-body">
+                        Use the form above to add the options customers can pick from.
+                    </p>
+                </div>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>Price impact</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($choices as $c): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= e((string) $c['label']) ?></strong>
+                                        <?php if ((int) $c['is_default'] === 1): ?>
+                                            <span class="default-pill">Default</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="price-impact">
+                                        <?php
+                                            $delta   = (float) $c['price_delta'];
+                                            $percent = (float) $c['price_percent'];
+                                            $bits = [];
+                                            if ($delta != 0)   { $bits[] = ($delta > 0 ? '+' : '') . '£' . number_format($delta, 2); }
+                                            if ($percent != 0) { $bits[] = ($percent > 0 ? '+' : '') . number_format($percent, 2) . '%'; }
+                                        ?>
+                                        <?php if ($bits): ?>
+                                            <strong><?= e(implode(' and ', $bits)) ?></strong>
+                                        <?php else: ?>
+                                            Free
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="row-actions">
+                                        <?php if ((int) $c['is_default'] !== 1): ?>
+                                            <form method="post"
+                                                  action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
+                                                  style="display:inline;margin:0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="set_default_choice">
+                                                <input type="hidden" name="choice_id" value="<?= (int) $c['id'] ?>">
+                                                <button type="submit" class="set-default">Set default</button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
+                                        <form method="post" action="/admin/products/extra-choice-delete.php"
+                                              onsubmit="return confirm('Delete choice <?= e(addslashes((string) $c['label'])) ?>?');">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                                            <input type="hidden" name="extra_id" value="<?= (int) $extraId ?>">
+                                            <button type="submit">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </section>
+    </main>
+</div>
+</body>
+</html>

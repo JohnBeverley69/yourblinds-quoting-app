@@ -16,63 +16,61 @@ if ($id <= 0) {
 }
 
 $loadStmt = db()->prepare(
-    'SELECT id, name, option_label, sort_order, active
-       FROM products WHERE id = ? AND client_id = ?'
+    'SELECT e.id, e.product_id, e.name, e.is_required, e.sort_order, e.active,
+            p.name AS product_name
+       FROM product_extras e
+       JOIN products p ON p.id = e.product_id
+      WHERE e.id = ? AND e.client_id = ?'
 );
 $loadStmt->execute([$id, $clientId]);
-$product = $loadStmt->fetch();
+$extra = $loadStmt->fetch();
 
-if (!$product) {
+if (!$extra) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-       . '<h1>Product not found</h1>'
-       . '<p><a href="/admin/products/index.php">Back to products</a></p>';
+       . '<h1>Extra not found</h1>';
     exit;
 }
 
 $f = [
-    'name'       => (string) $product['name'],
-    'sort_order' => (int)    $product['sort_order'],
-    'active'     => (int)    $product['active'],
+    'name'        => (string) $extra['name'],
+    'is_required' => (int)    $extra['is_required'],
+    'sort_order'  => (int)    $extra['sort_order'],
+    'active'      => (int)    $extra['active'],
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']       = trim((string) ($_POST['name'] ?? ''));
-    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']     = !empty($_POST['active']) ? 1 : 0;
+    $f['name']        = trim((string) ($_POST['name'] ?? ''));
+    $f['is_required'] = !empty($_POST['is_required']) ? 1 : 0;
+    $f['sort_order']  = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']      = !empty($_POST['active']) ? 1 : 0;
 
     if ($f['name'] === '') {
-        $error = 'Product name is required.';
+        $error = 'Name is required.';
     } elseif (strlen($f['name']) > 150) {
-        $error = 'Product name is too long (max 150 characters).';
+        $error = 'Name is too long (max 150 chars).';
     } else {
         try {
-            // option_label is no longer set from the form — left at the
-            // schema default. Force any stale 'Master Admin'-style values
-            // back to 'Fabric' here too so display lines up immediately.
             $u = db()->prepare(
-                "UPDATE products
-                    SET name = ?, sort_order = ?, active = ?, option_label = 'Fabric'
-                  WHERE id = ? AND client_id = ?"
+                'UPDATE product_extras
+                    SET name = ?, is_required = ?, sort_order = ?, active = ?
+                  WHERE id = ? AND client_id = ?'
             );
             $u->execute([
-                $f['name'],
-                $f['sort_order'],
-                $f['active'],
-                $id,
-                $clientId,
+                $f['name'], $f['is_required'], $f['sort_order'], $f['active'],
+                $id, $clientId,
             ]);
-            $_SESSION['flash_success'] = 'Product updated.';
-            header('Location: /admin/products/index.php');
+            $_SESSION['flash_success'] = 'Extra updated.';
+            header('Location: /admin/products/extras.php?product_id=' . (int) $extra['product_id']);
             exit;
         } catch (Throwable $e) {
-            if (str_contains($e->getMessage(), 'uniq_product_client_name')) {
-                $error = 'A product with that name already exists.';
+            if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
+                $error = 'An extra with that name already exists for this product.';
             } else {
-                $error = 'Could not save product: ' . $e->getMessage();
+                $error = 'Could not save: ' . $e->getMessage();
             }
         }
     }
@@ -84,7 +82,7 @@ $activeNav = 'products';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Edit product &middot; YourBlinds</title>
+    <title>Edit extra &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-group input[type="number"] {
@@ -105,9 +103,11 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Edit product</h1>
+                <h1 class="page-title">Edit extra</h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/index.php">&larr; Back to products</a>
+                    <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>">
+                        &larr; Back to <?= e((string) $extra['product_name']) ?> extras
+                    </a>
                 </p>
             </div>
         </div>
@@ -117,7 +117,7 @@ $activeNav = 'products';
         <?php endif; ?>
 
         <section class="section">
-            <form method="post" action="/admin/products/edit.php?id=<?= (int) $id ?>"
+            <form method="post" action="/admin/products/extra-edit.php?id=<?= (int) $id ?>"
                   class="form" novalidate>
                 <?= csrf_field() ?>
 
@@ -133,10 +133,17 @@ $activeNav = 'products';
                 <div class="form-row">
                     <div class="form-group">
                         <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number" value="<?= (int) $f['sort_order'] ?>">
+                        <input id="sort_order" name="sort_order" type="number"
+                               value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 
+                <label class="checkbox-row" for="is_required">
+                    <input type="checkbox" id="is_required" name="is_required" value="1"
+                           <?= (int) $f['is_required'] === 1 ? 'checked' : '' ?>>
+                    Required (customer must pick a choice)
+                </label>
+                <br>
                 <label class="checkbox-row" for="active">
                     <input type="checkbox" id="active" name="active" value="1"
                            <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>
@@ -145,26 +152,12 @@ $activeNav = 'products';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save changes</button>
-                    <a href="/admin/products/index.php" class="btn btn-secondary">Cancel</a>
+                    <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>"
+                       class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </section>
-
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Manage</h2>
-            </div>
-            <div class="actions-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                <a href="/admin/products/options.php?product_id=<?= (int) $id ?>"
-                   class="btn btn-secondary">Fabrics &rarr;</a>
-                <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>"
-                   class="btn btn-secondary">Systems &rarr;</a>
-                <a href="/admin/products/extras.php?product_id=<?= (int) $id ?>"
-                   class="btn btn-secondary">Extras &rarr;</a>
-            </div>
-        </section>
     </main>
 </div>
-
 </body>
 </html>
