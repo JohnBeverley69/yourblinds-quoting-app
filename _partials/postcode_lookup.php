@@ -123,7 +123,8 @@
         }
     });
 
-    // Apply selection to the address fields.
+    // Apply selection to the address fields, then collapse the dropdown so
+    // the form doesn't stay cluttered after the user has picked.
     sel.addEventListener('change', function () {
         var idx = parseInt(sel.value, 10);
         if (isNaN(idx) || !cache[idx]) return;
@@ -133,6 +134,7 @@
         setField('installation_town',     a.town);
         setField('installation_county',   a.county);
         setField('installation_postcode', a.postcode);
+        results.style.display = 'none';
     });
 })();
 </script>
