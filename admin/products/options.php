@@ -66,6 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
     $f['active']     = !empty($_POST['active']) ? 1 : 0;
 
+    // Strip "Band " prefix if the user typed it — store just "A" / "AAA" etc.
+    $f['band_code'] = preg_replace('/^band\s+/i', '', $f['band_code']);
+
     if ($f['band_code'] === '') {
         $error = 'Band code is required (e.g. A, B, C).';
     } elseif (strlen($f['band_code']) > 20) {

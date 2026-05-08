@@ -144,6 +144,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                         $rowErrs[] = "Row $rowNum: missing " . ($band === '' ? 'band' : 'name');
                         continue;
                     }
+                    // Strip a leading "Band " / "BAND " prefix if the user
+                    // typed/pasted it. We want just "AAA", not "BAND AAA",
+                    // so the sort + display logic stays clean.
+                    $band = preg_replace('/^band\s+/i', '', $band);
+                    if ($band === '') {
+                        $rowErrs[] = "Row $rowNum: band code was just 'Band' with nothing after it";
+                        continue;
+                    }
                     // Sub-header detection: skip rows where the band or name looks
                     // like a column title (common when pasting from multi-section
                     // supplier sheets that have repeated 'Fabric / Band' rows).
