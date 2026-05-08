@@ -112,7 +112,11 @@ $activeNav = 'products';
                                         </a>
                                     </td>
                                     <td class="num"><?= (int) $p['extra_count']  ?></td>
-                                    <td class="num"><?= (int) $p['table_count']  ?></td>
+                                    <td class="num">
+                                        <a href="/admin/products/price-tables.php?product_id=<?= (int) $p['id'] ?>">
+                                            <?= (int) $p['table_count'] ?>
+                                        </a>
+                                    </td>
                                     <td class="meta-cell">
                                         <?= e((string) $p['updated_at']) ?>
                                     </td>

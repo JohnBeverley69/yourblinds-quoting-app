@@ -156,11 +156,10 @@ $activeNav = 'products';
             </div>
             <div class="actions-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <a href="/admin/products/options.php?product_id=<?= (int) $id ?>"
-                   class="btn btn-secondary">
-                    Fabrics &rarr;
-                </a>
+                   class="btn btn-secondary">Fabrics &rarr;</a>
+                <a href="/admin/products/price-tables.php?product_id=<?= (int) $id ?>"
+                   class="btn btn-secondary">Price tables &rarr;</a>
                 <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2c">Extras (soon)</span>
-                <span class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed" title="Coming in Phase 2d">Price tables (soon)</span>
             </div>
         </section>
     </main>
