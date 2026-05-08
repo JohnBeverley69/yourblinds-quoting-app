@@ -339,6 +339,24 @@ $activeNav = 'calendar';
                 <div class="notes-block"><?= e((string) $appt['notes']) ?></div>
             </section>
         <?php endif; ?>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Danger zone</h2>
+            </div>
+            <p style="margin:0 0 0.875rem;color:#6b7280;font-size:0.9375rem">
+                Deleting this appointment is permanent. The customer record and any
+                linked quotes will be kept; only the calendar entry is removed. If you
+                just want to record that the booking didn't happen, set the status to
+                <em>Cancelled</em> or <em>No-show</em> above instead.
+            </p>
+            <form method="post" action="/calendar/delete.php" style="margin:0;"
+                  onsubmit="return confirm('Delete this appointment? This cannot be undone.');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $appt['id'] ?>">
+                <button type="submit" class="btn btn-danger">Delete appointment</button>
+            </form>
+        </section>
     </main>
 </div>
 </body>
