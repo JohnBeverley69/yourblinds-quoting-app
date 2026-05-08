@@ -147,9 +147,10 @@ $activeNav = 'products';
         }
         .checkbox-row input { width: 18px; height: 18px; }
         .band-pill {
-            display: inline-block; min-width: 2rem; text-align: center;
-            padding: 0.125rem 0.5rem; font-weight: 700; font-size: 0.875rem;
+            display: inline-block; text-align: center;
+            padding: 0.125rem 0.625rem; font-weight: 700; font-size: 0.8125rem;
             color: #fff; background: #1f3b5b; border-radius: 6px;
+            white-space: nowrap;
         }
         .row-actions { white-space: nowrap; }
         .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
@@ -301,7 +302,7 @@ $activeNav = 'products';
                                                    name="ids[]" value="<?= (int) $o['id'] ?>"
                                                    aria-label="Select <?= e((string) $o['name']) ?>">
                                         </td>
-                                        <td><span class="band-pill"><?= e((string) $o['band_code']) ?></span></td>
+                                        <td><span class="band-pill">Band <?= e((string) $o['band_code']) ?></span></td>
                                         <td>
                                             <?= e((string) $o['name']) ?>
                                             <?php if ((int) $o['active'] !== 1): ?>
