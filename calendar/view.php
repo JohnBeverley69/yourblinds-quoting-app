@@ -224,11 +224,11 @@ $activeNav = 'calendar';
             <div class="actions-bar">
                 <?php if ($mapsUrl !== ''): ?>
                     <a href="<?= e($mapsUrl) ?>"
-                       class="btn btn-primary"
+                       class="btn btn-success"
                        target="_blank" rel="noopener">Let's Go &rarr;</a>
                 <?php endif; ?>
                 <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
-                   class="btn <?= $mapsUrl !== '' ? 'btn-secondary' : 'btn-primary' ?>">Start quote</a>
+                   class="btn btn-primary">Start quote</a>
                 <a href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                    class="btn btn-secondary">Edit</a>
             </div>
