@@ -6,16 +6,21 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireSuperAdmin();
 
-$user = current_user();
+$user  = current_user();
+$flags = require __DIR__ . '/../_partials/feature_flags.php';
 
-// One row per client with its feature flags.
-$rows = db()->query(
-    'SELECT c.id, c.company_name, c.active,
-            COALESCE(s.feature_maps, 0) AS feature_maps
+// Build a SELECT that pulls every flag column dynamically. Column names come
+// from a server-side allowlist (the $flags array) — never from user input —
+// so it's safe to interpolate directly.
+$flagCols = implode(",\n            ",
+    array_map(static fn ($k) => "COALESCE(s.$k, 0) AS $k", array_keys($flags))
+);
+$sql = "SELECT c.id, c.company_name, c.active,
+            $flagCols
        FROM clients c
        LEFT JOIN client_settings s ON s.client_id = c.id
-   ORDER BY c.company_name'
-)->fetchAll();
+   ORDER BY c.company_name";
+$rows = db()->query($sql)->fetchAll();
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -77,12 +82,14 @@ $activeNav = 'master-admin';
                         <thead>
                             <tr>
                                 <th>Client</th>
-                                <th class="toggle" title="Maps & directions add-on">Maps</th>
+                                <?php foreach ($flags as $col => $label): ?>
+                                    <th class="toggle"><?= e($label) ?></th>
+                                <?php endforeach; ?>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (!$rows): ?>
-                                <tr><td colspan="2" class="table-empty">No clients yet.</td></tr>
+                                <tr><td colspan="<?= count($flags) + 1 ?>" class="table-empty">No clients yet.</td></tr>
                             <?php else: foreach ($rows as $r): ?>
                                 <tr class="<?= ((int) $r['active']) === 1 ? '' : 'is-inactive' ?>">
                                     <td>
@@ -91,13 +98,15 @@ $activeNav = 'master-admin';
                                             <span class="inactive-tag">Inactive</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="toggle">
-                                        <input type="checkbox"
-                                               name="maps[<?= (int) $r['id'] ?>]"
-                                               value="1"
-                                               <?= ((int) $r['feature_maps']) === 1 ? 'checked' : '' ?>
-                                               aria-label="Maps add-on for <?= e((string) $r['company_name']) ?>">
-                                    </td>
+                                    <?php foreach ($flags as $col => $label): ?>
+                                        <td class="toggle">
+                                            <input type="checkbox"
+                                                   name="flags[<?= e($col) ?>][<?= (int) $r['id'] ?>]"
+                                                   value="1"
+                                                   <?= ((int) $r[$col]) === 1 ? 'checked' : '' ?>
+                                                   aria-label="<?= e($label) ?> for <?= e((string) $r['company_name']) ?>">
+                                        </td>
+                                    <?php endforeach; ?>
                                 </tr>
                             <?php endforeach; endif; ?>
                         </tbody>

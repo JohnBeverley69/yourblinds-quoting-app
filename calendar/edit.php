@@ -10,6 +10,14 @@ $user     = current_user();
 $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
+// Postcode lookup add-on — gates the lookup widget rendered inside the
+// Installation address fieldset.
+$pcStmt = db()->prepare(
+    'SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?'
+);
+$pcStmt->execute([$clientId]);
+$postcodeLookupEnabled = ((int) $pcStmt->fetchColumn()) === 1;
+
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
     header('Location: /calendar/index.php');
@@ -343,6 +351,10 @@ $activeNav = 'calendar';
 
                 <fieldset class="form-fieldset">
                     <legend>Installation address</legend>
+
+                    <?php if ($postcodeLookupEnabled): ?>
+                        <?php require __DIR__ . '/../_partials/postcode_lookup.php'; ?>
+                    <?php endif; ?>
 
                     <div class="form-row full">
                         <div class="form-group">
