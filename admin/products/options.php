@@ -105,12 +105,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
-// List existing options.
+// List existing options. Custom band sort: AAA → AA → A → B → C → ...
+// (premium "A" tiers in descending length, then alphabetical for the rest).
 $rows = db()->prepare(
-    'SELECT id, band_code, supplier_name, name, colour, code, sort_order, active
+    "SELECT id, band_code, supplier_name, name, colour, code, sort_order, active
        FROM product_options
       WHERE product_id = ? AND client_id = ?
-   ORDER BY band_code, sort_order, name, colour'
+   ORDER BY
+        CASE
+            WHEN band_code = 'AAA' THEN 1
+            WHEN band_code = 'AA'  THEN 2
+            WHEN band_code = 'A'   THEN 3
+            ELSE 100
+        END,
+        band_code,
+        sort_order, name, colour"
 );
 $rows->execute([$productId, $clientId]);
 $options = $rows->fetchAll();
@@ -205,11 +214,6 @@ $activeNav = 'products';
                                value="<?= e((string) $f['band_code']) ?>" placeholder="A">
                     </div>
                     <div class="form-group">
-                        <label for="supplier_name">Supplier</label>
-                        <input id="supplier_name" name="supplier_name" type="text" maxlength="150"
-                               value="<?= e((string) $f['supplier_name']) ?>">
-                    </div>
-                    <div class="form-group">
                         <label for="name"><?= e($label) ?> name <span class="required">*</span></label>
                         <input id="name" name="name" type="text" required maxlength="150"
                                value="<?= e((string) $f['name']) ?>"
@@ -219,6 +223,11 @@ $activeNav = 'products';
                         <label for="colour">Colour</label>
                         <input id="colour" name="colour" type="text" maxlength="150"
                                value="<?= e((string) $f['colour']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="supplier_name">Supplier</label>
+                        <input id="supplier_name" name="supplier_name" type="text" maxlength="150"
+                               value="<?= e((string) $f['supplier_name']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="code">Code</label>
@@ -256,9 +265,9 @@ $activeNav = 'products';
                         <thead>
                             <tr>
                                 <th>Band</th>
-                                <th>Supplier</th>
                                 <th><?= e($label) ?></th>
                                 <th>Colour</th>
+                                <th>Supplier</th>
                                 <th>Code</th>
                                 <th></th>
                             </tr>
@@ -267,7 +276,6 @@ $activeNav = 'products';
                             <?php foreach ($options as $o): ?>
                                 <tr>
                                     <td><span class="band-pill"><?= e((string) $o['band_code']) ?></span></td>
-                                    <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
                                     <td>
                                         <?= e((string) $o['name']) ?>
                                         <?php if ((int) $o['active'] !== 1): ?>
@@ -275,6 +283,7 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                     </td>
                                     <td><?= e((string) ($o['colour'] ?? '')) ?></td>
+                                    <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
                                     <td><?= e((string) ($o['code'] ?? '')) ?></td>
                                     <td class="row-actions">
                                         <a href="/admin/products/option-edit.php?id=<?= (int) $o['id'] ?>">Edit</a>

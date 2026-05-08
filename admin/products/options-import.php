@@ -45,7 +45,7 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $sheet = $ss->getActiveSheet();
     $sheet->setTitle($label . 's');
     $sheet->fromArray([
-        ['Band*', 'Supplier', $label . ' name*', 'Colour', 'Code'],
+        ['Band*', $label . ' name*', 'Colour', 'Supplier', 'Code'],
     ], null, 'A1');
     $sheet->getStyle('A1:E1')->getFont()->setBold(true);
     $sheet->getStyle('A1:E1')->getFill()
@@ -53,8 +53,8 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         ->getStartColor()->setRGB('1F3B5B');
     $sheet->getStyle('A1:E1')->getFont()->getColor()->setRGB('FFFFFF');
     $sheet->getColumnDimension('A')->setWidth(10);
-    $sheet->getColumnDimension('B')->setWidth(20);
-    $sheet->getColumnDimension('C')->setWidth(30);
+    $sheet->getColumnDimension('B')->setWidth(30);
+    $sheet->getColumnDimension('C')->setWidth(20);
     $sheet->getColumnDimension('D')->setWidth(20);
     $sheet->getColumnDimension('E')->setWidth(15);
     $sheet->freezePane('A2');
@@ -260,8 +260,8 @@ $activeNav = 'products';
                 <h2 class="section-title">1. Download the template</h2>
             </div>
             <div class="tip-box">
-                Columns: <code>Band*</code>, <code>Supplier</code>, <code><?= e($label) ?> name*</code>,
-                <code>Colour</code>, <code>Code</code>. Asterisks = required.
+                Columns: <code>Band*</code>, <code><?= e($label) ?> name*</code>,
+                <code>Colour</code>, <code>Supplier</code>, <code>Code</code>. Asterisks = required.
                 Each row becomes one <?= e($labelL) ?>.
             </div>
             <p>
