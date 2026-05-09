@@ -73,16 +73,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Recent quotes for this customer (read-only, last 5)
-$qstmt = db()->prepare(
-    'SELECT id, quote_number, status, total, created_at
-       FROM quotes
-      WHERE customer_id = ? AND client_id = ?
-      ORDER BY created_at DESC
-      LIMIT 5'
-);
-$qstmt->execute([$id, $clientId]);
-$recentQuotes = $qstmt->fetchAll();
+// Recent quotes for this customer (read-only, last 5). The `quotes` table
+// is dropped during the Phase 2 schema rebuild; until Phase 3 brings it
+// back, skip the lookup so the page still renders.
+$recentQuotes = [];
+if (db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn()) {
+    $qstmt = db()->prepare(
+        'SELECT id, quote_number, status, total, created_at
+           FROM quotes
+          WHERE customer_id = ? AND client_id = ?
+          ORDER BY created_at DESC
+          LIMIT 5'
+    );
+    $qstmt->execute([$id, $clientId]);
+    $recentQuotes = $qstmt->fetchAll();
+}
 
 $money = static fn ($n) => '£' . number_format((float) $n, 2);
 

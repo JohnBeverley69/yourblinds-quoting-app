@@ -15,31 +15,47 @@ $q = trim((string) ($_GET['q'] ?? ''));
 $flashMsg = $_SESSION['flash_success'] ?? null;
 unset($_SESSION['flash_success']);
 
+// The `quotes` table is dropped during the Phase 2 schema rebuild and won't
+// come back until Phase 3. Until then, gate the JOIN + count column so the
+// page survives. When Phase 3 lands, the quote count just starts populating
+// automatically — no further code change needed here.
+$hasQuotes = (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
+
+if ($hasQuotes) {
+    $selectExtra = ', COUNT(quotes.id) AS quote_count';
+    $joinExtra   = 'LEFT JOIN quotes ON quotes.customer_id = c.id';
+    $groupBy     = 'GROUP BY c.id';
+} else {
+    $selectExtra = ', 0 AS quote_count';
+    $joinExtra   = '';
+    $groupBy     = '';
+}
+
 if ($q !== '') {
     $like = '%' . $q . '%';
     $stmt = db()->prepare(
-        'SELECT c.id, c.name, c.email, c.phone, c.town, c.postcode, c.updated_at,
-                COUNT(quotes.id) AS quote_count
+        "SELECT c.id, c.name, c.email, c.phone, c.town, c.postcode, c.updated_at
+                $selectExtra
            FROM customers c
-           LEFT JOIN quotes ON quotes.customer_id = c.id
+           $joinExtra
           WHERE c.client_id = ?
             AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?
                  OR c.postcode LIKE ? OR c.town LIKE ?)
-          GROUP BY c.id
+          $groupBy
           ORDER BY c.name
-          LIMIT 100'
+          LIMIT 100"
     );
     $stmt->execute([$clientId, $like, $like, $like, $like, $like]);
 } else {
     $stmt = db()->prepare(
-        'SELECT c.id, c.name, c.email, c.phone, c.town, c.postcode, c.updated_at,
-                COUNT(quotes.id) AS quote_count
+        "SELECT c.id, c.name, c.email, c.phone, c.town, c.postcode, c.updated_at
+                $selectExtra
            FROM customers c
-           LEFT JOIN quotes ON quotes.customer_id = c.id
+           $joinExtra
           WHERE c.client_id = ?
-          GROUP BY c.id
+          $groupBy
           ORDER BY c.name
-          LIMIT 100'
+          LIMIT 100"
     );
     $stmt->execute([$clientId]);
 }
@@ -108,7 +124,9 @@ $activeNav = 'customers';
                                 <th>Phone</th>
                                 <th>Town</th>
                                 <th>Postcode</th>
-                                <th class="num">Quotes</th>
+                                <?php if ($hasQuotes): ?>
+                                    <th class="num">Quotes</th>
+                                <?php endif; ?>
                                 <th></th>
                             </tr>
                         </thead>
@@ -120,7 +138,9 @@ $activeNav = 'customers';
                                     <td><?= e((string) ($c['phone'] ?? '')) ?></td>
                                     <td><?= e((string) ($c['town'] ?? '')) ?></td>
                                     <td><?= e((string) ($c['postcode'] ?? '')) ?></td>
-                                    <td class="num"><?= (int) $c['quote_count'] ?></td>
+                                    <?php if ($hasQuotes): ?>
+                                        <td class="num"><?= (int) $c['quote_count'] ?></td>
+                                    <?php endif; ?>
                                     <td>
                                         <a href="/customer-manager/edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
                                     </td>
