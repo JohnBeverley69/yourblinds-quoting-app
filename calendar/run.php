@@ -90,6 +90,15 @@ foreach ($appts as $a) {
 }
 
 // ---------------------------------------------------------------------------
+// Pre-compute the inputs JS needs to rebuild the URL with the user's GPS
+// position as the origin (the "Start from my location" button below). We
+// always emit these so the button can rewrite the iframe on click without
+// a round-trip — the API key, destination, and waypoint list are all known.
+// ---------------------------------------------------------------------------
+$gpsDestination = '';
+$gpsWaypoints   = [];
+
+// ---------------------------------------------------------------------------
 // Build the Google Maps Embed URL.
 // Embed API (Directions mode) supports up to 10 stops total: origin +
 // destination + up to 8 waypoints.
@@ -112,23 +121,33 @@ if ($mapsEnabled && GOOGLE_MAPS_API_KEY !== '' && $totalStops > 0) {
         $stops   = $totalStops > $maxApps ? array_slice($plottable, 0, $maxApps) : $plottable;
         $truncatedTo = $totalStops > $maxApps ? $maxApps : null;
 
-        $wp = implode('|', array_map(static fn ($s) => $s['_address'], $stops));
+        $stopAddrs = array_map(static fn ($s) => $s['_address'], $stops);
+        $wp = implode('|', $stopAddrs);
         $embedUrl = 'https://www.google.com/maps/embed/v1/directions'
                   . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
                   . '&origin='      . urlencode($homeAddress)
                   . '&destination=' . urlencode($homeAddress)
                   . '&waypoints='   . urlencode($wp)
                   . '&mode=driving';
+
+        // GPS override: GPS → apps → home. All apps stay as waypoints.
+        $gpsDestination = $homeAddress;
+        $gpsWaypoints   = $stopAddrs;
     } else {
         // Legacy fallback: no home set, so the first appointment is the
         // origin and the last is the destination.
         $stops = $totalStops > 10 ? array_slice($plottable, 0, 10) : $plottable;
         $truncatedTo = $totalStops > 10 ? 10 : null;
+        $stopAddrs = array_map(static fn ($s) => $s['_address'], $stops);
 
         if (count($stops) === 1) {
             $embedUrl = 'https://www.google.com/maps/embed/v1/place'
                       . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
                       . '&q='   . urlencode($stops[0]['_address']);
+
+            // GPS override: GPS → that one app.
+            $gpsDestination = $stops[0]['_address'];
+            $gpsWaypoints   = [];
         } else {
             $origin = $stops[0]['_address'];
             $dest   = $stops[count($stops) - 1]['_address'];
@@ -143,6 +162,10 @@ if ($mapsEnabled && GOOGLE_MAPS_API_KEY !== '' && $totalStops > 0) {
                       . '&destination=' . urlencode($dest)
                       . ($wp !== '' ? '&waypoints=' . urlencode($wp) : '')
                       . '&mode=driving';
+
+            // GPS override: GPS → all apps in order → last app stays as dest.
+            $gpsDestination = $dest;
+            $gpsWaypoints   = array_slice($stopAddrs, 0, -1);
         }
     }
 }
@@ -263,6 +286,17 @@ $activeNav = 'calendar';
             font-size: 0.8125rem;
             margin-bottom: 1rem;
         }
+        .gps-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.625rem;
+            font-size: 0.875rem;
+            color: #4b5563;
+        }
+        .gps-toolbar .gps-status { white-space: nowrap; }
+        .gps-toolbar .gps-status strong { color: #111827; }
     </style>
 </head>
 <body>
@@ -326,11 +360,83 @@ $activeNav = 'calendar';
                             Showing the first <?= (int) $truncatedTo ?> stops only — Google's Embed API caps a single route at 10 waypoints. The full list appears below the map.
                         </div>
                     <?php endif; ?>
+
+                    <div class="gps-toolbar">
+                        <span class="gps-status" id="gps-status">
+                            Start: <strong><?= $usingHome ? 'home address' : 'first appointment' ?></strong>
+                        </span>
+                        <button type="button" id="use-gps-btn" class="btn btn-secondary btn-sm">
+                            📍 Start from my location
+                        </button>
+                        <button type="button" id="reset-gps-btn" class="btn btn-secondary btn-sm" hidden>
+                            ↺ Reset start
+                        </button>
+                    </div>
+
                     <div class="run-map">
-                        <iframe loading="lazy" allowfullscreen
+                        <iframe id="run-map-frame" loading="lazy" allowfullscreen
                                 referrerpolicy="no-referrer-when-downgrade"
                                 src="<?= e($embedUrl) ?>"></iframe>
                     </div>
+
+                    <script>
+                    (function () {
+                        var cfg = {
+                            apiKey: <?= json_encode(GOOGLE_MAPS_API_KEY) ?>,
+                            destination: <?= json_encode($gpsDestination) ?>,
+                            waypoints: <?= json_encode($gpsWaypoints) ?>,
+                            originalSrc: <?= json_encode($embedUrl) ?>,
+                            originalLabel: <?= json_encode($usingHome ? 'home address' : 'first appointment') ?>
+                        };
+                        var iframe   = document.getElementById('run-map-frame');
+                        var btn      = document.getElementById('use-gps-btn');
+                        var resetBtn = document.getElementById('reset-gps-btn');
+                        var status   = document.getElementById('gps-status');
+
+                        if (!('geolocation' in navigator)) {
+                            btn.disabled = true;
+                            btn.title    = 'Your browser does not support geolocation.';
+                            return;
+                        }
+
+                        btn.addEventListener('click', function () {
+                            var origLabel = btn.textContent;
+                            btn.disabled    = true;
+                            btn.textContent = 'Getting location…';
+
+                            navigator.geolocation.getCurrentPosition(function (pos) {
+                                var origin = pos.coords.latitude.toFixed(6)
+                                           + ',' + pos.coords.longitude.toFixed(6);
+                                var dest   = cfg.destination || origin;
+                                var wp     = (cfg.waypoints || []).join('|');
+                                var url = 'https://www.google.com/maps/embed/v1/directions'
+                                        + '?key='         + encodeURIComponent(cfg.apiKey)
+                                        + '&origin='      + encodeURIComponent(origin)
+                                        + '&destination=' + encodeURIComponent(dest)
+                                        + (wp ? '&waypoints=' + encodeURIComponent(wp) : '')
+                                        + '&mode=driving';
+                                iframe.src = url;
+                                status.innerHTML = 'Start: <strong>your current location</strong>';
+                                btn.hidden       = true;
+                                btn.disabled     = false;
+                                btn.textContent  = origLabel;
+                                resetBtn.hidden  = false;
+                            }, function (err) {
+                                btn.disabled    = false;
+                                btn.textContent = origLabel;
+                                alert('Could not get your location: '
+                                    + (err && err.message ? err.message : 'unknown error'));
+                            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+                        });
+
+                        resetBtn.addEventListener('click', function () {
+                            iframe.src       = cfg.originalSrc;
+                            status.innerHTML = 'Start: <strong>' + cfg.originalLabel + '</strong>';
+                            resetBtn.hidden  = true;
+                            btn.hidden       = false;
+                        });
+                    })();
+                    </script>
                 <?php endif; ?>
 
                 <ol class="run-stops">
