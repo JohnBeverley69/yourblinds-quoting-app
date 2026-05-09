@@ -465,6 +465,7 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                     </td>
                                     <td class="row-actions">
+                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
                                         <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= (int) $c['id'] ?>#add-option"
                                            class="follow-up"
                                            title="Add an option that only appears when this choice is selected">
