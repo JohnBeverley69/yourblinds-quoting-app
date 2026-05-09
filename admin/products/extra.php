@@ -43,7 +43,6 @@ $f = [
     'price_percent'   => '0.00',
     'price_per_metre' => '0.00',
     'is_default'      => 0,
-    'sort_order'      => 0,
     'system_id'       => 0,
 ];
 $error            = null;
@@ -57,7 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
-    $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
     $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
@@ -110,6 +108,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $clear->execute([$extraId]);
                 }
 
+                // sort_order = MAX+1 so new choices append to the end of
+                // the list (drag-and-drop owns ordering after that).
+                $sortStmt = $pdo->prepare(
+                    'SELECT COALESCE(MAX(sort_order), -1) + 1
+                       FROM product_extra_choices
+                      WHERE product_extra_id = ?'
+                );
+                $sortStmt->execute([$extraId]);
+                $nextSort = (int) $sortStmt->fetchColumn();
+
                 $ins = $pdo->prepare(
                     'INSERT INTO product_extra_choices
                        (product_extra_id, system_id, label,
@@ -125,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     (float) $f['price_percent'],
                     (float) $f['price_per_metre'],
                     $f['is_default'],
-                    $f['sort_order'],
+                    $nextSort,
                 ]);
                 $newChoiceId = (int) $pdo->lastInsertId();
 
@@ -216,10 +224,8 @@ $activeNav = 'products';
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1fr 0.75fr; align-items: end; }
-        .form-row.cols-3-row2 { grid-template-columns: 1fr 1fr 1fr; align-items: end; }
         @media (max-width: 900px) {
-            .form-row.cols-5,
-            .form-row.cols-3-row2 { grid-template-columns: 1fr; }
+            .form-row.cols-5 { grid-template-columns: 1fr; }
         }
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
@@ -339,7 +345,7 @@ $activeNav = 'products';
                     </div>
                 </div>
 
-                <div class="form-row cols-3-row2">
+                <div class="form-row full">
                     <div class="form-group">
                         <label for="system_id">System (optional)</label>
                         <select id="system_id" name="system_id">
@@ -352,12 +358,6 @@ $activeNav = 'products';
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>">
-                    </div>
-                    <div class="form-group">&nbsp;</div>
                 </div>
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">

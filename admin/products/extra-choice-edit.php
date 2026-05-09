@@ -43,7 +43,6 @@ $f = [
     'price_percent'   => (string) $choice['price_percent'],
     'price_per_metre' => (string) $choice['price_per_metre'],
     'is_default'      => (int)    $choice['is_default'],
-    'sort_order'      => (int)    $choice['sort_order'],
     'active'          => (int)    $choice['active'],
     'system_id'       => (int) ($choice['system_id'] ?? 0),
 ];
@@ -59,7 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
-    $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
     $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
@@ -117,9 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'UPDATE product_extra_choices
                         SET label = ?, system_id = ?,
                             price_delta = ?, price_percent = ?, price_per_metre = ?,
-                            is_default = ?, sort_order = ?, active = ?
+                            is_default = ?, active = ?
                       WHERE id = ?'
                 );
+                // sort_order is intentionally not touched — drag-and-drop
+                // on the choices list is the only writer.
                 $u->execute([
                     $f['label'],
                     $f['system_id'] > 0 ? $f['system_id'] : null,
@@ -127,7 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (float) $f['price_percent'],
                     (float) $f['price_per_metre'],
                     $f['is_default'],
-                    $f['sort_order'],
                     $f['active'],
                     $id,
                 ]);
@@ -258,7 +257,7 @@ $activeNav = 'products';
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row full">
                     <div class="form-group">
                         <label for="system_id">System (optional)</label>
                         <select id="system_id" name="system_id">
@@ -273,11 +272,6 @@ $activeNav = 'products';
                         <small style="color:#6b7280;font-size:0.8125rem">
                             Limit this choice to one system (e.g. Champagne only on Vogue). Leave as "All systems" if it's available everywhere.
                         </small>
-                    </div>
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 

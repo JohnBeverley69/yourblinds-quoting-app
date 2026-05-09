@@ -10,18 +10,16 @@ $user     = current_user();
 $clientId = $user['client_id'];
 
 $f = [
-    'name'       => '',
-    'sort_order' => 0,
-    'active'     => 1,
+    'name'   => '',
+    'active' => 1,
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']       = trim((string) ($_POST['name'] ?? ''));
-    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']     = !empty($_POST['active']) ? 1 : 0;
+    $f['name']   = trim((string) ($_POST['name'] ?? ''));
+    $f['active'] = !empty($_POST['active']) ? 1 : 0;
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
@@ -30,7 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             // option_label uses the schema default ('Fabric') — no longer
-            // settable from the form.
+            // settable from the form. sort_order = MAX+1 so new products
+            // append to the end of the list (drag-and-drop owns ordering).
+            $sortStmt = db()->prepare(
+                'SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products WHERE client_id = ?'
+            );
+            $sortStmt->execute([$clientId]);
+            $nextSort = (int) $sortStmt->fetchColumn();
+
             $stmt = db()->prepare(
                 'INSERT INTO products (client_id, name, sort_order, active)
                  VALUES (?, ?, ?, ?)'
@@ -38,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([
                 $clientId,
                 $f['name'],
-                $f['sort_order'],
+                $nextSort,
                 $f['active'],
             ]);
             $_SESSION['flash_success'] = 'Product "' . $f['name'] . '" added.';
@@ -103,13 +108,6 @@ $activeNav = 'products';
                                required maxlength="150" autofocus
                                value="<?= e((string) $f['name']) ?>"
                                placeholder="e.g. Vertical Blinds">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number" value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 

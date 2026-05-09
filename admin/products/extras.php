@@ -32,7 +32,7 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f = ['name' => '', 'is_required' => 1, 'sort_order' => 0, 'parent_choice_id' => 0];
+$f = ['name' => '', 'is_required' => 1, 'parent_choice_id' => 0];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
@@ -40,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     $f['name']             = trim((string) ($_POST['name'] ?? ''));
     $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
-    $f['sort_order']       = (int) ($_POST['sort_order'] ?? 0);
     $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
 
     if ($f['name'] === '') {
@@ -49,6 +48,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'Name is too long (max 150 chars).';
     } else {
         try {
+            // sort_order = MAX+1 so new extras append to the end of the
+            // list (drag-and-drop owns ordering after that).
+            $sortStmt = db()->prepare(
+                'SELECT COALESCE(MAX(sort_order), -1) + 1
+                   FROM product_extras
+                  WHERE product_id = ? AND client_id = ?'
+            );
+            $sortStmt->execute([$productId, $clientId]);
+            $nextSort = (int) $sortStmt->fetchColumn();
+
             $stmt = db()->prepare(
                 'INSERT INTO product_extras
                    (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
@@ -60,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
                 $f['name'],
                 $f['is_required'],
-                $f['sort_order'],
+                $nextSort,
             ]);
             $newId = (int) db()->lastInsertId();
             $_SESSION['flash_success'] = 'Extra "' . $f['name'] . '" added.';
@@ -115,8 +124,8 @@ $activeNav = 'products';
     <title><?= e((string) $product['name']) ?> &middot; Extras &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
-        .form-row.cols-3-narrow { grid-template-columns: 4fr 1fr 1fr; align-items: end; }
-        @media (max-width: 700px) { .form-row.cols-3-narrow { grid-template-columns: 1fr; } }
+        .form-row.cols-2-narrow { grid-template-columns: 4fr 1fr; align-items: end; }
+        @media (max-width: 700px) { .form-row.cols-2-narrow { grid-template-columns: 1fr; } }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
             font-size: 0.9375rem; color: #111827; cursor: pointer;
@@ -202,19 +211,13 @@ $activeNav = 'products';
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="create">
 
-                <div class="form-row cols-3-narrow">
+                <div class="form-row cols-2-narrow">
                     <div class="form-group">
                         <label for="name">Name <span class="required">*</span></label>
                         <input id="name" name="name" type="text"
                                required maxlength="150" autofocus
                                value="<?= e((string) $f['name']) ?>"
                                placeholder="e.g. Control side">
-                    </div>
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>"
-                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff">
                     </div>
                     <div class="form-group">
                         <label class="checkbox-row" for="is_required">

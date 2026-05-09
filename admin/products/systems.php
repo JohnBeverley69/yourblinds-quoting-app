@@ -32,14 +32,13 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f     = ['name' => '', 'sort_order' => 0];
+$f     = ['name' => ''];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
-    $f['name']       = trim((string) ($_POST['name'] ?? ''));
-    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
+    $f['name'] = trim((string) ($_POST['name'] ?? ''));
 
     if ($f['name'] === '') {
         $error = 'System name is required.';
@@ -47,11 +46,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'System name is too long (max 150 chars).';
     } else {
         try {
+            // sort_order = MAX+1 so new systems append to the end of the
+            // list (drag-and-drop is the only re-orderer after that).
+            $sortStmt = db()->prepare(
+                'SELECT COALESCE(MAX(sort_order), -1) + 1
+                   FROM product_systems
+                  WHERE product_id = ? AND client_id = ?'
+            );
+            $sortStmt->execute([$productId, $clientId]);
+            $nextSort = (int) $sortStmt->fetchColumn();
+
             $stmt = db()->prepare(
                 'INSERT INTO product_systems (client_id, product_id, name, sort_order, active)
                  VALUES (?, ?, ?, ?, 1)'
             );
-            $stmt->execute([$clientId, $productId, $f['name'], $f['sort_order']]);
+            $stmt->execute([$clientId, $productId, $f['name'], $nextSort]);
             $_SESSION['flash_success'] = 'System "' . $f['name'] . '" added.';
             header('Location: /admin/products/systems.php?product_id=' . $productId);
             exit;
@@ -185,18 +194,13 @@ $activeNav = 'products';
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="create">
 
-                <div class="form-row cols-2-narrow">
+                <div class="form-row full">
                     <div class="form-group">
                         <label for="name">System name <span class="required">*</span></label>
                         <input id="name" name="name" type="text"
                                required maxlength="150" autofocus
                                value="<?= e((string) $f['name']) ?>"
                                placeholder="e.g. Slim Line">
-                    </div>
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 

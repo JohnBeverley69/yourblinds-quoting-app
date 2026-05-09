@@ -31,18 +31,16 @@ if (!$product) {
 }
 
 $f = [
-    'name'       => (string) $product['name'],
-    'sort_order' => (int)    $product['sort_order'],
-    'active'     => (int)    $product['active'],
+    'name'   => (string) $product['name'],
+    'active' => (int)    $product['active'],
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']       = trim((string) ($_POST['name'] ?? ''));
-    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']     = !empty($_POST['active']) ? 1 : 0;
+    $f['name']   = trim((string) ($_POST['name'] ?? ''));
+    $f['active'] = !empty($_POST['active']) ? 1 : 0;
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
@@ -53,14 +51,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // option_label is no longer set from the form — left at the
             // schema default. Force any stale 'Master Admin'-style values
             // back to 'Fabric' here too so display lines up immediately.
+            // sort_order is intentionally not touched here — drag-and-drop
+            // on the products list is the only writer.
             $u = db()->prepare(
                 "UPDATE products
-                    SET name = ?, sort_order = ?, active = ?, option_label = 'Fabric'
+                    SET name = ?, active = ?, option_label = 'Fabric'
                   WHERE id = ? AND client_id = ?"
             );
             $u->execute([
                 $f['name'],
-                $f['sort_order'],
                 $f['active'],
                 $id,
                 $clientId,
@@ -127,13 +126,6 @@ $activeNav = 'products';
                         <input id="name" name="name" type="text"
                                required maxlength="150"
                                value="<?= e((string) $f['name']) ?>">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number" value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 

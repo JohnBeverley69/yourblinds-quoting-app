@@ -36,7 +36,6 @@ if (!$extra) {
 $f = [
     'name'             => (string) $extra['name'],
     'is_required'      => (int)    $extra['is_required'],
-    'sort_order'       => (int)    $extra['sort_order'],
     'active'           => (int)    $extra['active'],
     'parent_choice_id' => (int) ($extra['parent_choice_id'] ?? 0),
 ];
@@ -47,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $f['name']             = trim((string) ($_POST['name'] ?? ''));
     $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
-    $f['sort_order']       = (int) ($_POST['sort_order'] ?? 0);
     $f['active']           = !empty($_POST['active']) ? 1 : 0;
     $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
 
@@ -57,14 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Name is too long (max 150 chars).';
     } else {
         try {
+            // sort_order is intentionally not touched — drag-and-drop on
+            // the extras list is the only writer.
             $u = db()->prepare(
                 'UPDATE product_extras
-                    SET name = ?, is_required = ?, sort_order = ?, active = ?,
+                    SET name = ?, is_required = ?, active = ?,
                         parent_choice_id = ?
                   WHERE id = ? AND client_id = ?'
             );
             $u->execute([
-                $f['name'], $f['is_required'], $f['sort_order'], $f['active'],
+                $f['name'], $f['is_required'], $f['active'],
                 $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
                 $id, $clientId,
             ]);
@@ -143,14 +143,6 @@ $activeNav = 'products';
                         <input id="name" name="name" type="text"
                                required maxlength="150"
                                value="<?= e((string) $f['name']) ?>">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="sort_order">Sort order</label>
-                        <input id="sort_order" name="sort_order" type="number"
-                               value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
 
