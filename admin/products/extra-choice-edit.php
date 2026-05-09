@@ -265,6 +265,12 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                    <a href="/admin/products/extra.php?id=<?= (int) $choice['product_extra_id'] ?>"
+                       class="btn btn-secondary">Cancel</a>
+                </div>
+
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="system_id">System (optional)</label>

@@ -349,6 +349,13 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Add choice</button>
+                    <span style="color:#6b7280;font-size:0.875rem;margin-left:0.5rem">
+                        Most choices need only a Label — the rest is optional.
+                    </span>
+                </div>
+
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="system_id">System (optional)</label>
