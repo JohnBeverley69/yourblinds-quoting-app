@@ -72,6 +72,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo = db();
         $pdo->beginTransaction();
         try {
+            // If no existing customer picked but a name was entered, auto-
+            // create a customer record so the same person is findable on
+            // the next quote. The quote is then linked to that new id.
+            if ($f['customer_id'] === 0 && $f['end_customer_name'] !== '') {
+                $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
+                $custIns = $pdo->prepare(
+                    'INSERT INTO customers
+                       (client_id, name, email, phone,
+                        address1, address2, town, county, postcode)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $custIns->execute([
+                    $clientId,
+                    $f['end_customer_name'],
+                    $emptyToNull($f['end_customer_email']),
+                    $emptyToNull($f['end_customer_phone']),
+                    $emptyToNull($f['end_customer_address1']),
+                    $emptyToNull($f['end_customer_address2']),
+                    $emptyToNull($f['end_customer_town']),
+                    $emptyToNull($f['end_customer_county']),
+                    $emptyToNull($f['end_customer_postcode']),
+                ]);
+                $f['customer_id'] = (int) $pdo->lastInsertId();
+            }
+
             // Snapshot the tenant's VAT rate at the time the quote is created.
             $vatSt = $pdo->prepare(
                 'SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1'
