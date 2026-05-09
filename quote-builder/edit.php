@@ -652,6 +652,85 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         </section>
         <?php endif; ?>
 
+        <!-- ============== SEND TO CUSTOMER ============== -->
+        <?php
+            // Build the absolute public-accept URL (used by both the email
+            // body via the server-side handler AND the WhatsApp link below).
+            // Same APP_URL pattern as forgot_password.php — never derive
+            // from $_SERVER['HTTP_HOST'].
+            $appUrl     = trim((string) (env('APP_URL', '') ?? ''));
+            $publicUrl  = $appUrl !== ''
+                ? rtrim($appUrl, '/') . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token'])
+                : '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
+
+            // Sanitize the customer's phone for wa.me — strip non-digits,
+            // keep a leading + only if it was there.
+            $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
+            $waPhone  = preg_replace('/[^0-9]/', '', $rawPhone);
+
+            // WhatsApp message body. Plain text — wa.me will URL-encode it.
+            $waMessage = "Hi " . ((string) $quote['end_customer_name'])
+                       . ", here's your quote " . (string) $quote['quote_number']
+                       . " from " . (string) $user['company_name'] . ":\n"
+                       . $publicUrl;
+        ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Send to customer</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+                Email the PDF and a link the customer can click to accept the quote online.
+                <?php if ($waPhone !== ''): ?>
+                    Or share the same link via WhatsApp.
+                <?php else: ?>
+                    Add a phone number to the customer details above to enable WhatsApp sharing.
+                <?php endif; ?>
+            </p>
+
+            <form method="post" action="/pdf-generator/email_pdf.php" class="form" novalidate
+                  style="margin-bottom:1rem">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $quote['id'] ?>">
+
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label for="send-to">Recipient email</label>
+                        <input id="send-to" name="to" type="email" required maxlength="150"
+                               value="<?= e((string) ($quote['end_customer_email'] ?? '')) ?>">
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:flex-end">
+                        <button type="submit" class="btn btn-primary" style="width:100%">
+                            📧 Email PDF + accept link
+                        </button>
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="send-message">Message (optional)</label>
+                        <textarea id="send-message" name="message" rows="3"
+                                  placeholder="Optional — anything you want to add above the standard text."></textarea>
+                    </div>
+                </div>
+            </form>
+
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                <?php if ($waPhone !== ''): ?>
+                    <a href="https://wa.me/<?= e($waPhone) ?>?text=<?= e(rawurlencode($waMessage)) ?>"
+                       class="btn btn-secondary" target="_blank" rel="noopener">
+                        💬 Send via WhatsApp
+                    </a>
+                <?php endif; ?>
+                <a href="<?= e($publicUrl) ?>"
+                   class="btn btn-secondary" target="_blank" rel="noopener"
+                   title="Public URL — share manually if needed">
+                    🔗 Copy public link
+                </a>
+                <small style="color:#6b7280;font-size:0.8125rem;flex-basis:100%;margin-top:0.375rem">
+                    Public link: <code style="font-size:0.8125rem"><?= e($publicUrl) ?></code>
+                </small>
+            </div>
+        </section>
+
         <!-- ============== STATUS + DANGER ZONE ============== -->
         <section class="section">
             <div class="section-header">

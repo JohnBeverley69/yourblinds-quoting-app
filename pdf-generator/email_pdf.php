@@ -19,9 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$id       = (int) ($_POST['id'] ?? 0);
-$quote    = qb_load_quote_or_404($id, $user['client_id']);
-$backUrl  = '/quote-history/view.php?id=' . $id;
+$id       = (int) ($_POST['id'] ?? $_POST['quote_id'] ?? 0);
+$quote    = qb_load_quote_or_404($id, (int) $user['client_id']);
+$backUrl  = '/quote-builder/edit.php?id=' . $id;
 
 if (!class_exists(\Dompdf\Dompdf::class)) {
     qb_flash_redirect(
@@ -36,7 +36,7 @@ if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
     qb_flash_redirect($backUrl, 'error', 'Please provide a valid recipient email address.');
 }
 
-$pdfBytes = pdf_render_quote($id, $user['client_id']);
+$pdfBytes = pdf_render_quote($id, (int) $user['client_id']);
 if ($pdfBytes === null) {
     qb_flash_redirect($backUrl, 'error', 'Could not render the quote PDF.');
 }
@@ -49,16 +49,26 @@ $subject = sprintf(
     (string) $user['company_name']
 );
 
-$greeting = (string) ($quote['end_customer_name'] !== '' ? $quote['end_customer_name'] : 'there');
+$greeting = (string) $quote['end_customer_name'] !== ''
+    ? (string) $quote['end_customer_name'] : 'there';
 
-$body = "Hello {$greeting},\n\n"
-      . "Please find your quote ({$quote['quote_number']}) attached as a PDF.\n";
+// Build the absolute accept-link URL from APP_URL. Same defensive pattern as
+// auth/forgot_password.php — never derive from $_SERVER['HTTP_HOST'].
+$appUrl    = trim((string) (env('APP_URL', '') ?? ''));
+$publicUrl = $appUrl !== ''
+    ? rtrim($appUrl, '/') . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token'])
+    : '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
+
+$body  = "Hello {$greeting},\n\n";
+$body .= "Please find your quote ({$quote['quote_number']}) attached as a PDF.\n";
 if ($customMessage !== '') {
     $body .= "\n" . $customMessage . "\n";
 }
-$body .= "\nIf you have any questions please reply to this email.\n\n"
-       . 'Kind regards,' . "\n"
-       . (string) $user['company_name'];
+$body .= "\nYou can also view it online and accept it here:\n";
+$body .= $publicUrl . "\n";
+$body .= "\nIf you have any questions please reply to this email.\n\n";
+$body .= "Kind regards,\n";
+$body .= (string) $user['company_name'];
 
 $filename = preg_replace('/[^A-Za-z0-9._-]/', '_', (string) $quote['quote_number']) . '.pdf';
 
@@ -81,9 +91,13 @@ if (!$ok) {
     );
 }
 
-// Promote draft -> sent on first successful send.
+// Promote draft → sent on first successful send + stamp sent_at.
 if ((string) $quote['status'] === 'draft') {
-    db()->prepare('UPDATE quotes SET status = "sent" WHERE id = ?')->execute([$id]);
+    db()->prepare('UPDATE quotes SET status = "sent", sent_at = NOW() WHERE id = ?')
+        ->execute([$id]);
+} elseif (empty($quote['sent_at'])) {
+    db()->prepare('UPDATE quotes SET sent_at = NOW() WHERE id = ?')
+        ->execute([$id]);
 }
 
 qb_flash_redirect($backUrl, 'success', 'Quote PDF emailed to ' . $to . '.');
