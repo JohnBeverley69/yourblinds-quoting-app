@@ -143,8 +143,12 @@ $activeNav = 'products';
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
                 </p>
             </div>
-            <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
-               class="btn btn-secondary">Bulk import (multiple bands)</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/admin/products/price-tables-single-import.php?system_id=<?= (int) $systemId ?>"
+                   class="btn btn-secondary">Single-band import</a>
+                <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
+                   class="btn btn-secondary">Bulk import (multiple bands)</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>
