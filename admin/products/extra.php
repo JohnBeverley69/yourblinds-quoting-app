@@ -29,7 +29,7 @@ $extra = $loadStmt->fetch();
 if (!$extra) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-       . '<h1>Extra not found</h1>';
+       . '<h1>Option not found</h1>';
     exit;
 }
 
@@ -278,10 +278,10 @@ $activeNav = 'products';
                 </h1>
                 <p class="page-subtitle">
                     <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>">
-                        &larr; All extras for <?= e((string) $extra['product_name']) ?>
+                        &larr; All options for <?= e((string) $extra['product_name']) ?>
                     </a>
                     &middot;
-                    <a href="/admin/products/extra-edit.php?id=<?= (int) $extraId ?>">Edit extra</a>
+                    <a href="/admin/products/extra-edit.php?id=<?= (int) $extraId ?>">Edit option</a>
                 </p>
             </div>
         </div>

@@ -607,7 +607,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div id="item-extras-wrap" style="display:none">
                     <div class="section-header" style="margin-top:0.5rem">
-                        <h3 class="section-title" style="font-size:1rem">Extras</h3>
+                        <h3 class="section-title" style="font-size:1rem">Options</h3>
                     </div>
                     <div id="item-extras" class="extras-grid"></div>
                 </div>

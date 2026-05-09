@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . $summary['products']     . ' products, '
                           . $summary['fabrics']      . ' fabrics, '
                           . $summary['systems']      . ' systems, '
-                          . $summary['extras']       . ' extras, '
+                          . $summary['extras']       . ' options, '
                           . $summary['choices']      . ' choices, '
                           . $summary['price_tables'] . ' price tables ('
                           . $summary['price_table_rows'] . ' cells), '
@@ -226,7 +226,7 @@ $activeNav = 'master-admin';
                     <strong><?= (int) $mySizes['products'] ?></strong> products,
                     <strong><?= (int) $mySizes['fabrics'] ?></strong> fabrics,
                     <strong><?= (int) $mySizes['systems'] ?></strong> systems,
-                    <strong><?= (int) $mySizes['extras'] ?></strong> extras,
+                    <strong><?= (int) $mySizes['extras'] ?></strong> options,
                     <strong><?= (int) $mySizes['price_tables'] ?></strong> price tables.
                 </div>
 

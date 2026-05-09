@@ -157,7 +157,7 @@ function pe_apply_extra(
     $st->execute([$extraId, $productId, $clientId]);
     $extra = $st->fetch();
     if (!$extra) {
-        return ['error' => "Extra #$extraId not found for this product."];
+        return ['error' => "Option #$extraId not found for this product."];
     }
 
     // 2. Look up the choice.
@@ -171,7 +171,7 @@ function pe_apply_extra(
     $st->execute([$choiceId, $extraId]);
     $choice = $st->fetch();
     if (!$choice) {
-        return ['error' => "Choice #$choiceId not found for extra '" . $extra['name'] . "'."];
+        return ['error' => "Choice #$choiceId not found for option '" . $extra['name'] . "'."];
     }
 
     // 3. System-scope check: a system-locked choice can only be priced when

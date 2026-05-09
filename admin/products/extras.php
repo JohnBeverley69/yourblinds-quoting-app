@@ -72,12 +72,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $nextSort,
             ]);
             $newId = (int) db()->lastInsertId();
-            $_SESSION['flash_success'] = 'Extra "' . $f['name'] . '" added.';
+            $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added.';
             header('Location: /admin/products/extra.php?id=' . $newId);
             exit;
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
-                $error = 'An extra with that name already exists for this product.';
+                $error = 'An option with that name already exists for this product.';
             } else {
                 $error = 'Could not add: ' . $e->getMessage();
             }
@@ -121,7 +121,7 @@ $activeNav = 'products';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e((string) $product['name']) ?> &middot; Extras &middot; YourBlinds</title>
+    <title><?= e((string) $product['name']) ?> &middot; Options &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-row.cols-2-narrow { grid-template-columns: 4fr 1fr; align-items: end; }
@@ -175,7 +175,7 @@ $activeNav = 'products';
         <div class="page-header">
             <div>
                 <h1 class="page-title">
-                    <?= e((string) $product['name']) ?> &mdash; Extras
+                    <?= e((string) $product['name']) ?> &mdash; Options
                 </h1>
                 <p class="page-subtitle">
                     <a href="/admin/products/index.php">&larr; All products</a>
@@ -201,7 +201,7 @@ $activeNav = 'products';
 
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Add extra</h2>
+                <h2 class="section-title">Add option</h2>
             </div>
             <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
                 Examples: Control side, Control type, Draw side, Lining, Motor type, Headrail colour.
@@ -241,27 +241,27 @@ $activeNav = 'products';
                             <?php endforeach; ?>
                         </select>
                         <small style="color:#6b7280;font-size:0.8125rem">
-                            Optional — pick a choice to make this extra only show when that choice is selected.
+                            Optional — pick a choice to make this option only show when that choice is selected.
                         </small>
                     </div>
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Add extra</button>
+                    <button type="submit" class="btn btn-primary">Add option</button>
                 </div>
             </form>
         </section>
 
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Extras (<?= count($extras) ?>)</h2>
+                <h2 class="section-title">Options (<?= count($extras) ?>)</h2>
             </div>
 
             <?php if (!$extras): ?>
                 <div class="placeholder">
-                    <p class="placeholder-title">No extras yet</p>
+                    <p class="placeholder-title">No options yet</p>
                     <p class="placeholder-body">
-                        Add an extra (e.g. "Control side"), then open it to add the choices customers can pick from.
+                        Add an option (e.g. "Control side"), then open it to add the choices customers can pick from.
                     </p>
                 </div>
             <?php else: ?>
@@ -314,7 +314,7 @@ $activeNav = 'products';
                                     <td class="row-actions">
                                         <a href="/admin/products/extra-edit.php?id=<?= (int) $x['id'] ?>">Edit</a>
                                         <form method="post" action="/admin/products/extra-delete.php"
-                                              onsubmit="return confirm('Delete extra <?= e(addslashes((string) $x['name'])) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.');">
+                                              onsubmit="return confirm('Delete option <?= e(addslashes((string) $x['name'])) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.');">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $x['id'] ?>">
                                             <input type="hidden" name="product_id" value="<?= (int) $productId ?>">

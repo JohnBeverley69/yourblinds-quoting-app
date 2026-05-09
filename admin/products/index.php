@@ -98,7 +98,7 @@ $activeNav = 'products';
                                 <th>Name</th>
                                 <th class="num">Fabrics</th>
                                 <th class="num">Systems</th>
-                                <th class="num">Extras</th>
+                                <th class="num">Options</th>
                                 <th>Updated</th>
                                 <th></th>
                             </tr>

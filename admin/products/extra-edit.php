@@ -29,7 +29,7 @@ $extra = $loadStmt->fetch();
 if (!$extra) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-       . '<h1>Extra not found</h1>';
+       . '<h1>Option not found</h1>';
     exit;
 }
 
@@ -68,12 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
                 $id, $clientId,
             ]);
-            $_SESSION['flash_success'] = 'Extra updated.';
+            $_SESSION['flash_success'] = 'Option updated.';
             header('Location: /admin/products/extras.php?product_id=' . (int) $extra['product_id']);
             exit;
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
-                $error = 'An extra with that name already exists for this product.';
+                $error = 'An option with that name already exists for this product.';
             } else {
                 $error = 'Could not save: ' . $e->getMessage();
             }
@@ -98,7 +98,7 @@ $activeNav = 'products';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Edit extra &middot; YourBlinds</title>
+    <title>Edit option &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .form-group input[type="number"] {
@@ -127,10 +127,10 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Edit extra</h1>
+                <h1 class="page-title">Edit option</h1>
                 <p class="page-subtitle">
                     <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>">
-                        &larr; Back to <?= e((string) $extra['product_name']) ?> extras
+                        &larr; Back to <?= e((string) $extra['product_name']) ?> options
                     </a>
                 </p>
             </div>
@@ -167,7 +167,7 @@ $activeNav = 'products';
                             <?php endforeach; ?>
                         </select>
                         <small style="color:#6b7280;font-size:0.8125rem">
-                            Optional — pick a choice from elsewhere in this product to make this extra only show when that choice is selected.
+                            Optional — pick a choice from elsewhere in this product to make this option only show when that choice is selected.
                         </small>
                     </div>
                 </div>

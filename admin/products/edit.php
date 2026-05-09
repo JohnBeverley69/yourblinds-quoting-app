@@ -254,7 +254,7 @@ $activeNav = 'products';
                 <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>"
                    class="btn btn-secondary">Systems &rarr;</a>
                 <a href="/admin/products/extras.php?product_id=<?= (int) $id ?>"
-                   class="btn btn-secondary">Extras &rarr;</a>
+                   class="btn btn-secondary">Options &rarr;</a>
             </div>
         </section>
     </main>
