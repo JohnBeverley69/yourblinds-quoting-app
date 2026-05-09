@@ -6,8 +6,9 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireSuperAdmin();
 
-$user  = current_user();
-$flags = require __DIR__ . '/../_partials/feature_flags.php';
+$user        = current_user();
+$myClientId  = (int) $user['client_id'];
+$flags       = require __DIR__ . '/../_partials/feature_flags.php';
 
 // Build a SELECT that pulls every flag column dynamically. Column names come
 // from a server-side allowlist (the $flags array) — never from user input —
@@ -16,7 +17,9 @@ $flagCols = implode(",\n            ",
     array_map(static fn ($k) => "COALESCE(s.$k, 0) AS $k", array_keys($flags))
 );
 $sql = "SELECT c.id, c.company_name, c.active,
-            $flagCols
+            $flagCols,
+            (SELECT COUNT(*) FROM client_users u WHERE u.client_id = c.id) AS user_count,
+            (SELECT COUNT(*) FROM client_users u WHERE u.client_id = c.id AND u.is_super_admin = 1) AS super_count
        FROM clients c
        LEFT JOIN client_settings s ON s.client_id = c.id
    ORDER BY c.company_name";
@@ -51,6 +54,29 @@ $activeNav = 'master-admin';
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
+        .super-tag {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.0625rem 0.5rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #fff;
+            background: #1f3b5b;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .row-meta { color: #6b7280; font-size: 0.8125rem; margin-top: 0.125rem; }
+        .row-actions { white-space: nowrap; text-align: right; }
+        .row-actions form { margin: 0; display: inline; }
+        .row-actions button {
+            font-size: 0.875rem; color: #b91c1c; background: transparent;
+            border: 0; cursor: pointer; padding: 0;
+        }
+        .row-actions button:hover { text-decoration: underline; }
+        .row-actions .muted {
+            font-size: 0.8125rem; color: #9ca3af;
+        }
     </style>
 </head>
 <body>
@@ -62,7 +88,7 @@ $activeNav = 'master-admin';
             <div>
                 <h1 class="page-title">Master Admin</h1>
                 <p class="page-subtitle">
-                    Per-client feature flags. Tick to enable a paid add-on for that client.
+                    Per-client feature flags + tenant management. Tick to enable an add-on for a client.
                 </p>
             </div>
             <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
@@ -76,47 +102,85 @@ $activeNav = 'master-admin';
         <?php endif; ?>
 
         <section class="section">
-            <form method="post" action="/master-admin/save.php">
+            <!--
+                The feature-flags form is a sibling of the table, not its
+                ancestor. Each <input> in the table uses form="flags-form"
+                to attach itself to the form by id. This lets us put a
+                separate delete-client form inside each row without nesting
+                <form> elements (which is invalid HTML).
+            -->
+            <form id="flags-form" method="post" action="/master-admin/save.php" style="display:none">
                 <?= csrf_field() ?>
-                <div class="table-wrap">
-                    <table class="table feature-table">
-                        <thead>
-                            <tr>
-                                <th>Client</th>
-                                <?php foreach ($flags as $col => $label): ?>
-                                    <th class="toggle"><?= e($label) ?></th>
-                                <?php endforeach; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!$rows): ?>
-                                <tr><td colspan="<?= count($flags) + 1 ?>" class="table-empty">No clients yet.</td></tr>
-                            <?php else: foreach ($rows as $r): ?>
-                                <tr class="<?= ((int) $r['active']) === 1 ? '' : 'is-inactive' ?>">
-                                    <td>
-                                        <?= e((string) $r['company_name']) ?>
-                                        <?php if ((int) $r['active'] !== 1): ?>
-                                            <span class="inactive-tag">Inactive</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php foreach ($flags as $col => $label): ?>
-                                        <td class="toggle">
-                                            <input type="checkbox"
-                                                   name="flags[<?= e($col) ?>][<?= (int) $r['id'] ?>]"
-                                                   value="1"
-                                                   <?= ((int) $r[$col]) === 1 ? 'checked' : '' ?>
-                                                   aria-label="<?= e($label) ?> for <?= e((string) $r['company_name']) ?>">
-                                        </td>
-                                    <?php endforeach; ?>
-                                </tr>
-                            <?php endforeach; endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save changes</button>
-                </div>
             </form>
+
+            <div class="table-wrap">
+                <table class="table feature-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <?php foreach ($flags as $col => $label): ?>
+                                <th class="toggle"><?= e($label) ?></th>
+                            <?php endforeach; ?>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (!$rows): ?>
+                            <tr><td colspan="<?= count($flags) + 2 ?>" class="table-empty">No clients yet.</td></tr>
+                        <?php else: foreach ($rows as $r):
+                            $isSelf  = (int) $r['id']          === $myClientId;
+                            $isSuper = (int) $r['super_count'] > 0;
+                        ?>
+                            <tr class="<?= ((int) $r['active']) === 1 ? '' : 'is-inactive' ?>">
+                                <td>
+                                    <strong><?= e((string) $r['company_name']) ?></strong>
+                                    <?php if ($isSuper): ?>
+                                        <span class="super-tag">Master</span>
+                                    <?php endif; ?>
+                                    <?php if ((int) $r['active'] !== 1): ?>
+                                        <span class="inactive-tag">Inactive</span>
+                                    <?php endif; ?>
+                                    <div class="row-meta">
+                                        <?= (int) $r['user_count'] ?> user<?= (int) $r['user_count'] === 1 ? '' : 's' ?>
+                                    </div>
+                                </td>
+                                <?php foreach ($flags as $col => $label): ?>
+                                    <td class="toggle">
+                                        <input type="checkbox"
+                                               form="flags-form"
+                                               name="flags[<?= e($col) ?>][<?= (int) $r['id'] ?>]"
+                                               value="1"
+                                               <?= ((int) $r[$col]) === 1 ? 'checked' : '' ?>
+                                               aria-label="<?= e($label) ?> for <?= e((string) $r['company_name']) ?>">
+                                    </td>
+                                <?php endforeach; ?>
+                                <td class="row-actions">
+                                    <?php if ($isSelf): ?>
+                                        <span class="muted" title="You're logged in as a user of this client.">
+                                            (your client)
+                                        </span>
+                                    <?php elseif ($isSuper): ?>
+                                        <span class="muted" title="Has a master admin user — clear the super-admin flag first.">
+                                            (protected)
+                                        </span>
+                                    <?php else: ?>
+                                        <form method="post" action="/master-admin/delete-client.php"
+                                              onsubmit="return confirm('Delete <?= e(addslashes((string) $r['company_name'])) ?>?\n\nThis is permanent. ALL of the client\'s data goes:\n  - users, customers, quotes\n  - products, fabrics, systems, extras, choices\n  - price tables and rows\n\nNo undo. Continue?');">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="client_id" value="<?= (int) $r['id'] ?>">
+                                            <button type="submit">Delete</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" form="flags-form" class="btn btn-primary">Save flag changes</button>
+            </div>
         </section>
     </main>
 </div>
