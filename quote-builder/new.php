@@ -153,7 +153,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
 
             $_SESSION['flash_success'] = 'Quote ' . $quoteNumber . ' created.';
-            header('Location: /quote-builder/edit.php?id=' . $newId);
+            // Land on the Add-line section so the user can start picking
+            // products straight away — customer details are already filled
+            // in from the form they just submitted.
+            header('Location: /quote-builder/edit.php?id=' . $newId . '#add-line');
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();

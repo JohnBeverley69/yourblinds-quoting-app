@@ -462,7 +462,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
         <?php if ($editable): ?>
         <!-- ============== ADD LINE ITEM ============== -->
-        <section class="section">
+        <section class="section" id="add-line">
             <div class="section-header">
                 <h2 class="section-title">Add line item</h2>
             </div>

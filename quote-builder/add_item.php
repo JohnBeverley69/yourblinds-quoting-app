@@ -165,8 +165,10 @@ try {
         $msg .= ' Rounded up to ' . qb_fmt_mm((int) $priced['matrix_width_mm'])
               . ' × ' . qb_fmt_mm((int) $priced['matrix_drop_mm']) . ' cell.';
     }
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', $msg);
+    // Land back on the Add-line section so the user can keep adding lines
+    // without scrolling past the items table each time.
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', $msg);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not add line: ' . $e->getMessage());
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add line: ' . $e->getMessage());
 }
