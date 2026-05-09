@@ -91,8 +91,7 @@ if (db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn()) {
 
 $money = static fn ($n) => '£' . number_format((float) $n, 2);
 
-$dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
-$dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
+$dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'customers';
 ?><!doctype html>
 <html lang="en">

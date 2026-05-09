@@ -64,8 +64,7 @@ foreach ($stmt->fetchAll() as $row) {
     $byDate[$row['appointment_date']][] = $row;
 }
 
-$dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
-$dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
+$dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 
 // Whether to surface the "Today's run" link in the page header.
 $mapsStmt = db()->prepare(

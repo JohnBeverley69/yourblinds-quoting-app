@@ -61,8 +61,7 @@ if ($q !== '') {
 }
 $customers = $stmt->fetchAll();
 
-$dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
-$dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
+$dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'customers';
 ?><!doctype html>
 <html lang="en">

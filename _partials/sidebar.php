@@ -12,15 +12,14 @@ declare(strict_types=1);
  *
  * Optional scope (sensible defaults applied if missing):
  *   $isAdmin    bool   defaults to ($user['role'] === 'admin')
- *   $dashHref   string defaults to /admin/index.php (admin) or /quote-builder/index.php
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
- *   $activeNav  string one of: calendar, dashboard, new-quote, quote-history,
- *                      customers, pricing, users, settings. Empty = no highlight.
+ *   $activeNav  string one of: calendar, new-quote, quote-history,
+ *                      customers, products, users, settings, master-admin.
+ *                      Empty = no highlight.
  */
 
 $isAdmin      = $isAdmin      ?? (($user['role'] ?? '') === 'admin');
 $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
-$dashHref     = $dashHref     ?? ($isAdmin ? '/admin/index.php' : '/quote-builder/index.php');
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
@@ -30,10 +29,11 @@ $activeNav    = $activeNav    ?? '';
 // the moment Phase 3 lands the table.
 $hasQuotes = $hasQuotes ?? (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
 
-// [href, label, visible]. Order = display order.
+// [href, label, visible]. Order = display order. Calendar is the de-facto
+// landing page (login redirects there); a separate "Dashboard" link was
+// just a placeholder pointing at /admin/index.php and got removed.
 $navLinks = [
     'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-    'dashboard'     => [$dashHref,                     'Dashboard',     true],
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],

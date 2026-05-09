@@ -54,8 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
-$dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
+$dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'customers';
 ?><!doctype html>
 <html lang="en">
