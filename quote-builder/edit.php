@@ -576,12 +576,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary item-submit"
-                            name="next_action" value="more" disabled>
-                        Add blind
+                            name="next_action" value="stop" disabled>
+                        Save
                     </button>
                     <button type="submit" class="btn btn-secondary item-submit"
-                            name="next_action" value="stop" disabled>
-                        Add blind &amp; finish
+                            name="next_action" value="more" disabled>
+                        Save and add another blind
                     </button>
                 </div>
             </form>
