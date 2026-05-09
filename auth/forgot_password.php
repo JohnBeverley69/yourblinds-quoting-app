@@ -14,43 +14,78 @@ $email   = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $email = trim((string) ($_POST['email'] ?? ''));
-
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address.';
+    // Rate limit BEFORE we touch the DB or send any email — defends against
+    // password-reset email bombing and timing-based user enumeration. Reuses
+    // the same login_attempts ledger as login.php so failed logins + reset
+    // requests count toward a single per-IP cap.
+    $ip = client_ip();
+    if (rate_limited($ip)) {
+        $error = 'Too many requests. Please wait a few minutes and try again.';
     } else {
-        $stmt = db()->prepare(
-            'SELECT id FROM client_users WHERE email = ? AND active = 1 LIMIT 1'
-        );
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
+        $email = trim((string) ($_POST['email'] ?? ''));
 
-        if ($user) {
-            $token     = bin2hex(random_bytes(32));               // 64 hex chars
-            $tokenHash = hash('sha256', $token);
-            $expiresAt = (new DateTimeImmutable('+1 hour'))->format('Y-m-d H:i:s');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Please enter a valid email address.';
+        } else {
+            // Always record the attempt as "unsuccessful" — it's a request,
+            // not a credential check, but we want it to count for rate-limiting.
+            // The identifier prefix flags the row's purpose for the ops log.
+            record_login_attempt($ip, 'reset:' . $email, false);
 
-            db()->prepare(
-                'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
-            )->execute([(int) $user['id'], $tokenHash, $expiresAt]);
+            $stmt = db()->prepare(
+                'SELECT id FROM client_users WHERE email = ? AND active = 1 LIMIT 1'
+            );
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
 
-            $scheme   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-                     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') ? 'https' : 'http';
-            $host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $resetUrl = "{$scheme}://{$host}/auth/reset_password.php?token={$token}";
+            if ($user) {
+                $token     = bin2hex(random_bytes(32));               // 64 hex chars
+                $tokenHash = hash('sha256', $token);
+                $expiresAt = (new DateTimeImmutable('+1 hour'))->format('Y-m-d H:i:s');
 
-            // In dev, also log the URL so testing works without a real SMTP relay.
-            $appEnv = strtolower(env('APP_ENV', 'production') ?? 'production');
-            if (in_array($appEnv, ['development', 'dev', 'local'], true)) {
-                error_log("[YourBlinds] Password reset URL for {$email}: {$resetUrl}");
+                db()->prepare(
+                    'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+                )->execute([(int) $user['id'], $tokenHash, $expiresAt]);
+
+                // Build the reset URL from a configured base, NEVER from the
+                // request's Host header (host-header injection lets an attacker
+                // force the reset email to point at their own domain). If
+                // APP_URL isn't configured we still send the email but log
+                // a warning — the link will be relative which most clients
+                // surface as plain text the user can copy-paste.
+                $resetUrl = build_reset_url($token);
+
+                // In dev, also log the URL so testing works without a real SMTP relay.
+                $appEnv = strtolower(env('APP_ENV', 'production') ?? 'production');
+                if (in_array($appEnv, ['development', 'dev', 'local'], true)) {
+                    error_log("[YourBlinds] Password reset URL for {$email}: {$resetUrl}");
+                }
+
+                send_password_reset_email($email, $resetUrl);
             }
 
-            send_password_reset_email($email, $resetUrl);
+            // Same response whether or not the email matched — prevents enumeration.
+            $message = 'If that email is registered with us, a password reset link is on its way.';
         }
-
-        // Same response whether or not the email matched — prevents enumeration.
-        $message = 'If that email is registered with us, a password reset link is on its way.';
     }
+}
+
+/**
+ * Build the password-reset URL from APP_URL (.env). Refuses to fall back to
+ * the request's Host header — that's the host-header injection vector we're
+ * closing. If APP_URL isn't set, we log a warning and use a relative path,
+ * which is at worst inconvenient (the user gets a copy-paste-able token URL
+ * that lacks the scheme/host) but never spoofable.
+ */
+function build_reset_url(string $token): string
+{
+    $base = trim((string) (env('APP_URL', '') ?? ''));
+    if ($base === '') {
+        error_log('[YourBlinds] APP_URL not set in .env — password reset URL emitted as relative path. '
+                . 'Set APP_URL to e.g. https://yourblinds.uk so reset emails carry an absolute link.');
+        return '/auth/reset_password.php?token=' . $token;
+    }
+    return rtrim($base, '/') . '/auth/reset_password.php?token=' . $token;
 }
 
 /**
