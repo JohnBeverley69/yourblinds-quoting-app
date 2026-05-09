@@ -10,8 +10,8 @@ declare(strict_types=1);
  *
  * GET /quote-builder/api/fabrics-search.php
  *   ?product_id=N         (required)
- *   &q=string             (optional — empty returns first 50 alphabetical)
- *   &limit=N              (optional, default 50, max 200)
+ *   &q=string             (optional — empty returns first 200 alphabetical)
+ *   &limit=N              (optional, default 200, max 200)
  *
  * Match is OR across name / colour / supplier_name / band_code / code,
  * substring, case-insensitive (MySQL collation default).
@@ -31,7 +31,7 @@ $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $productId = (int) ($_GET['product_id'] ?? 0);
 $q         = trim((string) ($_GET['q'] ?? ''));
-$limit     = max(1, min(200, (int) ($_GET['limit'] ?? 50)));
+$limit     = max(1, min(200, (int) ($_GET['limit'] ?? 200)));
 
 if ($productId <= 0) {
     echo json_encode(['fabrics' => [], 'error' => 'product_id required']);
