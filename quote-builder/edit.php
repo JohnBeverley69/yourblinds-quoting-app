@@ -8,46 +8,59 @@ require __DIR__ . '/_helpers.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = $user['client_id'];
-$isAdmin  = $user['role'] === 'admin';
+$clientId = (int) $user['client_id'];
 
 $id    = (int) ($_GET['id'] ?? 0);
 $quote = qb_load_quote_or_404($id, $clientId);
+$editable = qb_is_editable($quote);
 
-$itemsStmt = db()->prepare(
-    'SELECT qi.*, p.name AS product_name
-       FROM quote_items qi
-       LEFT JOIN products p ON p.id = qi.product_id
-      WHERE qi.quote_id = ?
-      ORDER BY qi.line_no, qi.id'
+// Items + their extras (one query each, then fold).
+$itemsSt = db()->prepare(
+    'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY line_no, id'
 );
-$itemsStmt->execute([$id]);
-$items = $itemsStmt->fetchAll();
+$itemsSt->execute([$id]);
+$items = $itemsSt->fetchAll();
 
-$prodStmt = db()->prepare(
-    'SELECT p.id, p.name, pg.name AS group_name
-       FROM products p
-       JOIN product_groups pg ON pg.id = p.product_group_id
-      WHERE p.client_id = ? AND p.active = 1
-      ORDER BY pg.sort_order, pg.name, p.name'
+$extrasByItem = [];
+if ($items) {
+    $itemIds = array_map(static fn ($r) => (int) $r['id'], $items);
+    $ph = implode(',', array_fill(0, count($itemIds), '?'));
+    $st = db()->prepare(
+        "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
+                mode, amount_applied
+           FROM quote_item_extras
+          WHERE quote_item_id IN ($ph)
+          ORDER BY id"
+    );
+    $st->execute($itemIds);
+    foreach ($st->fetchAll() as $r) {
+        $extrasByItem[(int) $r['quote_item_id']][] = $r;
+    }
+}
+
+// Active products for the line-item form (cascading dropdowns load the rest
+// via /quote-builder/api/product-data.php).
+$prodSt = db()->prepare(
+    'SELECT id, name FROM products
+      WHERE client_id = ? AND active = 1
+   ORDER BY sort_order, name'
 );
-$prodStmt->execute([$clientId]);
-$products = $prodStmt->fetchAll();
+$prodSt->execute([$clientId]);
+$products = $prodSt->fetchAll();
 
-$custStmt = db()->prepare(
+// Customers dropdown for the customer-details form.
+$custSt = db()->prepare(
     'SELECT id, name, town, postcode FROM customers WHERE client_id = ? ORDER BY name LIMIT 500'
 );
-$custStmt->execute([$clientId]);
-$customers = $custStmt->fetchAll();
+$custSt->execute([$clientId]);
+$customers = $custSt->fetchAll();
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$money    = static fn ($n) => '£' . number_format((float) $n, 2);
-$dashHref = $isAdmin ? '/admin/index.php' : '/quote-builder/index.php';
-$dashTag  = $isAdmin ? 'Admin Console'    : 'Trade Portal';
 $activeNav = 'new-quote';
+$transitions = qb_allowed_transitions((string) $quote['status']);
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -55,6 +68,54 @@ $activeNav = 'new-quote';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Quote <?= e((string) $quote['quote_number']) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
+    <style>
+        .status-pill {
+            display: inline-block; padding: 0.125rem 0.625rem; font-size: 0.75rem;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+            border-radius: 999px; vertical-align: middle; margin-left: 0.5rem;
+        }
+        .status-draft     { background: #e5e7eb; color: #374151; }
+        .status-sent      { background: #dbeafe; color: #1e40af; }
+        .status-accepted  { background: #d1fae5; color: #065f46; }
+        .status-declined  { background: #fee2e2; color: #991b1b; }
+        .status-ordered   { background: #ede9fe; color: #5b21b6; }
+        .status-invoiced  { background: #fef3c7; color: #92400e; }
+        .status-paid      { background: #14532d; color: #ffffff; }
+        .item-desc { font-size: 0.875rem; color: #374151; line-height: 1.45; }
+        .item-desc strong { color: #111827; font-weight: 600; }
+        .item-extras { color: #6b7280; font-size: 0.8125rem; margin-top: 0.25rem; }
+        .totals-row td { font-weight: 600; }
+        .totals-row.grand td { font-size: 1.0625rem; color: #111827; }
+        #item-preview {
+            padding: 0.75rem 1rem; border-radius: 8px;
+            font-size: 0.9375rem; margin: 0.75rem 0;
+        }
+        #item-preview.idle    { background: #f3f4f6; color: #4b5563; }
+        #item-preview.error   { background: #fee2e2; color: #991b1b; }
+        #item-preview.success { background: #d1fae5; color: #065f46; }
+        .extras-grid {
+            display: grid; gap: 0.75rem 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            margin: 0.5rem 0;
+        }
+        .extras-grid label {
+            display: block; font-size: 0.8125rem; color: #4b5563;
+            font-weight: 600; margin-bottom: 0.25rem;
+        }
+        .form-group input[type="number"], .form-group input[type="text"] {
+            width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
+            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            box-sizing: border-box;
+        }
+        .read-only-banner {
+            background: #fef3c7; color: #92400e; padding: 0.75rem 1rem;
+            border-radius: 8px; margin-bottom: 1rem; font-size: 0.9375rem;
+        }
+        .status-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .status-actions button, .status-actions form {
+            margin: 0;
+        }
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -65,18 +126,18 @@ $activeNav = 'new-quote';
             <div>
                 <h1 class="page-title">
                     Quote <?= e((string) $quote['quote_number']) ?>
-                    <span class="badge badge-<?= e((string) $quote['status']) ?>" style="margin-left:.5rem; vertical-align:middle;">
+                    <span class="status-pill status-<?= e((string) $quote['status']) ?>">
                         <?= e((string) $quote['status']) ?>
                     </span>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/quote-history/index.php">&larr; Back to history</a>
-                    &nbsp;&middot;&nbsp;
-                    <a href="/quote-history/view.php?id=<?= (int) $quote['id'] ?>">Read-only view</a>
+                    <a href="/quote-history/index.php">&larr; Quote history</a>
                 </p>
             </div>
-            <div style="display:flex; gap:.5rem; align-items:center;">
-                <strong style="font-size:1.125rem; color:#111827;">Total <?= e($money($quote['total'])) ?></strong>
+            <div style="text-align:right">
+                <strong style="font-size:1.125rem;color:#111827">
+                    Total <?= e(qb_fmt_money($quote['total'])) ?>
+                </strong>
             </div>
         </div>
 
@@ -85,6 +146,15 @@ $activeNav = 'new-quote';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
+        <?php if (!$editable): ?>
+            <div class="read-only-banner">
+                This quote is in <strong><?= e((string) $quote['status']) ?></strong> state and is read-only.
+                <?php if (in_array('draft', $transitions, true)): ?>
+                    Use <strong>Reopen as draft</strong> below to edit it.
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
 
         <!-- ============== CUSTOMER DETAILS ============== -->
@@ -99,14 +169,14 @@ $activeNav = 'new-quote';
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="customer_id">Linked customer</label>
-                        <select id="customer_id" name="customer_id">
-                            <option value="">— None —</option>
+                        <select id="customer_id" name="customer_id" <?= !$editable ? 'disabled' : '' ?>>
+                            <option value="0">— None —</option>
                             <?php foreach ($customers as $c): ?>
                                 <option value="<?= (int) $c['id'] ?>"
                                     <?= (int) ($quote['customer_id'] ?? 0) === (int) $c['id'] ? 'selected' : '' ?>>
                                     <?= e((string) $c['name']) ?>
                                     <?php if (!empty($c['town']) || !empty($c['postcode'])): ?>
-                                        — <?= e(trim((string) $c['town']) . ' ' . (string) $c['postcode']) ?>
+                                        — <?= e(trim((string) $c['town'] . ' ' . (string) $c['postcode'])) ?>
                                     <?php endif; ?>
                                 </option>
                             <?php endforeach; ?>
@@ -117,20 +187,23 @@ $activeNav = 'new-quote';
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="end_customer_name">Customer name <span class="required">*</span></label>
-                        <input id="end_customer_name" name="end_customer_name" type="text" required maxlength="150"
+                        <input id="end_customer_name" name="end_customer_name" type="text"
+                               required maxlength="150" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) $quote['end_customer_name']) ?>">
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="end_customer_email">Email</label>
                         <input id="end_customer_email" name="end_customer_email" type="email" maxlength="150"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_email'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_phone">Phone</label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
                     </div>
                 </div>
@@ -139,14 +212,15 @@ $activeNav = 'new-quote';
                     <div class="form-group">
                         <label for="end_customer_address1">Address line 1</label>
                         <input id="end_customer_address1" name="end_customer_address1" type="text" maxlength="150"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_address1'] ?? '')) ?>">
                     </div>
                 </div>
-
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="end_customer_address2">Address line 2</label>
                         <input id="end_customer_address2" name="end_customer_address2" type="text" maxlength="150"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_address2'] ?? '')) ?>">
                     </div>
                 </div>
@@ -155,16 +229,19 @@ $activeNav = 'new-quote';
                     <div class="form-group">
                         <label for="end_customer_town">Town</label>
                         <input id="end_customer_town" name="end_customer_town" type="text" maxlength="100"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_town'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_county">County</label>
                         <input id="end_customer_county" name="end_customer_county" type="text" maxlength="100"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_county'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_postcode">Postcode</label>
                         <input id="end_customer_postcode" name="end_customer_postcode" type="text" maxlength="20"
+                               <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_postcode'] ?? '')) ?>">
                     </div>
                 </div>
@@ -172,81 +249,118 @@ $activeNav = 'new-quote';
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="notes">Quote notes</label>
-                        <textarea id="notes" name="notes" rows="3"><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
+                        <textarea id="notes" name="notes" rows="3" <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
                     </div>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save details</button>
-                </div>
+                <?php if ($editable): ?>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save details</button>
+                    </div>
+                <?php endif; ?>
             </form>
         </section>
 
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Line items</h2>
+                <h2 class="section-title">Line items (<?= count($items) ?>)</h2>
             </div>
 
             <?php if (empty($items)): ?>
-                <div class="table-empty">No line items yet. Add one below.</div>
+                <div class="placeholder">
+                    <p class="placeholder-title">No line items yet</p>
+                    <p class="placeholder-body">
+                        <?php if ($editable): ?>
+                            Add one below.
+                        <?php else: ?>
+                            This quote has no items.
+                        <?php endif; ?>
+                    </p>
+                </div>
             <?php else: ?>
                 <div class="table-wrap">
                     <table class="table">
                         <thead>
                             <tr>
-                                <th style="width:3rem;">#</th>
-                                <th>Room / Description</th>
+                                <th style="width:3rem">#</th>
+                                <th>Description</th>
                                 <th>Size</th>
                                 <th class="num">Qty</th>
                                 <th class="num">Unit</th>
                                 <th class="num">Total</th>
-                                <th></th>
+                                <?php if ($editable): ?><th></th><?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($items as $item): ?>
+                            <?php foreach ($items as $it): ?>
                                 <tr>
-                                    <td><?= (int) ($item['line_no'] ?? 0) ?></td>
+                                    <td><?= (int) $it['line_no'] ?></td>
                                     <td>
-                                        <?php if (!empty($item['room_name'])): ?>
-                                            <strong><?= e((string) $item['room_name']) ?></strong><br>
+                                        <?php if (!empty($it['room_name'])): ?>
+                                            <strong><?= e((string) $it['room_name']) ?></strong><br>
                                         <?php endif; ?>
-                                        <span class="pre-line" style="font-size:.875rem; color:#374151;"><?= e((string) $item['description_text']) ?></span>
+                                        <span class="item-desc">
+                                            <strong><?= e((string) $it['product_name_snapshot']) ?></strong><?php if (!empty($it['system_name_snapshot'])): ?> — <?= e((string) $it['system_name_snapshot']) ?><?php endif; ?><br>
+                                            Band <?= e((string) ($it['fabric_band_snapshot'] ?? '?')) ?>
+                                            <?php if (!empty($it['fabric_supplier_snapshot'])): ?> — <?= e((string) $it['fabric_supplier_snapshot']) ?><?php endif; ?>
+                                            — <?= e((string) $it['fabric_name_snapshot']) ?><?php if (!empty($it['fabric_colour_snapshot'])): ?> / <?= e((string) $it['fabric_colour_snapshot']) ?><?php endif; ?>
+                                        </span>
+                                        <?php if (!empty($extrasByItem[(int) $it['id']])): ?>
+                                            <div class="item-extras">
+                                                <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
+                                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?>
+                                                    <?php if ((float) $ex['amount_applied'] != 0): ?>
+                                                        (<?= e(qb_fmt_money($ex['amount_applied'])) ?>)
+                                                    <?php endif; ?>
+                                                    <br>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($it['notes'])): ?>
+                                            <div class="item-extras"><em><?= e((string) $it['notes']) ?></em></div>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?= e(qb_fmt_size((float) $item['width'])) ?> &times;
-                                        <?= e(qb_fmt_size((float) $item['drop_value'])) ?> m
+                                        <?= qb_fmt_mm((int) $it['width_mm']) ?> ×
+                                        <?= qb_fmt_mm((int) $it['drop_mm']) ?>
+                                        <?php if (!empty($it['width_matrix_mm'])
+                                                 && ((int) $it['width_matrix_mm'] !== (int) $it['width_mm']
+                                                  || (int) $it['drop_matrix_mm']  !== (int) $it['drop_mm'])): ?>
+                                            <br><small style="color:#6b7280">cell: <?= qb_fmt_mm((int) $it['width_matrix_mm']) ?> × <?= qb_fmt_mm((int) $it['drop_matrix_mm']) ?></small>
+                                        <?php endif; ?>
                                     </td>
-                                    <td class="num"><?= (int) $item['quantity'] ?></td>
-                                    <td class="num"><?= e($money($item['sell_price'])) ?></td>
-                                    <td class="num"><?= e($money($item['line_total'])) ?></td>
-                                    <td>
-                                        <form method="post" action="/quote-builder/delete_item.php" style="margin:0;"
-                                              onsubmit="return confirm('Remove this line item?');">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                                            <input type="hidden" name="item_id"  value="<?= (int) $item['id'] ?>">
-                                            <button type="submit" class="btn btn-sm btn-danger" aria-label="Delete line">&times;</button>
-                                        </form>
-                                    </td>
+                                    <td class="num"><?= (int) $it['quantity'] ?></td>
+                                    <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
+                                    <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
+                                    <?php if ($editable): ?>
+                                        <td>
+                                            <form method="post" action="/quote-builder/delete_item.php" style="margin:0"
+                                                  onsubmit="return confirm('Remove this line?');">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-danger" aria-label="Delete line">&times;</button>
+                                            </form>
+                                        </td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
 
                             <tr class="totals-row">
-                                <td colspan="5" class="label">Subtotal</td>
-                                <td class="num"><?= e($money($quote['subtotal'])) ?></td>
-                                <td></td>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
+                                <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
+                                <?php if ($editable): ?><td></td><?php endif; ?>
                             </tr>
                             <tr class="totals-row">
-                                <td colspan="5" class="label">VAT</td>
-                                <td class="num"><?= e($money($quote['vat'])) ?></td>
-                                <td></td>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
+                                <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
+                                <?php if ($editable): ?><td></td><?php endif; ?>
                             </tr>
                             <tr class="totals-row grand">
-                                <td colspan="5" class="label">Total</td>
-                                <td class="num"><?= e($money($quote['total'])) ?></td>
-                                <td></td>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
+                                <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
+                                <?php if ($editable): ?><td></td><?php endif; ?>
                             </tr>
                         </tbody>
                     </table>
@@ -254,6 +368,7 @@ $activeNav = 'new-quote';
             <?php endif; ?>
         </section>
 
+        <?php if ($editable): ?>
         <!-- ============== ADD LINE ITEM ============== -->
         <section class="section">
             <div class="section-header">
@@ -262,7 +377,7 @@ $activeNav = 'new-quote';
 
             <noscript>
                 <div class="alert alert-info">
-                    Adding line items requires JavaScript for live pricing and the supplier / fabric / colour dropdowns.
+                    Adding line items requires JavaScript for cascading dropdowns and live pricing.
                 </div>
             </noscript>
 
@@ -271,54 +386,48 @@ $activeNav = 'new-quote';
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                 <input type="hidden" name="round_up" value="1">
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="item-room">Room name</label>
-                        <input id="item-room" name="room_name" type="text" maxlength="80"
-                               placeholder="e.g. Living Room">
-                    </div>
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="item-product">Product <span class="required">*</span></label>
                         <select id="item-product" name="product_id" required>
                             <option value="">Choose product...</option>
                             <?php foreach ($products as $p): ?>
-                                <option value="<?= (int) $p['id'] ?>">
-                                    <?= e((string) $p['name']) ?> (<?= e((string) $p['group_name']) ?>)
-                                </option>
+                                <option value="<?= (int) $p['id'] ?>"><?= e((string) $p['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="item-room">Room name</label>
+                        <input id="item-room" name="room_name" type="text" maxlength="80"
+                               placeholder="e.g. Living Room">
+                    </div>
                 </div>
 
-                <div class="form-row cols-3">
+                <div class="form-row cols-2">
                     <div class="form-group">
-                        <label for="item-supplier">Supplier <span class="required">*</span></label>
-                        <select id="item-supplier" name="supplier" required>
-                            <option value="">Loading...</option>
+                        <label for="item-system">System</label>
+                        <select id="item-system" name="system_id" disabled>
+                            <option value="">Choose product first</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="item-fabric">Fabric <span class="required">*</span></label>
-                        <select id="item-fabric" name="fabric" required disabled>
-                            <option value="">Choose supplier first</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="item-colour">Colour <span class="required">*</span></label>
-                        <select id="item-colour" name="colour" required disabled>
-                            <option value="">Choose fabric first</option>
+                        <select id="item-fabric" name="option_id" required disabled>
+                            <option value="">Choose product first</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="form-row cols-3">
                     <div class="form-group">
-                        <label for="item-width">Width (m) <span class="required">*</span></label>
-                        <input id="item-width" name="width" type="number" step="0.001" min="0.001" required>
+                        <label for="item-width">Width <span class="required">*</span></label>
+                        <input id="item-width" name="width" type="text" required
+                               placeholder="e.g. 1500, 150cm, 1.5m, 60in">
                     </div>
                     <div class="form-group">
-                        <label for="item-drop">Drop (m) <span class="required">*</span></label>
-                        <input id="item-drop" name="drop" type="number" step="0.001" min="0.001" required>
+                        <label for="item-drop">Drop <span class="required">*</span></label>
+                        <input id="item-drop" name="drop" type="text" required
+                               placeholder="e.g. 1800, 180cm, 1.8m, 72in">
                     </div>
                     <div class="form-group">
                         <label for="item-qty">Quantity</label>
@@ -326,182 +435,299 @@ $activeNav = 'new-quote';
                     </div>
                 </div>
 
-                <div id="item-preview" class="alert alert-info" role="status" aria-live="polite">
-                    Fill in product, supplier, fabric, colour and size to see the price.
+                <div id="item-extras-wrap" style="display:none">
+                    <div class="section-header" style="margin-top:0.5rem">
+                        <h3 class="section-title" style="font-size:1rem">Extras</h3>
+                    </div>
+                    <div id="item-extras" class="extras-grid"></div>
+                </div>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="item-notes">Line notes</label>
+                        <input id="item-notes" name="notes" type="text" maxlength="255"
+                               placeholder="Optional internal note for this line">
+                    </div>
+                </div>
+
+                <div id="item-preview" class="idle">
+                    Pick a product, fabric and dimensions to see the price.
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="item-submit" disabled>Add to quote</button>
+                    <button type="submit" class="btn btn-primary" id="item-submit" disabled>Add line</button>
                 </div>
             </form>
+        </section>
+        <?php endif; ?>
+
+        <!-- ============== STATUS + DANGER ZONE ============== -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Quote actions</h2>
+            </div>
+            <div class="status-actions">
+                <?php foreach ($transitions as $t): ?>
+                    <form method="post" action="/quote-builder/change_status.php">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <input type="hidden" name="target_status" value="<?= e($t) ?>">
+                        <button type="submit" class="btn btn-secondary">
+                            <?= $t === 'draft' ? 'Reopen as draft' : 'Mark as ' . e($t) ?>
+                        </button>
+                    </form>
+                <?php endforeach; ?>
+                <form method="post" action="/quote-builder/delete.php"
+                      onsubmit="return confirm('Delete quote <?= e(addslashes((string) $quote['quote_number'])) ?>? This is permanent — all line items go too.');"
+                      style="margin-left:auto">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                    <button type="submit" class="btn btn-danger">Delete quote</button>
+                </form>
+            </div>
         </section>
     </main>
 </div>
 
+<?php if ($editable): ?>
 <script>
 (function () {
     'use strict';
 
-    const $ = id => document.getElementById(id);
-    const supplierSel = $('item-supplier');
-    const fabricSel   = $('item-fabric');
-    const colourSel   = $('item-colour');
-    const productSel  = $('item-product');
-    const widthIn     = $('item-width');
-    const dropIn      = $('item-drop');
-    const qtyIn       = $('item-qty');
-    const previewBox  = $('item-preview');
-    const submitBtn   = $('item-submit');
+    var form          = document.getElementById('add-item-form');
+    if (!form) return;
+    var productSel    = document.getElementById('item-product');
+    var systemSel     = document.getElementById('item-system');
+    var fabricSel     = document.getElementById('item-fabric');
+    var widthIn       = document.getElementById('item-width');
+    var dropIn        = document.getElementById('item-drop');
+    var qtyIn         = document.getElementById('item-qty');
+    var extrasWrap    = document.getElementById('item-extras-wrap');
+    var extrasBox     = document.getElementById('item-extras');
+    var previewBox    = document.getElementById('item-preview');
+    var submitBtn     = document.getElementById('item-submit');
 
-    const setIdle = (el, msg) => {
+    var productData   = null;  // cached response from /api/product-data
+    var previewTimer  = null;
+
+    function setIdle(el, msg) {
         el.innerHTML = '<option value="">' + msg + '</option>';
-        el.disabled = true;
-    };
-
-    async function loadJson(url) {
-        const r = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
-        if (!r.ok) {
-            const body = await r.text();
-            throw new Error('HTTP ' + r.status + ': ' + body.slice(0, 200));
-        }
-        return r.json();
+        el.disabled  = true;
     }
 
-    async function loadSuppliers() {
-        try {
-            setIdle(supplierSel, 'Loading...');
-            supplierSel.disabled = true;
-            const data = await loadJson('/pricing-engine/api/suppliers.php');
-            supplierSel.innerHTML = '<option value="">Choose supplier...</option>'
-                + data.suppliers.map(s =>
-                    '<option value="' + escapeAttr(s.name) + '">' + escapeHtml(s.name) + ' (' + s.count + ')</option>'
-                ).join('');
-            supplierSel.disabled = false;
-        } catch (err) {
-            setIdle(supplierSel, 'Failed to load suppliers');
-            console.error(err);
-        }
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, function (c) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
     }
 
-    async function loadFabrics() {
-        if (!supplierSel.value) {
-            setIdle(fabricSel, 'Choose supplier first');
-            setIdle(colourSel, 'Choose fabric first');
+    async function loadProductData() {
+        productData = null;
+        if (!productSel.value) {
+            setIdle(systemSel, 'Choose product first');
+            setIdle(fabricSel, 'Choose product first');
+            extrasWrap.style.display = 'none';
+            extrasBox.innerHTML = '';
             schedulePreview();
             return;
         }
         try {
+            setIdle(systemSel, 'Loading...');
             setIdle(fabricSel, 'Loading...');
-            const data = await loadJson('/pricing-engine/api/fabrics.php?supplier='
-                + encodeURIComponent(supplierSel.value));
-            fabricSel.innerHTML = '<option value="">Choose fabric...</option>'
-                + data.fabrics.map(f =>
-                    '<option value="' + escapeAttr(f.name) + '">' + escapeHtml(f.name) + ' (' + f.count + ')</option>'
-                ).join('');
-            fabricSel.disabled = false;
-            setIdle(colourSel, 'Choose fabric first');
+            extrasBox.innerHTML = '';
+            extrasWrap.style.display = 'none';
+
+            var r = await fetch('/quote-builder/api/product-data.php?product_id='
+                                + encodeURIComponent(productSel.value),
+                                { credentials: 'same-origin' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            productData = await r.json();
+            if (productData.error) throw new Error(productData.error);
+
+            // Systems dropdown.
+            if (productData.systems.length === 0) {
+                setIdle(systemSel, '— No systems —');
+                systemSel.value = '';
+            } else {
+                var sysOpts = '<option value="">— Choose system —</option>';
+                productData.systems.forEach(function (s) {
+                    sysOpts += '<option value="' + s.id + '"'
+                            + (s.is_default ? ' selected' : '') + '>'
+                            + escapeHtml(s.name) + '</option>';
+                });
+                systemSel.innerHTML = sysOpts;
+                systemSel.disabled  = false;
+            }
+
+            // Fabrics dropdown.
+            if (productData.fabrics.length === 0) {
+                setIdle(fabricSel, '— No fabrics —');
+            } else {
+                var fabOpts = '<option value="">Choose fabric...</option>';
+                productData.fabrics.forEach(function (f) {
+                    fabOpts += '<option value="' + f.id + '">' + escapeHtml(f.label) + '</option>';
+                });
+                fabricSel.innerHTML = fabOpts;
+                fabricSel.disabled  = false;
+            }
+
+            renderExtras();
         } catch (err) {
-            setIdle(fabricSel, 'Failed to load fabrics');
+            setIdle(systemSel, 'Failed to load');
+            setIdle(fabricSel, 'Failed to load');
             console.error(err);
         }
         schedulePreview();
     }
 
-    async function loadColours() {
-        if (!supplierSel.value || !fabricSel.value) {
-            setIdle(colourSel, 'Choose fabric first');
-            schedulePreview();
+    function renderExtras() {
+        if (!productData || !productData.extras || productData.extras.length === 0) {
+            extrasWrap.style.display = 'none';
+            extrasBox.innerHTML = '';
             return;
         }
-        try {
-            setIdle(colourSel, 'Loading...');
-            const data = await loadJson('/pricing-engine/api/colours.php'
-                + '?supplier=' + encodeURIComponent(supplierSel.value)
-                + '&fabric='   + encodeURIComponent(fabricSel.value));
-            colourSel.innerHTML = '<option value="">Choose colour...</option>'
-                + data.colours.map(c =>
-                    '<option value="' + escapeAttr(c.colour) + '" data-band="' + escapeAttr(c.band) + '">'
-                    + escapeHtml(c.colour) + ' (Band ' + escapeHtml(c.band) + ')</option>'
-                ).join('');
-            colourSel.disabled = false;
-        } catch (err) {
-            setIdle(colourSel, 'Failed to load colours');
-            console.error(err);
-        }
-        schedulePreview();
+        var systemId = parseInt(systemSel.value, 10) || 0;
+        var html = '';
+        var anyVisible = false;
+
+        productData.extras.forEach(function (extra, idx) {
+            // Conditional extras: hidden until parent choice is selected.
+            if (extra.parent_choice_id) {
+                var parentSelected = false;
+                productData.extras.forEach(function (other, otherIdx) {
+                    if (otherIdx === idx) return;
+                    var sel = document.querySelector(
+                        '[data-extra-id="' + other.id + '"] select'
+                    );
+                    if (sel && parseInt(sel.value, 10) === extra.parent_choice_id) {
+                        parentSelected = true;
+                    }
+                });
+                if (!parentSelected) return;
+            }
+
+            // Filter choices by system_id (system-locked choices show only for that system).
+            var visibleChoices = extra.choices.filter(function (c) {
+                return c.system_id === null || c.system_id === systemId;
+            });
+            if (visibleChoices.length === 0) return;
+
+            anyVisible = true;
+            var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
+            html += '<div data-extra-id="' + extra.id + '">';
+            html += '<label>' + escapeHtml(extra.name)
+                  + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '')
+                  + '</label>';
+            html += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
+            html += '<select name="extras[' + idx + '][choice_id]"'
+                  + (extra.is_required ? ' required' : '') + '>';
+            if (!extra.is_required || !hasDefault) {
+                html += '<option value="">— None —</option>';
+            }
+            visibleChoices.forEach(function (c) {
+                html += '<option value="' + c.id + '"'
+                      + (c.is_default ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+            });
+            html += '</select></div>';
+        });
+
+        extrasBox.innerHTML  = html;
+        extrasWrap.style.display = anyVisible ? '' : 'none';
+
+        // Re-bind change listeners on the choice selects so conditional
+        // extras can re-render when their parent's value changes.
+        extrasBox.querySelectorAll('select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                renderExtras();
+                schedulePreview();
+            });
+        });
     }
 
-    let previewTimer = null;
     function schedulePreview() {
         clearTimeout(previewTimer);
-        previewTimer = setTimeout(runPreview, 300);
+        previewTimer = setTimeout(runPreview, 250);
+    }
+
+    function collectExtras() {
+        var out = [];
+        var divs = extrasBox.querySelectorAll('[data-extra-id]');
+        divs.forEach(function (div) {
+            var sel = div.querySelector('select');
+            var eid = parseInt(div.getAttribute('data-extra-id'), 10);
+            var cid = parseInt(sel.value, 10);
+            if (eid > 0 && cid > 0) {
+                out.push({ extra_id: eid, choice_id: cid });
+            }
+        });
+        return out;
     }
 
     async function runPreview() {
-        const haveAll = productSel.value && supplierSel.value && fabricSel.value && colourSel.value
-            && parseFloat(widthIn.value) > 0 && parseFloat(dropIn.value) > 0;
-        if (!haveAll) {
-            previewBox.className = 'alert alert-info';
-            previewBox.textContent = 'Fill in product, supplier, fabric, colour and size to see the price.';
+        var ok = productSel.value && fabricSel.value
+              && widthIn.value.trim() && dropIn.value.trim();
+        if (!ok) {
+            previewBox.className   = 'idle';
+            previewBox.textContent = 'Pick a product, fabric and dimensions to see the price.';
             submitBtn.disabled = true;
             return;
         }
 
-        const params = new URLSearchParams({
+        var params = new URLSearchParams({
             product_id: productSel.value,
-            supplier:   supplierSel.value,
-            fabric:     fabricSel.value,
-            colour:     colourSel.value,
+            system_id:  systemSel.value || '0',
+            option_id:  fabricSel.value,
             width:      widthIn.value,
             drop:       dropIn.value,
             quantity:   qtyIn.value || '1',
             round_up:   '1'
         });
+        collectExtras().forEach(function (ex, i) {
+            params.append('extras[' + i + '][extra_id]',  ex.extra_id);
+            params.append('extras[' + i + '][choice_id]', ex.choice_id);
+        });
+
         try {
-            const r = await fetch('/pricing-engine/api/preview.php?' + params, {
-                headers: { 'Accept': 'application/json' },
-                credentials: 'same-origin'
-            });
-            const data = await r.json();
-            if (!r.ok || data.error) {
-                previewBox.className = 'alert alert-error';
-                previewBox.textContent = data.error || ('HTTP ' + r.status);
+            var r = await fetch('/quote-builder/api/preview.php?' + params,
+                                { credentials: 'same-origin' });
+            var data = await r.json();
+            if (data.error) {
+                previewBox.className   = 'error';
+                previewBox.textContent = data.error;
                 submitBtn.disabled = true;
                 return;
             }
-            const unit  = Number(data.sell_price).toFixed(2);
-            const total = Number(data.line_total).toFixed(2);
-            const qty   = Number(data.quantity);
-            const rounded = data.rounded_up
-                ? ' &middot; rounded up to ' + Number(data.matrix_width).toFixed(1)
-                  + 'm × ' + Number(data.matrix_drop).toFixed(1) + 'm cell'
-                : '';
-            previewBox.className = 'alert alert-success';
-            previewBox.innerHTML =
-                '<strong>£' + unit + '</strong> per blind'
-                + (qty > 1 ? ' × ' + qty + ' = <strong>£' + total + '</strong>' : '')
-                + ' &middot; markup ' + Number(data.markup_percent).toFixed(1) + '%'
-                + (data.discount_percent > 0 ? ', discount ' + Number(data.discount_percent).toFixed(1) + '%' : '')
-                + rounded;
+            var unit  = Number(data.sell_price).toFixed(2);
+            var total = Number(data.line_total).toFixed(2);
+            var qty   = Number(data.quantity);
+            var bits = ['<strong>£' + unit + '</strong> per blind'];
+            if (qty > 1) bits.push('× ' + qty + ' = <strong>£' + total + '</strong>');
+            bits.push('base £' + Number(data.base_price).toFixed(2));
+            if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
+            if (data.markup_percent > 0)   bits.push('markup ' + Number(data.markup_percent).toFixed(2) + '%');
+            if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
+            if (data.rounded_up) bits.push('rounded up to ' + data.matrix_width_mm + ' × ' + data.matrix_drop_mm + ' mm');
+            previewBox.className = 'success';
+            previewBox.innerHTML = bits.join(' &middot; ');
             submitBtn.disabled = false;
         } catch (err) {
-            previewBox.className = 'alert alert-error';
+            previewBox.className   = 'error';
             previewBox.textContent = 'Could not fetch live price.';
             submitBtn.disabled = true;
             console.error(err);
         }
     }
 
-    function escapeAttr(s)  { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-    function escapeHtml(s)  { return escapeAttr(s); }
-
-    supplierSel.addEventListener('change', () => { loadFabrics(); });
-    fabricSel.addEventListener('change',   () => { loadColours(); });
-    [colourSel, productSel].forEach(el => el.addEventListener('change', schedulePreview));
-    [widthIn, dropIn, qtyIn].forEach(el => el.addEventListener('input', schedulePreview));
-
-    loadSuppliers();
+    productSel.addEventListener('change', loadProductData);
+    systemSel.addEventListener('change', function () { renderExtras(); schedulePreview(); });
+    [fabricSel, qtyIn].forEach(function (el) {
+        el.addEventListener('change', schedulePreview);
+    });
+    [widthIn, dropIn].forEach(function (el) {
+        el.addEventListener('input', schedulePreview);
+    });
 })();
 </script>
+<?php endif; ?>
 </body>
 </html>

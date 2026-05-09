@@ -10,30 +10,31 @@ requireLogin();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     header('Allow: POST');
-    header('Location: /quote-history/index.php');
     exit;
 }
 
 csrf_check();
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = (int) $user['client_id'];
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $itemId   = (int) ($_POST['item_id']  ?? 0);
+$quote    = qb_load_quote_or_404($quoteId, $clientId);
 
-$quote = qb_load_quote_or_404($quoteId, $clientId);
-
-if ($itemId > 0) {
-    $stmt = db()->prepare(
-        'DELETE FROM quote_items WHERE id = ? AND quote_id = ?'
+if (!qb_is_editable($quote)) {
+    qb_flash_redirect(
+        '/quote-builder/edit.php?id=' . $quoteId,
+        'error',
+        'Quote is locked. Reopen it to remove items.'
     );
-    $stmt->execute([$itemId, $quoteId]);
-
-    if ($stmt->rowCount() > 0) {
-        qb_recompute_totals($quoteId);
-        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Line item removed.');
-    }
 }
 
-header('Location: /quote-builder/edit.php?id=' . $quoteId);
-exit;
+// Ownership check: the item must belong to this quote.
+$st = db()->prepare(
+    'DELETE FROM quote_items WHERE id = ? AND quote_id = ?'
+);
+$st->execute([$itemId, $quoteId]);
+
+qb_recompute_totals($quoteId);
+
+qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Line removed.');
