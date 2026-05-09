@@ -482,7 +482,31 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="item-room">Room name</label>
                         <input id="item-room" name="room_name" type="text" maxlength="80"
-                               placeholder="e.g. Living Room">
+                               list="room-options"
+                               placeholder="Type or pick — e.g. Living Room">
+                        <datalist id="room-options">
+                            <option value="Bathroom">
+                            <option value="Bedroom">
+                            <option value="Bedroom 2">
+                            <option value="Bedroom 3">
+                            <option value="Cloakroom">
+                            <option value="Conservatory">
+                            <option value="Dining Room">
+                            <option value="En-suite">
+                            <option value="Hallway">
+                            <option value="Kitchen">
+                            <option value="Kitchen / Diner">
+                            <option value="Landing">
+                            <option value="Living Room">
+                            <option value="Lounge">
+                            <option value="Master Bedroom">
+                            <option value="Nursery">
+                            <option value="Office">
+                            <option value="Snug">
+                            <option value="Spare Room">
+                            <option value="Study">
+                            <option value="Utility">
+                        </datalist>
                     </div>
                     <div class="form-group">
                         <label for="item-product">Product <span class="required">*</span></label>
