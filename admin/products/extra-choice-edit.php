@@ -49,6 +49,8 @@ $f = [
 ];
 $error = null;
 
+$widthTablePasted = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
@@ -60,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
     $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
+    $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -72,46 +75,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!is_numeric($f['price_per_metre'])) {
         $error = 'Per-metre surcharge must be a number.';
     } else {
-        try {
-            $pdo = db();
-            $pdo->beginTransaction();
-
-            if ($f['is_default'] === 1) {
-                $clear = $pdo->prepare(
-                    'UPDATE product_extra_choices SET is_default = 0
-                      WHERE product_extra_id = ? AND id != ?'
-                );
-                $clear->execute([(int) $choice['product_extra_id'], $id]);
+        // Parse the pasted width-price table. Empty = clear all rows.
+        require_once __DIR__ . '/../../_partials/price_table_parser.php';
+        $widthRows = [];
+        $parseErr  = null;
+        $lines = preg_split('/\r?\n/', trim($widthTablePasted)) ?: [];
+        foreach ($lines as $lineNum => $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+            // Strip out leading "Width" / "Price" header line if pasted.
+            if (preg_match('/^(width|price|mm)/i', $line) && !preg_match('/\d/', $line)) continue;
+            $parts = preg_split('/[\s,;|]+/', $line);
+            if (count($parts) < 2) {
+                $parseErr = 'Line ' . ($lineNum + 1) . ': expected width and price separated by space, comma, tab, or |. Got "' . $line . '".';
+                break;
             }
+            $w = ptp_parse_dimension((string) $parts[0]);
+            $p = ptp_parse_price((string) $parts[1]);
+            if ($w === null) {
+                $parseErr = 'Line ' . ($lineNum + 1) . ': could not read width "' . $parts[0] . '".';
+                break;
+            }
+            if ($p === null) {
+                $parseErr = 'Line ' . ($lineNum + 1) . ': could not read price "' . $parts[1] . '".';
+                break;
+            }
+            $widthRows[$w] = (float) $p; // last write wins on duplicate width
+        }
 
-            $u = $pdo->prepare(
-                'UPDATE product_extra_choices
-                    SET label = ?, system_id = ?,
-                        price_delta = ?, price_percent = ?, price_per_metre = ?,
-                        is_default = ?, sort_order = ?, active = ?
-                  WHERE id = ?'
-            );
-            $u->execute([
-                $f['label'],
-                $f['system_id'] > 0 ? $f['system_id'] : null,
-                (float) $f['price_delta'],
-                (float) $f['price_percent'],
-                (float) $f['price_per_metre'],
-                $f['is_default'],
-                $f['sort_order'],
-                $f['active'],
-                $id,
-            ]);
-            $pdo->commit();
+        if ($parseErr !== null) {
+            $error = $parseErr;
+        } else {
+            try {
+                $pdo = db();
+                $pdo->beginTransaction();
 
-            $_SESSION['flash_success'] = 'Choice updated.';
-            header('Location: /admin/products/extra.php?id=' . (int) $choice['product_extra_id']);
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $error = 'Could not save: ' . $e->getMessage();
+                if ($f['is_default'] === 1) {
+                    $clear = $pdo->prepare(
+                        'UPDATE product_extra_choices SET is_default = 0
+                          WHERE product_extra_id = ? AND id != ?'
+                    );
+                    $clear->execute([(int) $choice['product_extra_id'], $id]);
+                }
+
+                $u = $pdo->prepare(
+                    'UPDATE product_extra_choices
+                        SET label = ?, system_id = ?,
+                            price_delta = ?, price_percent = ?, price_per_metre = ?,
+                            is_default = ?, sort_order = ?, active = ?
+                      WHERE id = ?'
+                );
+                $u->execute([
+                    $f['label'],
+                    $f['system_id'] > 0 ? $f['system_id'] : null,
+                    (float) $f['price_delta'],
+                    (float) $f['price_percent'],
+                    (float) $f['price_per_metre'],
+                    $f['is_default'],
+                    $f['sort_order'],
+                    $f['active'],
+                    $id,
+                ]);
+
+                // Replace the width table.
+                $del = $pdo->prepare(
+                    'DELETE FROM extra_choice_price_rows WHERE product_extra_choice_id = ?'
+                );
+                $del->execute([$id]);
+                if ($widthRows) {
+                    $ins = $pdo->prepare(
+                        'INSERT INTO extra_choice_price_rows
+                           (product_extra_choice_id, width_mm, price)
+                         VALUES (?, ?, ?)'
+                    );
+                    foreach ($widthRows as $w => $p) {
+                        $ins->execute([$id, $w, $p]);
+                    }
+                }
+
+                $pdo->commit();
+
+                $_SESSION['flash_success'] = 'Choice updated.';
+                header('Location: /admin/products/extra.php?id=' . (int) $choice['product_extra_id']);
+                exit;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $error = 'Could not save: ' . $e->getMessage();
+            }
         }
     }
+}
+
+// Pre-fill width table textarea with existing rows.
+if ($widthTablePasted === '') {
+    $existing = db()->prepare(
+        'SELECT width_mm, price FROM extra_choice_price_rows
+          WHERE product_extra_choice_id = ?
+       ORDER BY width_mm'
+    );
+    $existing->execute([$id]);
+    $lines = [];
+    foreach ($existing->fetchAll() as $r) {
+        $lines[] = $r['width_mm'] . ', ' . number_format((float) $r['price'], 2, '.', '');
+    }
+    $widthTablePasted = implode("\n", $lines);
 }
 
 // Systems available on the parent product.
@@ -218,6 +285,24 @@ $activeNav = 'products';
                                value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Width-based price table (optional)
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
+                        A fourth pricing mode for cases where the surcharge varies by width.
+                        One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
+                        Width can be in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
+                        Pricing engine looks up the smallest entry &ge; the customer's width (round-up).
+                        <strong>Combined</strong> with the flat / percent / per-metre fields above.
+                        Save with the textarea blank to clear the table.
+                    </p>
+                    <textarea name="width_price_table" id="width_price_table"
+                              rows="8"
+                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;resize:vertical"
+                              placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
+                </fieldset>
 
                 <label class="checkbox-row" for="is_default">
                     <input type="checkbox" id="is_default" name="is_default" value="1"

@@ -144,7 +144,9 @@ $rows = db()->prepare(
     'SELECT c.id, c.label, c.system_id,
             c.price_delta, c.price_percent, c.price_per_metre,
             c.is_default, c.sort_order, c.active,
-            s.name AS system_name
+            s.name AS system_name,
+            (SELECT COUNT(*) FROM extra_choice_price_rows r
+              WHERE r.product_extra_choice_id = c.id) AS width_table_size
        FROM product_extra_choices c
        LEFT JOIN product_systems s ON s.id = c.system_id
       WHERE c.product_extra_id = ?
@@ -369,10 +371,12 @@ $activeNav = 'products';
                                             $delta    = (float) $c['price_delta'];
                                             $percent  = (float) $c['price_percent'];
                                             $perMetre = (float) $c['price_per_metre'];
+                                            $widthN   = (int)   $c['width_table_size'];
                                             $bits = [];
                                             if ($delta    != 0) { $bits[] = ($delta > 0 ? '+' : '') . '£' . number_format($delta, 2); }
                                             if ($perMetre != 0) { $bits[] = ($perMetre > 0 ? '+' : '') . '£' . number_format($perMetre, 2) . '/m'; }
                                             if ($percent  != 0) { $bits[] = ($percent > 0 ? '+' : '') . number_format($percent, 2) . '%'; }
+                                            if ($widthN   > 0)  { $bits[] = 'width table (' . $widthN . ' size' . ($widthN === 1 ? '' : 's') . ')'; }
                                         ?>
                                         <?php if ($bits): ?>
                                             <strong><?= e(implode(' and ', $bits)) ?></strong>
