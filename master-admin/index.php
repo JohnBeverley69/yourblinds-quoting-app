@@ -65,6 +65,7 @@ $activeNav = 'master-admin';
                     Per-client feature flags. Tick to enable a paid add-on for that client.
                 </p>
             </div>
+            <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>
