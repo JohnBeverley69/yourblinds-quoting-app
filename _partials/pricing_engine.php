@@ -162,7 +162,7 @@ function pe_apply_extra(
 
     // 2. Look up the choice.
     $st = $pdo->prepare(
-        'SELECT id, product_extra_id, system_id, label,
+        'SELECT id, product_extra_id, label,
                 price_delta, price_percent, price_per_metre
            FROM product_extra_choices
           WHERE id = ? AND product_extra_id = ? AND active = 1
@@ -174,11 +174,16 @@ function pe_apply_extra(
         return ['error' => "Choice #$choiceId not found for option '" . $extra['name'] . "'."];
     }
 
-    // 3. System-scope check: a system-locked choice can only be priced when
-    //    the item is on that system.
-    if ($choice['system_id'] !== null
-        && (int) $choice['system_id'] !== ($systemId ?? 0)
-    ) {
+    // 3. System-scope check via the junction table. No junction rows for the
+    //    choice = available on every system (default). Otherwise the item's
+    //    system_id must be in the allow-list.
+    $scopeSt = $pdo->prepare(
+        'SELECT product_system_id FROM product_extra_choice_systems
+          WHERE product_extra_choice_id = ?'
+    );
+    $scopeSt->execute([$choiceId]);
+    $allowedSystemIds = array_map('intval', $scopeSt->fetchAll(PDO::FETCH_COLUMN));
+    if ($allowedSystemIds && !in_array($systemId ?? 0, $allowedSystemIds, true)) {
         return ['error' => "Choice '" . $choice['label'] . "' on '" . $extra['name']
                           . "' is not available on the selected system."];
     }

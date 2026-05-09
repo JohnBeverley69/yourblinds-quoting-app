@@ -43,7 +43,7 @@ $f = [
     'price_percent'   => '0.00',
     'price_per_metre' => '0.00',
     'is_default'      => 0,
-    'system_id'       => 0,
+    'system_ids'      => [],   // empty = available on all systems
 ];
 $error            = null;
 $widthTablePasted = '';
@@ -56,7 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
-    $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
+    $f['system_ids']      = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
+    ))));
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
@@ -120,14 +123,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
                 $ins = $pdo->prepare(
                     'INSERT INTO product_extra_choices
-                       (product_extra_id, system_id, label,
+                       (product_extra_id, label,
                         price_delta, price_percent, price_per_metre,
                         is_default, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
                 );
                 $ins->execute([
                     $extraId,
-                    $f['system_id'] > 0 ? $f['system_id'] : null,
                     $f['label'],
                     (float) $f['price_delta'],
                     (float) $f['price_percent'],
@@ -136,6 +138,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $nextSort,
                 ]);
                 $newChoiceId = (int) $pdo->lastInsertId();
+
+                // Tie the choice to the selected systems via the junction
+                // table. Empty selection = available on every system.
+                // Validate each id belongs to this product's catalogue
+                // (POST inputs aren't trustworthy).
+                if ($f['system_ids']) {
+                    $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
+                    $vsSt = $pdo->prepare(
+                        "SELECT id FROM product_systems
+                          WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
+                    );
+                    $vsSt->execute([...$f['system_ids'], (int) $extra['product_id'], $clientId]);
+                    $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
+
+                    if ($validSystemIds) {
+                        $jIns = $pdo->prepare(
+                            'INSERT INTO product_extra_choice_systems
+                               (product_extra_choice_id, product_system_id)
+                             VALUES (?, ?)'
+                        );
+                        foreach ($validSystemIds as $sid) {
+                            $jIns->execute([$newChoiceId, $sid]);
+                        }
+                    }
+                }
 
                 if ($widthRows) {
                     $rowIns = $pdo->prepare(
@@ -191,19 +218,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 // Sort by sort_order alone — drag-and-drop controls position. The 'default'
 // pill still shows but doesn't override the user's drag.
 $rows = db()->prepare(
-    'SELECT c.id, c.label, c.system_id,
+    'SELECT c.id, c.label,
             c.price_delta, c.price_percent, c.price_per_metre,
             c.is_default, c.sort_order, c.active,
-            s.name AS system_name,
             (SELECT COUNT(*) FROM extra_choice_price_rows r
               WHERE r.product_extra_choice_id = c.id) AS width_table_size
        FROM product_extra_choices c
-       LEFT JOIN product_systems s ON s.id = c.system_id
       WHERE c.product_extra_id = ?
    ORDER BY c.sort_order, c.label'
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
+
+// Pull each choice's system scope (junction-table rows) in one query, fold
+// into a [choice_id => [system names]] map so the rows below can show
+// "Vogue + Slim Line only" instead of just one system.
+$scopeByChoice = [];
+if ($choices) {
+    $choiceIds = array_map(static fn ($c) => (int) $c['id'], $choices);
+    $ph = implode(',', array_fill(0, count($choiceIds), '?'));
+    $scopeSt = db()->prepare(
+        "SELECT pecs.product_extra_choice_id, ps.name
+           FROM product_extra_choice_systems pecs
+           JOIN product_systems ps ON ps.id = pecs.product_system_id
+          WHERE pecs.product_extra_choice_id IN ($ph)
+          ORDER BY ps.sort_order, ps.name"
+    );
+    $scopeSt->execute($choiceIds);
+    foreach ($scopeSt->fetchAll() as $r) {
+        $scopeByChoice[(int) $r['product_extra_choice_id']][] = (string) $r['name'];
+    }
+}
 
 // Systems available on this product, for the system dropdown.
 $sysStmt = db()->prepare(
@@ -356,20 +401,27 @@ $activeNav = 'products';
                     </span>
                 </div>
 
+                <?php if ($systems): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="system_id">System (optional)</label>
-                        <select id="system_id" name="system_id">
-                            <option value="0">— All systems —</option>
+                        <label>System scope (optional)</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
                             <?php foreach ($systems as $s): ?>
-                                <option value="<?= (int) $s['id'] ?>"
-                                    <?= ((int) $f['system_id']) === (int) $s['id'] ? 'selected' : '' ?>>
+                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                    <input type="checkbox" name="system_ids[]"
+                                           value="<?= (int) $s['id'] ?>"
+                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
                                     <?= e((string) $s['name']) ?>
-                                </option>
+                                </label>
                             <?php endforeach; ?>
-                        </select>
+                        </div>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Tick one or more to limit this choice to specific systems.
+                            Leave all unticked to make it available everywhere.
+                        </small>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
@@ -449,8 +501,9 @@ $activeNav = 'products';
                                         <?php if ((int) $c['is_default'] === 1): ?>
                                             <span class="default-pill">Default</span>
                                         <?php endif; ?>
-                                        <?php if (!empty($c['system_name'])): ?>
-                                            <span class="system-pill"><?= e((string) $c['system_name']) ?> only</span>
+                                        <?php $scopeNames = $scopeByChoice[(int) $c['id']] ?? []; ?>
+                                        <?php if ($scopeNames): ?>
+                                            <span class="system-pill"><?= e(implode(' + ', $scopeNames)) ?> only</span>
                                         <?php endif; ?>
                                     </td>
                                     <td class="price-impact">

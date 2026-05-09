@@ -37,6 +37,14 @@ if (!$choice) {
     exit;
 }
 
+// Existing system bindings via junction table.
+$scopeSt = db()->prepare(
+    'SELECT product_system_id FROM product_extra_choice_systems
+      WHERE product_extra_choice_id = ?'
+);
+$scopeSt->execute([$id]);
+$existingSystemIds = array_map('intval', $scopeSt->fetchAll(PDO::FETCH_COLUMN));
+
 $f = [
     'label'           => (string) $choice['label'],
     'price_delta'     => (string) $choice['price_delta'],
@@ -44,7 +52,7 @@ $f = [
     'price_per_metre' => (string) $choice['price_per_metre'],
     'is_default'      => (int)    $choice['is_default'],
     'active'          => (int)    $choice['active'],
-    'system_id'       => (int) ($choice['system_id'] ?? 0),
+    'system_ids'      => $existingSystemIds,
 ];
 $error = null;
 
@@ -59,7 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
-    $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
+    $f['system_ids']      = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
+    ))));
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
@@ -113,16 +124,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $u = $pdo->prepare(
                     'UPDATE product_extra_choices
-                        SET label = ?, system_id = ?,
+                        SET label = ?,
                             price_delta = ?, price_percent = ?, price_per_metre = ?,
                             is_default = ?, active = ?
                       WHERE id = ?'
                 );
                 // sort_order is intentionally not touched — drag-and-drop
-                // on the choices list is the only writer.
+                // on the choices list is the only writer. system_id (legacy
+                // single-system column) is left untouched too — the junction
+                // table below is the source of truth.
                 $u->execute([
                     $f['label'],
-                    $f['system_id'] > 0 ? $f['system_id'] : null,
                     (float) $f['price_delta'],
                     (float) $f['price_percent'],
                     (float) $f['price_per_metre'],
@@ -130,6 +142,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $f['active'],
                     $id,
                 ]);
+
+                // Replace the system-scope junction rows. Validate the IDs
+                // belong to this product's catalogue first (POST inputs
+                // aren't trustworthy).
+                $pdo->prepare(
+                    'DELETE FROM product_extra_choice_systems
+                      WHERE product_extra_choice_id = ?'
+                )->execute([$id]);
+
+                if ($f['system_ids']) {
+                    $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
+                    $vsSt = $pdo->prepare(
+                        "SELECT id FROM product_systems
+                          WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
+                    );
+                    $vsSt->execute([...$f['system_ids'], (int) $choice['product_id'], $clientId]);
+                    $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
+
+                    if ($validSystemIds) {
+                        $jIns = $pdo->prepare(
+                            'INSERT INTO product_extra_choice_systems
+                               (product_extra_choice_id, product_system_id)
+                             VALUES (?, ?)'
+                        );
+                        foreach ($validSystemIds as $sid) {
+                            $jIns->execute([$id, $sid]);
+                        }
+                    }
+                }
 
                 // Replace the width table.
                 $del = $pdo->prepare(
@@ -271,23 +312,27 @@ $activeNav = 'products';
                        class="btn btn-secondary">Cancel</a>
                 </div>
 
+                <?php if ($systems): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="system_id">System (optional)</label>
-                        <select id="system_id" name="system_id">
-                            <option value="0">— All systems —</option>
+                        <label>System scope (optional)</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
                             <?php foreach ($systems as $s): ?>
-                                <option value="<?= (int) $s['id'] ?>"
-                                    <?= ((int) $f['system_id']) === (int) $s['id'] ? 'selected' : '' ?>>
+                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                    <input type="checkbox" name="system_ids[]"
+                                           value="<?= (int) $s['id'] ?>"
+                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
                                     <?= e((string) $s['name']) ?>
-                                </option>
+                                </label>
                             <?php endforeach; ?>
-                        </select>
+                        </div>
                         <small style="color:#6b7280;font-size:0.8125rem">
-                            Limit this choice to one system (e.g. Champagne only on Vogue). Leave as "All systems" if it's available everywhere.
+                            Tick one or more to limit this choice to specific systems.
+                            Leave all unticked to make it available everywhere.
                         </small>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">

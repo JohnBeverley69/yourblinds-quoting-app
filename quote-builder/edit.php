@@ -891,9 +891,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 if (!parentSelected) return;
             }
 
-            // Filter choices by system_id (system-locked choices show only for that system).
+            // Filter choices by system scope. Empty system_ids array means
+            // "available on every system"; otherwise the chosen system must
+            // be in the list.
             var visibleChoices = extra.choices.filter(function (c) {
-                return c.system_id === null || c.system_id === systemId;
+                if (!c.system_ids || c.system_ids.length === 0) return true;
+                return c.system_ids.indexOf(systemId) !== -1;
             });
             if (visibleChoices.length === 0) return;
 

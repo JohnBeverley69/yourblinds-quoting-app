@@ -82,7 +82,7 @@ $choicesByExtra = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
     $st = $pdo->prepare(
-        "SELECT id, product_extra_id, system_id, label,
+        "SELECT id, product_extra_id, label,
                 price_delta, price_percent, price_per_metre,
                 is_default, sort_order
            FROM product_extra_choices
@@ -90,10 +90,31 @@ if ($extraIds) {
        ORDER BY product_extra_id, sort_order, label"
     );
     $st->execute($extraIds);
-    foreach ($st->fetchAll() as $r) {
+    $rawChoices = $st->fetchAll();
+
+    // Pull every choice's system-scope rows in one go, fold by choice id.
+    $scopeByChoice = [];
+    if ($rawChoices) {
+        $choiceIds = array_map(static fn ($c) => (int) $c['id'], $rawChoices);
+        $cph = implode(',', array_fill(0, count($choiceIds), '?'));
+        $scopeSt = $pdo->prepare(
+            "SELECT product_extra_choice_id, product_system_id
+               FROM product_extra_choice_systems
+              WHERE product_extra_choice_id IN ($cph)"
+        );
+        $scopeSt->execute($choiceIds);
+        foreach ($scopeSt->fetchAll() as $r) {
+            $scopeByChoice[(int) $r['product_extra_choice_id']][] = (int) $r['product_system_id'];
+        }
+    }
+
+    foreach ($rawChoices as $r) {
+        $cid = (int) $r['id'];
         $choicesByExtra[(int) $r['product_extra_id']][] = [
-            'id'         => (int)    $r['id'],
-            'system_id'  => $r['system_id'] !== null ? (int) $r['system_id'] : null,
+            'id'         => $cid,
+            // Empty array means "all systems". Otherwise a JS-friendly list of
+            // allowed system ids — JS filters choices on system change.
+            'system_ids' => $scopeByChoice[$cid] ?? [],
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
         ];
