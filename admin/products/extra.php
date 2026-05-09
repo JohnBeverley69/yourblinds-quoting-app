@@ -138,6 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
+// Sort by sort_order alone — drag-and-drop controls position. The 'default'
+// pill still shows but doesn't override the user's drag.
 $rows = db()->prepare(
     'SELECT c.id, c.label, c.system_id,
             c.price_delta, c.price_percent, c.price_per_metre,
@@ -146,7 +148,7 @@ $rows = db()->prepare(
        FROM product_extra_choices c
        LEFT JOIN product_systems s ON s.id = c.system_id
       WHERE c.product_extra_id = ?
-   ORDER BY c.is_default DESC, c.sort_order, c.label'
+   ORDER BY c.sort_order, c.label'
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
@@ -330,10 +332,15 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
+                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                    Drag the <strong>⋮⋮</strong> handle to reorder.
+                    <span class="reorder-status">Saving…</span>
+                </p>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table sortable-list" data-reorder-type="choices">
                         <thead>
                             <tr>
+                                <th class="drag-col"></th>
                                 <th>Label</th>
                                 <th>Price impact</th>
                                 <th></th>
@@ -341,7 +348,8 @@ $activeNav = 'products';
                         </thead>
                         <tbody>
                             <?php foreach ($choices as $c): ?>
-                                <tr>
+                                <tr data-id="<?= (int) $c['id'] ?>">
+                                    <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
                                         <strong><?= e((string) $c['label']) ?></strong>
                                         <?php if ((int) $c['is_default'] === 1): ?>
@@ -396,5 +404,6 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php if ($choices): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
 </body>
 </html>

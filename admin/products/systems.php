@@ -98,12 +98,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 }
 
 // List systems for this product, with price-table counts.
+// Sort by sort_order alone — drag-and-drop controls position. The 'default'
+// flag is shown as a pill but doesn't dictate order anymore.
 $rows = db()->prepare(
     'SELECT s.id, s.name, s.sort_order, s.active, s.is_default, s.updated_at,
             (SELECT COUNT(*) FROM price_tables t WHERE t.system_id = s.id) AS table_count
        FROM product_systems s
       WHERE s.product_id = ? AND s.client_id = ?
-   ORDER BY s.is_default DESC, s.sort_order, s.name'
+   ORDER BY s.sort_order, s.name'
 );
 $rows->execute([$productId, $clientId]);
 $systems = $rows->fetchAll();
@@ -216,10 +218,15 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
+                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                    Drag the <strong>⋮⋮</strong> handle to reorder.
+                    <span class="reorder-status">Saving…</span>
+                </p>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table sortable-list" data-reorder-type="systems">
                         <thead>
                             <tr>
+                                <th class="drag-col"></th>
                                 <th>Name</th>
                                 <th class="num">Price tables</th>
                                 <th>Updated</th>
@@ -228,7 +235,8 @@ $activeNav = 'products';
                         </thead>
                         <tbody>
                             <?php foreach ($systems as $s): ?>
-                                <tr>
+                                <tr data-id="<?= (int) $s['id'] ?>">
+                                    <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
                                         <span class="system-name"><?= e((string) $s['name']) ?></span>
                                         <?php if ((int) $s['is_default'] === 1): ?>
@@ -280,5 +288,6 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php if ($systems): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
 </body>
 </html>

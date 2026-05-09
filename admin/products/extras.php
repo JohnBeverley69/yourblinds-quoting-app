@@ -88,6 +88,9 @@ $choiceStmt = db()->prepare(
 $choiceStmt->execute([$productId, $clientId]);
 $availableChoices = $choiceStmt->fetchAll();
 
+// Sort purely by sort_order so drag-and-drop fully controls position.
+// Conditional (parent-choice-gated) rows still get their visual indent
+// + ↳ marker so the relationship reads at a glance regardless of position.
 $rows = db()->prepare(
     'SELECT e.id, e.name, e.is_required, e.sort_order, e.active, e.updated_at,
             e.parent_choice_id,
@@ -98,7 +101,7 @@ $rows = db()->prepare(
        LEFT JOIN product_extra_choices pc ON pc.id = e.parent_choice_id
        LEFT JOIN product_extras        pe ON pe.id = pc.product_extra_id
       WHERE e.product_id = ? AND e.client_id = ?
-   ORDER BY (e.parent_choice_id IS NOT NULL), e.sort_order, e.name'
+   ORDER BY e.sort_order, e.name'
 );
 $rows->execute([$productId, $clientId]);
 $extras = $rows->fetchAll();
@@ -257,10 +260,15 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
+                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                    Drag the <strong>⋮⋮</strong> handle to reorder.
+                    <span class="reorder-status">Saving…</span>
+                </p>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table sortable-list" data-reorder-type="extras">
                         <thead>
                             <tr>
+                                <th class="drag-col"></th>
                                 <th>Name</th>
                                 <th class="num">Choices</th>
                                 <th>Updated</th>
@@ -269,7 +277,8 @@ $activeNav = 'products';
                         </thead>
                         <tbody>
                             <?php foreach ($extras as $x): ?>
-                                <tr<?= !empty($x['parent_choice_id']) ? ' class="conditional-row"' : '' ?>>
+                                <tr data-id="<?= (int) $x['id'] ?>"<?= !empty($x['parent_choice_id']) ? ' class="conditional-row"' : '' ?>>
+                                    <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
                                         <span class="extra-name"><?= e((string) $x['name']) ?></span>
                                         <?php if ((int) $x['is_required'] === 1): ?>
@@ -314,5 +323,6 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php if ($extras): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
 </body>
 </html>

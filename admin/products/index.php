@@ -50,19 +50,6 @@ $activeNav = 'products';
             background: #f3f4f6; border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
-        /* Drag-to-reorder column */
-        .drag-col { width: 2rem; text-align: center; cursor: grab; color: #9ca3af; user-select: none; }
-        .drag-col:hover { color: #1f3b5b; }
-        .drag-col:active { cursor: grabbing; }
-        .sortable-ghost { opacity: 0.4; }
-        .sortable-chosen { background: #eff6ff; }
-        .reorder-status {
-            display: inline-block; margin-left: 0.5rem; font-size: 0.8125rem;
-            color: #6b7280; opacity: 0; transition: opacity 0.2s;
-        }
-        .reorder-status.show { opacity: 1; }
-        .reorder-status.ok { color: #16a34a; }
-        .reorder-status.fail { color: #b91c1c; }
     </style>
 </head>
 <body>
@@ -103,7 +90,7 @@ $activeNav = 'products';
                     <span class="reorder-status" id="reorder-status">Saving…</span>
                 </p>
                 <div class="table-wrap">
-                    <table class="table" id="product-table">
+                    <table class="table sortable-list" data-reorder-type="products">
                         <thead>
                             <tr>
                                 <th class="drag-col"></th>
@@ -115,7 +102,7 @@ $activeNav = 'products';
                                 <th></th>
                             </tr>
                         </thead>
-                        <tbody id="product-rows">
+                        <tbody>
                             <?php foreach ($products as $p): ?>
                                 <tr data-id="<?= (int) $p['id'] ?>">
                                     <td class="drag-col" title="Drag to reorder">⋮⋮</td>
@@ -163,59 +150,6 @@ $activeNav = 'products';
     </main>
 </div>
 
-<?php if ($products): ?>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"
-        integrity="sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM"
-        crossorigin="anonymous"></script>
-<script>
-(function () {
-    var tbody  = document.getElementById('product-rows');
-    var status = document.getElementById('reorder-status');
-    if (!tbody || typeof Sortable === 'undefined') return;
-
-    var csrf = <?= json_encode(csrf_token()) ?>;
-
-    function showStatus(msg, kind) {
-        if (!status) return;
-        status.textContent = msg;
-        status.classList.remove('ok', 'fail');
-        if (kind) status.classList.add(kind);
-        status.classList.add('show');
-        if (kind === 'ok') {
-            setTimeout(function () { status.classList.remove('show'); }, 1200);
-        }
-    }
-
-    new Sortable(tbody, {
-        handle: '.drag-col',
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        chosenClass: 'sortable-chosen',
-        onStart: function () { showStatus('Saving…'); },
-        onEnd:   function () {
-            var ids = Array.prototype.map.call(tbody.children, function (tr) {
-                return tr.getAttribute('data-id');
-            });
-            var body = '_csrf=' + encodeURIComponent(csrf);
-            ids.forEach(function (id) { body += '&ids[]=' + encodeURIComponent(id); });
-
-            fetch('/admin/products/reorder.php', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body
-            }).then(function (r) {
-                return r.json().then(function (j) { return { ok: r.ok && j.ok, data: j }; });
-            }).then(function (r) {
-                if (r.ok) showStatus('Saved', 'ok');
-                else      showStatus('Save failed', 'fail');
-            }).catch(function () {
-                showStatus('Save failed', 'fail');
-            });
-        }
-    });
-})();
-</script>
-<?php endif; ?>
+<?php if ($products): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
 </body>
 </html>
