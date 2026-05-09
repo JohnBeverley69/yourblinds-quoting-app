@@ -26,7 +26,29 @@ if (PHP_SAPI !== 'cli') {
     header('Content-Type: text/plain; charset=utf-8');
 }
 
+// Surface SQL / PDO errors directly into the browser instead of 500-ing,
+// so it's obvious which CREATE TABLE failed and why. This is a one-shot
+// migration tool — fine to be loud here.
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+
 $pdo = db();
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+set_exception_handler(function (Throwable $e) {
+    if (PHP_SAPI !== 'cli' && !headers_sent()) {
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+    echo "MIGRATION FAILED\n";
+    echo "================\n\n";
+    echo 'Error:   ' . $e->getMessage()                . "\n";
+    echo 'In:      ' . $e->getFile() . ':' . $e->getLine() . "\n";
+    if ($e->getPrevious()) {
+        echo 'Caused by: ' . $e->getPrevious()->getMessage() . "\n";
+    }
+    echo "\nThe migration is idempotent — it's safe to fix the issue and re-run.\n";
+    exit(1);
+});
 
 function table_exists(PDO $pdo, string $table): bool
 {
