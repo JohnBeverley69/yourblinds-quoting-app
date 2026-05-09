@@ -45,13 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'File too large (10 MB max).';
     } else {
         require __DIR__ . '/../../vendor/autoload.php';
+        require __DIR__ . '/../../_partials/price_table_parser.php';
         try {
             $ss     = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
             $bands  = [];
 
             foreach ($ss->getAllSheets() as $sheet) {
                 $rows = $sheet->toArray(null, true, true, true);
-                $bands = array_merge($bands, parse_band_blocks($rows));
+                $bands = array_merge($bands, ptp_parse_band_blocks($rows));
             }
 
             if (!$bands) {
@@ -108,92 +109,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Could not read the file: ' . $e->getMessage();
         }
     }
-}
-
-/**
- * Walk a sheet's rows looking for stacked "Band X" matrices.
- * Returns: [['code' => 'AAA', 'cells' => [[width_mm, drop_mm, price], ...]], ...]
- *
- * Format expected (loose — handles the typos / variants we've seen):
- *   Row:  A="Band X" (or "Bnad X" — tolerant of B-something + uppercase suffix)
- *   Row:  A="Metric" (or anything), C..N = widths in metres
- *   Row:  B="Ins"     (optional — inches reference, ignored)
- *   Rows: A = drop in metres, C..N = prices, until a blank A or another band header
- */
-function parse_band_blocks(array $rows): array
-{
-    $bands     = [];
-    $current   = null;
-    $widths    = [];
-    $cells     = [];
-    $expecting = 'band';
-
-    $finalise = function () use (&$bands, &$current, &$cells) {
-        if ($current !== null && $cells) {
-            $bands[] = ['code' => $current, 'cells' => $cells];
-        }
-        $current = null;
-        $cells   = [];
-    };
-
-    foreach ($rows as $rowNum => $row) {
-        $a = trim((string) ($row['A'] ?? ''));
-
-        if (preg_match('/^B\w+\s+([A-Z]+)\s*$/i', $a, $m)) {
-            $finalise();
-            $current   = strtoupper($m[1]);
-            $widths    = [];
-            $expecting = 'widths';
-            continue;
-        }
-
-        if ($current === null) continue;
-
-        if ($expecting === 'widths') {
-            foreach ($row as $col => $val) {
-                if ($col === 'A' || $col === 'B') continue;
-                if (is_numeric($val) && (float) $val > 0) {
-                    $widths[$col] = (int) round((float) $val * 1000);
-                }
-            }
-            if ($widths) {
-                $expecting = 'maybeInches';
-            }
-            continue;
-        }
-
-        if ($expecting === 'maybeInches') {
-            if (!is_numeric($a)) {
-                $expecting = 'data';
-                continue;
-            }
-            $expecting = 'data';
-        }
-
-        if ($expecting === 'data') {
-            if ($a === '' || !is_numeric($a)) {
-                $finalise();
-                $widths    = [];
-                $expecting = 'band';
-                if (preg_match('/^B\w+\s+([A-Z]+)\s*$/i', $a, $m)) {
-                    $current   = strtoupper($m[1]);
-                    $widths    = [];
-                    $expecting = 'widths';
-                }
-                continue;
-            }
-            $dropMm = (int) round((float) $a * 1000);
-            foreach ($widths as $col => $widthMm) {
-                $val = $row[$col] ?? null;
-                if ($val === null || $val === '' || !is_numeric($val)) continue;
-                $price = (float) $val;
-                if ($price < 0) continue;
-                $cells[] = [$widthMm, $dropMm, $price];
-            }
-        }
-    }
-    $finalise();
-    return $bands;
 }
 
 $activeNav = 'products';
@@ -275,10 +190,10 @@ $activeNav = 'products';
             <div class="tip-box">
                 A multi-band Excel file with each band block looking like this:
                 <ul style="margin:0.5rem 0 0;padding-left:1.25rem">
-                    <li>One row with <code>Band X</code> (or <code>Band XYZ</code>) in column A — tolerant of typos like "Bnad"</li>
-                    <li>Next row: widths in <strong>metres</strong> in columns C onwards (e.g. 0.800, 1.200, 1.600 …)</li>
-                    <li>Optional inches reference row (skipped automatically)</li>
-                    <li>Data rows: drop in metres in column A, prices in £ across the width columns</li>
+                    <li>One row with <code>Band X</code> (or <code>Price Band X</code>, or <code>Bnad X</code>) in column A</li>
+                    <li>A widths row — values in <strong>mm</strong> (e.g. <code>610mm</code>) or <strong>metres</strong> (e.g. <code>0.800</code>); auto-detected per cell</li>
+                    <li>Optional label rows (<code>DROP</code>, <code>WIDTH</code>, <code>Metric</code>, inches reference) get skipped</li>
+                    <li>Data rows: drop in column A, prices in £ across the width columns; currency symbols / commas are stripped automatically</li>
                 </ul>
                 Multiple band blocks can be stacked vertically in one sheet, or spread across multiple sheets — both work.
                 <strong>Re-importing replaces</strong> any existing rows for each band <em>within this system</em>.

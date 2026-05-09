@@ -123,6 +123,14 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // ---------------------------------------------------------------------------
 // File upload — parse + REPLACE (delete all existing rows, insert new).
+//
+// Two modes:
+//   ?action=upload         — rigid template (widths in row 1, drops in column A,
+//                            single-band, no header — what the Download template
+//                            generates)
+//   ?action=upload_flex    — flexible parser, any supplier sheet. Picks the band
+//                            matching this table's band_code if present; otherwise
+//                            takes the first band found.
 // ---------------------------------------------------------------------------
 $summary = null;
 $error   = null;
@@ -202,6 +210,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                             'inserted' => $inserted,
                             'blank'    => $blank,
                             'errors'   => $rowErrs,
+                        ];
+                    } catch (Throwable $e) {
+                        $pdo->rollBack();
+                        $error = 'Database error: ' . $e->getMessage();
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            $error = 'Could not read the file: ' . $e->getMessage();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Flexible single-table import — uses the shared parser that the bulk
+// importer uses. Picks the band whose code matches this table's band_code if
+// present in the file; otherwise falls back to the only band found.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
+    csrf_check();
+
+    if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        $error = 'Please choose a file to upload.';
+    } elseif (filesize($_FILES['file']['tmp_name']) > 10 * 1024 * 1024) {
+        $error = 'File too large (10 MB max).';
+    } else {
+        require __DIR__ . '/../../vendor/autoload.php';
+        require __DIR__ . '/../../_partials/price_table_parser.php';
+        try {
+            $ss    = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
+            $bands = [];
+            foreach ($ss->getAllSheets() as $sheet) {
+                $rows = $sheet->toArray(null, true, true, true);
+                $bands = array_merge($bands, ptp_parse_band_blocks($rows));
+            }
+
+            if (!$bands) {
+                $error = 'Could not detect any band data in the file. '
+                       . 'For multi-band files, use the bulk-import page instead. '
+                       . 'For a single-band file, the parser still expects a "Band X" header row.';
+            } else {
+                // Prefer a band matching this table's band_code; otherwise use
+                // the first band found.
+                $myCode = strtoupper((string) $table['band_code']);
+                $picked = null;
+                foreach ($bands as $b) {
+                    if (strtoupper($b['code']) === $myCode) {
+                        $picked = $b;
+                        break;
+                    }
+                }
+                $usedFallback = false;
+                if ($picked === null) {
+                    $picked = $bands[0];
+                    $usedFallback = true;
+                }
+
+                if (!$picked['cells']) {
+                    $error = 'The matched band had no price cells.';
+                } else {
+                    $pdo = db();
+                    $pdo->beginTransaction();
+                    try {
+                        $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
+                        $del->execute([$tableId]);
+                        $ins = $pdo->prepare(
+                            'INSERT INTO price_table_rows
+                               (price_table_id, width_mm, drop_mm, price)
+                             VALUES (?, ?, ?, ?)'
+                        );
+                        foreach ($picked['cells'] as [$w, $d, $p]) {
+                            $ins->execute([$tableId, $w, $d, $p]);
+                        }
+                        $pdo->commit();
+                        $summary = [
+                            'inserted'        => count($picked['cells']),
+                            'blank'           => 0,
+                            'errors'          => [],
+                            'flex_band'       => $picked['code'],
+                            'flex_fallback'   => $usedFallback,
+                            'flex_total_seen' => count($bands),
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
@@ -301,6 +390,13 @@ $activeNav = 'products';
                 <?php if ($summary['blank'] > 0): ?>
                     Skipped <?= (int) $summary['blank'] ?> blank cell<?= $summary['blank'] === 1 ? '' : 's' ?>.
                 <?php endif; ?>
+                <?php if (!empty($summary['flex_band'])): ?>
+                    Picked <strong>Band <?= e((string) $summary['flex_band']) ?></strong>
+                    out of <?= (int) $summary['flex_total_seen'] ?> band<?= $summary['flex_total_seen'] === 1 ? '' : 's' ?> in the file.
+                    <?php if (!empty($summary['flex_fallback']) && strtoupper($summary['flex_band']) !== strtoupper((string) $table['band_code'])): ?>
+                        <em>(No "Band <?= e((string) $table['band_code']) ?>" header in the file — used the first band instead.)</em>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
             <?php if ($summary['errors']): ?>
                 <div class="alert alert-error" role="alert">
@@ -364,6 +460,43 @@ $activeNav = 'products';
                     <button type="submit" class="btn btn-primary">Upload &amp; replace</button>
                     <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>"
                        class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Or: import a supplier file directly</h2>
+            </div>
+            <div class="tip-box">
+                Skip the template if you already have a supplier sheet. The flexible parser handles:
+                <ul style="margin:0.5rem 0 0;padding-left:1.25rem">
+                    <li>"Band X" or "Price Band X" headers, with or without typos like "Bnad"</li>
+                    <li>Widths in <strong>mm</strong> (e.g. <code>610mm</code>) or <strong>metres</strong> (e.g. <code>0.800</code>) — auto-detected per cell</li>
+                    <li>Prices with <strong>£</strong>, commas, or bare numbers</li>
+                    <li>Stray label rows ("DROP", "WIDTH", "Metric", inches references) get skipped</li>
+                </ul>
+                If the file contains multiple bands, the parser uses the one matching this table's
+                <strong>Band <?= e((string) $table['band_code']) ?></strong>; failing that, the first band found.
+                Replace strategy still applies — every cell in this table is wiped and reinserted.
+            </div>
+            <form method="post" action="/admin/products/price-table.php"
+                  enctype="multipart/form-data">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="upload_flex">
+                <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="file_flex">Supplier file (.xlsx)</label>
+                        <input id="file_flex" name="file" type="file"
+                               accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                               required>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Import &amp; replace</button>
                 </div>
             </form>
         </section>
