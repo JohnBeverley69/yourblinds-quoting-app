@@ -127,6 +127,34 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
             box-sizing: border-box;
         }
+        .fabric-picker { position: relative; }
+        .fabric-results {
+            position: absolute; top: 100%; left: 0; right: 0;
+            max-height: 360px; overflow-y: auto;
+            background: #fff; border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            z-index: 20; margin-top: 4px;
+        }
+        .fabric-results .frow {
+            padding: 0.5rem 0.75rem; cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .fabric-results .frow:last-child { border-bottom: 0; }
+        .fabric-results .frow:hover,
+        .fabric-results .frow.active { background: #eff6ff; }
+        .fabric-results .fname { font-weight: 600; color: #111827; font-size: 0.9375rem; }
+        .fabric-results .fmeta { color: #6b7280; font-size: 0.8125rem; margin-top: 0.125rem; }
+        .fabric-results .fband {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #fff; background: #1f3b5b;
+            border-radius: 999px; margin-right: 0.375rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .fabric-results .empty {
+            padding: 1rem; text-align: center;
+            color: #6b7280; font-size: 0.875rem;
+        }
         .read-only-banner {
             background: #fef3c7; color: #92400e; padding: 0.75rem 1rem;
             border-radius: 8px; margin-bottom: 1rem; font-size: 0.9375rem;
@@ -448,10 +476,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="item-fabric">Fabric <span class="required">*</span></label>
-                        <select id="item-fabric" name="option_id" required disabled>
-                            <option value="">Choose product first</option>
-                        </select>
+                        <label for="item-fabric-search">Fabric <span class="required">*</span></label>
+                        <div class="fabric-picker">
+                            <input type="text" id="item-fabric-search"
+                                   placeholder="Choose product first"
+                                   autocomplete="off" disabled>
+                            <input type="hidden" id="item-fabric" name="option_id" required>
+                            <div id="item-fabric-results" class="fabric-results" hidden></div>
+                        </div>
                     </div>
                 </div>
 
@@ -535,7 +567,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     if (!form) return;
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
-    var fabricSel     = document.getElementById('item-fabric');
+    var fabricSearch  = document.getElementById('item-fabric-search');
+    var fabricId      = document.getElementById('item-fabric');
+    var fabricResults = document.getElementById('item-fabric-results');
     var widthIn       = document.getElementById('item-width');
     var dropIn        = document.getElementById('item-drop');
     var qtyIn         = document.getElementById('item-qty');
@@ -544,8 +578,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var previewBox    = document.getElementById('item-preview');
     var submitBtn     = document.getElementById('item-submit');
 
-    var productData   = null;  // cached response from /api/product-data
-    var previewTimer  = null;
+    var productData    = null;  // cached response from /api/product-data
+    var previewTimer   = null;
+    var fabricSearchTimer = null;
 
     function setIdle(el, msg) {
         el.innerHTML = '<option value="">' + msg + '</option>';
@@ -560,9 +595,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
     async function loadProductData() {
         productData = null;
+        clearFabric();
+        closeFabricResults();
         if (!productSel.value) {
             setIdle(systemSel, 'Choose product first');
-            setIdle(fabricSel, 'Choose product first');
+            fabricSearch.disabled = true;
+            fabricSearch.placeholder = 'Choose product first';
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
             schedulePreview();
@@ -570,7 +608,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         try {
             setIdle(systemSel, 'Loading...');
-            setIdle(fabricSel, 'Loading...');
+            fabricSearch.disabled = true;
+            fabricSearch.placeholder = 'Loading...';
             extrasBox.innerHTML = '';
             extrasWrap.style.display = 'none';
 
@@ -596,26 +635,97 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 systemSel.disabled  = false;
             }
 
-            // Fabrics dropdown.
-            if (productData.fabrics.length === 0) {
-                setIdle(fabricSel, '— No fabrics —');
-            } else {
-                var fabOpts = '<option value="">Choose fabric...</option>';
-                productData.fabrics.forEach(function (f) {
-                    fabOpts += '<option value="' + f.id + '">' + escapeHtml(f.label) + '</option>';
-                });
-                fabricSel.innerHTML = fabOpts;
-                fabricSel.disabled  = false;
-            }
+            // Fabric typeahead — enable input. Picking happens via the
+            // floating results panel populated from /api/fabrics-search.
+            fabricSearch.disabled    = false;
+            fabricSearch.placeholder = 'Type to search fabrics (or click for recent)';
 
             renderExtras();
         } catch (err) {
             setIdle(systemSel, 'Failed to load');
-            setIdle(fabricSel, 'Failed to load');
+            fabricSearch.placeholder = 'Failed to load';
             console.error(err);
         }
         schedulePreview();
     }
+
+    // -----------------------------------------------------------------------
+    // Fabric typeahead
+    // -----------------------------------------------------------------------
+    async function searchFabrics(query) {
+        if (!productSel.value) return;
+        try {
+            var r = await fetch('/quote-builder/api/fabrics-search.php'
+                + '?product_id=' + encodeURIComponent(productSel.value)
+                + '&q='          + encodeURIComponent(query || ''),
+                { credentials: 'same-origin' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var data = await r.json();
+            renderFabricResults(data.fabrics || []);
+        } catch (err) {
+            fabricResults.innerHTML = '<div class="empty">Could not search fabrics.</div>';
+            fabricResults.hidden = false;
+            console.error(err);
+        }
+    }
+
+    function renderFabricResults(items) {
+        if (!items.length) {
+            fabricResults.innerHTML = '<div class="empty">No matching fabrics.</div>';
+            fabricResults.hidden = false;
+            return;
+        }
+        var html = '';
+        items.forEach(function (f) {
+            var meta = [];
+            if (f.supplier) meta.push(escapeHtml(f.supplier));
+            if (f.code)     meta.push('Code ' + escapeHtml(f.code));
+            html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(f.label) + '">'
+                  +    '<div class="fname">'
+                  +      '<span class="fband">Band ' + escapeHtml(f.band) + '</span>'
+                  +      escapeHtml(f.name) + (f.colour ? ' / ' + escapeHtml(f.colour) : '')
+                  +    '</div>'
+                  + (meta.length ? '<div class="fmeta">' + meta.join(' · ') + '</div>' : '')
+                  + '</div>';
+        });
+        fabricResults.innerHTML = html;
+        fabricResults.hidden = false;
+
+        // Bind click handlers on each row.
+        fabricResults.querySelectorAll('.frow').forEach(function (row) {
+            row.addEventListener('mousedown', function (e) {
+                // Use mousedown so it fires before the input's blur event.
+                e.preventDefault();
+                pickFabric(row.dataset.id, row.dataset.label);
+            });
+        });
+    }
+
+    function pickFabric(id, label) {
+        fabricId.value = String(id);
+        fabricSearch.value = label;
+        closeFabricResults();
+        schedulePreview();
+    }
+
+    function clearFabric() {
+        fabricId.value = '';
+        fabricSearch.value = '';
+    }
+
+    function closeFabricResults() {
+        fabricResults.hidden = true;
+        fabricResults.innerHTML = '';
+    }
+
+    function scheduleFabricSearch() {
+        clearTimeout(fabricSearchTimer);
+        fabricSearchTimer = setTimeout(function () {
+            searchFabrics(fabricSearch.value.trim());
+        }, 200);
+    }
+
+    function escapeAttr(s) { return escapeHtml(s); }
 
     function renderExtras() {
         if (!productData || !productData.extras || productData.extras.length === 0) {
@@ -701,7 +811,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
 
     async function runPreview() {
-        var ok = productSel.value && fabricSel.value
+        var ok = productSel.value && fabricId.value
               && widthIn.value.trim() && dropIn.value.trim();
         if (!ok) {
             previewBox.className   = 'idle';
@@ -713,7 +823,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         var params = new URLSearchParams({
             product_id: productSel.value,
             system_id:  systemSel.value || '0',
-            option_id:  fabricSel.value,
+            option_id:  fabricId.value,
             width:      widthIn.value,
             drop:       dropIn.value,
             quantity:   qtyIn.value || '1',
@@ -757,11 +867,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
     productSel.addEventListener('change', loadProductData);
     systemSel.addEventListener('change', function () { renderExtras(); schedulePreview(); });
-    [fabricSel, qtyIn].forEach(function (el) {
-        el.addEventListener('change', schedulePreview);
-    });
+    qtyIn.addEventListener('change', schedulePreview);
     [widthIn, dropIn].forEach(function (el) {
         el.addEventListener('input', schedulePreview);
+    });
+
+    // Fabric typeahead listeners.
+    fabricSearch.addEventListener('focus', function () {
+        // On focus, kick off a query (empty = first 50 alphabetical) so the
+        // user gets something to browse before typing.
+        if (productSel.value) searchFabrics(fabricSearch.value.trim());
+    });
+    fabricSearch.addEventListener('input', function () {
+        // Typing invalidates the previous picked id — they're searching anew.
+        fabricId.value = '';
+        scheduleFabricSearch();
+        schedulePreview();
+    });
+    fabricSearch.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeFabricResults();
+    });
+    fabricSearch.addEventListener('blur', function () {
+        // Slight delay so a click on a result row registers before close.
+        setTimeout(closeFabricResults, 150);
     });
 })();
 </script>

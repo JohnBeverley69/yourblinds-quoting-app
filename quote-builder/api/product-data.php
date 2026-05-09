@@ -2,12 +2,16 @@
 declare(strict_types=1);
 
 /**
- * Returns everything the quote-builder line-item form needs to render
+ * Returns the data the quote-builder line-item form needs to render
  * cascading dropdowns for a given product:
  *   - systems[]  (id, name, is_default)
- *   - fabrics[]  (id, band, supplier, name, colour, code, label)
  *   - extras[]   (id, name, is_required, parent_choice_id, choices[])
  *     each choice: (id, system_id, label, is_default)
+ *
+ * Fabrics are NOT returned here — for tenants with hundreds or thousands
+ * of fabrics that'd inflate the response massively. The form drives the
+ * fabric picker via /quote-builder/api/fabrics-search.php instead, which
+ * matches by substring across name / colour / supplier / band.
  *
  * Tenant-scoped via the logged-in user's client_id. Inactive rows skipped.
  *
@@ -62,34 +66,8 @@ $systems = array_map(static fn ($r) => [
     'is_default' => (bool)   $r['is_default'],
 ], $st->fetchAll());
 
-// 3. Fabrics. Includes a pre-built display label for the dropdown so the
-//    UI doesn't have to format band/supplier/name/colour itself.
-$st = $pdo->prepare(
-    'SELECT id, band_code, supplier_name, name, colour, code
-       FROM product_options
-      WHERE product_id = ? AND client_id = ? AND active = 1
-   ORDER BY band_code, supplier_name, name, colour'
-);
-$st->execute([$productId, $clientId]);
-$fabrics = [];
-foreach ($st->fetchAll() as $r) {
-    $bits = array_filter([
-        (string) ($r['supplier_name'] ?? ''),
-        (string) $r['name'],
-        (string) ($r['colour'] ?? ''),
-    ], static fn ($s) => $s !== '');
-    $fabrics[] = [
-        'id'       => (int)    $r['id'],
-        'band'     => (string) $r['band_code'],
-        'supplier' => (string) ($r['supplier_name'] ?? ''),
-        'name'     => (string) $r['name'],
-        'colour'   => (string) ($r['colour'] ?? ''),
-        'code'     => (string) ($r['code']   ?? ''),
-        'label'    => 'Band ' . $r['band_code'] . ' — ' . implode(' / ', $bits),
-    ];
-}
-
-// 4. Extras + their choices, in two queries (extras then choices in IN clause).
+// 3. Extras + their choices, in two queries (extras then choices in IN clause).
+//    (Fabrics moved to /api/fabrics-search.php for typeahead — see header.)
 $st = $pdo->prepare(
     'SELECT id, name, is_required, parent_choice_id, sort_order
        FROM product_extras
@@ -138,6 +116,5 @@ echo json_encode([
         'name' => (string) $product['name'],
     ],
     'systems' => $systems,
-    'fabrics' => $fabrics,
     'extras'  => $extras,
 ]);
