@@ -239,6 +239,10 @@ $activeNav = 'products';
         .checkbox-row input { width: 18px; height: 18px; }
         .row-actions { white-space: nowrap; }
         .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
+        .row-actions a.follow-up {
+            color: #15803d; text-decoration: none;
+        }
+        .row-actions a.follow-up:hover { text-decoration: underline; }
         .row-actions form { display: inline; margin: 0; }
         .row-actions button {
             font-size: 0.875rem; color: #b91c1c; background: transparent;
@@ -461,6 +465,11 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                     </td>
                                     <td class="row-actions">
+                                        <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= (int) $c['id'] ?>#add-option"
+                                           class="follow-up"
+                                           title="Add an option that only appears when this choice is selected">
+                                            + Follow-up option
+                                        </a>
                                         <?php if ((int) $c['is_default'] !== 1): ?>
                                             <form method="post"
                                                   action="/admin/products/extra.php?id=<?= (int) $extraId ?>"

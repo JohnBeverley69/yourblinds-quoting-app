@@ -35,6 +35,16 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 $f = ['name' => '', 'is_required' => 1, 'parent_choice_id' => 0];
 $error = null;
 
+// "+ Follow-up option" deep link from extra.php pre-fills the parent dropdown
+// via ?parent_choice=N. We accept the GET only on initial render — POST
+// always wins so a re-render after a validation error keeps the typed value.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['parent_choice'])) {
+    $candidate = (int) $_GET['parent_choice'];
+    if ($candidate > 0) {
+        $f['parent_choice_id'] = $candidate;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
@@ -199,13 +209,36 @@ $activeNav = 'products';
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
-        <section class="section">
+        <?php
+            // Resolve the pre-filled parent choice, if any, so we can show
+            // a friendly banner. We look it up in $availableChoices rather
+            // than firing another query.
+            $parentChoiceLabel = '';
+            if ((int) $f['parent_choice_id'] > 0) {
+                foreach ($availableChoices as $c) {
+                    if ((int) $c['id'] === (int) $f['parent_choice_id']) {
+                        $parentChoiceLabel = (string) $c['extra_name']
+                                           . ' = ' . (string) $c['label'];
+                        break;
+                    }
+                }
+            }
+        ?>
+        <section class="section" id="add-option">
             <div class="section-header">
                 <h2 class="section-title">Add option</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
-                Examples: Control side, Control type, Draw side, Lining, Motor type, Headrail colour.
-            </p>
+            <?php if ($parentChoiceLabel !== ''): ?>
+                <div class="alert alert-info" style="margin-bottom:1rem">
+                    Adding a <strong>follow-up option</strong> that appears when
+                    <strong><?= e($parentChoiceLabel) ?></strong> is selected.
+                    Adjust the "Appears when" dropdown below if you want a different parent.
+                </div>
+            <?php else: ?>
+                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+                    Examples: Control side, Control type, Draw side, Lining, Motor type, Headrail colour.
+                </p>
+            <?php endif; ?>
             <form method="post" action="/admin/products/extras.php?product_id=<?= (int) $productId ?>"
                   class="form" novalidate>
                 <?= csrf_field() ?>
