@@ -104,20 +104,21 @@ The first admin user is created by `seed.sql`. Check the seed file for the usern
 ## Project layout
 
 ```
-admin/             Admin pages (settings, users, pricing)
+admin/             Admin pages (products, settings, users)
 auth/              Login, logout, password reset, middleware
-calendar/          Monthly view, book/view appointments
+calendar/          Monthly view, book/view appointments, today's run
 customer-manager/  Customer CRUD
-database/          install.sql, schema.sql, seed.sql (do not commit live dumps)
+master-admin/      Cross-tenant admin (super-admin only)
 pdf-generator/     Quote PDF rendering (dompdf)
-pricing-engine/    Supplier/fabric/colour pricing APIs
-quote-builder/     New/edit quote, add items
+quote-builder/     New/edit quote, add blinds, live-price API
 quote-history/     List, view, public share link
+_partials/         Shared includes (sidebar, pricing engine, parsers)
 vendor/            Composer dependencies (gitignored)
+uploads/           Runtime user uploads, e.g. company logos
 bootstrap.php      Loaded by every page — env, sessions, DB
 db.php             PDO factory exposed as db()
 mailer.php         PHPMailer wrapper
-migrate_calendar.php   One-off migration script
+migrate_*.php      One-off migration scripts
 .env.example       Template — copy to .env
 .htaccess          Blocks public access to sensitive paths
 ```
