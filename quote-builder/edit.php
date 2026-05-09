@@ -480,6 +480,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div class="form-row cols-2">
                     <div class="form-group">
+                        <label for="item-room">Room name</label>
+                        <input id="item-room" name="room_name" type="text" maxlength="80"
+                               placeholder="e.g. Living Room">
+                    </div>
+                    <div class="form-group">
                         <label for="item-product">Product <span class="required">*</span></label>
                         <select id="item-product" name="product_id" required>
                             <option value="">Choose product...</option>
@@ -487,11 +492,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <option value="<?= (int) $p['id'] ?>"><?= e((string) $p['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="item-room">Room name</label>
-                        <input id="item-room" name="room_name" type="text" maxlength="80"
-                               placeholder="e.g. Living Room">
                     </div>
                 </div>
 
