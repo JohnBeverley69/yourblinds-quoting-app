@@ -47,10 +47,24 @@ $qStmt = db()->prepare(
 $qStmt->execute([$token]);
 $quote = $qStmt->fetch();
 
-if (!$quote || (string) $quote['status'] === 'draft') {
-    // Drafts aren't ready for the customer; treat as if the link is invalid.
+if (!$quote) {
     http_response_code(404);
     exit('Quote not found.');
+}
+
+// First-view auto-promote: if the trade user shared the link via WhatsApp
+// or copy-paste (i.e. without going through email_pdf.php which already
+// promotes), the quote is still "draft" — but the customer has the link in
+// hand, so it has effectively been sent. Flip status + stamp sent_at on the
+// first view from the public URL; subsequent views are no-ops. Token in the
+// URL is the auth — anyone with it has been given it deliberately.
+if ((string) $quote['status'] === 'draft') {
+    db()->prepare(
+        'UPDATE quotes SET status = "sent", sent_at = NOW()
+          WHERE id = ? AND status = "draft"'
+    )->execute([(int) $quote['id']]);
+    $quote['status']  = 'sent';
+    $quote['sent_at'] = date('Y-m-d H:i:s');
 }
 
 $itemsSt = db()->prepare(
