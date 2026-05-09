@@ -228,10 +228,10 @@ if (!table_exists($pdo, 'client_markups')) {
                                           ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uniq_markup_client_product (client_id, product_id),
-            CONSTRAINT fk_markups_client
+            CONSTRAINT fk_client_markups_client
                 FOREIGN KEY (client_id)  REFERENCES clients(id)
                 ON DELETE CASCADE ON UPDATE CASCADE,
-            CONSTRAINT fk_markups_product
+            CONSTRAINT fk_client_markups_product
                 FOREIGN KEY (product_id) REFERENCES products(id)
                 ON DELETE CASCADE ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -256,10 +256,10 @@ if (!table_exists($pdo, 'client_discounts')) {
                                             ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uniq_discount_client_product (client_id, product_id),
-            CONSTRAINT fk_discounts_client
+            CONSTRAINT fk_client_discounts_client
                 FOREIGN KEY (client_id)  REFERENCES clients(id)
                 ON DELETE CASCADE ON UPDATE CASCADE,
-            CONSTRAINT fk_discounts_product
+            CONSTRAINT fk_client_discounts_product
                 FOREIGN KEY (product_id) REFERENCES products(id)
                 ON DELETE CASCADE ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
