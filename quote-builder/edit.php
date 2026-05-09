@@ -48,6 +48,13 @@ $prodSt = db()->prepare(
 $prodSt->execute([$clientId]);
 $products = $prodSt->fetchAll();
 
+// Postcode lookup feature flag — gates the "Find by postcode" widget.
+$pcFlag = db()->prepare(
+    'SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?'
+);
+$pcFlag->execute([$clientId]);
+$postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
+
 // Customers dropdown for the customer-details form. We build display
 // labels keyed by id so the typeahead can echo the linked customer back
 // into the search box on render.
@@ -224,6 +231,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
                     </div>
                 </div>
+
+                <?php if ($postcodeLookupEnabled && $editable): ?>
+                    <?php
+                        $pcFieldMap = [
+                            'line1'    => 'end_customer_address1',
+                            'line2'    => 'end_customer_address2',
+                            'town'     => 'end_customer_town',
+                            'county'   => 'end_customer_county',
+                            'postcode' => 'end_customer_postcode',
+                        ];
+                        require __DIR__ . '/../_partials/postcode_lookup.php';
+                    ?>
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">

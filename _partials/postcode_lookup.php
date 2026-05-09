@@ -1,14 +1,39 @@
 <?php
 /**
- * Postcode lookup widget — populates the installation address fields
- * (installation_address1/2, installation_town, installation_county,
- * installation_postcode) from a Postcoder lookup result.
+ * Postcode lookup widget — populates address fields from a Postcoder
+ * lookup result.
  *
  * Single-call flow: postcode -> list of full addresses -> user picks one.
  *
- * Caller is responsible for gating inclusion behind feature_postcode_lookup.
- * Drop the include just inside the "Installation address" fieldset.
+ * Caller responsibilities:
+ *   1. Gate inclusion behind feature_postcode_lookup.
+ *   2. Optionally pass $pcFieldMap before requiring this file to control
+ *      which form-field IDs get populated. If not set, defaults to the
+ *      calendar's installation_* fields.
+ *
+ *      $pcFieldMap = [
+ *          'line1'    => 'end_customer_address1',
+ *          'line2'    => 'end_customer_address2',
+ *          'town'     => 'end_customer_town',
+ *          'county'   => 'end_customer_county',
+ *          'postcode' => 'end_customer_postcode',
+ *      ];
+ *      require __DIR__ . '/../_partials/postcode_lookup.php';
+ *
+ *   3. Drop the include just inside the address fieldset so the
+ *      "Find by postcode" row appears above the address fields.
+ *
+ * Multiple instances on one page would collide on the widget IDs — at
+ * the moment there's no caller that needs that, so we keep it simple.
  */
+
+$pcFieldMap = $pcFieldMap ?? [
+    'line1'    => 'installation_address1',
+    'line2'    => 'installation_address2',
+    'town'     => 'installation_town',
+    'county'   => 'installation_county',
+    'postcode' => 'installation_postcode',
+];
 ?>
 <div class="form-row" style="grid-template-columns: 1fr auto; align-items: end; margin-bottom: 0.5rem;">
     <div class="form-group" style="margin-bottom: 0;">
@@ -38,6 +63,7 @@
 
 <script>
 (function () {
+    var fieldMap = <?= json_encode($pcFieldMap, JSON_THROW_ON_ERROR) ?>;
     var input   = document.getElementById('postcode_lookup_input');
     var btn     = document.getElementById('postcode_lookup_btn');
     var results = document.getElementById('postcode_lookup_results');
@@ -115,7 +141,6 @@
 
     btn.addEventListener('click', lookup);
 
-    // Pressing Enter in the postcode field triggers Find.
     input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -123,17 +148,15 @@
         }
     });
 
-    // Apply selection to the address fields, then collapse the dropdown so
-    // the form doesn't stay cluttered after the user has picked.
+    // Apply selection to the address fields configured by the caller, then
+    // collapse the dropdown so the form doesn't stay cluttered after picking.
     sel.addEventListener('change', function () {
         var idx = parseInt(sel.value, 10);
         if (isNaN(idx) || !cache[idx]) return;
         var a = cache[idx];
-        setField('installation_address1', a.line1);
-        setField('installation_address2', a.line2);
-        setField('installation_town',     a.town);
-        setField('installation_county',   a.county);
-        setField('installation_postcode', a.postcode);
+        Object.keys(fieldMap).forEach(function (key) {
+            setField(fieldMap[key], a[key]);
+        });
         results.style.display = 'none';
     });
 })();

@@ -162,6 +162,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Postcode lookup feature flag — gates the "Find by postcode" widget.
+$pcFlag = db()->prepare(
+    'SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?'
+);
+$pcFlag->execute([$clientId]);
+$postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
+
 $custStmt = db()->prepare(
     'SELECT id, name, town, postcode FROM customers
       WHERE client_id = ? ORDER BY name LIMIT 500'
@@ -257,6 +264,19 @@ $activeNav = 'new-quote';
                                value="<?= e((string) $f['end_customer_phone']) ?>">
                     </div>
                 </div>
+
+                <?php if ($postcodeLookupEnabled): ?>
+                    <?php
+                        $pcFieldMap = [
+                            'line1'    => 'end_customer_address1',
+                            'line2'    => 'end_customer_address2',
+                            'town'     => 'end_customer_town',
+                            'county'   => 'end_customer_county',
+                            'postcode' => 'end_customer_postcode',
+                        ];
+                        require __DIR__ . '/../_partials/postcode_lookup.php';
+                    ?>
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">
