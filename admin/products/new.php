@@ -9,17 +9,13 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$f = [
-    'name'   => '',
-    'active' => 1,
-];
+$f = ['name' => ''];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']   = trim((string) ($_POST['name'] ?? ''));
-    $f['active'] = !empty($_POST['active']) ? 1 : 0;
+    $f['name'] = trim((string) ($_POST['name'] ?? ''));
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
@@ -30,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // option_label uses the schema default ('Fabric') — no longer
             // settable from the form. sort_order = MAX+1 so new products
             // append to the end of the list (drag-and-drop owns ordering).
+            // active hard-coded to 1 — new products always start active;
+            // flip via the edit page if you need to hide one.
             $sortStmt = db()->prepare(
                 'SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products WHERE client_id = ?'
             );
@@ -38,13 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $stmt = db()->prepare(
                 'INSERT INTO products (client_id, name, sort_order, active)
-                 VALUES (?, ?, ?, ?)'
+                 VALUES (?, ?, ?, 1)'
             );
             $stmt->execute([
                 $clientId,
                 $f['name'],
                 $nextSort,
-                $f['active'],
             ]);
             $_SESSION['flash_success'] = 'Product "' . $f['name'] . '" added.';
             header('Location: /admin/products/index.php');
@@ -72,11 +69,6 @@ $activeNav = 'products';
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
         }
-        .checkbox-row {
-            display: inline-flex; align-items: center; gap: 0.5rem;
-            margin-bottom: 1rem; font-size: 0.9375rem; color: #111827; cursor: pointer;
-        }
-        .checkbox-row input { width: 18px; height: 18px; }
     </style>
 </head>
 <body>
@@ -110,12 +102,6 @@ $activeNav = 'products';
                                placeholder="e.g. Vertical Blinds">
                     </div>
                 </div>
-
-                <label class="checkbox-row" for="active">
-                    <input type="checkbox" id="active" name="active" value="1"
-                           <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>
-                    Active (uncheck to hide from quote builder without deleting)
-                </label>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add product</button>

@@ -197,11 +197,19 @@ $activeNav = 'products';
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
         }
-        .checkbox-row {
-            display: inline-flex; align-items: center; gap: 0.5rem;
-            margin-bottom: 1rem; font-size: 0.9375rem; color: #111827; cursor: pointer;
+        .toggle-stack {
+            display: flex; flex-direction: column; gap: 0.625rem;
+            margin: 1.25rem 0;
         }
-        .checkbox-row input { width: 18px; height: 18px; }
+        .toggle-stack label {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            margin: 0; padding: 0;
+        }
+        .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
+        .toggle-stack small {
+            color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+        }
     </style>
 </head>
 <body>
@@ -309,17 +317,20 @@ $activeNav = 'products';
                            style="font:inherit">
                 </fieldset>
 
-                <label class="checkbox-row" for="is_default">
-                    <input type="checkbox" id="is_default" name="is_default" value="1"
-                           <?= (int) $f['is_default'] === 1 ? 'checked' : '' ?>>
-                    Default (pre-selected for the customer)
-                </label>
-                <br>
-                <label class="checkbox-row" for="active">
-                    <input type="checkbox" id="active" name="active" value="1"
-                           <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>
-                    Active
-                </label>
+                <div class="toggle-stack">
+                    <label for="is_default">
+                        <input type="checkbox" id="is_default" name="is_default" value="1"
+                               <?= (int) $f['is_default'] === 1 ? 'checked' : '' ?>>
+                        Default
+                        <small>pre-selected for the customer</small>
+                    </label>
+                    <label for="active">
+                        <input type="checkbox" id="active" name="active" value="1"
+                               <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>
+                        Active
+                        <small>uncheck to hide from quote builder</small>
+                    </label>
+                </div>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save changes</button>
