@@ -706,16 +706,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $quote['id'] ?>">
 
-                <div class="form-row cols-2">
+                <div class="form-row full">
                     <div class="form-group">
                         <label for="send-to">Recipient email</label>
                         <input id="send-to" name="to" type="email" required maxlength="150"
                                value="<?= e((string) ($quote['end_customer_email'] ?? '')) ?>">
-                    </div>
-                    <div class="form-group" style="display:flex;align-items:flex-end">
-                        <button type="submit" class="btn btn-primary" style="width:100%">
-                            📧 Email PDF + accept link
-                        </button>
                     </div>
                 </div>
                 <div class="form-row full">
@@ -725,24 +720,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                   placeholder="Optional — anything you want to add above the standard text."></textarea>
                     </div>
                 </div>
-            </form>
 
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
-                <?php if ($waEnabled): ?>
-                    <a href="https://wa.me/<?= e($waPhone) ?>?text=<?= e(rawurlencode($waMessage)) ?>"
-                       class="btn btn-secondary" target="_blank" rel="noopener">
-                        💬 Send via WhatsApp
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-top:0.5rem">
+                    <button type="submit" class="btn btn-danger"
+                            style="font-size:1rem;padding:0.75rem 1.5rem;font-weight:600">
+                        📧 Email PDF + accept link
+                    </button>
+                    <?php if ($waEnabled): ?>
+                        <a href="https://wa.me/<?= e($waPhone) ?>?text=<?= e(rawurlencode($waMessage)) ?>"
+                           class="btn btn-danger" target="_blank" rel="noopener"
+                           style="font-size:1rem;padding:0.75rem 1.5rem;font-weight:600">
+                            💬 Send via WhatsApp
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= e($publicUrl) ?>"
+                       class="btn btn-secondary" target="_blank" rel="noopener"
+                       title="Public URL — share manually if needed">
+                        🔗 Copy public link
                     </a>
-                <?php endif; ?>
-                <a href="<?= e($publicUrl) ?>"
-                   class="btn btn-secondary" target="_blank" rel="noopener"
-                   title="Public URL — share manually if needed">
-                    🔗 Copy public link
-                </a>
-                <small style="color:#6b7280;font-size:0.8125rem;flex-basis:100%;margin-top:0.375rem">
+                </div>
+                <small style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.625rem">
                     Public link: <code style="font-size:0.8125rem"><?= e($publicUrl) ?></code>
                 </small>
-            </div>
+            </form>
         </section>
 
         <!-- ============== STATUS + DANGER ZONE ============== -->
