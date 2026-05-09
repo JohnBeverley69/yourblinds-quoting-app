@@ -24,12 +24,18 @@ $dashHref     = $dashHref     ?? ($isAdmin ? '/admin/index.php' : '/quote-builde
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
+// Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
+// missing, hide the entries that would 500 on click. The check is a single
+// metadata lookup — cheap enough to do per page render, and self-heals
+// the moment Phase 3 lands the table.
+$hasQuotes = $hasQuotes ?? (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
+
 // [href, label, visible]. Order = display order.
 $navLinks = [
     'calendar'      => ['/calendar/index.php',         'Calendar',      true],
     'dashboard'     => [$dashHref,                     'Dashboard',     true],
-    'new-quote'     => ['/quote-builder/new.php',      'New Quote',     true],
-    'quote-history' => ['/quote-history/index.php',    'Quote History', true],
+    'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
+    'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
