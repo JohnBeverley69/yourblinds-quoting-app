@@ -42,10 +42,13 @@ $emptyToNull = static function (string $k): ?string {
     return $v === '' ? null : $v;
 };
 
+$hasWhatsapp = !empty($_POST['has_whatsapp']) ? 1 : 0;
+
 $u = db()->prepare(
     'UPDATE quotes
         SET customer_id = ?,
             end_customer_name = ?, end_customer_email = ?, end_customer_phone = ?,
+            has_whatsapp = ?,
             end_customer_address1 = ?, end_customer_address2 = ?,
             end_customer_town = ?, end_customer_county = ?, end_customer_postcode = ?,
             notes = ?
@@ -56,6 +59,7 @@ $u->execute([
     $name,
     $emptyToNull('end_customer_email'),
     $emptyToNull('end_customer_phone'),
+    $hasWhatsapp,
     $emptyToNull('end_customer_address1'),
     $emptyToNull('end_customer_address2'),
     $emptyToNull('end_customer_town'),

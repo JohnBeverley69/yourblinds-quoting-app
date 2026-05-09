@@ -38,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($fields as $f) {
         $input[$f] = trim((string) ($_POST[$f] ?? ''));
     }
+    $input['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
 
     if ($input['name'] === '') {
         $error = 'Name is required.';
@@ -46,7 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $upd = db()->prepare(
             'UPDATE customers
-                SET name = ?, email = ?, phone = ?, address1 = ?, address2 = ?,
+                SET name = ?, email = ?, phone = ?, has_whatsapp = ?,
+                    address1 = ?, address2 = ?,
                     town = ?, county = ?, postcode = ?, notes = ?
               WHERE id = ? AND client_id = ?'
         );
@@ -54,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input['name'],
             $input['email']    !== '' ? $input['email']    : null,
             $input['phone']    !== '' ? $input['phone']    : null,
+            (int) $input['has_whatsapp'],
             $input['address1'] !== '' ? $input['address1'] : null,
             $input['address2'] !== '' ? $input['address2'] : null,
             $input['town']     !== '' ? $input['town']     : null,
@@ -71,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($fields as $f) {
         $customer[$f] = $input[$f];
     }
+    $customer['has_whatsapp'] = $input['has_whatsapp'];
 }
 
 // Recent quotes for this customer (read-only, last 5). The `quotes` table
@@ -145,6 +149,11 @@ $activeNav = 'customers';
                         <label for="phone">Phone</label>
                         <input id="phone" name="phone" type="tel" maxlength="50" autocomplete="tel"
                                value="<?= e((string) ($customer['phone'] ?? '')) ?>">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <input type="checkbox" name="has_whatsapp" value="1"
+                                   <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
+                            Customer has WhatsApp on this number
+                        </label>
                     </div>
                 </div>
 

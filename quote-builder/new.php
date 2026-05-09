@@ -20,6 +20,7 @@ $f = [
     'end_customer_town'     => '',
     'end_customer_county'   => '',
     'end_customer_postcode' => '',
+    'has_whatsapp'          => 0,
     'notes'                 => '',
 ];
 $error = null;
@@ -36,13 +37,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['end_customer_town']     = trim((string) ($_POST['end_customer_town']     ?? ''));
     $f['end_customer_county']   = trim((string) ($_POST['end_customer_county']   ?? ''));
     $f['end_customer_postcode'] = trim((string) ($_POST['end_customer_postcode'] ?? ''));
+    $f['has_whatsapp']          = !empty($_POST['has_whatsapp']) ? 1 : 0;
     $f['notes']                 = trim((string) ($_POST['notes']                 ?? ''));
 
     // If a customer is picked, copy their fields into any blank snapshot
     // fields the user left empty — keeps the link but lets edits flow.
     if ($f['customer_id'] > 0) {
         $cs = db()->prepare(
-            'SELECT name, email, phone, address1, address2, town, county, postcode
+            'SELECT name, email, phone, has_whatsapp,
+                    address1, address2, town, county, postcode
                FROM customers WHERE id = ? AND client_id = ? LIMIT 1'
         );
         $cs->execute([$f['customer_id'], $clientId]);
@@ -58,6 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($f['end_customer_town']     === '') $f['end_customer_town']     = (string) ($cust['town']     ?? '');
             if ($f['end_customer_county']   === '') $f['end_customer_county']   = (string) ($cust['county']   ?? '');
             if ($f['end_customer_postcode'] === '') $f['end_customer_postcode'] = (string) ($cust['postcode'] ?? '');
+            // has_whatsapp: a hidden POST field copies the picked customer's
+            // value via JS, but if the user untoggled it before submit we
+            // respect that — only fall through when no POST value.
+            if (!isset($_POST['has_whatsapp']) && !empty($cust['has_whatsapp'])) {
+                $f['has_whatsapp'] = 1;
+            }
         }
     }
 
@@ -79,15 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
                 $custIns = $pdo->prepare(
                     'INSERT INTO customers
-                       (client_id, name, email, phone,
+                       (client_id, name, email, phone, has_whatsapp,
                         address1, address2, town, county, postcode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $custIns->execute([
                     $clientId,
                     $f['end_customer_name'],
                     $emptyToNull($f['end_customer_email']),
                     $emptyToNull($f['end_customer_phone']),
+                    (int) $f['has_whatsapp'],
                     $emptyToNull($f['end_customer_address1']),
                     $emptyToNull($f['end_customer_address2']),
                     $emptyToNull($f['end_customer_town']),
@@ -115,13 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $st = $pdo->prepare(
                         'INSERT INTO quotes
                           (client_id, quote_number, customer_id,
-                           end_customer_name, end_customer_email, end_customer_phone,
+                           end_customer_name, end_customer_email, end_customer_phone, has_whatsapp,
                            end_customer_address1, end_customer_address2,
                            end_customer_town, end_customer_county, end_customer_postcode,
                            status, vat_percent, notes,
                            public_token, created_by_user_id)
                          VALUES
-                          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            "draft", ?, ?, ?, ?)'
                     );
                     $st->execute([
@@ -131,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $f['end_customer_name'],
                         $f['end_customer_email']    !== '' ? $f['end_customer_email']    : null,
                         $f['end_customer_phone']    !== '' ? $f['end_customer_phone']    : null,
+                        (int) $f['has_whatsapp'],
                         $f['end_customer_address1'] !== '' ? $f['end_customer_address1'] : null,
                         $f['end_customer_address2'] !== '' ? $f['end_customer_address2'] : null,
                         $f['end_customer_town']     !== '' ? $f['end_customer_town']     : null,
@@ -173,7 +184,7 @@ $pcFlag->execute([$clientId]);
 $postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
 
 $custStmt = db()->prepare(
-    'SELECT id, name, email, phone,
+    'SELECT id, name, email, phone, has_whatsapp,
             address1, address2, town, county, postcode
        FROM customers
       WHERE client_id = ? ORDER BY name LIMIT 500'
@@ -195,14 +206,15 @@ foreach ($customers as $c) {
     ], static fn ($s) => $s !== '');
     $customerLabels[$cid] = implode(' — ', $bits);
     $customerData[$cid]   = [
-        'name'     => (string) $c['name'],
-        'email'    => (string) ($c['email']    ?? ''),
-        'phone'    => (string) ($c['phone']    ?? ''),
-        'address1' => (string) ($c['address1'] ?? ''),
-        'address2' => (string) ($c['address2'] ?? ''),
-        'town'     => (string) ($c['town']     ?? ''),
-        'county'   => (string) ($c['county']   ?? ''),
-        'postcode' => (string) ($c['postcode'] ?? ''),
+        'name'         => (string) $c['name'],
+        'email'        => (string) ($c['email']    ?? ''),
+        'phone'        => (string) ($c['phone']    ?? ''),
+        'has_whatsapp' => !empty($c['has_whatsapp']) ? '1' : '',
+        'address1'     => (string) ($c['address1'] ?? ''),
+        'address2'     => (string) ($c['address2'] ?? ''),
+        'town'         => (string) ($c['town']     ?? ''),
+        'county'       => (string) ($c['county']   ?? ''),
+        'postcode'     => (string) ($c['postcode'] ?? ''),
     ];
 }
 $selectedCustomerLabel = $customerLabels[(int) $f['customer_id']] ?? '';
@@ -257,6 +269,7 @@ $activeNav = 'new-quote';
                                         data-name="<?= e($d['name']) ?>"
                                         data-email="<?= e($d['email']) ?>"
                                         data-phone="<?= e($d['phone']) ?>"
+                                        data-has_whatsapp="<?= e($d['has_whatsapp']) ?>"
                                         data-address1="<?= e($d['address1']) ?>"
                                         data-address2="<?= e($d['address2']) ?>"
                                         data-town="<?= e($d['town']) ?>"
@@ -289,6 +302,11 @@ $activeNav = 'new-quote';
                         <label for="end_customer_phone">Phone</label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
                                value="<?= e((string) $f['end_customer_phone']) ?>">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
+                                   <?= !empty($f['has_whatsapp']) ? 'checked' : '' ?>>
+                            Customer has WhatsApp on this number
+                        </label>
                     </div>
                 </div>
 
@@ -388,6 +406,9 @@ $activeNav = 'new-quote';
         if (matched) {
             hidden.value = matched.dataset.id || '0';
             FIELDS.forEach(function (f) { setField(f, matched.dataset[f]); });
+            // has_whatsapp is a checkbox, not a text field
+            var wa = document.getElementById('end_customer_has_whatsapp');
+            if (wa) wa.checked = matched.dataset.has_whatsapp === '1';
         } else {
             hidden.value = '0';
         }

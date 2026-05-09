@@ -91,7 +91,7 @@ $postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
 // (b) populate the address fields client-side when the user picks
 // someone different.
 $custSt = db()->prepare(
-    'SELECT id, name, email, phone,
+    'SELECT id, name, email, phone, has_whatsapp,
             address1, address2, town, county, postcode
        FROM customers WHERE client_id = ? ORDER BY name LIMIT 500'
 );
@@ -109,14 +109,15 @@ foreach ($customers as $c) {
     ], static fn ($s) => $s !== '');
     $customerLabels[$cid] = implode(' — ', $bits);
     $customerData[$cid]   = [
-        'name'     => (string) $c['name'],
-        'email'    => (string) ($c['email']    ?? ''),
-        'phone'    => (string) ($c['phone']    ?? ''),
-        'address1' => (string) ($c['address1'] ?? ''),
-        'address2' => (string) ($c['address2'] ?? ''),
-        'town'     => (string) ($c['town']     ?? ''),
-        'county'   => (string) ($c['county']   ?? ''),
-        'postcode' => (string) ($c['postcode'] ?? ''),
+        'name'         => (string) $c['name'],
+        'email'        => (string) ($c['email']    ?? ''),
+        'phone'        => (string) ($c['phone']    ?? ''),
+        'has_whatsapp' => !empty($c['has_whatsapp']) ? '1' : '',
+        'address1'     => (string) ($c['address1'] ?? ''),
+        'address2'     => (string) ($c['address2'] ?? ''),
+        'town'         => (string) ($c['town']     ?? ''),
+        'county'       => (string) ($c['county']   ?? ''),
+        'postcode'     => (string) ($c['postcode'] ?? ''),
     ];
 }
 $selectedCustomerLabel = $customerLabels[(int) ($quote['customer_id'] ?? 0)] ?? '';
@@ -281,6 +282,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         data-name="<?= e($d['name']) ?>"
                                         data-email="<?= e($d['email']) ?>"
                                         data-phone="<?= e($d['phone']) ?>"
+                                        data-has_whatsapp="<?= e($d['has_whatsapp']) ?>"
                                         data-address1="<?= e($d['address1']) ?>"
                                         data-address2="<?= e($d['address2']) ?>"
                                         data-town="<?= e($d['town']) ?>"
@@ -317,6 +319,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
                                <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;<?= !$editable ? 'cursor:default' : 'cursor:pointer' ?>">
+                            <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
+                                   <?= !empty($quote['has_whatsapp']) ? 'checked' : '' ?>
+                                   <?= !$editable ? 'disabled' : '' ?>>
+                            Customer has WhatsApp on this number
+                        </label>
                     </div>
                 </div>
 
@@ -664,9 +672,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 : '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
 
             // Sanitize the customer's phone for wa.me — strip non-digits,
-            // keep a leading + only if it was there.
-            $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
-            $waPhone  = preg_replace('/[^0-9]/', '', $rawPhone);
+            // keep a leading + only if it was there. Only enables WhatsApp
+            // when the trade user has explicitly ticked "has WhatsApp" on
+            // the customer; otherwise a tap of the wa.me link could land
+            // on a "user not on WhatsApp" error page.
+            $rawPhone   = (string) ($quote['end_customer_phone'] ?? '');
+            $waPhone    = preg_replace('/[^0-9]/', '', $rawPhone);
+            $waEnabled  = $waPhone !== '' && !empty($quote['has_whatsapp']);
 
             // WhatsApp message body. Plain text — wa.me will URL-encode it.
             $waMessage = "Hi " . ((string) $quote['end_customer_name'])
@@ -680,10 +692,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </div>
             <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
                 Email the PDF and a link the customer can click to accept the quote online.
-                <?php if ($waPhone !== ''): ?>
+                <?php if ($waEnabled): ?>
                     Or share the same link via WhatsApp.
-                <?php else: ?>
+                <?php elseif ($waPhone === ''): ?>
                     Add a phone number to the customer details above to enable WhatsApp sharing.
+                <?php else: ?>
+                    Tick "Customer has WhatsApp on this number" above to enable WhatsApp sharing.
                 <?php endif; ?>
             </p>
 
@@ -714,7 +728,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </form>
 
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
-                <?php if ($waPhone !== ''): ?>
+                <?php if ($waEnabled): ?>
                     <a href="https://wa.me/<?= e($waPhone) ?>?text=<?= e(rawurlencode($waMessage)) ?>"
                        class="btn btn-secondary" target="_blank" rel="noopener">
                         💬 Send via WhatsApp
@@ -1247,6 +1261,8 @@ window.__editingBlind__ = <?= json_encode([
         if (matched) {
             hidden.value = matched.dataset.id || '0';
             FIELDS.forEach(function (f) { setField(f, matched.dataset[f]); });
+            var wa = document.getElementById('end_customer_has_whatsapp');
+            if (wa) wa.checked = matched.dataset.has_whatsapp === '1';
         } else {
             hidden.value = '0';
         }

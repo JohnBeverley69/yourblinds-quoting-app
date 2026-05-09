@@ -16,14 +16,16 @@ $customer = [
     'town' => '', 'county' => '', 'postcode' => '',
     'notes' => '',
 ];
+$customer['has_whatsapp'] = 0;
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    foreach (array_keys($customer) as $k) {
+    foreach (['name','email','phone','address1','address2','town','county','postcode','notes'] as $k) {
         $customer[$k] = trim((string) ($_POST[$k] ?? ''));
     }
+    $customer['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
 
     if ($customer['name'] === '') {
         $error = 'Name is required.';
@@ -32,14 +34,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $stmt = db()->prepare(
             'INSERT INTO customers
-              (client_id, name, email, phone, address1, address2, town, county, postcode, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              (client_id, name, email, phone, has_whatsapp,
+               address1, address2, town, county, postcode, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $clientId,
             $customer['name'],
             $customer['email']    !== '' ? $customer['email']    : null,
             $customer['phone']    !== '' ? $customer['phone']    : null,
+            (int) $customer['has_whatsapp'],
             $customer['address1'] !== '' ? $customer['address1'] : null,
             $customer['address2'] !== '' ? $customer['address2'] : null,
             $customer['town']     !== '' ? $customer['town']     : null,
@@ -104,6 +108,11 @@ $activeNav = 'customers';
                         <label for="phone">Phone</label>
                         <input id="phone" name="phone" type="tel" maxlength="50" autocomplete="tel"
                                value="<?= e($customer['phone']) ?>">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <input type="checkbox" name="has_whatsapp" value="1"
+                                   <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
+                            Customer has WhatsApp on this number
+                        </label>
                     </div>
                 </div>
 
