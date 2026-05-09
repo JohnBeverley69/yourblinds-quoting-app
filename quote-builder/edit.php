@@ -575,7 +575,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="item-submit" disabled>Add blind</button>
+                    <button type="submit" class="btn btn-primary item-submit"
+                            name="next_action" value="more" disabled>
+                        Add blind
+                    </button>
+                    <button type="submit" class="btn btn-secondary item-submit"
+                            name="next_action" value="stop" disabled>
+                        Add blind &amp; finish
+                    </button>
                 </div>
             </form>
         </section>
@@ -635,7 +642,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var extrasWrap    = document.getElementById('item-extras-wrap');
     var extrasBox     = document.getElementById('item-extras');
     var previewBox    = document.getElementById('item-preview');
-    var submitBtn     = document.getElementById('item-submit');
+    var submitBtns    = document.querySelectorAll('#add-item-form .item-submit');
+    function setSubmitDisabled(disabled) {
+        submitBtns.forEach(function (btn) { btn.disabled = !!disabled; });
+    }
 
     var productData    = null;  // cached response from /api/product-data
     var previewTimer   = null;
@@ -875,7 +885,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (!ok) {
             previewBox.className   = 'idle';
             previewBox.textContent = 'Pick a product, fabric and dimensions to see the price.';
-            submitBtn.disabled = true;
+            setSubmitDisabled(true);
             return;
         }
 
@@ -900,7 +910,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (data.error) {
                 previewBox.className   = 'error';
                 previewBox.textContent = data.error;
-                submitBtn.disabled = true;
+                setSubmitDisabled(true);
                 return;
             }
             var unit  = Number(data.sell_price).toFixed(2);
@@ -915,11 +925,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (data.rounded_up) bits.push('rounded up to ' + data.matrix_width_mm + ' × ' + data.matrix_drop_mm + ' mm');
             previewBox.className = 'success';
             previewBox.innerHTML = bits.join(' &middot; ');
-            submitBtn.disabled = false;
+            setSubmitDisabled(false);
         } catch (err) {
             previewBox.className   = 'error';
             previewBox.textContent = 'Could not fetch live price.';
-            submitBtn.disabled = true;
+            setSubmitDisabled(true);
             console.error(err);
         }
     }

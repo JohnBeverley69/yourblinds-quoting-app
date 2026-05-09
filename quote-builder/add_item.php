@@ -165,9 +165,14 @@ try {
         $msg .= ' Rounded up to ' . qb_fmt_mm((int) $priced['matrix_width_mm'])
               . ' × ' . qb_fmt_mm((int) $priced['matrix_drop_mm']) . ' cell.';
     }
-    // Land back on the Add-line section so the user can keep adding blinds
-    // without scrolling past the items table each time.
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', $msg);
+    // The form has two submit buttons:
+    //   "Add blind"          → next_action=more  → land back on Add-line
+    //   "Add blind & finish" → next_action=stop  → land at top of editor
+    // so the trade user can either keep adding or pop up to the items
+    // table for a final review.
+    $nextAction = (string) ($_POST['next_action'] ?? 'more');
+    $anchor     = $nextAction === 'stop' ? '' : '#add-line';
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . $anchor, 'success', $msg);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add blind: ' . $e->getMessage());
