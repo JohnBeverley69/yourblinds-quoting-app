@@ -63,6 +63,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'logo') {
+        // Validate the uploaded file: real image, sensible size, allowed type.
+        if (!isset($_FILES['logo']) || ($_FILES['logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $_SESSION['flash_error'] = 'Please choose a logo file.';
+        } elseif (filesize($_FILES['logo']['tmp_name']) > 2 * 1024 * 1024) {
+            $_SESSION['flash_error'] = 'Logo too large (2 MB max).';
+        } else {
+            $info = @getimagesize($_FILES['logo']['tmp_name']);
+            $ext  = null;
+            if ($info !== false) {
+                switch ($info[2]) {
+                    case IMAGETYPE_JPEG: $ext = 'jpg'; break;
+                    case IMAGETYPE_PNG:  $ext = 'png'; break;
+                    case IMAGETYPE_GIF:  $ext = 'gif'; break;
+                }
+            }
+            if ($ext === null) {
+                $_SESSION['flash_error'] = 'File must be a JPG, PNG, or GIF image.';
+            } else {
+                $dir = __DIR__ . '/../uploads/logos';
+                if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                    $_SESSION['flash_error'] = 'Could not create uploads/logos directory.';
+                } else {
+                    // Wipe any existing logo for this client (could be a different
+                    // extension), so we never end up with two files for one client.
+                    foreach (glob($dir . '/' . $clientId . '.*') ?: [] as $old) {
+                        @unlink($old);
+                    }
+                    $dest = $dir . '/' . $clientId . '.' . $ext;
+                    if (move_uploaded_file($_FILES['logo']['tmp_name'], $dest)) {
+                        // Web-relative path stored on the row — handy for HTML
+                        // <img src="..."> rendering. The PDF renderer reads the
+                        // file directly via filesystem path.
+                        $webPath = '/uploads/logos/' . $clientId . '.' . $ext;
+                        db()->prepare('UPDATE clients SET logo_path = ? WHERE id = ?')
+                            ->execute([$webPath, $clientId]);
+                        $_SESSION['flash_success'] = 'Logo uploaded.';
+                    } else {
+                        $_SESSION['flash_error'] = 'Could not save the uploaded file.';
+                    }
+                }
+            }
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
+    if ($action === 'remove_logo') {
+        $dir = __DIR__ . '/../uploads/logos';
+        foreach (glob($dir . '/' . $clientId . '.*') ?: [] as $old) {
+            @unlink($old);
+        }
+        db()->prepare('UPDATE clients SET logo_path = NULL WHERE id = ?')->execute([$clientId]);
+        $_SESSION['flash_success'] = 'Logo removed.';
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'quote') {
         $prefix    = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
         $markup    = (float) ($_POST['default_markup_percent'] ?? 0);
@@ -238,6 +296,51 @@ $activeNav = 'settings';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save company details</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Company logo</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+                Used in the header of customer-facing quote PDFs and the public
+                accept page. JPG, PNG, or GIF, up to 2 MB.
+            </p>
+
+            <?php if (!empty($client['logo_path'])): ?>
+                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+                    <img src="<?= e((string) $client['logo_path']) ?>" alt="Logo"
+                         style="max-height:80px;max-width:200px;background:#fff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
+                    <form method="post" action="/admin/settings.php" style="margin:0"
+                          onsubmit="return confirm('Remove the company logo?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="remove_logo">
+                        <button type="submit" class="btn btn-secondary btn-sm">Remove logo</button>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" action="/admin/settings.php" class="form" enctype="multipart/form-data" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="logo">
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="logo">
+                            <?= !empty($client['logo_path']) ? 'Replace logo' : 'Upload logo' ?>
+                        </label>
+                        <input id="logo" name="logo" type="file"
+                               accept=".jpg,.jpeg,.png,.gif,image/jpeg,image/png,image/gif"
+                               required>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <?= !empty($client['logo_path']) ? 'Replace logo' : 'Upload logo' ?>
+                    </button>
                 </div>
             </form>
         </section>

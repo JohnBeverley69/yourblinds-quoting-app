@@ -107,6 +107,25 @@ function pdf_quote_html(array $quote, array $items, array $extrasByItem): string
         return $ts ? date('j F Y', $ts) : '&mdash;';
     };
 
+    // Trade company logo — embedded as a data URI so Dompdf doesn't need
+    // to chase a remote URL or worry about chroot. Skipped silently if the
+    // file's missing or unreadable (the text branding still appears below).
+    $logoTag = '';
+    if (!empty($quote['trade_logo'])) {
+        // logo_path is stored as a web-relative path like /uploads/logos/X.png
+        $rel  = ltrim((string) $quote['trade_logo'], '/');
+        $abs  = APP_ROOT . '/' . $rel;
+        if (is_file($abs) && is_readable($abs)) {
+            $bytes = file_get_contents($abs);
+            $info  = @getimagesize($abs);
+            if ($bytes !== false && $info !== false) {
+                $mime = $info['mime'];
+                $logoTag = '<img src="data:' . $mime . ';base64,' . base64_encode($bytes)
+                         . '" alt="" style="max-height:64px;max-width:240px;display:block;margin-bottom:8px;">';
+            }
+        }
+    }
+
     // Trade company address block (the branding panel at the top-left).
     $tradeLines = array_values(array_filter([
         (string) ($quote['trade_addr1']    ?? ''),
@@ -177,6 +196,7 @@ table { border-collapse: collapse; }
 <table class="layout">
 <tr>
 <td width="55%">
+<?= $logoTag /* already-safe HTML built above; data URI image */ ?>
 <div class="brand"><?= e((string) ($quote['trade_company_name'] ?? '')) ?></div>
 <div class="trade-block">
 <?php foreach ($tradeLines as $line): ?>

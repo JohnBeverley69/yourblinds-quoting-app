@@ -1,0 +1,7 @@
+# User-uploaded content lives here. Block PHP execution as a defense-in-depth
+# safeguard — the upload validator already rejects non-images via getimagesize(),
+# but if a malicious file ever sneaks in, Apache won't execute it as code.
+
+<FilesMatch "\.(?i:php|phar|phtml|php5|php7|inc)$">
+    Require all denied
+</FilesMatch>

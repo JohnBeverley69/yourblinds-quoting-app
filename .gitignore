@@ -22,7 +22,11 @@ database/*.dump
 *.log
 
 # --- User uploads (runtime data, not source) ---
-/uploads/
+# Folder is gitignored, but the .htaccess + .gitkeep that establish the
+# folder + its PHP-execution lockdown ARE tracked.
+/uploads/*
+!/uploads/.htaccess
+!/uploads/.gitkeep
 /public/uploads/
 
 # --- IDE / editor ---
