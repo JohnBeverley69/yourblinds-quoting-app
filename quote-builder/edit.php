@@ -671,14 +671,33 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 ? rtrim($appUrl, '/') . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token'])
                 : '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
 
-            // Sanitize the customer's phone for wa.me — strip non-digits,
-            // keep a leading + only if it was there. Only enables WhatsApp
-            // when the trade user has explicitly ticked "has WhatsApp" on
-            // the customer; otherwise a tap of the wa.me link could land
-            // on a "user not on WhatsApp" error page.
-            $rawPhone   = (string) ($quote['end_customer_phone'] ?? '');
-            $waPhone    = preg_replace('/[^0-9]/', '', $rawPhone);
-            $waEnabled  = $waPhone !== '' && !empty($quote['has_whatsapp']);
+            // Normalise the customer's phone to wa.me's required format:
+            // international, digits only, NO leading + or 00. Defaults to
+            // UK assumption (07… → 447…), since that's the typical case
+            // here. Numbers that already start with a country code or are
+            // explicitly +-prefixed pass through fine.
+            //
+            // Examples:
+            //   07123 456789  → 447123456789
+            //   +44 7123 ...  → 447123...
+            //   0044 7123 ... → 447123...
+            //   34 600 ...    → 34600... (Spanish, kept as-is)
+            $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
+            $digits   = preg_replace('/[^0-9]/', '', $rawPhone);
+            if ($digits === '') {
+                $waPhone = '';
+            } elseif (str_starts_with($digits, '00')) {
+                $waPhone = substr($digits, 2);            // strip 00 dial-out
+            } elseif (str_starts_with($digits, '0')) {
+                $waPhone = '44' . substr($digits, 1);     // UK national → +44
+            } else {
+                $waPhone = $digits;                        // already international
+            }
+
+            // Only enables WhatsApp when the trade user has explicitly ticked
+            // "has WhatsApp" on the customer; otherwise a tap of the wa.me
+            // link could land on a "user not on WhatsApp" error page.
+            $waEnabled = $waPhone !== '' && !empty($quote['has_whatsapp']);
 
             // WhatsApp message body. Plain text — wa.me will URL-encode it.
             $waMessage = "Hi " . ((string) $quote['end_customer_name'])
