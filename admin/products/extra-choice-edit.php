@@ -75,32 +75,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!is_numeric($f['price_per_metre'])) {
         $error = 'Per-metre surcharge must be a number.';
     } else {
-        // Parse the pasted width-price table. Empty = clear all rows.
         require_once __DIR__ . '/../../_partials/price_table_parser.php';
         $widthRows = [];
         $parseErr  = null;
-        $lines = preg_split('/\r?\n/', trim($widthTablePasted)) ?: [];
-        foreach ($lines as $lineNum => $line) {
-            $line = trim($line);
-            if ($line === '') continue;
-            // Strip out leading "Width" / "Price" header line if pasted.
-            if (preg_match('/^(width|price|mm)/i', $line) && !preg_match('/\d/', $line)) continue;
-            $parts = preg_split('/[\s,;|]+/', $line);
-            if (count($parts) < 2) {
-                $parseErr = 'Line ' . ($lineNum + 1) . ': expected width and price separated by space, comma, tab, or |. Got "' . $line . '".';
-                break;
+        $usedFile  = false;
+
+        // If a file was uploaded, parse it and use those rows (overrides
+        // textarea). Expects two columns: width then price. Header rows
+        // without numbers are skipped silently.
+        if (isset($_FILES['width_price_file'])
+            && ($_FILES['width_price_file']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $tmp = $_FILES['width_price_file']['tmp_name'];
+            if (filesize($tmp) > 5 * 1024 * 1024) {
+                $parseErr = 'File too large (5 MB max).';
+            } else {
+                require_once __DIR__ . '/../../vendor/autoload.php';
+                try {
+                    $ss      = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmp);
+                    $sheet   = $ss->getActiveSheet();
+                    $sheetRows = $sheet->toArray(null, true, true, true);
+                    foreach ($sheetRows as $rowNum => $row) {
+                        // Find first two non-empty cells in the row.
+                        $cells = [];
+                        foreach ($row as $val) {
+                            $v = trim((string) ($val ?? ''));
+                            if ($v === '') continue;
+                            $cells[] = $v;
+                            if (count($cells) === 2) break;
+                        }
+                        if (count($cells) < 2) continue;
+                        $w = ptp_parse_dimension($cells[0]);
+                        $p = ptp_parse_price($cells[1]);
+                        // If neither parses, treat as a header / label row.
+                        if ($w === null && $p === null) continue;
+                        if ($w === null || $p === null) {
+                            $parseErr = "Row $rowNum: couldn't read width/price ('"
+                                      . $cells[0] . "', '" . $cells[1] . "').";
+                            break;
+                        }
+                        $widthRows[$w] = (float) $p;
+                    }
+                    $usedFile = true;
+                } catch (Throwable $e) {
+                    $parseErr = 'Could not read the file: ' . $e->getMessage();
+                }
             }
-            $w = ptp_parse_dimension((string) $parts[0]);
-            $p = ptp_parse_price((string) $parts[1]);
-            if ($w === null) {
-                $parseErr = 'Line ' . ($lineNum + 1) . ': could not read width "' . $parts[0] . '".';
-                break;
+        }
+
+        // Otherwise (or if file gave no rows but had no error), parse the
+        // textarea. Empty textarea + no file = clear all rows.
+        if ($parseErr === null && !$usedFile) {
+            $lines = preg_split('/\r?\n/', trim($widthTablePasted)) ?: [];
+            foreach ($lines as $lineNum => $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                if (preg_match('/^(width|price|mm)/i', $line) && !preg_match('/\d/', $line)) continue;
+                $parts = preg_split('/[\s,;|]+/', $line);
+                if (count($parts) < 2) {
+                    $parseErr = 'Line ' . ($lineNum + 1) . ': expected width and price separated by space, comma, tab, or |. Got "' . $line . '".';
+                    break;
+                }
+                $w = ptp_parse_dimension((string) $parts[0]);
+                $p = ptp_parse_price((string) $parts[1]);
+                if ($w === null) {
+                    $parseErr = 'Line ' . ($lineNum + 1) . ': could not read width "' . $parts[0] . '".';
+                    break;
+                }
+                if ($p === null) {
+                    $parseErr = 'Line ' . ($lineNum + 1) . ': could not read price "' . $parts[1] . '".';
+                    break;
+                }
+                $widthRows[$w] = (float) $p;
             }
-            if ($p === null) {
-                $parseErr = 'Line ' . ($lineNum + 1) . ': could not read price "' . $parts[1] . '".';
-                break;
-            }
-            $widthRows[$w] = (float) $p; // last write wins on duplicate width
         }
 
         if ($parseErr !== null) {
@@ -233,7 +279,7 @@ $activeNav = 'products';
 
         <section class="section">
             <form method="post" action="/admin/products/extra-choice-edit.php?id=<?= (int) $id ?>"
-                  class="form" novalidate>
+                  class="form" novalidate enctype="multipart/form-data">
                 <?= csrf_field() ?>
 
                 <div class="form-row full">
@@ -292,16 +338,32 @@ $activeNav = 'products';
                     </legend>
                     <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
                         A fourth pricing mode for cases where the surcharge varies by width.
-                        One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
-                        Width can be in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
                         Pricing engine looks up the smallest entry &ge; the customer's width (round-up).
                         <strong>Combined</strong> with the flat / percent / per-metre fields above.
-                        Save with the textarea blank to clear the table.
+                    </p>
+
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                        Option A — paste rows
+                    </p>
+                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                        One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
+                        Width in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
+                        Empty textarea + no file = clear the table.
                     </p>
                     <textarea name="width_price_table" id="width_price_table"
-                              rows="8"
+                              rows="6"
                               style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;resize:vertical"
                               placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
+
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                        Option B — upload Excel
+                    </p>
+                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                        Two-column .xlsx: width in column A, price in column B. Header row optional. If a file is provided, it overrides the textarea above.
+                    </p>
+                    <input type="file" name="width_price_file" id="width_price_file"
+                           accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                           style="font:inherit">
                 </fieldset>
 
                 <label class="checkbox-row" for="is_default">
