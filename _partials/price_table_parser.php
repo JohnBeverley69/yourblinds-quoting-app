@@ -21,12 +21,13 @@ if (!function_exists('ptp_parse_dimension')) {
     /**
      * Convert a raw cell to integer millimetres.
      *
-     * Detection:
-     *   - "1500mm"       -> 1500   (mm explicit)
-     *   - "61.5cm"       -> 615    (cm explicit)
+     * Detection (in order):
+     *   - "1500mm"       -> 1500
+     *   - "61.5cm"       -> 615
      *   - "1.5m" / "5m"  -> 1500 / 5000 (metres explicit, word-bounded)
-     *   - "0.800" (bare) -> 800    (heuristic: < 100 = metres)
-     *   - "610"   (bare) -> 610    (heuristic: >= 100 = mm)
+     *   - "24.02''" / "24in"  -> 610 / 610 (inches × 25.4)
+     *   - "0.800" (bare) -> 800   (heuristic: < 100 = metres)
+     *   - "610"   (bare) -> 610   (heuristic: >= 100 = mm)
      *
      * Returns null for anything we can't pull a positive number out of.
      */
@@ -44,6 +45,8 @@ if (!function_exists('ptp_parse_dimension')) {
         if (strpos($lower, 'mm') !== false)              return (int) round($num);
         if (strpos($lower, 'cm') !== false)              return (int) round($num * 10);
         if (preg_match('/\d\s*m\b/i', $str))             return (int) round($num * 1000);
+        // Inches — quote characters (' or ") or "in"/"ins" suffix.
+        if (preg_match('/[\'"]|\bins?\b/i', $str))       return (int) round($num * 25.4);
 
         // No unit suffix — magnitude heuristic.
         // Anything below 100 is implausibly small for a blind in mm
@@ -94,7 +97,8 @@ if (!function_exists('ptp_parse_band_blocks')) {
         $current   = null;
         $widths    = [];
         $cells     = [];
-        $expecting = 'band'; // band | widths | data
+        $expecting = 'band';   // band | widths | data
+        $dropCol   = null;     // detected once per band — which column holds drops
 
         $finalise = function () use (&$bands, &$current, &$cells) {
             if ($current !== null && $cells) {
@@ -113,6 +117,7 @@ if (!function_exists('ptp_parse_band_blocks')) {
                 $finalise();
                 $current   = strtoupper($m[1]);
                 $widths    = [];
+                $dropCol   = null;
                 $expecting = 'widths';
                 continue;
             }
@@ -140,11 +145,27 @@ if (!function_exists('ptp_parse_band_blocks')) {
             }
 
             // expecting === 'data'
-            $dropMm = ptp_parse_dimension($a);
+            //
+            // The drop column isn't always A — some files put it in B (with
+            // column A holding label text in the widths row). On the first
+            // data row of each band, sniff for the leftmost non-widths column
+            // that holds a parseable dimension and lock it in.
+            if ($dropCol === null) {
+                foreach ($row as $col => $val) {
+                    if (isset($widths[$col])) continue;
+                    $d = ptp_parse_dimension((string) ($val ?? ''));
+                    if ($d !== null && $d > 0) {
+                        $dropCol = $col;
+                        break;
+                    }
+                }
+                if ($dropCol === null) continue; // not a data row yet
+            }
+
+            $dropMm = ptp_parse_dimension((string) ($row[$dropCol] ?? ''));
             if ($dropMm === null) {
-                // Not a data row — inches reference, label spacer, blank,
-                // anything else. Skip and keep waiting for the next data row
-                // or band header.
+                // Could be an inches reference row, a blank spacer, anything.
+                // Keep waiting for the next real data row.
                 continue;
             }
             foreach ($widths as $col => $widthMm) {
