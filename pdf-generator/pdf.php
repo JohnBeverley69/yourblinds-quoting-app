@@ -5,11 +5,16 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 /**
- * YourBlinds — quote PDF rendering.
+ * YourBlinds — customer-facing quote PDF rendering.
+ *
+ * The output is intentionally **size-free** — the customer sees product,
+ * fabric, colour, room, extras, quantity, price. Width and drop are NOT
+ * rendered (business rule: trade companies don't want customers shopping
+ * the same blinds elsewhere with dimensions in hand).
  *
  * Loads a quote (scoped by client_id), builds an HTML document, and uses
- * Dompdf to produce A4 PDF bytes. Returns null if the quote does not exist
- * or Dompdf is not installed (logged).
+ * Dompdf to produce A4 PDF bytes. Returns null if the quote does not
+ * exist or Dompdf is not installed (logged).
  */
 function pdf_render_quote(int $quoteId, int $clientId): ?string
 {
@@ -20,14 +25,21 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
 
     $pdo = db();
 
+    // Quote header + the trade company's branding fields, all in one trip.
     $qstmt = $pdo->prepare(
         'SELECT q.*,
-                c.company_name, c.address1 AS client_addr1, c.address2 AS client_addr2,
-                c.town AS client_town, c.county AS client_county, c.postcode AS client_postcode,
-                c.email AS client_email, c.phone AS client_phone,
-                cs.vat_percent, cs.quote_footer
+                c.company_name AS trade_company_name,
+                c.address1     AS trade_addr1,
+                c.address2     AS trade_addr2,
+                c.town         AS trade_town,
+                c.county       AS trade_county,
+                c.postcode     AS trade_postcode,
+                c.email        AS trade_email,
+                c.phone        AS trade_phone,
+                c.logo_path    AS trade_logo,
+                cs.quote_footer
            FROM quotes q
-           JOIN clients c        ON c.id        = q.client_id
+           JOIN clients          c  ON c.id        = q.client_id
            LEFT JOIN client_settings cs ON cs.client_id = q.client_id
           WHERE q.id = ? AND q.client_id = ?
           LIMIT 1'
@@ -38,23 +50,40 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
         return null;
     }
 
+    // Items, in line-no order. We use the snapshot fields (frozen at quote
+    // time) rather than current product names, so re-rendering an old quote
+    // shows what was sold then, not what the catalogue says now.
     $istmt = $pdo->prepare(
-        'SELECT qi.*, p.name AS product_name
-           FROM quote_items qi
-           LEFT JOIN products p ON p.id = qi.product_id
-          WHERE qi.quote_id = ?
-          ORDER BY qi.line_no, qi.id'
+        'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY line_no, id'
     );
     $istmt->execute([$quoteId]);
     $items = $istmt->fetchAll();
 
-    $html = pdf_quote_html($quote, $items);
+    // Per-item extras. One query, IN clause, fold into a map so the HTML
+    // builder can pull them out per row without N+1.
+    $extrasByItem = [];
+    if ($items) {
+        $itemIds = array_map(static fn ($r) => (int) $r['id'], $items);
+        $ph = implode(',', array_fill(0, count($itemIds), '?'));
+        $est = $pdo->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, amount_applied
+               FROM quote_item_extras
+              WHERE quote_item_id IN ($ph)
+              ORDER BY id"
+        );
+        $est->execute($itemIds);
+        foreach ($est->fetchAll() as $r) {
+            $extrasByItem[(int) $r['quote_item_id']][] = $r;
+        }
+    }
+
+    $html = pdf_quote_html($quote, $items, $extrasByItem);
 
     $options = new Options();
-    $options->set('isRemoteEnabled',          false);
-    $options->set('isHtml5ParserEnabled',     true);
-    $options->set('defaultFont',              'helvetica');
-    $options->set('chroot',                   APP_ROOT);
+    $options->set('isRemoteEnabled',      false);
+    $options->set('isHtml5ParserEnabled', true);
+    $options->set('defaultFont',          'helvetica');
+    $options->set('chroot',               APP_ROOT);
 
     $dompdf = new Dompdf($options);
     $dompdf->loadHtml($html, 'UTF-8');
@@ -65,28 +94,28 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
 }
 
 /**
- * Build the printable HTML for one quote. Inline CSS — Dompdf doesn't load
- * external stylesheets when isRemoteEnabled is off (intentionally).
+ * Build the printable HTML for one quote — customer-facing version.
+ * Inline CSS — Dompdf has isRemoteEnabled = false (intentionally), so
+ * external stylesheets won't load.
  */
-function pdf_quote_html(array $quote, array $items): string
+function pdf_quote_html(array $quote, array $items, array $extrasByItem): string
 {
     $money   = static fn ($n)         => '&pound;' . number_format((float) $n, 2);
     $fmtDate = static function (?string $dt): string {
-        if (!$dt) {
-            return '&mdash;';
-        }
+        if (!$dt) return '&mdash;';
         $ts = strtotime($dt);
         return $ts ? date('j F Y', $ts) : '&mdash;';
     };
-    $fmtSize = static fn (float $v) => number_format($v, 1, '.', '');
 
-    $clientLines = array_values(array_filter([
-        (string) ($quote['client_addr1']   ?? ''),
-        (string) ($quote['client_addr2']   ?? ''),
-        trim(((string) ($quote['client_town'] ?? '')) . ' ' . ((string) ($quote['client_postcode'] ?? ''))),
-        (string) ($quote['client_county']  ?? ''),
+    // Trade company address block (the branding panel at the top-left).
+    $tradeLines = array_values(array_filter([
+        (string) ($quote['trade_addr1']    ?? ''),
+        (string) ($quote['trade_addr2']    ?? ''),
+        trim(((string) ($quote['trade_town'] ?? '')) . ' ' . ((string) ($quote['trade_postcode'] ?? ''))),
+        (string) ($quote['trade_county']   ?? ''),
     ], static fn ($s) => trim((string) $s) !== ''));
 
+    // End-customer address block.
     $custLines = array_values(array_filter([
         (string) ($quote['end_customer_address1'] ?? ''),
         (string) ($quote['end_customer_address2'] ?? ''),
@@ -109,10 +138,9 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1f293
 table { border-collapse: collapse; }
 .layout { width: 100%; }
 .layout td { vertical-align: top; padding: 0; }
-.brand { font-size: 26px; font-weight: bold; color: #1f3b5b; line-height: 1; }
-.brand .accent { color: #2563eb; }
-.client-block { margin-top: 8px; font-size: 10px; color: #6b7280; line-height: 1.55; }
-.client-block .name { color: #111827; font-size: 12px; font-weight: bold; }
+.brand { font-size: 22px; font-weight: bold; color: #1f3b5b; line-height: 1; margin-bottom: 6px; }
+.trade-block { font-size: 10px; color: #6b7280; line-height: 1.55; }
+.trade-block .name { color: #111827; font-size: 13px; font-weight: bold; }
 .quote-block { text-align: right; }
 .quote-block h2 { font-size: 18px; color: #111827; margin: 0 0 10px; font-weight: bold; }
 .quote-block .meta { font-size: 10.5px; }
@@ -129,8 +157,9 @@ table { border-collapse: collapse; }
 .items tbody td { padding: 9px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
 .items tbody tr:last-child td { border-bottom: 1px solid #d1d5db; }
 .items td.num, .items th.num { text-align: right; }
-.items .room { font-weight: 600; color: #111827; }
-.items .desc { white-space: pre-line; color: #4b5563; font-size: 10px; margin-top: 3px; }
+.items .room { font-weight: 600; color: #111827; font-size: 11.5px; }
+.items .desc { color: #4b5563; font-size: 10px; margin-top: 3px; line-height: 1.45; }
+.items .extras { color: #6b7280; font-size: 10px; margin-top: 3px; }
 .items tfoot td { padding: 6px 8px; font-size: 11px; }
 .items tfoot td.label { text-align: right; color: #6b7280; }
 .items tfoot td.val   { text-align: right; font-weight: 600; }
@@ -148,25 +177,23 @@ table { border-collapse: collapse; }
 <table class="layout">
 <tr>
 <td width="55%">
-<div class="brand">Your<span class="accent">Blinds</span></div>
-<div class="client-block">
-<div class="name"><?= e((string) $quote['company_name']) ?></div>
-<?php foreach ($clientLines as $line): ?>
+<div class="brand"><?= e((string) ($quote['trade_company_name'] ?? '')) ?></div>
+<div class="trade-block">
+<?php foreach ($tradeLines as $line): ?>
 <?= e((string) $line) ?><br>
 <?php endforeach; ?>
-<?php if (!empty($quote['client_phone'])): ?>
-<?= e((string) $quote['client_phone']) ?><br>
+<?php if (!empty($quote['trade_phone'])): ?>
+<?= e((string) $quote['trade_phone']) ?><br>
 <?php endif; ?>
-<?php if (!empty($quote['client_email'])): ?>
-<?= e((string) $quote['client_email']) ?>
+<?php if (!empty($quote['trade_email'])): ?>
+<?= e((string) $quote['trade_email']) ?>
 <?php endif; ?>
 </div>
 </td>
 <td class="quote-block">
 <h2>Quote <?= e((string) $quote['quote_number']) ?></h2>
 <div class="meta">
-<span class="lbl">Date</span> <span class="val"><?= $fmtDate($quote['quote_date'] ?? $quote['created_at']) ?></span><br>
-<span class="lbl">Valid until</span> <span class="val"><?= $fmtDate($quote['valid_until'] ?? null) ?></span><br>
+<span class="lbl">Date</span> <span class="val"><?= $fmtDate($quote['created_at'] ?? null) ?></span><br>
 <span class="lbl">Status</span> <span class="val" style="text-transform:capitalize;"><?= e((string) $quote['status']) ?></span>
 </div>
 </td>
@@ -193,27 +220,48 @@ table { border-collapse: collapse; }
 <tr>
 <th width="30">#</th>
 <th>Description</th>
-<th width="80">Size</th>
 <th class="num" width="40">Qty</th>
-<th class="num" width="70">Unit</th>
-<th class="num" width="75">Total</th>
+<th class="num" width="75">Unit</th>
+<th class="num" width="80">Total</th>
 </tr>
 </thead>
 <tbody>
 <?php if (empty($items)): ?>
-<tr><td colspan="6" style="text-align:center; padding:24px; color:#9ca3af;">No line items.</td></tr>
-<?php else: foreach ($items as $i => $item): ?>
+<tr><td colspan="5" style="text-align:center; padding:24px; color:#9ca3af;">No line items.</td></tr>
+<?php else: foreach ($items as $i => $item):
+    // Build the description block from snapshot fields. We deliberately
+    // do NOT render width_mm / drop_mm / matrix_* anywhere — that's the
+    // size-rule the trade business asked for.
+    $descBits = [];
+    if (!empty($item['product_name_snapshot'])) {
+        $descBits[] = (string) $item['product_name_snapshot']
+            . (!empty($item['system_name_snapshot']) ? ' — ' . (string) $item['system_name_snapshot'] : '');
+    }
+    $fabricBits = array_filter([
+        (string) ($item['fabric_supplier_snapshot'] ?? ''),
+        (string) ($item['fabric_name_snapshot']     ?? ''),
+        (string) ($item['fabric_colour_snapshot']   ?? ''),
+    ], static fn ($s) => $s !== '');
+    if ($fabricBits) {
+        $descBits[] = implode(' / ', $fabricBits);
+    }
+?>
 <tr>
 <td><?= (int) ($item['line_no'] ?? ($i + 1)) ?></td>
 <td>
 <?php if (!empty($item['room_name'])): ?>
 <div class="room"><?= e((string) $item['room_name']) ?></div>
 <?php endif; ?>
-<div class="desc"><?= e((string) $item['description_text']) ?></div>
-</td>
-<td>
-<?php if (!empty($item['width']) && !empty($item['drop_value'])): ?>
-<?= $fmtSize((float) $item['width']) ?>&times;<?= $fmtSize((float) $item['drop_value']) ?>m
+<?php if ($descBits): ?>
+<div class="desc"><?= e(implode("\n", $descBits)) ?></div>
+<?php endif; ?>
+<?php $exs = $extrasByItem[(int) $item['id']] ?? []; ?>
+<?php if ($exs): ?>
+<div class="extras">
+<?php foreach ($exs as $ex): ?>
++ <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?><br>
+<?php endforeach; ?>
+</div>
 <?php endif; ?>
 </td>
 <td class="num"><?= (int) $item['quantity'] ?></td>
@@ -223,9 +271,9 @@ table { border-collapse: collapse; }
 <?php endforeach; endif; ?>
 </tbody>
 <tfoot>
-<tr><td colspan="4"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
-<tr><td colspan="4"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
-<tr class="grand"><td colspan="4"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
+<tr><td colspan="3"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
+<tr><td colspan="3"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
+<tr class="grand"><td colspan="3"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
 </tfoot>
 </table>
 
@@ -239,7 +287,7 @@ table { border-collapse: collapse; }
 <?php if (!empty($quote['quote_footer'])): ?>
 <div class="footer"><?= e((string) $quote['quote_footer']) ?></div>
 <?php else: ?>
-<div class="footer"><?= e((string) $quote['company_name']) ?> &middot; Quote <?= e((string) $quote['quote_number']) ?></div>
+<div class="footer"><?= e((string) ($quote['trade_company_name'] ?? '')) ?> &middot; Quote <?= e((string) $quote['quote_number']) ?></div>
 <?php endif; ?>
 
 </body>

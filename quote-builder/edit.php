@@ -536,6 +536,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <h2 class="section-title">Quote actions</h2>
             </div>
             <div class="status-actions">
+                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>"
+                   class="btn btn-secondary" target="_blank" rel="noopener">
+                    View PDF
+                </a>
+                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>&download=1"
+                   class="btn btn-secondary">
+                    Download PDF
+                </a>
                 <?php foreach ($transitions as $t): ?>
                     <form method="post" action="/quote-builder/change_status.php">
                         <?= csrf_field() ?>
