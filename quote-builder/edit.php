@@ -14,6 +14,36 @@ $id    = (int) ($_GET['id'] ?? 0);
 $quote = qb_load_quote_or_404($id, $clientId);
 $editable = qb_is_editable($quote);
 
+// Edit-blind mode: ?edit_item=N pre-populates the Add-blind form with this
+// item's values and switches its submit handler to update_item.php so saving
+// updates the row in place rather than creating a new one. Falls back to
+// "add" mode if the item doesn't belong to the quote.
+$editingItemId    = $editable ? (int) ($_GET['edit_item'] ?? 0) : 0;
+$editingItem      = null;
+$editingExtras    = [];
+if ($editingItemId > 0) {
+    $editSt = db()->prepare(
+        'SELECT * FROM quote_items WHERE id = ? AND quote_id = ? LIMIT 1'
+    );
+    $editSt->execute([$editingItemId, $id]);
+    $editingItem = $editSt->fetch();
+    if (!$editingItem) {
+        $editingItemId = 0;
+    } else {
+        $exSt = db()->prepare(
+            'SELECT product_extra_id, product_extra_choice_id
+               FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
+        );
+        $exSt->execute([$editingItemId]);
+        foreach ($exSt->fetchAll() as $r) {
+            $editingExtras[] = [
+                'extra_id'  => (int) $r['product_extra_id'],
+                'choice_id' => (int) $r['product_extra_choice_id'],
+            ];
+        }
+    }
+}
+
 // Items + their extras (one query each, then fold).
 $itemsSt = db()->prepare(
     'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY line_no, id'
@@ -424,8 +454,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
                                     <?php if ($editable): ?>
-                                        <td>
-                                            <form method="post" action="/quote-builder/delete_item.php" style="margin:0"
+                                        <td style="white-space:nowrap">
+                                            <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
+                                               class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
+                                            <form method="post" action="/quote-builder/delete_item.php" style="display:inline;margin:0"
                                                   onsubmit="return confirm('Remove this blind?');">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -461,10 +493,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         </section>
 
         <?php if ($editable): ?>
-        <!-- ============== ADD LINE ITEM ============== -->
+        <!-- ============== ADD / EDIT BLIND ============== -->
         <section class="section" id="add-line">
             <div class="section-header">
-                <h2 class="section-title">Add blind</h2>
+                <h2 class="section-title">
+                    <?= $editingItemId > 0 ? 'Edit blind ' . (int) $editingItem['line_no'] : 'Add blind' ?>
+                </h2>
+                <?php if ($editingItemId > 0): ?>
+                    <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>"
+                       style="font-size:0.875rem">Cancel edit</a>
+                <?php endif; ?>
             </div>
 
             <noscript>
@@ -473,16 +511,22 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             </noscript>
 
-            <form method="post" action="/quote-builder/add_item.php" class="form" id="add-item-form" novalidate>
+            <form method="post"
+                  action="<?= $editingItemId > 0 ? '/quote-builder/update_item.php' : '/quote-builder/add_item.php' ?>"
+                  class="form" id="add-item-form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                 <input type="hidden" name="round_up" value="1">
+                <?php if ($editingItemId > 0): ?>
+                    <input type="hidden" name="item_id" value="<?= (int) $editingItemId ?>">
+                <?php endif; ?>
 
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="item-room">Room name</label>
                         <input id="item-room" name="room_name" type="text" maxlength="80"
                                list="room-options"
+                               value="<?= e((string) ($editingItem['room_name'] ?? '')) ?>"
                                placeholder="Type or pick — e.g. Living Room">
                         <datalist id="room-options">
                             <option value="Bathroom">
@@ -513,7 +557,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <select id="item-product" name="product_id" required>
                             <option value="">Choose product...</option>
                             <?php foreach ($products as $p): ?>
-                                <option value="<?= (int) $p['id'] ?>"><?= e((string) $p['name']) ?></option>
+                                <option value="<?= (int) $p['id'] ?>"
+                                    <?= ($editingItem && (int) $editingItem['product_id'] === (int) $p['id']) ? 'selected' : '' ?>>
+                                    <?= e((string) $p['name']) ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -542,16 +589,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="item-width">Width <span class="required">*</span></label>
                         <input id="item-width" name="width" type="text" required
+                               value="<?= $editingItem ? (int) $editingItem['width_mm'] : '' ?>"
                                placeholder="e.g. 1500, 150cm, 1.5m, 60in">
                     </div>
                     <div class="form-group">
                         <label for="item-drop">Drop <span class="required">*</span></label>
                         <input id="item-drop" name="drop" type="text" required
+                               value="<?= $editingItem ? (int) $editingItem['drop_mm'] : '' ?>"
                                placeholder="e.g. 1800, 180cm, 1.8m, 72in">
                     </div>
                     <div class="form-group">
                         <label for="item-qty">Quantity</label>
-                        <input id="item-qty" name="quantity" type="number" step="1" min="1" value="1">
+                        <input id="item-qty" name="quantity" type="number" step="1" min="1"
+                               value="<?= $editingItem ? (int) $editingItem['quantity'] : 1 ?>">
                     </div>
                 </div>
 
@@ -566,6 +616,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="item-notes">Notes</label>
                         <input id="item-notes" name="notes" type="text" maxlength="255"
+                               value="<?= e((string) ($editingItem['notes'] ?? '')) ?>"
                                placeholder="Optional internal note for this blind">
                     </div>
                 </div>
@@ -575,14 +626,22 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary item-submit"
-                            name="next_action" value="stop" disabled>
-                        Save
-                    </button>
-                    <button type="submit" class="btn btn-secondary item-submit"
-                            name="next_action" value="more" disabled>
-                        Save and add another blind
-                    </button>
+                    <?php if ($editingItemId > 0): ?>
+                        <button type="submit" class="btn btn-primary item-submit" disabled>
+                            Save changes
+                        </button>
+                        <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>"
+                           class="btn btn-secondary">Cancel</a>
+                    <?php else: ?>
+                        <button type="submit" class="btn btn-primary item-submit"
+                                name="next_action" value="stop" disabled>
+                            Save
+                        </button>
+                        <button type="submit" class="btn btn-secondary item-submit"
+                                name="next_action" value="more" disabled>
+                            Save and add another blind
+                        </button>
+                    <?php endif; ?>
                 </div>
             </form>
         </section>
@@ -802,20 +861,30 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             extrasBox.innerHTML = '';
             return;
         }
+
+        // Capture currently-selected values so re-renders preserve user
+        // selections instead of reverting to defaults. Distinguishes
+        // "user picked None" ("") from "never rendered yet" (undefined).
+        var preset = {};
+        extrasBox.querySelectorAll('[data-extra-id]').forEach(function (div) {
+            var sel = div.querySelector('select');
+            if (sel) preset[parseInt(div.getAttribute('data-extra-id'), 10)] = sel.value;
+        });
+
         var systemId = parseInt(systemSel.value, 10) || 0;
         var html = '';
         var anyVisible = false;
 
         productData.extras.forEach(function (extra, idx) {
             // Conditional extras: hidden until parent choice is selected.
+            // Read from `preset` (captured) rather than the live DOM since
+            // we're mid-rebuild.
             if (extra.parent_choice_id) {
                 var parentSelected = false;
                 productData.extras.forEach(function (other, otherIdx) {
                     if (otherIdx === idx) return;
-                    var sel = document.querySelector(
-                        '[data-extra-id="' + other.id + '"] select'
-                    );
-                    if (sel && parseInt(sel.value, 10) === extra.parent_choice_id) {
+                    var presetVal = preset[other.id];
+                    if (presetVal && parseInt(presetVal, 10) === extra.parent_choice_id) {
                         parentSelected = true;
                     }
                 });
@@ -829,6 +898,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (visibleChoices.length === 0) return;
 
             anyVisible = true;
+            var presetVal = preset[extra.id];
             var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
             html += '<div data-extra-id="' + extra.id + '">';
             html += '<label>' + escapeHtml(extra.name)
@@ -838,11 +908,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             html += '<select name="extras[' + idx + '][choice_id]"'
                   + (extra.is_required ? ' required' : '') + '>';
             if (!extra.is_required || !hasDefault) {
-                html += '<option value="">— None —</option>';
+                html += '<option value=""'
+                      + (presetVal === '' ? ' selected' : '')
+                      + '>— None —</option>';
             }
             visibleChoices.forEach(function (c) {
+                var isSelected;
+                if (presetVal !== undefined && presetVal !== '') {
+                    isSelected = String(c.id) === presetVal;
+                } else if (presetVal === '') {
+                    isSelected = false;
+                } else {
+                    isSelected = c.is_default;
+                }
                 html += '<option value="' + c.id + '"'
-                      + (c.is_default ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+                      + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
             });
             html += '</select></div>';
         });
@@ -858,6 +938,42 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 schedulePreview();
             });
         });
+    }
+
+    // Apply the editing-mode pre-fill after loadProductData has populated
+    // the cascade. Multi-pass so conditional extras (which only appear
+    // once their parent is set) get their values too.
+    async function applyEditingValues(initial) {
+        if (!initial) return;
+        if (initial.system_id) {
+            systemSel.value = String(initial.system_id);
+        }
+        if (initial.option_id && initial.fabric_label) {
+            fabricSearch.value = initial.fabric_label;
+            fabricId.value = String(initial.option_id);
+        }
+        // Three-pass set-then-render: covers single-level conditional nesting
+        // (which is all the schema currently supports). Each pass sets values
+        // for extras that exist in the DOM and re-renders to reveal newly-
+        // unlocked conditional ones.
+        for (var pass = 0; pass < 3; pass++) {
+            (initial.extras || []).forEach(function (ex) {
+                var sel = document.querySelector(
+                    '[data-extra-id="' + ex.extra_id + '"] select'
+                );
+                if (sel) sel.value = String(ex.choice_id);
+            });
+            renderExtras();
+        }
+        // Final pass after the last render — renderExtras' sticky preset
+        // already applies the values, but a defensive pass costs nothing.
+        (initial.extras || []).forEach(function (ex) {
+            var sel = document.querySelector(
+                '[data-extra-id="' + ex.extra_id + '"] select'
+            );
+            if (sel) sel.value = String(ex.choice_id);
+        });
+        schedulePreview();
     }
 
     function schedulePreview() {
@@ -960,8 +1076,45 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Slight delay so a click on a result row registers before close.
         setTimeout(closeFabricResults, 150);
     });
+
+    // Edit-mode pre-fill. When the page loads with ?edit_item=N, the form
+    // already has the basic fields (room, dimensions, quantity, notes,
+    // product) populated server-side; the cascading bits (system, fabric,
+    // extras) need to wait for /api/product-data to come back before they
+    // can be set. This kicks the cascade and applies the values.
+    if (productSel.value) {
+        (async function () {
+            await loadProductData();
+            if (window.__editingBlind__) {
+                await applyEditingValues(window.__editingBlind__);
+            }
+        })();
+    }
 })();
 </script>
+
+<?php
+// Editing data for the JS pre-fill, emitted only when in edit mode.
+if ($editingItemId > 0 && $editingItem):
+    // Build the fabric label the typeahead expects ("Band X — Supplier / Name / Colour").
+    $editFabricBits = array_filter([
+        (string) ($editingItem['fabric_supplier_snapshot'] ?? ''),
+        (string) ($editingItem['fabric_name_snapshot']     ?? ''),
+        (string) ($editingItem['fabric_colour_snapshot']   ?? ''),
+    ], static fn ($s) => $s !== '');
+    $editFabricLabel = 'Band ' . (string) ($editingItem['fabric_band_snapshot'] ?? '?')
+                     . ' — ' . implode(' / ', $editFabricBits);
+?>
+<script>
+window.__editingBlind__ = <?= json_encode([
+    'product_id'    => (int) ($editingItem['product_id']     ?? 0),
+    'system_id'     => $editingItem['system_id'] !== null ? (int) $editingItem['system_id'] : null,
+    'option_id'     => (int) ($editingItem['option_id']      ?? 0),
+    'fabric_label'  => $editFabricLabel,
+    'extras'        => $editingExtras,
+], JSON_THROW_ON_ERROR) ?>;
+</script>
+<?php endif; ?>
 <?php endif; ?>
 
 <script>
