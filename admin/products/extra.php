@@ -46,7 +46,8 @@ $f = [
     'sort_order'      => 0,
     'system_id'       => 0,
 ];
-$error = null;
+$error            = null;
+$widthTablePasted = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create_choice') {
     csrf_check();
@@ -58,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
     $f['sort_order']      = (int) ($_POST['sort_order'] ?? 0);
     $f['system_id']       = (int) ($_POST['system_id']  ?? 0);
+    $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -70,42 +72,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     } elseif (!is_numeric($f['price_per_metre'])) {
         $error = 'Per-metre surcharge must be a number.';
     } else {
-        try {
-            $pdo = db();
-            $pdo->beginTransaction();
+        require_once __DIR__ . '/../../_partials/price_table_parser.php';
 
-            // If marking this as default, clear default on all sibling choices first.
-            if ($f['is_default'] === 1) {
-                $clear = $pdo->prepare(
-                    'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
-                );
-                $clear->execute([$extraId]);
+        // Width-based price table — optional. Either a pasted textarea or an
+        // uploaded .xlsx; file wins. Empty input = no rows added.
+        $uploadedPath = null;
+        if (isset($_FILES['width_price_file'])
+            && ($_FILES['width_price_file']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $tmp = $_FILES['width_price_file']['tmp_name'];
+            if (filesize($tmp) > 5 * 1024 * 1024) {
+                $error = 'File too large (5 MB max).';
+            } else {
+                $uploadedPath = $tmp;
             }
+        }
 
-            $ins = $pdo->prepare(
-                'INSERT INTO product_extra_choices
-                   (product_extra_id, system_id, label,
-                    price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
-            );
-            $ins->execute([
-                $extraId,
-                $f['system_id'] > 0 ? $f['system_id'] : null,
-                $f['label'],
-                (float) $f['price_delta'],
-                (float) $f['price_percent'],
-                (float) $f['price_per_metre'],
-                $f['is_default'],
-                $f['sort_order'],
-            ]);
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Choice "' . $f['label'] . '" added.';
-            header('Location: /admin/products/extra.php?id=' . $extraId);
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $error = 'Could not add: ' . $e->getMessage();
+        $widthRows = [];
+        if ($error === null) {
+            $parsed = ptp_parse_width_price_input($widthTablePasted, $uploadedPath);
+            if ($parsed['error'] !== null) {
+                $error = $parsed['error'];
+            } else {
+                $widthRows = $parsed['rows'];
+            }
+        }
+
+        if ($error === null) {
+            try {
+                $pdo = db();
+                $pdo->beginTransaction();
+
+                // If marking this as default, clear default on all sibling choices first.
+                if ($f['is_default'] === 1) {
+                    $clear = $pdo->prepare(
+                        'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
+                    );
+                    $clear->execute([$extraId]);
+                }
+
+                $ins = $pdo->prepare(
+                    'INSERT INTO product_extra_choices
+                       (product_extra_id, system_id, label,
+                        price_delta, price_percent, price_per_metre,
+                        is_default, sort_order, active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                );
+                $ins->execute([
+                    $extraId,
+                    $f['system_id'] > 0 ? $f['system_id'] : null,
+                    $f['label'],
+                    (float) $f['price_delta'],
+                    (float) $f['price_percent'],
+                    (float) $f['price_per_metre'],
+                    $f['is_default'],
+                    $f['sort_order'],
+                ]);
+                $newChoiceId = (int) $pdo->lastInsertId();
+
+                if ($widthRows) {
+                    $rowIns = $pdo->prepare(
+                        'INSERT INTO extra_choice_price_rows
+                           (product_extra_choice_id, width_mm, price)
+                         VALUES (?, ?, ?)'
+                    );
+                    foreach ($widthRows as $w => $p) {
+                        $rowIns->execute([$newChoiceId, $w, $p]);
+                    }
+                }
+
+                $pdo->commit();
+                $_SESSION['flash_success'] = 'Choice "' . $f['label'] . '" added.';
+                header('Location: /admin/products/extra.php?id=' . $extraId);
+                exit;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $error = 'Could not add: ' . $e->getMessage();
+            }
         }
     }
 }
@@ -253,15 +295,16 @@ $activeNav = 'products';
                 <h2 class="section-title">Add choice</h2>
             </div>
             <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
-                Three independent surcharge modes; any (or none) can apply per choice.
+                Four independent surcharge modes; any (or none) can apply per choice.
                 <strong>Flat £</strong> = fixed add-on (e.g. Motor +£45).
                 <strong>Percent %</strong> = on the base price (e.g. Blackout +15%).
                 <strong>£/metre</strong> = multiplied by the blind width in metres
                 (e.g. Champagne headrail at £8/m → on a 2.4m wide blind = +£19.20).
+                <strong>Width table</strong> (below) = lookup by width for stepped surcharges.
                 Use <strong>System</strong> to limit a choice to one system (e.g. Champagne only on Vogue).
             </p>
             <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
-                  class="form" novalidate>
+                  class="form" novalidate enctype="multipart/form-data">
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="create_choice">
 
@@ -316,6 +359,39 @@ $activeNav = 'products';
                     </div>
                     <div class="form-group">&nbsp;</div>
                 </div>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Width-based price table (optional)
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
+                        A fourth pricing mode for cases where the surcharge varies by width.
+                        Pricing engine looks up the smallest entry &ge; the customer's width (round-up).
+                        <strong>Combined</strong> with the flat / percent / per-metre fields above.
+                    </p>
+
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                        Option A — paste rows
+                    </p>
+                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                        One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
+                        Width in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
+                    </p>
+                    <textarea name="width_price_table" id="width_price_table"
+                              rows="6"
+                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;resize:vertical"
+                              placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
+
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                        Option B — upload Excel
+                    </p>
+                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                        Two-column .xlsx: width in column A, price in column B. Header row optional. If a file is provided, it overrides the textarea above.
+                    </p>
+                    <input type="file" name="width_price_file" id="width_price_file"
+                           accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                           style="font:inherit">
+                </fieldset>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add choice</button>

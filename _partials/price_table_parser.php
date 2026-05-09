@@ -73,6 +73,84 @@ if (!function_exists('ptp_parse_price')) {
     }
 }
 
+if (!function_exists('ptp_parse_width_price_input')) {
+    /**
+     * Parse a width/price input from either a pasted textarea or an uploaded
+     * .xlsx file.
+     *
+     * Returns ['rows' => [width_mm => price, ...], 'error' => string|null].
+     *
+     * If $filePath is a real path, parse Excel (file wins over textarea).
+     * Else parse $textarea (one row per line, "width<sep>price"). Empty
+     * input -> rows = [] (caller can treat as "clear the table").
+     */
+    function ptp_parse_width_price_input(string $textarea, ?string $filePath = null): array
+    {
+        $rows = [];
+
+        if ($filePath !== null && is_readable($filePath)) {
+            require_once __DIR__ . '/../vendor/autoload.php';
+            try {
+                $ss        = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
+                $sheetRows = $ss->getActiveSheet()->toArray(null, true, true, true);
+                foreach ($sheetRows as $rowNum => $row) {
+                    $cells = [];
+                    foreach ($row as $val) {
+                        $v = trim((string) ($val ?? ''));
+                        if ($v === '') continue;
+                        $cells[] = $v;
+                        if (count($cells) === 2) break;
+                    }
+                    if (count($cells) < 2) continue;
+                    $w = ptp_parse_dimension($cells[0]);
+                    $p = ptp_parse_price($cells[1]);
+                    // Both null = header row, skip silently.
+                    if ($w === null && $p === null) continue;
+                    if ($w === null || $p === null) {
+                        return [
+                            'rows'  => [],
+                            'error' => "Row $rowNum: couldn't read width/price ('"
+                                     . $cells[0] . "', '" . $cells[1] . "').",
+                        ];
+                    }
+                    $rows[$w] = (float) $p;
+                }
+                return ['rows' => $rows, 'error' => null];
+            } catch (Throwable $e) {
+                return ['rows' => [], 'error' => 'Could not read the file: ' . $e->getMessage()];
+            }
+        }
+
+        // Textarea path.
+        $lines = preg_split('/\r?\n/', trim($textarea)) ?: [];
+        foreach ($lines as $lineNum => $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+            // Skip header-y lines like "Width" / "Price" / "mm" with no digits.
+            if (preg_match('/^(width|price|mm)/i', $line) && !preg_match('/\d/', $line)) continue;
+            $parts = preg_split('/[\s,;|]+/', $line);
+            if (count($parts) < 2) {
+                return [
+                    'rows'  => [],
+                    'error' => 'Line ' . ($lineNum + 1)
+                             . ': expected width and price separated by space, comma, tab, or |. Got "'
+                             . $line . '".',
+                ];
+            }
+            $w = ptp_parse_dimension((string) $parts[0]);
+            $p = ptp_parse_price((string) $parts[1]);
+            if ($w === null) {
+                return ['rows' => [], 'error' => 'Line ' . ($lineNum + 1) . ': could not read width "' . $parts[0] . '".'];
+            }
+            if ($p === null) {
+                return ['rows' => [], 'error' => 'Line ' . ($lineNum + 1) . ': could not read price "' . $parts[1] . '".'];
+            }
+            $rows[$w] = (float) $p;
+        }
+        return ['rows' => $rows, 'error' => null];
+    }
+}
+
 if (!function_exists('ptp_parse_band_blocks')) {
     /**
      * Walk a sheet's rows looking for stacked band matrices.

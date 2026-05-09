@@ -76,82 +76,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Per-metre surcharge must be a number.';
     } else {
         require_once __DIR__ . '/../../_partials/price_table_parser.php';
-        $widthRows = [];
-        $parseErr  = null;
-        $usedFile  = false;
 
-        // If a file was uploaded, parse it and use those rows (overrides
-        // textarea). Expects two columns: width then price. Header rows
-        // without numbers are skipped silently.
+        // Width-based price table — either a pasted textarea or an uploaded
+        // .xlsx (file wins). Empty input + no file = clear all rows.
+        $uploadedPath = null;
         if (isset($_FILES['width_price_file'])
             && ($_FILES['width_price_file']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
             $tmp = $_FILES['width_price_file']['tmp_name'];
             if (filesize($tmp) > 5 * 1024 * 1024) {
-                $parseErr = 'File too large (5 MB max).';
+                $error = 'File too large (5 MB max).';
             } else {
-                require_once __DIR__ . '/../../vendor/autoload.php';
-                try {
-                    $ss      = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmp);
-                    $sheet   = $ss->getActiveSheet();
-                    $sheetRows = $sheet->toArray(null, true, true, true);
-                    foreach ($sheetRows as $rowNum => $row) {
-                        // Find first two non-empty cells in the row.
-                        $cells = [];
-                        foreach ($row as $val) {
-                            $v = trim((string) ($val ?? ''));
-                            if ($v === '') continue;
-                            $cells[] = $v;
-                            if (count($cells) === 2) break;
-                        }
-                        if (count($cells) < 2) continue;
-                        $w = ptp_parse_dimension($cells[0]);
-                        $p = ptp_parse_price($cells[1]);
-                        // If neither parses, treat as a header / label row.
-                        if ($w === null && $p === null) continue;
-                        if ($w === null || $p === null) {
-                            $parseErr = "Row $rowNum: couldn't read width/price ('"
-                                      . $cells[0] . "', '" . $cells[1] . "').";
-                            break;
-                        }
-                        $widthRows[$w] = (float) $p;
-                    }
-                    $usedFile = true;
-                } catch (Throwable $e) {
-                    $parseErr = 'Could not read the file: ' . $e->getMessage();
-                }
+                $uploadedPath = $tmp;
             }
         }
 
-        // Otherwise (or if file gave no rows but had no error), parse the
-        // textarea. Empty textarea + no file = clear all rows.
-        if ($parseErr === null && !$usedFile) {
-            $lines = preg_split('/\r?\n/', trim($widthTablePasted)) ?: [];
-            foreach ($lines as $lineNum => $line) {
-                $line = trim($line);
-                if ($line === '') continue;
-                if (preg_match('/^(width|price|mm)/i', $line) && !preg_match('/\d/', $line)) continue;
-                $parts = preg_split('/[\s,;|]+/', $line);
-                if (count($parts) < 2) {
-                    $parseErr = 'Line ' . ($lineNum + 1) . ': expected width and price separated by space, comma, tab, or |. Got "' . $line . '".';
-                    break;
-                }
-                $w = ptp_parse_dimension((string) $parts[0]);
-                $p = ptp_parse_price((string) $parts[1]);
-                if ($w === null) {
-                    $parseErr = 'Line ' . ($lineNum + 1) . ': could not read width "' . $parts[0] . '".';
-                    break;
-                }
-                if ($p === null) {
-                    $parseErr = 'Line ' . ($lineNum + 1) . ': could not read price "' . $parts[1] . '".';
-                    break;
-                }
-                $widthRows[$w] = (float) $p;
+        $widthRows = [];
+        if ($error === null) {
+            $parsed = ptp_parse_width_price_input($widthTablePasted, $uploadedPath);
+            if ($parsed['error'] !== null) {
+                $error = $parsed['error'];
+            } else {
+                $widthRows = $parsed['rows'];
             }
         }
 
-        if ($parseErr !== null) {
-            $error = $parseErr;
-        } else {
+        if ($error === null) {
             try {
                 $pdo = db();
                 $pdo->beginTransaction();
