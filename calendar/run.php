@@ -33,6 +33,28 @@ $fStmt->execute([$clientId]);
 $mapsEnabled = ((int) $fStmt->fetchColumn()) === 1;
 
 // ---------------------------------------------------------------------------
+// Logged-in user's home address — used as origin + destination for the run
+// so the route reflects the actual day's driving (home → app1 → ... → home).
+// Falls back to no-home if all home_* fields are blank.
+// ---------------------------------------------------------------------------
+$homeStmt = db()->prepare(
+    'SELECT home_address1, home_address2, home_town, home_county, home_postcode
+       FROM client_users WHERE id = ? LIMIT 1'
+);
+$homeStmt->execute([(int) $user['user_id']]);
+$homeRow     = $homeStmt->fetch();
+$homeParts   = $homeRow
+    ? array_values(array_filter([
+        $homeRow['home_address1'] ?? null,
+        $homeRow['home_address2'] ?? null,
+        $homeRow['home_town']     ?? null,
+        $homeRow['home_county']   ?? null,
+        $homeRow['home_postcode'] ?? null,
+    ], static fn ($v) => $v !== null && $v !== ''))
+    : [];
+$homeAddress = $homeParts ? implode(', ', $homeParts) : '';
+
+// ---------------------------------------------------------------------------
 // Day's appointments, time-ordered.
 // ---------------------------------------------------------------------------
 $stmt = db()->prepare(
@@ -70,34 +92,58 @@ foreach ($appts as $a) {
 // ---------------------------------------------------------------------------
 // Build the Google Maps Embed URL.
 // Embed API (Directions mode) supports up to 10 stops total: origin +
-// destination + up to 8 waypoints. We chronologically slice if exceeded.
+// destination + up to 8 waypoints.
+//
+// If the user has a home address set, it's the origin AND the destination
+// (round trip), with all appointments as waypoints — leaving 8 waypoint
+// slots before truncation kicks in. Without a home address we fall back to
+// the legacy first-app-as-origin / last-app-as-dest behaviour.
 // ---------------------------------------------------------------------------
 $embedUrl    = '';
 $truncatedTo = null;
+$usingHome   = $homeAddress !== '';
 $totalStops  = count($plottable);
 
 if ($mapsEnabled && GOOGLE_MAPS_API_KEY !== '' && $totalStops > 0) {
-    $stops = $totalStops > 10 ? array_slice($plottable, 0, 10) : $plottable;
-    $truncatedTo = $totalStops > 10 ? 10 : null;
+    if ($usingHome) {
+        // Home → appointments → Home. Origin + dest take 2 of the 10 slots,
+        // leaving 8 waypoints for actual stops.
+        $maxApps = 8;
+        $stops   = $totalStops > $maxApps ? array_slice($plottable, 0, $maxApps) : $plottable;
+        $truncatedTo = $totalStops > $maxApps ? $maxApps : null;
 
-    if (count($stops) === 1) {
-        $embedUrl = 'https://www.google.com/maps/embed/v1/place'
-                  . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
-                  . '&q='   . urlencode($stops[0]['_address']);
-    } else {
-        $origin = $stops[0]['_address'];
-        $dest   = $stops[count($stops) - 1]['_address'];
-        $mid    = array_slice($stops, 1, count($stops) - 2);
-        $wp     = $mid
-            ? implode('|', array_map(static fn ($s) => $s['_address'], $mid))
-            : '';
-
+        $wp = implode('|', array_map(static fn ($s) => $s['_address'], $stops));
         $embedUrl = 'https://www.google.com/maps/embed/v1/directions'
                   . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
-                  . '&origin=' . urlencode($origin)
-                  . '&destination=' . urlencode($dest)
-                  . ($wp !== '' ? '&waypoints=' . urlencode($wp) : '')
+                  . '&origin='      . urlencode($homeAddress)
+                  . '&destination=' . urlencode($homeAddress)
+                  . '&waypoints='   . urlencode($wp)
                   . '&mode=driving';
+    } else {
+        // Legacy fallback: no home set, so the first appointment is the
+        // origin and the last is the destination.
+        $stops = $totalStops > 10 ? array_slice($plottable, 0, 10) : $plottable;
+        $truncatedTo = $totalStops > 10 ? 10 : null;
+
+        if (count($stops) === 1) {
+            $embedUrl = 'https://www.google.com/maps/embed/v1/place'
+                      . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
+                      . '&q='   . urlencode($stops[0]['_address']);
+        } else {
+            $origin = $stops[0]['_address'];
+            $dest   = $stops[count($stops) - 1]['_address'];
+            $mid    = array_slice($stops, 1, count($stops) - 2);
+            $wp     = $mid
+                ? implode('|', array_map(static fn ($s) => $s['_address'], $mid))
+                : '';
+
+            $embedUrl = 'https://www.google.com/maps/embed/v1/directions'
+                      . '?key=' . urlencode(GOOGLE_MAPS_API_KEY)
+                      . '&origin=' . urlencode($origin)
+                      . '&destination=' . urlencode($dest)
+                      . ($wp !== '' ? '&waypoints=' . urlencode($wp) : '')
+                      . '&mode=driving';
+        }
     }
 }
 
@@ -258,6 +304,14 @@ $activeNav = 'calendar';
                     <p class="placeholder-body">There's nothing booked for this day.</p>
                 </div>
             <?php else: ?>
+                <?php if (!$usingHome): ?>
+                    <div class="run-noaddr">
+                        No home address set on your user profile, so the route starts at the first
+                        appointment instead of from home. Set it under
+                        <a href="/admin/users_edit.php?id=<?= (int) $user['user_id'] ?>">Edit user</a>
+                        &rarr; Home address.
+                    </div>
+                <?php endif; ?>
                 <?php if (!$plottable): ?>
                     <div class="run-noaddr">
                         Appointments exist for this day but none have an installation address recorded, so the route can't be drawn.

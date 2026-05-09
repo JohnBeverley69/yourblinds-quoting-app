@@ -47,6 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'can_view_all_customer_jobs' => !empty($_POST['can_view_all_customer_jobs']) ? 1 : 0,
         'can_view_costs'             => !empty($_POST['can_view_costs']) ? 1 : 0,
     ];
+    $home = [
+        'home_address1' => trim((string) ($_POST['home_address1'] ?? '')),
+        'home_address2' => trim((string) ($_POST['home_address2'] ?? '')),
+        'home_town'     => trim((string) ($_POST['home_town']     ?? '')),
+        'home_county'   => trim((string) ($_POST['home_county']   ?? '')),
+        'home_postcode' => trim((string) ($_POST['home_postcode'] ?? '')),
+    ];
 
     $fullName = trim($first . ' ' . $last);
 
@@ -75,7 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                            can_create_quotes          = ?,
                            can_create_orders          = ?,
                            can_view_all_customer_jobs = ?,
-                           can_view_costs             = ?';
+                           can_view_costs             = ?,
+                           home_address1              = ?,
+                           home_address2              = ?,
+                           home_town                  = ?,
+                           home_county                = ?,
+                           home_postcode              = ?';
             $params = [
                 $first !== '' ? $first : null,
                 $last  !== '' ? $last  : null,
@@ -88,6 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $perms['can_create_orders'],
                 $perms['can_view_all_customer_jobs'],
                 $perms['can_view_costs'],
+                $home['home_address1'] !== '' ? $home['home_address1'] : null,
+                $home['home_address2'] !== '' ? $home['home_address2'] : null,
+                $home['home_town']     !== '' ? $home['home_town']     : null,
+                $home['home_county']   !== '' ? $home['home_county']   : null,
+                $home['home_postcode'] !== '' ? $home['home_postcode'] : null,
             ];
             if ($newPassword !== '') {
                 $sql .= ', password_hash = ?';
@@ -121,8 +138,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'username'   => $uname,
         'role'       => $role,
         'active'     => $active,
-    ] + $perms);
+    ] + $perms + $home);
 }
+
+// Postcode-lookup feature flag (gates the optional Find-by-postcode widget).
+$pcFlag = db()->prepare(
+    'SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?'
+);
+$pcFlag->execute([$clientId]);
+$postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
+
 $activeNav = 'users';
 ?><!doctype html>
 <html lang="en">
@@ -240,6 +265,61 @@ $activeNav = 'users';
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Home address
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                        Used as the start and end point for the calendar's "Today's run" map. Leave
+                        blank if the user works out of the office only.
+                    </p>
+
+                    <?php if ($postcodeLookupEnabled): ?>
+                        <?php
+                            $pcFieldMap = [
+                                'line1'    => 'home_address1',
+                                'line2'    => 'home_address2',
+                                'town'     => 'home_town',
+                                'county'   => 'home_county',
+                                'postcode' => 'home_postcode',
+                            ];
+                            require __DIR__ . '/../_partials/postcode_lookup.php';
+                        ?>
+                    <?php endif; ?>
+
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="home_address1">Address line 1</label>
+                            <input id="home_address1" name="home_address1" type="text" maxlength="150"
+                                   value="<?= e((string) ($target['home_address1'] ?? '')) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="home_address2">Address line 2</label>
+                            <input id="home_address2" name="home_address2" type="text" maxlength="150"
+                                   value="<?= e((string) ($target['home_address2'] ?? '')) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row cols-3">
+                        <div class="form-group">
+                            <label for="home_town">Town</label>
+                            <input id="home_town" name="home_town" type="text" maxlength="100"
+                                   value="<?= e((string) ($target['home_town'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="home_county">County</label>
+                            <input id="home_county" name="home_county" type="text" maxlength="100"
+                                   value="<?= e((string) ($target['home_county'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="home_postcode">Postcode</label>
+                            <input id="home_postcode" name="home_postcode" type="text" maxlength="20"
+                                   value="<?= e((string) ($target['home_postcode'] ?? '')) ?>">
+                        </div>
+                    </div>
+                </fieldset>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save changes</button>
