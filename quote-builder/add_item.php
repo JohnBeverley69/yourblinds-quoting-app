@@ -26,7 +26,7 @@ if (!qb_is_editable($quote)) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
-        'Quote is locked (status: ' . $quote['status'] . '). Reopen it to add items.'
+        'Quote is locked (status: ' . $quote['status'] . '). Reopen it to add blinds.'
     );
 }
 
@@ -160,15 +160,15 @@ try {
     qb_recompute_totals($quoteId);
     $pdo->commit();
 
-    $msg = 'Line ' . $nextLineNo . ' added (' . qb_fmt_money($priced['line_total']) . ').';
+    $msg = 'Blind ' . $nextLineNo . ' added (' . qb_fmt_money($priced['line_total']) . ').';
     if (!empty($priced['rounded_up'])) {
         $msg .= ' Rounded up to ' . qb_fmt_mm((int) $priced['matrix_width_mm'])
               . ' × ' . qb_fmt_mm((int) $priced['matrix_drop_mm']) . ' cell.';
     }
-    // Land back on the Add-line section so the user can keep adding lines
+    // Land back on the Add-line section so the user can keep adding blinds
     // without scrolling past the items table each time.
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', $msg);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add line: ' . $e->getMessage());
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add blind: ' . $e->getMessage());
 }

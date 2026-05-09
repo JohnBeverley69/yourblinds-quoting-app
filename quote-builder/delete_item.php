@@ -25,7 +25,7 @@ if (!qb_is_editable($quote)) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
-        'Quote is locked. Reopen it to remove items.'
+        'Quote is locked. Reopen it to remove blinds.'
     );
 }
 
@@ -37,4 +37,4 @@ $st->execute([$itemId, $quoteId]);
 
 qb_recompute_totals($quoteId);
 
-qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Line removed.');
+qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Blind removed.');

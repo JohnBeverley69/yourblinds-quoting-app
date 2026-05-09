@@ -354,17 +354,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Line items (<?= count($items) ?>)</h2>
+                <h2 class="section-title">Blinds (<?= count($items) ?>)</h2>
             </div>
 
             <?php if (empty($items)): ?>
                 <div class="placeholder">
-                    <p class="placeholder-title">No line items yet</p>
+                    <p class="placeholder-title">No blinds yet</p>
                     <p class="placeholder-body">
                         <?php if ($editable): ?>
                             Add one below.
                         <?php else: ?>
-                            This quote has no items.
+                            This quote has no blinds.
                         <?php endif; ?>
                     </p>
                 </div>
@@ -426,11 +426,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                     <?php if ($editable): ?>
                                         <td>
                                             <form method="post" action="/quote-builder/delete_item.php" style="margin:0"
-                                                  onsubmit="return confirm('Remove this line?');">
+                                                  onsubmit="return confirm('Remove this blind?');">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                                                 <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
-                                                <button type="submit" class="btn btn-sm btn-danger" aria-label="Delete line">&times;</button>
+                                                <button type="submit" class="btn btn-sm btn-danger" aria-label="Remove blind">&times;</button>
                                             </form>
                                         </td>
                                     <?php endif; ?>
@@ -464,12 +464,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <!-- ============== ADD LINE ITEM ============== -->
         <section class="section" id="add-line">
             <div class="section-header">
-                <h2 class="section-title">Add line item</h2>
+                <h2 class="section-title">Add blind</h2>
             </div>
 
             <noscript>
                 <div class="alert alert-info">
-                    Adding line items requires JavaScript for cascading dropdowns and live pricing.
+                    Adding blinds requires JavaScript for cascading dropdowns and live pricing.
                 </div>
             </noscript>
 
@@ -540,9 +540,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="item-notes">Line notes</label>
+                        <label for="item-notes">Notes</label>
                         <input id="item-notes" name="notes" type="text" maxlength="255"
-                               placeholder="Optional internal note for this line">
+                               placeholder="Optional internal note for this blind">
                     </div>
                 </div>
 
@@ -551,7 +551,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="item-submit" disabled>Add line</button>
+                    <button type="submit" class="btn btn-primary" id="item-submit" disabled>Add blind</button>
                 </div>
             </form>
         </section>
@@ -582,7 +582,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </form>
                 <?php endforeach; ?>
                 <form method="post" action="/quote-builder/delete.php"
-                      onsubmit="return confirm('Delete quote <?= e(addslashes((string) $quote['quote_number'])) ?>? This is permanent — all line items go too.');"
+                      onsubmit="return confirm('Delete quote <?= e(addslashes((string) $quote['quote_number'])) ?>? This is permanent — all blinds go too.');"
                       style="margin-left:auto">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
