@@ -56,22 +56,38 @@ $pcFlag->execute([$clientId]);
 $postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
 
 // Customers dropdown for the customer-details form. We build display
-// labels keyed by id so the typeahead can echo the linked customer back
-// into the search box on render.
+// labels keyed by id + a per-customer data bundle so the typeahead can
+// (a) echo the linked customer back into the search box on render, and
+// (b) populate the address fields client-side when the user picks
+// someone different.
 $custSt = db()->prepare(
-    'SELECT id, name, town, postcode FROM customers WHERE client_id = ? ORDER BY name LIMIT 500'
+    'SELECT id, name, email, phone,
+            address1, address2, town, county, postcode
+       FROM customers WHERE client_id = ? ORDER BY name LIMIT 500'
 );
 $custSt->execute([$clientId]);
 $customers = $custSt->fetchAll();
 
 $customerLabels = [];
+$customerData   = [];
 foreach ($customers as $c) {
+    $cid  = (int) $c['id'];
     $bits = array_filter([
         (string) $c['name'],
         (string) ($c['town'] ?? ''),
         (string) ($c['postcode'] ?? ''),
     ], static fn ($s) => $s !== '');
-    $customerLabels[(int) $c['id']] = implode(' — ', $bits);
+    $customerLabels[$cid] = implode(' — ', $bits);
+    $customerData[$cid]   = [
+        'name'     => (string) $c['name'],
+        'email'    => (string) ($c['email']    ?? ''),
+        'phone'    => (string) ($c['phone']    ?? ''),
+        'address1' => (string) ($c['address1'] ?? ''),
+        'address2' => (string) ($c['address2'] ?? ''),
+        'town'     => (string) ($c['town']     ?? ''),
+        'county'   => (string) ($c['county']   ?? ''),
+        'postcode' => (string) ($c['postcode'] ?? ''),
+    ];
 }
 $selectedCustomerLabel = $customerLabels[(int) ($quote['customer_id'] ?? 0)] ?? '';
 
@@ -224,8 +240,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <input type="hidden" id="customer_id" name="customer_id"
                                value="<?= (int) ($quote['customer_id'] ?? 0) ?>">
                         <datalist id="customer-options">
-                            <?php foreach ($customerLabels as $cid => $label): ?>
-                                <option value="<?= e($label) ?>" data-id="<?= (int) $cid ?>"></option>
+                            <?php foreach ($customerLabels as $cid => $label): $d = $customerData[$cid]; ?>
+                                <option value="<?= e($label) ?>"
+                                        data-id="<?= (int) $cid ?>"
+                                        data-name="<?= e($d['name']) ?>"
+                                        data-email="<?= e($d['email']) ?>"
+                                        data-phone="<?= e($d['phone']) ?>"
+                                        data-address1="<?= e($d['address1']) ?>"
+                                        data-address2="<?= e($d['address2']) ?>"
+                                        data-town="<?= e($d['town']) ?>"
+                                        data-county="<?= e($d['county']) ?>"
+                                        data-postcode="<?= e($d['postcode']) ?>"></option>
                             <?php endforeach; ?>
                         </datalist>
                         <?php if ($editable): ?>
@@ -907,27 +932,42 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
 <script>
 (function () {
-    // Customer typeahead — keep the hidden customer_id in sync with the
-    // visible search box. Runs regardless of editable mode (readonly input
-    // means there's just nothing to react to).
+    // Customer typeahead. When a match is picked:
+    //   - copy data-id into the hidden customer_id field
+    //   - populate the customer-detail fields from the data-* attrs so the
+    //     form reflects the newly-linked customer's current details.
+    // No match (free-text) → hidden id resets to 0; populated fields are
+    // left as-is so the user can finish typing without losing their work.
     var search   = document.getElementById('customer_search');
     var hidden   = document.getElementById('customer_id');
     var dataList = document.getElementById('customer-options');
     if (!search || !hidden || !dataList) return;
 
-    function syncId() {
-        var typed = search.value.trim();
-        var matched = 0;
-        for (var i = 0; i < dataList.options.length; i++) {
-            if (dataList.options[i].value === typed) {
-                matched = parseInt(dataList.options[i].dataset.id, 10) || 0;
-                break;
-            }
-        }
-        hidden.value = matched;
+    var FIELDS = ['name','email','phone','address1','address2','town','county','postcode'];
+
+    function setField(suffix, value) {
+        var el = document.getElementById(
+            suffix === 'name' ? 'end_customer_name' : 'end_customer_' + suffix
+        );
+        if (el) el.value = value || '';
     }
-    search.addEventListener('input',  syncId);
-    search.addEventListener('change', syncId);
+
+    function syncFromMatch() {
+        var typed = search.value.trim();
+        var matched = null;
+        for (var i = 0; i < dataList.options.length; i++) {
+            if (dataList.options[i].value === typed) { matched = dataList.options[i]; break; }
+        }
+        if (matched) {
+            hidden.value = matched.dataset.id || '0';
+            FIELDS.forEach(function (f) { setField(f, matched.dataset[f]); });
+        } else {
+            hidden.value = '0';
+        }
+    }
+
+    search.addEventListener('input',  syncFromMatch);
+    search.addEventListener('change', syncFromMatch);
 })();
 </script>
 </body>
