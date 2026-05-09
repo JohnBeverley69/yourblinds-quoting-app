@@ -271,8 +271,10 @@ table { border-collapse: collapse; }
 <?php endforeach; endif; ?>
 </tbody>
 <tfoot>
+<?php if ((float) ($quote['vat_percent'] ?? 0) > 0): ?>
 <tr><td colspan="3"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
 <tr><td colspan="3"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
+<?php endif; ?>
 <tr class="grand"><td colspan="3"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
 </tfoot>
 </table>

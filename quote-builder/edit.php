@@ -412,16 +412,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 </tr>
                             <?php endforeach; ?>
 
-                            <tr class="totals-row">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
-                                <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
-                                <?php if ($editable): ?><td></td><?php endif; ?>
-                            </tr>
-                            <tr class="totals-row">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
-                                <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
-                                <?php if ($editable): ?><td></td><?php endif; ?>
-                            </tr>
+                            <?php if ((float) $quote['vat_percent'] > 0): ?>
+                                <tr class="totals-row">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
+                                    <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                                <tr class="totals-row">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
+                                    <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
                             <tr class="totals-row grand">
                                 <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
