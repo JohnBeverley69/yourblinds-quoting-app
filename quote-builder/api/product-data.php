@@ -84,7 +84,7 @@ if ($extraIds) {
     $st = $pdo->prepare(
         "SELECT id, product_extra_id, label,
                 price_delta, price_percent, price_per_metre,
-                is_default, sort_order
+                is_default, sort_order, image_path
            FROM product_extra_choices
           WHERE product_extra_id IN ($ph) AND active = 1
        ORDER BY product_extra_id, sort_order, label"
@@ -117,6 +117,7 @@ if ($extraIds) {
             'system_ids' => $scopeByChoice[$cid] ?? [],
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
+            'image_url'  => !empty($r['image_path']) ? (string) $r['image_path'] : null,
         ];
     }
 }

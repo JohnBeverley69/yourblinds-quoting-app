@@ -19,7 +19,7 @@ if ($id <= 0) {
 $loadStmt = db()->prepare(
     'SELECT c.id, c.product_extra_id, c.system_id, c.label,
             c.price_delta, c.price_percent, c.price_per_metre,
-            c.is_default, c.sort_order, c.active,
+            c.is_default, c.sort_order, c.active, c.image_path,
             e.name AS extra_name, e.product_id, e.client_id,
             p.name AS product_name
        FROM product_extra_choices c
@@ -57,6 +57,21 @@ $f = [
 $error = null;
 
 $widthTablePasted = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && (string) ($_POST['_action'] ?? '') === 'remove_image'
+) {
+    csrf_check();
+    if (!empty($choice['image_path'])) {
+        $abs = APP_ROOT . '/' . ltrim((string) $choice['image_path'], '/');
+        if (is_file($abs)) @unlink($abs);
+    }
+    db()->prepare('UPDATE product_extra_choices SET image_path = NULL WHERE id = ?')
+        ->execute([$id]);
+    $_SESSION['flash_success'] = 'Thumbnail removed.';
+    header('Location: /admin/products/extra-choice-edit.php?id=' . $id);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -186,6 +201,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($widthRows as $w => $p) {
                         $ins->execute([$id, $w, $p]);
                     }
+                }
+
+                // Optional thumbnail upload. Same security pattern as the
+                // company-logo upload in admin/settings.php — validate the
+                // file is a real image via getimagesize() and pin the
+                // extension from the detected type rather than the user's
+                // filename. Replacing wipes any prior file for this choice.
+                if (isset($_FILES['image_file'])
+                    && ($_FILES['image_file']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                    $tmp = $_FILES['image_file']['tmp_name'];
+                    if (filesize($tmp) > 2 * 1024 * 1024) {
+                        throw new RuntimeException('Thumbnail too large (2 MB max).');
+                    }
+                    $info = @getimagesize($tmp);
+                    $ext  = null;
+                    if ($info !== false) {
+                        switch ($info[2]) {
+                            case IMAGETYPE_JPEG: $ext = 'jpg'; break;
+                            case IMAGETYPE_PNG:  $ext = 'png'; break;
+                            case IMAGETYPE_GIF:  $ext = 'gif'; break;
+                        }
+                    }
+                    if ($ext === null) {
+                        throw new RuntimeException('Thumbnail must be a JPG, PNG, or GIF image.');
+                    }
+                    $dir = APP_ROOT . '/uploads/choice-images';
+                    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                        throw new RuntimeException('Could not create uploads/choice-images directory.');
+                    }
+                    foreach (glob($dir . '/' . $id . '.*') ?: [] as $old) {
+                        @unlink($old);
+                    }
+                    $dest = $dir . '/' . $id . '.' . $ext;
+                    if (!move_uploaded_file($tmp, $dest)) {
+                        throw new RuntimeException('Could not save the uploaded thumbnail.');
+                    }
+                    $webPath = '/uploads/choice-images/' . $id . '.' . $ext;
+                    $pdo->prepare('UPDATE product_extra_choices SET image_path = ? WHERE id = ?')
+                        ->execute([$webPath, $id]);
                 }
 
                 $pdo->commit();
@@ -332,6 +386,40 @@ $activeNav = 'products';
                         </small>
                     </div>
                 </div>
+                <?php endif; ?>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Thumbnail image (optional)
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                        Shown to the customer in the quote builder when they pick this choice.
+                        Useful for things like wand-control orientation where the words alone
+                        ("Left", "Right", "Centre Left") aren't enough to communicate. JPG, PNG,
+                        or GIF, up to 2&nbsp;MB.
+                    </p>
+                    <?php if (!empty($choice['image_path'])): ?>
+                        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem">
+                            <img src="<?= e((string) $choice['image_path']) ?>" alt="Current thumbnail"
+                                 style="max-height:80px;max-width:160px;background:#fff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
+                            <small style="color:#6b7280;font-size:0.8125rem">
+                                Current thumbnail. Upload a new file below to replace, or use the Remove button.
+                            </small>
+                        </div>
+                    <?php endif; ?>
+                    <input type="file" name="image_file" id="image_file"
+                           accept=".jpg,.jpeg,.png,.gif,image/jpeg,image/png,image/gif"
+                           style="font:inherit">
+                </fieldset>
+
+                <?php if (!empty($choice['image_path'])): ?>
+                    <form method="post" action="/admin/products/extra-choice-edit.php?id=<?= (int) $id ?>"
+                          style="margin:0 0 1rem"
+                          onsubmit="return confirm('Remove the thumbnail for this choice?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="remove_image">
+                        <button type="submit" class="btn btn-secondary btn-sm">Remove thumbnail</button>
+                    </form>
                 <?php endif; ?>
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">

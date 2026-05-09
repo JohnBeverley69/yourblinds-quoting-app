@@ -168,6 +168,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             display: block; font-size: 0.8125rem; color: #4b5563;
             font-weight: 600; margin-bottom: 0.25rem;
         }
+        .extras-grid .choice-thumb {
+            display: block; max-width: 160px; max-height: 90px;
+            margin-top: 0.5rem; padding: 0.25rem;
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+        }
         .form-group input[type="number"], .form-group input[type="text"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
@@ -903,6 +908,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             anyVisible = true;
             var presetVal = preset[extra.id];
             var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
+            var selectedThumb = null;   // image_url of the currently-selected choice, if any
             html += '<div data-extra-id="' + extra.id + '">';
             html += '<label>' + escapeHtml(extra.name)
                   + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '')
@@ -924,10 +930,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 } else {
                     isSelected = c.is_default;
                 }
+                if (isSelected && c.image_url) {
+                    selectedThumb = c.image_url;
+                }
                 html += '<option value="' + c.id + '"'
                       + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
             });
-            html += '</select></div>';
+            html += '</select>';
+            // Show a small preview of whatever the customer just picked. The
+            // thumbnail re-renders along with the rest of the extras box on
+            // every change, so flipping choices updates the image instantly.
+            if (selectedThumb) {
+                html += '<img class="choice-thumb" src="' + escapeAttr(selectedThumb)
+                      + '" alt="" loading="lazy">';
+            }
+            html += '</div>';
         });
 
         extrasBox.innerHTML  = html;
