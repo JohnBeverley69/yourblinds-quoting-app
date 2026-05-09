@@ -44,6 +44,7 @@ $activeNav = 'products';
         }
         .row-actions button:hover { text-decoration: underline; }
         .product-name { font-weight: 600; color: #111827; }
+        a.product-name:hover { color: #1f3b5b; text-decoration: underline; }
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem;
             font-size: 0.6875rem; font-weight: 600; color: #6b7280;
@@ -107,7 +108,11 @@ $activeNav = 'products';
                                 <tr data-id="<?= (int) $p['id'] ?>">
                                     <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
-                                        <span class="product-name"><?= e((string) $p['name']) ?></span>
+                                        <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>"
+                                           class="product-name"
+                                           style="text-decoration:none">
+                                            <?= e((string) $p['name']) ?>
+                                        </a>
                                         <?php if ((int) $p['active'] !== 1): ?>
                                             <span class="inactive-pill">Inactive</span>
                                         <?php endif; ?>
