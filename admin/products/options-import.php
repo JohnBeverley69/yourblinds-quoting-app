@@ -115,82 +115,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                      || $h === 'slat' || $h === 'slat type')                      $colMap['name']     = $col;
             }
 
-            if (!isset($colMap['band']) || !isset($colMap['name'])) {
-                $error = 'Could not find both a Band column and a Name column in the uploaded file.';
-            } else {
-                $insert = db()->prepare(
-                    'INSERT INTO product_options
-                       (client_id, product_id, band_code, supplier_name,
-                        name, colour, code, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)'
-                );
-
-                $inserted = 0;
-                $skipped  = 0;
-                $blank    = 0;
-                $rowErrs  = [];
-                // Header-ish strings that should never end up as a data row, even
-                // if they appear past row 1 (e.g. when the user pasted multiple
-                // sub-header rows along with their data).
-                $headerLikeBand = ['BAND', 'BAND CODE', 'BANDCODE'];
-                $headerLikeName = ['FABRIC', 'FABRIC NAME', 'NAME', 'SLAT', 'SLAT TYPE'];
-
-                foreach ($rows as $rowNum => $row) {
-                    if ($rowNum === 1) continue; // header
-                    $band = trim((string) ($row[$colMap['band']] ?? ''));
-                    $name = trim((string) ($row[$colMap['name']] ?? ''));
-                    if ($band === '' && $name === '') { $blank++; continue; }
-                    if ($band === '' || $name === '') {
-                        $rowErrs[] = "Row $rowNum: missing " . ($band === '' ? 'band' : 'name');
-                        continue;
-                    }
-                    // Strip a leading "Band " / "BAND " prefix if the user
-                    // typed/pasted it. We want just "AAA", not "BAND AAA",
-                    // so the sort + display logic stays clean.
-                    $band = preg_replace('/^band\s+/i', '', $band);
-                    if ($band === '') {
-                        $rowErrs[] = "Row $rowNum: band code was just 'Band' with nothing after it";
-                        continue;
-                    }
-                    // Sub-header detection: skip rows where the band or name looks
-                    // like a column title (common when pasting from multi-section
-                    // supplier sheets that have repeated 'Fabric / Band' rows).
-                    if (in_array(strtoupper($band), $headerLikeBand, true)
-                     || in_array(strtoupper($name), $headerLikeName, true)) {
-                        $blank++;
-                        continue;
-                    }
-                    $supplier = isset($colMap['supplier']) ? trim((string) ($row[$colMap['supplier']] ?? '')) : '';
-                    $colour   = isset($colMap['colour'])   ? trim((string) ($row[$colMap['colour']]   ?? '')) : '';
-                    $code     = isset($colMap['code'])     ? trim((string) ($row[$colMap['code']]     ?? '')) : '';
-
-                    try {
-                        $insert->execute([
-                            $clientId,
-                            $productId,
-                            strtoupper($band),
-                            $supplier !== '' ? $supplier : null,
-                            $name,
-                            $colour !== '' ? $colour : null,
-                            $code   !== '' ? $code   : null,
-                        ]);
-                        $inserted++;
-                    } catch (PDOException $e) {
-                        if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
-                            $skipped++;
-                        } else {
-                            $rowErrs[] = "Row $rowNum: " . $e->getMessage();
-                        }
-                    }
-                }
-
-                $summary = [
-                    'inserted' => $inserted,
-                    'skipped'  => $skipped,
-                    'blank'    => $blank,
-                    'errors'   => $rowErrs,
+            // Headerless fallback — many supplier files (e.g. Decora) ship the
+            // raw data in row 1 with no header row at all. If we couldn't pin
+            // down both Band and Name from row 1, assume positional columns:
+            //   A = band, B = name, C = colour, D = supplier, E = code
+            // and process every row (including row 1) as data.
+            $hasHeaders = isset($colMap['band']) && isset($colMap['name']);
+            if (!$hasHeaders) {
+                $colMap = [
+                    'band'     => 'A',
+                    'name'     => 'B',
+                    'colour'   => 'C',
+                    'supplier' => 'D',
+                    'code'     => 'E',
                 ];
             }
+
+            // Either path — header-driven or positional — we now have a usable
+            // column map and proceed with the insert loop.
+            $insert = db()->prepare(
+                'INSERT INTO product_options
+                   (client_id, product_id, band_code, supplier_name,
+                    name, colour, code, sort_order, active)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)'
+            );
+
+            $inserted = 0;
+            $skipped  = 0;
+            $blank    = 0;
+            $rowErrs  = [];
+            // Header-ish strings that should never end up as a data row, even
+            // if they appear past row 1 (e.g. when the user pasted multiple
+            // sub-header rows along with their data).
+            $headerLikeBand = ['BAND', 'BAND CODE', 'BANDCODE'];
+            $headerLikeName = ['FABRIC', 'FABRIC NAME', 'NAME', 'SLAT', 'SLAT TYPE'];
+
+            foreach ($rows as $rowNum => $row) {
+                // Header-driven mode skips row 1 (it's the header). Positional
+                // (headerless) mode treats every row as data — including row 1.
+                if ($hasHeaders && $rowNum === 1) continue;
+
+                $band = trim((string) ($row[$colMap['band']] ?? ''));
+                $name = trim((string) ($row[$colMap['name']] ?? ''));
+                if ($band === '' && $name === '') { $blank++; continue; }
+                if ($band === '' || $name === '') {
+                    $rowErrs[] = "Row $rowNum: missing " . ($band === '' ? 'band' : 'name');
+                    continue;
+                }
+                // Strip a leading "Band " / "BAND " prefix if the user
+                // typed/pasted it. We want just "AAA", not "BAND AAA",
+                // so the sort + display logic stays clean.
+                $band = preg_replace('/^band\s+/i', '', $band);
+                if ($band === '') {
+                    $rowErrs[] = "Row $rowNum: band code was just 'Band' with nothing after it";
+                    continue;
+                }
+                // Sub-header detection: skip rows where the band or name looks
+                // like a column title (common when pasting from multi-section
+                // supplier sheets that have repeated 'Fabric / Band' rows).
+                if (in_array(strtoupper($band), $headerLikeBand, true)
+                 || in_array(strtoupper($name), $headerLikeName, true)) {
+                    $blank++;
+                    continue;
+                }
+                $supplier = isset($colMap['supplier']) ? trim((string) ($row[$colMap['supplier']] ?? '')) : '';
+                $colour   = isset($colMap['colour'])   ? trim((string) ($row[$colMap['colour']]   ?? '')) : '';
+                $code     = isset($colMap['code'])     ? trim((string) ($row[$colMap['code']]     ?? '')) : '';
+
+                try {
+                    $insert->execute([
+                        $clientId,
+                        $productId,
+                        strtoupper($band),
+                        $supplier !== '' ? $supplier : null,
+                        $name,
+                        $colour !== '' ? $colour : null,
+                        $code   !== '' ? $code   : null,
+                    ]);
+                    $inserted++;
+                } catch (PDOException $e) {
+                    if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
+                        $skipped++;
+                    } else {
+                        $rowErrs[] = "Row $rowNum: " . $e->getMessage();
+                    }
+                }
+            }
+
+            $summary = [
+                'inserted' => $inserted,
+                'skipped'  => $skipped,
+                'blank'    => $blank,
+                'errors'   => $rowErrs,
+                'mode'     => $hasHeaders ? 'header' : 'positional',
+            ];
         } catch (Throwable $e) {
             $error = 'Could not read the file: ' . $e->getMessage();
         }
@@ -250,7 +268,10 @@ $activeNav = 'products';
 
         <?php if ($summary !== null): ?>
             <div class="alert alert-success" role="status">
-                Imported <strong><?= (int) $summary['inserted'] ?></strong> <?= e($labelL) ?>s.
+                Imported <strong><?= (int) $summary['inserted'] ?></strong> <?= e($labelL) ?>s
+                (<?= $summary['mode'] === 'header'
+                    ? 'header row detected'
+                    : 'no headers — used positional A=Band B=Name C=Colour D=Supplier E=Code' ?>).
                 <?php if ($summary['skipped'] > 0): ?>
                     Skipped <?= (int) $summary['skipped'] ?> duplicate<?= $summary['skipped'] === 1 ? '' : 's' ?>.
                 <?php endif; ?>
@@ -303,7 +324,13 @@ $activeNav = 'products';
                 Open the file in Excel, paste your data into the columns, save.
                 You can leave Supplier / Colour / Code blank if you don't have them.
                 Bands like <code>A</code>, <code>B</code>, <code>AA</code>, <code>AAA</code> are
-                normalised to uppercase on import.
+                normalised to uppercase on import. A leading <code>Band&nbsp;</code> prefix
+                on the code (e.g. <code>Band AA</code>) is stripped automatically.
+                <br><br>
+                <strong>Headerless files also work:</strong> if row 1 has no recognisable
+                header (just data), the importer falls back to positional columns —
+                A&nbsp;=&nbsp;Band, B&nbsp;=&nbsp;Name, C&nbsp;=&nbsp;Colour,
+                D&nbsp;=&nbsp;Supplier, E&nbsp;=&nbsp;Code.
             </div>
         </section>
 
