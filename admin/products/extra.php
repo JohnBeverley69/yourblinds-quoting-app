@@ -210,6 +210,8 @@ $activeNav = 'products';
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
+        a.choice-label { font-weight: 600; color: #111827; text-decoration: none; }
+        a.choice-label:hover { color: #1f3b5b; text-decoration: underline; }
         .price-impact { color: #6b7280; font-size: 0.875rem; }
         .price-impact strong { color: #111827; font-weight: 600; }
     </style>
@@ -351,7 +353,10 @@ $activeNav = 'products';
                                 <tr data-id="<?= (int) $c['id'] ?>">
                                     <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
-                                        <strong><?= e((string) $c['label']) ?></strong>
+                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>"
+                                           class="choice-label">
+                                            <?= e((string) $c['label']) ?>
+                                        </a>
                                         <?php if ((int) $c['is_default'] === 1): ?>
                                             <span class="default-pill">Default</span>
                                         <?php endif; ?>
@@ -386,7 +391,6 @@ $activeNav = 'products';
                                                 <button type="submit" class="set-default">Set default</button>
                                             </form>
                                         <?php endif; ?>
-                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
                                         <form method="post" action="/admin/products/extra-choice-delete.php"
                                               onsubmit="return confirm('Delete choice <?= e(addslashes((string) $c['label'])) ?>?');">
                                             <?= csrf_field() ?>

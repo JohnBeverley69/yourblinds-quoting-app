@@ -130,6 +130,8 @@ $activeNav = 'products';
         }
         .row-actions button:hover { text-decoration: underline; }
         .system-name { font-weight: 600; color: #111827; }
+        a.system-name { text-decoration: none; }
+        a.system-name:hover { color: #1f3b5b; text-decoration: underline; }
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 600; color: #6b7280; background: #f3f4f6;
@@ -238,7 +240,10 @@ $activeNav = 'products';
                                 <tr data-id="<?= (int) $s['id'] ?>">
                                     <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
-                                        <span class="system-name"><?= e((string) $s['name']) ?></span>
+                                        <a href="/admin/products/price-tables.php?system_id=<?= (int) $s['id'] ?>"
+                                           class="system-name">
+                                            <?= e((string) $s['name']) ?>
+                                        </a>
                                         <?php if ((int) $s['is_default'] === 1): ?>
                                             <span class="default-pill">Default</span>
                                         <?php endif; ?>
@@ -255,9 +260,6 @@ $activeNav = 'products';
                                         <?= e((string) $s['updated_at']) ?>
                                     </td>
                                     <td class="row-actions">
-                                        <a href="/admin/products/price-tables.php?system_id=<?= (int) $s['id'] ?>">
-                                            Price tables &rarr;
-                                        </a>
                                         <?php if ((int) $s['is_default'] !== 1): ?>
                                             <form method="post"
                                                   action="/admin/products/systems.php?product_id=<?= (int) $productId ?>"

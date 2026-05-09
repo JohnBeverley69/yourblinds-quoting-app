@@ -132,6 +132,8 @@ $activeNav = 'products';
         }
         .row-actions button:hover { text-decoration: underline; }
         .extra-name { font-weight: 600; color: #111827; }
+        a.extra-name { text-decoration: none; }
+        a.extra-name:hover { color: #1f3b5b; text-decoration: underline; }
         .req-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 600; color: #fff; background: #1f3b5b;
@@ -280,7 +282,10 @@ $activeNav = 'products';
                                 <tr data-id="<?= (int) $x['id'] ?>"<?= !empty($x['parent_choice_id']) ? ' class="conditional-row"' : '' ?>>
                                     <td class="drag-col" title="Drag to reorder">⋮⋮</td>
                                     <td>
-                                        <span class="extra-name"><?= e((string) $x['name']) ?></span>
+                                        <a href="/admin/products/extra.php?id=<?= (int) $x['id'] ?>"
+                                           class="extra-name">
+                                            <?= e((string) $x['name']) ?>
+                                        </a>
                                         <?php if ((int) $x['is_required'] === 1): ?>
                                             <span class="req-pill">Required</span>
                                         <?php else: ?>
@@ -304,7 +309,6 @@ $activeNav = 'products';
                                         <?= e((string) $x['updated_at']) ?>
                                     </td>
                                     <td class="row-actions">
-                                        <a href="/admin/products/extra.php?id=<?= (int) $x['id'] ?>">Choices &rarr;</a>
                                         <a href="/admin/products/extra-edit.php?id=<?= (int) $x['id'] ?>">Edit</a>
                                         <form method="post" action="/admin/products/extra-delete.php"
                                               onsubmit="return confirm('Delete extra <?= e(addslashes((string) $x['name'])) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.');">

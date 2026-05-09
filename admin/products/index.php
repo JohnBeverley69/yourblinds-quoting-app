@@ -136,7 +136,6 @@ $activeNav = 'products';
                                         <?= e((string) $p['updated_at']) ?>
                                     </td>
                                     <td class="row-actions">
-                                        <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>">Edit</a>
                                         <form method="post"
                                               action="/admin/products/delete.php"
                                               onsubmit="return confirm('Delete <?= e(addslashes((string) $p['name'])) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.');">
