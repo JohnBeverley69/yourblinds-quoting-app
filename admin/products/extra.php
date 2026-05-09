@@ -389,7 +389,7 @@ $activeNav = 'products';
                         Two-column .xlsx: width in column A, price in column B. Header row optional. If a file is provided, it overrides the textarea above.
                     </p>
                     <input type="file" name="width_price_file" id="width_price_file"
-                           accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                           accept=".xlsx,.xlsm,.xls,.csv,.ods"
                            style="font:inherit">
                 </fieldset>
 

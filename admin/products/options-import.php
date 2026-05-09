@@ -348,7 +348,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label for="file">Filled template (.xlsx)</label>
                         <input id="file" name="file" type="file"
-                               accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                               accept=".xlsx,.xlsm,.xls,.csv,.ods"
                                required>
                     </div>
                 </div>
