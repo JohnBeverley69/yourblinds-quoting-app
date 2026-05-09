@@ -144,6 +144,19 @@ $custStmt = db()->prepare(
 $custStmt->execute([$clientId]);
 $customers = $custStmt->fetchAll();
 
+// Pre-build display labels keyed by id, so the typeahead can echo the
+// chosen customer's text back into the search box on validation re-render.
+$customerLabels = [];
+foreach ($customers as $c) {
+    $bits = array_filter([
+        (string) $c['name'],
+        (string) ($c['town'] ?? ''),
+        (string) ($c['postcode'] ?? ''),
+    ], static fn ($s) => $s !== '');
+    $customerLabels[(int) $c['id']] = implode(' — ', $bits);
+}
+$selectedCustomerLabel = $customerLabels[(int) $f['customer_id']] ?? '';
+
 $activeNav = 'new-quote';
 ?><!doctype html>
 <html lang="en">
@@ -181,19 +194,20 @@ $activeNav = 'new-quote';
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="customer_id">Existing customer</label>
-                        <select id="customer_id" name="customer_id">
-                            <option value="0">— None / new customer —</option>
-                            <?php foreach ($customers as $c): ?>
-                                <option value="<?= (int) $c['id'] ?>"
-                                    <?= (int) $f['customer_id'] === (int) $c['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $c['name']) ?>
-                                    <?php if (!empty($c['town']) || !empty($c['postcode'])): ?>
-                                        — <?= e(trim((string) $c['town'] . ' ' . (string) $c['postcode'])) ?>
-                                    <?php endif; ?>
-                                </option>
+                        <label for="customer_search">Existing customer</label>
+                        <input type="text" id="customer_search" list="customer-options"
+                               value="<?= e($selectedCustomerLabel) ?>"
+                               placeholder="Type to search by name, town, or postcode...">
+                        <input type="hidden" id="customer_id" name="customer_id"
+                               value="<?= (int) $f['customer_id'] ?>">
+                        <datalist id="customer-options">
+                            <?php foreach ($customerLabels as $cid => $label): ?>
+                                <option value="<?= e($label) ?>" data-id="<?= (int) $cid ?>"></option>
                             <?php endforeach; ?>
-                        </select>
+                        </datalist>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Type to filter — leave blank for a new customer.
+                        </small>
                     </div>
                 </div>
 
@@ -267,5 +281,31 @@ $activeNav = 'new-quote';
         </section>
     </main>
 </div>
+
+<script>
+(function () {
+    // Customer typeahead: when the user picks (or types an exact match for)
+    // an option from the datalist, copy its data-id into the hidden
+    // customer_id field. Anything else clears it (= new customer).
+    var search   = document.getElementById('customer_search');
+    var hidden   = document.getElementById('customer_id');
+    var dataList = document.getElementById('customer-options');
+    if (!search || !hidden || !dataList) return;
+
+    function syncId() {
+        var typed = search.value.trim();
+        var matched = 0;
+        for (var i = 0; i < dataList.options.length; i++) {
+            if (dataList.options[i].value === typed) {
+                matched = parseInt(dataList.options[i].dataset.id, 10) || 0;
+                break;
+            }
+        }
+        hidden.value = matched;
+    }
+    search.addEventListener('input',  syncId);
+    search.addEventListener('change', syncId);
+})();
+</script>
 </body>
 </html>

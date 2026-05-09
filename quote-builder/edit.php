@@ -48,12 +48,25 @@ $prodSt = db()->prepare(
 $prodSt->execute([$clientId]);
 $products = $prodSt->fetchAll();
 
-// Customers dropdown for the customer-details form.
+// Customers dropdown for the customer-details form. We build display
+// labels keyed by id so the typeahead can echo the linked customer back
+// into the search box on render.
 $custSt = db()->prepare(
     'SELECT id, name, town, postcode FROM customers WHERE client_id = ? ORDER BY name LIMIT 500'
 );
 $custSt->execute([$clientId]);
 $customers = $custSt->fetchAll();
+
+$customerLabels = [];
+foreach ($customers as $c) {
+    $bits = array_filter([
+        (string) $c['name'],
+        (string) ($c['town'] ?? ''),
+        (string) ($c['postcode'] ?? ''),
+    ], static fn ($s) => $s !== '');
+    $customerLabels[(int) $c['id']] = implode(' — ', $bits);
+}
+$selectedCustomerLabel = $customerLabels[(int) ($quote['customer_id'] ?? 0)] ?? '';
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -168,19 +181,23 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="customer_id">Linked customer</label>
-                        <select id="customer_id" name="customer_id" <?= !$editable ? 'disabled' : '' ?>>
-                            <option value="0">— None —</option>
-                            <?php foreach ($customers as $c): ?>
-                                <option value="<?= (int) $c['id'] ?>"
-                                    <?= (int) ($quote['customer_id'] ?? 0) === (int) $c['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $c['name']) ?>
-                                    <?php if (!empty($c['town']) || !empty($c['postcode'])): ?>
-                                        — <?= e(trim((string) $c['town'] . ' ' . (string) $c['postcode'])) ?>
-                                    <?php endif; ?>
-                                </option>
+                        <label for="customer_search">Linked customer</label>
+                        <input type="text" id="customer_search" list="customer-options"
+                               value="<?= e($selectedCustomerLabel) ?>"
+                               placeholder="Type to search by name, town, or postcode..."
+                               <?= !$editable ? 'readonly' : '' ?>>
+                        <input type="hidden" id="customer_id" name="customer_id"
+                               value="<?= (int) ($quote['customer_id'] ?? 0) ?>">
+                        <datalist id="customer-options">
+                            <?php foreach ($customerLabels as $cid => $label): ?>
+                                <option value="<?= e($label) ?>" data-id="<?= (int) $cid ?>"></option>
                             <?php endforeach; ?>
-                        </select>
+                        </datalist>
+                        <?php if ($editable): ?>
+                            <small style="color:#6b7280;font-size:0.8125rem">
+                                Type to filter — leave blank to unlink.
+                            </small>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -729,5 +746,31 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 })();
 </script>
 <?php endif; ?>
+
+<script>
+(function () {
+    // Customer typeahead — keep the hidden customer_id in sync with the
+    // visible search box. Runs regardless of editable mode (readonly input
+    // means there's just nothing to react to).
+    var search   = document.getElementById('customer_search');
+    var hidden   = document.getElementById('customer_id');
+    var dataList = document.getElementById('customer-options');
+    if (!search || !hidden || !dataList) return;
+
+    function syncId() {
+        var typed = search.value.trim();
+        var matched = 0;
+        for (var i = 0; i < dataList.options.length; i++) {
+            if (dataList.options[i].value === typed) {
+                matched = parseInt(dataList.options[i].dataset.id, 10) || 0;
+                break;
+            }
+        }
+        hidden.value = matched;
+    }
+    search.addEventListener('input',  syncId);
+    search.addEventListener('change', syncId);
+})();
+</script>
 </body>
 </html>
