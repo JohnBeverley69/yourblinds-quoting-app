@@ -722,14 +722,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-top:0.5rem">
-                    <button type="submit" class="btn btn-danger"
-                            style="font-size:1rem;padding:0.75rem 1.5rem;font-weight:600">
+                    <button type="submit"
+                            style="background:#dc2626;color:#000;font-size:1rem;font-weight:700;padding:0.75rem 1.5rem;border:0;border-radius:8px;cursor:pointer">
                         📧 Email PDF + accept link
                     </button>
                     <?php if ($waEnabled): ?>
                         <a href="https://wa.me/<?= e($waPhone) ?>?text=<?= e(rawurlencode($waMessage)) ?>"
-                           class="btn btn-danger" target="_blank" rel="noopener"
-                           style="font-size:1rem;padding:0.75rem 1.5rem;font-weight:600">
+                           target="_blank" rel="noopener"
+                           style="display:inline-block;background:#25D366;color:#000;font-size:1rem;font-weight:700;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none">
                             💬 Send via WhatsApp
                         </a>
                     <?php endif; ?>
