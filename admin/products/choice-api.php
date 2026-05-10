@@ -292,6 +292,15 @@ try {
         case 'duplicate':
             $sourceId = (int) ($_POST['choice_id'] ?? 0);
 
+            // Optional system_id override — when an existing-row multi-
+            // select spawns a sibling for a specific system, we pass it
+            // here. Default NULL ("all systems") matches the original
+            // Dup-button behaviour.
+            $cloneSystemId = null;
+            if (isset($_POST['system_id'])) {
+                $cloneSystemId = $validateSystemId($_POST['system_id']);
+            }
+
             $srcSt = $pdo->prepare(
                 'SELECT label, image_path,
                         price_delta, price_percent, price_per_metre,
@@ -313,10 +322,11 @@ try {
                    (product_extra_id, system_id, label, image_path,
                     price_delta, price_percent, price_per_metre,
                     is_default, sort_order, active)
-                 VALUES (?, NULL, ?, ?, ?, ?, ?, 0, ?, ?)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)'
             );
             $ins->execute([
                 $extraId,
+                $cloneSystemId,
                 (string) $src['label'],
                 $src['image_path'],
                 $src['price_delta'], $src['price_percent'], $src['price_per_metre'],

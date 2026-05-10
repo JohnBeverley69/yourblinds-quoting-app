@@ -81,17 +81,60 @@ $sysStmt = db()->prepare(
 $sysStmt->execute([(int) $extra['product_id'], $clientId]);
 $systems = $sysStmt->fetchAll();
 
-// Helper closure used both for existing rows and the bottom blank row.
-// Encapsulates the dropdown HTML so the markup below stays compact.
-$renderSystemSelect = static function (?int $selected, string $cls = '') use ($systems): string {
-    $opts = '<option value="0"' . ($selected === null ? ' selected' : '') . '>All systems</option>';
-    foreach ($systems as $s) {
-        $sid = (int) $s['id'];
-        $sel = ($selected === $sid) ? ' selected' : '';
-        $opts .= '<option value="' . $sid . '"' . $sel . '>'
-               . e((string) $s['name']) . '</option>';
+// Helper closure for an existing row's "Available on" multi-select.
+//
+// Each existing row gets a checkbox dropdown identical-looking to the
+// new-row one. The current system_id is pre-ticked AND disabled — the
+// user can't untick what's already saved (use the × button to delete).
+// Other systems are clickable; ticking spawns a sibling row (clone)
+// for that system. "All systems" is shown but disabled because
+// "extending an All-systems row to a specific system" would create
+// overlapping coverage; if the user really wants to switch, they can
+// delete + re-add.
+$renderSystemMultiSelect = static function (?int $currentSystemId) use ($systems): string {
+    $isAll = $currentSystemId === null;
+
+    // Summary text: current system name (or "All systems").
+    $summaryText = 'All systems';
+    if (!$isAll) {
+        foreach ($systems as $s) {
+            if ((int) $s['id'] === $currentSystemId) {
+                $summaryText = (string) $s['name'];
+                break;
+            }
+        }
     }
-    return '<select class="cell-select' . ($cls !== '' ? ' ' . $cls : '') . '">' . $opts . '</select>';
+
+    $html  = '<details class="multi-select row-multi">';
+    $html .= '<summary>' . e($summaryText) . '</summary>';
+    $html .= '<div class="multi-opts">';
+
+    // "All systems" — ticked + disabled if current. Otherwise disabled
+    // (deliberately — see comment above).
+    $html .= '<label>'
+           . '<input type="checkbox" class="row-system-tick" data-system="0"'
+           . ($isAll ? ' checked' : '') . ' disabled>'
+           . ' <strong>All systems</strong>'
+           . '</label>';
+
+    if ($systems) {
+        $html .= '<hr>';
+        foreach ($systems as $s) {
+            $sid       = (int) $s['id'];
+            $isCurrent = ($sid === $currentSystemId);
+            // Disabled if it's the current row's system (locked) OR
+            // current is NULL (would create overlap with "All systems").
+            $disabled  = $isCurrent || $isAll;
+            $html .= '<label>'
+                   . '<input type="checkbox" class="row-system-tick" data-system="' . $sid . '"'
+                   . ($isCurrent ? ' checked' : '')
+                   . ($disabled ? ' disabled' : '')
+                   . '> ' . e((string) $s['name'])
+                   . '</label>';
+        }
+    }
+    $html .= '</div></details>';
+    return $html;
 };
 
 $activeNav = 'products';
@@ -310,14 +353,7 @@ $activeNav = 'products';
                                            maxlength="150">
                                 </td>
                                 <td class="col-system">
-                                    <?php
-                                        // Manually emit the dropdown so we can attach data-field.
-                                        echo str_replace(
-                                            '<select class="cell-select"',
-                                            '<select class="cell-select" data-field="system_id"',
-                                            $renderSystemSelect($sysId)
-                                        );
-                                    ?>
+                                    <?= $renderSystemMultiSelect($sysId) ?>
                                 </td>
                                 <td class="col-price">
                                     <input class="cell-input num" data-field="price_delta"
@@ -599,28 +635,13 @@ $activeNav = 'products';
         // Label.
         tr.appendChild(cellInput('label', choice.label, { col: 'label', maxlength: 150 }));
 
-        // System dropdown — single-select for existing rows (changing
-        // here means MOVE this row to another system, not duplicate it
-        // — the multi-select lives only on the new-row).
+        // System multi-select — same widget as the new-row, but with the
+        // current row's system pre-ticked + disabled (use × to delete).
+        // Other ticks spawn sibling rows. See the PHP renderSystemMulti
+        // Select() helper for the canonical structure.
         var tdSys = document.createElement('td');
         tdSys.className = 'col-system';
-        var sel = document.createElement('select');
-        sel.className = 'cell-select';
-        sel.dataset.field = 'system_id';
-        var optAll = document.createElement('option');
-        optAll.value = '0';
-        optAll.textContent = 'All systems';
-        if (choice.system_id == null) optAll.selected = true;
-        sel.appendChild(optAll);
-        systemsList.forEach(function (s) {
-            var o = document.createElement('option');
-            o.value = String(s.id);
-            o.textContent = s.name;
-            if (choice.system_id === s.id) o.selected = true;
-            sel.appendChild(o);
-        });
-        captureLast(sel);
-        tdSys.appendChild(sel);
+        tdSys.appendChild(buildSystemMultiSelect(choice.system_id == null ? null : choice.system_id));
         tr.appendChild(tdSys);
 
         // Prices.
@@ -650,6 +671,90 @@ $activeNav = 'products';
         countLabel.textContent = '(' + n + ')';
     }
 
+    // Build the existing-row multi-select widget — DOM mirror of the
+    // PHP renderSystemMultiSelect() helper. Used by buildRow when a new
+    // row is freshly inserted (after spawn or duplicate).
+    function buildSystemMultiSelect(currentSystemId) {
+        var isAll = currentSystemId == null;
+
+        var details = document.createElement('details');
+        details.className = 'multi-select row-multi';
+
+        var summary = document.createElement('summary');
+        summary.textContent = 'All systems';
+        if (!isAll) {
+            for (var i = 0; i < systemsList.length; i++) {
+                if (systemsList[i].id === currentSystemId) {
+                    summary.textContent = systemsList[i].name;
+                    break;
+                }
+            }
+        }
+        details.appendChild(summary);
+
+        var opts = document.createElement('div');
+        opts.className = 'multi-opts';
+
+        // "All systems" — ticked + disabled if current; else disabled.
+        var allLabel = document.createElement('label');
+        var allCb    = document.createElement('input');
+        allCb.type    = 'checkbox';
+        allCb.className = 'row-system-tick';
+        allCb.dataset.system = '0';
+        allCb.disabled = true;
+        if (isAll) allCb.checked = true;
+        var allStrong = document.createElement('strong');
+        allStrong.textContent = 'All systems';
+        allLabel.appendChild(allCb);
+        allLabel.appendChild(document.createTextNode(' '));
+        allLabel.appendChild(allStrong);
+        opts.appendChild(allLabel);
+
+        if (systemsList.length) {
+            var hr = document.createElement('hr');
+            opts.appendChild(hr);
+
+            systemsList.forEach(function (s) {
+                var lbl = document.createElement('label');
+                var cb  = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'row-system-tick';
+                cb.dataset.system = String(s.id);
+                var isCurrent = (s.id === currentSystemId);
+                if (isCurrent) cb.checked = true;
+                if (isCurrent || isAll) cb.disabled = true;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(' ' + s.name));
+                opts.appendChild(lbl);
+            });
+        }
+
+        details.appendChild(opts);
+        return details;
+    }
+
+    // Spawn a sibling row for a given system, by duplicating the source
+    // row server-side with that system_id. Inserts the new row in the
+    // grid right after the source. The tick that triggered the spawn
+    // is reset (the source row didn't change; a new row was created).
+    function spawnSibling(sourceRow, systemId, checkbox) {
+        return withSavingState(sourceRow, api('duplicate', {
+            choice_id: sourceRow.dataset.id,
+            system_id: systemId
+        })).then(function (data) {
+            var newRowEl = buildRow(data.choice);
+            sourceRow.parentNode.insertBefore(newRowEl, sourceRow.nextSibling);
+            updateCount();
+            // Source row isn't on the new system — untick + close the
+            // dropdown so the source's state stays accurate.
+            checkbox.checked = false;
+            var details = checkbox.closest('details');
+            if (details) details.open = false;
+        }).catch(function () {
+            checkbox.checked = false;
+        });
+    }
+
     // ---- Event wiring ----------------------------------------------------
 
     // Capture last-saved values on focus so blurs without changes are no-ops.
@@ -664,6 +769,21 @@ $activeNav = 'products';
     // Save existing-row cells on blur (text/number) or change (selects/checkboxes).
     body.addEventListener('change', function (e) {
         var el = e.target;
+
+        // Existing-row multi-select tick → spawn a sibling row for that
+        // system. Don't fall through to saveCell — it's a row create,
+        // not a field update on this row.
+        if (el.classList.contains('row-system-tick')) {
+            // The new-row's multi-select uses different classes, so we
+            // don't accidentally double-handle here.
+            if (!el.checked) return;
+            if (el.dataset.system === '0') return;   // disabled in HTML; defensive
+            var sourceRow = el.closest('tr');
+            if (!sourceRow || !sourceRow.dataset.id) return;
+            spawnSibling(sourceRow, el.dataset.system, el);
+            return;
+        }
+
         if (el === newLabel || el === newSystem) return;
         if (el.matches('select.cell-select, input[type="checkbox"]')) {
             saveCell(el);
@@ -770,11 +890,12 @@ $activeNav = 'products';
         }
     });
 
-    // Close the dropdown when clicking outside.
+    // Close ANY open multi-select dropdown (new-row or existing-row)
+    // when clicking outside it.
     document.addEventListener('click', function (e) {
-        if (newSystem.open && !newSystem.contains(e.target)) {
-            newSystem.open = false;
-        }
+        document.querySelectorAll('details.multi-select[open]').forEach(function (d) {
+            if (!d.contains(e.target)) d.open = false;
+        });
     });
 
     function commitNewRow(focusNext) {
