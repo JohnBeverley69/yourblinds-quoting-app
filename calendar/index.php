@@ -644,66 +644,106 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         reschedule(id, '');
     });
 
-    // -- Live-poll the Pending tray ---------------------------------
-    // New acceptances land in the tray as soon as a customer clicks
-    // Accept on the public link. Polling here so the trade user sees
-    // new pending jobs without manually refreshing.
+    // -- Live polling: Pending tray + calendar grid ------------------
+    // One round-trip every 15s updates both halves of the page so trade
+    // users see new acceptances, drag-rescheduling done by colleagues,
+    // edits made in another tab — all without manually reloading.
     //
-    // Keeps shared-hosting friendly: 15s interval, only while the
-    // page is visible, only swaps DOM if the ID set actually changed
-    // (so someone reading a card doesn't get the text re-rendered
-    // under their cursor on every poll).
-    var pollEndpoint = '/calendar/pending.php' + (window.location.search.indexOf('mine=1') !== -1 ? '?mine=1' : '');
+    // Shared-hosting friendly: small SELECTs, runs only while the tab
+    // is visible, only swaps DOM if the relevant payload actually
+    // changed (so a card the user is looking at doesn't get re-rendered
+    // under their cursor every 15s).
+    var currentMonth = '<?= e($firstOfMonth->format('Y-m')) ?>';
+    var pollEndpoint = '/calendar/pending.php?month=' + encodeURIComponent(currentMonth)
+        + (window.location.search.indexOf('mine=1') !== -1 ? '&mine=1' : '');
     var pollMs = 15000;
     var pollTimer = null;
+    var lastPendingJson = null;
+    var lastGridJson    = null;
 
-    function currentPendingIds() {
-        var ids = [];
-        pendingCards.querySelectorAll('.pending-card').forEach(function (c) {
-            ids.push(c.dataset.id);
-        });
-        return ids.sort().join(',');
-    }
-
-    function refreshPendingTray() {
+    function refreshAll() {
         // Bail if the user is mid-drag — don't yank the card out from
-        // under them.
+        // under them, and don't shuffle the cells while they're aiming.
         if (dragId) return;
 
         fetch(pollEndpoint, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !data.ok) return;
-                var newIds = data.pending.map(function (p) { return String(p.id); }).sort().join(',');
-                if (newIds === currentPendingIds()) return;  // no change
 
-                // Rebuild the tray contents.
-                var html = '';
-                if (data.pending.length === 0) {
-                    html = '<span class="pending-empty">Nothing pending. Accepted quotes land here until you place them on a date.</span>';
-                } else {
-                    data.pending.forEach(function (p) {
-                        var meta = [];
-                        if (p.town)     meta.push(p.town);
-                        if (p.postcode) meta.push(p.postcode);
-                        html += '<div class="pending-card" draggable="true"'
-                             +  ' data-id="' + p.id + '"'
-                             +  ' title="' + escapeAttr(p.title) + '">'
-                             +    '<span class="pc-title">' + escapeHtml(p.title) + '</span>'
-                             +    (meta.length
-                                    ? '<span class="pc-meta">' + escapeHtml(meta.join(' · ')) + '</span>'
-                                    : '')
-                             +  '</div>';
-                    });
+                var pendingJson = JSON.stringify(data.pending);
+                if (pendingJson !== lastPendingJson) {
+                    renderPending(data.pending);
+                    lastPendingJson = pendingJson;
                 }
-                pendingCards.innerHTML = html;
-                pendingCount.textContent = data.pending.length;
 
-                // Re-bind drag on the new cards.
-                pendingCards.querySelectorAll('.pending-card').forEach(bindDraggable);
+                var gridJson = JSON.stringify(data.grid);
+                if (gridJson !== lastGridJson) {
+                    renderGrid(data.grid);
+                    lastGridJson = gridJson;
+                }
             })
             .catch(function () { /* network blip — try again next tick */ });
     }
+
+    function renderPending(pending) {
+        var html = '';
+        if (pending.length === 0) {
+            html = '<span class="pending-empty">Nothing pending. Accepted quotes land here until you place them on a date.</span>';
+        } else {
+            pending.forEach(function (p) {
+                var meta = [];
+                if (p.town)     meta.push(p.town);
+                if (p.postcode) meta.push(p.postcode);
+                html += '<div class="pending-card" draggable="true"'
+                     +  ' data-id="' + p.id + '"'
+                     +  ' title="' + escapeAttr(p.title) + '">'
+                     +    '<span class="pc-title">' + escapeHtml(p.title) + '</span>'
+                     +    (meta.length
+                            ? '<span class="pc-meta">' + escapeHtml(meta.join(' · ')) + '</span>'
+                            : '')
+                     +  '</div>';
+            });
+        }
+        pendingCards.innerHTML = html;
+        pendingCount.textContent = pending.length;
+        pendingCards.querySelectorAll('.pending-card').forEach(bindDraggable);
+    }
+
+    function renderGrid(byDate) {
+        document.querySelectorAll('.cal-cell[data-date]').forEach(function (cell) {
+            var date  = cell.dataset.date;
+            var appts = (byDate && byDate[date]) ? byDate[date] : [];
+            var existing = cell.querySelector('.cal-appts');
+
+            if (appts.length === 0) {
+                if (existing) existing.remove();
+                return;
+            }
+
+            var html = '';
+            appts.forEach(function (a) {
+                html += '<a class="cal-appt status-' + escapeAttr(a.status) + '"'
+                     +  ' href="/calendar/view.php?id=' + a.id + '"'
+                     +  ' draggable="true" data-id="' + a.id + '"'
+                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status) + '">'
+                     +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
+                     +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
+                     +  '</a>';
+            });
+
+            if (existing) {
+                existing.innerHTML = html;
+            } else {
+                var wrap = document.createElement('div');
+                wrap.className = 'cal-appts';
+                wrap.innerHTML = html;
+                cell.appendChild(wrap);
+            }
+            cell.querySelectorAll('.cal-appt[draggable="true"]').forEach(bindDraggable);
+        });
+    }
+
     function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
             return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
@@ -713,7 +753,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
 
     function startPolling() {
         if (pollTimer !== null) return;
-        pollTimer = setInterval(refreshPendingTray, pollMs);
+        pollTimer = setInterval(refreshAll, pollMs);
     }
     function stopPolling() {
         if (pollTimer === null) return;
@@ -725,7 +765,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
             stopPolling();
         } else {
             // Refresh once immediately on tab return, then resume.
-            refreshPendingTray();
+            refreshAll();
             startPolling();
         }
     });
@@ -748,11 +788,11 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                 return data;
             });
         }).then(function () {
-            // Simplest reliable update: reload the page to re-render
-            // both tray and grid in their new state. The page is small
-            // and this avoids a fragile DOM-shuffle that has to deal
-            // with month boundaries, cell limits etc.
-            window.location.reload();
+            // Pull the freshest state from the server (also picks up
+            // anything any other open tab / colleague has done in
+            // between). Surgical DOM update via the same path the
+            // polling loop uses — no full page reload, no flash.
+            refreshAll();
         }).catch(function (err) {
             alert(err.message || 'Could not reschedule.');
         });
