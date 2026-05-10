@@ -36,6 +36,7 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
                 c.postcode     AS trade_postcode,
                 c.email        AS trade_email,
                 c.phone        AS trade_phone,
+                c.vat_number   AS trade_vat_number,
                 c.logo_path    AS trade_logo,
                 cs.quote_footer
            FROM quotes q
@@ -206,7 +207,10 @@ table { border-collapse: collapse; }
 <?= e((string) $quote['trade_phone']) ?><br>
 <?php endif; ?>
 <?php if (!empty($quote['trade_email'])): ?>
-<?= e((string) $quote['trade_email']) ?>
+<?= e((string) $quote['trade_email']) ?><br>
+<?php endif; ?>
+<?php if (!empty($quote['trade_vat_number'])): ?>
+VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <?php endif; ?>
 </div>
 </td>

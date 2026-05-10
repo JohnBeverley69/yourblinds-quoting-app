@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     contact_name       = ?,
                     email              = ?,
                     phone              = ?,
+                    vat_number         = ?,
                     address1           = ?,
                     address2           = ?,
                     town               = ?,
@@ -40,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) ($_POST['contact_name']       ?? '')) ?: null,
             trim((string) ($_POST['email']              ?? '')) ?: null,
             trim((string) ($_POST['phone']              ?? '')) ?: null,
+            trim((string) ($_POST['vat_number']         ?? '')) ?: null,
             trim((string) ($_POST['address1']           ?? '')) ?: null,
             trim((string) ($_POST['address2']           ?? '')) ?: null,
             trim((string) ($_POST['town']               ?? '')) ?: null,
@@ -225,6 +227,19 @@ $activeNav = 'settings';
                         <label for="phone">Phone</label>
                         <input id="phone" name="phone" type="tel" maxlength="50"
                                value="<?= e((string) ($client['phone'] ?? '')) ?>">
+                    </div>
+                </div>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="vat_number">VAT number</label>
+                        <input id="vat_number" name="vat_number" type="text" maxlength="50"
+                               value="<?= e((string) ($client['vat_number'] ?? '')) ?>"
+                               placeholder="e.g. GB123456789">
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Leave blank if your business isn't VAT-registered.
+                            When set, it appears below your contact details on every quote PDF.
+                        </small>
                     </div>
                 </div>
 
