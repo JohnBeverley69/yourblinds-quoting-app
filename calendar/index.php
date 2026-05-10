@@ -315,6 +315,14 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         .cal-appt.status-cancelled { background: #dc2626; }
         .cal-appt.status-no_show   { background: #6b7280; }
 
+        /* Cards born from an accepted-quote drag (quote_id is set)
+           render in green so confirmed installations stand out from
+           plain manual bookings. Overrides the status-* colour
+           because it's a more specific signal — "this is work the
+           customer has signed off, schedule with confidence". */
+        .cal-appt.from-quote.status-booked,
+        .cal-appt.from-quote.status-completed { background: #16a34a; }
+
         /* ----- Tablet portrait & smaller: stack toolbar, slightly smaller cells. */
         @media (max-width: 900px) {
             .app-main { padding: 1rem; }
@@ -540,7 +548,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                         <?php if ($appts): ?>
                             <div class="cal-appts">
                                 <?php foreach ($appts as $a): ?>
-                                    <a class="cal-appt status-<?= e((string) $a['status']) ?>"
+                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
@@ -723,7 +731,8 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
 
             var html = '';
             appts.forEach(function (a) {
-                html += '<a class="cal-appt status-' + escapeAttr(a.status) + '"'
+                var fromQuoteCls = a.quote_id ? ' from-quote' : '';
+                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  ' title="' + escapeAttr(a.title + ' — ' + a.status) + '">'
