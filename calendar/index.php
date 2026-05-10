@@ -477,7 +477,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                                 if (!empty($pa['installation_postcode'])) $metaBits[] = (string) $pa['installation_postcode'];
                             ?>
                             <?php if ($metaBits): ?>
-                                <span class="pc-meta"><?= e(implode(' &middot; ', $metaBits)) ?></span>
+                                <span class="pc-meta"><?= e(implode(' · ', $metaBits)) ?></span>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
