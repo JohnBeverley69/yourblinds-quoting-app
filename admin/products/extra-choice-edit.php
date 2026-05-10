@@ -318,6 +318,13 @@ $activeNav = 'products';
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
+        <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+            Label, prices, system, default and active toggles are all editable inline on the
+            <a href="/admin/products/extra.php?id=<?= (int) $choice['product_extra_id'] ?>">choices list</a>.
+            This page is for the deeper edits — <strong>width-table pricing</strong> and
+            <strong>thumbnail image upload</strong> — that don't fit the inline grid.
+        </p>
+
         <section class="section">
             <form method="post" action="/admin/products/extra-choice-edit.php?id=<?= (int) $id ?>"
                   class="form" novalidate enctype="multipart/form-data">
@@ -348,12 +355,6 @@ $activeNav = 'products';
                         <input id="price_per_metre" name="price_per_metre" type="number"
                                step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
                     </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save changes</button>
-                    <a href="/admin/products/extra.php?id=<?= (int) $choice['product_extra_id'] ?>"
-                       class="btn btn-secondary">Cancel</a>
                 </div>
 
                 <?php if ($systems): ?>
