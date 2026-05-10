@@ -31,7 +31,7 @@ $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $productId = (int) ($_GET['product_id'] ?? 0);
 $q         = trim((string) ($_GET['q'] ?? ''));
-$limit     = max(1, min(200, (int) ($_GET['limit'] ?? 200)));
+$limit     = max(1, min(500, (int) ($_GET['limit'] ?? 500)));
 
 if ($productId <= 0) {
     echo json_encode(['fabrics' => [], 'error' => 'product_id required']);
@@ -44,11 +44,16 @@ if ($q === '') {
     // Empty query — return the alphabetically-first $limit fabrics so the
     // user gets *something* to scroll on the very first focus, before
     // they type a single character.
+    //
+    // Order by NAME first (not band_code) so the result mixes bands
+    // fairly. Otherwise a tenant with a large band-A catalogue would
+    // fill the whole limit with band A and never see B/C/D on the
+    // empty-focus dropdown — exactly the bug the user reported.
     $st = $pdo->prepare(
         "SELECT id, band_code, supplier_name, name, colour, code
            FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1
-       ORDER BY band_code, supplier_name, name, colour
+       ORDER BY name, colour, band_code, supplier_name
           LIMIT $limit"
     );
     $st->execute([$productId, $clientId]);
