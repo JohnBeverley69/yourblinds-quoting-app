@@ -41,9 +41,11 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 // CSRF — accept either header (XHR) or form field (fallback).
-$token = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? '');
-$expected = (string) ($_SESSION['csrf_token'] ?? '');
-if ($expected === '' || !hash_equals($expected, $token)) {
+// The session key is _csrf (set by csrf_token() in auth/middleware.php),
+// not csrf_token. Using the helper keeps us aligned with the rest of
+// the app even if that ever changes.
+$token = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['_csrf'] ?? '');
+if (!hash_equals(csrf_token(), $token)) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'CSRF token invalid — reload the page.']);
     exit;
