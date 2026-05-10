@@ -85,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please choose a valid appointment date.';
     } elseif ($f['appointment_time'] === ''
               || (DateTimeImmutable::createFromFormat('H:i', $f['appointment_time']) === false
+                  && DateTimeImmutable::createFromFormat('G:i', $f['appointment_time']) === false
                   && DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']) === false)) {
         $error = 'Please choose a valid appointment time.';
     } elseif ($f['duration_minutes'] < 5 || $f['duration_minutes'] > 1440) {
@@ -106,7 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($error === null) {
             // Normalise time to HH:MM:SS for storage.
-            $timeObj = DateTimeImmutable::createFromFormat('H:i', $f['appointment_time'])
+            $timeObj = DateTimeImmutable::createFromFormat('H:i',   $f['appointment_time'])
+                    ?: DateTimeImmutable::createFromFormat('G:i',   $f['appointment_time'])
                     ?: DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']);
             $timeStored = $timeObj->format('H:i:s');
 
@@ -414,8 +416,24 @@ $activeNav = 'calendar';
                         <div class="form-group">
                             <label for="appointment_time">Time <span class="required">*</span></label>
                             <input id="appointment_time" name="appointment_time"
-                                   type="time" required
+                                   type="text" required
+                                   pattern="[0-9]{1,2}:[0-9]{2}"
+                                   placeholder="HH:MM (e.g. 09:30)"
+                                   list="time-options"
                                    value="<?= e((string) $f['appointment_time']) ?>">
+                            <datalist id="time-options">
+                                <option value="08:00"><option value="08:30">
+                                <option value="09:00"><option value="09:30">
+                                <option value="10:00"><option value="10:30">
+                                <option value="11:00"><option value="11:30">
+                                <option value="12:00"><option value="12:30">
+                                <option value="13:00"><option value="13:30">
+                                <option value="14:00"><option value="14:30">
+                                <option value="15:00"><option value="15:30">
+                                <option value="16:00"><option value="16:30">
+                                <option value="17:00"><option value="17:30">
+                                <option value="18:00">
+                            </datalist>
                         </div>
                         <div class="form-group">
                             <label for="duration_minutes">Duration (mins)</label>
