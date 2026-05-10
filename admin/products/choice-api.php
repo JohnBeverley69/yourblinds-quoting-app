@@ -157,10 +157,42 @@ try {
             if ($label === '')             throw new RuntimeException('Label is required.');
             if (strlen($label) > 150)      throw new RuntimeException('Label too long (150 max).');
 
-            $systemIdToStore = $validateSystemId($_POST['system_id'] ?? null);
+            // Accept system_ids[] (multi-select on the new-row, the
+            // common case) or system_id (single, for any older clients
+            // / scripts). Each entry becomes one row.
+            //
+            // Empty array, missing, or 0 / "" → one row with NULL
+            // (= "all systems"). A 0/empty mixed in with specific ids
+            // overrides the rest — "all systems" can't be combined with
+            // a partial list since they'd be redundant.
+            $rawList = [];
+            if (isset($_POST['system_ids']) && is_array($_POST['system_ids'])) {
+                $rawList = $_POST['system_ids'];
+            } elseif (isset($_POST['system_id'])) {
+                $rawList = [$_POST['system_id']];
+            }
 
+            $systemIdsToStore = [];
+            $hasAll = (count($rawList) === 0);  // missing → all systems
+            foreach ($rawList as $raw) {
+                $sid = $validateSystemId($raw);
+                if ($sid === null) { $hasAll = true; continue; }
+                if (!in_array($sid, $systemIdsToStore, true)) {
+                    $systemIdsToStore[] = $sid;
+                }
+            }
+            if ($hasAll) {
+                // "All systems" is dominant — collapse to a single NULL row.
+                $systemIdsToStore = [null];
+            }
+            if (empty($systemIdsToStore)) {
+                $systemIdsToStore = [null]; // defensive
+            }
+
+            // Insert one row per chosen system. sort_order increments so
+            // they land in the same visual block.
+            $created   = [];
             $sortOrder = $nextSortOrder();
-
             $ins = $pdo->prepare(
                 'INSERT INTO product_extra_choices
                    (product_extra_id, system_id, label,
@@ -168,10 +200,18 @@ try {
                     is_default, sort_order, active)
                  VALUES (?, ?, ?, 0, 0, 0, 0, ?, 1)'
             );
-            $ins->execute([$extraId, $systemIdToStore, $label, $sortOrder]);
-            $newId = (int) $pdo->lastInsertId();
+            foreach ($systemIdsToStore as $sid) {
+                $ins->execute([$extraId, $sid, $label, $sortOrder++]);
+                $created[] = $fetchChoice((int) $pdo->lastInsertId());
+            }
 
-            echo json_encode(['ok' => true, 'choice' => $fetchChoice($newId)]);
+            echo json_encode([
+                'ok'      => true,
+                'choices' => $created,
+                // Back-compat for any caller still expecting a single
+                // 'choice' field (older JS during a brief deploy gap).
+                'choice'  => $created[0] ?? null,
+            ]);
             break;
 
         // -----------------------------------------------------------------

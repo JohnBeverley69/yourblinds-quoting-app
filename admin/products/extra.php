@@ -181,6 +181,50 @@ $activeNav = 'products';
         .grid-table tr.new-row td:first-child { color: #d1d5db; }
         .grid-table tr.new-row .cell-input::placeholder { color: #9ca3af; font-style: italic; }
 
+        /* Multi-system selector on the new-row. Built on <details> so
+           we get show/hide for free; the styling makes the closed
+           summary look like a normal cell-select, and the open panel
+           floats above the table with a checkbox per system. */
+        .multi-select { position: relative; }
+        .multi-select > summary {
+            list-style: none; cursor: pointer;
+            font: inherit; padding: 0.4375rem 1.75rem 0.4375rem 0.5rem;
+            border: 1px solid transparent; border-radius: 6px;
+            background: transparent; color: #111827;
+            position: relative;
+        }
+        .multi-select > summary::-webkit-details-marker { display: none; }
+        .multi-select > summary::after {
+            content: '▾'; position: absolute; right: 0.5rem; top: 50%;
+            transform: translateY(-50%); color: #6b7280; font-size: 0.75rem;
+        }
+        .multi-select > summary:hover {
+            border-color: #d1d5db; background: #fff;
+        }
+        .multi-select[open] > summary {
+            border-color: #1f3b5b; background: #fff;
+            box-shadow: 0 0 0 3px rgba(31, 59, 91, 0.12);
+        }
+        .multi-opts {
+            position: absolute; top: 100%; left: 0; right: 0;
+            margin-top: 4px; padding: 0.375rem;
+            background: #fff; border: 1px solid #d1d5db;
+            border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            z-index: 30; min-width: 200px;
+        }
+        .multi-opts label {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.375rem 0.5rem; cursor: pointer; border-radius: 6px;
+            font-size: 0.9375rem; color: #111827;
+        }
+        .multi-opts label:hover { background: #eef2f7; }
+        .multi-opts input[type="checkbox"] {
+            width: 16px; height: 16px; margin: 0;
+        }
+        .multi-opts hr {
+            margin: 0.25rem 0; border: 0; border-top: 1px solid #f3f4f6;
+        }
+
         .row-error {
             color: #b91c1c; font-size: 0.8125rem; padding: 0.25rem 0.5rem 0;
         }
@@ -312,7 +356,10 @@ $activeNav = 'products';
                             </tr>
                         <?php endforeach; ?>
 
-                        <!-- Bottom "type to add" row. Always present, never has a server id. -->
+                        <!-- Bottom "type to add" row. Always present, never has a server id.
+                             The system cell is a multi-select: ticking 2+ systems creates
+                             one row per system in a single save (each row gets its own
+                             price line, ready for per-system tweaks). -->
                         <tr class="new-row" id="new-row">
                             <td class="col-drag">+</td>
                             <td class="col-label">
@@ -321,16 +368,29 @@ $activeNav = 'products';
                                        maxlength="150">
                             </td>
                             <td class="col-system">
-                                <?php
-                                    echo str_replace(
-                                        '<select class="cell-select"',
-                                        '<select class="cell-select" id="new-system"',
-                                        $renderSystemSelect(null)
-                                    );
-                                ?>
+                                <details class="multi-select" id="new-system">
+                                    <summary id="new-system-summary">All systems</summary>
+                                    <div class="multi-opts">
+                                        <label>
+                                            <input type="checkbox" id="new-system-all" checked>
+                                            <span><strong>All systems</strong></span>
+                                        </label>
+                                        <?php if ($systems): ?>
+                                            <hr>
+                                            <?php foreach ($systems as $s): ?>
+                                                <label>
+                                                    <input type="checkbox"
+                                                           class="new-system-one"
+                                                           value="<?= (int) $s['id'] ?>">
+                                                    <span><?= e((string) $s['name']) ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </details>
                             </td>
                             <td colspan="6" style="color:#9ca3af;font-size:0.8125rem">
-                                Prices, default + active toggles become editable once the row is saved.
+                                Tick one or more systems above. Prices and toggles become editable once saved.
                             </td>
                         </tr>
                     </tbody>
@@ -355,13 +415,26 @@ $activeNav = 'products';
     var extraId  = <?= (int) $extraId ?>;
     var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    var grid       = document.getElementById('choices-grid');
-    var body       = document.getElementById('choices-body');
-    var indicator  = document.getElementById('save-indicator');
-    var countLabel = document.getElementById('choices-count');
-    var newRow     = document.getElementById('new-row');
-    var newLabel   = document.getElementById('new-label');
-    var newSystem  = document.getElementById('new-system');
+    // Systems list, mirrored from PHP, for building system dropdowns
+    // on freshly-inserted rows (after create or duplicate).
+    var systemsList = <?= json_encode(
+        array_map(static fn ($s) => [
+            'id'   => (int) $s['id'],
+            'name' => (string) $s['name'],
+        ], $systems),
+        JSON_THROW_ON_ERROR
+    ) ?>;
+
+    var grid           = document.getElementById('choices-grid');
+    var body           = document.getElementById('choices-body');
+    var indicator      = document.getElementById('save-indicator');
+    var countLabel     = document.getElementById('choices-count');
+    var newRow         = document.getElementById('new-row');
+    var newLabel       = document.getElementById('new-label');
+    var newSystem      = document.getElementById('new-system');           // <details>
+    var newSystemSummary = document.getElementById('new-system-summary');
+    var newSystemAll   = document.getElementById('new-system-all');
+    var newSystemOnes  = document.querySelectorAll('.new-system-one');
 
     var hideTimer  = null;
     function flashIndicator(message, isError) {
@@ -526,13 +599,26 @@ $activeNav = 'products';
         // Label.
         tr.appendChild(cellInput('label', choice.label, { col: 'label', maxlength: 150 }));
 
-        // System dropdown — clone the new-row's select so options match.
+        // System dropdown — single-select for existing rows (changing
+        // here means MOVE this row to another system, not duplicate it
+        // — the multi-select lives only on the new-row).
         var tdSys = document.createElement('td');
         tdSys.className = 'col-system';
-        var sel = newSystem.cloneNode(true);
-        sel.removeAttribute('id');
+        var sel = document.createElement('select');
+        sel.className = 'cell-select';
         sel.dataset.field = 'system_id';
-        sel.value = choice.system_id == null ? '0' : String(choice.system_id);
+        var optAll = document.createElement('option');
+        optAll.value = '0';
+        optAll.textContent = 'All systems';
+        if (choice.system_id == null) optAll.selected = true;
+        sel.appendChild(optAll);
+        systemsList.forEach(function (s) {
+            var o = document.createElement('option');
+            o.value = String(s.id);
+            o.textContent = s.name;
+            if (choice.system_id === s.id) o.selected = true;
+            sel.appendChild(o);
+        });
         captureLast(sel);
         tdSys.appendChild(sel);
         tr.appendChild(tdSys);
@@ -633,39 +719,121 @@ $activeNav = 'products';
         }
     });
 
-    // ---- New-row creation ------------------------------------------------
+    // ---- New-row creation (multi-system) --------------------------------
+
+    // "All systems" and the per-system checkboxes are mutually exclusive.
+    // Ticking "All" clears specifics; ticking any specific clears "All".
+    // If everything ends up unticked, snap back to "All" so we never have
+    // an indeterminate selection.
+    function syncMultiSelect(changed) {
+        if (changed === newSystemAll) {
+            if (newSystemAll.checked) {
+                newSystemOnes.forEach(function (cb) { cb.checked = false; });
+            }
+        } else if (changed && changed.classList.contains('new-system-one')) {
+            if (changed.checked) newSystemAll.checked = false;
+        }
+        var anyOne = false;
+        newSystemOnes.forEach(function (cb) { if (cb.checked) anyOne = true; });
+        if (!anyOne && !newSystemAll.checked) newSystemAll.checked = true;
+
+        // Update the summary text. "All systems" / single name / "Vogue +
+        // Nova" / "3 systems" depending on count.
+        var picked = [];
+        newSystemOnes.forEach(function (cb) {
+            if (cb.checked) {
+                var span = cb.parentNode.querySelector('span');
+                picked.push(span ? span.textContent : cb.value);
+            }
+        });
+        if (newSystemAll.checked || picked.length === 0) {
+            newSystemSummary.textContent = 'All systems';
+        } else if (picked.length === 1) {
+            newSystemSummary.textContent = picked[0];
+        } else if (picked.length === 2) {
+            newSystemSummary.textContent = picked.join(' + ');
+        } else {
+            newSystemSummary.textContent = picked.length + ' systems';
+        }
+    }
+
+    function resetMultiSelect() {
+        newSystemAll.checked = true;
+        newSystemOnes.forEach(function (cb) { cb.checked = false; });
+        syncMultiSelect();
+    }
+
+    // Wire the checkboxes.
+    newSystem.addEventListener('change', function (e) {
+        if (e.target.matches('input[type="checkbox"]')) {
+            syncMultiSelect(e.target);
+        }
+    });
+
+    // Close the dropdown when clicking outside.
+    document.addEventListener('click', function (e) {
+        if (newSystem.open && !newSystem.contains(e.target)) {
+            newSystem.open = false;
+        }
+    });
 
     function commitNewRow(focusNext) {
         var label = newLabel.value.trim();
         if (label === '') return Promise.resolve();
-        var sysId = newSystem.value || '0';
 
-        // Briefly highlight the new row while the request is in flight.
-        newRow.classList.add('is-saving');
-        return api('create', { label: label, system_id: sysId })
-            .then(function (data) {
-                newRow.classList.remove('is-saving');
-                newRow.classList.add('just-saved');
-                setTimeout(function () { newRow.classList.remove('just-saved'); }, 700);
-                flashIndicator('Saved');
-
-                // Insert the real row immediately above the new-row.
-                var realRow = buildRow(data.choice);
-                body.insertBefore(realRow, newRow);
-                updateCount();
-
-                // Reset the new-row inputs ready for another entry.
-                newLabel.value = '';
-                newSystem.value = '0';
-
-                if (focusNext) newLabel.focus();
-            })
-            .catch(function (err) {
-                newRow.classList.remove('is-saving');
-                newRow.classList.add('is-error');
-                flashIndicator(err.message || 'Could not add', true);
-                setTimeout(function () { newRow.classList.remove('is-error'); }, 2000);
+        // Build the system_ids[] payload. "All systems" = no entries
+        // (server treats missing as "all").
+        var fd = new FormData();
+        fd.append('label', label);
+        if (!newSystemAll.checked) {
+            newSystemOnes.forEach(function (cb) {
+                if (cb.checked) fd.append('system_ids[]', cb.value);
             });
+        }
+
+        newRow.classList.add('is-saving');
+
+        // Use api() but with our pre-built FormData. Bypass the helper
+        // since system_ids is an array, which the helper's flat-key loop
+        // would mangle.
+        fd.append('action',   'create');
+        fd.append('extra_id', String(extraId));
+
+        return fetch(endpoint, {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().then(function (data) {
+                if (!data.ok) throw new Error(data.error || 'Unknown error.');
+                return data;
+            });
+        }).then(function (data) {
+            newRow.classList.remove('is-saving');
+            newRow.classList.add('just-saved');
+            setTimeout(function () { newRow.classList.remove('just-saved'); }, 700);
+
+            // Insert each created row above the new-row, in order.
+            var rows = data.choices || (data.choice ? [data.choice] : []);
+            rows.forEach(function (c) {
+                body.insertBefore(buildRow(c), newRow);
+            });
+            updateCount();
+            flashIndicator(rows.length === 1 ? 'Saved' : 'Saved (' + rows.length + ' rows)');
+
+            // Reset the new-row ready for another entry.
+            newLabel.value = '';
+            resetMultiSelect();
+            newSystem.open = false;
+
+            if (focusNext) newLabel.focus();
+        }).catch(function (err) {
+            newRow.classList.remove('is-saving');
+            newRow.classList.add('is-error');
+            flashIndicator(err.message || 'Could not add', true);
+            setTimeout(function () { newRow.classList.remove('is-error'); }, 2000);
+        });
     }
 
     newLabel.addEventListener('keydown', function (e) {
@@ -674,33 +842,27 @@ $activeNav = 'products';
             commitNewRow(true); // focus stays in label for rapid entry
         } else if (e.key === 'Escape') {
             newLabel.value = '';
-            newSystem.value = '0';
+            resetMultiSelect();
+            newSystem.open = false;
         }
     });
-    // Tab from label → system dropdown (default behaviour). Tab from
-    // system dropdown → trigger save and move on, otherwise the user's
-    // typed label would silently sit unsaved.
-    newSystem.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            commitNewRow(true);
-        }
-    });
-    // Blurring the new-row entirely (focus moves outside both inputs)
-    // should also commit — small delay so Tab from label → system
-    // doesn't trip it. Same handler on both inputs so leaving via
-    // either one saves the typed label.
+
+    // Blurring the new-row entirely (focus moves outside the label input
+    // AND the multi-select dropdown) should also commit — small delay
+    // so navigating between them doesn't trip it.
     function maybeCommitNewRow() {
         setTimeout(function () {
-            if (document.activeElement !== newSystem
-             && document.activeElement !== newLabel
+            var active = document.activeElement;
+            var insideMs = newSystem.contains(active);
+            if (active !== newLabel
+             && !insideMs
              && newLabel.value.trim() !== '') {
                 commitNewRow(false);
             }
-        }, 120);
+        }, 150);
     }
-    newLabel.addEventListener('blur',  maybeCommitNewRow);
-    newSystem.addEventListener('blur', maybeCommitNewRow);
+    newLabel.addEventListener('blur', maybeCommitNewRow);
+    newSystem.addEventListener('focusout', maybeCommitNewRow);
 })();
 </script>
 </body>
