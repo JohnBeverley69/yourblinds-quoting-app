@@ -1,6 +1,24 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Choices editor — spreadsheet-style inline grid.
+ *
+ * Every cell is editable in place: type-and-blur or type-and-tab/enter
+ * to save. Adding a new choice = type a label in the bottom row, hit
+ * Enter. No separate form, no page reloads, no detour through an edit
+ * page for routine tweaks. The detour only kicks in for width tables
+ * + thumbnail uploads (the "…" link on each row), since those need a
+ * proper file picker / textarea.
+ *
+ * All writes go through /admin/products/choice-api.php which validates
+ * tenant scope, the field whitelist, and the "one default per (extra,
+ * system)" invariant.
+ *
+ * The page itself only renders the initial HTML and seeds the JS with
+ * the systems list + extra id. Once the JS is up, the page never reloads.
+ */
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -9,7 +27,7 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$extraId = (int) ($_GET['id'] ?? $_POST['extra_id'] ?? 0);
+$extraId = (int) ($_GET['id'] ?? 0);
 if ($extraId <= 0) {
     header('Location: /admin/products/index.php');
     exit;
@@ -37,307 +55,24 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f = [
-    'label'           => '',
-    'price_delta'     => '0.00',
-    'price_percent'   => '0.00',
-    'price_per_metre' => '0.00',
-    'is_default'      => 0,
-    'system_id'       => 0,   // 0 = available on all systems
-];
-$error            = null;
-$widthTablePasted = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create_choice') {
-    csrf_check();
-
-    $f['label']           = trim((string) ($_POST['label'] ?? ''));
-    $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
-    $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
-    $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
-    $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
-    $f['system_id']       = (int) ($_POST['system_id'] ?? 0);
-    $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
-
-    if ($f['label'] === '') {
-        $error = 'Label is required.';
-    } elseif (strlen($f['label']) > 150) {
-        $error = 'Label is too long (max 150 chars).';
-    } elseif (!is_numeric($f['price_delta'])) {
-        $error = 'Flat surcharge must be a number.';
-    } elseif (!is_numeric($f['price_percent'])) {
-        $error = 'Percent surcharge must be a number.';
-    } elseif (!is_numeric($f['price_per_metre'])) {
-        $error = 'Per-metre surcharge must be a number.';
-    } else {
-        require_once __DIR__ . '/../../_partials/price_table_parser.php';
-
-        // Width-based price table — optional. Either a pasted textarea or an
-        // uploaded .xlsx; file wins. Empty input = no rows added.
-        $uploadedPath = null;
-        if (isset($_FILES['width_price_file'])
-            && ($_FILES['width_price_file']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-            $tmp = $_FILES['width_price_file']['tmp_name'];
-            if (filesize($tmp) > 5 * 1024 * 1024) {
-                $error = 'File too large (5 MB max).';
-            } else {
-                $uploadedPath = $tmp;
-            }
-        }
-
-        $widthRows = [];
-        if ($error === null) {
-            $parsed = ptp_parse_width_price_input($widthTablePasted, $uploadedPath);
-            if ($parsed['error'] !== null) {
-                $error = $parsed['error'];
-            } else {
-                $widthRows = $parsed['rows'];
-            }
-        }
-
-        if ($error === null) {
-            try {
-                $pdo = db();
-                $pdo->beginTransaction();
-
-                // Validate the chosen system (if any) belongs to this
-                // product's catalogue — POST inputs aren't trustworthy.
-                // 0 = "available on all systems" → store as NULL.
-                $systemIdToStore = null;
-                if ($f['system_id'] > 0) {
-                    $vsSt = $pdo->prepare(
-                        'SELECT id FROM product_systems
-                          WHERE id = ? AND product_id = ? AND client_id = ?
-                          LIMIT 1'
-                    );
-                    $vsSt->execute([$f['system_id'], (int) $extra['product_id'], $clientId]);
-                    if ($vsSt->fetchColumn() !== false) {
-                        $systemIdToStore = $f['system_id'];
-                    }
-                }
-
-                // If marking this as default, clear default on sibling
-                // choices that compete for the same system (= same
-                // system_id, treating NULL and a system_id as separate
-                // namespaces). One default per (extra, system) is the
-                // new model.
-                if ($f['is_default'] === 1) {
-                    if ($systemIdToStore === null) {
-                        $clear = $pdo->prepare(
-                            'UPDATE product_extra_choices SET is_default = 0
-                              WHERE product_extra_id = ? AND system_id IS NULL'
-                        );
-                        $clear->execute([$extraId]);
-                    } else {
-                        $clear = $pdo->prepare(
-                            'UPDATE product_extra_choices SET is_default = 0
-                              WHERE product_extra_id = ? AND system_id = ?'
-                        );
-                        $clear->execute([$extraId, $systemIdToStore]);
-                    }
-                }
-
-                // sort_order = MAX+1 so new choices append to the end of
-                // the list (drag-and-drop owns ordering after that).
-                $sortStmt = $pdo->prepare(
-                    'SELECT COALESCE(MAX(sort_order), -1) + 1
-                       FROM product_extra_choices
-                      WHERE product_extra_id = ?'
-                );
-                $sortStmt->execute([$extraId]);
-                $nextSort = (int) $sortStmt->fetchColumn();
-
-                $ins = $pdo->prepare(
-                    'INSERT INTO product_extra_choices
-                       (product_extra_id, system_id, label,
-                        price_delta, price_percent, price_per_metre,
-                        is_default, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
-                );
-                $ins->execute([
-                    $extraId,
-                    $systemIdToStore,
-                    $f['label'],
-                    (float) $f['price_delta'],
-                    (float) $f['price_percent'],
-                    (float) $f['price_per_metre'],
-                    $f['is_default'],
-                    $nextSort,
-                ]);
-                $newChoiceId = (int) $pdo->lastInsertId();
-
-                if ($widthRows) {
-                    $rowIns = $pdo->prepare(
-                        'INSERT INTO extra_choice_price_rows
-                           (product_extra_choice_id, width_mm, price)
-                         VALUES (?, ?, ?)'
-                    );
-                    foreach ($widthRows as $w => $p) {
-                        $rowIns->execute([$newChoiceId, $w, $p]);
-                    }
-                }
-
-                $pdo->commit();
-                $_SESSION['flash_success'] = 'Choice "' . $f['label'] . '" added.';
-                header('Location: /admin/products/extra.php?id=' . $extraId);
-                exit;
-            } catch (Throwable $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                $error = 'Could not add: ' . $e->getMessage();
-            }
-        }
-    }
-}
-
-// Duplicate a choice — clone label/prices/image/width-table, leave the
-// new row's system_id NULL so the user can pick the system for it on the
-// edit page. Saves rekeying when the same colour applies on more than one
-// system at the same price.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'duplicate_choice') {
-    csrf_check();
-    $sourceId = (int) ($_POST['choice_id'] ?? 0);
-    if ($sourceId > 0) {
-        $pdo = db();
-        $pdo->beginTransaction();
-        try {
-            // Tenant-scoped source lookup so a stray POST can't clone a
-            // choice from another client's catalogue.
-            $sourceSt = $pdo->prepare(
-                'SELECT c.label, c.image_path,
-                        c.price_delta, c.price_percent, c.price_per_metre,
-                        c.is_default, c.sort_order, c.active
-                   FROM product_extra_choices c
-                   JOIN product_extras e ON e.id = c.product_extra_id
-                  WHERE c.id = ? AND c.product_extra_id = ? AND e.client_id = ?
-                  LIMIT 1'
-            );
-            $sourceSt->execute([$sourceId, $extraId, $clientId]);
-            $source = $sourceSt->fetch();
-            if (!$source) {
-                throw new RuntimeException('Source choice not found.');
-            }
-
-            // Sort just after the source so the clone lands next to it.
-            $nextSort = (int) $source['sort_order'] + 1;
-
-            // Insert with system_id=NULL and is_default=0; the user picks
-            // both on the edit page they're sent to.
-            $cloneSt = $pdo->prepare(
-                'INSERT INTO product_extra_choices
-                   (product_extra_id, system_id, label, image_path,
-                    price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active)
-                 VALUES (?, NULL, ?, ?, ?, ?, ?, 0, ?, ?)'
-            );
-            $cloneSt->execute([
-                $extraId,
-                (string) $source['label'],
-                $source['image_path'],
-                $source['price_delta'],
-                $source['price_percent'],
-                $source['price_per_metre'],
-                $nextSort,
-                (int) $source['active'],
-            ]);
-            $newId = (int) $pdo->lastInsertId();
-
-            // Copy width-table rows so per-clone editing stays isolated.
-            $wSrc = $pdo->prepare(
-                'SELECT width_mm, price FROM extra_choice_price_rows
-                  WHERE product_extra_choice_id = ?'
-            );
-            $wSrc->execute([$sourceId]);
-            $wIns = $pdo->prepare(
-                'INSERT INTO extra_choice_price_rows
-                   (product_extra_choice_id, width_mm, price)
-                 VALUES (?, ?, ?)'
-            );
-            foreach ($wSrc->fetchAll(PDO::FETCH_ASSOC) as $w) {
-                $wIns->execute([$newId, (int) $w['width_mm'], $w['price']]);
-            }
-
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Choice duplicated. Pick a system and adjust the price below.';
-            header('Location: /admin/products/extra-choice-edit.php?id=' . $newId);
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not duplicate: ' . $e->getMessage();
-            header('Location: /admin/products/extra.php?id=' . $extraId);
-            exit;
-        }
-    }
-}
-
-// Mark a choice as default — one default per (extra, system) bucket.
-// "All systems" choices (system_id IS NULL) form their own bucket so
-// they don't get cleared by a system-specific default.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'set_default_choice') {
-    csrf_check();
-    $targetId = (int) ($_POST['choice_id'] ?? 0);
-    if ($targetId > 0) {
-        $pdo = db();
-        $pdo->beginTransaction();
-        try {
-            // Look up the target's system_id so we know which bucket
-            // to clear.
-            $tSt = $pdo->prepare(
-                'SELECT system_id FROM product_extra_choices
-                  WHERE id = ? AND product_extra_id = ? LIMIT 1'
-            );
-            $tSt->execute([$targetId, $extraId]);
-            $targetSystemId = $tSt->fetchColumn();
-
-            if ($targetSystemId === null || $targetSystemId === false) {
-                $clear = $pdo->prepare(
-                    'UPDATE product_extra_choices SET is_default = 0
-                      WHERE product_extra_id = ? AND system_id IS NULL'
-                );
-                $clear->execute([$extraId]);
-            } else {
-                $clear = $pdo->prepare(
-                    'UPDATE product_extra_choices SET is_default = 0
-                      WHERE product_extra_id = ? AND system_id = ?'
-                );
-                $clear->execute([$extraId, (int) $targetSystemId]);
-            }
-
-            $set = $pdo->prepare(
-                'UPDATE product_extra_choices SET is_default = 1
-                  WHERE id = ? AND product_extra_id = ?'
-            );
-            $set->execute([$targetId, $extraId]);
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Default choice updated.';
-            header('Location: /admin/products/extra.php?id=' . $extraId);
-            exit;
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not set default: ' . $e->getMessage();
-        }
-    }
-}
-
-// Sort by sort_order alone — drag-and-drop controls position. The 'default'
-// pill still shows but doesn't override the user's drag. system_id is
-// joined to its product_systems row so we can show the system name
-// inline ("Vogue", "Nova", "All systems").
+// Sort by sort_order alone — drag-and-drop owns position. system_id
+// is joined to its product_systems row so we can label the dropdown's
+// selected option without a second query per row.
 $rows = db()->prepare(
     'SELECT c.id, c.label, c.system_id,
             c.price_delta, c.price_percent, c.price_per_metre,
-            c.is_default, c.sort_order, c.active,
-            ps.name AS system_name,
+            c.is_default, c.sort_order, c.active, c.image_path,
             (SELECT COUNT(*) FROM extra_choice_price_rows r
               WHERE r.product_extra_choice_id = c.id) AS width_table_size
        FROM product_extra_choices c
-       LEFT JOIN product_systems ps ON ps.id = c.system_id
       WHERE c.product_extra_id = ?
    ORDER BY c.sort_order, c.label'
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
 
-// Systems available on this product, for the system dropdown.
+// Systems available on this product, for every system dropdown the
+// page renders (existing rows + the bottom blank row).
 $sysStmt = db()->prepare(
     'SELECT id, name FROM product_systems
       WHERE product_id = ? AND client_id = ?
@@ -346,60 +81,116 @@ $sysStmt = db()->prepare(
 $sysStmt->execute([(int) $extra['product_id'], $clientId]);
 $systems = $sysStmt->fetchAll();
 
+// Helper closure used both for existing rows and the bottom blank row.
+// Encapsulates the dropdown HTML so the markup below stays compact.
+$renderSystemSelect = static function (?int $selected, string $cls = '') use ($systems): string {
+    $opts = '<option value="0"' . ($selected === null ? ' selected' : '') . '>All systems</option>';
+    foreach ($systems as $s) {
+        $sid = (int) $s['id'];
+        $sel = ($selected === $sid) ? ' selected' : '';
+        $opts .= '<option value="' . $sid . '"' . $sel . '>'
+               . e((string) $s['name']) . '</option>';
+    }
+    return '<select class="cell-select' . ($cls !== '' ? ' ' . $cls : '') . '">' . $opts . '</select>';
+};
+
 $activeNav = 'products';
 ?><!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title><?= e((string) $extra['name']) ?> &middot; Choices &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
-        .form-row.cols-5 { grid-template-columns: 2fr 1fr 1fr 1fr 0.75fr; align-items: end; }
-        @media (max-width: 900px) {
-            .form-row.cols-5 { grid-template-columns: 1fr; }
+        /* Spreadsheet-style choices grid. Each cell looks plain until
+           focused, then shows a clear edit affordance. Aim is to make
+           the page feel like a tight data grid, not a form-and-list. */
+        .grid-table { width: 100%; border-collapse: collapse; }
+        .grid-table thead th {
+            text-align: left; font-size: 0.75rem; font-weight: 700;
+            color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;
+            padding: 0.5rem 0.5rem; border-bottom: 2px solid #e5e7eb;
+            background: #f9fafb;
         }
-        .form-group input[type="number"] {
-            width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+        .grid-table tbody td {
+            padding: 0.25rem 0.25rem; border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
         }
-        .checkbox-row {
-            display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
-            padding: 0.5625rem 0; margin: 0;
+        .grid-table tbody tr:hover td { background: #fafbfd; }
+        .grid-table tbody tr.is-saving td { background: #fefce8; }
+        .grid-table tbody tr.just-saved td {
+            background: #ecfdf5; transition: background 600ms ease-out;
         }
-        .checkbox-row input { width: 18px; height: 18px; }
-        .row-actions { white-space: nowrap; }
-        .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
-        .row-actions a.follow-up {
-            color: #15803d; text-decoration: none;
+        .grid-table tbody tr.is-error td { background: #fef2f2; }
+        .grid-table tbody tr.is-inactive td .cell-input,
+        .grid-table tbody tr.is-inactive td .cell-select {
+            opacity: 0.55; text-decoration: line-through;
         }
-        .row-actions a.follow-up:hover { text-decoration: underline; }
-        .row-actions form { display: inline; margin: 0; }
-        .row-actions button {
-            font-size: 0.875rem; color: #b91c1c; background: transparent;
-            border: 0; cursor: pointer; padding: 0; margin-left: 0.5rem;
+
+        /* Editable cells — invisible until interaction. */
+        .cell-input, .cell-select {
+            font: inherit; width: 100%; box-sizing: border-box;
+            padding: 0.4375rem 0.5rem; background: transparent;
+            border: 1px solid transparent; border-radius: 6px;
+            color: #111827;
         }
-        .row-actions button.set-default {
-            color: #1f3b5b;
+        .cell-input.num { text-align: right; font-variant-numeric: tabular-nums; }
+        /* Suppress the browser's number-input spinners — the right-aligned
+           digits read better without them, and the user can edit freely. */
+        .cell-input.num::-webkit-outer-spin-button,
+        .cell-input.num::-webkit-inner-spin-button {
+            -webkit-appearance: none; margin: 0;
         }
-        .row-actions button:hover { text-decoration: underline; }
-        .default-pill {
-            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-            font-weight: 700; color: #fff; background: #16a34a;
-            border-radius: 999px; margin-left: 0.5rem;
-            text-transform: uppercase; letter-spacing: 0.05em;
+        .cell-input.num { -moz-appearance: textfield; }
+        .cell-input:hover, .cell-select:hover {
+            border-color: #d1d5db; background: #fff;
         }
-        .system-pill {
-            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-            font-weight: 700; color: #fff; background: #1f3b5b;
-            border-radius: 999px; margin-left: 0.5rem;
-            text-transform: uppercase; letter-spacing: 0.05em;
+        .cell-input:focus, .cell-select:focus {
+            outline: none; border-color: #1f3b5b; background: #fff;
+            box-shadow: 0 0 0 3px rgba(31, 59, 91, 0.12);
         }
-        a.choice-label { font-weight: 600; color: #111827; text-decoration: none; }
-        a.choice-label:hover { color: #1f3b5b; text-decoration: underline; }
-        .price-impact { color: #6b7280; font-size: 0.875rem; }
-        .price-impact strong { color: #111827; font-weight: 600; }
+
+        .grid-table th.col-drag,    .grid-table td.col-drag    { width: 28px; padding-left: 0.25rem; padding-right: 0; color: #9ca3af; cursor: grab; text-align: center; }
+        .grid-table th.col-label,   .grid-table td.col-label   { min-width: 180px; }
+        .grid-table th.col-system,  .grid-table td.col-system  { width: 200px; }
+        .grid-table th.col-price,   .grid-table td.col-price   { width: 96px; }
+        .grid-table th.col-toggle,  .grid-table td.col-toggle  { width: 72px; text-align: center; }
+        .grid-table th.col-actions, .grid-table td.col-actions { width: 130px; text-align: right; white-space: nowrap; }
+
+        .col-toggle input[type="checkbox"] {
+            width: 18px; height: 18px; cursor: pointer; margin: 0;
+        }
+
+        .row-actions a, .row-actions button {
+            font-size: 0.8125rem; padding: 0.25rem 0.5rem; margin: 0 0 0 0.125rem;
+            border: 0; background: transparent; cursor: pointer; border-radius: 6px;
+            color: #1f3b5b; text-decoration: none;
+        }
+        .row-actions a:hover, .row-actions button:hover {
+            background: #eef2f7;
+        }
+        .row-actions .btn-more { color: #4b5563; }
+        .row-actions .btn-delete { color: #b91c1c; }
+        .row-actions .btn-delete:hover { background: #fee2e2; }
+
+        /* Bottom blank row gets a softer background so it reads as a
+           "type to add" affordance rather than a real row. */
+        .grid-table tr.new-row td { background: #f9fafb; }
+        .grid-table tr.new-row td:first-child { color: #d1d5db; }
+        .grid-table tr.new-row .cell-input::placeholder { color: #9ca3af; font-style: italic; }
+
+        .row-error {
+            color: #b91c1c; font-size: 0.8125rem; padding: 0.25rem 0.5rem 0;
+        }
+
+        .save-indicator {
+            display: inline-block; font-size: 0.8125rem; color: #6b7280;
+            margin-left: 0.5rem; opacity: 0; transition: opacity 200ms;
+        }
+        .save-indicator.is-visible { opacity: 1; }
+        .save-indicator.is-error { color: #b91c1c; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -428,244 +219,489 @@ $activeNav = 'products';
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
-        <?php if ($error !== null): ?>
-            <div class="alert alert-error" role="alert"><?= e($error) ?></div>
-        <?php endif; ?>
 
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Add choice</h2>
+                <h2 class="section-title">
+                    Choices <span id="choices-count">(<?= count($choices) ?>)</span>
+                    <span id="save-indicator" class="save-indicator">Saving…</span>
+                </h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
-                Four independent surcharge modes; any (or none) can apply per choice.
-                <strong>Flat £</strong> = fixed add-on (e.g. Motor +£45).
-                <strong>Percent %</strong> = on the base price (e.g. Blackout +15%).
-                <strong>£/metre</strong> = multiplied by the blind width in metres
-                (e.g. Champagne headrail at £8/m → on a 2.4m wide blind = +£19.20).
-                <strong>Width table</strong> (below) = lookup by width for stepped surcharges.
-                Use <strong>Available on</strong> to tie a choice to one system, or leave
-                "All systems" if it applies everywhere. To make the same colour available
-                on more than one system at different prices, add it once per system using
-                the <em>Duplicate</em> link on the row below.
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+                Click any cell to edit. Tab or Enter saves; Escape cancels.
+                Type a label in the last row to add a new choice.
+                Drag <strong>⋮⋮</strong> to reorder.
+                <strong>…</strong> opens the row's full edit page (width-table pricing, thumbnail upload).
             </p>
-            <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
-                  class="form" novalidate enctype="multipart/form-data">
-                <?= csrf_field() ?>
-                <input type="hidden" name="_action" value="create_choice">
 
-                <div class="form-row cols-5">
-                    <div class="form-group">
-                        <label for="label">Label <span class="required">*</span></label>
-                        <input id="label" name="label" type="text"
-                               required maxlength="150" autofocus
-                               value="<?= e((string) $f['label']) ?>" placeholder="e.g. Left">
-                    </div>
-                    <div class="form-group">
-                        <label for="price_delta">Flat £</label>
-                        <input id="price_delta" name="price_delta" type="number"
-                               step="0.01" value="<?= e((string) $f['price_delta']) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label for="price_percent">Percent %</label>
-                        <input id="price_percent" name="price_percent" type="number"
-                               step="0.01" value="<?= e((string) $f['price_percent']) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label for="price_per_metre">£/metre</label>
-                        <input id="price_per_metre" name="price_per_metre" type="number"
-                               step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-row" for="is_default">
-                            <input type="checkbox" id="is_default" name="is_default" value="1"
-                                   <?= $f['is_default'] === 1 ? 'checked' : '' ?>>
-                            Default
-                        </label>
-                    </div>
-                </div>
+            <div class="table-wrap">
+                <table class="grid-table sortable-list" data-reorder-type="choices" id="choices-grid">
+                    <thead>
+                        <tr>
+                            <th class="col-drag"></th>
+                            <th class="col-label">Label</th>
+                            <th class="col-system">Available on</th>
+                            <th class="col-price">Flat £</th>
+                            <th class="col-price">%</th>
+                            <th class="col-price">£/m</th>
+                            <th class="col-toggle" title="Default = pre-selected for the customer">Default</th>
+                            <th class="col-toggle" title="Inactive = hidden from quote builder">Active</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="choices-body">
+                        <?php foreach ($choices as $c): ?>
+                            <?php
+                                $cid       = (int) $c['id'];
+                                $sysId     = $c['system_id'] !== null ? (int) $c['system_id'] : null;
+                                $isActive  = (int) $c['active']     === 1;
+                                $isDefault = (int) $c['is_default'] === 1;
+                                $widthN    = (int) $c['width_table_size'];
+                            ?>
+                            <tr data-id="<?= $cid ?>" class="<?= $isActive ? '' : 'is-inactive' ?>">
+                                <td class="col-drag drag-col" title="Drag to reorder">⋮⋮</td>
+                                <td class="col-label">
+                                    <input class="cell-input" data-field="label"
+                                           value="<?= e((string) $c['label']) ?>"
+                                           maxlength="150">
+                                </td>
+                                <td class="col-system">
+                                    <?php
+                                        // Manually emit the dropdown so we can attach data-field.
+                                        echo str_replace(
+                                            '<select class="cell-select"',
+                                            '<select class="cell-select" data-field="system_id"',
+                                            $renderSystemSelect($sysId)
+                                        );
+                                    ?>
+                                </td>
+                                <td class="col-price">
+                                    <input class="cell-input num" data-field="price_delta"
+                                           type="number" step="0.01"
+                                           value="<?= number_format((float) $c['price_delta'], 2, '.', '') ?>">
+                                </td>
+                                <td class="col-price">
+                                    <input class="cell-input num" data-field="price_percent"
+                                           type="number" step="0.01"
+                                           value="<?= number_format((float) $c['price_percent'], 2, '.', '') ?>">
+                                </td>
+                                <td class="col-price">
+                                    <input class="cell-input num" data-field="price_per_metre"
+                                           type="number" step="0.01"
+                                           value="<?= number_format((float) $c['price_per_metre'], 2, '.', '') ?>">
+                                </td>
+                                <td class="col-toggle">
+                                    <input type="checkbox" data-field="is_default"
+                                           <?= $isDefault ? 'checked' : '' ?>>
+                                </td>
+                                <td class="col-toggle">
+                                    <input type="checkbox" data-field="active"
+                                           <?= $isActive ? 'checked' : '' ?>>
+                                </td>
+                                <td class="col-actions row-actions">
+                                    <a href="/admin/products/extra-choice-edit.php?id=<?= $cid ?>"
+                                       class="btn-more"
+                                       title="Open full edit page — width-table pricing, thumbnail upload">…</a>
+                                    <button type="button" class="btn-duplicate"
+                                            title="Clone this choice (handy when the same label applies to another system)">
+                                        Dup
+                                    </button>
+                                    <button type="button" class="btn-delete"
+                                            title="Delete this choice">×</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
 
-                <?php if ($systems): ?>
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="system_id">Available on</label>
-                        <select id="system_id" name="system_id">
-                            <option value="0" <?= (int) $f['system_id'] === 0 ? 'selected' : '' ?>>
-                                All systems
-                            </option>
-                            <?php foreach ($systems as $s): ?>
-                                <option value="<?= (int) $s['id'] ?>"
-                                    <?= (int) $f['system_id'] === (int) $s['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $s['name']) ?> only
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small style="color:#6b7280;font-size:0.8125rem">
-                            "All systems" = appears on every system on this product.
-                            Pick a single system to limit it. To price the same choice
-                            differently per system, add one row per system (the
-                            <em>Duplicate</em> link on a saved row makes this quick).
-                        </small>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Add choice</button>
-                    <span style="color:#6b7280;font-size:0.875rem;margin-left:0.5rem">
-                        Most choices need only a Label — the rest is optional.
-                    </span>
-                </div>
-
-                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
-                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
-                        Width-based price table (optional)
-                    </legend>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
-                        A fourth pricing mode for cases where the surcharge varies by width.
-                        Pricing engine looks up the smallest entry &ge; the customer's width (round-up).
-                        <strong>Combined</strong> with the flat / percent / per-metre fields above.
-                    </p>
-
-                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
-                        Option A — paste rows
-                    </p>
-                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
-                        One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
-                        Width in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
-                    </p>
-                    <textarea name="width_price_table" id="width_price_table"
-                              rows="6"
-                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;resize:vertical"
-                              placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
-
-                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
-                        Option B — upload Excel
-                    </p>
-                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
-                        Two-column .xlsx: width in column A, price in column B. Header row optional. If a file is provided, it overrides the textarea above.
-                    </p>
-                    <input type="file" name="width_price_file" id="width_price_file"
-                           accept=".xlsx,.xlsm,.xls,.csv,.ods"
-                           style="font:inherit">
-                </fieldset>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Add choice</button>
-                </div>
-            </form>
-        </section>
-
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Choices (<?= count($choices) ?>)</h2>
+                        <!-- Bottom "type to add" row. Always present, never has a server id. -->
+                        <tr class="new-row" id="new-row">
+                            <td class="col-drag">+</td>
+                            <td class="col-label">
+                                <input class="cell-input" id="new-label"
+                                       placeholder="Type new label and press Enter…"
+                                       maxlength="150">
+                            </td>
+                            <td class="col-system">
+                                <?php
+                                    echo str_replace(
+                                        '<select class="cell-select"',
+                                        '<select class="cell-select" id="new-system"',
+                                        $renderSystemSelect(null)
+                                    );
+                                ?>
+                            </td>
+                            <td colspan="6" style="color:#9ca3af;font-size:0.8125rem">
+                                Prices, default + active toggles become editable once the row is saved.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
-            <?php if (!$choices): ?>
-                <div class="placeholder">
-                    <p class="placeholder-title">No choices yet</p>
-                    <p class="placeholder-body">
-                        Use the form above to add the options customers can pick from.
-                    </p>
-                </div>
-            <?php else: ?>
-                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
-                    Drag the <strong>⋮⋮</strong> handle to reorder.
-                    <span class="reorder-status">Saving…</span>
-                </p>
-                <div class="table-wrap">
-                    <table class="table sortable-list" data-reorder-type="choices">
-                        <thead>
-                            <tr>
-                                <th class="drag-col"></th>
-                                <th>Label</th>
-                                <th>Available on</th>
-                                <th>Price impact</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($choices as $c): ?>
-                                <tr data-id="<?= (int) $c['id'] ?>">
-                                    <td class="drag-col" title="Drag to reorder">⋮⋮</td>
-                                    <td>
-                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>"
-                                           class="choice-label">
-                                            <?= e((string) $c['label']) ?>
-                                        </a>
-                                        <?php if ((int) $c['is_default'] === 1): ?>
-                                            <span class="default-pill">Default</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($c['system_id'] === null): ?>
-                                            <span style="color:#6b7280;font-size:0.875rem">All systems</span>
-                                        <?php else: ?>
-                                            <span class="system-pill"><?= e((string) ($c['system_name'] ?? '?')) ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="price-impact">
-                                        <?php
-                                            $delta    = (float) $c['price_delta'];
-                                            $percent  = (float) $c['price_percent'];
-                                            $perMetre = (float) $c['price_per_metre'];
-                                            $widthN   = (int)   $c['width_table_size'];
-                                            $bits = [];
-                                            if ($delta    != 0) { $bits[] = ($delta > 0 ? '+' : '') . '£' . number_format($delta, 2); }
-                                            if ($perMetre != 0) { $bits[] = ($perMetre > 0 ? '+' : '') . '£' . number_format($perMetre, 2) . '/m'; }
-                                            if ($percent  != 0) { $bits[] = ($percent > 0 ? '+' : '') . number_format($percent, 2) . '%'; }
-                                            if ($widthN   > 0)  { $bits[] = 'width table (' . $widthN . ' size' . ($widthN === 1 ? '' : 's') . ')'; }
-                                        ?>
-                                        <?php if ($bits): ?>
-                                            <strong><?= e(implode(' and ', $bits)) ?></strong>
-                                        <?php else: ?>
-                                            Free
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="row-actions">
-                                        <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
-                                        <form method="post"
-                                              action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
-                                              style="display:inline;margin:0">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="_action" value="duplicate_choice">
-                                            <input type="hidden" name="choice_id" value="<?= (int) $c['id'] ?>">
-                                            <button type="submit" class="set-default"
-                                                    title="Clone this choice — handy when the same colour applies to another system at a different price">
-                                                Duplicate
-                                            </button>
-                                        </form>
-                                        <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= (int) $c['id'] ?>#add-option"
-                                           class="follow-up"
-                                           title="Add an option that only appears when this choice is selected">
-                                            + Follow-up option
-                                        </a>
-                                        <?php if ((int) $c['is_default'] !== 1): ?>
-                                            <form method="post"
-                                                  action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
-                                                  style="display:inline;margin:0">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="set_default_choice">
-                                                <input type="hidden" name="choice_id" value="<?= (int) $c['id'] ?>">
-                                                <button type="submit" class="set-default">Set default</button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <form method="post" action="/admin/products/extra-choice-delete.php"
-                                              onsubmit="return confirm('Delete choice <?= e(addslashes((string) $c['label'])) ?>?');">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
-                                            <input type="hidden" name="extra_id" value="<?= (int) $extraId ?>">
-                                            <button type="submit">Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
+            <p style="color:#6b7280;font-size:0.875rem;margin-top:0.75rem">
+                Need width-based pricing or a thumbnail image?
+                Click <strong>…</strong> on any row.
+            </p>
         </section>
     </main>
 </div>
-<?php if ($choices): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
+
+<?php require __DIR__ . '/../../_partials/sortable_init.php'; ?>
+
+<script>
+(function () {
+    'use strict';
+
+    var endpoint = '/admin/products/choice-api.php';
+    var extraId  = <?= (int) $extraId ?>;
+    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    var grid       = document.getElementById('choices-grid');
+    var body       = document.getElementById('choices-body');
+    var indicator  = document.getElementById('save-indicator');
+    var countLabel = document.getElementById('choices-count');
+    var newRow     = document.getElementById('new-row');
+    var newLabel   = document.getElementById('new-label');
+    var newSystem  = document.getElementById('new-system');
+
+    var hideTimer  = null;
+    function flashIndicator(message, isError) {
+        clearTimeout(hideTimer);
+        indicator.textContent = message;
+        indicator.classList.toggle('is-error', !!isError);
+        indicator.classList.add('is-visible');
+        hideTimer = setTimeout(function () {
+            indicator.classList.remove('is-visible');
+        }, isError ? 4000 : 1100);
+    }
+
+    // Promise-based POST. Returns the parsed JSON; rejects on transport
+    // errors or {ok:false} responses (with the server's error message).
+    function api(action, params) {
+        var fd = new FormData();
+        fd.append('action',   action);
+        fd.append('extra_id', String(extraId));
+        Object.keys(params || {}).forEach(function (k) {
+            // null/undefined are sent as empty strings so PHP sees them.
+            fd.append(k, params[k] == null ? '' : String(params[k]));
+        });
+        return fetch(endpoint, {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().catch(function () {
+                throw new Error('Server returned a non-JSON response.');
+            }).then(function (data) {
+                if (!data.ok) throw new Error(data.error || 'Unknown error.');
+                return data;
+            });
+        });
+    }
+
+    // Visual save lifecycle on a row. Yellowish during, green flash on
+    // success, red sticky on error.
+    function withSavingState(row, promise) {
+        if (!row) return promise;
+        row.classList.remove('just-saved', 'is-error');
+        row.classList.add('is-saving');
+        return promise.then(function (data) {
+            row.classList.remove('is-saving');
+            row.classList.add('just-saved');
+            setTimeout(function () { row.classList.remove('just-saved'); }, 700);
+            flashIndicator('Saved');
+            return data;
+        }).catch(function (err) {
+            row.classList.remove('is-saving');
+            row.classList.add('is-error');
+            flashIndicator(err.message || 'Save failed', true);
+            throw err;
+        });
+    }
+
+    // Pull the field value out of an input/select/checkbox in a way that
+    // matches what the server expects to receive ("0"/"1" for checkboxes,
+    // raw strings for everything else).
+    function valueFromCell(el) {
+        if (el.type === 'checkbox') return el.checked ? '1' : '0';
+        return el.value;
+    }
+
+    // Track each editable cell's last-saved value so blur events that
+    // didn't actually change anything skip the request.
+    function captureLast(el) {
+        el._lastSaved = valueFromCell(el);
+    }
+
+    function saveCell(el) {
+        var row = el.closest('tr');
+        if (!row || !row.dataset.id) return Promise.resolve();
+        var field = el.dataset.field;
+        if (!field) return Promise.resolve();
+        var current = valueFromCell(el);
+        if (el._lastSaved === current) return Promise.resolve();
+
+        return withSavingState(row, api('update', {
+            choice_id: row.dataset.id,
+            field:     field,
+            value:     current
+        })).then(function () {
+            el._lastSaved = current;
+
+            // is_default is exclusive within a (extra, system) bucket on
+            // the server. Mirror that on the client by un-checking
+            // sibling defaults in the same bucket so the UI stays in
+            // sync without a refetch.
+            if (field === 'is_default' && el.checked) {
+                var sysSel = row.querySelector('select[data-field="system_id"]');
+                var rowSys = sysSel ? sysSel.value : '0';
+                body.querySelectorAll('tr[data-id]').forEach(function (other) {
+                    if (other === row) return;
+                    var otherSysSel = other.querySelector('select[data-field="system_id"]');
+                    var otherSys    = otherSysSel ? otherSysSel.value : '0';
+                    if (otherSys === rowSys) {
+                        var d = other.querySelector('input[data-field="is_default"]');
+                        if (d && d.checked) {
+                            d.checked = false;
+                            d._lastSaved = '0';
+                        }
+                    }
+                });
+            }
+            // active toggle changes whether the row's text reads as
+            // strikethrough. Reflect immediately.
+            if (field === 'active') {
+                row.classList.toggle('is-inactive', !el.checked);
+            }
+        }).catch(function () {
+            // On error, snap the value back so the user can retry.
+            if (el._lastSaved !== undefined) {
+                if (el.type === 'checkbox') el.checked = el._lastSaved === '1';
+                else                        el.value   = el._lastSaved;
+            }
+        });
+    }
+
+    // Build a fresh row's DOM from a server-returned choice object.
+    function buildRow(choice) {
+        var tr = document.createElement('tr');
+        tr.dataset.id = String(choice.id);
+        if (!choice.active) tr.classList.add('is-inactive');
+
+        function cellInput(field, value, opts) {
+            var td = document.createElement('td');
+            td.className = 'col-' + (opts.col || 'price');
+            var inp = document.createElement('input');
+            inp.className = 'cell-input' + (opts.num ? ' num' : '');
+            inp.dataset.field = field;
+            if (opts.type)      inp.type      = opts.type;
+            if (opts.step)      inp.step      = opts.step;
+            if (opts.maxlength) inp.maxLength = opts.maxlength;
+            inp.value = value;
+            captureLast(inp);
+            td.appendChild(inp);
+            return td;
+        }
+        function cellToggle(field, checked) {
+            var td = document.createElement('td');
+            td.className = 'col-toggle';
+            var inp = document.createElement('input');
+            inp.type = 'checkbox';
+            inp.dataset.field = field;
+            inp.checked = !!checked;
+            captureLast(inp);
+            td.appendChild(inp);
+            return td;
+        }
+
+        // Drag handle. Both classes: col-drag for column width,
+        // drag-col so the SortableJS init in sortable_init.php picks
+        // it up as a draggable handle.
+        var tdDrag = document.createElement('td');
+        tdDrag.className = 'col-drag drag-col';
+        tdDrag.title = 'Drag to reorder';
+        tdDrag.textContent = '⋮⋮';
+        tr.appendChild(tdDrag);
+
+        // Label.
+        tr.appendChild(cellInput('label', choice.label, { col: 'label', maxlength: 150 }));
+
+        // System dropdown — clone the new-row's select so options match.
+        var tdSys = document.createElement('td');
+        tdSys.className = 'col-system';
+        var sel = newSystem.cloneNode(true);
+        sel.removeAttribute('id');
+        sel.dataset.field = 'system_id';
+        sel.value = choice.system_id == null ? '0' : String(choice.system_id);
+        captureLast(sel);
+        tdSys.appendChild(sel);
+        tr.appendChild(tdSys);
+
+        // Prices.
+        tr.appendChild(cellInput('price_delta',     choice.price_delta,     { type: 'number', step: '0.01', num: true }));
+        tr.appendChild(cellInput('price_percent',   choice.price_percent,   { type: 'number', step: '0.01', num: true }));
+        tr.appendChild(cellInput('price_per_metre', choice.price_per_metre, { type: 'number', step: '0.01', num: true }));
+
+        // Toggles.
+        tr.appendChild(cellToggle('is_default', choice.is_default));
+        tr.appendChild(cellToggle('active',     choice.active));
+
+        // Actions.
+        var tdActions = document.createElement('td');
+        tdActions.className = 'col-actions row-actions';
+        tdActions.innerHTML =
+            '<a href="/admin/products/extra-choice-edit.php?id=' + choice.id +
+                '" class="btn-more" title="Open full edit page">…</a>' +
+            '<button type="button" class="btn-duplicate" title="Clone this choice">Dup</button>' +
+            '<button type="button" class="btn-delete" title="Delete">&times;</button>';
+        tr.appendChild(tdActions);
+
+        return tr;
+    }
+
+    function updateCount() {
+        var n = body.querySelectorAll('tr[data-id]').length;
+        countLabel.textContent = '(' + n + ')';
+    }
+
+    // ---- Event wiring ----------------------------------------------------
+
+    // Capture last-saved values on focus so blurs without changes are no-ops.
+    body.addEventListener('focusin', function (e) {
+        var el = e.target;
+        if (el.matches('.cell-input, .cell-select, input[type="checkbox"]')) {
+            // Only set if not already set this lifetime — first focus wins.
+            if (el._lastSaved === undefined) captureLast(el);
+        }
+    });
+
+    // Save existing-row cells on blur (text/number) or change (selects/checkboxes).
+    body.addEventListener('change', function (e) {
+        var el = e.target;
+        if (el === newLabel || el === newSystem) return;
+        if (el.matches('select.cell-select, input[type="checkbox"]')) {
+            saveCell(el);
+        }
+    });
+    body.addEventListener('blur', function (e) {
+        var el = e.target;
+        if (el === newLabel || el === newSystem) return;
+        if (el.matches('input.cell-input')) saveCell(el);
+    }, true); // capture-phase since blur doesn't bubble
+
+    // Keyboard niceties on existing-row inputs: Enter/Tab → save + move,
+    // Escape → revert to last saved value.
+    body.addEventListener('keydown', function (e) {
+        var el = e.target;
+        if (!el.matches('input.cell-input')) return;
+        if (el === newLabel) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            el.blur(); // triggers save
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            if (el._lastSaved !== undefined) el.value = el._lastSaved;
+            el.blur();
+        }
+    });
+
+    // Duplicate + delete.
+    body.addEventListener('click', function (e) {
+        var btn = e.target;
+        if (btn.classList.contains('btn-duplicate')) {
+            var row = btn.closest('tr');
+            if (!row || !row.dataset.id) return;
+            withSavingState(row, api('duplicate', { choice_id: row.dataset.id }))
+                .then(function (data) {
+                    var newRowEl = buildRow(data.choice);
+                    row.parentNode.insertBefore(newRowEl, row.nextSibling);
+                    updateCount();
+                    var firstInput = newRowEl.querySelector('select[data-field="system_id"]');
+                    if (firstInput) firstInput.focus();
+                }).catch(function () { /* indicator already shows */ });
+        } else if (btn.classList.contains('btn-delete')) {
+            var row = btn.closest('tr');
+            if (!row || !row.dataset.id) return;
+            var label = row.querySelector('input[data-field="label"]');
+            var name  = label ? label.value : 'this choice';
+            if (!confirm('Delete "' + name + '"?')) return;
+            withSavingState(row, api('delete', { choice_id: row.dataset.id }))
+                .then(function () {
+                    row.parentNode.removeChild(row);
+                    updateCount();
+                }).catch(function () { /* indicator already shows */ });
+        }
+    });
+
+    // ---- New-row creation ------------------------------------------------
+
+    function commitNewRow(focusNext) {
+        var label = newLabel.value.trim();
+        if (label === '') return Promise.resolve();
+        var sysId = newSystem.value || '0';
+
+        // Briefly highlight the new row while the request is in flight.
+        newRow.classList.add('is-saving');
+        return api('create', { label: label, system_id: sysId })
+            .then(function (data) {
+                newRow.classList.remove('is-saving');
+                newRow.classList.add('just-saved');
+                setTimeout(function () { newRow.classList.remove('just-saved'); }, 700);
+                flashIndicator('Saved');
+
+                // Insert the real row immediately above the new-row.
+                var realRow = buildRow(data.choice);
+                body.insertBefore(realRow, newRow);
+                updateCount();
+
+                // Reset the new-row inputs ready for another entry.
+                newLabel.value = '';
+                newSystem.value = '0';
+
+                if (focusNext) newLabel.focus();
+            })
+            .catch(function (err) {
+                newRow.classList.remove('is-saving');
+                newRow.classList.add('is-error');
+                flashIndicator(err.message || 'Could not add', true);
+                setTimeout(function () { newRow.classList.remove('is-error'); }, 2000);
+            });
+    }
+
+    newLabel.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitNewRow(true); // focus stays in label for rapid entry
+        } else if (e.key === 'Escape') {
+            newLabel.value = '';
+            newSystem.value = '0';
+        }
+    });
+    // Tab from label → system dropdown (default behaviour). Tab from
+    // system dropdown → trigger save and move on, otherwise the user's
+    // typed label would silently sit unsaved.
+    newSystem.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitNewRow(true);
+        }
+    });
+    // Blurring the new-row entirely (focus moves outside both inputs)
+    // should also commit — small delay so Tab from label → system
+    // doesn't trip it. Same handler on both inputs so leaving via
+    // either one saves the typed label.
+    function maybeCommitNewRow() {
+        setTimeout(function () {
+            if (document.activeElement !== newSystem
+             && document.activeElement !== newLabel
+             && newLabel.value.trim() !== '') {
+                commitNewRow(false);
+            }
+        }, 120);
+    }
+    newLabel.addEventListener('blur',  maybeCommitNewRow);
+    newSystem.addEventListener('blur', maybeCommitNewRow);
+})();
+</script>
 </body>
 </html>
