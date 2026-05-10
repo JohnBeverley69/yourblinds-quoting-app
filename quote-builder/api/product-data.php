@@ -66,7 +66,11 @@ $systems = array_map(static fn ($r) => [
     'is_default' => (bool)   $r['is_default'],
 ], $st->fetchAll());
 
-// 3. Extras + their choices, in two queries (extras then choices in IN clause).
+// 3. Extras + their choices. The new model puts system scope on the
+//    choice itself (system_id, NULL = "all systems"). Option-level
+//    scope is gone — an option appears whenever any of its choices
+//    is available for the chosen system, which the JS handles client-
+//    side after the filter runs.
 //    (Fabrics moved to /api/fabrics-search.php for typeahead — see header.)
 $st = $pdo->prepare(
     'SELECT id, name, is_required, parent_choice_id, sort_order
@@ -78,26 +82,11 @@ $st->execute([$productId, $clientId]);
 $extrasRaw = $st->fetchAll();
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
-// System-scope per extra (junction). Empty = available on every system.
-$extraScopeByExtra = [];
-if ($extraIds) {
-    $eph = implode(',', array_fill(0, count($extraIds), '?'));
-    $extraScopeSt = $pdo->prepare(
-        "SELECT product_extra_id, product_system_id
-           FROM product_extra_systems
-          WHERE product_extra_id IN ($eph)"
-    );
-    $extraScopeSt->execute($extraIds);
-    foreach ($extraScopeSt->fetchAll() as $r) {
-        $extraScopeByExtra[(int) $r['product_extra_id']][] = (int) $r['product_system_id'];
-    }
-}
-
 $choicesByExtra = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
     $st = $pdo->prepare(
-        "SELECT id, product_extra_id, label,
+        "SELECT id, product_extra_id, system_id, label,
                 price_delta, price_percent, price_per_metre,
                 is_default, sort_order, image_path
            FROM product_extra_choices
@@ -105,31 +94,12 @@ if ($extraIds) {
        ORDER BY product_extra_id, sort_order, label"
     );
     $st->execute($extraIds);
-    $rawChoices = $st->fetchAll();
-
-    // Pull every choice's system-scope rows in one go, fold by choice id.
-    $scopeByChoice = [];
-    if ($rawChoices) {
-        $choiceIds = array_map(static fn ($c) => (int) $c['id'], $rawChoices);
-        $cph = implode(',', array_fill(0, count($choiceIds), '?'));
-        $scopeSt = $pdo->prepare(
-            "SELECT product_extra_choice_id, product_system_id
-               FROM product_extra_choice_systems
-              WHERE product_extra_choice_id IN ($cph)"
-        );
-        $scopeSt->execute($choiceIds);
-        foreach ($scopeSt->fetchAll() as $r) {
-            $scopeByChoice[(int) $r['product_extra_choice_id']][] = (int) $r['product_system_id'];
-        }
-    }
-
-    foreach ($rawChoices as $r) {
-        $cid = (int) $r['id'];
+    foreach ($st->fetchAll() as $r) {
         $choicesByExtra[(int) $r['product_extra_id']][] = [
-            'id'         => $cid,
-            // Empty array means "all systems". Otherwise a JS-friendly list of
-            // allowed system ids — JS filters choices on system change.
-            'system_ids' => $scopeByChoice[$cid] ?? [],
+            'id'         => (int) $r['id'],
+            // null = "available on every system". Otherwise the choice
+            // is only available when the picked system matches.
+            'system_id'  => $r['system_id'] !== null ? (int) $r['system_id'] : null,
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
             'image_url'  => !empty($r['image_path']) ? (string) $r['image_path'] : null,
@@ -137,16 +107,13 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra, $extraScopeByExtra) {
+$extras = array_map(static function ($r) use ($choicesByExtra) {
     $eid = (int) $r['id'];
     return [
         'id'               => $eid,
         'name'             => (string) $r['name'],
         'is_required'      => (bool)   $r['is_required'],
         'parent_choice_id' => $r['parent_choice_id'] !== null ? (int) $r['parent_choice_id'] : null,
-        // Empty array = available on every system. Otherwise the JS-side
-        // filter only shows the option when the chosen system is in the list.
-        'system_ids'       => $extraScopeByExtra[$eid] ?? [],
         'choices'          => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);

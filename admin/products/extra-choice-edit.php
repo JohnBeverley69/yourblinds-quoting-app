@@ -37,14 +37,6 @@ if (!$choice) {
     exit;
 }
 
-// Existing system bindings via junction table.
-$scopeSt = db()->prepare(
-    'SELECT product_system_id FROM product_extra_choice_systems
-      WHERE product_extra_choice_id = ?'
-);
-$scopeSt->execute([$id]);
-$existingSystemIds = array_map('intval', $scopeSt->fetchAll(PDO::FETCH_COLUMN));
-
 $f = [
     'label'           => (string) $choice['label'],
     'price_delta'     => (string) $choice['price_delta'],
@@ -52,7 +44,7 @@ $f = [
     'price_per_metre' => (string) $choice['price_per_metre'],
     'is_default'      => (int)    $choice['is_default'],
     'active'          => (int)    $choice['active'],
-    'system_ids'      => $existingSystemIds,
+    'system_id'       => $choice['system_id'] !== null ? (int) $choice['system_id'] : 0,
 ];
 $error = null;
 
@@ -82,10 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
-    $f['system_ids']      = array_values(array_unique(array_filter(array_map(
-        'intval',
-        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
-    ))));
+    $f['system_id']       = (int) ($_POST['system_id'] ?? 0);
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
@@ -129,27 +118,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo = db();
                 $pdo->beginTransaction();
 
-                if ($f['is_default'] === 1) {
-                    $clear = $pdo->prepare(
-                        'UPDATE product_extra_choices SET is_default = 0
-                          WHERE product_extra_id = ? AND id != ?'
+                // Validate the chosen system (if any) belongs to this
+                // product. 0 = "All systems" → store as NULL.
+                $systemIdToStore = null;
+                if ($f['system_id'] > 0) {
+                    $vsSt = $pdo->prepare(
+                        'SELECT id FROM product_systems
+                          WHERE id = ? AND product_id = ? AND client_id = ?
+                          LIMIT 1'
                     );
-                    $clear->execute([(int) $choice['product_extra_id'], $id]);
+                    $vsSt->execute([$f['system_id'], (int) $choice['product_id'], $clientId]);
+                    if ($vsSt->fetchColumn() !== false) {
+                        $systemIdToStore = $f['system_id'];
+                    }
+                }
+
+                // Default-clear scoped to the same system bucket — one
+                // default per (extra, system) in the new model.
+                if ($f['is_default'] === 1) {
+                    if ($systemIdToStore === null) {
+                        $clear = $pdo->prepare(
+                            'UPDATE product_extra_choices SET is_default = 0
+                              WHERE product_extra_id = ? AND id != ?
+                                AND system_id IS NULL'
+                        );
+                        $clear->execute([(int) $choice['product_extra_id'], $id]);
+                    } else {
+                        $clear = $pdo->prepare(
+                            'UPDATE product_extra_choices SET is_default = 0
+                              WHERE product_extra_id = ? AND id != ?
+                                AND system_id = ?'
+                        );
+                        $clear->execute([
+                            (int) $choice['product_extra_id'],
+                            $id,
+                            $systemIdToStore,
+                        ]);
+                    }
                 }
 
                 $u = $pdo->prepare(
                     'UPDATE product_extra_choices
-                        SET label = ?,
+                        SET label = ?, system_id = ?,
                             price_delta = ?, price_percent = ?, price_per_metre = ?,
                             is_default = ?, active = ?
                       WHERE id = ?'
                 );
                 // sort_order is intentionally not touched — drag-and-drop
-                // on the choices list is the only writer. system_id (legacy
-                // single-system column) is left untouched too — the junction
-                // table below is the source of truth.
+                // on the choices list is the only writer.
                 $u->execute([
                     $f['label'],
+                    $systemIdToStore,
                     (float) $f['price_delta'],
                     (float) $f['price_percent'],
                     (float) $f['price_per_metre'],
@@ -157,35 +176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $f['active'],
                     $id,
                 ]);
-
-                // Replace the system-scope junction rows. Validate the IDs
-                // belong to this product's catalogue first (POST inputs
-                // aren't trustworthy).
-                $pdo->prepare(
-                    'DELETE FROM product_extra_choice_systems
-                      WHERE product_extra_choice_id = ?'
-                )->execute([$id]);
-
-                if ($f['system_ids']) {
-                    $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
-                    $vsSt = $pdo->prepare(
-                        "SELECT id FROM product_systems
-                          WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
-                    );
-                    $vsSt->execute([...$f['system_ids'], (int) $choice['product_id'], $clientId]);
-                    $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
-
-                    if ($validSystemIds) {
-                        $jIns = $pdo->prepare(
-                            'INSERT INTO product_extra_choice_systems
-                               (product_extra_choice_id, product_system_id)
-                             VALUES (?, ?)'
-                        );
-                        foreach ($validSystemIds as $sid) {
-                            $jIns->execute([$id, $sid]);
-                        }
-                    }
-                }
 
                 // Replace the width table.
                 $del = $pdo->prepare(
@@ -369,20 +359,23 @@ $activeNav = 'products';
                 <?php if ($systems): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label>System scope (optional)</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
+                        <label for="system_id">Available on</label>
+                        <select id="system_id" name="system_id">
+                            <option value="0" <?= (int) $f['system_id'] === 0 ? 'selected' : '' ?>>
+                                All systems
+                            </option>
                             <?php foreach ($systems as $s): ?>
-                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
-                                    <input type="checkbox" name="system_ids[]"
-                                           value="<?= (int) $s['id'] ?>"
-                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
-                                    <?= e((string) $s['name']) ?>
-                                </label>
+                                <option value="<?= (int) $s['id'] ?>"
+                                    <?= (int) $f['system_id'] === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?> only
+                                </option>
                             <?php endforeach; ?>
-                        </div>
+                        </select>
                         <small style="color:#6b7280;font-size:0.8125rem">
-                            Tick one or more to limit this choice to specific systems.
-                            Leave all unticked to make it available everywhere.
+                            "All systems" = appears on every system on this product.
+                            Pick a single system to limit it. To price the same choice
+                            differently per system, use the <em>Duplicate</em> link
+                            on the choices list.
                         </small>
                     </div>
                 </div>

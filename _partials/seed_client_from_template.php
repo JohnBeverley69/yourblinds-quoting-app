@@ -139,42 +139,16 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     }
 
     // -----------------------------------------------------------------------
-    // 4b. product_extra_systems  (the extra ↔ system junction)
-    //     Mirror of step 5b, but at the option level. Empty junction = the
-    //     option is available on every system; otherwise restricted to the
-    //     listed systems.
+    // 5. product_extra_choices  (system_id column is the authoritative
+    //    system scope in this model — NULL = "every system", otherwise
+    //    the choice is only available on the matching system. Old
+    //    junction tables aren't read or written by anyone any more.)
     // -----------------------------------------------------------------------
     if ($extraMap) {
         $oldExtraIds = array_keys($extraMap);
         $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
         $sel = $pdo->prepare(
-            "SELECT product_extra_id, product_system_id
-               FROM product_extra_systems
-              WHERE product_extra_id IN ($ph)"
-        );
-        $sel->execute($oldExtraIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO product_extra_systems
-               (product_extra_id, product_system_id)
-             VALUES (?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $newExtraId  = $extraMap[(int) $r['product_extra_id']]   ?? null;
-            $newSystemId = $systemMap[(int) $r['product_system_id']] ?? null;
-            if ($newExtraId === null || $newSystemId === null) continue;
-            $ins->execute([$newExtraId, $newSystemId]);
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 5. product_extra_choices  (system_id column is legacy / unused — the
-    //    junction table copy below is the authoritative system scope)
-    // -----------------------------------------------------------------------
-    if ($extraMap) {
-        $oldExtraIds = array_keys($extraMap);
-        $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT id, product_extra_id, label,
+            "SELECT id, product_extra_id, system_id, label, image_path,
                     price_delta, price_percent, price_per_metre,
                     is_default, sort_order, active
                FROM product_extra_choices
@@ -184,46 +158,31 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         $sel->execute($oldExtraIds);
         $ins = $pdo->prepare(
             'INSERT INTO product_extra_choices
-               (product_extra_id, label,
+               (product_extra_id, system_id, label, image_path,
                 price_delta, price_percent, price_per_metre,
                 is_default, sort_order, active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            // Map the source's system_id to the new client's system_id.
+            // NULL stays NULL (= every system).
+            $newSystemId = null;
+            if ($r['system_id'] !== null) {
+                $newSystemId = $systemMap[(int) $r['system_id']] ?? null;
+                // If we can't map it (orphaned), fall back to "all systems"
+                // rather than dropping the row — the source data may have
+                // a stray reference; we'd rather over-show than under-show.
+            }
             $ins->execute([
                 $extraMap[(int) $r['product_extra_id']],
+                $newSystemId,
                 $r['label'],
+                $r['image_path'],
                 $r['price_delta'], $r['price_percent'], $r['price_per_metre'],
                 (int) $r['is_default'], (int) $r['sort_order'], (int) $r['active'],
             ]);
             $choiceMap[(int) $r['id']] = (int) $pdo->lastInsertId();
             $summary['choices']++;
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 5b. product_extra_choice_systems  (the choice ↔ system junction)
-    //     Map old choice and system ids to their newly-inserted equivalents.
-    // -----------------------------------------------------------------------
-    if ($choiceMap) {
-        $oldChoiceIds = array_keys($choiceMap);
-        $ph           = implode(',', array_fill(0, count($oldChoiceIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT product_extra_choice_id, product_system_id
-               FROM product_extra_choice_systems
-              WHERE product_extra_choice_id IN ($ph)"
-        );
-        $sel->execute($oldChoiceIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO product_extra_choice_systems
-               (product_extra_choice_id, product_system_id)
-             VALUES (?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $newChoiceId = $choiceMap[(int) $r['product_extra_choice_id']] ?? null;
-            $newSystemId = $systemMap[(int) $r['product_system_id']] ?? null;
-            if ($newChoiceId === null || $newSystemId === null) continue;
-            $ins->execute([$newChoiceId, $newSystemId]);
         }
     }
 

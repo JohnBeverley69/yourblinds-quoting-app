@@ -1008,20 +1008,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 if (!parentSelected) return;
             }
 
-            // System-scope filter at the EXTRA level. Empty system_ids array
-            // means "available on every system"; otherwise the chosen system
-            // must be in the list. Mirrors the choice-level filter below and
-            // the server-side junction table product_extra_systems.
-            if (extra.system_ids && extra.system_ids.length > 0) {
-                if (extra.system_ids.indexOf(systemId) === -1) return;
-            }
-
-            // Filter choices by system scope. Empty system_ids array means
-            // "available on every system"; otherwise the chosen system must
-            // be in the list.
+            // Filter choices by system. system_id === null means "all
+            // systems"; otherwise it must match the chosen system. The
+            // option auto-hides when no choice is available — there is
+            // no separate option-level scope in this model.
             var visibleChoices = extra.choices.filter(function (c) {
-                if (!c.system_ids || c.system_ids.length === 0) return true;
-                return c.system_ids.indexOf(systemId) !== -1;
+                if (c.system_id === null || c.system_id === undefined) return true;
+                return c.system_id === systemId;
             });
             if (visibleChoices.length === 0) return;
 

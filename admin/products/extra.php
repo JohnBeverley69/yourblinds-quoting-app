@@ -43,7 +43,7 @@ $f = [
     'price_percent'   => '0.00',
     'price_per_metre' => '0.00',
     'is_default'      => 0,
-    'system_ids'      => [],   // empty = available on all systems
+    'system_id'       => 0,   // 0 = available on all systems
 ];
 $error            = null;
 $widthTablePasted = '';
@@ -56,10 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
-    $f['system_ids']      = array_values(array_unique(array_filter(array_map(
-        'intval',
-        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
-    ))));
+    $f['system_id']       = (int) ($_POST['system_id'] ?? 0);
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
 
     if ($f['label'] === '') {
@@ -103,12 +100,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $pdo = db();
                 $pdo->beginTransaction();
 
-                // If marking this as default, clear default on all sibling choices first.
-                if ($f['is_default'] === 1) {
-                    $clear = $pdo->prepare(
-                        'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
+                // Validate the chosen system (if any) belongs to this
+                // product's catalogue — POST inputs aren't trustworthy.
+                // 0 = "available on all systems" → store as NULL.
+                $systemIdToStore = null;
+                if ($f['system_id'] > 0) {
+                    $vsSt = $pdo->prepare(
+                        'SELECT id FROM product_systems
+                          WHERE id = ? AND product_id = ? AND client_id = ?
+                          LIMIT 1'
                     );
-                    $clear->execute([$extraId]);
+                    $vsSt->execute([$f['system_id'], (int) $extra['product_id'], $clientId]);
+                    if ($vsSt->fetchColumn() !== false) {
+                        $systemIdToStore = $f['system_id'];
+                    }
+                }
+
+                // If marking this as default, clear default on sibling
+                // choices that compete for the same system (= same
+                // system_id, treating NULL and a system_id as separate
+                // namespaces). One default per (extra, system) is the
+                // new model.
+                if ($f['is_default'] === 1) {
+                    if ($systemIdToStore === null) {
+                        $clear = $pdo->prepare(
+                            'UPDATE product_extra_choices SET is_default = 0
+                              WHERE product_extra_id = ? AND system_id IS NULL'
+                        );
+                        $clear->execute([$extraId]);
+                    } else {
+                        $clear = $pdo->prepare(
+                            'UPDATE product_extra_choices SET is_default = 0
+                              WHERE product_extra_id = ? AND system_id = ?'
+                        );
+                        $clear->execute([$extraId, $systemIdToStore]);
+                    }
                 }
 
                 // sort_order = MAX+1 so new choices append to the end of
@@ -123,13 +149,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
                 $ins = $pdo->prepare(
                     'INSERT INTO product_extra_choices
-                       (product_extra_id, label,
+                       (product_extra_id, system_id, label,
                         price_delta, price_percent, price_per_metre,
                         is_default, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
                 );
                 $ins->execute([
                     $extraId,
+                    $systemIdToStore,
                     $f['label'],
                     (float) $f['price_delta'],
                     (float) $f['price_percent'],
@@ -138,31 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $nextSort,
                 ]);
                 $newChoiceId = (int) $pdo->lastInsertId();
-
-                // Tie the choice to the selected systems via the junction
-                // table. Empty selection = available on every system.
-                // Validate each id belongs to this product's catalogue
-                // (POST inputs aren't trustworthy).
-                if ($f['system_ids']) {
-                    $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
-                    $vsSt = $pdo->prepare(
-                        "SELECT id FROM product_systems
-                          WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
-                    );
-                    $vsSt->execute([...$f['system_ids'], (int) $extra['product_id'], $clientId]);
-                    $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
-
-                    if ($validSystemIds) {
-                        $jIns = $pdo->prepare(
-                            'INSERT INTO product_extra_choice_systems
-                               (product_extra_choice_id, product_system_id)
-                             VALUES (?, ?)'
-                        );
-                        foreach ($validSystemIds as $sid) {
-                            $jIns->execute([$newChoiceId, $sid]);
-                        }
-                    }
-                }
 
                 if ($widthRows) {
                     $rowIns = $pdo->prepare(
@@ -187,7 +189,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
-// Mark a choice as default — only one default per extra.
+// Duplicate a choice — clone label/prices/image/width-table, leave the
+// new row's system_id NULL so the user can pick the system for it on the
+// edit page. Saves rekeying when the same colour applies on more than one
+// system at the same price.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'duplicate_choice') {
+    csrf_check();
+    $sourceId = (int) ($_POST['choice_id'] ?? 0);
+    if ($sourceId > 0) {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            // Tenant-scoped source lookup so a stray POST can't clone a
+            // choice from another client's catalogue.
+            $sourceSt = $pdo->prepare(
+                'SELECT c.label, c.image_path,
+                        c.price_delta, c.price_percent, c.price_per_metre,
+                        c.is_default, c.sort_order, c.active
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE c.id = ? AND c.product_extra_id = ? AND e.client_id = ?
+                  LIMIT 1'
+            );
+            $sourceSt->execute([$sourceId, $extraId, $clientId]);
+            $source = $sourceSt->fetch();
+            if (!$source) {
+                throw new RuntimeException('Source choice not found.');
+            }
+
+            // Sort just after the source so the clone lands next to it.
+            $nextSort = (int) $source['sort_order'] + 1;
+
+            // Insert with system_id=NULL and is_default=0; the user picks
+            // both on the edit page they're sent to.
+            $cloneSt = $pdo->prepare(
+                'INSERT INTO product_extra_choices
+                   (product_extra_id, system_id, label, image_path,
+                    price_delta, price_percent, price_per_metre,
+                    is_default, sort_order, active)
+                 VALUES (?, NULL, ?, ?, ?, ?, ?, 0, ?, ?)'
+            );
+            $cloneSt->execute([
+                $extraId,
+                (string) $source['label'],
+                $source['image_path'],
+                $source['price_delta'],
+                $source['price_percent'],
+                $source['price_per_metre'],
+                $nextSort,
+                (int) $source['active'],
+            ]);
+            $newId = (int) $pdo->lastInsertId();
+
+            // Copy width-table rows so per-clone editing stays isolated.
+            $wSrc = $pdo->prepare(
+                'SELECT width_mm, price FROM extra_choice_price_rows
+                  WHERE product_extra_choice_id = ?'
+            );
+            $wSrc->execute([$sourceId]);
+            $wIns = $pdo->prepare(
+                'INSERT INTO extra_choice_price_rows
+                   (product_extra_choice_id, width_mm, price)
+                 VALUES (?, ?, ?)'
+            );
+            foreach ($wSrc->fetchAll(PDO::FETCH_ASSOC) as $w) {
+                $wIns->execute([$newId, (int) $w['width_mm'], $w['price']]);
+            }
+
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Choice duplicated. Pick a system and adjust the price below.';
+            header('Location: /admin/products/extra-choice-edit.php?id=' . $newId);
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not duplicate: ' . $e->getMessage();
+            header('Location: /admin/products/extra.php?id=' . $extraId);
+            exit;
+        }
+    }
+}
+
+// Mark a choice as default — one default per (extra, system) bucket.
+// "All systems" choices (system_id IS NULL) form their own bucket so
+// they don't get cleared by a system-specific default.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'set_default_choice') {
     csrf_check();
     $targetId = (int) ($_POST['choice_id'] ?? 0);
@@ -195,10 +279,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            $clear = $pdo->prepare(
-                'UPDATE product_extra_choices SET is_default = 0 WHERE product_extra_id = ?'
+            // Look up the target's system_id so we know which bucket
+            // to clear.
+            $tSt = $pdo->prepare(
+                'SELECT system_id FROM product_extra_choices
+                  WHERE id = ? AND product_extra_id = ? LIMIT 1'
             );
-            $clear->execute([$extraId]);
+            $tSt->execute([$targetId, $extraId]);
+            $targetSystemId = $tSt->fetchColumn();
+
+            if ($targetSystemId === null || $targetSystemId === false) {
+                $clear = $pdo->prepare(
+                    'UPDATE product_extra_choices SET is_default = 0
+                      WHERE product_extra_id = ? AND system_id IS NULL'
+                );
+                $clear->execute([$extraId]);
+            } else {
+                $clear = $pdo->prepare(
+                    'UPDATE product_extra_choices SET is_default = 0
+                      WHERE product_extra_id = ? AND system_id = ?'
+                );
+                $clear->execute([$extraId, (int) $targetSystemId]);
+            }
+
             $set = $pdo->prepare(
                 'UPDATE product_extra_choices SET is_default = 1
                   WHERE id = ? AND product_extra_id = ?'
@@ -216,39 +319,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 }
 
 // Sort by sort_order alone — drag-and-drop controls position. The 'default'
-// pill still shows but doesn't override the user's drag.
+// pill still shows but doesn't override the user's drag. system_id is
+// joined to its product_systems row so we can show the system name
+// inline ("Vogue", "Nova", "All systems").
 $rows = db()->prepare(
-    'SELECT c.id, c.label,
+    'SELECT c.id, c.label, c.system_id,
             c.price_delta, c.price_percent, c.price_per_metre,
             c.is_default, c.sort_order, c.active,
+            ps.name AS system_name,
             (SELECT COUNT(*) FROM extra_choice_price_rows r
               WHERE r.product_extra_choice_id = c.id) AS width_table_size
        FROM product_extra_choices c
+       LEFT JOIN product_systems ps ON ps.id = c.system_id
       WHERE c.product_extra_id = ?
    ORDER BY c.sort_order, c.label'
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
-
-// Pull each choice's system scope (junction-table rows) in one query, fold
-// into a [choice_id => [system names]] map so the rows below can show
-// "Vogue + Slim Line only" instead of just one system.
-$scopeByChoice = [];
-if ($choices) {
-    $choiceIds = array_map(static fn ($c) => (int) $c['id'], $choices);
-    $ph = implode(',', array_fill(0, count($choiceIds), '?'));
-    $scopeSt = db()->prepare(
-        "SELECT pecs.product_extra_choice_id, ps.name
-           FROM product_extra_choice_systems pecs
-           JOIN product_systems ps ON ps.id = pecs.product_system_id
-          WHERE pecs.product_extra_choice_id IN ($ph)
-          ORDER BY ps.sort_order, ps.name"
-    );
-    $scopeSt->execute($choiceIds);
-    foreach ($scopeSt->fetchAll() as $r) {
-        $scopeByChoice[(int) $r['product_extra_choice_id']][] = (string) $r['name'];
-    }
-}
 
 // Systems available on this product, for the system dropdown.
 $sysStmt = db()->prepare(
@@ -356,7 +443,10 @@ $activeNav = 'products';
                 <strong>£/metre</strong> = multiplied by the blind width in metres
                 (e.g. Champagne headrail at £8/m → on a 2.4m wide blind = +£19.20).
                 <strong>Width table</strong> (below) = lookup by width for stepped surcharges.
-                Use <strong>System</strong> to limit a choice to one system (e.g. Champagne only on Vogue).
+                Use <strong>Available on</strong> to tie a choice to one system, or leave
+                "All systems" if it applies everywhere. To make the same colour available
+                on more than one system at different prices, add it once per system using
+                the <em>Duplicate</em> link on the row below.
             </p>
             <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
                   class="form" novalidate enctype="multipart/form-data">
@@ -394,34 +484,37 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <?php if ($systems): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="system_id">Available on</label>
+                        <select id="system_id" name="system_id">
+                            <option value="0" <?= (int) $f['system_id'] === 0 ? 'selected' : '' ?>>
+                                All systems
+                            </option>
+                            <?php foreach ($systems as $s): ?>
+                                <option value="<?= (int) $s['id'] ?>"
+                                    <?= (int) $f['system_id'] === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?> only
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            "All systems" = appears on every system on this product.
+                            Pick a single system to limit it. To price the same choice
+                            differently per system, add one row per system (the
+                            <em>Duplicate</em> link on a saved row makes this quick).
+                        </small>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add choice</button>
                     <span style="color:#6b7280;font-size:0.875rem;margin-left:0.5rem">
                         Most choices need only a Label — the rest is optional.
                     </span>
                 </div>
-
-                <?php if ($systems): ?>
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label>System scope (optional)</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
-                            <?php foreach ($systems as $s): ?>
-                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
-                                    <input type="checkbox" name="system_ids[]"
-                                           value="<?= (int) $s['id'] ?>"
-                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
-                                    <?= e((string) $s['name']) ?>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                        <small style="color:#6b7280;font-size:0.8125rem">
-                            Tick one or more to limit this choice to specific systems.
-                            Leave all unticked to make it available everywhere.
-                        </small>
-                    </div>
-                </div>
-                <?php endif; ?>
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
@@ -485,6 +578,7 @@ $activeNav = 'products';
                             <tr>
                                 <th class="drag-col"></th>
                                 <th>Label</th>
+                                <th>Available on</th>
                                 <th>Price impact</th>
                                 <th></th>
                             </tr>
@@ -501,9 +595,12 @@ $activeNav = 'products';
                                         <?php if ((int) $c['is_default'] === 1): ?>
                                             <span class="default-pill">Default</span>
                                         <?php endif; ?>
-                                        <?php $scopeNames = $scopeByChoice[(int) $c['id']] ?? []; ?>
-                                        <?php if ($scopeNames): ?>
-                                            <span class="system-pill"><?= e(implode(' + ', $scopeNames)) ?> only</span>
+                                    </td>
+                                    <td>
+                                        <?php if ($c['system_id'] === null): ?>
+                                            <span style="color:#6b7280;font-size:0.875rem">All systems</span>
+                                        <?php else: ?>
+                                            <span class="system-pill"><?= e((string) ($c['system_name'] ?? '?')) ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td class="price-impact">
@@ -526,6 +623,17 @@ $activeNav = 'products';
                                     </td>
                                     <td class="row-actions">
                                         <a href="/admin/products/extra-choice-edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
+                                        <form method="post"
+                                              action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
+                                              style="display:inline;margin:0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="duplicate_choice">
+                                            <input type="hidden" name="choice_id" value="<?= (int) $c['id'] ?>">
+                                            <button type="submit" class="set-default"
+                                                    title="Clone this choice — handy when the same colour applies to another system at a different price">
+                                                Duplicate
+                                            </button>
+                                        </form>
                                         <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= (int) $c['id'] ?>#add-option"
                                            class="follow-up"
                                            title="Add an option that only appears when this choice is selected">

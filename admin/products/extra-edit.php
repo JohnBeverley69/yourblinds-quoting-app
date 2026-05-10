@@ -33,20 +33,11 @@ if (!$extra) {
     exit;
 }
 
-// Existing system bindings via the junction table.
-$scopeSt = db()->prepare(
-    'SELECT product_system_id FROM product_extra_systems
-      WHERE product_extra_id = ?'
-);
-$scopeSt->execute([$id]);
-$existingSystemIds = array_map('intval', $scopeSt->fetchAll(PDO::FETCH_COLUMN));
-
 $f = [
     'name'             => (string) $extra['name'],
     'is_required'      => (int)    $extra['is_required'],
     'active'           => (int)    $extra['active'],
     'parent_choice_id' => (int) ($extra['parent_choice_id'] ?? 0),
-    'system_ids'       => $existingSystemIds,
 ];
 $error = null;
 
@@ -57,10 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
     $f['active']           = !empty($_POST['active']) ? 1 : 0;
     $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
-    $f['system_ids']       = array_values(array_unique(array_filter(array_map(
-        'intval',
-        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
-    ))));
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
@@ -84,31 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id, $clientId,
             ]);
 
-            // Replace the system-scope junction rows. Validate ids belong
-            // to this product's catalogue first.
-            $pdo->prepare(
-                'DELETE FROM product_extra_systems WHERE product_extra_id = ?'
-            )->execute([$id]);
-
-            if ($f['system_ids']) {
-                $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
-                $vsSt = $pdo->prepare(
-                    "SELECT id FROM product_systems
-                      WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
-                );
-                $vsSt->execute([...$f['system_ids'], (int) $extra['product_id'], $clientId]);
-                $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
-                if ($validSystemIds) {
-                    $jIns = $pdo->prepare(
-                        'INSERT INTO product_extra_systems
-                           (product_extra_id, product_system_id) VALUES (?, ?)'
-                    );
-                    foreach ($validSystemIds as $sid) {
-                        $jIns->execute([$id, $sid]);
-                    }
-                }
-            }
-
             $pdo->commit();
             $_SESSION['flash_success'] = 'Option updated.';
             header('Location: /admin/products/extras.php?product_id=' . (int) $extra['product_id']);
@@ -123,15 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
-// Systems available on this product, for the system-scope checkboxes.
-$sysStmt = db()->prepare(
-    'SELECT id, name FROM product_systems
-      WHERE product_id = ? AND client_id = ?
-   ORDER BY sort_order, name'
-);
-$sysStmt->execute([(int) $extra['product_id'], $clientId]);
-$systems = $sysStmt->fetchAll();
 
 // All choices in this product (excluding self's own choices, to avoid loops).
 $choiceStmt = db()->prepare(
@@ -223,28 +176,6 @@ $activeNav = 'products';
                         </small>
                     </div>
                 </div>
-
-                <?php if ($systems): ?>
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label>System scope (optional)</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
-                            <?php foreach ($systems as $s): ?>
-                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
-                                    <input type="checkbox" name="system_ids[]"
-                                           value="<?= (int) $s['id'] ?>"
-                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
-                                    <?= e((string) $s['name']) ?>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                        <small style="color:#6b7280;font-size:0.8125rem">
-                            Tick one or more to limit this whole option to specific systems.
-                            Leave all unticked to make it available on every system.
-                        </small>
-                    </div>
-                </div>
-                <?php endif; ?>
 
                 <div class="toggle-stack">
                     <label for="is_required">
