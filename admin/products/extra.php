@@ -731,8 +731,16 @@ $activeNav = 'products';
 
     // Spawn a sibling row for a given system, by duplicating the source
     // row server-side with that system_id. Inserts the new row in the
-    // grid right after the source. The tick that triggered the spawn
-    // is reset (the source row didn't change; a new row was created).
+    // grid right after the source.
+    //
+    // Crucially: the tick STAYS ticked and the dropdown stays OPEN, so
+    // the user can rapid-tick more systems and see what they've added
+    // accumulate visually. (Auto-untick made it feel like only one
+    // could be picked at a time.) The tick state during a session
+    // diverges from the row's own system_id — we lock the new ticks
+    // as disabled too so the user can't accidentally re-tick and
+    // create duplicates. On page reload the dropdown re-renders from
+    // the row's actual system_id and the grid shows the spawned siblings.
     function spawnSibling(sourceRow, systemId, checkbox) {
         return withSavingState(sourceRow, api('duplicate', {
             choice_id: sourceRow.dataset.id,
@@ -741,13 +749,12 @@ $activeNav = 'products';
             var newRowEl = buildRow(data.choice);
             sourceRow.parentNode.insertBefore(newRowEl, sourceRow.nextSibling);
             updateCount();
-            // Source row isn't on the new system — untick + close the
-            // dropdown so the source's state stays accurate.
-            checkbox.checked = false;
-            var details = checkbox.closest('details');
-            if (details) details.open = false;
+            // Lock the just-ticked checkbox so it can't be toggled
+            // again from this dropdown. Visually it stays ticked so
+            // the user sees a running record of what they've added.
+            checkbox.disabled = true;
         }).catch(function () {
-            checkbox.checked = false;
+            checkbox.checked = false;  // revert on error so user can retry
         });
     }
 
