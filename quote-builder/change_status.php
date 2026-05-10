@@ -47,11 +47,25 @@ try {
             ->execute([$quoteId]);
     }
 
+    // Mirror the public-accept side: when the trade user marks a quote
+    // accepted, also drop a placeholder installation appointment on the
+    // calendar so it's never forgotten. Idempotent — safe to re-run if
+    // the status was already accepted before this commit landed.
+    $appointmentMsg = '';
+    if ($target === 'accepted') {
+        $apptId = qb_create_appointment_from_quote($pdo, $quoteId);
+        if ($apptId !== null) {
+            $appointmentMsg = ' Installation appointment dropped on the '
+                            . 'calendar (placeholder date — drag to the real '
+                            . 'date and assign a fitter).';
+        }
+    }
+
     $pdo->commit();
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
-        'Status: ' . $target . '.'
+        'Status: ' . $target . '.' . $appointmentMsg
     );
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

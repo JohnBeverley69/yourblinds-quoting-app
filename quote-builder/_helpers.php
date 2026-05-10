@@ -151,3 +151,93 @@ function qb_allowed_transitions(string $current): array
     }
     return ['draft'];
 }
+
+/**
+ * Create an installation appointment off the back of a quote acceptance.
+ *
+ * Idempotent: if an appointment already exists pointing at this quote
+ * (appointments.quote_id = N), returns its id without inserting.
+ *
+ * The appointment lands on a placeholder date (today + 14 days) at 09:00
+ * for 60 minutes — it WILL appear on the calendar so the trade user can
+ * find it, drag it to the real date, and assign a fitter. Status is
+ * 'booked' (the existing default appointment status).
+ *
+ * Customer + installation address copied from the quote snapshot fields,
+ * so even if the customer record changes later, the appointment carries
+ * the address as the quote captured it.
+ *
+ * Returns the appointment id (new or pre-existing), or null if the quote
+ * doesn't exist / has no client_id.
+ */
+function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
+{
+    if ($quoteId <= 0) return null;
+
+    $q = $pdo->prepare(
+        'SELECT id, client_id, quote_number, customer_id,
+                end_customer_name, end_customer_email, end_customer_phone,
+                end_customer_address1, end_customer_address2,
+                end_customer_town, end_customer_county, end_customer_postcode,
+                notes
+           FROM quotes WHERE id = ? LIMIT 1'
+    );
+    $q->execute([$quoteId]);
+    $quote = $q->fetch();
+    if (!$quote || empty($quote['client_id'])) {
+        return null;
+    }
+
+    // Idempotency check — re-acceptance, double-click, replay attack, all
+    // safe; we never end up with two installation appointments per quote.
+    $exist = $pdo->prepare(
+        'SELECT id FROM appointments WHERE quote_id = ? LIMIT 1'
+    );
+    $exist->execute([$quoteId]);
+    $existingId = $exist->fetchColumn();
+    if ($existingId !== false) {
+        return (int) $existingId;
+    }
+
+    // Default placeholder schedule: +14 days, 9 am, 60 min. The trade
+    // user is expected to drag/edit it to the real date once they've
+    // arranged the install with the customer.
+    $defaultDate = (new DateTimeImmutable('+14 days'))->format('Y-m-d');
+    $defaultTime = '09:00:00';
+    $title       = 'Install: ' . (string) $quote['quote_number']
+                 . ' — ' . (string) $quote['end_customer_name'];
+
+    $notes = "Auto-created from accepted quote " . $quote['quote_number'] . ".\n"
+           . "Set the real date / time and assign a fitter when scheduled."
+           . (!empty($quote['notes']) ? "\n\nQuote notes:\n" . $quote['notes'] : '');
+
+    $ins = $pdo->prepare(
+        'INSERT INTO appointments
+           (client_id, client_user_id, customer_id, quote_id,
+            title, appointment_date, appointment_time, duration_minutes,
+            installation_address1, installation_address2,
+            installation_town, installation_county, installation_postcode,
+            notes, status)
+         VALUES (?, NULL, ?, ?,
+                 ?, ?, ?, 60,
+                 ?, ?, ?, ?, ?,
+                 ?, ?)'
+    );
+    $ins->execute([
+        (int) $quote['client_id'],
+        $quote['customer_id'] !== null ? (int) $quote['customer_id'] : null,
+        (int) $quote['id'],
+        $title,
+        $defaultDate,
+        $defaultTime,
+        $quote['end_customer_address1'] ?: null,
+        $quote['end_customer_address2'] ?: null,
+        $quote['end_customer_town']     ?: null,
+        $quote['end_customer_county']   ?: null,
+        $quote['end_customer_postcode'] ?: null,
+        $notes,
+        'booked',
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}

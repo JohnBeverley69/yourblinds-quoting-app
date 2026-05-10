@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../quote-builder/_helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -72,6 +73,11 @@ if ($action === 'accept') {
                 accepted_at               = NOW()
           WHERE id = ?'
     )->execute([substr($name, 0, 150), substr($ip, 0, 45), (int) $quote['id']]);
+
+    // Auto-create the installation appointment so the trade business
+    // sees the job land on their calendar the moment the customer
+    // accepts. Idempotent — repeat accepts don't multiply appointments.
+    qb_create_appointment_from_quote($pdo, (int) $quote['id']);
 
     $_SESSION['flash_success'] = 'Quote accepted. Thanks!';
     header('Location: ' . $publicUrl);

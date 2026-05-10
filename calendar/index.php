@@ -52,7 +52,7 @@ $mineOnly = isset($_GET['mine']) && (string) $_GET['mine'] === '1';
 if ($mineOnly) {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status,
+                a.duration_minutes, a.status, a.quote_id,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name
            FROM appointments a
@@ -71,7 +71,7 @@ if ($mineOnly) {
 } else {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status,
+                a.duration_minutes, a.status, a.quote_id,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name
            FROM appointments a
