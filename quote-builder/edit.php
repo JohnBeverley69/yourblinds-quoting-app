@@ -1213,11 +1213,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
 
     async function runPreview() {
-        var ok = productSel.value && fabricId.value
-              && widthIn.value.trim() && dropIn.value.trim();
-        if (!ok) {
+        // Spell out exactly what's missing so the user can act on it
+        // without having to guess which field they skipped — generic
+        // "pick a product, fabric and dimensions" was too easy to miss
+        // when you'd already filled three of the four.
+        var missing = [];
+        if (!productSel.value)     missing.push('product');
+        if (!fabricId.value)       missing.push('fabric');
+        if (!widthIn.value.trim()) missing.push('width');
+        if (!dropIn.value.trim())  missing.push('drop');
+        if (missing.length > 0) {
             previewBox.className   = 'idle';
-            previewBox.textContent = 'Pick a product, fabric and dimensions to see the price.';
+            previewBox.textContent = 'Still need: ' + missing.join(', ') + '.';
             setSubmitDisabled(true);
             return;
         }
