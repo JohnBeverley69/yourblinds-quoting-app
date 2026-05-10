@@ -426,7 +426,8 @@ $activeNav = 'products';
                                 </details>
                             </td>
                             <td colspan="6" style="color:#9ca3af;font-size:0.8125rem">
-                                Tick one or more systems above. Prices and toggles become editable once saved.
+                                Tick one or more systems, then press <strong>Enter</strong> on the label to add.
+                                One row per ticked system; prices and toggles become editable on each new row.
                             </td>
                         </tr>
                     </tbody>
