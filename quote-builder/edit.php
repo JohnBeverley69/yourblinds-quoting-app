@@ -299,13 +299,46 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
 
         /* ===========================================================
-           Mobile tweaks — tighter padding on the Add-blind form so
-           it doesn't feel cramped on a phone, and the items table
-           stays horizontally scrollable inside its .table-wrap.
+           Mobile / small-screen tweaks. The global app.css already
+           collapses .form-row variants and shrinks .app-main padding
+           under 768px; the rules below target quote-builder-specific
+           bits (sticky bar, button rows, section spacing) so the
+           page doesn't feel cramped or have the nav FAB sitting on
+           top of the total.
            =========================================================== */
-        @media (max-width: 700px) {
-            .quote-sticky-bar { padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+        @media (max-width: 768px) {
+            /* Sticky bar margins were tuned for the 1.5rem desktop
+               main padding; on mobile main-padding is 1.25rem. Also
+               pad the right side so the nav FAB button (top: 0.625rem
+               right: 0.625rem, 44x44px, z-index 1002) doesn't sit on
+               top of the Total figure. */
+            .quote-sticky-bar {
+                margin: -1.25rem -1.25rem 1rem;
+                padding: 0.5rem 3.5rem 0.5rem 0.75rem;
+                font-size: 0.875rem;
+            }
             .quote-sticky-bar .qsb-total { font-size: 1rem; }
+
+            /* Sections themselves — tighter inner padding so each
+               doesn't take a full screen height of vertical space. */
+            .section { padding: 1rem; margin-bottom: 0.875rem; }
+
+            /* Send-to-customer button row was side-by-side; on a
+               narrow screen the WhatsApp button overflows. Stack them. */
+            .section [style*="display:flex"][style*="flex-wrap:wrap"] button,
+            .section [style*="display:flex"][style*="flex-wrap:wrap"] a.btn-secondary {
+                flex: 1 1 100%;
+                text-align: center;
+            }
+
+            /* Status / quote-actions row at the bottom — same idea,
+               buttons full width so they don't squeeze each other. */
+            .status-actions form,
+            .status-actions > a,
+            .status-actions > button { flex: 1 1 100%; }
+            .status-actions form button { width: 100%; }
+        }
+        @media (max-width: 700px) {
             .extras-grid { grid-template-columns: 1fr; }
         }
     </style>
