@@ -644,6 +644,93 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         reschedule(id, '');
     });
 
+    // -- Live-poll the Pending tray ---------------------------------
+    // New acceptances land in the tray as soon as a customer clicks
+    // Accept on the public link. Polling here so the trade user sees
+    // new pending jobs without manually refreshing.
+    //
+    // Keeps shared-hosting friendly: 15s interval, only while the
+    // page is visible, only swaps DOM if the ID set actually changed
+    // (so someone reading a card doesn't get the text re-rendered
+    // under their cursor on every poll).
+    var pollEndpoint = '/calendar/pending.php' + (window.location.search.indexOf('mine=1') !== -1 ? '?mine=1' : '');
+    var pollMs = 15000;
+    var pollTimer = null;
+
+    function currentPendingIds() {
+        var ids = [];
+        pendingCards.querySelectorAll('.pending-card').forEach(function (c) {
+            ids.push(c.dataset.id);
+        });
+        return ids.sort().join(',');
+    }
+
+    function refreshPendingTray() {
+        // Bail if the user is mid-drag — don't yank the card out from
+        // under them.
+        if (dragId) return;
+
+        fetch(pollEndpoint, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.ok) return;
+                var newIds = data.pending.map(function (p) { return String(p.id); }).sort().join(',');
+                if (newIds === currentPendingIds()) return;  // no change
+
+                // Rebuild the tray contents.
+                var html = '';
+                if (data.pending.length === 0) {
+                    html = '<span class="pending-empty">Nothing pending. Accepted quotes land here until you place them on a date.</span>';
+                } else {
+                    data.pending.forEach(function (p) {
+                        var meta = [];
+                        if (p.town)     meta.push(p.town);
+                        if (p.postcode) meta.push(p.postcode);
+                        html += '<div class="pending-card" draggable="true"'
+                             +  ' data-id="' + p.id + '"'
+                             +  ' title="' + escapeAttr(p.title) + '">'
+                             +    '<span class="pc-title">' + escapeHtml(p.title) + '</span>'
+                             +    (meta.length
+                                    ? '<span class="pc-meta">' + escapeHtml(meta.join(' · ')) + '</span>'
+                                    : '')
+                             +  '</div>';
+                    });
+                }
+                pendingCards.innerHTML = html;
+                pendingCount.textContent = data.pending.length;
+
+                // Re-bind drag on the new cards.
+                pendingCards.querySelectorAll('.pending-card').forEach(bindDraggable);
+            })
+            .catch(function () { /* network blip — try again next tick */ });
+    }
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    function startPolling() {
+        if (pollTimer !== null) return;
+        pollTimer = setInterval(refreshPendingTray, pollMs);
+    }
+    function stopPolling() {
+        if (pollTimer === null) return;
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            stopPolling();
+        } else {
+            // Refresh once immediately on tab return, then resume.
+            refreshPendingTray();
+            startPolling();
+        }
+    });
+    if (!document.hidden) startPolling();
+
     // -- AJAX --------------------------------------------------------
     function reschedule(id, date) {
         var fd = new FormData();
