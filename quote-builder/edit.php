@@ -754,6 +754,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <td style="white-space:nowrap">
                                             <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
                                                class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
+                                            <form method="post" action="/quote-builder/duplicate_item.php" style="display:inline;margin:0 0.25rem 0 0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-secondary"
+                                                        title="Duplicate this blind — copies fabric, system, options. New row opens in edit mode for you to tweak the size.">
+                                                    Dup
+                                                </button>
+                                            </form>
                                             <form method="post" action="/quote-builder/delete_item.php" style="display:inline;margin:0"
                                                   onsubmit="return confirm('Remove this blind?');">
                                                 <?= csrf_field() ?>
