@@ -26,7 +26,7 @@ if (!$target) {
     exit('User not found.');
 }
 
-$validRoles = ['admin','owner','office','sales','agent','readonly'];
+$validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 $error      = null;
 $flashMsg   = $_SESSION['flash_success'] ?? null;
 unset($_SESSION['flash_success']);

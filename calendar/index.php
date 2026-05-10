@@ -41,23 +41,51 @@ $trailingBlanks = (7 - ($totalCells % 7)) % 7;
 // ---------------------------------------------------------------------------
 // Fetch appointments visible to this client, falling within the month window.
 // Grouped by date for fast per-cell rendering.
+//
+// ?mine=1 filters to appointments assigned to the logged-in user only —
+// this is what powers the "My Diary" sidebar entry that fitters use to
+// see just their own jobs. Without the flag, the calendar shows every
+// appointment for the tenant (the admin/office view).
 // ---------------------------------------------------------------------------
-$stmt = db()->prepare(
-    'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-            a.duration_minutes, a.status,
-            a.installation_town, a.installation_postcode,
-            c.name AS customer_name
-       FROM appointments a
-  LEFT JOIN customers c ON c.id = a.customer_id
-      WHERE a.client_id = ?
-        AND a.appointment_date BETWEEN ? AND ?
-   ORDER BY a.appointment_date, a.appointment_time'
-);
-$stmt->execute([
-    $clientId,
-    $firstOfMonth->format('Y-m-d'),
-    $lastOfMonth->format('Y-m-d'),
-]);
+$mineOnly = isset($_GET['mine']) && (string) $_GET['mine'] === '1';
+
+if ($mineOnly) {
+    $stmt = db()->prepare(
+        'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                a.duration_minutes, a.status,
+                a.installation_town, a.installation_postcode,
+                c.name AS customer_name
+           FROM appointments a
+      LEFT JOIN customers c ON c.id = a.customer_id
+          WHERE a.client_id = ?
+            AND a.client_user_id = ?
+            AND a.appointment_date BETWEEN ? AND ?
+       ORDER BY a.appointment_date, a.appointment_time'
+    );
+    $stmt->execute([
+        $clientId,
+        (int) $user['user_id'],
+        $firstOfMonth->format('Y-m-d'),
+        $lastOfMonth->format('Y-m-d'),
+    ]);
+} else {
+    $stmt = db()->prepare(
+        'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                a.duration_minutes, a.status,
+                a.installation_town, a.installation_postcode,
+                c.name AS customer_name
+           FROM appointments a
+      LEFT JOIN customers c ON c.id = a.customer_id
+          WHERE a.client_id = ?
+            AND a.appointment_date BETWEEN ? AND ?
+       ORDER BY a.appointment_date, a.appointment_time'
+    );
+    $stmt->execute([
+        $clientId,
+        $firstOfMonth->format('Y-m-d'),
+        $lastOfMonth->format('Y-m-d'),
+    ]);
+}
 
 $byDate = [];
 foreach ($stmt->fetchAll() as $row) {
@@ -81,7 +109,7 @@ $fmtTime = static function (string $time): string {
         ?: DateTimeImmutable::createFromFormat('H:i', $time);
     return $t === false ? $time : strtolower($t->format('g:ia'));
 };
-$activeNav = 'calendar';
+$activeNav = $mineOnly ? 'my-diary' : 'calendar';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -294,9 +322,17 @@ $activeNav = 'calendar';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Calendar</h1>
+                <h1 class="page-title">
+                    <?= $mineOnly ? 'My Diary' : 'Calendar' ?>
+                </h1>
                 <p class="page-subtitle">
-                    Appointments for <?= e($user['company_name']) ?>.
+                    <?php if ($mineOnly): ?>
+                        Appointments assigned to <?= e($user['full_name']) ?>.
+                        <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>">Show all</a>
+                    <?php else: ?>
+                        Appointments for <?= e($user['company_name']) ?>.
+                        <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>">My diary only</a>
+                    <?php endif; ?>
                 </p>
             </div>
             <div class="actions-bar">
@@ -307,21 +343,31 @@ $activeNav = 'calendar';
             </div>
         </div>
 
+        <?php
+            // Preserve mine=1 across month navigation so the diary view
+            // doesn't break out to "show all" when the user clicks
+            // prev/next month.
+            $monthQs = static fn (string $ym): string =>
+                '?month=' . urlencode($ym) . ($mineOnly ? '&mine=1' : '');
+            $todayHref = $mineOnly
+                ? '/calendar/index.php?mine=1'
+                : '/calendar/index.php';
+        ?>
         <section class="section">
             <div class="cal-toolbar">
                 <div class="cal-nav">
                     <a class="cal-nav-btn"
-                       href="?month=<?= e($prevMonth) ?>"
+                       href="<?= e($monthQs($prevMonth)) ?>"
                        aria-label="Previous month"
                        rel="prev">&lsaquo;</a>
                     <span class="cal-month-label"><?= e($firstOfMonth->format('F Y')) ?></span>
                     <a class="cal-nav-btn"
-                       href="?month=<?= e($nextMonth) ?>"
+                       href="<?= e($monthQs($nextMonth)) ?>"
                        aria-label="Next month"
                        rel="next">&rsaquo;</a>
                     <?php if ($firstOfMonth->format('Y-m') !== $thisMonth): ?>
                         <a class="cal-nav-btn cal-nav-today"
-                           href="/calendar/index.php">Today</a>
+                           href="<?= e($todayHref) ?>">Today</a>
                     <?php endif; ?>
                 </div>
                 <div class="cal-legend" aria-label="Status colours">

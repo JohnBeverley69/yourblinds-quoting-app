@@ -14,7 +14,7 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$validRoles = ['admin','owner','office','sales','agent','readonly'];
+$validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 
 $form = [
     'first_name' => '',
