@@ -736,19 +736,58 @@ $activeNav = 'products';
         return details;
     }
 
-    // Spawn a sibling row for a given system, by duplicating the source
-    // row server-side with that system_id. Inserts the new row in the
-    // grid right after the source.
+    // React to a specific-system tick on an existing row's dropdown.
     //
-    // Crucially: the tick STAYS ticked and the dropdown stays OPEN, so
-    // the user can rapid-tick more systems and see what they've added
-    // accumulate visually. (Auto-untick made it feel like only one
-    // could be picked at a time.) The tick state during a session
-    // diverges from the row's own system_id — we lock the new ticks
-    // as disabled too so the user can't accidentally re-tick and
-    // create duplicates. On page reload the dropdown re-renders from
-    // the row's actual system_id and the grid shows the spawned siblings.
+    // Two paths depending on what the source row currently is:
+    //
+    // 1. Source row is "All systems" (its All checkbox is ticked).
+    //    The first specific tick CONVERTS the row in place — its
+    //    system_id changes from NULL to the ticked system. No sibling
+    //    is created; no orphan All-systems row left behind. Subsequent
+    //    ticks (now that the source is a specific row) fall through
+    //    to path 2.
+    //
+    // 2. Source row is already a specific system. Ticking another
+    //    system spawns a SIBLING row (clone) for that system, and the
+    //    just-ticked checkbox locks ticked so the user sees a running
+    //    record of what they've added. The original row is untouched.
+    //
+    // Both paths leave the dropdown OPEN so the user can rapid-tick
+    // more systems if they want.
     function spawnSibling(sourceRow, systemId, checkbox) {
+        var allCb = sourceRow.querySelector('.row-system-tick[data-system="0"]');
+        var isAllRow = allCb && allCb.checked;
+
+        if (isAllRow) {
+            // Path 1: convert in place. Update system_id on this row.
+            return withSavingState(sourceRow, api('update', {
+                choice_id: sourceRow.dataset.id,
+                field:     'system_id',
+                value:     systemId
+            })).then(function () {
+                // Reflect the new state in the dropdown without a
+                // full rebuild: untick All, lock the new current,
+                // update the summary text. The other checkboxes were
+                // already enabled by buildSystemMultiSelect's "only
+                // the current is disabled" rule.
+                allCb.checked  = false;
+                checkbox.disabled = true;
+
+                var sysName = '?';
+                for (var i = 0; i < systemsList.length; i++) {
+                    if (String(systemsList[i].id) === String(systemId)) {
+                        sysName = systemsList[i].name;
+                        break;
+                    }
+                }
+                var summary = sourceRow.querySelector('.multi-select > summary');
+                if (summary) summary.textContent = sysName;
+            }).catch(function () {
+                checkbox.checked = false;
+            });
+        }
+
+        // Path 2: standard spawn. Source row stays; new sibling created.
         return withSavingState(sourceRow, api('duplicate', {
             choice_id: sourceRow.dataset.id,
             system_id: systemId
@@ -756,12 +795,9 @@ $activeNav = 'products';
             var newRowEl = buildRow(data.choice);
             sourceRow.parentNode.insertBefore(newRowEl, sourceRow.nextSibling);
             updateCount();
-            // Lock the just-ticked checkbox so it can't be toggled
-            // again from this dropdown. Visually it stays ticked so
-            // the user sees a running record of what they've added.
             checkbox.disabled = true;
         }).catch(function () {
-            checkbox.checked = false;  // revert on error so user can retry
+            checkbox.checked = false;
         });
     }
 
