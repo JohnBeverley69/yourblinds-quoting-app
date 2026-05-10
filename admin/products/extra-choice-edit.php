@@ -175,21 +175,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $vsSt->execute([...$f['system_ids'], (int) $choice['product_id'], $clientId]);
                     $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
 
-                    // Auto-collapse: if every available system is ticked,
-                    // treat it as "no scope" (zero rows). Same runtime effect,
-                    // but cleaner data and future-proof against new systems
-                    // being added later (which would otherwise NOT inherit
-                    // this row).
-                    $totalSt = $pdo->prepare(
-                        'SELECT COUNT(*) FROM product_systems
-                          WHERE product_id = ? AND client_id = ?'
-                    );
-                    $totalSt->execute([(int) $choice['product_id'], $clientId]);
-                    $totalSystems = (int) $totalSt->fetchColumn();
-                    if ($totalSystems > 0 && count($validSystemIds) === $totalSystems) {
-                        $validSystemIds = [];
-                    }
-
                     if ($validSystemIds) {
                         $jIns = $pdo->prepare(
                             'INSERT INTO product_extra_choice_systems
