@@ -364,6 +364,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $startOpen   = !$hasCustomer;
         ?>
         <section class="section">
+            <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+
             <details class="customer-collapse"<?= $startOpen ? ' open' : '' ?>>
                 <summary>
                     <?php if ($hasCustomer): ?>
@@ -379,9 +383,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <span class="cs-hint">— click to add the customer's contact info</span>
                     <?php endif; ?>
                 </summary>
-            <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
-                <?= csrf_field() ?>
-                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
 
                 <div class="form-row full">
                     <div class="form-group">
@@ -495,21 +496,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                value="<?= e((string) ($quote['end_customer_postcode'] ?? '')) ?>">
                     </div>
                 </div>
-
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="notes">Quote notes</label>
-                        <textarea id="notes" name="notes" rows="3" <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
-                    </div>
-                </div>
-
-                <?php if ($editable): ?>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Save details</button>
-                    </div>
-                <?php endif; ?>
-            </form>
             </details>
+
+            <!-- Quote notes lives OUTSIDE <details> so it stays visible
+                 even when the customer summary is collapsed. Still inside
+                 the form so it saves alongside customer fields. -->
+            <div class="form-row full" style="margin-top:1rem">
+                <div class="form-group">
+                    <label for="notes">Quote notes</label>
+                    <textarea id="notes" name="notes" rows="3" <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
+                </div>
+            </div>
+
+            <?php if ($editable): ?>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save details</button>
+                </div>
+            <?php endif; ?>
+            </form>
         </section>
         </div><!-- /col-customer -->
 
