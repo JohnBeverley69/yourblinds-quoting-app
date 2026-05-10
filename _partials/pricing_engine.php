@@ -160,6 +160,21 @@ function pe_apply_extra(
         return ['error' => "Option #$extraId not found for this product."];
     }
 
+    // 1b. System-scope check at the OPTION level via product_extra_systems.
+    //     No junction rows = available on every system (default). Otherwise
+    //     the item's system_id must be in the allow-list. Mirrors the
+    //     choice-level check below; both layers are independently enforced.
+    $extraScopeSt = $pdo->prepare(
+        'SELECT product_system_id FROM product_extra_systems
+          WHERE product_extra_id = ?'
+    );
+    $extraScopeSt->execute([$extraId]);
+    $extraAllowedSystemIds = array_map('intval', $extraScopeSt->fetchAll(PDO::FETCH_COLUMN));
+    if ($extraAllowedSystemIds && !in_array($systemId ?? 0, $extraAllowedSystemIds, true)) {
+        return ['error' => "Option '" . $extra['name']
+                          . "' is not available on the selected system."];
+    }
+
     // 2. Look up the choice.
     $st = $pdo->prepare(
         'SELECT id, product_extra_id, label,

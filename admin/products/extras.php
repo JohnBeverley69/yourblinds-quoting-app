@@ -32,8 +32,18 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f = ['name' => '', 'is_required' => 1, 'parent_choice_id' => 0];
+$f = ['name' => '', 'is_required' => 1, 'parent_choice_id' => 0, 'system_ids' => []];
 $error = null;
+
+// Systems available on this product, for the new system-scope checkboxes
+// (also used to render the existing rows below with a "X + Y only" pill).
+$sysStmt = db()->prepare(
+    'SELECT id, name FROM product_systems
+      WHERE product_id = ? AND client_id = ?
+   ORDER BY sort_order, name'
+);
+$sysStmt->execute([$productId, $clientId]);
+$systems = $sysStmt->fetchAll();
 
 // "+ Follow-up option" deep link from extra.php pre-fills the parent dropdown
 // via ?parent_choice=N. We accept the GET only on initial render — POST
@@ -51,16 +61,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $f['name']             = trim((string) ($_POST['name'] ?? ''));
     $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
     $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
+    $f['system_ids']       = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['system_ids'] ?? null) ? $_POST['system_ids'] : []
+    ))));
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Name is too long (max 150 chars).';
     } else {
+        $pdo = db();
+        $pdo->beginTransaction();
         try {
             // sort_order = MAX+1 so new extras append to the end of the
             // list (drag-and-drop owns ordering after that).
-            $sortStmt = db()->prepare(
+            $sortStmt = $pdo->prepare(
                 'SELECT COALESCE(MAX(sort_order), -1) + 1
                    FROM product_extras
                   WHERE product_id = ? AND client_id = ?'
@@ -68,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $sortStmt->execute([$productId, $clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
-            $stmt = db()->prepare(
+            $stmt = $pdo->prepare(
                 'INSERT INTO product_extras
                    (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
                  VALUES (?, ?, ?, ?, ?, ?, 1)'
@@ -81,11 +97,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['is_required'],
                 $nextSort,
             ]);
-            $newId = (int) db()->lastInsertId();
+            $newId = (int) $pdo->lastInsertId();
+
+            // Tie the option to its selected systems via the junction table.
+            // Empty selection = available on every system.
+            if ($f['system_ids']) {
+                $ph = implode(',', array_fill(0, count($f['system_ids']), '?'));
+                $vsSt = $pdo->prepare(
+                    "SELECT id FROM product_systems
+                      WHERE id IN ($ph) AND product_id = ? AND client_id = ?"
+                );
+                $vsSt->execute([...$f['system_ids'], $productId, $clientId]);
+                $validSystemIds = array_map('intval', $vsSt->fetchAll(PDO::FETCH_COLUMN));
+                if ($validSystemIds) {
+                    $jIns = $pdo->prepare(
+                        'INSERT INTO product_extra_systems
+                           (product_extra_id, product_system_id) VALUES (?, ?)'
+                    );
+                    foreach ($validSystemIds as $sid) {
+                        $jIns->execute([$newId, $sid]);
+                    }
+                }
+            }
+
+            $pdo->commit();
             $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added.';
             header('Location: /admin/products/extra.php?id=' . $newId);
             exit;
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
                 $error = 'An option with that name already exists for this product.';
             } else {
@@ -124,6 +164,26 @@ $rows = db()->prepare(
 );
 $rows->execute([$productId, $clientId]);
 $extras = $rows->fetchAll();
+
+// Pull each extra's system scope (junction) in one query, fold by extra id
+// so the rows below can show "Vogue + Slim Line only" instead of nothing
+// for system-scoped Options.
+$scopeByExtra = [];
+if ($extras) {
+    $extraIds = array_map(static fn ($e) => (int) $e['id'], $extras);
+    $ph = implode(',', array_fill(0, count($extraIds), '?'));
+    $scopeSt = db()->prepare(
+        "SELECT pes.product_extra_id, ps.name
+           FROM product_extra_systems pes
+           JOIN product_systems ps ON ps.id = pes.product_system_id
+          WHERE pes.product_extra_id IN ($ph)
+          ORDER BY ps.sort_order, ps.name"
+    );
+    $scopeSt->execute($extraIds);
+    foreach ($scopeSt->fetchAll() as $r) {
+        $scopeByExtra[(int) $r['product_extra_id']][] = (string) $r['name'];
+    }
+}
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -279,6 +339,28 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <?php if ($systems): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>System scope (optional)</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;padding:0.5rem 0">
+                            <?php foreach ($systems as $s): ?>
+                                <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                    <input type="checkbox" name="system_ids[]"
+                                           value="<?= (int) $s['id'] ?>"
+                                           <?= in_array((int) $s['id'], $f['system_ids'], true) ? 'checked' : '' ?>>
+                                    <?= e((string) $s['name']) ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            Tick one or more to limit this whole option to specific systems.
+                            Leave all unticked to make it available on every system.
+                        </small>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add option</button>
                 </div>
@@ -326,6 +408,12 @@ $activeNav = 'products';
                                             <span class="req-pill">Required</span>
                                         <?php else: ?>
                                             <span class="opt-pill">Optional</span>
+                                        <?php endif; ?>
+                                        <?php $extraScope = $scopeByExtra[(int) $x['id']] ?? []; ?>
+                                        <?php if ($extraScope): ?>
+                                            <span class="req-pill" style="background:#1f3b5b">
+                                                <?= e(implode(' + ', $extraScope)) ?> only
+                                            </span>
                                         <?php endif; ?>
                                         <?php if (!empty($x['parent_choice_id'])): ?>
                                             <span class="parent-cond">

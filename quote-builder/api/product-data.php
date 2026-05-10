@@ -78,6 +78,21 @@ $st->execute([$productId, $clientId]);
 $extrasRaw = $st->fetchAll();
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
+// System-scope per extra (junction). Empty = available on every system.
+$extraScopeByExtra = [];
+if ($extraIds) {
+    $eph = implode(',', array_fill(0, count($extraIds), '?'));
+    $extraScopeSt = $pdo->prepare(
+        "SELECT product_extra_id, product_system_id
+           FROM product_extra_systems
+          WHERE product_extra_id IN ($eph)"
+    );
+    $extraScopeSt->execute($extraIds);
+    foreach ($extraScopeSt->fetchAll() as $r) {
+        $extraScopeByExtra[(int) $r['product_extra_id']][] = (int) $r['product_system_id'];
+    }
+}
+
 $choicesByExtra = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
@@ -122,13 +137,17 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra) {
+$extras = array_map(static function ($r) use ($choicesByExtra, $extraScopeByExtra) {
+    $eid = (int) $r['id'];
     return [
-        'id'               => (int)    $r['id'],
+        'id'               => $eid,
         'name'             => (string) $r['name'],
         'is_required'      => (bool)   $r['is_required'],
         'parent_choice_id' => $r['parent_choice_id'] !== null ? (int) $r['parent_choice_id'] : null,
-        'choices'          => $choicesByExtra[(int) $r['id']] ?? [],
+        // Empty array = available on every system. Otherwise the JS-side
+        // filter only shows the option when the chosen system is in the list.
+        'system_ids'       => $extraScopeByExtra[$eid] ?? [],
+        'choices'          => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);
 

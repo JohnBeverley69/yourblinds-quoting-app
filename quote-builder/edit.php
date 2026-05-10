@@ -1008,6 +1008,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 if (!parentSelected) return;
             }
 
+            // System-scope filter at the EXTRA level. Empty system_ids array
+            // means "available on every system"; otherwise the chosen system
+            // must be in the list. Mirrors the choice-level filter below and
+            // the server-side junction table product_extra_systems.
+            if (extra.system_ids && extra.system_ids.length > 0) {
+                if (extra.system_ids.indexOf(systemId) === -1) return;
+            }
+
             // Filter choices by system scope. Empty system_ids array means
             // "available on every system"; otherwise the chosen system must
             // be in the list.

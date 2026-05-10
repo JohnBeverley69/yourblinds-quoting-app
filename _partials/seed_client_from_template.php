@@ -139,6 +139,34 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     }
 
     // -----------------------------------------------------------------------
+    // 4b. product_extra_systems  (the extra ↔ system junction)
+    //     Mirror of step 5b, but at the option level. Empty junction = the
+    //     option is available on every system; otherwise restricted to the
+    //     listed systems.
+    // -----------------------------------------------------------------------
+    if ($extraMap) {
+        $oldExtraIds = array_keys($extraMap);
+        $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
+        $sel = $pdo->prepare(
+            "SELECT product_extra_id, product_system_id
+               FROM product_extra_systems
+              WHERE product_extra_id IN ($ph)"
+        );
+        $sel->execute($oldExtraIds);
+        $ins = $pdo->prepare(
+            'INSERT INTO product_extra_systems
+               (product_extra_id, product_system_id)
+             VALUES (?, ?)'
+        );
+        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $newExtraId  = $extraMap[(int) $r['product_extra_id']]   ?? null;
+            $newSystemId = $systemMap[(int) $r['product_system_id']] ?? null;
+            if ($newExtraId === null || $newSystemId === null) continue;
+            $ins->execute([$newExtraId, $newSystemId]);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // 5. product_extra_choices  (system_id column is legacy / unused — the
     //    junction table copy below is the authoritative system scope)
     // -----------------------------------------------------------------------
