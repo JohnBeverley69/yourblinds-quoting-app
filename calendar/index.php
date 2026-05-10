@@ -92,6 +92,33 @@ foreach ($stmt->fetchAll() as $row) {
     $byDate[$row['appointment_date']][] = $row;
 }
 
+// Pending Scheduling tray — appointments with NO date set yet, e.g.
+// auto-created on quote acceptance and waiting for the trade user to
+// drag them onto the right day. Always queried for the same tenant
+// scope as the main grid (and the same mine=1 filter — fitters see
+// only their own pending jobs).
+$pendingSql = $mineOnly
+    ? 'SELECT a.id, a.title, a.status, a.quote_id,
+              a.installation_town, a.installation_postcode,
+              c.name AS customer_name
+         FROM appointments a
+    LEFT JOIN customers c ON c.id = a.customer_id
+        WHERE a.client_id = ?
+          AND a.client_user_id = ?
+          AND a.appointment_date IS NULL
+     ORDER BY a.id DESC'
+    : 'SELECT a.id, a.title, a.status, a.quote_id,
+              a.installation_town, a.installation_postcode,
+              c.name AS customer_name
+         FROM appointments a
+    LEFT JOIN customers c ON c.id = a.customer_id
+        WHERE a.client_id = ?
+          AND a.appointment_date IS NULL
+     ORDER BY a.id DESC';
+$pStmt = db()->prepare($pendingSql);
+$pStmt->execute($mineOnly ? [$clientId, (int) $user['user_id']] : [$clientId]);
+$pendingAppts = $pStmt->fetchAll();
+
 $dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 
 // Whether to surface the "Today's run" link in the page header.
@@ -115,6 +142,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Calendar &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
@@ -313,6 +341,74 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                 margin-left: 0.5rem;
             }
         }
+
+        /* ===========================================================
+           Pending Scheduling tray + drag-and-drop affordances.
+           Pending appointments live above the calendar grid as
+           draggable cards. Drop targets:
+             - any calendar cell with a real date → schedules to that date
+             - the pending tray itself → unschedules (date back to NULL)
+           Both pending cards and scheduled cards are draggable.
+           =========================================================== */
+        .pending-tray {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 0.875rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .pending-tray-head {
+            display: flex; align-items: center; gap: 0.5rem;
+            margin: 0 0 0.625rem;
+        }
+        .pending-tray-head h3 {
+            margin: 0; font-size: 0.9375rem; color: #92400e;
+            font-weight: 700;
+        }
+        .pending-tray-head .pending-count {
+            font-size: 0.75rem; padding: 0.125rem 0.5rem;
+            background: #f59e0b; color: #fff; border-radius: 999px;
+            font-weight: 700;
+        }
+        .pending-tray-head .pending-hint {
+            margin-left: auto; font-size: 0.8125rem; color: #92400e;
+            font-style: italic;
+        }
+        .pending-cards {
+            display: flex; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .pending-card {
+            display: inline-flex; flex-direction: column;
+            min-width: 180px; max-width: 280px;
+            padding: 0.5rem 0.625rem;
+            background: #fff;
+            border: 1px solid #fde68a; border-radius: 8px;
+            cursor: grab; user-select: none;
+            font-size: 0.8125rem; color: #111827;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .pending-card:active { cursor: grabbing; }
+        .pending-card .pc-title {
+            font-weight: 600; line-height: 1.3;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .pending-card .pc-meta {
+            color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;
+        }
+        .pending-card.dragging,
+        .cal-appt.dragging { opacity: 0.4; }
+
+        .cal-appt { cursor: grab; }
+        .cal-appt:active { cursor: grabbing; }
+
+        /* Drop-target highlights — swap to a soft blue while a
+           draggable is hovering. */
+        .cal-cell.is-drop-target { background: #dbeafe; outline: 2px dashed #2563eb; outline-offset: -2px; }
+        .pending-tray.is-drop-target { background: #fef3c7; outline: 2px dashed #f59e0b; outline-offset: -2px; }
+
+        .pending-empty {
+            color: #92400e; font-size: 0.8125rem; font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -353,6 +449,42 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                 ? '/calendar/index.php?mine=1'
                 : '/calendar/index.php';
         ?>
+
+        <!-- Pending Scheduling tray. Appointments with no date set
+             (typically auto-created on quote acceptance) live here as
+             draggable cards. Drop one onto a calendar cell to schedule
+             it; drop a scheduled appointment back onto the tray to
+             unschedule. -->
+        <div class="pending-tray" id="pending-tray">
+            <div class="pending-tray-head">
+                <h3>Pending Scheduling</h3>
+                <span class="pending-count" id="pending-count"><?= count($pendingAppts) ?></span>
+                <span class="pending-hint">Drag a card onto a date to schedule it.</span>
+            </div>
+            <div class="pending-cards" id="pending-cards">
+                <?php if (empty($pendingAppts)): ?>
+                    <span class="pending-empty">Nothing pending. Accepted quotes land here until you place them on a date.</span>
+                <?php else: ?>
+                    <?php foreach ($pendingAppts as $pa): ?>
+                        <div class="pending-card"
+                             draggable="true"
+                             data-id="<?= (int) $pa['id'] ?>"
+                             title="<?= e((string) $pa['title']) ?>">
+                            <span class="pc-title"><?= e((string) $pa['title']) ?></span>
+                            <?php
+                                $metaBits = [];
+                                if (!empty($pa['installation_town'])) $metaBits[] = (string) $pa['installation_town'];
+                                if (!empty($pa['installation_postcode'])) $metaBits[] = (string) $pa['installation_postcode'];
+                            ?>
+                            <?php if ($metaBits): ?>
+                                <span class="pc-meta"><?= e(implode(' &middot; ', $metaBits)) ?></span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <section class="section">
             <div class="cal-toolbar">
                 <div class="cal-nav">
@@ -399,7 +531,8 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                         $weekday3  = $cellDate->format('D');
                         $appts     = $byDate[$iso] ?? [];
                     ?>
-                    <div class="cal-cell<?= $isToday ? ' is-today' : '' ?>" role="gridcell">
+                    <div class="cal-cell<?= $isToday ? ' is-today' : '' ?>" role="gridcell"
+                         data-date="<?= e($iso) ?>">
                         <a class="cal-cell-add"
                            href="/calendar/new.php?date=<?= e($iso) ?>"
                            aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
@@ -409,6 +542,8 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                                 <?php foreach ($appts as $a): ?>
                                     <a class="cal-appt status-<?= e((string) $a['status']) ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
+                                       draggable="true"
+                                       data-id="<?= (int) $a['id'] ?>"
                                        title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
@@ -426,5 +561,116 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         </section>
     </main>
 </div>
+<script>
+(function () {
+    'use strict';
+
+    var endpoint  = '/calendar/reschedule.php';
+    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    var pendingTray  = document.getElementById('pending-tray');
+    var pendingCards = document.getElementById('pending-cards');
+    var pendingCount = document.getElementById('pending-count');
+
+    // Drag state — what's currently being dragged.
+    var dragId   = null;
+    var dragNode = null;
+
+    // -- Make all cards (pending + scheduled) draggable -------------
+    function bindDraggable(card) {
+        card.addEventListener('dragstart', function (e) {
+            dragId   = card.dataset.id;
+            dragNode = card;
+            // dataTransfer is required for Firefox to start a drag.
+            e.dataTransfer.setData('text/plain', dragId);
+            e.dataTransfer.effectAllowed = 'move';
+            card.classList.add('dragging');
+        });
+        card.addEventListener('dragend', function () {
+            card.classList.remove('dragging');
+            dragId = null;
+            dragNode = null;
+            // Clear any leftover drop highlights (e.g. dragend without
+            // ever firing dragleave on the last hovered cell).
+            document.querySelectorAll('.is-drop-target').forEach(function (el) {
+                el.classList.remove('is-drop-target');
+            });
+        });
+        // Scheduled appts are <a> tags. Suppress click navigation
+        // during the brief moment between drag start and ChromeAndroid
+        // misfiring a click after a drop. Plain clicks (no drag) still
+        // navigate normally because dragend resets dragNode synchronously.
+        if (card.tagName === 'A') {
+            card.addEventListener('click', function (e) {
+                if (card.classList.contains('dragging')) e.preventDefault();
+            });
+        }
+    }
+
+    document.querySelectorAll('.pending-card, .cal-appt[draggable="true"]').forEach(bindDraggable);
+
+    // -- Drop targets -----------------------------------------------
+    function bindDropTarget(el, onDrop) {
+        el.addEventListener('dragover', function (e) {
+            // dragover must preventDefault to allow a drop.
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            el.classList.add('is-drop-target');
+        });
+        el.addEventListener('dragleave', function (e) {
+            // dragleave fires when crossing into a child too; only
+            // clear when the cursor really leaves the element.
+            if (!el.contains(e.relatedTarget)) {
+                el.classList.remove('is-drop-target');
+            }
+        });
+        el.addEventListener('drop', function (e) {
+            e.preventDefault();
+            el.classList.remove('is-drop-target');
+            if (!dragId) return;
+            onDrop(dragId, el);
+        });
+    }
+
+    // Each calendar cell drops to its own date.
+    document.querySelectorAll('.cal-cell[data-date]').forEach(function (cell) {
+        bindDropTarget(cell, function (id, target) {
+            reschedule(id, target.dataset.date);
+        });
+    });
+
+    // The pending tray drops to NULL (empty string) — unschedule.
+    bindDropTarget(pendingTray, function (id) {
+        reschedule(id, '');
+    });
+
+    // -- AJAX --------------------------------------------------------
+    function reschedule(id, date) {
+        var fd = new FormData();
+        fd.append('appointment_id',  id);
+        fd.append('appointment_date', date);
+
+        fetch(endpoint, {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().then(function (data) {
+                if (!data.ok) throw new Error(data.error || 'Save failed.');
+                return data;
+            });
+        }).then(function () {
+            // Simplest reliable update: reload the page to re-render
+            // both tray and grid in their new state. The page is small
+            // and this avoids a fragile DOM-shuffle that has to deal
+            // with month boundaries, cell limits etc.
+            window.location.reload();
+        }).catch(function (err) {
+            alert(err.message || 'Could not reschedule.');
+        });
+    }
+})();
+</script>
 </body>
 </html>

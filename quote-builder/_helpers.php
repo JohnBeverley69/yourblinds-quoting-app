@@ -199,16 +199,17 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         return (int) $existingId;
     }
 
-    // Default placeholder schedule: +14 days, 9 am, 60 min. The trade
-    // user is expected to drag/edit it to the real date once they've
-    // arranged the install with the customer.
-    $defaultDate = (new DateTimeImmutable('+14 days'))->format('Y-m-d');
-    $defaultTime = '09:00:00';
-    $title       = 'Install: ' . (string) $quote['quote_number']
-                 . ' — ' . (string) $quote['end_customer_name'];
+    // Land in the Pending Scheduling tray (NULL appointment_date) so
+    // the trade user has to consciously place it on a real date —
+    // dragging from the tray onto a calendar cell, or opening the
+    // appointment to edit. Default time + duration are set so once
+    // dropped on a date it's instantly displayable; the user can
+    // tweak both via the edit form when the install is firmed up.
+    $title = 'Install: ' . (string) $quote['quote_number']
+           . ' — ' . (string) $quote['end_customer_name'];
 
     $notes = "Auto-created from accepted quote " . $quote['quote_number'] . ".\n"
-           . "Set the real date / time and assign a fitter when scheduled."
+           . "Drag onto the right date (or open to edit) when the install is scheduled."
            . (!empty($quote['notes']) ? "\n\nQuote notes:\n" . $quote['notes'] : '');
 
     $ins = $pdo->prepare(
@@ -219,7 +220,7 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
             installation_town, installation_county, installation_postcode,
             notes, status)
          VALUES (?, NULL, ?, ?,
-                 ?, ?, ?, 60,
+                 ?, NULL, ?, 60,
                  ?, ?, ?, ?, ?,
                  ?, ?)'
     );
@@ -228,8 +229,7 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         $quote['customer_id'] !== null ? (int) $quote['customer_id'] : null,
         (int) $quote['id'],
         $title,
-        $defaultDate,
-        $defaultTime,
+        '09:00:00',
         $quote['end_customer_address1'] ?: null,
         $quote['end_customer_address2'] ?: null,
         $quote['end_customer_town']     ?: null,

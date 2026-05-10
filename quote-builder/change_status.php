@@ -55,9 +55,9 @@ try {
     if ($target === 'accepted') {
         $apptId = qb_create_appointment_from_quote($pdo, $quoteId);
         if ($apptId !== null) {
-            $appointmentMsg = ' Installation appointment dropped on the '
-                            . 'calendar (placeholder date — drag to the real '
-                            . 'date and assign a fitter).';
+            $appointmentMsg = ' Installation appointment is in the calendar\'s'
+                            . ' "Pending Scheduling" tray — drag it onto the'
+                            . ' right date and assign a fitter when ready.';
         }
     }
 
