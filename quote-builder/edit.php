@@ -323,6 +323,23 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                doesn't take a full screen height of vertical space. */
             .section { padding: 1rem; margin-bottom: 0.875rem; }
 
+            /* Customer-collapse summary was getting cut off on the
+               right ("...Coventry — CV") because the meta span sat
+               on the same flex line as the name. Smaller font, allow
+               the meta to drop to its own line, and let any single
+               long token (postcode) break instead of overflowing. */
+            .customer-collapse > summary {
+                font-size: 1rem;
+                line-height: 1.35;
+                gap: 0.25rem;
+                word-break: break-word;
+            }
+            .customer-collapse > summary .cs-meta,
+            .customer-collapse > summary .cs-hint {
+                display: block;
+                width: 100%;
+            }
+
             /* Send-to-customer button row was side-by-side; on a
                narrow screen the WhatsApp button overflows. Stack them. */
             .section [style*="display:flex"][style*="flex-wrap:wrap"] button,
@@ -337,6 +354,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             .status-actions > a,
             .status-actions > button { flex: 1 1 100%; }
             .status-actions form button { width: 100%; }
+
+            /* Belt-and-braces against any inline-styled or third-
+               party element that ignores width:100% and pushes past
+               the section right edge (the Quote-notes textarea was
+               disappearing off the right). */
+            .section input,
+            .section textarea,
+            .section select { max-width: 100%; box-sizing: border-box; }
         }
         @media (max-width: 700px) {
             .extras-grid { grid-template-columns: 1fr; }
