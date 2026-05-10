@@ -262,6 +262,39 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .customer-collapse > .form { margin-top: 0.75rem; }
 
         /* ===========================================================
+           Two-column layout: customer details (left, sticky) +
+           add-blind/items list (right, scrolls with the page). Customer
+           panel stays visible while the user scrolls the blinds work
+           on the right — no more losing sight of the address while
+           reviewing line items. Stacks back to one column under 900px.
+           =========================================================== */
+        .quote-cols {
+            display: grid;
+            grid-template-columns: minmax(260px, 28%) 1fr;
+            gap: 1.25rem;
+            align-items: start;
+        }
+        .quote-cols .col-customer {
+            position: sticky;
+            top: 3.25rem;          /* clears the sticky quote bar */
+        }
+        .quote-cols .col-customer > .section {
+            max-height: calc(100vh - 4.5rem);
+            overflow-y: auto;
+            margin-bottom: 0;
+        }
+        .quote-cols .col-blinds > .section { margin-bottom: 1rem; }
+
+        @media (max-width: 900px) {
+            .quote-cols { grid-template-columns: 1fr; gap: 0; }
+            .quote-cols .col-customer { position: static; }
+            .quote-cols .col-customer > .section {
+                max-height: none; overflow-y: visible;
+                margin-bottom: 1rem;
+            }
+        }
+
+        /* ===========================================================
            Mobile tweaks — tighter padding on the Add-blind form so
            it doesn't feel cramped on a phone, and the items table
            stays horizontally scrollable inside its .table-wrap.
@@ -317,6 +350,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </div>
         <?php endif; ?>
 
+        <div class="quote-cols">
+        <div class="col-customer">
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
         <?php
             // Build a compact summary of the customer for the collapsed
@@ -476,7 +511,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </form>
             </details>
         </section>
+        </div><!-- /col-customer -->
 
+        <div class="col-blinds">
         <?php if ($editable): ?>
         <!-- ============== ADD / EDIT BLIND (above the items list — quickest path
              when building a quote of many blinds, no scrolling past existing rows) ============== -->
@@ -743,6 +780,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             <?php endif; ?>
         </section>
+        </div><!-- /col-blinds -->
+        </div><!-- /quote-cols -->
 
         <!-- ============== SEND TO CUSTOMER ============== -->
         <?php
