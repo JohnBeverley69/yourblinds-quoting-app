@@ -318,7 +318,7 @@ $activeNav = 'products';
                 Click any cell to edit. Tab or Enter saves; Escape cancels.
                 Type a label in the last row to add a new choice.
                 Drag <strong>⋮⋮</strong> to reorder.
-                <strong>…</strong> opens the row's full edit page (width-table pricing, thumbnail upload).
+                <strong>Edit</strong> on a row opens its full edit page (width-table pricing, thumbnail image).
             </p>
 
             <div class="table-wrap">
@@ -381,7 +381,7 @@ $activeNav = 'products';
                                 <td class="col-actions row-actions">
                                     <a href="/admin/products/extra-choice-edit.php?id=<?= $cid ?>"
                                        class="btn-more"
-                                       title="Open full edit page — width-table pricing, thumbnail upload">…</a>
+                                       title="Full edit page — width-table pricing, thumbnail image upload">Edit</a>
                                     <button type="button" class="btn-duplicate"
                                             title="Clone this choice (handy when the same label applies to another system)">
                                         Dup
@@ -433,10 +433,6 @@ $activeNav = 'products';
                 </table>
             </div>
 
-            <p style="color:#6b7280;font-size:0.875rem;margin-top:0.75rem">
-                Need width-based pricing or a thumbnail image?
-                Click <strong>…</strong> on any row.
-            </p>
         </section>
     </main>
 </div>
@@ -658,7 +654,7 @@ $activeNav = 'products';
         tdActions.className = 'col-actions row-actions';
         tdActions.innerHTML =
             '<a href="/admin/products/extra-choice-edit.php?id=' + choice.id +
-                '" class="btn-more" title="Open full edit page">…</a>' +
+                '" class="btn-more" title="Full edit page — width table, thumbnail">Edit</a>' +
             '<button type="button" class="btn-duplicate" title="Clone this choice">Dup</button>' +
             '<button type="button" class="btn-delete" title="Delete">&times;</button>';
         tr.appendChild(tdActions);
