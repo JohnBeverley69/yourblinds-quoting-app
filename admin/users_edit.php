@@ -337,7 +337,7 @@ $activeNav = 'users';
                     Deleting this user is permanent. Their existing quotes will be kept (link cleared).
                 </p>
                 <form method="post" action="/admin/users_delete.php" style="margin:0;"
-                      onsubmit="return confirm('Delete <?= e(addslashes((string) $target['full_name'])) ?>? This cannot be undone.');">
+                      data-confirm="Delete <?= e((string) $target['full_name']) ?>? This cannot be undone.">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" value="<?= (int) $target['id'] ?>">
                     <button type="submit" class="btn btn-danger">Delete user</button>
@@ -346,5 +346,6 @@ $activeNav = 'users';
         <?php endif; ?>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

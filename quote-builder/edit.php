@@ -822,7 +822,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                                 </button>
                                             </form>
                                             <form method="post" action="/quote-builder/delete_item.php" style="display:inline;margin:0"
-                                                  onsubmit="return confirm('Remove this blind?');">
+                                                  data-confirm="Remove this blind?">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                                                 <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
@@ -987,7 +987,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </form>
                 <?php endforeach; ?>
                 <form method="post" action="/quote-builder/delete.php"
-                      onsubmit="return confirm('Delete quote <?= e(addslashes((string) $quote['quote_number'])) ?>? This is permanent — all blinds go too.');"
+                      data-confirm="Delete quote <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too."
                       style="margin-left:auto">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -1497,5 +1497,6 @@ window.__editingBlind__ = <?= json_encode([
     search.addEventListener('change', syncFromMatch);
 })();
 </script>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

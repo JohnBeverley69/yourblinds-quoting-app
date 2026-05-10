@@ -278,7 +278,7 @@ $activeNav = 'products';
                                             </form>
                                         <?php endif; ?>
                                         <form method="post" action="/admin/products/system-delete.php"
-                                              onsubmit="return confirm('Delete system <?= e(addslashes((string) $s['name'])) ?>? This wipes its <?= (int) $s['table_count'] ?> price tables (and all their cells) too.');">
+                                              data-confirm="Delete system <?= e((string) $s['name']) ?>? This wipes its <?= (int) $s['table_count'] ?> price tables (and all their cells) too.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
                                             <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
@@ -295,5 +295,6 @@ $activeNav = 'products';
     </main>
 </div>
 <?php if ($systems): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>

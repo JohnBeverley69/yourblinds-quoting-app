@@ -165,7 +165,7 @@ $activeNav = 'master-admin';
                                         </span>
                                     <?php else: ?>
                                         <form method="post" action="/master-admin/delete-client.php"
-                                              onsubmit="return confirm('Delete <?= e(addslashes((string) $r['company_name'])) ?>?\n\nThis is permanent. ALL of the client\'s data goes:\n  - users, customers, quotes\n  - products, fabrics, systems, options, choices\n  - price tables and rows\n\nNo undo. Continue?');">
+                                              data-confirm="Delete <?= e((string) $r['company_name']) ?>? This is permanent. ALL of the client's data is removed: users, customers, quotes, products, fabrics, systems, options, choices, price tables and rows. No undo.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="client_id" value="<?= (int) $r['id'] ?>">
                                             <button type="submit">Delete</button>
@@ -184,5 +184,6 @@ $activeNav = 'master-admin';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

@@ -329,7 +329,7 @@ $activeNav = 'settings';
                     <img src="<?= e((string) $client['logo_path']) ?>" alt="Logo"
                          style="max-height:80px;max-width:200px;background:#fff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
                     <form method="post" action="/admin/settings.php" style="margin:0"
-                          onsubmit="return confirm('Remove the company logo?');">
+                          data-confirm="Remove the company logo?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_action" value="remove_logo">
                         <button type="submit" class="btn btn-secondary btn-sm">Remove logo</button>
@@ -416,5 +416,6 @@ $activeNav = 'settings';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

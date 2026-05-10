@@ -239,7 +239,7 @@ $activeNav = 'products';
                                     <td class="row-actions">
                                         <a href="/admin/products/price-table.php?id=<?= (int) $t['id'] ?>">Open</a>
                                         <form method="post" action="/admin/products/price-table-delete.php"
-                                              onsubmit="return confirm('Delete the Band <?= e(addslashes((string) $t['band_code'])) ?> price table? This wipes its <?= (int) $t['row_count'] ?> cells too.');">
+                                              data-confirm="Delete the Band <?= e((string) $t['band_code']) ?> price table? This wipes its <?= (int) $t['row_count'] ?> cells too.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
                                             <input type="hidden" name="system_id" value="<?= (int) $systemId ?>">
@@ -255,5 +255,6 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>

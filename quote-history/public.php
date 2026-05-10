@@ -354,7 +354,7 @@ $vatPct = $quote['vat_percent'] !== null
                     </button>
                     <button type="submit" name="action" value="decline" class="btn-secondary"
                             formnovalidate
-                            onclick="return confirm('Decline this quote? Your supplier will be notified.');">
+                            data-confirm-click="Decline this quote? Your supplier will be notified.">
                         Decline
                     </button>
                 </div>
@@ -369,5 +369,6 @@ $vatPct = $quote['vat_percent'] !== null
     <?php endif; ?>
 
 </main>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

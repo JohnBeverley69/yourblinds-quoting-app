@@ -245,7 +245,7 @@ $activeNav = 'customers';
                 Deleting this customer is permanent. Existing quotes will be kept but will no longer be linked to a customer record.
             </p>
             <form method="post" action="/customer-manager/delete.php" style="margin:0;"
-                  onsubmit="return confirm('Delete <?= e(addslashes((string) $customer['name'])) ?>? This cannot be undone.');">
+                  data-confirm="Delete <?= e((string) $customer['name']) ?>? This cannot be undone.">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $customer['id'] ?>">
                 <button type="submit" class="btn btn-danger">Delete customer</button>
@@ -253,5 +253,6 @@ $activeNav = 'customers';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

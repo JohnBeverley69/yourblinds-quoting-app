@@ -373,7 +373,7 @@ $activeNav = 'calendar';
                 <em>Cancelled</em> or <em>No-show</em> above instead.
             </p>
             <form method="post" action="/calendar/delete.php" style="margin:0;"
-                  onsubmit="return confirm('Delete this appointment? This cannot be undone.');">
+                  data-confirm="Delete this appointment? This cannot be undone.">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $appt['id'] ?>">
                 <button type="submit" class="btn btn-danger">Delete appointment</button>
@@ -381,5 +381,6 @@ $activeNav = 'calendar';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

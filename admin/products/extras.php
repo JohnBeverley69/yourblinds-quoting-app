@@ -352,7 +352,7 @@ $activeNav = 'products';
                                     <td class="row-actions">
                                         <a href="/admin/products/extra-edit.php?id=<?= (int) $x['id'] ?>">Edit</a>
                                         <form method="post" action="/admin/products/extra-delete.php"
-                                              onsubmit="return confirm('Delete option <?= e(addslashes((string) $x['name'])) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.');">
+                                              data-confirm="Delete option <?= e((string) $x['name']) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $x['id'] ?>">
                                             <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
@@ -369,5 +369,6 @@ $activeNav = 'products';
     </main>
 </div>
 <?php if ($extras): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>

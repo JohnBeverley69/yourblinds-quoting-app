@@ -138,7 +138,7 @@ $activeNav = 'products';
                                     <td class="row-actions">
                                         <form method="post"
                                               action="/admin/products/delete.php"
-                                              onsubmit="return confirm('Delete <?= e(addslashes((string) $p['name'])) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.');">
+                                              data-confirm="Delete <?= e((string) $p['name']) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
                                             <button type="submit">Delete</button>
@@ -155,5 +155,6 @@ $activeNav = 'products';
 </div>
 
 <?php if ($products): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>

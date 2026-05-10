@@ -409,7 +409,7 @@ $activeNav = 'products';
                 <?php if (!empty($choice['image_path'])): ?>
                     <form method="post" action="/admin/products/extra-choice-edit.php?id=<?= (int) $id ?>"
                           style="margin:0 0 1rem"
-                          onsubmit="return confirm('Remove the thumbnail for this choice?');">
+                          data-confirm="Remove the thumbnail for this choice?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_action" value="remove_image">
                         <button type="submit" class="btn btn-secondary btn-sm">Remove thumbnail</button>
@@ -474,5 +474,6 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>
