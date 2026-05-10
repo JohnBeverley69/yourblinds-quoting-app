@@ -84,13 +84,16 @@ $systems = $sysStmt->fetchAll();
 // Helper closure for an existing row's "Available on" multi-select.
 //
 // Each existing row gets a checkbox dropdown identical-looking to the
-// new-row one. The current system_id is pre-ticked AND disabled — the
-// user can't untick what's already saved (use the × button to delete).
-// Other systems are clickable; ticking spawns a sibling row (clone)
-// for that system. "All systems" is shown but disabled because
-// "extending an All-systems row to a specific system" would create
-// overlapping coverage; if the user really wants to switch, they can
-// delete + re-add.
+// new-row one. The current row's own system is pre-ticked AND disabled
+// (use × to delete the row instead). Every OTHER specific-system
+// checkbox is clickable, including on "All systems" rows — ticking one
+// spawns a sibling row for that system. The user can then × the
+// original "All systems" row to finish converting to specific scopes.
+//
+// "All systems" itself is always disabled — converting a specific row
+// into an All-systems row from the dropdown would either silently
+// overwrite the row's system_id (destructive) or create a redundant
+// row, and the × + re-add path is clearer.
 $renderSystemMultiSelect = static function (?int $currentSystemId) use ($systems): string {
     $isAll = $currentSystemId === null;
 
@@ -109,8 +112,8 @@ $renderSystemMultiSelect = static function (?int $currentSystemId) use ($systems
     $html .= '<summary>' . e($summaryText) . '</summary>';
     $html .= '<div class="multi-opts">';
 
-    // "All systems" — ticked + disabled if current. Otherwise disabled
-    // (deliberately — see comment above).
+    // "All systems" — ticked + disabled if this is the current state.
+    // Always disabled to keep the conversion path explicit (× + re-add).
     $html .= '<label>'
            . '<input type="checkbox" class="row-system-tick" data-system="0"'
            . ($isAll ? ' checked' : '') . ' disabled>'
@@ -122,13 +125,13 @@ $renderSystemMultiSelect = static function (?int $currentSystemId) use ($systems
         foreach ($systems as $s) {
             $sid       = (int) $s['id'];
             $isCurrent = ($sid === $currentSystemId);
-            // Disabled if it's the current row's system (locked) OR
-            // current is NULL (would create overlap with "All systems").
-            $disabled  = $isCurrent || $isAll;
+            // Only the current row's own system is locked. Others are
+            // always clickable (even on All-systems rows) so the user
+            // can spawn siblings to convert into specific scopes.
             $html .= '<label>'
                    . '<input type="checkbox" class="row-system-tick" data-system="' . $sid . '"'
                    . ($isCurrent ? ' checked' : '')
-                   . ($disabled ? ' disabled' : '')
+                   . ($isCurrent ? ' disabled' : '')
                    . '> ' . e((string) $s['name'])
                    . '</label>';
         }
@@ -719,7 +722,10 @@ $activeNav = 'products';
                 cb.dataset.system = String(s.id);
                 var isCurrent = (s.id === currentSystemId);
                 if (isCurrent) cb.checked = true;
-                if (isCurrent || isAll) cb.disabled = true;
+                // Only this row's own system is locked. Others are
+                // always clickable so the user can spawn siblings,
+                // even on "All systems" rows.
+                if (isCurrent) cb.disabled = true;
                 lbl.appendChild(cb);
                 lbl.appendChild(document.createTextNode(' ' + s.name));
                 opts.appendChild(lbl);
