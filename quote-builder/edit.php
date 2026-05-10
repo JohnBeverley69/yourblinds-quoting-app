@@ -262,36 +262,40 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .customer-collapse > .form { margin-top: 0.75rem; }
 
         /* ===========================================================
-           Two-column layout: customer details (left, sticky) +
-           add-blind/items list (right, scrolls with the page). Customer
-           panel stays visible while the user scrolls the blinds work
-           on the right — no more losing sight of the address while
-           reviewing line items. Stacks back to one column under 900px.
+           Two-column layout: customer details + Add Blind form on the
+           LEFT (the input side — what the trade user is actively
+           typing into), and the Blinds list on the RIGHT (the output
+           side — what they've added so far). Left column is sticky so
+           it stays in view when the right-side list grows long.
+           Stacks back to one column under 1000px since the left side
+           now needs more horizontal room for the Add Blind form rows.
            =========================================================== */
         .quote-cols {
             display: grid;
-            grid-template-columns: minmax(260px, 28%) 1fr;
+            grid-template-columns: minmax(360px, 42%) 1fr;
             gap: 1.25rem;
             align-items: start;
         }
-        .quote-cols .col-customer {
+        .quote-cols .col-left {
             position: sticky;
             top: 3.25rem;          /* clears the sticky quote bar */
-        }
-        .quote-cols .col-customer > .section {
             max-height: calc(100vh - 4.5rem);
             overflow-y: auto;
-            margin-bottom: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
         }
-        .quote-cols .col-blinds > .section { margin-bottom: 1rem; }
+        .quote-cols .col-left > .section { margin-bottom: 0; }
+        .quote-cols .col-right > .section { margin-bottom: 1rem; }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1000px) {
             .quote-cols { grid-template-columns: 1fr; gap: 0; }
-            .quote-cols .col-customer { position: static; }
-            .quote-cols .col-customer > .section {
+            .quote-cols .col-left {
+                position: static;
                 max-height: none; overflow-y: visible;
-                margin-bottom: 1rem;
+                gap: 0;
             }
+            .quote-cols .col-left > .section { margin-bottom: 1rem; }
         }
 
         /* ===========================================================
@@ -351,7 +355,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <?php endif; ?>
 
         <div class="quote-cols">
-        <div class="col-customer">
+        <div class="col-left">
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
         <?php
             // Build a compact summary of the customer for the collapsed
@@ -515,12 +519,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <?php endif; ?>
             </form>
         </section>
-        </div><!-- /col-customer -->
 
-        <div class="col-blinds">
         <?php if ($editable): ?>
-        <!-- ============== ADD / EDIT BLIND (above the items list — quickest path
-             when building a quote of many blinds, no scrolling past existing rows) ============== -->
+        <!-- ============== ADD / EDIT BLIND (left column, directly below
+             customer details — keeps input + output side by side) ============== -->
         <section class="section" id="add-line">
             <div class="section-header">
                 <h2 class="section-title">
@@ -673,7 +675,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </form>
         </section>
         <?php endif; ?>
+        </div><!-- /col-left -->
 
+        <div class="col-right">
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
             <div class="section-header">
@@ -784,7 +788,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             <?php endif; ?>
         </section>
-        </div><!-- /col-blinds -->
+        </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 
         <!-- ============== SEND TO CUSTOMER ============== -->
