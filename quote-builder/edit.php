@@ -215,6 +215,62 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .status-actions button, .status-actions form {
             margin: 0;
         }
+
+        /* ===========================================================
+           Sticky quote bar — always-visible quote-number + status +
+           total. Slim so it doesn't eat much screen real estate; the
+           page-header below it carries the rest of the metadata.
+           =========================================================== */
+        .quote-sticky-bar {
+            position: sticky; top: 0; z-index: 40;
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 1rem; flex-wrap: wrap;
+            padding: 0.625rem 1rem; margin: -1rem -1rem 1rem;
+            background: #1f3b5b; color: #fff;
+            font-size: 0.9375rem; font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .quote-sticky-bar .qsb-left { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .quote-sticky-bar .qsb-total { font-size: 1.0625rem; }
+        .quote-sticky-bar .status-pill { margin: 0; }
+
+        /* ===========================================================
+           Customer details — collapsible section. Once the customer
+           is filled in, the section collapses to a one-line summary
+           ("Customer: Name — Town — Postcode") so it doesn't dominate
+           the top of the page on every revisit. Click the summary
+           to expand and edit.
+           =========================================================== */
+        .customer-collapse > summary {
+            list-style: none; cursor: pointer; padding: 0.25rem 0;
+            font-size: 1.125rem; font-weight: 600; color: #111827;
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+        }
+        .customer-collapse > summary::-webkit-details-marker { display: none; }
+        .customer-collapse > summary::before {
+            content: '▸'; display: inline-block; color: #6b7280;
+            transition: transform 150ms; flex-shrink: 0;
+        }
+        .customer-collapse[open] > summary::before { transform: rotate(90deg); }
+        .customer-collapse > summary .cs-meta {
+            font-size: 0.875rem; font-weight: 400; color: #6b7280;
+        }
+        .customer-collapse > summary .cs-hint {
+            font-size: 0.8125rem; font-weight: 400; color: #9ca3af;
+            font-style: italic;
+        }
+        .customer-collapse > .form { margin-top: 0.75rem; }
+
+        /* ===========================================================
+           Mobile tweaks — tighter padding on the Add-blind form so
+           it doesn't feel cramped on a phone, and the items table
+           stays horizontally scrollable inside its .table-wrap.
+           =========================================================== */
+        @media (max-width: 700px) {
+            .quote-sticky-bar { padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+            .quote-sticky-bar .qsb-total { font-size: 1rem; }
+            .extras-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -222,22 +278,26 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     <?php require __DIR__ . '/../_partials/sidebar.php'; ?>
 
     <main class="app-main">
+        <!-- Slim sticky bar — quote #, status, total — always visible
+             as the user scrolls through customer details / add-blind /
+             items / send. Replaces the "Total only at top" complaint. -->
+        <div class="quote-sticky-bar">
+            <span class="qsb-left">
+                Quote <?= e((string) $quote['quote_number']) ?>
+                <span class="status-pill status-<?= e((string) $quote['status']) ?>">
+                    <?= e((string) $quote['status']) ?>
+                </span>
+            </span>
+            <span class="qsb-total">
+                Total <?= e(qb_fmt_money($quote['total'])) ?>
+            </span>
+        </div>
+
         <div class="page-header">
             <div>
-                <h1 class="page-title">
-                    Quote <?= e((string) $quote['quote_number']) ?>
-                    <span class="status-pill status-<?= e((string) $quote['status']) ?>">
-                        <?= e((string) $quote['status']) ?>
-                    </span>
-                </h1>
-                <p class="page-subtitle">
+                <p class="page-subtitle" style="margin:0">
                     <a href="/quote-history/index.php">&larr; Quote history</a>
                 </p>
-            </div>
-            <div style="text-align:right">
-                <strong style="font-size:1.125rem;color:#111827">
-                    Total <?= e(qb_fmt_money($quote['total'])) ?>
-                </strong>
             </div>
         </div>
 
@@ -257,11 +317,33 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </div>
         <?php endif; ?>
 
-        <!-- ============== CUSTOMER DETAILS ============== -->
+        <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
+        <?php
+            // Build a compact summary of the customer for the collapsed
+            // state. Defaults to expanded when any required bit is
+            // missing (so the user sees the form on a brand-new quote).
+            $csName     = trim((string) ($quote['end_customer_name'] ?? ''));
+            $csTown     = trim((string) ($quote['end_customer_town'] ?? ''));
+            $csPostcode = trim((string) ($quote['end_customer_postcode'] ?? ''));
+            $hasCustomer = $csName !== '';
+            $startOpen   = !$hasCustomer;
+        ?>
         <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Customer details</h2>
-            </div>
+            <details class="customer-collapse"<?= $startOpen ? ' open' : '' ?>>
+                <summary>
+                    <?php if ($hasCustomer): ?>
+                        Customer:
+                        <?= e($csName) ?>
+                        <span class="cs-meta">
+                            <?php if ($csTown !== ''):     ?> — <?= e($csTown) ?><?php endif; ?>
+                            <?php if ($csPostcode !== ''): ?> — <?= e($csPostcode) ?><?php endif; ?>
+                        </span>
+                        <span class="cs-hint">(click to edit)</span>
+                    <?php else: ?>
+                        Customer details
+                        <span class="cs-hint">— click to add the customer's contact info</span>
+                    <?php endif; ?>
+                </summary>
             <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -392,121 +474,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 <?php endif; ?>
             </form>
-        </section>
-
-        <!-- ============== LINE ITEMS ============== -->
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Blinds (<?= count($items) ?>)</h2>
-            </div>
-
-            <?php if (empty($items)): ?>
-                <div class="placeholder">
-                    <p class="placeholder-title">No blinds yet</p>
-                    <p class="placeholder-body">
-                        <?php if ($editable): ?>
-                            Add one below.
-                        <?php else: ?>
-                            This quote has no blinds.
-                        <?php endif; ?>
-                    </p>
-                </div>
-            <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th style="width:3rem">#</th>
-                                <th>Description</th>
-                                <th>Size</th>
-                                <th class="num">Qty</th>
-                                <th class="num">Unit</th>
-                                <th class="num">Total</th>
-                                <?php if ($editable): ?><th></th><?php endif; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($items as $it): ?>
-                                <tr>
-                                    <td><?= (int) $it['line_no'] ?></td>
-                                    <td>
-                                        <?php if (!empty($it['room_name'])): ?>
-                                            <strong><?= e((string) $it['room_name']) ?></strong><br>
-                                        <?php endif; ?>
-                                        <span class="item-desc">
-                                            <strong><?= e((string) $it['product_name_snapshot']) ?></strong><?php if (!empty($it['system_name_snapshot'])): ?> — <?= e((string) $it['system_name_snapshot']) ?><?php endif; ?><br>
-                                            Band <?= e((string) ($it['fabric_band_snapshot'] ?? '?')) ?>
-                                            <?php if (!empty($it['fabric_supplier_snapshot'])): ?> — <?= e((string) $it['fabric_supplier_snapshot']) ?><?php endif; ?>
-                                            — <?= e((string) $it['fabric_name_snapshot']) ?><?php if (!empty($it['fabric_colour_snapshot'])): ?> / <?= e((string) $it['fabric_colour_snapshot']) ?><?php endif; ?>
-                                        </span>
-                                        <?php if (!empty($extrasByItem[(int) $it['id']])): ?>
-                                            <div class="item-extras">
-                                                <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
-                                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?>
-                                                    <?php if ((float) $ex['amount_applied'] != 0): ?>
-                                                        (<?= e(qb_fmt_money($ex['amount_applied'])) ?>)
-                                                    <?php endif; ?>
-                                                    <br>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                        <?php if (!empty($it['notes'])): ?>
-                                            <div class="item-extras"><em><?= e((string) $it['notes']) ?></em></div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?= qb_fmt_mm((int) $it['width_mm']) ?> ×
-                                        <?= qb_fmt_mm((int) $it['drop_mm']) ?>
-                                        <?php if (!empty($it['width_matrix_mm'])
-                                                 && ((int) $it['width_matrix_mm'] !== (int) $it['width_mm']
-                                                  || (int) $it['drop_matrix_mm']  !== (int) $it['drop_mm'])): ?>
-                                            <br><small style="color:#6b7280">cell: <?= qb_fmt_mm((int) $it['width_matrix_mm']) ?> × <?= qb_fmt_mm((int) $it['drop_matrix_mm']) ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="num"><?= (int) $it['quantity'] ?></td>
-                                    <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
-                                    <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
-                                    <?php if ($editable): ?>
-                                        <td style="white-space:nowrap">
-                                            <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
-                                               class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
-                                            <form method="post" action="/quote-builder/delete_item.php" style="display:inline;margin:0"
-                                                  onsubmit="return confirm('Remove this blind?');">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
-                                                <button type="submit" class="btn btn-sm btn-danger" aria-label="Remove blind">&times;</button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-
-                            <?php if ((float) $quote['vat_percent'] > 0): ?>
-                                <tr class="totals-row">
-                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
-                                    <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
-                                </tr>
-                                <tr class="totals-row">
-                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
-                                    <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
-                                </tr>
-                            <?php endif; ?>
-                            <tr class="totals-row grand">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
-                                <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
-                                <?php if ($editable): ?><td></td><?php endif; ?>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
+            </details>
         </section>
 
         <?php if ($editable): ?>
-        <!-- ============== ADD / EDIT BLIND ============== -->
+        <!-- ============== ADD / EDIT BLIND (above the items list — quickest path
+             when building a quote of many blinds, no scrolling past existing rows) ============== -->
         <section class="section" id="add-line">
             <div class="section-header">
                 <h2 class="section-title">
@@ -659,6 +632,117 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </form>
         </section>
         <?php endif; ?>
+
+        <!-- ============== LINE ITEMS ============== -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Blinds (<?= count($items) ?>)</h2>
+            </div>
+
+            <?php if (empty($items)): ?>
+                <div class="placeholder">
+                    <p class="placeholder-title">No blinds yet</p>
+                    <p class="placeholder-body">
+                        <?php if ($editable): ?>
+                            Add one below.
+                        <?php else: ?>
+                            This quote has no blinds.
+                        <?php endif; ?>
+                    </p>
+                </div>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width:3rem">#</th>
+                                <th>Description</th>
+                                <th>Size</th>
+                                <th class="num">Qty</th>
+                                <th class="num">Unit</th>
+                                <th class="num">Total</th>
+                                <?php if ($editable): ?><th></th><?php endif; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($items as $it): ?>
+                                <tr>
+                                    <td><?= (int) $it['line_no'] ?></td>
+                                    <td>
+                                        <?php if (!empty($it['room_name'])): ?>
+                                            <strong><?= e((string) $it['room_name']) ?></strong><br>
+                                        <?php endif; ?>
+                                        <span class="item-desc">
+                                            <strong><?= e((string) $it['product_name_snapshot']) ?></strong><?php if (!empty($it['system_name_snapshot'])): ?> — <?= e((string) $it['system_name_snapshot']) ?><?php endif; ?><br>
+                                            Band <?= e((string) ($it['fabric_band_snapshot'] ?? '?')) ?>
+                                            <?php if (!empty($it['fabric_supplier_snapshot'])): ?> — <?= e((string) $it['fabric_supplier_snapshot']) ?><?php endif; ?>
+                                            — <?= e((string) $it['fabric_name_snapshot']) ?><?php if (!empty($it['fabric_colour_snapshot'])): ?> / <?= e((string) $it['fabric_colour_snapshot']) ?><?php endif; ?>
+                                        </span>
+                                        <?php if (!empty($extrasByItem[(int) $it['id']])): ?>
+                                            <div class="item-extras">
+                                                <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
+                                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?>
+                                                    <?php if ((float) $ex['amount_applied'] != 0): ?>
+                                                        (<?= e(qb_fmt_money($ex['amount_applied'])) ?>)
+                                                    <?php endif; ?>
+                                                    <br>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($it['notes'])): ?>
+                                            <div class="item-extras"><em><?= e((string) $it['notes']) ?></em></div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?= qb_fmt_mm((int) $it['width_mm']) ?> ×
+                                        <?= qb_fmt_mm((int) $it['drop_mm']) ?>
+                                        <?php if (!empty($it['width_matrix_mm'])
+                                                 && ((int) $it['width_matrix_mm'] !== (int) $it['width_mm']
+                                                  || (int) $it['drop_matrix_mm']  !== (int) $it['drop_mm'])): ?>
+                                            <br><small style="color:#6b7280">cell: <?= qb_fmt_mm((int) $it['width_matrix_mm']) ?> × <?= qb_fmt_mm((int) $it['drop_matrix_mm']) ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="num"><?= (int) $it['quantity'] ?></td>
+                                    <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
+                                    <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
+                                    <?php if ($editable): ?>
+                                        <td style="white-space:nowrap">
+                                            <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
+                                               class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
+                                            <form method="post" action="/quote-builder/delete_item.php" style="display:inline;margin:0"
+                                                  onsubmit="return confirm('Remove this blind?');">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-danger" aria-label="Remove blind">&times;</button>
+                                            </form>
+                                        </td>
+                                    <?php endif; ?>
+                                </tr>
+                            <?php endforeach; ?>
+
+                            <?php if ((float) $quote['vat_percent'] > 0): ?>
+                                <tr class="totals-row">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
+                                    <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                                <tr class="totals-row">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
+                                    <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
+                            <tr class="totals-row grand">
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
+                                <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
+                                <?php if ($editable): ?><td></td><?php endif; ?>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </section>
 
         <!-- ============== SEND TO CUSTOMER ============== -->
         <?php
