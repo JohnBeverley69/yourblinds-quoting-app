@@ -25,22 +25,13 @@ declare(strict_types=1);
  * UNIQUE on that instead — guarantees one row per (client, product,
  * system) combination including the NULL case.
  *
- * Migration steps:
- *   1. Add system_id (nullable INT UNSIGNED) + system_id_key (generated
- *      stored, IFNULL(system_id, 0)) on both tables.
- *   2. Drop the old uniq_client_product index (if present).
- *   3. Add uniq_client_product_system over (client_id, product_id,
- *      system_id_key).
- *   4. Add FK system_id → product_systems(id) ON DELETE CASCADE so
- *      deleting a system cleans up its markup row.
- *   5. Backfill: for each existing markup/discount row, if the product
- *      has any systems, INSERT one copy per system carrying the same
- *      percent, then DELETE the original (system_id NULL) row. Rows
- *      for products without systems stay as-is (system_id NULL).
- *
- * Idempotent — re-runnable. Existing column / index / FK is detected
- * and skipped. Pricing output is unchanged at cut-over (every system
- * inherits its product's pre-migration markup).
+ * Idempotent — re-runnable. Detects existing columns / indexes / FKs
+ * and skips. Also detects type-mismatched columns from a previous
+ * partial run and fixes them (an earlier version of this script
+ * hard-coded INT UNSIGNED, which didn't match product_systems.id on
+ * databases where that column is plain signed INT — the FK then
+ * failed with "Cannot add foreign key constraint"). The new column
+ * type is read live from product_systems.id so it always matches.
  *
  * Run via web: /migrate_markup_per_system.php   (super-admin login)
  */
@@ -80,6 +71,18 @@ function col_exists(PDO $pdo, string $table, string $col): bool
     return $st->fetchColumn() !== false;
 }
 
+function column_type(PDO $pdo, string $table, string $col): ?string
+{
+    $st = $pdo->prepare(
+        'SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+    );
+    $st->execute([$table, $col]);
+    $val = $st->fetchColumn();
+    return $val !== false ? (string) $val : null;
+}
+
 function index_exists(PDO $pdo, string $table, string $index): bool
 {
     $st = $pdo->prepare(
@@ -103,7 +106,18 @@ function fk_exists(PDO $pdo, string $table, string $fk): bool
     return $st->fetchColumn() !== false;
 }
 
+// Match product_systems.id's column type exactly — the previous version
+// of this script assumed INT UNSIGNED, which fails the FK if it's
+// actually signed INT. Read the live type and use it for system_id.
+$systemIdType = column_type($pdo, 'product_systems', 'id');
+if ($systemIdType === null) {
+    throw new RuntimeException('product_systems.id column not found — schema bootstrap missing?');
+}
+// COLUMN_TYPE returns the lower-case "int(10) unsigned" etc., already
+// in ALTER-friendly form.
+
 $ops = [];
+$ops[] = "Target FK type (product_systems.id): $systemIdType";
 
 foreach (
     [
@@ -111,15 +125,37 @@ foreach (
         'client_discounts' => ['percent_col' => 'discount_percent', 'fk_name' => 'fk_client_discounts_system'],
     ] as $table => $meta
 ) {
-    // 1. system_id column
-    if (!col_exists($pdo, $table, 'system_id')) {
-        $pdo->exec("ALTER TABLE $table ADD COLUMN system_id INT UNSIGNED NULL AFTER product_id");
-        $ops[] = "$table: added column system_id";
+    // ---- 1. system_id column — add or fix type to match product_systems.id
+
+    // If a stored generated column depends on system_id, MySQL won't let
+    // us MODIFY system_id's type without first dropping the generated
+    // column. So order: drop system_id_key (if present), fix system_id,
+    // re-add system_id_key.
+    $dropGeneratedFirst = col_exists($pdo, $table, 'system_id_key');
+
+    if (col_exists($pdo, $table, 'system_id')) {
+        $currentType = column_type($pdo, $table, 'system_id');
+        if (strcasecmp((string) $currentType, $systemIdType) !== 0) {
+            // Need to drop the generated column first so MODIFY works.
+            if ($dropGeneratedFirst) {
+                $pdo->exec("ALTER TABLE $table DROP COLUMN system_id_key");
+                $ops[] = "$table: dropped generated column system_id_key (will re-add)";
+                $dropGeneratedFirst = false;   // re-added below
+            }
+            $pdo->exec("ALTER TABLE $table MODIFY COLUMN system_id $systemIdType NULL");
+            $ops[] = "$table: re-typed system_id ($currentType → $systemIdType)";
+        } else {
+            $ops[] = "$table: system_id already has correct type ($systemIdType)";
+        }
     } else {
-        $ops[] = "$table: column system_id already present";
+        $pdo->exec("ALTER TABLE $table ADD COLUMN system_id $systemIdType NULL AFTER product_id");
+        $ops[] = "$table: added column system_id ($systemIdType)";
     }
 
-    // 2. system_id_key generated stored column (for NULL-safe uniqueness)
+    // ---- 2. system_id_key generated stored column (for NULL-safe uniqueness).
+    //        Type is INT UNSIGNED for the IFNULL(...,0) result — that's the
+    //        index column, not an FK target, so its type doesn't need to
+    //        match product_systems.id.
     if (!col_exists($pdo, $table, 'system_id_key')) {
         $pdo->exec(
             "ALTER TABLE $table
@@ -131,9 +167,7 @@ foreach (
         $ops[] = "$table: column system_id_key already present";
     }
 
-    // 3. Drop old uniq (single-product) if present. Tables predate the
-    //    in-repo migrations, so the constraint name may vary — handle
-    //    the common name and skip silently if not found.
+    // ---- 3. Drop old uniq (single-product) if present.
     foreach (['uniq_client_product', 'uniq_client_markup', 'uniq_client_discount'] as $oldIdx) {
         if (index_exists($pdo, $table, $oldIdx)) {
             // FKs on client_id / product_id need a backing index. Add
@@ -150,7 +184,7 @@ foreach (
         }
     }
 
-    // 4. Add new uniq over (client_id, product_id, system_id_key)
+    // ---- 4. Add new uniq over (client_id, product_id, system_id_key)
     if (!index_exists($pdo, $table, 'uniq_client_product_system')) {
         $pdo->exec(
             "ALTER TABLE $table
@@ -162,7 +196,8 @@ foreach (
         $ops[] = "$table: unique uniq_client_product_system already present";
     }
 
-    // 5. FK system_id → product_systems(id)
+    // ---- 5. FK system_id → product_systems(id). With types matched at
+    //        step 1, this should now succeed cleanly.
     if (!fk_exists($pdo, $table, $meta['fk_name'])) {
         $pdo->exec(
             "ALTER TABLE $table
@@ -176,12 +211,11 @@ foreach (
     }
 }
 
-// 6. Backfill — expand each (system_id IS NULL) row into one row per
-//    system for products that have systems. Idempotent: INSERT IGNORE
-//    skips already-expanded rows, and the DELETE only fires for rows
-//    that we successfully expanded.
+// ---- 6. Backfill — expand each (system_id IS NULL) row into one row
+//        per system for products that have systems. Idempotent:
+//        INSERT IGNORE skips already-expanded rows, and the DELETE only
+//        fires for rows we successfully expanded.
 $expandRows = function (string $table, string $col) use ($pdo): int {
-    // Find rows still on system_id NULL where the product DOES have systems.
     $sel = $pdo->query(
         "SELECT m.id, m.client_id, m.product_id, m.$col
            FROM $table m
