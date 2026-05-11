@@ -18,41 +18,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['_action'] ?? '');
 
     if ($action === 'company') {
+        // order_destination / quote_destination / office_*_email are
+        // intentionally NOT in this UPDATE. The fields exist in the
+        // schema and the UI was hidden because the routing isn't wired
+        // up yet (the Beverley Blinds path is blocked on Blind Matrix
+        // integration; the customer-office path is redundant given
+        // tenants see their own orders in the dashboard). Leaving the
+        // columns untouched preserves any existing values for the day
+        // we wire it up.
         $stmt = db()->prepare(
             'UPDATE clients
-                SET company_name       = ?,
-                    contact_name       = ?,
-                    email              = ?,
-                    phone              = ?,
-                    vat_number         = ?,
-                    address1           = ?,
-                    address2           = ?,
-                    town               = ?,
-                    county             = ?,
-                    postcode           = ?,
-                    order_destination  = ?,
-                    quote_destination  = ?,
-                    office_order_email = ?,
-                    office_quote_email = ?
+                SET company_name = ?,
+                    contact_name = ?,
+                    email        = ?,
+                    phone        = ?,
+                    vat_number   = ?,
+                    address1     = ?,
+                    address2     = ?,
+                    town         = ?,
+                    county       = ?,
+                    postcode     = ?
               WHERE id = ?'
         );
         $stmt->execute([
-            trim((string) ($_POST['company_name']       ?? '')) ?: $user['company_name'],
-            trim((string) ($_POST['contact_name']       ?? '')) ?: null,
-            trim((string) ($_POST['email']              ?? '')) ?: null,
-            trim((string) ($_POST['phone']              ?? '')) ?: null,
-            trim((string) ($_POST['vat_number']         ?? '')) ?: null,
-            trim((string) ($_POST['address1']           ?? '')) ?: null,
-            trim((string) ($_POST['address2']           ?? '')) ?: null,
-            trim((string) ($_POST['town']               ?? '')) ?: null,
-            trim((string) ($_POST['county']             ?? '')) ?: null,
-            trim((string) ($_POST['postcode']           ?? '')) ?: null,
-            in_array($_POST['order_destination'] ?? '', ['beverley_blinds','customer_office','both'], true)
-                ? (string) $_POST['order_destination'] : 'beverley_blinds',
-            in_array($_POST['quote_destination'] ?? '', ['customer_office','both','none'], true)
-                ? (string) $_POST['quote_destination'] : 'customer_office',
-            trim((string) ($_POST['office_order_email'] ?? '')) ?: null,
-            trim((string) ($_POST['office_quote_email'] ?? '')) ?: null,
+            trim((string) ($_POST['company_name'] ?? '')) ?: $user['company_name'],
+            trim((string) ($_POST['contact_name'] ?? '')) ?: null,
+            trim((string) ($_POST['email']        ?? '')) ?: null,
+            trim((string) ($_POST['phone']        ?? '')) ?: null,
+            trim((string) ($_POST['vat_number']   ?? '')) ?: null,
+            trim((string) ($_POST['address1']     ?? '')) ?: null,
+            trim((string) ($_POST['address2']     ?? '')) ?: null,
+            trim((string) ($_POST['town']         ?? '')) ?: null,
+            trim((string) ($_POST['county']       ?? '')) ?: null,
+            trim((string) ($_POST['postcode']     ?? '')) ?: null,
             $clientId,
         ]);
         // Refresh session-cached company name in case it changed
@@ -277,37 +275,14 @@ $activeNav = 'settings';
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="order_destination">Order destination</label>
-                        <select id="order_destination" name="order_destination">
-                            <?php foreach (['beverley_blinds' => 'Beverley Blinds', 'customer_office' => 'Customer office', 'both' => 'Both'] as $val => $lbl): ?>
-                                <option value="<?= e($val) ?>" <?= ($client['order_destination'] ?? '') === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="quote_destination">Quote destination</label>
-                        <select id="quote_destination" name="quote_destination">
-                            <?php foreach (['customer_office' => 'Customer office', 'both' => 'Both', 'none' => 'None'] as $val => $lbl): ?>
-                                <option value="<?= e($val) ?>" <?= ($client['quote_destination'] ?? '') === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="office_order_email">Office order email</label>
-                        <input id="office_order_email" name="office_order_email" type="email" maxlength="150"
-                               value="<?= e((string) ($client['office_order_email'] ?? '')) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label for="office_quote_email">Office quote email</label>
-                        <input id="office_quote_email" name="office_quote_email" type="email" maxlength="150"
-                               value="<?= e((string) ($client['office_quote_email'] ?? '')) ?>">
-                    </div>
-                </div>
+                <!--
+                    Order/quote destination + office email fields were
+                    here. Hidden until routing is wired up — Beverley
+                    Blinds path waits on the Blind Matrix integration,
+                    customer-office path is redundant given tenants see
+                    their own orders in the dashboard. DB columns are
+                    preserved on save (see the company-update SQL).
+                -->
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save company details</button>
