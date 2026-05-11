@@ -799,11 +799,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                     <td>
                                         <?= qb_fmt_mm((int) $it['width_mm']) ?> ×
                                         <?= qb_fmt_mm((int) $it['drop_mm']) ?>
-                                        <?php if (!empty($it['width_matrix_mm'])
-                                                 && ((int) $it['width_matrix_mm'] !== (int) $it['width_mm']
-                                                  || (int) $it['drop_matrix_mm']  !== (int) $it['drop_mm'])): ?>
-                                            <br><small style="color:#6b7280">cell: <?= qb_fmt_mm((int) $it['width_matrix_mm']) ?> × <?= qb_fmt_mm((int) $it['drop_matrix_mm']) ?></small>
-                                        <?php endif; ?>
                                     </td>
                                     <td class="num"><?= (int) $it['quantity'] ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
