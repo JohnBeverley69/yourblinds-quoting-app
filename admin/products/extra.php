@@ -194,14 +194,13 @@ $choices = $rows->fetchAll();
 
 // -----------------------------------------------------------------------
 // Sub-options — any product_extras row gated by one or more of THIS
-// option's choices. Loaded so the user can manage them inline without
-// the round-trip via the Add Option page. Each sub-option also gets a
-// list of its parent gates (label badges) so the relationship reads
-// at a glance.
+// option's choices. Loaded WITH their full choice lists so each one
+// gets its own inline grid below — no round-trip to a separate page
+// to manage them.
 // -----------------------------------------------------------------------
 $subOptions = [];
 $parentLabelsBySub = [];
-$choiceCountBySub  = [];
+$choicesBySub      = [];
 if ($choices) {
     $myChoiceIds = array_map(static fn ($c) => (int) $c['id'], $choices);
     $ph = implode(',', array_fill(0, count($myChoiceIds), '?'));
@@ -235,16 +234,20 @@ if ($choices) {
             $parentLabelsBySub[(int) $r['product_extra_id']][] = (string) $r['label'];
         }
 
-        // Choice count per sub, for the "X choices →" link.
-        $ccSt = db()->prepare(
-            "SELECT product_extra_id, COUNT(*) AS n
-               FROM product_extra_choices
-              WHERE product_extra_id IN ($sph)
-           GROUP BY product_extra_id"
+        // Full choice rows per sub — drives the inline grids.
+        $scSt = db()->prepare(
+            "SELECT c.id, c.product_extra_id, c.label, c.system_id,
+                    c.price_delta, c.price_percent, c.price_per_metre,
+                    c.is_default, c.sort_order, c.active,
+                    (SELECT COUNT(*) FROM extra_choice_price_rows r
+                      WHERE r.product_extra_choice_id = c.id) AS width_table_size
+               FROM product_extra_choices c
+              WHERE c.product_extra_id IN ($sph)
+           ORDER BY c.product_extra_id, c.sort_order, c.label"
         );
-        $ccSt->execute($subIds);
-        foreach ($ccSt->fetchAll() as $r) {
-            $choiceCountBySub[(int) $r['product_extra_id']] = (int) $r['n'];
+        $scSt->execute($subIds);
+        foreach ($scSt->fetchAll() as $r) {
+            $choicesBySub[(int) $r['product_extra_id']][] = $r;
         }
     }
 }
@@ -469,22 +472,20 @@ $activeNav = 'products';
            the whole tree without round-tripping through the Add
            Option page.
            =========================================================== */
-        .sub-grid {
-            display: grid; gap: 0.625rem;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            margin-bottom: 1rem;
-        }
         .sub-card {
             background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
             padding: 0.75rem 0.875rem;
-            display: flex; flex-direction: column; gap: 0.4375rem;
+            margin-bottom: 0.875rem;
         }
-        .sub-card.is-inactive { opacity: 0.6; }
-        .sub-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .sub-card-name { font-size: 0.9375rem; color: #111827; }
+        .sub-card.is-inactive { opacity: 0.7; }
+        .sub-card-head {
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+            margin-bottom: 0.625rem;
+        }
+        .sub-card-name { font-size: 1rem; color: #111827; }
         .sub-card-gates {
             font-size: 0.8125rem; color: #6b7280;
-            display: flex; align-items: center; gap: 0.3125rem; flex-wrap: wrap;
+            display: inline-flex; align-items: center; gap: 0.3125rem; flex-wrap: wrap;
         }
         .gate-pill {
             display: inline-block; padding: 0.0625rem 0.5rem;
@@ -492,10 +493,9 @@ $activeNav = 'products';
             border-radius: 999px; font-size: 0.75rem; font-weight: 600;
         }
         .sub-card-actions {
-            display: flex; flex-wrap: wrap; gap: 0.25rem 0.625rem;
+            display: inline-flex; flex-wrap: wrap; gap: 0.25rem 0.625rem;
             font-size: 0.8125rem;
-            border-top: 1px solid #e5e7eb; padding-top: 0.4375rem;
-            margin-top: 0.125rem;
+            margin-left: auto;
         }
         .sub-card-actions a, .sub-card-actions button {
             background: transparent; border: 0; padding: 0; cursor: pointer;
@@ -505,6 +505,11 @@ $activeNav = 'products';
         .sub-card-actions .btn-secondary-link { color: #4b5563; }
         .sub-card-actions .btn-danger-link    { color: #b91c1c; }
         .sub-card-actions a:hover, .sub-card-actions button:hover { text-decoration: underline; }
+        /* Sub-option's inline grid keeps the same look but a subtle
+           background so it's visually grouped with its card header. */
+        .sub-card > .choices-grid-wrap {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+        }
 
         details.add-sub-form > summary {
             cursor: pointer; padding: 0.5rem 0.75rem;
@@ -563,7 +568,7 @@ $activeNav = 'products';
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">
-                    Choices <span id="choices-count">(<?= count($choices) ?>)</span>
+                    Choices (<?= count($choices) ?>)
                     <span id="save-indicator" class="save-indicator">Saving…</span>
                 </h2>
             </div>
@@ -574,132 +579,12 @@ $activeNav = 'products';
                 <strong>Edit</strong> on a row opens its full edit page (width-table pricing, thumbnail image).
             </p>
 
-            <div class="table-wrap">
-                <table class="grid-table sortable-list" data-reorder-type="choices" id="choices-grid">
-                    <thead>
-                        <tr>
-                            <th class="col-drag"></th>
-                            <th class="col-label">Label</th>
-                            <th class="col-system">Available on</th>
-                            <th class="col-price">Flat £</th>
-                            <th class="col-price">%</th>
-                            <th class="col-price">£/m</th>
-                            <th class="col-toggle" title="Default = pre-selected for the customer">Default</th>
-                            <th class="col-toggle" title="Inactive = hidden from quote builder">Active</th>
-                            <th class="col-actions"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="choices-body">
-                        <?php foreach ($choices as $c): ?>
-                            <?php
-                                $cid       = (int) $c['id'];
-                                $sysId     = $c['system_id'] !== null ? (int) $c['system_id'] : null;
-                                $isActive  = (int) $c['active']     === 1;
-                                $isDefault = (int) $c['is_default'] === 1;
-                                $widthN    = (int) $c['width_table_size'];
-                            ?>
-                            <tr data-id="<?= $cid ?>" class="<?= $isActive ? '' : 'is-inactive' ?>">
-                                <td class="col-drag drag-col" title="Drag to reorder">⋮⋮</td>
-                                <td class="col-label">
-                                    <input class="cell-input" data-field="label"
-                                           value="<?= e((string) $c['label']) ?>"
-                                           maxlength="150"
-                                           autocomplete="off"
-                                           data-form-type="other"
-                                           data-lpignore="true"
-                                           data-1p-ignore="true">
-                                </td>
-                                <td class="col-system">
-                                    <?= $renderSystemMultiSelect($sysId) ?>
-                                </td>
-                                <td class="col-price">
-                                    <input class="cell-input num" data-field="price_delta"
-                                           type="number" step="0.01"
-                                           value="<?= number_format((float) $c['price_delta'], 2, '.', '') ?>">
-                                </td>
-                                <td class="col-price">
-                                    <input class="cell-input num" data-field="price_percent"
-                                           type="number" step="0.01"
-                                           value="<?= number_format((float) $c['price_percent'], 2, '.', '') ?>">
-                                </td>
-                                <td class="col-price">
-                                    <input class="cell-input num" data-field="price_per_metre"
-                                           type="number" step="0.01"
-                                           value="<?= number_format((float) $c['price_per_metre'], 2, '.', '') ?>">
-                                </td>
-                                <td class="col-toggle">
-                                    <input type="checkbox" data-field="is_default"
-                                           <?= $isDefault ? 'checked' : '' ?>>
-                                </td>
-                                <td class="col-toggle">
-                                    <input type="checkbox" data-field="active"
-                                           <?= $isActive ? 'checked' : '' ?>>
-                                </td>
-                                <td class="col-actions row-actions">
-                                    <a href="/admin/products/extra-choice-edit.php?id=<?= $cid ?>"
-                                       class="btn-more"
-                                       title="Full edit page — width-table pricing, thumbnail image upload">Edit</a>
-                                    <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= $cid ?>#add-option"
-                                       class="btn-sub"
-                                       title="Add a follow-up option (e.g. colour) that only appears when this choice is selected">
-                                        + Sub
-                                    </a>
-                                    <button type="button" class="btn-duplicate"
-                                            title="Clone this choice (handy when the same label applies to another system)">
-                                        Dup
-                                    </button>
-                                    <button type="button" class="btn-delete"
-                                            title="Delete this choice">×</button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-
-                        <!-- Bottom "type to add" row. Always present, never has a server id.
-                             The system cell is a multi-select: ticking 2+ systems creates
-                             one row per system in a single save (each row gets its own
-                             price line, ready for per-system tweaks). -->
-                        <tr class="new-row" id="new-row">
-                            <td class="col-drag">+</td>
-                            <td class="col-label">
-                                <input class="cell-input" id="new-label"
-                                       placeholder="Type new label and press Enter…"
-                                       maxlength="150"
-                                       autocomplete="off"
-                                       data-form-type="other"
-                                       data-lpignore="true"
-                                       data-1p-ignore="true">
-                            </td>
-                            <td class="col-system">
-                                <details class="multi-select" id="new-system">
-                                    <summary id="new-system-summary">All systems</summary>
-                                    <div class="multi-opts">
-                                        <label>
-                                            <input type="checkbox" id="new-system-all" checked>
-                                            <span><strong>All systems</strong></span>
-                                        </label>
-                                        <?php if ($systems): ?>
-                                            <hr>
-                                            <?php foreach ($systems as $s): ?>
-                                                <label>
-                                                    <input type="checkbox"
-                                                           class="new-system-one"
-                                                           value="<?= (int) $s['id'] ?>">
-                                                    <span><?= e((string) $s['name']) ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </div>
-                                </details>
-                            </td>
-                            <td colspan="6" style="color:#9ca3af;font-size:0.8125rem">
-                                Tick one or more systems, then press <strong>Enter</strong> on the label to add.
-                                One row per ticked system; prices and toggles become editable on each new row.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
+            <?php
+                $gridExtraId = $extraId;
+                $gridChoices = $choices;
+                $productId   = (int) $extra['product_id'];
+                require __DIR__ . '/../../_partials/choices_grid.php';
+            ?>
         </section>
 
         <!-- ============== SUB-OPTIONS (follow-ups gated by this option's choices) ============== -->
@@ -721,32 +606,27 @@ $activeNav = 'products';
                     None yet. Tick parent choices in the form below to add one.
                 </p>
             <?php else: ?>
-                <div class="sub-grid">
-                    <?php foreach ($subOptions as $sub):
-                        $sid   = (int) $sub['id'];
-                        $gates = $parentLabelsBySub[$sid] ?? [];
-                        $cn    = $choiceCountBySub[$sid] ?? 0;
-                    ?>
-                        <div class="sub-card<?= (int) $sub['active'] === 0 ? ' is-inactive' : '' ?>">
-                            <div class="sub-card-head">
-                                <strong class="sub-card-name"><?= e((string) $sub['name']) ?></strong>
-                                <?php if ((int) $sub['is_required'] === 1): ?>
-                                    <span class="req-pill">Required</span>
-                                <?php endif; ?>
-                                <?php if ((int) $sub['active'] === 0): ?>
-                                    <span class="opt-pill">Inactive</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="sub-card-gates">
+                <?php foreach ($subOptions as $sub):
+                    $sid       = (int) $sub['id'];
+                    $gates     = $parentLabelsBySub[$sid] ?? [];
+                    $subChoices = $choicesBySub[$sid] ?? [];
+                ?>
+                    <div class="sub-card<?= (int) $sub['active'] === 0 ? ' is-inactive' : '' ?>">
+                        <div class="sub-card-head">
+                            <strong class="sub-card-name"><?= e((string) $sub['name']) ?></strong>
+                            <?php if ((int) $sub['is_required'] === 1): ?>
+                                <span class="req-pill">Required</span>
+                            <?php endif; ?>
+                            <?php if ((int) $sub['active'] === 0): ?>
+                                <span class="opt-pill">Inactive</span>
+                            <?php endif; ?>
+                            <span class="sub-card-gates">
                                 Appears when
                                 <?php foreach ($gates as $g): ?>
                                     <span class="gate-pill"><?= e((string) $g) ?></span>
                                 <?php endforeach; ?>
-                            </div>
-                            <div class="sub-card-actions">
-                                <a href="/admin/products/extra.php?id=<?= $sid ?>" class="btn-primary-link">
-                                    Manage <?= $cn ?> choice<?= $cn === 1 ? '' : 's' ?> &rarr;
-                                </a>
+                            </span>
+                            <span class="sub-card-actions">
                                 <a href="/admin/products/extra-edit.php?id=<?= $sid ?>" class="btn-secondary-link">
                                     Edit gates
                                 </a>
@@ -758,10 +638,19 @@ $activeNav = 'products';
                                     <input type="hidden" name="sub_id" value="<?= $sid ?>">
                                     <button type="submit" class="btn-danger-link">Delete</button>
                                 </form>
-                            </div>
+                            </span>
                         </div>
-                    <?php endforeach; ?>
-                </div>
+                        <?php
+                            // Render an inline choices grid for this sub-option.
+                            // Same partial as the main grid → same UX, same keyboard
+                            // flow, same single JS handler picks it up.
+                            $gridExtraId = $sid;
+                            $gridChoices = $subChoices;
+                            $productId   = (int) $extra['product_id'];
+                            require __DIR__ . '/../../_partials/choices_grid.php';
+                        ?>
+                    </div>
+                <?php endforeach; ?>
             <?php endif; ?>
 
             <?php if (!empty($choices)): ?>
@@ -830,12 +719,15 @@ $activeNav = 'products';
 (function () {
     'use strict';
 
-    var endpoint = '/admin/products/choice-api.php';
-    var extraId  = <?= (int) $extraId ?>;
+    // ============================================================
+    // Shared, page-level — multiple grids on this page share these.
+    // ============================================================
+    var endpoint  = '/admin/products/choice-api.php';
     var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var indicator = document.getElementById('save-indicator');
 
-    // Systems list, mirrored from PHP, for building system dropdowns
-    // on freshly-inserted rows (after create or duplicate).
+    // Systems list, mirrored from PHP. All grids on this page operate
+    // on the same product, so the same systems apply to all of them.
     var systemsList = <?= json_encode(
         array_map(static fn ($s) => [
             'id'   => (int) $s['id'],
@@ -844,20 +736,10 @@ $activeNav = 'products';
         JSON_THROW_ON_ERROR
     ) ?>;
 
-    var grid           = document.getElementById('choices-grid');
-    var body           = document.getElementById('choices-body');
-    var indicator      = document.getElementById('save-indicator');
-    var countLabel     = document.getElementById('choices-count');
-    var newRow         = document.getElementById('new-row');
-    var newLabel       = document.getElementById('new-label');
-    var newSystem      = document.getElementById('new-system');           // <details>
-    var newSystemSummary = document.getElementById('new-system-summary');
-    var newSystemAll   = document.getElementById('new-system-all');
-    var newSystemOnes  = document.querySelectorAll('.new-system-one');
-
-    var hideTimer  = null;
+    var hideTimer = null;
     function flashIndicator(message, isError) {
         clearTimeout(hideTimer);
+        if (!indicator) return;
         indicator.textContent = message;
         indicator.classList.toggle('is-error', !!isError);
         indicator.classList.add('is-visible');
@@ -865,6 +747,31 @@ $activeNav = 'products';
             indicator.classList.remove('is-visible');
         }, isError ? 4000 : 1100);
     }
+
+    // Outside-click closes any open multi-select on any grid. One
+    // global listener handles every grid on the page.
+    document.addEventListener('click', function (e) {
+        document.querySelectorAll('details.multi-select[open]').forEach(function (d) {
+            if (!d.contains(e.target)) d.open = false;
+        });
+    });
+
+    // ============================================================
+    // Per-grid — every .choices-grid-wrap on the page gets one
+    // call. All state (extraId, body, newRow, etc.) is closure-local.
+    // ============================================================
+    function initGrid(rootEl) {
+        var extraId = parseInt(rootEl.dataset.extraId, 10);
+        if (!extraId) return;
+
+        var body          = rootEl.querySelector('.grid-body');
+        var newRow        = rootEl.querySelector('.new-row');
+        if (!body || !newRow) return;
+        var newLabel      = rootEl.querySelector('.new-label-input');
+        var newSystem     = rootEl.querySelector('.new-system-details');
+        var newSystemSummary = newSystem && newSystem.querySelector('.new-system-summary');
+        var newSystemAll  = newSystem && newSystem.querySelector('.new-system-all-cb');
+        var newSystemOnes = newSystem ? newSystem.querySelectorAll('.new-system-one') : [];
 
     // Promise-based POST. Returns the parsed JSON; rejects on transport
     // errors or {ok:false} responses (with the server's error message).
@@ -1058,10 +965,10 @@ $activeNav = 'products';
         return tr;
     }
 
-    function updateCount() {
-        var n = body.querySelectorAll('tr[data-id]').length;
-        countLabel.textContent = '(' + n + ')';
-    }
+    // No-op stub — the per-grid count label used to live in the
+    // section header but it's now just a static count in the PHP.
+    // Keeping the function so existing call sites don't need editing.
+    function updateCount() {}
 
     // Build the existing-row multi-select widget — DOM mirror of the
     // PHP renderSystemMultiSelect() helper. Used by buildRow when a new
@@ -1321,20 +1228,15 @@ $activeNav = 'products';
         syncMultiSelect();
     }
 
-    // Wire the checkboxes.
-    newSystem.addEventListener('change', function (e) {
-        if (e.target.matches('input[type="checkbox"]')) {
-            syncMultiSelect(e.target);
-        }
-    });
-
-    // Close ANY open multi-select dropdown (new-row or existing-row)
-    // when clicking outside it.
-    document.addEventListener('click', function (e) {
-        document.querySelectorAll('details.multi-select[open]').forEach(function (d) {
-            if (!d.contains(e.target)) d.open = false;
+    // Wire the new-row's multi-select checkboxes — only if there is one
+    // (a fresh sub-option grid might not have it depending on layout).
+    if (newSystem) {
+        newSystem.addEventListener('change', function (e) {
+            if (e.target.matches('input[type="checkbox"]')) {
+                syncMultiSelect(e.target);
+            }
         });
-    });
+    }
 
     function commitNewRow(focusNext) {
         var label = newLabel.value.trim();
@@ -1395,16 +1297,18 @@ $activeNav = 'products';
         });
     }
 
-    newLabel.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            commitNewRow(true); // focus stays in label for rapid entry
-        } else if (e.key === 'Escape') {
-            newLabel.value = '';
-            resetMultiSelect();
-            newSystem.open = false;
-        }
-    });
+    if (newLabel) {
+        newLabel.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commitNewRow(true); // focus stays in label for rapid entry
+            } else if (e.key === 'Escape') {
+                newLabel.value = '';
+                resetMultiSelect();
+                if (newSystem) newSystem.open = false;
+            }
+        });
+    }
 
     // Blurring the new-row entirely (focus moves outside the label input
     // AND the multi-select dropdown) should also commit — small delay
@@ -1412,16 +1316,22 @@ $activeNav = 'products';
     function maybeCommitNewRow() {
         setTimeout(function () {
             var active = document.activeElement;
-            var insideMs = newSystem.contains(active);
+            var insideMs = newSystem && newSystem.contains(active);
             if (active !== newLabel
              && !insideMs
-             && newLabel.value.trim() !== '') {
+             && newLabel && newLabel.value.trim() !== '') {
                 commitNewRow(false);
             }
         }, 150);
     }
-    newLabel.addEventListener('blur', maybeCommitNewRow);
-    newSystem.addEventListener('focusout', maybeCommitNewRow);
+    if (newLabel)  newLabel.addEventListener('blur', maybeCommitNewRow);
+    if (newSystem) newSystem.addEventListener('focusout', maybeCommitNewRow);
+
+    }  // end initGrid
+
+    // Initialise every choices grid on the page (main option + any
+    // sub-options rendered inline below their cards).
+    document.querySelectorAll('.choices-grid-wrap').forEach(initGrid);
 })();
 </script>
 </body>
