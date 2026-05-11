@@ -58,35 +58,55 @@ try {
     // already been set (so re-accepting a previously-declined-and-
     // reopened quote doesn't overwrite a manual figure).
     //
-    // Two modes:
-    //   'percent' : amount = total × default_deposit_percent / 100
-    //   'flat'    : amount = default_deposit_flat (capped at total so
-    //                       we never demand more than the order's
-    //                       worth — pointless for £50-default on a
-    //                       £30 order).
+    // Two modes ('percent' / 'flat'). Defensive against partially-
+    // migrated databases: the mode/flat columns only exist after
+    // migrate_deposit_flat_mode.php has run, and deposit_amount only
+    // exists after migrate_quote_deposits.php has run. Either query
+    // failing just means "skip the seed", not "500 the whole accept
+    // action" — the trade user can still set the deposit manually
+    // on the quote Edit page once the migrations are deployed.
     if ($target === 'accepted' && ($quote['deposit_amount'] ?? null) === null) {
-        $dpStmt = $pdo->prepare(
-            'SELECT default_deposit_mode, default_deposit_percent, default_deposit_flat
-               FROM client_settings WHERE client_id = ? LIMIT 1'
-        );
-        $dpStmt->execute([$clientId]);
-        $dp     = $dpStmt->fetch() ?: [
-            'default_deposit_mode'    => 'percent',
-            'default_deposit_percent' => 50,
-            'default_deposit_flat'    => 0,
-        ];
-        $total  = (float) $quote['total'];
-        $mode   = (string) ($dp['default_deposit_mode'] ?? 'percent');
-        if ($mode === 'flat') {
-            $depositAmt = min((float) $dp['default_deposit_flat'], $total);
-        } else {
-            $depositAmt = $total * ((float) $dp['default_deposit_percent']) / 100;
-        }
-        $depositAmt = round($depositAmt, 2);
+        try {
+            // Try the full multi-mode lookup first.
+            try {
+                $dpStmt = $pdo->prepare(
+                    'SELECT default_deposit_mode,
+                            default_deposit_percent,
+                            default_deposit_flat
+                       FROM client_settings WHERE client_id = ? LIMIT 1'
+                );
+                $dpStmt->execute([$clientId]);
+                $dp = $dpStmt->fetch() ?: [];
+            } catch (Throwable $e) {
+                // Flat-mode columns missing → fall back to percent-only.
+                $dpStmt = $pdo->prepare(
+                    'SELECT default_deposit_percent
+                       FROM client_settings WHERE client_id = ? LIMIT 1'
+                );
+                $dpStmt->execute([$clientId]);
+                $dp = $dpStmt->fetch() ?: [];
+            }
 
-        $pdo->prepare(
-            'UPDATE quotes SET deposit_amount = ? WHERE id = ?'
-        )->execute([$depositAmt, $quoteId]);
+            $total = (float) $quote['total'];
+            $mode  = (string) ($dp['default_deposit_mode'] ?? 'percent');
+            if ($mode === 'flat') {
+                $depositAmt = min((float) ($dp['default_deposit_flat'] ?? 0), $total);
+            } else {
+                $depositAmt = $total * ((float) ($dp['default_deposit_percent'] ?? 50)) / 100;
+            }
+            $depositAmt = round($depositAmt, 2);
+
+            $pdo->prepare(
+                'UPDATE quotes SET deposit_amount = ? WHERE id = ?'
+            )->execute([$depositAmt, $quoteId]);
+        } catch (Throwable $e) {
+            // deposit_amount column missing OR another deposit-table
+            // problem — just skip the seed quietly so the accept
+            // action still succeeds. The trade user will see the
+            // status change to 'accepted' and can deal with the
+            // deposit once migrations are deployed.
+            error_log('Deposit auto-seed skipped on accept: ' . $e->getMessage());
+        }
     }
 
     // Mirror the public-accept side: when the trade user marks a quote
