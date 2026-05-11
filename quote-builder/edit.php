@@ -628,15 +628,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     ?>
                 <?php endif; ?>
 
-                <div class="form-row full">
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="end_customer_address1">Address line 1</label>
                         <input id="end_customer_address1" name="end_customer_address1" type="text" maxlength="150"
                                <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_address1'] ?? '')) ?>">
                     </div>
-                </div>
-                <div class="form-row full">
                     <div class="form-group">
                         <label for="end_customer_address2">Address line 2</label>
                         <input id="end_customer_address2" name="end_customer_address2" type="text" maxlength="150"
@@ -964,10 +962,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             <?php endif; ?>
         </section>
-        </div><!-- /col-right -->
-        </div><!-- /quote-cols -->
 
-        <!-- ============== SEND TO CUSTOMER ============== -->
+        <!-- ============== SEND TO CUSTOMER (in right column to fill
+             the whitespace below the Blinds table) ============== -->
         <?php
             // Build the absolute public-accept URL (used by both the email
             // body via the server-side handler AND the WhatsApp link below).
@@ -1071,6 +1068,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </small>
             </form>
         </section>
+        </div><!-- /col-right -->
+        </div><!-- /quote-cols -->
 
         <!-- ============== STATUS + DANGER ZONE ============== -->
         <section class="section">
