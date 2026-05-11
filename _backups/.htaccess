@@ -1,0 +1,5 @@
+# Server-side DB snapshots taken before each restore live here. They
+# contain real tenant data — block direct HTTP access. The backup
+# tool reads them via PHP filesystem only.
+Require all denied
+Deny from all

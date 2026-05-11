@@ -91,7 +91,10 @@ $activeNav = 'master-admin';
                     Per-client feature flags + tenant management. Tick to enable an add-on for a client.
                 </p>
             </div>
-            <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/master-admin/backup.php" class="btn btn-secondary">Backup &amp; restore</a>
+                <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>

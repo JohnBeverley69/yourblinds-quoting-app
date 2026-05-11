@@ -12,6 +12,12 @@ database/live_dump*.sql
 database/*_dump*.sql
 database/*.dump
 
+# Auto-snapshots taken by /master-admin/backup.php before each restore.
+# Contains real tenant data — must never be committed.
+/_backups/*
+!/_backups/.htaccess
+!/_backups/.gitkeep
+
 # --- Dependencies ---
 /vendor/
 /node_modules/
