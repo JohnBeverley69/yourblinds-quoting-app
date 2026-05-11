@@ -143,42 +143,114 @@ $activeNav = 'quote-history';
                     </p>
                 </div>
             <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Quote #</th>
-                                <th>Customer</th>
-                                <th>Postcode</th>
-                                <th>Status</th>
-                                <th class="num">Total</th>
-                                <th>Created</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($quotes as $r): ?>
+                <form method="post" action="/quote-history/bulk_delete.php"
+                      id="bulk-delete-form"
+                      data-confirm-submit="Delete the selected quotes? This is permanent — all blinds, items and appointments go too.">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="return_status" value="<?= e($status) ?>">
+                    <input type="hidden" name="return_q"      value="<?= e($q) ?>">
+
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.625rem;">
+                        <button type="submit" class="btn btn-danger"
+                                id="bulk-delete-btn"
+                                style="padding:0.3125rem 0.875rem;font-size:0.875rem"
+                                disabled>
+                            Delete selected
+                        </button>
+                        <span id="bulk-count" style="color:#6b7280;font-size:0.8125rem">
+                            (none selected)
+                        </span>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <a href="/quote-builder/edit.php?id=<?= (int) $r['id'] ?>" class="q-link">
-                                            <?= e((string) $r['quote_number']) ?>
-                                        </a>
-                                    </td>
-                                    <td><?= e((string) $r['end_customer_name']) ?></td>
-                                    <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
-                                    <td>
-                                        <span class="status-pill status-<?= e((string) $r['status']) ?>">
-                                            <?= e((string) $r['status']) ?>
-                                        </span>
-                                    </td>
-                                    <td class="num"><?= e($money($r['total'])) ?></td>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
-                                        <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
-                                    </td>
+                                    <th style="width:1.75rem;text-align:center">
+                                        <input type="checkbox" id="bulk-all"
+                                               aria-label="Select all visible quotes">
+                                    </th>
+                                    <th>Quote #</th>
+                                    <th>Customer</th>
+                                    <th>Postcode</th>
+                                    <th>Status</th>
+                                    <th class="num">Total</th>
+                                    <th>Created</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($quotes as $r): ?>
+                                    <tr>
+                                        <td style="text-align:center">
+                                            <input type="checkbox"
+                                                   class="bulk-row"
+                                                   name="quote_ids[]"
+                                                   value="<?= (int) $r['id'] ?>"
+                                                   aria-label="Select quote <?= e((string) $r['quote_number']) ?>">
+                                        </td>
+                                        <td>
+                                            <a href="/quote-builder/edit.php?id=<?= (int) $r['id'] ?>" class="q-link">
+                                                <?= e((string) $r['quote_number']) ?>
+                                            </a>
+                                        </td>
+                                        <td><?= e((string) $r['end_customer_name']) ?></td>
+                                        <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
+                                        <td>
+                                            <span class="status-pill status-<?= e((string) $r['status']) ?>">
+                                                <?= e((string) $r['status']) ?>
+                                            </span>
+                                        </td>
+                                        <td class="num"><?= e($money($r['total'])) ?></td>
+                                        <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                                            <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+
+                <script>
+                (function () {
+                    var form    = document.getElementById('bulk-delete-form');
+                    var allBox  = document.getElementById('bulk-all');
+                    var btn     = document.getElementById('bulk-delete-btn');
+                    var counter = document.getElementById('bulk-count');
+                    if (!form || !allBox || !btn || !counter) return;
+
+                    function rows() {
+                        return form.querySelectorAll('input.bulk-row');
+                    }
+                    function refresh() {
+                        var checked = form.querySelectorAll('input.bulk-row:checked').length;
+                        var total   = rows().length;
+                        btn.disabled = checked === 0;
+                        counter.textContent = checked === 0
+                            ? '(none selected)'
+                            : '(' + checked + ' of ' + total + ' selected)';
+                        // Sync the master checkbox state.
+                        allBox.checked       = checked > 0 && checked === total;
+                        allBox.indeterminate = checked > 0 && checked < total;
+                    }
+                    allBox.addEventListener('change', function () {
+                        rows().forEach(function (cb) { cb.checked = allBox.checked; });
+                        refresh();
+                    });
+                    form.addEventListener('change', function (e) {
+                        if (e.target && e.target.classList.contains('bulk-row')) refresh();
+                    });
+                    // Confirm-on-submit, using the same dialog idiom as the
+                    // existing data-confirm handlers elsewhere on the site.
+                    form.addEventListener('submit', function (e) {
+                        var msg = form.getAttribute('data-confirm-submit');
+                        if (msg && !window.confirm(msg)) {
+                            e.preventDefault();
+                        }
+                    });
+                    refresh();
+                })();
+                </script>
             <?php endif; ?>
         </section>
     </main>
