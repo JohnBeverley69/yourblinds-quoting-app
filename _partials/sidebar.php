@@ -71,6 +71,8 @@ $navLinks = [
 <?php endforeach; ?>
         </nav>
         <div class="app-sidebar-foot">
+            <a href="/auth/change_password.php">Change password</a>
+            &middot;
             <a href="/auth/logout.php">Sign out &rarr;</a>
         </div>
     </aside>
