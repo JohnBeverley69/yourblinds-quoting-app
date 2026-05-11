@@ -44,6 +44,7 @@ $navLinks = [
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
     'master-admin'  => ['/master-admin/index.php',     'Master Admin',  $isSuperAdmin],
+    'backup'        => ['/master-admin/backup.php',    'Backup',        $isSuperAdmin],
 ];
 ?>
     <input type="checkbox" id="navToggle" class="nav-toggle-input">

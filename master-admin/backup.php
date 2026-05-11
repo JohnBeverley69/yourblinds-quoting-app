@@ -33,7 +33,7 @@ requireSuperAdmin();
 
 $user      = current_user();
 $clientId  = (int) $user['client_id'];
-$activeNav = 'master-admin';
+$activeNav = 'backup';
 
 $backupDir = __DIR__ . '/../_backups';
 if (!is_dir($backupDir)) {
