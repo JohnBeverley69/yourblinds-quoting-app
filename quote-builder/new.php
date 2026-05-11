@@ -25,6 +25,51 @@ $f = [
 ];
 $error = null;
 
+// Pre-fill from an appointment when arriving via the calendar's
+// "Create quote" link (/quote-builder/new.php?appointment_id=N).
+// Copies the linked customer + the appointment's installation
+// address so the trade user doesn't retype anything they already
+// have. Tenant-scoped — silently ignored if the appointment
+// doesn't belong to the current client.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
+    $apptId = (int) $_GET['appointment_id'];
+    if ($apptId > 0) {
+        $aSt = db()->prepare(
+            'SELECT a.customer_id,
+                    a.installation_address1, a.installation_address2,
+                    a.installation_town, a.installation_county, a.installation_postcode,
+                    c.name AS cust_name, c.email AS cust_email,
+                    c.phone AS cust_phone, c.has_whatsapp AS cust_whatsapp,
+                    c.address1 AS cust_addr1, c.address2 AS cust_addr2,
+                    c.town AS cust_town, c.county AS cust_county,
+                    c.postcode AS cust_postcode
+               FROM appointments a
+          LEFT JOIN customers c ON c.id = a.customer_id
+              WHERE a.id = ? AND a.client_id = ?
+              LIMIT 1'
+        );
+        $aSt->execute([$apptId, $clientId]);
+        $appt = $aSt->fetch();
+        if ($appt) {
+            $f['customer_id']           = (int) ($appt['customer_id'] ?? 0);
+            $f['end_customer_name']     = (string) ($appt['cust_name']    ?? '');
+            $f['end_customer_email']    = (string) ($appt['cust_email']   ?? '');
+            $f['end_customer_phone']    = (string) ($appt['cust_phone']   ?? '');
+            $f['has_whatsapp']          = !empty($appt['cust_whatsapp']) ? 1 : 0;
+            // Prefer the appointment's installation address (the
+            // physical place where the blinds go) since that's what
+            // the customer's quote is really about. Fall back to the
+            // customer's address fields if the appointment didn't
+            // capture one.
+            $f['end_customer_address1'] = (string) ($appt['installation_address1'] ?: ($appt['cust_addr1']    ?? ''));
+            $f['end_customer_address2'] = (string) ($appt['installation_address2'] ?: ($appt['cust_addr2']    ?? ''));
+            $f['end_customer_town']     = (string) ($appt['installation_town']     ?: ($appt['cust_town']     ?? ''));
+            $f['end_customer_county']   = (string) ($appt['installation_county']   ?: ($appt['cust_county']   ?? ''));
+            $f['end_customer_postcode'] = (string) ($appt['installation_postcode'] ?: ($appt['cust_postcode'] ?? ''));
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 

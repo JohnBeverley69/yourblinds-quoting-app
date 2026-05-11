@@ -31,6 +31,7 @@ $f = [
     'customer_name'             => '',
     'email'                     => '',
     'phone'                     => '',
+    'has_whatsapp'              => 0,
     'installation_address1'     => '',
     'installation_address2'     => '',
     'installation_town'         => '',
@@ -66,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Pull each input into $f. Cast checkbox + numeric fields explicitly.
     foreach (array_keys($f) as $k) {
-        if ($k === 'different_billing_address') {
+        if ($k === 'different_billing_address' || $k === 'has_whatsapp') {
             $f[$k] = !empty($_POST[$k]) ? 1 : 0;
         } elseif ($k === 'duration_minutes' || $k === 'assigned_to') {
             $f[$k] = (int) ($_POST[$k] ?? 0);
@@ -121,15 +122,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 1) Customer record. Customer's address = installation address.
                 $cstmt = $pdo->prepare(
                     'INSERT INTO customers
-                       (client_id, name, email, phone,
+                       (client_id, name, email, phone, has_whatsapp,
                         address1, address2, town, county, postcode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $cstmt->execute([
                     $clientId,
                     $f['customer_name'],
                     $f['email'] !== '' ? $f['email'] : null,
                     $f['phone'] !== '' ? $f['phone'] : null,
+                    $f['has_whatsapp'],
                     $f['installation_address1'] !== '' ? $f['installation_address1'] : null,
                     $f['installation_address2'] !== '' ? $f['installation_address2'] : null,
                     $f['installation_town']     !== '' ? $f['installation_town']     : null,
@@ -306,6 +308,11 @@ $activeNav = 'calendar';
                             <input id="phone" name="phone" type="tel" maxlength="50"
                                    autocomplete="tel"
                                    value="<?= e((string) $f['phone']) ?>">
+                            <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                                <input type="checkbox" id="has_whatsapp" name="has_whatsapp" value="1"
+                                       <?= (int) $f['has_whatsapp'] === 1 ? 'checked' : '' ?>>
+                                Customer has WhatsApp on this number
+                            </label>
                         </div>
                     </div>
                 </fieldset>
