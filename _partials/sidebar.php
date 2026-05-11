@@ -38,6 +38,7 @@ $navLinks = [
     'my-schedule'   => ['/calendar/schedule.php',      'My Schedule',   true],
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
+    'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
