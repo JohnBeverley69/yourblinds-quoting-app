@@ -1,0 +1,46 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Delete a payment. POST + CSRF + tenant-scoped.
+ *
+ * Posted fields:
+ *   id          required
+ *   return_to   optional — URL to redirect back to
+ */
+
+require __DIR__ . '/../bootstrap.php';
+require __DIR__ . '/../auth/middleware.php';
+
+requireLogin();
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    exit;
+}
+
+csrf_check();
+
+$user     = current_user();
+$clientId = (int) $user['client_id'];
+
+$id       = (int) ($_POST['id']        ?? 0);
+$returnTo = (string) ($_POST['return_to'] ?? '/accounts/index.php');
+
+if ($id <= 0) {
+    $_SESSION['flash_error'] = 'No payment id supplied.';
+    header('Location: ' . $returnTo);
+    exit;
+}
+
+$st = db()->prepare(
+    'DELETE FROM payments WHERE id = ? AND client_id = ?'
+);
+$st->execute([$id, $clientId]);
+
+$_SESSION['flash_success'] = $st->rowCount() === 1
+    ? 'Payment deleted.'
+    : 'Payment not found.';
+header('Location: ' . $returnTo);
+exit;

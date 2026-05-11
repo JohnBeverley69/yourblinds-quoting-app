@@ -52,16 +52,33 @@ if ($q !== '') {
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
 
-$sql = 'SELECT id, quote_number, end_customer_name, end_customer_postcode,
-               status, total, accepted_at, created_at, updated_at,
-               deposit_amount, deposit_paid_at
-          FROM quotes
-         WHERE ' . implode(' AND ', $where) . '
-         ORDER BY COALESCE(accepted_at, created_at) DESC
-         LIMIT 200';
-$st = db()->prepare($sql);
-$st->execute($params);
-$orders = $st->fetchAll();
+$sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
+               q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
+               q.deposit_amount, q.deposit_paid_at,
+               IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
+                 AS payments_total
+          FROM quotes q
+         WHERE " . str_replace('client_id', 'q.client_id', implode(' AND ', $where)) . "
+         ORDER BY COALESCE(q.accepted_at, q.created_at) DESC
+         LIMIT 200";
+try {
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $orders = $st->fetchAll();
+} catch (Throwable $e) {
+    // payments table missing — re-run without the subquery.
+    $sql = 'SELECT id, quote_number, end_customer_name, end_customer_postcode,
+                   status, total, accepted_at, created_at, updated_at,
+                   deposit_amount, deposit_paid_at,
+                   0 AS payments_total
+              FROM quotes
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY COALESCE(accepted_at, created_at) DESC
+             LIMIT 200';
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $orders = $st->fetchAll();
+}
 
 // Per-status counts for the filter chips — scoped to the order
 // subset (so "ordered (3)" etc. always refers to the orders pool,
@@ -197,12 +214,21 @@ $activeNav = 'orders';
                                 <th>Accepted</th>
                                 <th class="num">Total</th>
                                 <th>Deposit</th>
+                                <th class="num">Outstanding</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($orders as $o):
                                 $dep    = $o['deposit_amount'];
                                 $depAt  = $o['deposit_paid_at'];
+                                // Outstanding = total − payments −
+                                // (deposit if marked paid).
+                                $depCounted = $depAt ? (float) ($dep ?? 0) : 0.0;
+                                $outstanding = round(
+                                    (float) $o['total']
+                                    - (float) ($o['payments_total'] ?? 0)
+                                    - $depCounted, 2
+                                );
                             ?>
                                 <tr>
                                     <td>
@@ -231,6 +257,20 @@ $activeNav = 'orders';
                                             <span style="color:#92400e;font-weight:600;font-size:0.8125rem">
                                                 <?= e($money($dep)) ?> due
                                             </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="num">
+                                        <?php if ($outstanding > 0.0049): ?>
+                                            <span style="color:#92400e;font-weight:700">
+                                                <?= e($money($outstanding)) ?>
+                                            </span>
+                                        <?php elseif ($outstanding < -0.0049): ?>
+                                            <span style="color:#1e40af;font-weight:700"
+                                                  title="Overpaid">
+                                                +<?= e($money(-$outstanding)) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="color:#065f46;font-weight:700">✓ paid</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

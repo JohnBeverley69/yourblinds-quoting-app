@@ -1076,6 +1076,164 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <?php endif; ?>
         </section>
         <?php endif; ?>
+
+        <?php
+            // Payments section — recorded against this quote. Defensive
+            // against the payments table not yet existing (try/catch).
+            $paymentsList    = [];
+            $paymentsTotal   = 0.0;
+            $paymentsLoaded  = false;
+            try {
+                $pStmt = db()->prepare(
+                    'SELECT id, amount, received_at, method, reference, notes
+                       FROM payments
+                      WHERE quote_id = ? AND client_id = ?
+                   ORDER BY received_at DESC, id DESC'
+                );
+                $pStmt->execute([(int) $quote['id'], $clientId]);
+                $paymentsList   = $pStmt->fetchAll();
+                $paymentsTotal  = array_sum(array_map(
+                    static fn ($p) => (float) $p['amount'], $paymentsList
+                ));
+                $paymentsLoaded = true;
+            } catch (Throwable $e) {
+                // payments table missing — migration not run yet. Skip
+                // the panel rather than 500 the whole quote page.
+            }
+            // Outstanding = total − payments − (deposit if marked paid).
+            $depositCounted   = $depositPaidAt ? (float) ($depositAmount ?? 0) : 0.0;
+            $totalReceived    = round($paymentsTotal + $depositCounted, 2);
+            $outstandingHere  = round((float) $quote['total'] - $totalReceived, 2);
+
+            // Local helper — keep the template clean.
+            $acctMethodLabels = [
+                'cash' => 'Cash', 'card' => 'Card',
+                'bank_transfer' => 'Bank transfer',
+                'cheque' => 'Cheque', 'paypal' => 'PayPal',
+                'stripe' => 'Stripe', 'gocardless' => 'GoCardless',
+                'other' => 'Other',
+            ];
+        ?>
+        <?php if ($paymentsLoaded): ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Payments</h2>
+            </div>
+
+            <?php if ($outstandingHere > 0.0049): ?>
+                <p style="background:#fef3c7;color:#92400e;
+                          padding:0.5rem 0.75rem;border-radius:8px;
+                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
+                    Outstanding: <?= e(qb_fmt_money($outstandingHere)) ?>
+                    <span style="font-weight:400;color:#92400e80">
+                        of <?= e(qb_fmt_money((float) $quote['total'])) ?>
+                    </span>
+                </p>
+            <?php elseif ($outstandingHere < -0.0049): ?>
+                <p style="background:#dbeafe;color:#1e40af;
+                          padding:0.5rem 0.75rem;border-radius:8px;
+                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
+                    Overpaid by <?= e(qb_fmt_money(-$outstandingHere)) ?>
+                </p>
+            <?php else: ?>
+                <p style="background:#d1fae5;color:#065f46;
+                          padding:0.5rem 0.75rem;border-radius:8px;
+                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
+                    ✓ Fully paid (<?= e(qb_fmt_money($totalReceived)) ?>)
+                </p>
+            <?php endif; ?>
+
+            <?php if ($paymentsList): ?>
+                <table class="table" style="font-size:0.875rem;margin:0 0 0.75rem">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th class="num">Amount</th>
+                            <?php if ($editable): ?><th></th><?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($paymentsList as $p): ?>
+                            <tr>
+                                <td><?= e(date('j M Y', strtotime((string) $p['received_at']))) ?></td>
+                                <td><?= e($acctMethodLabels[$p['method']] ?? ucfirst((string) $p['method'])) ?></td>
+                                <td><?= e((string) ($p['reference'] ?? '')) ?></td>
+                                <td class="num"><?= e(qb_fmt_money((float) $p['amount'])) ?></td>
+                                <?php if ($editable): ?>
+                                    <td style="white-space:nowrap">
+                                        <form method="post" action="/accounts/payment_delete.php"
+                                              style="display:inline;margin:0"
+                                              data-confirm="Delete this payment?">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                            <input type="hidden" name="return_to"
+                                                   value="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-danger"
+                                                    style="padding:0.125rem 0.4375rem;font-size:0.75rem">
+                                                ×
+                                            </button>
+                                        </form>
+                                    </td>
+                                <?php endif; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+
+            <?php if ($editable && $outstandingHere > 0.0049): ?>
+                <form method="post" action="/accounts/payment_save.php"
+                      style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:end">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                    <input type="hidden" name="return_to"
+                           value="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>">
+                    <div style="flex:1 1 6rem">
+                        <label style="font-size:0.75rem;color:#6b7280;display:block">Amount £</label>
+                        <input type="number" name="amount" step="0.01" required
+                               value="<?= e(number_format($outstandingHere, 2, '.', '')) ?>"
+                               style="width:100%;padding:0.4375rem 0.625rem;
+                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                    </div>
+                    <div style="flex:1 1 8rem">
+                        <label style="font-size:0.75rem;color:#6b7280;display:block">Date</label>
+                        <input type="date" name="received_at" required
+                               value="<?= e(date('Y-m-d')) ?>"
+                               style="width:100%;padding:0.4375rem 0.625rem;
+                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                    </div>
+                    <div style="flex:1 1 8rem">
+                        <label style="font-size:0.75rem;color:#6b7280;display:block">Method</label>
+                        <select name="method"
+                                style="width:100%;padding:0.4375rem 0.625rem;
+                                       border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                            <?php foreach ($acctMethodLabels as $k => $lbl): ?>
+                                <option value="<?= e($k) ?>"
+                                        <?= $k === 'bank_transfer' ? 'selected' : '' ?>>
+                                    <?= e($lbl) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div style="flex:2 1 10rem">
+                        <label style="font-size:0.75rem;color:#6b7280;display:block">Reference (optional)</label>
+                        <input type="text" name="reference" maxlength="200"
+                               placeholder="e.g. cheque #, Stripe id..."
+                               style="width:100%;padding:0.4375rem 0.625rem;
+                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary"
+                                style="padding:0.4375rem 0.875rem;font-size:0.875rem">
+                            Record payment
+                        </button>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
         </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 
