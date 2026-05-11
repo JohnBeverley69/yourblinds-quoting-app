@@ -174,6 +174,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             margin-top: 0.5rem; padding: 0.25rem;
             background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
         }
+        /* Each top-level option is one grid cell. Follow-up options
+           (e.g. Colour for the chosen Bottom Weight type) nest inside
+           the parent's cell with a left rule + indent so the
+           relationship is visually obvious — no orphan dropdowns
+           drifting around the grid. */
+        .extras-grid .extra-cell {
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+        .extras-grid .extra-cell .extra-child {
+            margin-left: 0.625rem;
+            padding-left: 0.625rem;
+            border-left: 2px solid #cbd5e1;
+        }
+        .extras-grid .extra-cell .extra-child label {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        .extras-grid .extra-cell .extra-child label::before {
+            content: '↳ ';
+            color: #9ca3af;
+        }
         .form-group input[type="number"], .form-group input[type="text"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
@@ -1182,51 +1203,78 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
 
         var systemId = parseInt(systemSel.value, 10) || 0;
-        var html = '';
-        var anyVisible = false;
 
-        productData.extras.forEach(function (extra, idx) {
-            // Conditional extras: hidden until ANY of the listed parent
-            // choices is selected. Read from `preset` (captured) rather
-            // than the live DOM since we're mid-rebuild.
+        // ----- Relationships: which extra owns which choice id, which
+        //       extras are children of which "owner" extra. Children sit
+        //       inside their owner's grid cell — keeps the visual
+        //       parent → child relationship obvious.
+        var choiceToExtra = {};
+        productData.extras.forEach(function (e) {
+            e.choices.forEach(function (c) { choiceToExtra[c.id] = e.id; });
+        });
+        var childrenOf = {};
+        productData.extras.forEach(function (e) {
+            var parents = e.parent_choice_ids || [];
+            if (parents.length === 0) return;
+            var ownerId = null;
+            for (var i = 0; i < parents.length; i++) {
+                if (choiceToExtra[parents[i]] !== undefined) {
+                    ownerId = choiceToExtra[parents[i]];
+                    break;
+                }
+            }
+            if (ownerId === null) return;
+            if (!childrenOf[ownerId]) childrenOf[ownerId] = [];
+            if (childrenOf[ownerId].indexOf(e.id) === -1) {
+                childrenOf[ownerId].push(e.id);
+            }
+        });
+
+        function isVisible(extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length > 0) {
-                var parentSelected = false;
-                productData.extras.forEach(function (other, otherIdx) {
-                    if (otherIdx === idx) return;
-                    var presetVal = preset[other.id];
-                    if (presetVal && parents.indexOf(parseInt(presetVal, 10)) !== -1) {
-                        parentSelected = true;
-                    }
+                var ok = false;
+                productData.extras.forEach(function (other) {
+                    if (other.id === extra.id) return;
+                    var v = preset[other.id];
+                    if (v && parents.indexOf(parseInt(v, 10)) !== -1) ok = true;
                 });
-                if (!parentSelected) return;
+                if (!ok) return false;
             }
-
-            // Filter choices by system. system_id === null means "all
-            // systems"; otherwise it must match the chosen system. The
-            // option auto-hides when no choice is available — there is
-            // no separate option-level scope in this model.
             var visibleChoices = extra.choices.filter(function (c) {
                 if (c.system_id === null || c.system_id === undefined) return true;
                 return c.system_id === systemId;
             });
-            if (visibleChoices.length === 0) return;
+            return visibleChoices.length > 0;
+        }
 
-            anyVisible = true;
+        // Render a single extra's inner HTML (label + select + optional
+        // thumbnail). Doesn't include the outer .extra-cell wrapper —
+        // caller decides whether this is a top-level cell or nested inside
+        // its parent.
+        function renderOne(extra, isChild) {
+            var idx = productData.extras.indexOf(extra);
+            var visibleChoices = extra.choices.filter(function (c) {
+                if (c.system_id === null || c.system_id === undefined) return true;
+                return c.system_id === systemId;
+            });
             var presetVal = preset[extra.id];
             var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
-            var selectedThumb = null;   // image_url of the currently-selected choice, if any
-            html += '<div data-extra-id="' + extra.id + '">';
-            html += '<label>' + escapeHtml(extra.name)
-                  + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '')
-                  + '</label>';
-            html += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
-            html += '<select name="extras[' + idx + '][choice_id]"'
-                  + (extra.is_required ? ' required' : '') + '>';
+            var selectedThumb = null;
+
+            var out = '<div data-extra-id="' + extra.id + '"'
+                    + (isChild ? ' class="extra-child"' : '')
+                    + '>';
+            out += '<label>' + escapeHtml(extra.name)
+                 + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '')
+                 + '</label>';
+            out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
+            out += '<select name="extras[' + idx + '][choice_id]"'
+                 + (extra.is_required ? ' required' : '') + '>';
             if (!extra.is_required || !hasDefault) {
-                html += '<option value=""'
-                      + (presetVal === '' ? ' selected' : '')
-                      + '>— None —</option>';
+                out += '<option value=""'
+                     + (presetVal === '' ? ' selected' : '')
+                     + '>— None —</option>';
             }
             visibleChoices.forEach(function (c) {
                 var isSelected;
@@ -1237,21 +1285,40 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 } else {
                     isSelected = c.is_default;
                 }
-                if (isSelected && c.image_url) {
-                    selectedThumb = c.image_url;
-                }
-                html += '<option value="' + c.id + '"'
-                      + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+                if (isSelected && c.image_url) selectedThumb = c.image_url;
+                out += '<option value="' + c.id + '"'
+                     + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
             });
-            html += '</select>';
-            // Show a small preview of whatever the customer just picked. The
-            // thumbnail re-renders along with the rest of the extras box on
-            // every change, so flipping choices updates the image instantly.
+            out += '</select>';
             if (selectedThumb) {
-                html += '<img class="choice-thumb" src="' + escapeAttr(selectedThumb)
-                      + '" alt="" loading="lazy">';
+                out += '<img class="choice-thumb" src="' + escapeAttr(selectedThumb)
+                     + '" alt="" loading="lazy">';
             }
-            html += '</div>';
+            out += '</div>';
+            return out;
+        }
+
+        // Walk a top-level visible extra and recursively append visible
+        // children inside the same grid cell. Limits depth defensively.
+        function renderTreeInto(extra, depth) {
+            if (depth > 4) return '';   // defensive — schema doesn't loop, but JS shouldn't either
+            var out = renderOne(extra, depth > 0);
+            (childrenOf[extra.id] || []).forEach(function (cid) {
+                var child = productData.extras.find(function (e) { return e.id === cid; });
+                if (!child || !isVisible(child)) return;
+                out += renderTreeInto(child, depth + 1);
+            });
+            return out;
+        }
+
+        var html = '';
+        var anyVisible = false;
+        productData.extras.forEach(function (extra) {
+            var parents = extra.parent_choice_ids || [];
+            if (parents.length > 0) return;   // children handled recursively
+            if (!isVisible(extra)) return;
+            anyVisible = true;
+            html += '<div class="extra-cell">' + renderTreeInto(extra, 0) + '</div>';
         });
 
         extrasBox.innerHTML  = html;
