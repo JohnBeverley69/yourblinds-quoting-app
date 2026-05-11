@@ -174,6 +174,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             margin-top: 0.5rem; padding: 0.25rem;
             background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
         }
+        /* The add/edit-blind form is the natural landing spot after a
+           Duplicate or Edit click. Give the anchor scroll some breathing
+           room so it doesn't sit jammed up against the page top, and
+           a brief flash so the user notices they've been moved here. */
+        #add-line { scroll-margin-top: 1rem; }
+        #add-line.flash-jump {
+            animation: edit-flash 1.5s ease-out;
+        }
+        @keyframes edit-flash {
+            0%   { box-shadow: 0 0 0 4px rgba(252, 211, 77, 0.55); }
+            100% { box-shadow: 0 0 0 4px rgba(252, 211, 77, 0); }
+        }
         /* Each top-level option is one grid cell. Follow-up options
            (e.g. Colour for the chosen Bottom Weight type) nest inside
            the parent's cell with a left rule + indent so the
@@ -1523,13 +1535,34 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // product) populated server-side; the cascading bits (system, fabric,
     // extras) need to wait for /api/product-data to come back before they
     // can be set. This kicks the cascade and applies the values.
+    //
+    // Then, once everything has settled, scrolls the form into view —
+    // the browser's own anchor-scroll fires too early (before the JS
+    // populates the cascade and shifts layout), which is why hitting
+    // Duplicate or Edit used to feel like "the page shot back to the
+    // top." Doing it ourselves AFTER the async work is reliable.
+    function scrollToAddLine() {
+        var target = document.getElementById('add-line');
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('flash-jump');
+        setTimeout(function () { target.classList.remove('flash-jump'); }, 1600);
+    }
+    var qs = new URLSearchParams(window.location.search);
+    var jumpToForm = qs.has('edit_item');
+
     if (productSel.value) {
         (async function () {
             await loadProductData();
             if (window.__editingBlind__) {
                 await applyEditingValues(window.__editingBlind__);
             }
+            if (jumpToForm) scrollToAddLine();
         })();
+    } else if (jumpToForm) {
+        // No product picked yet but we're in edit mode anyway — still
+        // worth scrolling so the user lands on the form.
+        scrollToAddLine();
     }
 })();
 </script>
