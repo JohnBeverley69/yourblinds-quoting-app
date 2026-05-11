@@ -192,10 +192,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-            if (str_contains($e->getMessage(), 'uniq_product_client_name')) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'uniq_product_client_name')) {
                 $error = 'A product with that name already exists.';
+            } elseif (str_contains($msg, 'Out of range') || str_contains($msg, '1264')) {
+                // MySQL 1264: numeric value out of range for the column.
+                // Most likely a markup/discount past DECIMAL(8,2)'s
+                // 999999.99 cap — re-prompt with something actionable
+                // instead of the raw "Out of range value for column..."
+                $error = 'A markup or discount % is too large for the column. '
+                       . 'Maximum is 999999.99.';
             } else {
-                $error = 'Could not save product: ' . $e->getMessage();
+                $error = 'Could not save product: ' . $msg;
             }
         }
     }
