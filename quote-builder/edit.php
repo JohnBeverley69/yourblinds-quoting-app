@@ -962,9 +962,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             <?php endif; ?>
         </section>
+        </div><!-- /col-right -->
+        </div><!-- /quote-cols -->
 
-        <!-- ============== SEND TO CUSTOMER (in right column to fill
-             the whitespace below the Blinds table) ============== -->
+        <!-- ============== SEND TO CUSTOMER (full-width below the cols
+             so it doesn't get buried under a tall Blinds table when the
+             quote has lots of line items) ============== -->
         <?php
             // Build the absolute public-accept URL (used by both the email
             // body via the server-side handler AND the WhatsApp link below).
@@ -1068,8 +1071,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </small>
             </form>
         </section>
-        </div><!-- /col-right -->
-        </div><!-- /quote-cols -->
 
         <!-- ============== STATUS + DANGER ZONE ============== -->
         <section class="section">
