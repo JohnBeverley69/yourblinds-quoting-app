@@ -94,6 +94,23 @@ $outSt = db()->prepare(
 $outSt->execute([$clientId]);
 $outstandingTotal = (float) $outSt->fetchColumn();
 
+// Quotes available to attach a new payment to — anything accepted or
+// beyond, with their per-quote outstanding pre-computed so the picker
+// can offer a sensible default amount when one is chosen.
+$pickSt = db()->prepare(
+    "SELECT q.id, q.quote_number, q.end_customer_name, q.total,
+            q.deposit_amount, q.deposit_paid_at,
+            IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
+              AS payments_total
+       FROM quotes q
+      WHERE q.client_id = ?
+        AND q.status IN ('accepted','ordered','invoiced','paid')
+   ORDER BY COALESCE(q.accepted_at, q.created_at) DESC
+      LIMIT 200"
+);
+$pickSt->execute([$clientId]);
+$payableQuotes = $pickSt->fetchAll();
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -129,17 +146,68 @@ $activeNav = 'accounts';
         .summary-card.month       .val { color: #1f3b5b; }
         .summary-card.alltime     .val { color: #065f46; }
 
+        .filter-fieldset {
+            border: 1px dashed #d1d5db; border-radius: 10px;
+            padding: 0.5rem 0.875rem 0.625rem;
+            margin: 0 0 1rem; background: #fafafa;
+        }
+        .filter-fieldset legend {
+            padding: 0 0.4375rem; font-size: 0.75rem;
+            color: #6b7280; text-transform: uppercase;
+            letter-spacing: 0.05em; font-weight: 600;
+        }
         .filter-bar {
-            display: flex; gap: 0.5rem; flex-wrap: wrap;
-            margin: 0 0 0.75rem;
+            display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end;
         }
         .filter-bar input, .filter-bar select {
             padding: 0.4375rem 0.625rem;
             border: 1px solid #d1d5db; border-radius: 6px; font: inherit;
+            background: #fff;
         }
         .filter-bar input[type="search"] { flex: 1 1 200px; }
-        .filter-bar input[type="date"]   { flex: 0 0 9.5rem; }
-        .filter-bar select               { flex: 0 0 8.5rem; }
+        .filter-bar select               { flex: 0 0 9rem; }
+        .filter-bar .filter-date {
+            display: flex; flex-direction: column; gap: 0.125rem;
+            font-size: 0.75rem; color: #6b7280;
+        }
+        .filter-bar .filter-date input { width: 9rem; }
+
+        /* Record-new-payment panel */
+        .np-panel {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 0 0.875rem; margin: 0 0 1rem;
+        }
+        .np-panel summary {
+            list-style: none; cursor: pointer;
+            padding: 0.75rem 0; font-weight: 600; color: #1f3b5b;
+            font-size: 0.9375rem;
+        }
+        .np-panel summary::-webkit-details-marker { display: none; }
+        .np-panel[open] summary {
+            border-bottom: 1px solid #e5e7eb; margin-bottom: 0.75rem;
+        }
+        .np-panel summary::before {
+            content: '▸ '; color: #9ca3af; margin-right: 0.25rem;
+        }
+        .np-panel[open] summary::before { content: '▾ '; }
+        .np-form { padding-bottom: 0.875rem; }
+        .np-grid {
+            display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem;
+            align-items: end;
+        }
+        .np-field { display: flex; flex-direction: column; gap: 0.1875rem; }
+        .np-field label {
+            font-size: 0.75rem; color: #6b7280; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .np-field input, .np-field select {
+            padding: 0.4375rem 0.625rem;
+            border: 1px solid #d1d5db; border-radius: 6px;
+            font: inherit; background: #fff;
+        }
+        .np-actions {
+            display: flex; gap: 0.5rem; margin-top: 0.75rem;
+        }
 
         .method-pill {
             display: inline-block; padding: 0.0625rem 0.5rem;
@@ -164,6 +232,12 @@ $activeNav = 'accounts';
                 <h1 class="page-title">Accounts</h1>
                 <p class="page-subtitle">Payments received against your orders.</p>
             </div>
+            <button type="button"
+                    onclick="document.getElementById('new-payment-panel').open = true;
+                             document.getElementById('np-amount').focus();"
+                    class="btn btn-primary">
+                + Record payment
+            </button>
         </div>
 
         <?php if ($flashMsg): ?>
@@ -188,29 +262,134 @@ $activeNav = 'accounts';
             </div>
         </div>
 
+        <!-- Record-new-payment panel. <details> + open when the user
+             clicks the header button above. Stays open if there was a
+             validation error so the typed values aren't lost. -->
+        <details id="new-payment-panel" class="np-panel"
+                 <?= $flashErr ? 'open' : '' ?>>
+            <summary>+ Record payment</summary>
+            <form method="post" action="/accounts/payment_save.php" class="np-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="return_to" value="/accounts/index.php">
+
+                <div class="np-grid">
+                    <div class="np-field" style="flex:2 1 14rem">
+                        <label for="np-quote">Order (optional)</label>
+                        <select id="np-quote" name="quote_id" data-outstanding-map>
+                            <option value="">— Standalone payment (no order linked) —</option>
+                            <?php foreach ($payableQuotes as $pq):
+                                $depCounted = $pq['deposit_paid_at']
+                                    ? (float) ($pq['deposit_amount'] ?? 0) : 0.0;
+                                $out = round(
+                                    (float) $pq['total']
+                                    - (float) $pq['payments_total']
+                                    - $depCounted, 2
+                                );
+                                if ($out <= 0.0049) continue;   // already paid
+                            ?>
+                                <option value="<?= (int) $pq['id'] ?>"
+                                        data-outstanding="<?= e(number_format($out, 2, '.', '')) ?>">
+                                    <?= e((string) $pq['quote_number']) ?>
+                                    — <?= e((string) ($pq['end_customer_name'] ?? '?')) ?>
+                                    (<?= e(acct_fmt_money($out)) ?> outstanding)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="np-field" style="flex:0 0 7rem">
+                        <label for="np-amount">Amount £</label>
+                        <input id="np-amount" name="amount"
+                               type="number" step="0.01" required
+                               placeholder="0.00">
+                    </div>
+
+                    <div class="np-field" style="flex:0 0 9rem">
+                        <label for="np-date">Received on</label>
+                        <input id="np-date" name="received_at" type="date" required
+                               value="<?= e(date('Y-m-d')) ?>">
+                    </div>
+
+                    <div class="np-field" style="flex:0 0 9rem">
+                        <label for="np-method">Method</label>
+                        <select id="np-method" name="method">
+                            <?php foreach (acct_methods() as $k => $lbl): ?>
+                                <option value="<?= e($k) ?>"
+                                        <?= $k === 'bank_transfer' ? 'selected' : '' ?>>
+                                    <?= e($lbl) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="np-field" style="flex:1 1 12rem">
+                        <label for="np-reference">Reference (optional)</label>
+                        <input id="np-reference" name="reference" type="text"
+                               maxlength="200"
+                               placeholder="e.g. cheque #, Stripe id...">
+                    </div>
+                </div>
+
+                <div class="np-actions">
+                    <button type="submit" class="btn btn-primary">Save payment</button>
+                    <button type="button" class="btn btn-secondary"
+                            onclick="document.getElementById('new-payment-panel').open = false;">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </details>
+        <script>
+            // When a quote is picked, pre-fill amount with the quote's
+            // outstanding balance — the typical case is "customer paid
+            // the rest." User can still type a different figure for
+            // part-payments.
+            (function () {
+                var sel = document.getElementById('np-quote');
+                var amt = document.getElementById('np-amount');
+                if (!sel || !amt) return;
+                sel.addEventListener('change', function () {
+                    var opt = sel.options[sel.selectedIndex];
+                    var out = opt ? opt.getAttribute('data-outstanding') : '';
+                    if (out && (!amt.value || parseFloat(amt.value) === 0)) {
+                        amt.value = out;
+                    }
+                });
+            })();
+        </script>
+
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Payments</h2>
+                <h2 class="section-title">Payment history</h2>
             </div>
 
-            <form method="get" action="/accounts/index.php" class="filter-bar">
-                <input type="search" name="q" value="<?= e($q) ?>"
-                       placeholder="Customer, quote #, reference...">
-                <input type="date" name="from" value="<?= e($from) ?>" title="From">
-                <input type="date" name="to"   value="<?= e($to)   ?>" title="To">
-                <select name="method">
-                    <option value="">All methods</option>
-                    <?php foreach (acct_methods() as $k => $lbl): ?>
-                        <option value="<?= e($k) ?>" <?= $method === $k ? 'selected' : '' ?>>
-                            <?= e($lbl) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <button type="submit" class="btn btn-secondary">Filter</button>
-                <?php if ($q || $from || $to || $method): ?>
-                    <a href="/accounts/index.php" class="btn btn-secondary">Clear</a>
-                <?php endif; ?>
-            </form>
+            <fieldset class="filter-fieldset">
+                <legend>Filter the list</legend>
+                <form method="get" action="/accounts/index.php" class="filter-bar">
+                    <input type="search" name="q" value="<?= e($q) ?>"
+                           placeholder="Customer, quote #, reference...">
+                    <label class="filter-date">
+                        <span>From</span>
+                        <input type="date" name="from" value="<?= e($from) ?>">
+                    </label>
+                    <label class="filter-date">
+                        <span>To</span>
+                        <input type="date" name="to" value="<?= e($to) ?>">
+                    </label>
+                    <select name="method">
+                        <option value="">All methods</option>
+                        <?php foreach (acct_methods() as $k => $lbl): ?>
+                            <option value="<?= e($k) ?>" <?= $method === $k ? 'selected' : '' ?>>
+                                <?= e($lbl) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-secondary">Apply filter</button>
+                    <?php if ($q || $from || $to || $method): ?>
+                        <a href="/accounts/index.php" class="btn btn-secondary">Clear</a>
+                    <?php endif; ?>
+                </form>
+            </fieldset>
 
             <?php if (!$payments): ?>
                 <div class="empty-state">
