@@ -38,7 +38,13 @@ try {
     $pdo->prepare('UPDATE quotes SET status = ? WHERE id = ? AND client_id = ?')
         ->execute([$target, $quoteId, $clientId]);
 
-    if ($target === 'sent' && empty($quote['sent_at'])) {
+    // sent_at gets stamped when moving INTO sent (obvious) AND when
+    // jumping straight from draft → accepted/declined (so the audit
+    // trail still answers "when did this quote leave draft?" instead
+    // of just "when did the customer accept?"). Idempotent — won't
+    // overwrite an existing sent_at.
+    if (in_array($target, ['sent', 'accepted', 'declined'], true)
+        && empty($quote['sent_at'])) {
         $pdo->prepare('UPDATE quotes SET sent_at = NOW() WHERE id = ?')
             ->execute([$quoteId]);
     }

@@ -141,7 +141,12 @@ function qb_is_editable(array $quote): bool
 function qb_allowed_transitions(string $current): array
 {
     switch ($current) {
-        case 'draft':     return ['sent'];
+        // From draft we now allow direct → accepted / declined so the
+        // trade user can record an in-person/phone acceptance without
+        // having to click "sent" first and then "accepted". The
+        // change_status handler auto-stamps sent_at when going draft →
+        // accepted/declined so the lifecycle timeline stays consistent.
+        case 'draft':     return ['sent', 'accepted', 'declined'];
         case 'sent':      return ['accepted', 'declined', 'draft'];
         case 'accepted':  return ['ordered', 'draft'];
         case 'declined':  return ['draft'];

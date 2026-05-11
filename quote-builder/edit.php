@@ -335,6 +335,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .quote-sticky-bar .qsb-left { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .quote-sticky-bar .qsb-total { font-size: 1.0625rem; }
         .quote-sticky-bar .status-pill { margin: 0; }
+        .quote-sticky-bar .qsb-actions {
+            display: flex; gap: 0.375rem; flex-wrap: wrap; align-items: center;
+        }
+        .quote-sticky-bar .qsb-actions form { margin: 0; }
+        .quote-sticky-bar .qsb-actions button {
+            font: inherit; font-size: 0.8125rem; font-weight: 600;
+            padding: 0.3125rem 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff; border-radius: 999px; cursor: pointer;
+        }
+        .quote-sticky-bar .qsb-actions button:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+        .quote-sticky-bar .qsb-actions button.is-accept {
+            background: #15803d; border-color: #166534;
+        }
+        .quote-sticky-bar .qsb-actions button.is-accept:hover { background: #166534; }
+        .quote-sticky-bar .qsb-actions button.is-decline {
+            background: rgba(220, 38, 38, 0.85); border-color: rgba(220, 38, 38, 1);
+        }
 
         /* ===========================================================
            Customer details — collapsible section. Once the customer
@@ -485,6 +506,34 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <?= e((string) $quote['status']) ?>
                 </span>
             </span>
+            <?php
+                // The two transitions that almost always want one-click
+                // access: "Mark as accepted" (customer's said yes) and
+                // "Mark as declined" (customer's said no). Available
+                // from draft now too, so an on-the-spot acceptance
+                // doesn't require a Send hop.
+                $quickActions = array_values(array_intersect(
+                    ['accepted', 'declined'], $transitions
+                ));
+            ?>
+            <?php if ($editable && $quickActions): ?>
+                <span class="qsb-actions">
+                    <?php foreach ($quickActions as $qa): ?>
+                        <form method="post" action="/quote-builder/change_status.php">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                            <input type="hidden" name="target_status" value="<?= e($qa) ?>">
+                            <button type="submit"
+                                    class="<?= $qa === 'accepted' ? 'is-accept' : 'is-decline' ?>"
+                                    <?php if ($qa === 'declined'): ?>
+                                        data-confirm="Mark this quote as declined?"
+                                    <?php endif; ?>>
+                                <?= $qa === 'accepted' ? '✓ Customer accepted' : '✕ Customer declined' ?>
+                            </button>
+                        </form>
+                    <?php endforeach; ?>
+                </span>
+            <?php endif; ?>
             <span class="qsb-total">
                 Total <?= e(qb_fmt_money($quote['total'])) ?>
             </span>
