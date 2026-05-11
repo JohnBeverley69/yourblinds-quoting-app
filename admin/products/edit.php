@@ -222,6 +222,14 @@ $activeNav = 'products';
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
             border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
         }
+        /* Kill the browser's up/down spinner on the markup/discount
+           inputs — pricing % is typed by hand, the spinner just adds
+           noise. */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+        input[type="number"] { -moz-appearance: textfield; }
         .toggle-stack {
             display: flex; flex-direction: column; gap: 0.625rem;
             margin: 1.25rem 0;
