@@ -1230,13 +1230,33 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             }
         });
 
+        // What's the effective selected choice for an extra right now?
+        // Uses the live DOM value if we have one (preset captured at the
+        // top of renderExtras), otherwise falls back to the extra's
+        // default for the current system. This matters on the FIRST
+        // render — the DOM is empty so preset is empty, but the parent
+        // <select> will default-select its is_default choice as soon as
+        // it renders. Without this fallback, child extras whose gate
+        // matches the parent's default would never appear on first paint.
+        function effectiveChoiceId(extra) {
+            if (preset[extra.id] !== undefined) {
+                return preset[extra.id];   // user-picked (incl. "" for None)
+            }
+            var visibleChoices = extra.choices.filter(function (c) {
+                if (c.system_id === null || c.system_id === undefined) return true;
+                return c.system_id === systemId;
+            });
+            var def = visibleChoices.find(function (c) { return c.is_default; });
+            return def ? String(def.id) : '';
+        }
+
         function isVisible(extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length > 0) {
                 var ok = false;
                 productData.extras.forEach(function (other) {
                     if (other.id === extra.id) return;
-                    var v = preset[other.id];
+                    var v = effectiveChoiceId(other);
                     if (v && parents.indexOf(parseInt(v, 10)) !== -1) ok = true;
                 });
                 if (!ok) return false;
