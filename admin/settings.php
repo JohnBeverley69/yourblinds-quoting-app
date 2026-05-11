@@ -125,30 +125,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // default_markup_percent has been retired — markup is now set
         // per-product (Product → Edit → Markup %). The column is still
         // in the DB for back-compat but no longer written from the UI.
-        $prefix    = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
-        $vat       = (float) ($_POST['vat_percent'] ?? 20);
-        $deposit   = (float) ($_POST['default_deposit_percent'] ?? 50);
-        if ($deposit < 0)   $deposit = 0;
-        if ($deposit > 100) $deposit = 100;
-        $emailFrom = trim((string) ($_POST['email_from_name'] ?? '')) ?: null;
-        $replyTo   = trim((string) ($_POST['reply_to_email']  ?? '')) ?: null;
-        $footer    = trim((string) ($_POST['quote_footer']    ?? '')) ?: null;
+        $prefix     = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
+        $vat        = (float) ($_POST['vat_percent'] ?? 20);
+        $depMode    = (string) ($_POST['default_deposit_mode'] ?? 'percent');
+        if (!in_array($depMode, ['percent', 'flat'], true)) {
+            $depMode = 'percent';
+        }
+        $depPct     = (float) ($_POST['default_deposit_percent'] ?? 50);
+        if ($depPct < 0)   $depPct = 0;
+        if ($depPct > 100) $depPct = 100;
+        $depFlat    = (float) ($_POST['default_deposit_flat'] ?? 0);
+        if ($depFlat < 0) $depFlat = 0;
+        $emailFrom  = trim((string) ($_POST['email_from_name'] ?? '')) ?: null;
+        $replyTo    = trim((string) ($_POST['reply_to_email']  ?? '')) ?: null;
+        $footer     = trim((string) ($_POST['quote_footer']    ?? '')) ?: null;
 
         $stmt = db()->prepare(
             'INSERT INTO client_settings
-              (client_id, quote_prefix, vat_percent, default_deposit_percent,
+              (client_id, quote_prefix, vat_percent,
+               default_deposit_mode, default_deposit_percent, default_deposit_flat,
                email_from_name, reply_to_email, quote_footer)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               quote_prefix            = VALUES(quote_prefix),
               vat_percent             = VALUES(vat_percent),
+              default_deposit_mode    = VALUES(default_deposit_mode),
               default_deposit_percent = VALUES(default_deposit_percent),
+              default_deposit_flat    = VALUES(default_deposit_flat),
               email_from_name         = VALUES(email_from_name),
               reply_to_email          = VALUES(reply_to_email),
               quote_footer            = VALUES(quote_footer)'
         );
         $stmt->execute([
-            $clientId, $prefix ?: null, $vat, $deposit,
+            $clientId, $prefix ?: null, $vat,
+            $depMode, $depPct, $depFlat,
             $emailFrom, $replyTo, $footer,
         ]);
         $_SESSION['flash_success'] = 'Quote settings saved.';
@@ -166,7 +176,9 @@ $settingsStmt->execute([$clientId]);
 $settings = $settingsStmt->fetch() ?: [
     'quote_prefix'             => '',
     'vat_percent'              => 20,
+    'default_deposit_mode'     => 'percent',
     'default_deposit_percent'  => 50,
+    'default_deposit_flat'     => 0,
     'email_from_name'          => '',
     'reply_to_email'           => '',
     'quote_footer'             => '',
@@ -348,7 +360,7 @@ $activeNav = 'settings';
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="quote">
 
-                <div class="form-row cols-3">
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="quote_prefix">Quote prefix</label>
                         <input id="quote_prefix" name="quote_prefix" type="text" maxlength="20"
@@ -361,19 +373,57 @@ $activeNav = 'settings';
                                step="0.01" min="0" max="99"
                                value="<?= e((string) ($settings['vat_percent'] ?? '20')) ?>">
                     </div>
-                    <div class="form-group">
-                        <label for="default_deposit_percent">Default deposit %</label>
-                        <input id="default_deposit_percent" name="default_deposit_percent"
-                               type="number" step="0.01" min="0" max="100"
-                               value="<?= e((string) ($settings['default_deposit_percent'] ?? '50')) ?>">
-                    </div>
                 </div>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Default deposit
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                        Seeds the deposit figure on every quote the moment it
+                        moves into Accepted. Overrideable per quote. Pick
+                        whichever mode matches how you actually take deposits.
+                    </p>
+                    <?php $depMode = (string) ($settings['default_deposit_mode'] ?? 'percent'); ?>
+                    <div style="display:flex;flex-wrap:wrap;gap:1rem 1.25rem;align-items:center">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;
+                                      font-weight:500;font-size:0.9375rem;cursor:pointer">
+                            <input type="radio" name="default_deposit_mode"
+                                   value="percent"
+                                   <?= $depMode === 'percent' ? 'checked' : '' ?>>
+                            Percentage of total
+                            <input name="default_deposit_percent" type="number"
+                                   step="0.01" min="0" max="100"
+                                   value="<?= e((string) ($settings['default_deposit_percent'] ?? '50')) ?>"
+                                   style="width:6rem;padding:0.375rem 0.5rem;
+                                          border:1px solid #d1d5db;border-radius:6px;
+                                          font:inherit;margin-left:0.5rem">
+                            <span style="color:#6b7280">%</span>
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;
+                                      font-weight:500;font-size:0.9375rem;cursor:pointer">
+                            <input type="radio" name="default_deposit_mode"
+                                   value="flat"
+                                   <?= $depMode === 'flat' ? 'checked' : '' ?>>
+                            Flat amount
+                            <span style="color:#6b7280">£</span>
+                            <input name="default_deposit_flat" type="number"
+                                   step="0.01" min="0"
+                                   value="<?= e((string) ($settings['default_deposit_flat'] ?? '0')) ?>"
+                                   style="width:7rem;padding:0.375rem 0.5rem;
+                                          border:1px solid #d1d5db;border-radius:6px;
+                                          font:inherit;margin-left:0.25rem">
+                        </label>
+                    </div>
+                </fieldset>
+
                 <p style="color:#6b7280;font-size:0.8125rem;margin:-0.25rem 0 0.75rem">
                     Markup and discount are set per product
                     (<a href="/admin/products/index.php" style="color:#1f3b5b">Products</a>
-                    → Edit → Pricing overrides). The deposit % seeds the deposit
-                    figure on every quote that moves into Accepted — you can
-                    override it per quote.
+                    → Edit → Pricing overrides).
                 </p>
 
                 <div class="form-row">

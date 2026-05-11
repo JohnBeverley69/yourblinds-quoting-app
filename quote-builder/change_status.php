@@ -54,16 +54,36 @@ try {
     }
 
     // First time a quote lands in 'accepted', seed deposit_amount from
-    // the tenant's default deposit %. Skipped if a deposit's already
-    // been set (so re-accepting a previously-declined-and-reopened
-    // quote doesn't overwrite a manual figure).
+    // the tenant's default deposit setting. Skipped if a deposit's
+    // already been set (so re-accepting a previously-declined-and-
+    // reopened quote doesn't overwrite a manual figure).
+    //
+    // Two modes:
+    //   'percent' : amount = total × default_deposit_percent / 100
+    //   'flat'    : amount = default_deposit_flat (capped at total so
+    //                       we never demand more than the order's
+    //                       worth — pointless for £50-default on a
+    //                       £30 order).
     if ($target === 'accepted' && ($quote['deposit_amount'] ?? null) === null) {
         $dpStmt = $pdo->prepare(
-            'SELECT default_deposit_percent FROM client_settings WHERE client_id = ? LIMIT 1'
+            'SELECT default_deposit_mode, default_deposit_percent, default_deposit_flat
+               FROM client_settings WHERE client_id = ? LIMIT 1'
         );
         $dpStmt->execute([$clientId]);
-        $dpPct = (float) ($dpStmt->fetchColumn() ?: 50);
-        $depositAmt = round(((float) $quote['total']) * $dpPct / 100, 2);
+        $dp     = $dpStmt->fetch() ?: [
+            'default_deposit_mode'    => 'percent',
+            'default_deposit_percent' => 50,
+            'default_deposit_flat'    => 0,
+        ];
+        $total  = (float) $quote['total'];
+        $mode   = (string) ($dp['default_deposit_mode'] ?? 'percent');
+        if ($mode === 'flat') {
+            $depositAmt = min((float) $dp['default_deposit_flat'], $total);
+        } else {
+            $depositAmt = $total * ((float) $dp['default_deposit_percent']) / 100;
+        }
+        $depositAmt = round($depositAmt, 2);
+
         $pdo->prepare(
             'UPDATE quotes SET deposit_amount = ? WHERE id = ?'
         )->execute([$depositAmt, $quoteId]);
