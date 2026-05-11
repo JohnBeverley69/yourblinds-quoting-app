@@ -174,6 +174,62 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             margin-top: 0.5rem; padding: 0.25rem;
             background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
         }
+        /* ============================================================
+           Page-slimming pass. The quote edit page used to be tall enough
+           to need lots of scrolling on a laptop. Each block below trims
+           a chunk without hiding functionality.
+           ============================================================ */
+        /* Tighter gap between form rows (default ~1rem → 0.5rem). */
+        #add-line .form-row { margin-bottom: 0.5rem; }
+        #add-line .form-row + .form-row { margin-top: 0; }
+
+        /* Compact "Options" subheader inside the add-blind form. */
+        #add-line #item-extras-wrap .section-header { margin: 0.5rem 0 0.25rem; }
+        #add-line #item-extras-wrap .section-title  {
+            font-size: 0.8125rem !important;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        /* Dimensions + quantity + notes row.
+           Wide screens (≥1100px): 4-up grid, one tidy line.
+           Narrower: same grid but the notes input wraps to its own
+           row spanning the full width — no duplicate inputs, just
+           layout reflow. */
+        #add-line .form-row.cols-3-plus-notes {
+            display: grid;
+            grid-template-columns: 1fr 1fr 0.5fr 1.5fr;
+            gap: 0.5rem 0.75rem;
+        }
+        #add-line .form-row.cols-3-plus-notes .form-group { margin: 0; }
+        @media (max-width: 1099px) {
+            #add-line .form-row.cols-3-plus-notes {
+                grid-template-columns: 1fr 1fr 0.75fr;
+            }
+            /* Notes input is the last form-group — span across all
+               three columns so it gets a full-width row of its own. */
+            #add-line .form-row.cols-3-plus-notes .form-group:last-child {
+                grid-column: 1 / -1;
+            }
+        }
+
+        /* Sticky save bar inside the add-blind form. Once you scroll down
+           past the form, the Save button rides along at the bottom of the
+           viewport so you never have to scroll back to commit a change.
+           Only fires inside the form (no global sticky bar across the
+           whole page), so the customer-details form still works normally. */
+        #add-line .form-actions.sticky-save {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            margin-top: 0.5rem;
+            padding: 0.625rem 0;
+            border-top: 1px solid #e5e7eb;
+            z-index: 5;
+        }
+
         /* The add/edit-blind form is the natural landing spot after a
            Duplicate or Edit click. Give the anchor scroll some breathing
            room so it doesn't sit jammed up against the page top, and
@@ -469,7 +525,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $csTown     = trim((string) ($quote['end_customer_town'] ?? ''));
             $csPostcode = trim((string) ($quote['end_customer_postcode'] ?? ''));
             $hasCustomer = $csName !== '';
-            $startOpen   = !$hasCustomer;
+            // Customer details starts COLLAPSED by default — the summary
+            // line tells the user what's in there and how to expand it
+            // ("click to edit" / "click to add the customer's contact info").
+            // Used to auto-open for new quotes; that ate ~250px on every
+            // page load whether the user needed it or not. Click is one tap.
+            $startOpen   = false;
         ?>
         <section class="section">
             <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
@@ -723,7 +784,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
 
-                <div class="form-row cols-3">
+                <!-- On wide screens this row morphs into a 4-up grid (the
+                     CSS turns cols-3-plus-notes into Width|Drop|Qty|Notes
+                     side by side) so we don't burn two rows on four short
+                     inputs. Below 1100px it falls back to cols-3 and the
+                     standalone notes row below takes over. -->
+                <div class="form-row cols-3 cols-3-plus-notes">
                     <div class="form-group">
                         <label for="item-width">Width <span class="required">*</span></label>
                         <input id="item-width" name="width" type="text" required
@@ -741,6 +807,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <input id="item-qty" name="quantity" type="number" step="1" min="1"
                                value="<?= $editingItem ? (int) $editingItem['quantity'] : 1 ?>">
                     </div>
+                    <div class="form-group">
+                        <label for="item-notes">Notes</label>
+                        <input id="item-notes" name="notes" type="text" maxlength="255"
+                               value="<?= e((string) ($editingItem['notes'] ?? '')) ?>"
+                               placeholder="Optional internal note">
+                    </div>
                 </div>
 
                 <div id="item-extras-wrap" style="display:none">
@@ -750,20 +822,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div id="item-extras" class="extras-grid"></div>
                 </div>
 
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="item-notes">Notes</label>
-                        <input id="item-notes" name="notes" type="text" maxlength="255"
-                               value="<?= e((string) ($editingItem['notes'] ?? '')) ?>"
-                               placeholder="Optional internal note for this blind">
-                    </div>
-                </div>
-
                 <div id="item-preview" class="idle">
                     Pick a product, fabric and dimensions to see the price.
                 </div>
 
-                <div class="form-actions">
+                <div class="form-actions sticky-save">
                     <?php if ($editingItemId > 0): ?>
                         <button type="submit" class="btn btn-primary item-submit" disabled>
                             Save changes
@@ -979,8 +1042,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="send-message">Message (optional)</label>
-                        <textarea id="send-message" name="message" rows="3"
-                                  placeholder="Optional — anything you want to add above the standard text."></textarea>
+                        <textarea id="send-message" name="message" rows="1"
+                                  style="resize:vertical;min-height:2.5rem"
+                                  placeholder="Optional — anything to add above the standard text."></textarea>
                     </div>
                 </div>
 
