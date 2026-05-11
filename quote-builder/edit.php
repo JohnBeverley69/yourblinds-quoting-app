@@ -608,11 +608,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             <!-- Quote notes lives OUTSIDE <details> so it stays visible
                  even when the customer summary is collapsed. Still inside
-                 the form so it saves alongside customer fields. -->
+                 the form so it saves alongside customer fields.
+                 rows="1" keeps the page short by default — the textarea
+                 is still resizable so anyone writing more than a line
+                 just drags the corner. -->
             <div class="form-row full" style="margin-top:1rem">
                 <div class="form-group">
                     <label for="notes">Quote notes</label>
-                    <textarea id="notes" name="notes" rows="3" <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
+                    <textarea id="notes" name="notes" rows="1"
+                              style="resize:vertical;min-height:2.5rem"
+                              <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
                 </div>
             </div>
 
