@@ -32,25 +32,32 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$f = ['name' => '', 'is_required' => 1, 'parent_choice_id' => 0];
+// parent_choice_ids — a list now, not a single id. A follow-up option
+// can be gated to multiple parent choices (e.g. one Colour option that
+// shows when EITHER Chained OR Chainless is selected).
+$f = ['name' => '', 'is_required' => 1, 'parent_choice_ids' => []];
 $error = null;
 
-// "+ Follow-up option" deep link from extra.php pre-fills the parent dropdown
+// "+ Sub" deep link from extra.php pre-fills the parent picker
 // via ?parent_choice=N. We accept the GET only on initial render — POST
-// always wins so a re-render after a validation error keeps the typed value.
+// always wins so a re-render after a validation error keeps the user's
+// existing ticks.
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['parent_choice'])) {
     $candidate = (int) $_GET['parent_choice'];
     if ($candidate > 0) {
-        $f['parent_choice_id'] = $candidate;
+        $f['parent_choice_ids'] = [$candidate];
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
-    $f['name']             = trim((string) ($_POST['name'] ?? ''));
-    $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
-    $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
+    $f['name']              = trim((string) ($_POST['name'] ?? ''));
+    $f['is_required']       = !empty($_POST['is_required']) ? 1 : 0;
+    $f['parent_choice_ids'] = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
+    ))));
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
@@ -70,20 +77,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $sortStmt->execute([$productId, $clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
+            // parent_choice_id (legacy single column) gets the FIRST
+            // ticked id so any old code that still reads it stays
+            // sensible. The junction is the source of truth.
+            $legacyParent = $f['parent_choice_ids'][0] ?? null;
+
             $stmt = $pdo->prepare(
                 'INSERT INTO product_extras
                    (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
                  VALUES (?, ?, ?, ?, ?, ?, 1)'
             );
             $stmt->execute([
-                $clientId,
-                $productId,
-                $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
-                $f['name'],
-                $f['is_required'],
-                $nextSort,
+                $clientId, $productId, $legacyParent,
+                $f['name'], $f['is_required'], $nextSort,
             ]);
             $newId = (int) $pdo->lastInsertId();
+
+            // Junction rows for every ticked parent choice. Validate
+            // each id belongs to this product before inserting.
+            if ($f['parent_choice_ids']) {
+                $ph = implode(',', array_fill(0, count($f['parent_choice_ids']), '?'));
+                $vps = $pdo->prepare(
+                    "SELECT c.id FROM product_extra_choices c
+                       JOIN product_extras e ON e.id = c.product_extra_id
+                      WHERE c.id IN ($ph) AND e.product_id = ? AND e.client_id = ?"
+                );
+                $vps->execute([...$f['parent_choice_ids'], $productId, $clientId]);
+                $validParents = array_map('intval', $vps->fetchAll(PDO::FETCH_COLUMN));
+                if ($validParents) {
+                    $jIns = $pdo->prepare(
+                        'INSERT INTO product_extra_parent_choices
+                           (product_extra_id, product_extra_choice_id)
+                         VALUES (?, ?)'
+                    );
+                    foreach ($validParents as $cid) {
+                        $jIns->execute([$newId, $cid]);
+                    }
+                }
+            }
 
             $pdo->commit();
             $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added.';
@@ -91,11 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
-                $error = 'An option with that name already exists for this product.';
-            } else {
-                $error = 'Could not add: ' . $e->getMessage();
-            }
+            $error = 'Could not add: ' . $e->getMessage();
         }
     }
 }
@@ -118,17 +145,35 @@ $availableChoices = $choiceStmt->fetchAll();
 $rows = db()->prepare(
     'SELECT e.id, e.name, e.is_required, e.sort_order, e.active, e.updated_at,
             e.parent_choice_id,
-            pc.label AS parent_choice_label,
-            pe.name  AS parent_extra_name,
             (SELECT COUNT(*) FROM product_extra_choices c WHERE c.product_extra_id = e.id) AS choice_count
        FROM product_extras e
-       LEFT JOIN product_extra_choices pc ON pc.id = e.parent_choice_id
-       LEFT JOIN product_extras        pe ON pe.id = pc.product_extra_id
       WHERE e.product_id = ? AND e.client_id = ?
    ORDER BY e.sort_order, e.name'
 );
 $rows->execute([$productId, $clientId]);
 $extras = $rows->fetchAll();
+
+// Pull every junction parent for each extra in one go. Folds into a
+// [extra_id => ["Operation = Wand", "Operation = Cord & Chain", ...]]
+// map so the rendered "Appears when …" label can list ALL parents.
+$parentsByExtra = [];
+if ($extras) {
+    $eIds = array_map(static fn ($r) => (int) $r['id'], $extras);
+    $ph = implode(',', array_fill(0, count($eIds), '?'));
+    $pSt = db()->prepare(
+        "SELECT pepc.product_extra_id, c.label, pe.name AS extra_name
+           FROM product_extra_parent_choices pepc
+           JOIN product_extra_choices c   ON c.id  = pepc.product_extra_choice_id
+           JOIN product_extras        pe  ON pe.id = c.product_extra_id
+          WHERE pepc.product_extra_id IN ($ph)
+       ORDER BY pe.name, c.sort_order, c.label"
+    );
+    $pSt->execute($eIds);
+    foreach ($pSt->fetchAll() as $r) {
+        $parentsByExtra[(int) $r['product_extra_id']][] = (string) $r['extra_name']
+            . ' = ' . (string) $r['label'];
+    }
+}
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -215,19 +260,17 @@ $activeNav = 'products';
         <?php endif; ?>
 
         <?php
-            // Resolve the pre-filled parent choice, if any, so we can show
-            // a friendly banner. We look it up in $availableChoices rather
+            // Resolve the pre-filled parent choices, if any, so we can show
+            // a friendly banner. We look them up in $availableChoices rather
             // than firing another query.
-            $parentChoiceLabel = '';
-            if ((int) $f['parent_choice_id'] > 0) {
-                foreach ($availableChoices as $c) {
-                    if ((int) $c['id'] === (int) $f['parent_choice_id']) {
-                        $parentChoiceLabel = (string) $c['extra_name']
-                                           . ' = ' . (string) $c['label'];
-                        break;
-                    }
+            $parentChoiceLabels = [];
+            foreach ($availableChoices as $c) {
+                if (in_array((int) $c['id'], $f['parent_choice_ids'], true)) {
+                    $parentChoiceLabels[] = (string) $c['extra_name']
+                                          . ' = ' . (string) $c['label'];
                 }
             }
+            $parentChoiceLabel = implode(' OR ', $parentChoiceLabels);
         ?>
         <section class="section" id="add-option">
             <div class="section-header">
@@ -237,7 +280,9 @@ $activeNav = 'products';
                 <div class="alert alert-info" style="margin-bottom:1rem">
                     Adding a <strong>follow-up option</strong> that appears when
                     <strong><?= e($parentChoiceLabel) ?></strong> is selected.
-                    Adjust the "Appears when" dropdown below if you want a different parent.
+                    Tick extra choices under "Appears when" below to gate the option
+                    to <em>multiple</em> parents (e.g. show it for both Chained AND
+                    Chainless).
                 </div>
             <?php else: ?>
                 <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
@@ -268,19 +313,29 @@ $activeNav = 'products';
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="parent_choice_id">Appears when</label>
-                        <select id="parent_choice_id" name="parent_choice_id">
-                            <option value="0">— Always visible —</option>
-                            <?php foreach ($availableChoices as $c): ?>
-                                <option value="<?= (int) $c['id'] ?>"
-                                    <?= ((int) $f['parent_choice_id']) === (int) $c['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small style="color:#6b7280;font-size:0.8125rem">
-                            Optional — pick a choice to make this option only show when that choice is selected.
-                        </small>
+                        <label>Appears when (optional)</label>
+                        <?php if (!$availableChoices): ?>
+                            <p style="color:#6b7280;font-size:0.8125rem;margin:0">
+                                No other choices on this product yet. Add some options + choices first
+                                if you want this option to be gated.
+                            </p>
+                        <?php else: ?>
+                            <div style="display:flex;flex-direction:column;gap:0.375rem;padding:0.5rem 0;max-height:240px;overflow-y:auto">
+                                <?php foreach ($availableChoices as $c): ?>
+                                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                        <input type="checkbox" name="parent_choice_ids[]"
+                                               value="<?= (int) $c['id'] ?>"
+                                               <?= in_array((int) $c['id'], $f['parent_choice_ids'], true) ? 'checked' : '' ?>>
+                                        <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <small style="color:#6b7280;font-size:0.8125rem">
+                                Tick one or more choices and this option will show in the quote builder
+                                when <strong>any</strong> of them is selected. Tick none to make the
+                                option always visible.
+                            </small>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -332,11 +387,11 @@ $activeNav = 'products';
                                         <?php else: ?>
                                             <span class="opt-pill">Optional</span>
                                         <?php endif; ?>
-                                        <?php if (!empty($x['parent_choice_id'])): ?>
+                                        <?php $parentLabels = $parentsByExtra[(int) $x['id']] ?? []; ?>
+                                        <?php if ($parentLabels): ?>
                                             <span class="parent-cond">
                                                 Appears when
-                                                <strong><?= e((string) ($x['parent_extra_name'] ?? '')) ?>
-                                                = <?= e((string) ($x['parent_choice_label'] ?? '')) ?></strong>
+                                                <strong><?= e(implode(' OR ', $parentLabels)) ?></strong>
                                                 is selected
                                             </span>
                                         <?php endif; ?>

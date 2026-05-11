@@ -1186,15 +1186,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         var anyVisible = false;
 
         productData.extras.forEach(function (extra, idx) {
-            // Conditional extras: hidden until parent choice is selected.
-            // Read from `preset` (captured) rather than the live DOM since
-            // we're mid-rebuild.
-            if (extra.parent_choice_id) {
+            // Conditional extras: hidden until ANY of the listed parent
+            // choices is selected. Read from `preset` (captured) rather
+            // than the live DOM since we're mid-rebuild.
+            var parents = extra.parent_choice_ids || [];
+            if (parents.length > 0) {
                 var parentSelected = false;
                 productData.extras.forEach(function (other, otherIdx) {
                     if (otherIdx === idx) return;
                     var presetVal = preset[other.id];
-                    if (presetVal && parseInt(presetVal, 10) === extra.parent_choice_id) {
+                    if (presetVal && parents.indexOf(parseInt(presetVal, 10)) !== -1) {
                         parentSelected = true;
                     }
                 });

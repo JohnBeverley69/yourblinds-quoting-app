@@ -33,21 +33,33 @@ if (!$extra) {
     exit;
 }
 
+// Load existing parent choices from the junction table.
+$pcSt = db()->prepare(
+    'SELECT product_extra_choice_id
+       FROM product_extra_parent_choices
+      WHERE product_extra_id = ?'
+);
+$pcSt->execute([$id]);
+$existingParents = array_map('intval', $pcSt->fetchAll(PDO::FETCH_COLUMN));
+
 $f = [
-    'name'             => (string) $extra['name'],
-    'is_required'      => (int)    $extra['is_required'],
-    'active'           => (int)    $extra['active'],
-    'parent_choice_id' => (int) ($extra['parent_choice_id'] ?? 0),
+    'name'              => (string) $extra['name'],
+    'is_required'       => (int)    $extra['is_required'],
+    'active'            => (int)    $extra['active'],
+    'parent_choice_ids' => $existingParents,
 ];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']             = trim((string) ($_POST['name'] ?? ''));
-    $f['is_required']      = !empty($_POST['is_required']) ? 1 : 0;
-    $f['active']           = !empty($_POST['active']) ? 1 : 0;
-    $f['parent_choice_id'] = (int) ($_POST['parent_choice_id'] ?? 0);
+    $f['name']              = trim((string) ($_POST['name'] ?? ''));
+    $f['is_required']       = !empty($_POST['is_required']) ? 1 : 0;
+    $f['active']            = !empty($_POST['active']) ? 1 : 0;
+    $f['parent_choice_ids'] = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
+    ))));
 
     if ($f['name'] === '') {
         $error = 'Name is required.';
@@ -57,8 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            // sort_order is intentionally not touched — drag-and-drop on
-            // the extras list is the only writer.
+            // Legacy single column gets the first ticked id (or NULL)
+            // so any code still reading it stays sensible. The junction
+            // is the source of truth.
+            $legacyParent = $f['parent_choice_ids'][0] ?? null;
             $u = $pdo->prepare(
                 'UPDATE product_extras
                     SET name = ?, is_required = ?, active = ?,
@@ -67,9 +81,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $u->execute([
                 $f['name'], $f['is_required'], $f['active'],
-                $f['parent_choice_id'] > 0 ? $f['parent_choice_id'] : null,
+                $legacyParent,
                 $id, $clientId,
             ]);
+
+            // Replace the junction rows. Validate ids belong to this
+            // product's catalogue first (POST inputs aren't trustworthy).
+            $pdo->prepare(
+                'DELETE FROM product_extra_parent_choices WHERE product_extra_id = ?'
+            )->execute([$id]);
+            if ($f['parent_choice_ids']) {
+                $ph = implode(',', array_fill(0, count($f['parent_choice_ids']), '?'));
+                $vps = $pdo->prepare(
+                    "SELECT c.id FROM product_extra_choices c
+                       JOIN product_extras e ON e.id = c.product_extra_id
+                      WHERE c.id IN ($ph)
+                        AND e.product_id = ? AND e.client_id = ?
+                        AND e.id != ?"
+                );
+                $vps->execute([...$f['parent_choice_ids'], (int) $extra['product_id'], $clientId, $id]);
+                $validParents = array_map('intval', $vps->fetchAll(PDO::FETCH_COLUMN));
+                if ($validParents) {
+                    $jIns = $pdo->prepare(
+                        'INSERT INTO product_extra_parent_choices
+                           (product_extra_id, product_extra_choice_id)
+                         VALUES (?, ?)'
+                    );
+                    foreach ($validParents as $cid) {
+                        $jIns->execute([$id, $cid]);
+                    }
+                }
+            }
 
             $pdo->commit();
             $_SESSION['flash_success'] = 'Option updated.';
@@ -77,11 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            if (str_contains($e->getMessage(), 'uniq_extra_per_product')) {
-                $error = 'An option with that name already exists for this product.';
-            } else {
-                $error = 'Could not save: ' . $e->getMessage();
-            }
+            $error = 'Could not save: ' . $e->getMessage();
         }
     }
 }
@@ -161,19 +199,28 @@ $activeNav = 'products';
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="parent_choice_id">Appears when</label>
-                        <select id="parent_choice_id" name="parent_choice_id">
-                            <option value="0">— Always visible —</option>
-                            <?php foreach ($availableChoices as $c): ?>
-                                <option value="<?= (int) $c['id'] ?>"
-                                    <?= ((int) $f['parent_choice_id']) === (int) $c['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small style="color:#6b7280;font-size:0.8125rem">
-                            Optional — pick a choice from elsewhere in this product to make this option only show when that choice is selected.
-                        </small>
+                        <label>Appears when (optional)</label>
+                        <?php if (!$availableChoices): ?>
+                            <p style="color:#6b7280;font-size:0.8125rem;margin:0">
+                                No other choices on this product yet.
+                            </p>
+                        <?php else: ?>
+                            <div style="display:flex;flex-direction:column;gap:0.375rem;padding:0.5rem 0;max-height:240px;overflow-y:auto">
+                                <?php foreach ($availableChoices as $c): ?>
+                                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                        <input type="checkbox" name="parent_choice_ids[]"
+                                               value="<?= (int) $c['id'] ?>"
+                                               <?= in_array((int) $c['id'], $f['parent_choice_ids'], true) ? 'checked' : '' ?>>
+                                        <?= e((string) $c['extra_name']) ?> = <?= e((string) $c['label']) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <small style="color:#6b7280;font-size:0.8125rem">
+                                Tick one or more choices and this option will show in the quote builder
+                                when <strong>any</strong> of them is selected. Leave all unticked to
+                                make it always visible.
+                            </small>
+                        <?php endif; ?>
                     </div>
                 </div>
 

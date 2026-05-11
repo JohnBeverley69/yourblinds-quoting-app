@@ -187,9 +187,11 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     }
 
     // -----------------------------------------------------------------------
-    // 6. product_extras  (pass 2: wire up parent_choice_id from the source)
+    // 6. product_extras  (pass 2: wire up parent_choice_id + the junction
+    //    product_extra_parent_choices so multi-parent gating is preserved)
     // -----------------------------------------------------------------------
     if ($extraMap && $choiceMap) {
+        // 6a. Legacy single-column parent (kept for back-compat).
         $sel = $pdo->prepare(
             'SELECT id, parent_choice_id FROM product_extras
               WHERE client_id = ? AND parent_choice_id IS NOT NULL'
@@ -201,6 +203,26 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
             $oldChoiceId = (int) $r['parent_choice_id'];
             if (!isset($extraMap[$oldExtraId]) || !isset($choiceMap[$oldChoiceId])) continue;
             $upd->execute([$choiceMap[$oldChoiceId], $extraMap[$oldExtraId]]);
+        }
+
+        // 6b. Junction rows — the multi-parent source of truth.
+        $oldExtraIds = array_keys($extraMap);
+        $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
+        $sel = $pdo->prepare(
+            "SELECT product_extra_id, product_extra_choice_id
+               FROM product_extra_parent_choices
+              WHERE product_extra_id IN ($ph)"
+        );
+        $sel->execute($oldExtraIds);
+        $ins = $pdo->prepare(
+            'INSERT INTO product_extra_parent_choices
+               (product_extra_id, product_extra_choice_id) VALUES (?, ?)'
+        );
+        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $newExtra  = $extraMap[(int) $r['product_extra_id']]         ?? null;
+            $newChoice = $choiceMap[(int) $r['product_extra_choice_id']] ?? null;
+            if ($newExtra === null || $newChoice === null) continue;
+            $ins->execute([$newExtra, $newChoice]);
         }
     }
 

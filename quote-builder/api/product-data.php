@@ -82,6 +82,22 @@ $st->execute([$productId, $clientId]);
 $extrasRaw = $st->fetchAll();
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
+// Parent-choice gating now uses the junction table — an option can be
+// gated to MULTIPLE parents. Fold into [extra_id => [choice_id, ...]].
+$parentsByExtra = [];
+if ($extraIds) {
+    $pph = implode(',', array_fill(0, count($extraIds), '?'));
+    $pSt = $pdo->prepare(
+        "SELECT product_extra_id, product_extra_choice_id
+           FROM product_extra_parent_choices
+          WHERE product_extra_id IN ($pph)"
+    );
+    $pSt->execute($extraIds);
+    foreach ($pSt->fetchAll() as $r) {
+        $parentsByExtra[(int) $r['product_extra_id']][] = (int) $r['product_extra_choice_id'];
+    }
+}
+
 $choicesByExtra = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
@@ -107,14 +123,17 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra) {
+$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra) {
     $eid = (int) $r['id'];
     return [
-        'id'               => $eid,
-        'name'             => (string) $r['name'],
-        'is_required'      => (bool)   $r['is_required'],
-        'parent_choice_id' => $r['parent_choice_id'] !== null ? (int) $r['parent_choice_id'] : null,
-        'choices'          => $choicesByExtra[$eid] ?? [],
+        'id'                 => $eid,
+        'name'               => (string) $r['name'],
+        'is_required'        => (bool)   $r['is_required'],
+        // parent_choice_ids — list of choice ids that gate this extra.
+        // Empty list = always visible. Any one match in the user's
+        // current selections is enough to show the extra.
+        'parent_choice_ids'  => $parentsByExtra[$eid] ?? [],
+        'choices'            => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);
 
