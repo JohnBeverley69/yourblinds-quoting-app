@@ -50,13 +50,77 @@ error_reporting(E_ALL);
 $pdo = db();
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-set_exception_handler(function (Throwable $e) {
+// Accumulated step log — printed on success AND on failure so we can
+// see how far we got and what the schema state was.
+$ops = [];
+
+set_exception_handler(function (Throwable $e) use (&$ops, $pdo) {
     if (PHP_SAPI !== 'cli' && !headers_sent()) {
         header('Content-Type: text/plain; charset=utf-8');
     }
     echo "MIGRATION FAILED\n================\n\n";
     echo 'Error: ' . $e->getMessage() . "\n";
     echo 'In:    ' . $e->getFile() . ':' . $e->getLine() . "\n";
+
+    if ($ops) {
+        echo "\nSteps before failure:\n";
+        foreach ($ops as $op) echo '  - ' . $op . "\n";
+    }
+
+    // Dump schema info that's relevant to FK debugging — the parent and
+    // child columns, plus storage engine for each table. MySQL's
+    // "Cannot add foreign key constraint" gives no detail; this fills in.
+    echo "\nSchema state (for FK debugging):\n";
+    try {
+        $diag = $pdo->query(
+            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY
+               FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE()
+                AND ((TABLE_NAME = 'product_systems' AND COLUMN_NAME = 'id')
+                  OR (TABLE_NAME IN ('client_markups', 'client_discounts')
+                      AND COLUMN_NAME IN ('system_id', 'system_id_key',
+                                          'client_id', 'product_id')))
+              ORDER BY TABLE_NAME, COLUMN_NAME"
+        );
+        foreach ($diag->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            echo sprintf(
+                "  %-18s %-15s %-22s null=%s key=%s\n",
+                $r['TABLE_NAME'], $r['COLUMN_NAME'], $r['COLUMN_TYPE'],
+                $r['IS_NULLABLE'], $r['COLUMN_KEY'] ?: '-'
+            );
+        }
+
+        $eng = $pdo->query(
+            "SELECT TABLE_NAME, ENGINE
+               FROM INFORMATION_SCHEMA.TABLES
+              WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME IN
+                    ('product_systems', 'client_markups', 'client_discounts')
+              ORDER BY TABLE_NAME"
+        );
+        echo "\nStorage engines:\n";
+        foreach ($eng->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            echo sprintf("  %-18s %s\n", $r['TABLE_NAME'], $r['ENGINE']);
+        }
+
+        // Latest InnoDB FK error from the server, if available — gives
+        // a far more informative message than the bare 1215.
+        $status = $pdo->query('SHOW ENGINE INNODB STATUS')->fetch(PDO::FETCH_ASSOC);
+        if ($status && isset($status['Status'])) {
+            $blob  = (string) $status['Status'];
+            $start = strpos($blob, 'LATEST FOREIGN KEY ERROR');
+            if ($start !== false) {
+                $end   = strpos($blob, '------------', $start + 1);
+                $slice = $end !== false
+                    ? substr($blob, $start, $end - $start)
+                    : substr($blob, $start, 2000);
+                echo "\nLatest InnoDB FK error:\n" . trim($slice) . "\n";
+            }
+        }
+    } catch (Throwable $ignored) {
+        echo "  (couldn't read INFORMATION_SCHEMA: " . $ignored->getMessage() . ")\n";
+    }
+
     exit(1);
 });
 
@@ -116,7 +180,6 @@ if ($systemIdType === null) {
 // COLUMN_TYPE returns the lower-case "int(10) unsigned" etc., already
 // in ALTER-friendly form.
 
-$ops = [];
 $ops[] = "Target FK type (product_systems.id): $systemIdType";
 
 foreach (
