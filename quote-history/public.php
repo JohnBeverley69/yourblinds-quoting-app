@@ -114,6 +114,64 @@ $tradeLines = array_values(array_filter([
 $vatPct = $quote['vat_percent'] !== null
     ? rtrim(rtrim(number_format((float) $quote['vat_percent'], 2, '.', ''), '0'), '.')
     : '20';
+
+// ---------------------------------------------------------------------------
+// Deposit info for the public callout (between table and accept form).
+//
+// Two states to surface:
+//   - Pre-acceptance: a PREDICTED deposit from the tenant defaults, so
+//     the customer knows up front what they'll need to pay if they go
+//     ahead. The actual deposit_amount only gets seeded by
+//     change_status.php the moment they accept, so we recompute the
+//     prediction here using the same logic.
+//   - Post-acceptance: the ACTUAL stored deposit_amount + paid status.
+//
+// All defensive against schema not yet migrated — try/catch the
+// settings lookup, fall back to "no deposit info shown" if anything
+// goes wrong. The customer never sees an error message.
+// ---------------------------------------------------------------------------
+$depositInfo  = null;   // ['amount' => float, 'paid' => bool, 'paid_at' => ?string, 'predicted' => bool]
+$depositStored = $quote['deposit_amount'] ?? null;
+$depositPaidAt = $quote['deposit_paid_at'] ?? null;
+
+if ($depositStored !== null) {
+    // Real, stored deposit — quote has been (or was) accepted.
+    $depositInfo = [
+        'amount'    => (float) $depositStored,
+        'paid'      => $depositPaidAt !== null,
+        'paid_at'   => $depositPaidAt,
+        'predicted' => false,
+    ];
+} elseif ($canAccept) {
+    // Pre-acceptance — fetch tenant defaults and predict.
+    try {
+        $depSt = db()->prepare(
+            'SELECT default_deposit_mode, default_deposit_percent, default_deposit_flat
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $depSt->execute([(int) $quote['client_id']]);
+        $dp = $depSt->fetch();
+        if ($dp) {
+            $total = (float) $quote['total'];
+            if (((string) ($dp['default_deposit_mode'] ?? 'percent')) === 'flat') {
+                $amt = min((float) ($dp['default_deposit_flat'] ?? 0), $total);
+            } else {
+                $amt = $total * ((float) ($dp['default_deposit_percent'] ?? 50)) / 100;
+            }
+            $amt = round($amt, 2);
+            if ($amt > 0) {
+                $depositInfo = [
+                    'amount'    => $amt,
+                    'paid'      => false,
+                    'paid_at'   => null,
+                    'predicted' => true,
+                ];
+            }
+        }
+    } catch (Throwable $e) {
+        // Columns missing (migrations not run) — quietly omit.
+    }
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -157,6 +215,16 @@ $vatPct = $quote['vat_percent'] !== null
         table.items tfoot td.val { text-align: right; font-weight: 600; }
         table.items tfoot tr.grand td { font-size: 1.125rem; color: #111827; padding-top: 0.875rem; }
         table.items tfoot tr.grand td.lbl { color: #111827; }
+        .deposit-card {
+            padding: 0.875rem 1rem; border-radius: 10px;
+            margin: 1rem 0; font-size: 0.9375rem; line-height: 1.5;
+        }
+        .deposit-card.deposit-due {
+            background: #fef3c7; color: #78350f; border: 1px solid #fde68a;
+        }
+        .deposit-card.deposit-paid {
+            background: #d1fae5; color: #064e3b; border: 1px solid #a7f3d0;
+        }
         .notes { background: #fffbeb; border-left: 3px solid #f59e0b;
                  padding: 0.75rem 1rem; margin-top: 1.5rem; border-radius: 0 8px 8px 0; }
         .notes h3 { margin: 0 0 0.25rem; font-size: 0.75rem; color: #92400e; font-weight: 700;
@@ -314,6 +382,29 @@ $vatPct = $quote['vat_percent'] !== null
             <h3>Notes</h3>
             <p><?= e((string) $quote['notes']) ?></p>
         </div>
+    <?php endif; ?>
+
+    <?php if ($depositInfo): ?>
+        <?php if ($depositInfo['paid']): ?>
+            <div class="deposit-card deposit-paid">
+                <strong>✓ Deposit paid</strong>
+                <?= e($money($depositInfo['amount'])) ?>
+                received on <?= e($fmtDate((string) $depositInfo['paid_at'])) ?>.
+            </div>
+        <?php elseif ($depositInfo['predicted']): ?>
+            <div class="deposit-card deposit-due">
+                <strong>Deposit on acceptance:</strong>
+                <?= e($money($depositInfo['amount'])) ?>.
+                The balance will be due on completion.
+            </div>
+        <?php else: ?>
+            <div class="deposit-card deposit-due">
+                <strong>Deposit outstanding:</strong>
+                <?= e($money($depositInfo['amount'])) ?>.
+                <?= e((string) ($quote['trade_company_name'] ?? 'Your supplier')) ?>
+                will be in touch about payment.
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <?php if ($alreadyDone && (string) $quote['status'] === 'accepted'): ?>
