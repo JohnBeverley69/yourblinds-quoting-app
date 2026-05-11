@@ -55,6 +55,186 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // =============================================================
 
 /**
+ * Per-tenant export: table → SQL fragment that restricts the dump to
+ * the chosen client's rows.
+ *
+ * The `?` placeholder gets bound to the client_id at execute time so
+ * the values are properly parameter-quoted (the table/column names
+ * inside the fragment are not user input — they live in this file
+ * verbatim, so the SQL fragment itself isn't an injection vector).
+ *
+ * Tables not listed here fall back to:
+ *   - "WHERE client_id = ?" if the table has a client_id column;
+ *   - otherwise skipped entirely with a comment in the output, so
+ *     anyone auditing the dump can spot a gap.
+ */
+function pe_tenant_scoping_map(): array
+{
+    return [
+        // -- Direct (table has a client_id / id column tied to client) --
+        'clients'           => 'id = ?',
+        'client_settings'   => 'client_id = ?',
+        'client_users'      => 'client_id = ?',
+        'client_markups'    => 'client_id = ?',
+        'client_discounts'  => 'client_id = ?',
+        'customers'         => 'client_id = ?',
+        'quotes'            => 'client_id = ?',
+        'products'          => 'client_id = ?',
+        'product_systems'   => 'client_id = ?',
+        'product_options'   => 'client_id = ?',
+        'product_extras'    => 'client_id = ?',
+        'appointments'      => 'client_id = ?',
+        'price_tables'      => 'client_id = ?',
+
+        // -- Indirect (one or two FK hops to a client-scoped parent) --
+        'client_user_roles' =>
+            'user_id IN (SELECT id FROM client_users WHERE client_id = ?)',
+        'quote_items' =>
+            'quote_id IN (SELECT id FROM quotes WHERE client_id = ?)',
+        'quote_item_extras' =>
+            'quote_item_id IN (SELECT id FROM quote_items
+              WHERE quote_id IN (SELECT id FROM quotes WHERE client_id = ?))',
+        'product_extra_choices' =>
+            'product_extra_id IN (SELECT id FROM product_extras WHERE client_id = ?)',
+        'product_extra_parent_choices' =>
+            'product_extra_id IN (SELECT id FROM product_extras WHERE client_id = ?)',
+        'extra_choice_price_rows' =>
+            'product_extra_choice_id IN (SELECT id FROM product_extra_choices
+              WHERE product_extra_id IN (SELECT id FROM product_extras WHERE client_id = ?))',
+        'price_table_rows' =>
+            'price_table_id IN (SELECT id FROM price_tables WHERE client_id = ?)',
+    ];
+}
+
+/**
+ * Stream a per-tenant SQL dump scoped to one client_id.
+ *
+ * Output shape mirrors pe_stream_dump:
+ *   - DROP TABLE IF EXISTS + CREATE TABLE for every relevant table
+ *     (so the file can load cleanly into a fresh empty database)
+ *   - INSERT rows, filtered to the tenant via pe_tenant_scoping_map()
+ *
+ * Tables with no tenant scope (login_attempts, password_resets,
+ * anything system-wide) are emitted in the file as commented stubs
+ * so the recipient knows they were intentionally skipped.
+ *
+ * IMPORTANT — loading this file:
+ *   - Into a FRESH empty DB: works as-is (DROP+CREATE+INSERT).
+ *   - Into a DB that already contains this tenant's data:
+ *     the DROP TABLE statements will WIPE EVERY OTHER TENANT too
+ *     (tables are shared). For in-place tenant restores, strip the
+ *     DROP/CREATE block before loading. The file's leading comment
+ *     spells this out.
+ */
+function pe_stream_tenant_dump(PDO $pdo, $handle, int $clientId, string $companyLabel): void
+{
+    $write = static function (string $s) use ($handle): void {
+        fwrite($handle, $s);
+    };
+    $map = pe_tenant_scoping_map();
+
+    $write("-- YourBlinds — PER-TENANT export\n");
+    $write('-- Tenant:    ' . $companyLabel . " (client_id=$clientId)\n");
+    $write('-- Generated: ' . date('c') . "\n");
+    $write('-- DB:        ' . (string) $pdo->query('SELECT DATABASE()')->fetchColumn() . "\n");
+    $write("--\n");
+    $write("-- This file contains ONE tenant's data: clients, users, customers,\n");
+    $write("-- quotes, products, calendar appointments, pricing — everything that\n");
+    $write("-- carries (or chains back to) this client_id.\n");
+    $write("--\n");
+    $write("-- LOADING:\n");
+    $write("--   Into a FRESH empty database: works as-is. The DROP+CREATE block\n");
+    $write("--     gives you a clean schema; the INSERTs populate the one tenant.\n");
+    $write("--   Into a DB that ALREADY has the same tables (incl. other tenants):\n");
+    $write("--     the DROP TABLE statements will wipe every other tenant too.\n");
+    $write("--     For an in-place single-tenant restore, strip the DROP/CREATE\n");
+    $write("--     section and only run the INSERTs (after deleting the\n");
+    $write("--     tenant's existing rows first).\n");
+    $write("\n");
+    $write("SET FOREIGN_KEY_CHECKS = 0;\n");
+    $write("SET UNIQUE_CHECKS = 0;\n");
+    $write("SET @OLD_SQL_MODE = @@SQL_MODE, SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n");
+    $write("\n");
+
+    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+
+    // Find which tables have a client_id column — used as the fallback
+    // scope for anything not in the explicit map.
+    $clientIdCols = [];
+    $cidStmt = $pdo->query(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND COLUMN_NAME  = 'client_id'"
+    );
+    foreach ($cidStmt->fetchAll(PDO::FETCH_COLUMN) as $t) {
+        $clientIdCols[$t] = true;
+    }
+
+    foreach ($tables as $table) {
+        $hasMap     = isset($map[$table]);
+        $hasClient  = isset($clientIdCols[$table]);
+
+        $write("\n-- ----------------------------------------\n");
+        $write("-- Table: `$table`\n");
+        $write("-- ----------------------------------------\n");
+
+        if (!$hasMap && !$hasClient) {
+            // System-level table (login_attempts, password_resets, etc.) —
+            // not part of one tenant's data. Skip the data but still emit
+            // schema so a fresh-DB load gets a complete structure.
+            $write("-- (no tenant scope — schema only, no rows)\n");
+            $write("DROP TABLE IF EXISTS `$table`;\n");
+            $create = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
+            $write(($create['Create Table'] ?? '') . ";\n");
+            continue;
+        }
+
+        // Schema
+        $write("DROP TABLE IF EXISTS `$table`;\n");
+        $create = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
+        $write(($create['Create Table'] ?? '') . ";\n\n");
+
+        // Filtered data — explicit scope first, client_id fallback otherwise.
+        $whereSql = $hasMap ? $map[$table] : 'client_id = ?';
+        $stmt = $pdo->prepare("SELECT * FROM `$table` WHERE $whereSql");
+        $stmt->execute([$clientId]);
+        $stmt->setFetchMode(PDO::FETCH_ASSOC);
+
+        $batch   = [];
+        $columns = null;
+        while ($row = $stmt->fetch()) {
+            if ($columns === null) {
+                $columns = '`' . implode('`, `', array_keys($row)) . '`';
+            }
+            $vals = [];
+            foreach ($row as $v) {
+                if ($v === null) {
+                    $vals[] = 'NULL';
+                } elseif (is_int($v) || is_float($v)) {
+                    $vals[] = (string) $v;
+                } else {
+                    $vals[] = $pdo->quote((string) $v);
+                }
+            }
+            $batch[] = '(' . implode(', ', $vals) . ')';
+            if (count($batch) >= 100) {
+                $write("INSERT INTO `$table` ($columns) VALUES\n  "
+                    . implode(",\n  ", $batch) . ";\n");
+                $batch = [];
+            }
+        }
+        if ($batch) {
+            $write("INSERT INTO `$table` ($columns) VALUES\n  "
+                . implode(",\n  ", $batch) . ";\n");
+        }
+    }
+
+    $write("\nSET SQL_MODE = @OLD_SQL_MODE;\n");
+    $write("SET UNIQUE_CHECKS = 1;\n");
+    $write("SET FOREIGN_KEY_CHECKS = 1;\n");
+}
+
+/**
  * Stream a full SQL dump of every table to the given handle.
  * Designed to be `php://output` for downloads or a file path for
  * server-side auto-snapshots.
@@ -242,6 +422,41 @@ if ($action === 'download') {
     exit;
 }
 
+if ($action === 'download-tenant') {
+    csrf_check();
+    $targetClient = (int) ($_POST['client_id'] ?? 0);
+    if ($targetClient <= 0) {
+        $_SESSION['flash_error'] = 'Pick a tenant to export.';
+        header('Location: /master-admin/backup.php');
+        exit;
+    }
+    // Verify the client exists + grab its name for the filename and the
+    // dump header comment.
+    $cStmt = $pdo->prepare('SELECT id, company_name FROM clients WHERE id = ? LIMIT 1');
+    $cStmt->execute([$targetClient]);
+    $clientRow = $cStmt->fetch();
+    if (!$clientRow) {
+        $_SESSION['flash_error'] = 'Tenant not found.';
+        header('Location: /master-admin/backup.php');
+        exit;
+    }
+
+    $companyLabel = (string) $clientRow['company_name'];
+    // Build a filesystem-friendly slug for the filename.
+    $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $companyLabel)) ?: 'tenant';
+    $slug = trim($slug, '-');
+    $name = 'yourblinds-tenant-' . $slug . '-' . date('Y-m-d-His') . '.sql';
+
+    header('Content-Type: application/sql; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $name . '"');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    $fh = fopen('php://output', 'wb');
+    pe_stream_tenant_dump($pdo, $fh, $targetClient, $companyLabel);
+    fclose($fh);
+    exit;
+}
+
 if ($action === 'restore') {
     csrf_check();
 
@@ -322,6 +537,11 @@ $rowApprox = (int) $pdo->query(
        FROM INFORMATION_SCHEMA.TABLES
       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'"
 )->fetchColumn();
+
+// All tenants, for the per-tenant export dropdown.
+$tenants = $pdo->query(
+    'SELECT id, company_name, active FROM clients ORDER BY company_name'
+)->fetchAll();
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -402,6 +622,45 @@ $rowApprox = (int) $pdo->query(
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="download">
                 <button type="submit" class="btn btn-primary">Download backup now</button>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Per-tenant export</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+                Exports <strong>one tenant's data only</strong> — their users,
+                customers, quotes, calendar appointments, products, fabrics,
+                price tables, markups. Useful for handing a tenant their own
+                data takeout, migrating one tenant to a new instance, or
+                investigating one tenant's records in isolation.
+            </p>
+            <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.75rem">
+                Loads cleanly into a <strong>fresh empty database</strong>.
+                Loading it into a DB that already has these tables would
+                wipe other tenants — strip the DROP/CREATE block first if
+                you're doing an in-place single-tenant restore (the file's
+                header comment explains).
+            </p>
+            <form method="post" action="/master-admin/backup.php"
+                  style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="download-tenant">
+                <label for="tenant-select" class="visually-hidden">Tenant</label>
+                <select id="tenant-select" name="client_id" required
+                        style="flex:1;min-width:240px;padding:0.5rem 0.625rem;
+                               border:1px solid #d1d5db;border-radius:8px;
+                               font:inherit;background:#fff">
+                    <option value="">— Choose a tenant —</option>
+                    <?php foreach ($tenants as $t): ?>
+                        <option value="<?= (int) $t['id'] ?>">
+                            <?= e((string) $t['company_name']) ?>
+                            <?php if (!(int) $t['active']): ?> (inactive)<?php endif; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="btn btn-primary">Download tenant export</button>
             </form>
         </section>
 
