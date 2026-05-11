@@ -111,6 +111,31 @@ $pickSt = db()->prepare(
 $pickSt->execute([$clientId]);
 $payableQuotes = $pickSt->fetchAll();
 
+// ?prefill_quote=N — clicked through from the Orders page's
+// Outstanding column. Pre-select that quote in the new-payment
+// dropdown, pre-fill the amount with its outstanding balance,
+// and auto-open the panel so the user lands directly on the form.
+$prefillQuoteId    = (int) ($_GET['prefill_quote'] ?? 0);
+$prefillAmount     = '';
+$prefillFound      = false;
+if ($prefillQuoteId > 0) {
+    foreach ($payableQuotes as $pq) {
+        if ((int) $pq['id'] !== $prefillQuoteId) continue;
+        $depCounted = $pq['deposit_paid_at']
+            ? (float) ($pq['deposit_amount'] ?? 0) : 0.0;
+        $out = round(
+            (float) $pq['total']
+            - (float) $pq['payments_total']
+            - $depCounted, 2
+        );
+        if ($out > 0.0049) {
+            $prefillAmount = number_format($out, 2, '.', '');
+            $prefillFound  = true;
+        }
+        break;
+    }
+}
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -264,9 +289,10 @@ $activeNav = 'accounts';
 
         <!-- Record-new-payment panel. <details> + open when the user
              clicks the header button above. Stays open if there was a
-             validation error so the typed values aren't lost. -->
+             validation error so the typed values aren't lost, OR if
+             we got here via ?prefill_quote= from the Orders page. -->
         <details id="new-payment-panel" class="np-panel"
-                 <?= $flashErr ? 'open' : '' ?>>
+                 <?= ($flashErr || $prefillFound) ? 'open' : '' ?>>
             <summary>+ Record payment</summary>
             <form method="post" action="/accounts/payment_save.php" class="np-form">
                 <?= csrf_field() ?>
@@ -276,7 +302,10 @@ $activeNav = 'accounts';
                     <div class="np-field" style="flex:2 1 14rem">
                         <label for="np-quote">Order (optional)</label>
                         <select id="np-quote" name="quote_id" data-outstanding-map>
-                            <option value="">— Standalone payment (no order linked) —</option>
+                            <option value=""
+                                    <?= !$prefillFound ? 'selected' : '' ?>>
+                                — Standalone payment (no order linked) —
+                            </option>
                             <?php foreach ($payableQuotes as $pq):
                                 $depCounted = $pq['deposit_paid_at']
                                     ? (float) ($pq['deposit_amount'] ?? 0) : 0.0;
@@ -286,9 +315,11 @@ $activeNav = 'accounts';
                                     - $depCounted, 2
                                 );
                                 if ($out <= 0.0049) continue;   // already paid
+                                $sel = ($prefillFound && (int) $pq['id'] === $prefillQuoteId);
                             ?>
                                 <option value="<?= (int) $pq['id'] ?>"
-                                        data-outstanding="<?= e(number_format($out, 2, '.', '')) ?>">
+                                        data-outstanding="<?= e(number_format($out, 2, '.', '')) ?>"
+                                        <?= $sel ? 'selected' : '' ?>>
                                     <?= e((string) $pq['quote_number']) ?>
                                     — <?= e((string) ($pq['end_customer_name'] ?? '?')) ?>
                                     (<?= e(acct_fmt_money($out)) ?> outstanding)
@@ -301,6 +332,7 @@ $activeNav = 'accounts';
                         <label for="np-amount">Amount £</label>
                         <input id="np-amount" name="amount"
                                type="number" step="0.01" required
+                               value="<?= e($prefillAmount) ?>"
                                placeholder="0.00">
                     </div>
 
@@ -356,6 +388,20 @@ $activeNav = 'accounts';
                     }
                 });
             })();
+            // If we landed here from the Orders page's outstanding link,
+            // scroll the open panel into view and focus the amount so
+            // the user can verify-and-Enter to save.
+            <?php if ($prefillFound): ?>
+            (function () {
+                var panel = document.getElementById('new-payment-panel');
+                var amt   = document.getElementById('np-amount');
+                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (amt) {
+                    amt.focus();
+                    amt.select();
+                }
+            })();
+            <?php endif; ?>
         </script>
 
         <section class="section">

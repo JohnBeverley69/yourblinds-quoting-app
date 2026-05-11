@@ -261,9 +261,12 @@ $activeNav = 'orders';
                                     </td>
                                     <td class="num">
                                         <?php if ($outstanding > 0.0049): ?>
-                                            <span style="color:#92400e;font-weight:700">
+                                            <a href="/accounts/index.php?prefill_quote=<?= (int) $o['id'] ?>"
+                                               title="Click to take a payment against this order"
+                                               style="color:#92400e;font-weight:700;text-decoration:none;
+                                                      border-bottom:1px dashed #92400e">
                                                 <?= e($money($outstanding)) ?>
-                                            </span>
+                                            </a>
                                         <?php elseif ($outstanding < -0.0049): ?>
                                             <span style="color:#1e40af;font-weight:700"
                                                   title="Overpaid">
