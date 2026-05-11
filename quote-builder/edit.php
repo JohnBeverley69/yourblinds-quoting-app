@@ -1376,7 +1376,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
             if (data.markup_percent > 0)   bits.push('markup ' + Number(data.markup_percent).toFixed(2) + '%');
             if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
-            if (data.rounded_up) bits.push('rounded up to ' + data.matrix_width_mm + ' × ' + data.matrix_drop_mm + ' mm');
+            // Rounded-up cell size used to be shown here ("rounded up
+            // to 1600 × 2000 mm") — trade users found it noisy / not
+            // actionable, since the engine always rounds up to the
+            // nearest price-table cell and that's expected behaviour.
             previewBox.className = 'success';
             previewBox.innerHTML = bits.join(' &middot; ');
             setSubmitDisabled(false);
