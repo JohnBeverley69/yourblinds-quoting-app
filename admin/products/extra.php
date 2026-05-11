@@ -55,6 +55,127 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
+// -----------------------------------------------------------------------
+// Sub-option create/delete handlers — let the trade user manage follow-
+// up options without leaving this page. Creating sets up the
+// product_extras row + the parent_choice junction rows so the new
+// sub-option is immediately gated correctly.
+// -----------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && (string) ($_POST['_action'] ?? '') === 'create_sub_option') {
+    csrf_check();
+    $name        = trim((string) ($_POST['name'] ?? ''));
+    $isRequired  = !empty($_POST['is_required']) ? 1 : 0;
+    $parentIds   = array_values(array_unique(array_filter(array_map(
+        'intval',
+        is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
+    ))));
+    $afterCreate = (string) ($_POST['after_create'] ?? 'stay');  // stay | open
+
+    if ($name === '') {
+        $_SESSION['flash_error'] = 'Sub-option name is required.';
+    } elseif (!$parentIds) {
+        $_SESSION['flash_error'] = 'Pick at least one parent choice to gate the sub-option.';
+    } else {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            // Sort below this option so it lists near the parent.
+            $sortStmt = $pdo->prepare(
+                'SELECT COALESCE(MAX(sort_order), -1) + 1
+                   FROM product_extras
+                  WHERE product_id = ? AND client_id = ?'
+            );
+            $sortStmt->execute([(int) $extra['product_id'], $clientId]);
+            $nextSort = (int) $sortStmt->fetchColumn();
+
+            // Validate every ticked parent belongs to THIS option's
+            // choices (POST inputs aren't trustworthy).
+            $ph = implode(',', array_fill(0, count($parentIds), '?'));
+            $vps = $pdo->prepare(
+                "SELECT id FROM product_extra_choices
+                  WHERE id IN ($ph) AND product_extra_id = ?"
+            );
+            $vps->execute([...$parentIds, $extraId]);
+            $validParents = array_map('intval', $vps->fetchAll(PDO::FETCH_COLUMN));
+            if (!$validParents) {
+                throw new RuntimeException('None of the ticked parents belong to this option.');
+            }
+
+            // Insert the new extra row. Legacy parent_choice_id gets
+            // the first parent for back-compat.
+            $ins = $pdo->prepare(
+                'INSERT INTO product_extras
+                   (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)'
+            );
+            $ins->execute([
+                $clientId, (int) $extra['product_id'],
+                $validParents[0], $name, $isRequired, $nextSort,
+            ]);
+            $newId = (int) $pdo->lastInsertId();
+
+            // Junction rows for every parent.
+            $jIns = $pdo->prepare(
+                'INSERT INTO product_extra_parent_choices
+                   (product_extra_id, product_extra_choice_id) VALUES (?, ?)'
+            );
+            foreach ($validParents as $pcid) {
+                $jIns->execute([$newId, $pcid]);
+            }
+
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Sub-option "' . $name . '" added.';
+            if ($afterCreate === 'open') {
+                header('Location: /admin/products/extra.php?id=' . $newId);
+            } else {
+                header('Location: /admin/products/extra.php?id=' . $extraId . '#sub-options');
+            }
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not add sub-option: ' . $e->getMessage();
+            header('Location: /admin/products/extra.php?id=' . $extraId . '#sub-options');
+            exit;
+        }
+    }
+    header('Location: /admin/products/extra.php?id=' . $extraId . '#sub-options');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && (string) ($_POST['_action'] ?? '') === 'delete_sub_option') {
+    csrf_check();
+    $subId = (int) ($_POST['sub_id'] ?? 0);
+    if ($subId > 0) {
+        $pdo = db();
+        // Tenant-scope check via JOIN — only delete if the sub-option
+        // belongs to this client AND is genuinely a child of one of
+        // THIS extra's choices.
+        $okSt = $pdo->prepare(
+            'SELECT 1
+               FROM product_extras se
+               JOIN product_extra_parent_choices pepc
+                 ON pepc.product_extra_id = se.id
+               JOIN product_extra_choices pc
+                 ON pc.id = pepc.product_extra_choice_id
+              WHERE se.id = ? AND se.client_id = ?
+                AND pc.product_extra_id = ?
+              LIMIT 1'
+        );
+        $okSt->execute([$subId, $clientId, $extraId]);
+        if ($okSt->fetchColumn()) {
+            $pdo->prepare('DELETE FROM product_extras WHERE id = ? AND client_id = ?')
+                ->execute([$subId, $clientId]);
+            $_SESSION['flash_success'] = 'Sub-option removed.';
+        } else {
+            $_SESSION['flash_error'] = 'Sub-option not found.';
+        }
+    }
+    header('Location: /admin/products/extra.php?id=' . $extraId . '#sub-options');
+    exit;
+}
+
 // Sort by sort_order alone — drag-and-drop owns position. system_id
 // is joined to its product_systems row so we can label the dropdown's
 // selected option without a second query per row.
@@ -70,6 +191,63 @@ $rows = db()->prepare(
 );
 $rows->execute([$extraId]);
 $choices = $rows->fetchAll();
+
+// -----------------------------------------------------------------------
+// Sub-options — any product_extras row gated by one or more of THIS
+// option's choices. Loaded so the user can manage them inline without
+// the round-trip via the Add Option page. Each sub-option also gets a
+// list of its parent gates (label badges) so the relationship reads
+// at a glance.
+// -----------------------------------------------------------------------
+$subOptions = [];
+$parentLabelsBySub = [];
+$choiceCountBySub  = [];
+if ($choices) {
+    $myChoiceIds = array_map(static fn ($c) => (int) $c['id'], $choices);
+    $ph = implode(',', array_fill(0, count($myChoiceIds), '?'));
+    $subSt = db()->prepare(
+        "SELECT DISTINCT se.id, se.name, se.is_required, se.active, se.sort_order
+           FROM product_extras se
+           JOIN product_extra_parent_choices pepc ON pepc.product_extra_id = se.id
+          WHERE pepc.product_extra_choice_id IN ($ph)
+            AND se.product_id = ? AND se.client_id = ?
+            AND se.id != ?
+       ORDER BY se.sort_order, se.name"
+    );
+    $subSt->execute([...$myChoiceIds, (int) $extra['product_id'], $clientId, $extraId]);
+    $subOptions = $subSt->fetchAll();
+
+    if ($subOptions) {
+        $subIds = array_map(static fn ($s) => (int) $s['id'], $subOptions);
+        $sph    = implode(',', array_fill(0, count($subIds), '?'));
+
+        // Parent badges: which of this option's choices gate each sub.
+        $plSt = db()->prepare(
+            "SELECT pepc.product_extra_id, c.label
+               FROM product_extra_parent_choices pepc
+               JOIN product_extra_choices c ON c.id = pepc.product_extra_choice_id
+              WHERE pepc.product_extra_id IN ($sph)
+                AND c.product_extra_id = ?
+           ORDER BY c.sort_order, c.label"
+        );
+        $plSt->execute([...$subIds, $extraId]);
+        foreach ($plSt->fetchAll() as $r) {
+            $parentLabelsBySub[(int) $r['product_extra_id']][] = (string) $r['label'];
+        }
+
+        // Choice count per sub, for the "X choices →" link.
+        $ccSt = db()->prepare(
+            "SELECT product_extra_id, COUNT(*) AS n
+               FROM product_extra_choices
+              WHERE product_extra_id IN ($sph)
+           GROUP BY product_extra_id"
+        );
+        $ccSt->execute($subIds);
+        foreach ($ccSt->fetchAll() as $r) {
+            $choiceCountBySub[(int) $r['product_extra_id']] = (int) $r['n'];
+        }
+    }
+}
 
 // Systems available on this product, for every system dropdown the
 // page renders (existing rows + the bottom blank row).
@@ -283,6 +461,76 @@ $activeNav = 'products';
         }
         .save-indicator.is-visible { opacity: 1; }
         .save-indicator.is-error { color: #b91c1c; font-weight: 600; }
+
+        /* ===========================================================
+           Sub-options section — cards for each follow-up option
+           gated by THIS option's choices, plus a collapsible
+           "+ Add sub-option" form below. Lets the trade user manage
+           the whole tree without round-tripping through the Add
+           Option page.
+           =========================================================== */
+        .sub-grid {
+            display: grid; gap: 0.625rem;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            margin-bottom: 1rem;
+        }
+        .sub-card {
+            background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 0.75rem 0.875rem;
+            display: flex; flex-direction: column; gap: 0.4375rem;
+        }
+        .sub-card.is-inactive { opacity: 0.6; }
+        .sub-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .sub-card-name { font-size: 0.9375rem; color: #111827; }
+        .sub-card-gates {
+            font-size: 0.8125rem; color: #6b7280;
+            display: flex; align-items: center; gap: 0.3125rem; flex-wrap: wrap;
+        }
+        .gate-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem;
+            background: #eef2f7; color: #1f3b5b;
+            border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+        }
+        .sub-card-actions {
+            display: flex; flex-wrap: wrap; gap: 0.25rem 0.625rem;
+            font-size: 0.8125rem;
+            border-top: 1px solid #e5e7eb; padding-top: 0.4375rem;
+            margin-top: 0.125rem;
+        }
+        .sub-card-actions a, .sub-card-actions button {
+            background: transparent; border: 0; padding: 0; cursor: pointer;
+            font: inherit; text-decoration: none;
+        }
+        .sub-card-actions .btn-primary-link   { color: #1f3b5b; font-weight: 600; }
+        .sub-card-actions .btn-secondary-link { color: #4b5563; }
+        .sub-card-actions .btn-danger-link    { color: #b91c1c; }
+        .sub-card-actions a:hover, .sub-card-actions button:hover { text-decoration: underline; }
+
+        details.add-sub-form > summary {
+            cursor: pointer; padding: 0.5rem 0.75rem;
+            background: #eef2f7; border: 1px dashed #93c5fd;
+            border-radius: 8px; color: #1f3b5b; font-weight: 600;
+            font-size: 0.9375rem; list-style: none;
+            width: max-content;
+        }
+        details.add-sub-form > summary::-webkit-details-marker { display: none; }
+        details.add-sub-form > summary:hover { background: #dbeafe; }
+        details.add-sub-form[open] > summary { background: #dbeafe; }
+        details.add-sub-form > .form {
+            margin-top: 0.75rem;
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 1rem;
+        }
+        .req-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #fff; background: #1f3b5b;
+            border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .opt-pill {
+            display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
+            font-weight: 700; color: #6b7280; background: #f3f4f6;
+            border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body>
@@ -445,9 +693,129 @@ $activeNav = 'products';
             </div>
 
         </section>
+
+        <!-- ============== SUB-OPTIONS (follow-ups gated by this option's choices) ============== -->
+        <section class="section" id="sub-options">
+            <div class="section-header">
+                <h2 class="section-title">
+                    Sub-options <span style="color:#6b7280;font-weight:400">(<?= count($subOptions) ?>)</span>
+                </h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+                Follow-up options that only show in the quote builder when specific choices above
+                are selected — e.g. <em>Colour</em> appears only when <em>Bottom Weight = Chained
+                OR Chainless</em>. One sub-option can be gated by multiple parent choices, so you
+                don't have to duplicate the choice list.
+            </p>
+
+            <?php if (!$subOptions): ?>
+                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;font-style:italic">
+                    None yet. Tick parent choices in the form below to add one.
+                </p>
+            <?php else: ?>
+                <div class="sub-grid">
+                    <?php foreach ($subOptions as $sub):
+                        $sid   = (int) $sub['id'];
+                        $gates = $parentLabelsBySub[$sid] ?? [];
+                        $cn    = $choiceCountBySub[$sid] ?? 0;
+                    ?>
+                        <div class="sub-card<?= (int) $sub['active'] === 0 ? ' is-inactive' : '' ?>">
+                            <div class="sub-card-head">
+                                <strong class="sub-card-name"><?= e((string) $sub['name']) ?></strong>
+                                <?php if ((int) $sub['is_required'] === 1): ?>
+                                    <span class="req-pill">Required</span>
+                                <?php endif; ?>
+                                <?php if ((int) $sub['active'] === 0): ?>
+                                    <span class="opt-pill">Inactive</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="sub-card-gates">
+                                Appears when
+                                <?php foreach ($gates as $g): ?>
+                                    <span class="gate-pill"><?= e((string) $g) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="sub-card-actions">
+                                <a href="/admin/products/extra.php?id=<?= $sid ?>" class="btn-primary-link">
+                                    Manage <?= $cn ?> choice<?= $cn === 1 ? '' : 's' ?> &rarr;
+                                </a>
+                                <a href="/admin/products/extra-edit.php?id=<?= $sid ?>" class="btn-secondary-link">
+                                    Edit gates
+                                </a>
+                                <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
+                                      style="display:inline;margin:0"
+                                      data-confirm="Delete sub-option <?= e((string) $sub['name']) ?>? Removes its choices too. Cannot be undone.">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="_action" value="delete_sub_option">
+                                    <input type="hidden" name="sub_id" value="<?= $sid ?>">
+                                    <button type="submit" class="btn-danger-link">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($choices)): ?>
+                <details class="add-sub-form">
+                    <summary>+ Add sub-option</summary>
+                    <form method="post" action="/admin/products/extra.php?id=<?= (int) $extraId ?>"
+                          class="form" novalidate>
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="create_sub_option">
+
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label for="sub_name">Sub-option name <span class="required">*</span></label>
+                                <input id="sub_name" name="name" type="text"
+                                       required maxlength="150"
+                                       placeholder="e.g. Colour, Length, Bracket type">
+                            </div>
+                        </div>
+
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label>Appears when <span class="required">*</span></label>
+                                <div style="display:flex;flex-direction:column;gap:0.375rem;padding:0.5rem 0;max-height:200px;overflow-y:auto">
+                                    <?php foreach ($choices as $c): ?>
+                                        <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                            <input type="checkbox" name="parent_choice_ids[]"
+                                                   value="<?= (int) $c['id'] ?>">
+                                            <?= e((string) $extra['name']) ?> = <?= e((string) $c['label']) ?>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small style="color:#6b7280;font-size:0.8125rem">
+                                    Tick one or more. The sub-option shows in the quote builder when <strong>any</strong> ticked choice is selected.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label class="checkbox-row">
+                                    <input type="checkbox" name="is_required" value="1">
+                                    Required — customer must pick a choice from this sub-option
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" name="after_create" value="open" class="btn btn-primary">
+                                Save &amp; open choices
+                            </button>
+                            <button type="submit" name="after_create" value="stay" class="btn btn-secondary">
+                                Save &amp; stay here
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            <?php endif; ?>
+        </section>
     </main>
 </div>
 
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 <?php require __DIR__ . '/../../_partials/sortable_init.php'; ?>
 
 <script>
