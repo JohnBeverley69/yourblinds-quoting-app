@@ -69,46 +69,8 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         return $summary; // no catalogue at the source — done.
     }
 
-    // -----------------------------------------------------------------------
-    // 1b. client_markups / client_discounts (per-product pricing)
-    //     Markup is the engine's only source of truth — every product must
-    //     have a row. Copy from the template's values; missing template rows
-    //     get a zero row so the new tenant doesn't end up with NULLs.
-    //     Discounts only get copied where the template had one (zero is the
-    //     natural "no discount" — we don't need an explicit row).
-    // -----------------------------------------------------------------------
-    $sel = $pdo->prepare(
-        'SELECT product_id, markup_percent FROM client_markups WHERE client_id = ?'
-    );
-    $sel->execute([$sourceClientId]);
-    $sourceMarkups = [];
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $sourceMarkups[(int) $r['product_id']] = (float) $r['markup_percent'];
-    }
-    $insMarkup = $pdo->prepare(
-        'INSERT INTO client_markups (client_id, product_id, markup_percent)
-         VALUES (?, ?, ?)'
-    );
-    foreach ($productMap as $sourceProductId => $newProductId) {
-        $mp = $sourceMarkups[$sourceProductId] ?? 0.0;
-        $insMarkup->execute([$newClientId, $newProductId, $mp]);
-    }
-
-    $sel = $pdo->prepare(
-        'SELECT product_id, discount_percent FROM client_discounts WHERE client_id = ?'
-    );
-    $sel->execute([$sourceClientId]);
-    $insDiscount = $pdo->prepare(
-        'INSERT INTO client_discounts (client_id, product_id, discount_percent)
-         VALUES (?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $sourceProductId = (int) $r['product_id'];
-        if (!isset($productMap[$sourceProductId])) continue;
-        $insDiscount->execute([
-            $newClientId, $productMap[$sourceProductId], (float) $r['discount_percent'],
-        ]);
-    }
+    // 1b. client_markups / client_discounts come AFTER systems are seeded
+    //     (pricing is per [product, system] now) — see step 3b below.
 
     // -----------------------------------------------------------------------
     // 2. product_options (fabrics)
@@ -154,6 +116,60 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         ]);
         $systemMap[(int) $r['id']] = (int) $pdo->lastInsertId();
         $summary['systems']++;
+    }
+
+    // -----------------------------------------------------------------------
+    // 3b. client_markups / client_discounts (per [product, system])
+    //     Has to come AFTER systems are seeded so we can rewrite system_id
+    //     through $systemMap. A NULL system_id stays NULL (products without
+    //     systems). Discounts only get copied where present (zero = no row).
+    // -----------------------------------------------------------------------
+    $sel = $pdo->prepare(
+        'SELECT product_id, system_id, markup_percent
+           FROM client_markups WHERE client_id = ?'
+    );
+    $sel->execute([$sourceClientId]);
+    $insMarkup = $pdo->prepare(
+        'INSERT INTO client_markups (client_id, product_id, system_id, markup_percent)
+         VALUES (?, ?, ?, ?)'
+    );
+    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sourceProductId = (int) $r['product_id'];
+        if (!isset($productMap[$sourceProductId])) continue;
+        $newSystemId = null;
+        if ($r['system_id'] !== null) {
+            $sid = (int) $r['system_id'];
+            if (!isset($systemMap[$sid])) continue;   // source system was inactive
+            $newSystemId = $systemMap[$sid];
+        }
+        $insMarkup->execute([
+            $newClientId, $productMap[$sourceProductId],
+            $newSystemId, (float) $r['markup_percent'],
+        ]);
+    }
+
+    $sel = $pdo->prepare(
+        'SELECT product_id, system_id, discount_percent
+           FROM client_discounts WHERE client_id = ?'
+    );
+    $sel->execute([$sourceClientId]);
+    $insDiscount = $pdo->prepare(
+        'INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent)
+         VALUES (?, ?, ?, ?)'
+    );
+    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sourceProductId = (int) $r['product_id'];
+        if (!isset($productMap[$sourceProductId])) continue;
+        $newSystemId = null;
+        if ($r['system_id'] !== null) {
+            $sid = (int) $r['system_id'];
+            if (!isset($systemMap[$sid])) continue;
+            $newSystemId = $systemMap[$sid];
+        }
+        $insDiscount->execute([
+            $newClientId, $productMap[$sourceProductId],
+            $newSystemId, (float) $r['discount_percent'],
+        ]);
     }
 
     // -----------------------------------------------------------------------

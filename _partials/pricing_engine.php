@@ -12,8 +12,8 @@ declare(strict_types=1);
  *                           → price_tables    → price_table_id
  *   3. (price_table, w, d)  → price_table_rows → base_price (round-up optional)
  *   4. selected extras      → extras_applied[] with mode + amount each
- *   5. markup % = client_markups row (per product) OR 0
- *   6. discount % = client_discounts row (per product) OR 0
+ *   5. markup % = client_markups row (per product+system) OR 0
+ *   6. discount % = client_discounts row (per product+system) OR 0
  *   7. sell_price = subtotal × (1 + markup/100) × (1 − discount/100)
  *   8. line_total = sell_price × quantity
  *
@@ -253,36 +253,63 @@ function pe_apply_extra(
 }
 
 /**
- * Markup % for (client, product). Per-product is the only source — no
- * tenant-wide default any more (used to fall back to
- * client_settings.default_markup_percent, but that second knob
- * confused users, so we consolidated). Missing row = 0.
+ * Markup % for (client, product, system). Per-system is the only
+ * source — premium / motorised / standard each carry their own margin
+ * since they're priced very differently in real life.
  *
- * migrate_consolidate_markup.php seeded every existing product with
- * the old default, so the engine's price output didn't change at
- * cut-over.
+ * Resolution: look for an exact (client, product, system_id) row.
+ * Products without systems use the (system_id IS NULL) row. Missing
+ * row = 0%, no fall-back.
+ *
+ * The unique key uses a generated column IFNULL(system_id, 0), so we
+ * can pass NULL for products with no systems without MySQL treating
+ * each NULL as a fresh row.
+ *
+ * migrate_markup_per_system.php expanded each product's pre-migration
+ * row across all its systems, so cut-over is price-neutral.
  */
-function pe_markup_for_product(PDO $pdo, int $clientId, int $productId): float
+function pe_markup_for_system(PDO $pdo, int $clientId, int $productId, ?int $systemId): float
 {
-    $st = $pdo->prepare(
-        'SELECT markup_percent FROM client_markups
-          WHERE client_id = ? AND product_id = ? LIMIT 1'
-    );
-    $st->execute([$clientId, $productId]);
+    if ($systemId === null) {
+        $st = $pdo->prepare(
+            'SELECT markup_percent FROM client_markups
+              WHERE client_id = ? AND product_id = ? AND system_id IS NULL
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId]);
+    } else {
+        $st = $pdo->prepare(
+            'SELECT markup_percent FROM client_markups
+              WHERE client_id = ? AND product_id = ? AND system_id = ?
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId, $systemId]);
+    }
     $val = $st->fetchColumn();
     return ($val !== false && $val !== null) ? (float) $val : 0.0;
 }
 
 /**
- * Discount % for (client, product). Per-product override or 0.
+ * Discount % for (client, product, system). Same per-system model as
+ * markup. Missing row = 0%.
  */
-function pe_discount_for_product(PDO $pdo, int $clientId, int $productId): float
+function pe_discount_for_system(PDO $pdo, int $clientId, int $productId, ?int $systemId): float
 {
-    $st = $pdo->prepare(
-        'SELECT discount_percent FROM client_discounts
-          WHERE client_id = ? AND product_id = ? LIMIT 1'
-    );
-    $st->execute([$clientId, $productId]);
+    if ($systemId === null) {
+        $st = $pdo->prepare(
+            'SELECT discount_percent FROM client_discounts
+              WHERE client_id = ? AND product_id = ? AND system_id IS NULL
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId]);
+    } else {
+        $st = $pdo->prepare(
+            'SELECT discount_percent FROM client_discounts
+              WHERE client_id = ? AND product_id = ? AND system_id = ?
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId, $systemId]);
+    }
     $val = $st->fetchColumn();
     return ($val !== false && $val !== null) ? (float) $val : 0.0;
 }
@@ -407,9 +434,10 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $extrasTotal      = round($extrasTotal, 2);
     $subtotalPerBlind = round($basePrice + $extrasTotal, 2);
 
-    // 7. Markup / discount.
-    $markup   = pe_markup_for_product  ($pdo, $clientId, $productId);
-    $discount = pe_discount_for_product($pdo, $clientId, $productId);
+    // 7. Markup / discount — resolved per (product, system) so premium /
+    //    motorised / standard can each have their own margin.
+    $markup   = pe_markup_for_system  ($pdo, $clientId, $productId, $systemId);
+    $discount = pe_discount_for_system($pdo, $clientId, $productId, $systemId);
 
     // 8. Sell price + line total.
     $sellPrice = round(

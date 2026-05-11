@@ -45,10 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     } elseif (strlen($f['name']) > 150) {
         $error = 'System name is too long (max 150 chars).';
     } else {
+        $pdo = db();
         try {
+            $pdo->beginTransaction();
+
             // sort_order = MAX+1 so new systems append to the end of the
             // list (drag-and-drop is the only re-orderer after that).
-            $sortStmt = db()->prepare(
+            $sortStmt = $pdo->prepare(
                 'SELECT COALESCE(MAX(sort_order), -1) + 1
                    FROM product_systems
                   WHERE product_id = ? AND client_id = ?'
@@ -56,15 +59,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $sortStmt->execute([$productId, $clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
-            $stmt = db()->prepare(
+            $countStmt = $pdo->prepare(
+                'SELECT COUNT(*) FROM product_systems
+                  WHERE product_id = ? AND client_id = ?'
+            );
+            $countStmt->execute([$productId, $clientId]);
+            $existingSystems = (int) $countStmt->fetchColumn();
+
+            $stmt = $pdo->prepare(
                 'INSERT INTO product_systems (client_id, product_id, name, sort_order, active)
                  VALUES (?, ?, ?, ?, 1)'
             );
             $stmt->execute([$clientId, $productId, $f['name'], $nextSort]);
+            $newSystemId = (int) $pdo->lastInsertId();
+
+            // If this is the FIRST system on the product, promote any
+            // existing NULL-system markup/discount row into the new
+            // system so the engine doesn't quietly drop to 0%. Without
+            // this, a product that previously priced fine (with a NULL-
+            // system markup row) would suddenly lose its margin the
+            // moment someone added a system.
+            if ($existingSystems === 0) {
+                foreach (
+                    [
+                        ['table' => 'client_markups',   'col' => 'markup_percent'],
+                        ['table' => 'client_discounts', 'col' => 'discount_percent'],
+                    ] as $t
+                ) {
+                    $promote = $pdo->prepare(
+                        "INSERT INTO {$t['table']} (client_id, product_id, system_id, {$t['col']})
+                         SELECT client_id, product_id, ?, {$t['col']}
+                           FROM {$t['table']}
+                          WHERE client_id = ? AND product_id = ? AND system_id IS NULL"
+                    );
+                    $promote->execute([$newSystemId, $clientId, $productId]);
+
+                    $pdo->prepare(
+                        "DELETE FROM {$t['table']}
+                          WHERE client_id = ? AND product_id = ? AND system_id IS NULL"
+                    )->execute([$clientId, $productId]);
+                }
+            }
+
+            $pdo->commit();
             $_SESSION['flash_success'] = 'System "' . $f['name'] . '" added.';
             header('Location: /admin/products/systems.php?product_id=' . $productId);
             exit;
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_system_per_product')) {
                 $error = 'A system with that name already exists for this product.';
             } else {

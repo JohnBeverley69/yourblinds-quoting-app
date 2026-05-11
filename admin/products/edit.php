@@ -30,48 +30,109 @@ if (!$product) {
     exit;
 }
 
-// Per-product markup / discount. After the consolidate-markup migration,
-// every product has an explicit markup row — there's no tenant-wide
-// default any more. 0 just means 0%.
+// Markup / discount are now per (product, system). A product with
+// systems carries one row per system; one without systems carries a
+// single row keyed by system_id IS NULL.
+$sysStmt = db()->prepare(
+    'SELECT id, name FROM product_systems
+      WHERE product_id = ? AND client_id = ? AND active = 1
+   ORDER BY sort_order, name'
+);
+$sysStmt->execute([$id, $clientId]);
+$systems = $sysStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $mStmt = db()->prepare(
-    'SELECT markup_percent FROM client_markups
-      WHERE client_id = ? AND product_id = ? LIMIT 1'
+    'SELECT system_id, markup_percent FROM client_markups
+      WHERE client_id = ? AND product_id = ?'
 );
 $mStmt->execute([$clientId, $id]);
-$mVal = $mStmt->fetchColumn();
+$markupsBySystem = [];   // string key: '' for NULL, otherwise system_id
+foreach ($mStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $key = $r['system_id'] === null ? '' : (string) (int) $r['system_id'];
+    $markupsBySystem[$key] = (string) $r['markup_percent'];
+}
 
 $dStmt = db()->prepare(
-    'SELECT discount_percent FROM client_discounts
-      WHERE client_id = ? AND product_id = ? LIMIT 1'
+    'SELECT system_id, discount_percent FROM client_discounts
+      WHERE client_id = ? AND product_id = ?'
 );
 $dStmt->execute([$clientId, $id]);
-$dVal = $dStmt->fetchColumn();
+$discountsBySystem = [];
+foreach ($dStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $key = $r['system_id'] === null ? '' : (string) (int) $r['system_id'];
+    $discountsBySystem[$key] = (string) $r['discount_percent'];
+}
 
+// $f['markup'] and $f['discount'] are keyed by system_id (or '' for
+// products without systems). Default missing entries to '0.00'.
 $f = [
-    'name'             => (string) $product['name'],
-    'active'           => (int)    $product['active'],
-    'markup_percent'   => $mVal !== false ? (string) $mVal : '0.00',
-    'discount_percent' => $dVal !== false ? (string) $dVal : '0.00',
+    'name'     => (string) $product['name'],
+    'active'   => (int)    $product['active'],
+    'markup'   => [],
+    'discount' => [],
 ];
+if ($systems) {
+    foreach ($systems as $s) {
+        $key = (string) (int) $s['id'];
+        $f['markup'][$key]   = $markupsBySystem[$key]   ?? '0.00';
+        $f['discount'][$key] = $discountsBySystem[$key] ?? '0.00';
+    }
+} else {
+    $f['markup']['']   = $markupsBySystem['']   ?? '0.00';
+    $f['discount'][''] = $discountsBySystem[''] ?? '0.00';
+}
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']             = trim((string) ($_POST['name'] ?? ''));
-    $f['active']           = !empty($_POST['active']) ? 1 : 0;
-    $f['markup_percent']   = trim((string) ($_POST['markup_percent']   ?? '0'));
-    $f['discount_percent'] = trim((string) ($_POST['discount_percent'] ?? '0'));
+    $f['name']     = trim((string) ($_POST['name'] ?? ''));
+    $f['active']   = !empty($_POST['active']) ? 1 : 0;
+
+    // Two posting shapes depending on whether the product has systems:
+    //   With systems:    markup[<sysid>] / discount[<sysid>]  (arrays)
+    //   Without systems: markup / discount                    (scalars)
+    // Keeping them shape-distinct avoids HTML-form gymnastics (you can't
+    // easily post `array[''=>v]` from <input name="..."> markup).
+    $f['markup']   = [];
+    $f['discount'] = [];
+    $validKeys     = [];
+    if ($systems) {
+        $postedMarkup   = is_array($_POST['markup']   ?? null) ? $_POST['markup']   : [];
+        $postedDiscount = is_array($_POST['discount'] ?? null) ? $_POST['discount'] : [];
+        foreach ($systems as $s) {
+            $k = (string) (int) $s['id'];
+            $f['markup'][$k]   = trim((string) ($postedMarkup[$k]   ?? '0'));
+            $f['discount'][$k] = trim((string) ($postedDiscount[$k] ?? '0'));
+            $validKeys[]       = $k;
+        }
+    } else {
+        $f['markup']['']   = trim((string) ($_POST['markup']   ?? '0'));
+        $f['discount'][''] = trim((string) ($_POST['discount'] ?? '0'));
+        $validKeys[]       = '';
+    }
+
+    $validateNum = static function (string $v, string $label) {
+        if (!is_numeric($v) || (float) $v < 0) {
+            return "$label must be a non-negative number.";
+        }
+        return null;
+    };
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Product name is too long (max 150 characters).';
-    } elseif (!is_numeric($f['markup_percent']) || (float) $f['markup_percent'] < 0) {
-        $error = 'Markup % must be a non-negative number.';
-    } elseif (!is_numeric($f['discount_percent']) || (float) $f['discount_percent'] < 0) {
-        $error = 'Discount % must be a non-negative number.';
     } else {
+        foreach ($validKeys as $k) {
+            $error = $validateNum($f['markup'][$k],   'Markup %');
+            if ($error) break;
+            $error = $validateNum($f['discount'][$k], 'Discount %');
+            if ($error) break;
+        }
+    }
+
+    if ($error === null) {
         try {
             $pdo = db();
             $pdo->beginTransaction();
@@ -88,31 +149,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $u->execute([$f['name'], $f['active'], $id, $clientId]);
 
-            // Markup: per-product is now the single source of truth.
-            // Always upsert (including 0), so the row exists and the
-            // engine doesn't have to think about NULL fall-backs.
-            $mp = (float) $f['markup_percent'];
-            $pdo->prepare(
-                'INSERT INTO client_markups (client_id, product_id, markup_percent)
-                 VALUES (?, ?, ?)
+            // Markup: upsert one row per system (or one NULL-system row
+            // for products without systems). The unique key uses a
+            // generated system_id_key (IFNULL(system_id, 0)) so the
+            // ON DUPLICATE KEY UPDATE catches the NULL case too.
+            $insMarkup = $pdo->prepare(
+                'INSERT INTO client_markups (client_id, product_id, system_id, markup_percent)
+                 VALUES (?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE markup_percent = VALUES(markup_percent)'
-            )->execute([$clientId, $id, $mp]);
+            );
+            // Discount: same shape, but 0 deletes the row (no need to
+            // store an explicit zero — missing row also reads as 0).
+            $insDiscount = $pdo->prepare(
+                'INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)'
+            );
+            $delDiscount = $pdo->prepare(
+                'DELETE FROM client_discounts
+                  WHERE client_id = ? AND product_id = ?
+                    AND ((system_id IS NULL AND ? IS NULL) OR system_id = ?)'
+            );
 
-            // Discount: 0 = no discount, so we can skip the row. Keeping
-            // the DELETE-on-zero pattern here is fine — discount has
-            // always been opt-in, no migration needed.
-            $dp = (float) $f['discount_percent'];
-            if ($dp > 0) {
-                $pdo->prepare(
-                    'INSERT INTO client_discounts (client_id, product_id, discount_percent)
-                     VALUES (?, ?, ?)
-                     ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)'
-                )->execute([$clientId, $id, $dp]);
-            } else {
-                $pdo->prepare(
-                    'DELETE FROM client_discounts
-                      WHERE client_id = ? AND product_id = ?'
-                )->execute([$clientId, $id]);
+            foreach ($validKeys as $k) {
+                $sysId = $k === '' ? null : (int) $k;
+                $insMarkup->execute([$clientId, $id, $sysId, (float) $f['markup'][$k]]);
+
+                $dp = (float) $f['discount'][$k];
+                if ($dp > 0) {
+                    $insDiscount->execute([$clientId, $id, $sysId, $dp]);
+                } else {
+                    // The "IS NULL ... = ?" trick needs the same value
+                    // twice so the prepared statement covers both
+                    // branches without juggling SQL strings.
+                    $delDiscount->execute([$clientId, $id, $sysId, $sysId]);
+                }
             }
 
             $pdo->commit();
@@ -120,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: /admin/products/index.php');
             exit;
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_product_client_name')) {
                 $error = 'A product with that name already exists.';
             } else {
@@ -155,6 +226,25 @@ $activeNav = 'products';
         .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
         .toggle-stack small {
             color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+        }
+        .pricing-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.9375rem;
+        }
+        .pricing-table th, .pricing-table td {
+            padding: 0.5rem 0.625rem; text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .pricing-table th {
+            font-size: 0.75rem; text-transform: uppercase;
+            letter-spacing: 0.04em; color: #6b7280; font-weight: 600;
+        }
+        .pricing-table td.system-name { font-weight: 500; color: #111827; }
+        .pricing-table td.num { width: 7rem; }
+        .pricing-table td.num input {
+            width: 100%; padding: 0.4375rem 0.625rem;
+            border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+            font: inherit; box-sizing: border-box;
         }
     </style>
 </head>
@@ -192,29 +282,66 @@ $activeNav = 'products';
 
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
-                        Pricing overrides
+                        Pricing per system
                     </legend>
                     <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
-                        Applied by the pricing engine on top of the price-table base.
-                        <strong>Markup</strong> is what you add to make the sell price;
-                        <strong>discount</strong> comes off after that. Leave either at 0
-                        to skip it.
+                        Margin and discount can be tuned per system (premium / motorised /
+                        standard are usually priced differently). Markup is applied on top
+                        of the price-table base; discount comes off after that. Leave at 0
+                        to skip.
+                        <?php if (!$systems): ?>
+                            <br><em>No systems on this product yet — values below apply to
+                            every quote. Add systems on the
+                            <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>"
+                               style="color:#1f3b5b">Systems</a> page to split them out.</em>
+                        <?php endif; ?>
                     </p>
 
-                    <div class="form-row cols-2">
-                        <div class="form-group">
-                            <label for="markup_percent">Markup %</label>
-                            <input id="markup_percent" name="markup_percent" type="number"
-                                   step="0.01" min="0"
-                                   value="<?= e((string) $f['markup_percent']) ?>">
+                    <?php if ($systems): ?>
+                        <table class="pricing-table">
+                            <thead>
+                                <tr>
+                                    <th>System</th>
+                                    <th style="width:7rem">Markup %</th>
+                                    <th style="width:7rem">Discount %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($systems as $s):
+                                    $key = (string) (int) $s['id'];
+                                ?>
+                                    <tr>
+                                        <td class="system-name"><?= e((string) $s['name']) ?></td>
+                                        <td class="num">
+                                            <input type="number" step="0.01" min="0"
+                                                   name="markup[<?= (int) $s['id'] ?>]"
+                                                   value="<?= e((string) ($f['markup'][$key] ?? '0.00')) ?>">
+                                        </td>
+                                        <td class="num">
+                                            <input type="number" step="0.01" min="0"
+                                                   name="discount[<?= (int) $s['id'] ?>]"
+                                                   value="<?= e((string) ($f['discount'][$key] ?? '0.00')) ?>">
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <div class="form-row cols-2">
+                            <div class="form-group">
+                                <label for="markup_no_sys">Markup %</label>
+                                <input id="markup_no_sys" name="markup" type="number"
+                                       step="0.01" min="0"
+                                       value="<?= e((string) ($f['markup'][''] ?? '0.00')) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="discount_no_sys">Discount %</label>
+                                <input id="discount_no_sys" name="discount" type="number"
+                                       step="0.01" min="0"
+                                       value="<?= e((string) ($f['discount'][''] ?? '0.00')) ?>">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="discount_percent">Discount %</label>
-                            <input id="discount_percent" name="discount_percent" type="number"
-                                   step="0.01" min="0"
-                                   value="<?= e((string) $f['discount_percent']) ?>">
-                        </div>
-                    </div>
+                    <?php endif; ?>
                 </fieldset>
 
                 <div class="toggle-stack">
