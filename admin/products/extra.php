@@ -218,6 +218,8 @@ $activeNav = 'products';
             background: #eef2f7;
         }
         .row-actions .btn-more { color: #4b5563; }
+        .row-actions .btn-sub  { color: #15803d; }
+        .row-actions .btn-sub:hover { background: #dcfce7; }
         .row-actions .btn-delete { color: #b91c1c; }
         .row-actions .btn-delete:hover { background: #fee2e2; }
 
@@ -385,6 +387,11 @@ $activeNav = 'products';
                                     <a href="/admin/products/extra-choice-edit.php?id=<?= $cid ?>"
                                        class="btn-more"
                                        title="Full edit page — width-table pricing, thumbnail image upload">Edit</a>
+                                    <a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=<?= $cid ?>#add-option"
+                                       class="btn-sub"
+                                       title="Add a follow-up option (e.g. colour) that only appears when this choice is selected">
+                                        + Sub
+                                    </a>
                                     <button type="button" class="btn-duplicate"
                                             title="Clone this choice (handy when the same label applies to another system)">
                                         Dup
@@ -659,6 +666,8 @@ $activeNav = 'products';
         tdActions.innerHTML =
             '<a href="/admin/products/extra-choice-edit.php?id=' + choice.id +
                 '" class="btn-more" title="Full edit page — width table, thumbnail">Edit</a>' +
+            '<a href="/admin/products/extras.php?product_id=<?= (int) $extra['product_id'] ?>&parent_choice=' + choice.id +
+                '#add-option" class="btn-sub" title="Add a follow-up option that appears only when this choice is selected">+ Sub</a>' +
             '<button type="button" class="btn-duplicate" title="Clone this choice">Dup</button>' +
             '<button type="button" class="btn-delete" title="Delete">&times;</button>';
         tr.appendChild(tdActions);
