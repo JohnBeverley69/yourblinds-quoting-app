@@ -1011,6 +1011,71 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             <?php endif; ?>
         </section>
+
+        <?php
+            // Deposit panel — only shown once a quote has gained a
+            // deposit_amount (i.e. it's been accepted at some point).
+            // change_status.php seeds the amount the first time a quote
+            // lands in 'accepted'; the trade user can then edit it and
+            // toggle paid/unpaid here.
+            $depositAmount = $quote['deposit_amount'] ?? null;
+            $depositPaidAt = $quote['deposit_paid_at'] ?? null;
+            $hasDeposit    = $depositAmount !== null;
+        ?>
+        <?php if ($hasDeposit): ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Deposit</h2>
+            </div>
+
+            <?php if ($depositPaidAt): ?>
+                <p style="background:#d1fae5;color:#065f46;
+                          padding:0.5rem 0.75rem;border-radius:8px;
+                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
+                    ✓ Paid
+                    <?= e(qb_fmt_money((float) $depositAmount)) ?>
+                    on <?= e(date('j M Y', strtotime((string) $depositPaidAt))) ?>
+                </p>
+            <?php else: ?>
+                <p style="background:#fef3c7;color:#92400e;
+                          padding:0.5rem 0.75rem;border-radius:8px;
+                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
+                    Outstanding deposit:
+                    <?= e(qb_fmt_money((float) $depositAmount)) ?>
+                </p>
+            <?php endif; ?>
+
+            <?php if ($editable): ?>
+                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                    <form method="post" action="/quote-builder/deposit.php"
+                          style="display:flex;gap:0.375rem;align-items:center;margin:0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="save_amount">
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <label style="font-size:0.8125rem;color:#6b7280;margin:0">Amount £</label>
+                        <input type="number" name="deposit_amount" step="0.01" min="0"
+                               value="<?= e(number_format((float) $depositAmount, 2, '.', '')) ?>"
+                               style="width:7rem;padding:0.375rem 0.5rem;
+                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                        <button type="submit" class="btn btn-secondary"
+                                style="padding:0.3125rem 0.75rem;font-size:0.8125rem">
+                            Save amount
+                        </button>
+                    </form>
+                    <form method="post" action="/quote-builder/deposit.php" style="margin:0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="mark_paid">
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <button type="submit"
+                                class="btn <?= $depositPaidAt ? 'btn-secondary' : 'btn-primary' ?>"
+                                style="padding:0.3125rem 0.875rem;font-size:0.8125rem">
+                            <?= $depositPaidAt ? 'Mark unpaid' : 'Mark deposit paid' ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
         </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 

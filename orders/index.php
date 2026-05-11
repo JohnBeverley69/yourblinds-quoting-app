@@ -53,7 +53,8 @@ if ($q !== '') {
 }
 
 $sql = 'SELECT id, quote_number, end_customer_name, end_customer_postcode,
-               status, total, accepted_at, created_at, updated_at
+               status, total, accepted_at, created_at, updated_at,
+               deposit_amount, deposit_paid_at
           FROM quotes
          WHERE ' . implode(' AND ', $where) . '
          ORDER BY COALESCE(accepted_at, created_at) DESC
@@ -195,10 +196,14 @@ $activeNav = 'orders';
                                 <th>Status</th>
                                 <th>Accepted</th>
                                 <th class="num">Total</th>
+                                <th>Deposit</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($orders as $o): ?>
+                            <?php foreach ($orders as $o):
+                                $dep    = $o['deposit_amount'];
+                                $depAt  = $o['deposit_paid_at'];
+                            ?>
                                 <tr>
                                     <td>
                                         <a class="q-link"
@@ -215,6 +220,19 @@ $activeNav = 'orders';
                                     </td>
                                     <td><?= e($fmtDate((string) ($o['accepted_at'] ?? null))) ?></td>
                                     <td class="num"><?= e($money($o['total'])) ?></td>
+                                    <td>
+                                        <?php if ($dep === null): ?>
+                                            <span style="color:#9ca3af;font-size:0.8125rem">—</span>
+                                        <?php elseif ($depAt): ?>
+                                            <span style="color:#065f46;font-weight:600;font-size:0.8125rem">
+                                                ✓ <?= e($money($dep)) ?> paid
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="color:#92400e;font-weight:600;font-size:0.8125rem">
+                                                <?= e($money($dep)) ?> due
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

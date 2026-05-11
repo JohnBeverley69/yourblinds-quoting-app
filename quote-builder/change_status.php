@@ -53,6 +53,22 @@ try {
             ->execute([$quoteId]);
     }
 
+    // First time a quote lands in 'accepted', seed deposit_amount from
+    // the tenant's default deposit %. Skipped if a deposit's already
+    // been set (so re-accepting a previously-declined-and-reopened
+    // quote doesn't overwrite a manual figure).
+    if ($target === 'accepted' && ($quote['deposit_amount'] ?? null) === null) {
+        $dpStmt = $pdo->prepare(
+            'SELECT default_deposit_percent FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $dpStmt->execute([$clientId]);
+        $dpPct = (float) ($dpStmt->fetchColumn() ?: 50);
+        $depositAmt = round(((float) $quote['total']) * $dpPct / 100, 2);
+        $pdo->prepare(
+            'UPDATE quotes SET deposit_amount = ? WHERE id = ?'
+        )->execute([$depositAmt, $quoteId]);
+    }
+
     // Mirror the public-accept side: when the trade user marks a quote
     // accepted, also drop a placeholder installation appointment on the
     // calendar so it's never forgotten. Idempotent — safe to re-run if

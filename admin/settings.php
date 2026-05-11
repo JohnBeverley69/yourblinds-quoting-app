@@ -127,24 +127,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // in the DB for back-compat but no longer written from the UI.
         $prefix    = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
         $vat       = (float) ($_POST['vat_percent'] ?? 20);
+        $deposit   = (float) ($_POST['default_deposit_percent'] ?? 50);
+        if ($deposit < 0)   $deposit = 0;
+        if ($deposit > 100) $deposit = 100;
         $emailFrom = trim((string) ($_POST['email_from_name'] ?? '')) ?: null;
         $replyTo   = trim((string) ($_POST['reply_to_email']  ?? '')) ?: null;
         $footer    = trim((string) ($_POST['quote_footer']    ?? '')) ?: null;
 
         $stmt = db()->prepare(
             'INSERT INTO client_settings
-              (client_id, quote_prefix, vat_percent,
+              (client_id, quote_prefix, vat_percent, default_deposit_percent,
                email_from_name, reply_to_email, quote_footer)
-              VALUES (?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-              quote_prefix    = VALUES(quote_prefix),
-              vat_percent     = VALUES(vat_percent),
-              email_from_name = VALUES(email_from_name),
-              reply_to_email  = VALUES(reply_to_email),
-              quote_footer    = VALUES(quote_footer)'
+              quote_prefix            = VALUES(quote_prefix),
+              vat_percent             = VALUES(vat_percent),
+              default_deposit_percent = VALUES(default_deposit_percent),
+              email_from_name         = VALUES(email_from_name),
+              reply_to_email          = VALUES(reply_to_email),
+              quote_footer            = VALUES(quote_footer)'
         );
         $stmt->execute([
-            $clientId, $prefix ?: null, $vat,
+            $clientId, $prefix ?: null, $vat, $deposit,
             $emailFrom, $replyTo, $footer,
         ]);
         $_SESSION['flash_success'] = 'Quote settings saved.';
@@ -160,11 +164,12 @@ $client = $clientStmt->fetch() ?: [];
 $settingsStmt = db()->prepare('SELECT * FROM client_settings WHERE client_id = ? LIMIT 1');
 $settingsStmt->execute([$clientId]);
 $settings = $settingsStmt->fetch() ?: [
-    'quote_prefix'    => '',
-    'vat_percent'     => 20,
-    'email_from_name' => '',
-    'reply_to_email'  => '',
-    'quote_footer'    => '',
+    'quote_prefix'             => '',
+    'vat_percent'              => 20,
+    'default_deposit_percent'  => 50,
+    'email_from_name'          => '',
+    'reply_to_email'           => '',
+    'quote_footer'             => '',
 ];
 $activeNav = 'settings';
 ?><!doctype html>
@@ -343,7 +348,7 @@ $activeNav = 'settings';
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="quote">
 
-                <div class="form-row cols-2">
+                <div class="form-row cols-3">
                     <div class="form-group">
                         <label for="quote_prefix">Quote prefix</label>
                         <input id="quote_prefix" name="quote_prefix" type="text" maxlength="20"
@@ -356,11 +361,19 @@ $activeNav = 'settings';
                                step="0.01" min="0" max="99"
                                value="<?= e((string) ($settings['vat_percent'] ?? '20')) ?>">
                     </div>
+                    <div class="form-group">
+                        <label for="default_deposit_percent">Default deposit %</label>
+                        <input id="default_deposit_percent" name="default_deposit_percent"
+                               type="number" step="0.01" min="0" max="100"
+                               value="<?= e((string) ($settings['default_deposit_percent'] ?? '50')) ?>">
+                    </div>
                 </div>
                 <p style="color:#6b7280;font-size:0.8125rem;margin:-0.25rem 0 0.75rem">
-                    Markup and discount are now set per product
+                    Markup and discount are set per product
                     (<a href="/admin/products/index.php" style="color:#1f3b5b">Products</a>
-                    → Edit → Pricing overrides).
+                    → Edit → Pricing overrides). The deposit % seeds the deposit
+                    figure on every quote that moves into Accepted — you can
+                    override it per quote.
                 </p>
 
                 <div class="form-row">
