@@ -109,7 +109,19 @@ $copied = $pdo->exec(
 $ops[] = "Backfilled $copied row(s) from product_extras.parent_choice_id.";
 
 // 3. Drop the uniqueness constraint that blocks same-named options.
+//    MySQL complains "needed in a foreign key constraint" if we try to
+//    drop the index while it's the only one backing an FK on
+//    client_id / product_id. Add plain indexes on those columns first
+//    (a no-op if they already exist), then drop the uniq.
 if (index_exists_q($pdo, 'product_extras', 'uniq_extra_per_product')) {
+    if (!index_exists_q($pdo, 'product_extras', 'idx_extras_client')) {
+        $pdo->exec('ALTER TABLE product_extras ADD INDEX idx_extras_client (client_id)');
+        $ops[] = 'Added backing index: idx_extras_client.';
+    }
+    if (!index_exists_q($pdo, 'product_extras', 'idx_extras_product')) {
+        $pdo->exec('ALTER TABLE product_extras ADD INDEX idx_extras_product (product_id)');
+        $ops[] = 'Added backing index: idx_extras_product.';
+    }
     $pdo->exec('ALTER TABLE product_extras DROP INDEX uniq_extra_per_product');
     $ops[] = 'Dropped index: uniq_extra_per_product (allows same-named options).';
 } else {
