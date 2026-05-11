@@ -1291,7 +1291,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
             out += '<select name="extras[' + idx + '][choice_id]"'
                  + (extra.is_required ? ' required' : '') + '>';
-            if (!extra.is_required || !hasDefault) {
+            // "None" is only useful when there's no default to fall back
+            // to — otherwise the default IS the "natural" pick and giving
+            // the customer a None escape-hatch just adds noise (and lets
+            // them ship a Bottom Weight with no Colour, which is silly).
+            if (!hasDefault) {
                 out += '<option value=""'
                      + (presetVal === '' ? ' selected' : '')
                      + '>— None —</option>';
