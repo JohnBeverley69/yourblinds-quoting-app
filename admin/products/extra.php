@@ -603,7 +603,11 @@ $activeNav = 'products';
                                 <td class="col-label">
                                     <input class="cell-input" data-field="label"
                                            value="<?= e((string) $c['label']) ?>"
-                                           maxlength="150">
+                                           maxlength="150"
+                                           autocomplete="off"
+                                           data-form-type="other"
+                                           data-lpignore="true"
+                                           data-1p-ignore="true">
                                 </td>
                                 <td class="col-system">
                                     <?= $renderSystemMultiSelect($sysId) ?>
@@ -659,7 +663,11 @@ $activeNav = 'products';
                             <td class="col-label">
                                 <input class="cell-input" id="new-label"
                                        placeholder="Type new label and press Enter…"
-                                       maxlength="150">
+                                       maxlength="150"
+                                       autocomplete="off"
+                                       data-form-type="other"
+                                       data-lpignore="true"
+                                       data-1p-ignore="true">
                             </td>
                             <td class="col-system">
                                 <details class="multi-select" id="new-system">
@@ -981,6 +989,13 @@ $activeNav = 'products';
             if (opts.type)      inp.type      = opts.type;
             if (opts.step)      inp.step      = opts.step;
             if (opts.maxlength) inp.maxLength = opts.maxlength;
+            // Tell password managers (Dashlane / 1Password / LastPass /
+            // Bitwarden) to ignore these. They aren't credential inputs,
+            // and PM keystroke-interception breaks our keydown handler.
+            inp.autocomplete = 'off';
+            inp.dataset.formType = 'other';
+            inp.dataset.lpignore = 'true';
+            inp.dataset['1pIgnore'] = 'true';
             inp.value = value;
             captureLast(inp);
             td.appendChild(inp);
