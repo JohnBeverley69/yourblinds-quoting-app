@@ -12,8 +12,8 @@ declare(strict_types=1);
  *                           → price_tables    → price_table_id
  *   3. (price_table, w, d)  → price_table_rows → base_price (round-up optional)
  *   4. selected extras      → extras_applied[] with mode + amount each
- *   5. markup % = client_markups override OR client_settings.default_markup_percent
- *   6. discount % = client_discounts override OR 0
+ *   5. markup % = client_markups row (per product) OR 0
+ *   6. discount % = client_discounts row (per product) OR 0
  *   7. sell_price = subtotal × (1 + markup/100) × (1 − discount/100)
  *   8. line_total = sell_price × quantity
  *
@@ -253,7 +253,14 @@ function pe_apply_extra(
 }
 
 /**
- * Markup % for (client, product). Per-product override > client default > 0.
+ * Markup % for (client, product). Per-product is the only source — no
+ * tenant-wide default any more (used to fall back to
+ * client_settings.default_markup_percent, but that second knob
+ * confused users, so we consolidated). Missing row = 0.
+ *
+ * migrate_consolidate_markup.php seeded every existing product with
+ * the old default, so the engine's price output didn't change at
+ * cut-over.
  */
 function pe_markup_for_product(PDO $pdo, int $clientId, int $productId): float
 {
@@ -262,15 +269,6 @@ function pe_markup_for_product(PDO $pdo, int $clientId, int $productId): float
           WHERE client_id = ? AND product_id = ? LIMIT 1'
     );
     $st->execute([$clientId, $productId]);
-    $val = $st->fetchColumn();
-    if ($val !== false && $val !== null) {
-        return (float) $val;
-    }
-
-    $st = $pdo->prepare(
-        'SELECT default_markup_percent FROM client_settings WHERE client_id = ? LIMIT 1'
-    );
-    $st->execute([$clientId]);
     $val = $st->fetchColumn();
     return ($val !== false && $val !== null) ? (float) $val : 0.0;
 }

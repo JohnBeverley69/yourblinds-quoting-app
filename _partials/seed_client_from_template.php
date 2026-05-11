@@ -70,6 +70,47 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     }
 
     // -----------------------------------------------------------------------
+    // 1b. client_markups / client_discounts (per-product pricing)
+    //     Markup is the engine's only source of truth — every product must
+    //     have a row. Copy from the template's values; missing template rows
+    //     get a zero row so the new tenant doesn't end up with NULLs.
+    //     Discounts only get copied where the template had one (zero is the
+    //     natural "no discount" — we don't need an explicit row).
+    // -----------------------------------------------------------------------
+    $sel = $pdo->prepare(
+        'SELECT product_id, markup_percent FROM client_markups WHERE client_id = ?'
+    );
+    $sel->execute([$sourceClientId]);
+    $sourceMarkups = [];
+    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sourceMarkups[(int) $r['product_id']] = (float) $r['markup_percent'];
+    }
+    $insMarkup = $pdo->prepare(
+        'INSERT INTO client_markups (client_id, product_id, markup_percent)
+         VALUES (?, ?, ?)'
+    );
+    foreach ($productMap as $sourceProductId => $newProductId) {
+        $mp = $sourceMarkups[$sourceProductId] ?? 0.0;
+        $insMarkup->execute([$newClientId, $newProductId, $mp]);
+    }
+
+    $sel = $pdo->prepare(
+        'SELECT product_id, discount_percent FROM client_discounts WHERE client_id = ?'
+    );
+    $sel->execute([$sourceClientId]);
+    $insDiscount = $pdo->prepare(
+        'INSERT INTO client_discounts (client_id, product_id, discount_percent)
+         VALUES (?, ?, ?)'
+    );
+    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sourceProductId = (int) $r['product_id'];
+        if (!isset($productMap[$sourceProductId])) continue;
+        $insDiscount->execute([
+            $newClientId, $productMap[$sourceProductId], (float) $r['discount_percent'],
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
     // 2. product_options (fabrics)
     // -----------------------------------------------------------------------
     $sel = $pdo->prepare(

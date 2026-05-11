@@ -30,8 +30,9 @@ if (!$product) {
     exit;
 }
 
-// Existing per-product markup / discount overrides (Phase 3.1).
-// 0 / no row = use the tenant default. Any positive number = override.
+// Per-product markup / discount. After the consolidate-markup migration,
+// every product has an explicit markup row — there's no tenant-wide
+// default any more. 0 just means 0%.
 $mStmt = db()->prepare(
     'SELECT markup_percent FROM client_markups
       WHERE client_id = ? AND product_id = ? LIMIT 1'
@@ -45,14 +46,6 @@ $dStmt = db()->prepare(
 );
 $dStmt->execute([$clientId, $id]);
 $dVal = $dStmt->fetchColumn();
-
-// Default markup from client_settings — shown as a hint so users know what
-// the engine will fall back to when the per-product override is 0.
-$defStmt = db()->prepare(
-    'SELECT default_markup_percent FROM client_settings WHERE client_id = ? LIMIT 1'
-);
-$defStmt->execute([$clientId]);
-$defaultMarkup = (float) ($defStmt->fetchColumn() ?: 0);
 
 $f = [
     'name'             => (string) $product['name'],
@@ -95,23 +88,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $u->execute([$f['name'], $f['active'], $id, $clientId]);
 
-            // Markup: 0 = remove the override (engine will fall through to
-            // the tenant default); >0 = upsert.
+            // Markup: per-product is now the single source of truth.
+            // Always upsert (including 0), so the row exists and the
+            // engine doesn't have to think about NULL fall-backs.
             $mp = (float) $f['markup_percent'];
-            if ($mp > 0) {
-                $pdo->prepare(
-                    'INSERT INTO client_markups (client_id, product_id, markup_percent)
-                     VALUES (?, ?, ?)
-                     ON DUPLICATE KEY UPDATE markup_percent = VALUES(markup_percent)'
-                )->execute([$clientId, $id, $mp]);
-            } else {
-                $pdo->prepare(
-                    'DELETE FROM client_markups
-                      WHERE client_id = ? AND product_id = ?'
-                )->execute([$clientId, $id]);
-            }
+            $pdo->prepare(
+                'INSERT INTO client_markups (client_id, product_id, markup_percent)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE markup_percent = VALUES(markup_percent)'
+            )->execute([$clientId, $id, $mp]);
 
-            // Discount: same pattern. 0 = no discount.
+            // Discount: 0 = no discount, so we can skip the row. Keeping
+            // the DELETE-on-zero pattern here is fine — discount has
+            // always been opt-in, no migration needed.
             $dp = (float) $f['discount_percent'];
             if ($dp > 0) {
                 $pdo->prepare(
@@ -206,10 +195,10 @@ $activeNav = 'products';
                         Pricing overrides
                     </legend>
                     <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
-                        Per-product markup and discount, applied by the pricing engine on top of the price-table base.
-                        <strong>Markup</strong>: leave at 0 to use the tenant default
-                        (currently <strong><?= number_format($defaultMarkup, 2) ?>%</strong>, set in Settings).
-                        <strong>Discount</strong>: leave at 0 for no discount.
+                        Applied by the pricing engine on top of the price-table base.
+                        <strong>Markup</strong> is what you add to make the sell price;
+                        <strong>discount</strong> comes off after that. Leave either at 0
+                        to skip it.
                     </p>
 
                     <div class="form-row cols-2">

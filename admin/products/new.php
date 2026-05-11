@@ -9,32 +9,45 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$f = ['name' => ''];
+$f = [
+    'name'             => '',
+    'markup_percent'   => '0.00',
+    'discount_percent' => '0.00',
+];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name'] = trim((string) ($_POST['name'] ?? ''));
+    $f['name']             = trim((string) ($_POST['name'] ?? ''));
+    $f['markup_percent']   = trim((string) ($_POST['markup_percent']   ?? '0'));
+    $f['discount_percent'] = trim((string) ($_POST['discount_percent'] ?? '0'));
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Product name is too long (max 150 characters).';
+    } elseif (!is_numeric($f['markup_percent']) || (float) $f['markup_percent'] < 0) {
+        $error = 'Markup % must be a non-negative number.';
+    } elseif (!is_numeric($f['discount_percent']) || (float) $f['discount_percent'] < 0) {
+        $error = 'Discount % must be a non-negative number.';
     } else {
         try {
+            $pdo = db();
+            $pdo->beginTransaction();
+
             // option_label uses the schema default ('Fabric') — no longer
             // settable from the form. sort_order = MAX+1 so new products
             // append to the end of the list (drag-and-drop owns ordering).
             // active hard-coded to 1 — new products always start active;
             // flip via the edit page if you need to hide one.
-            $sortStmt = db()->prepare(
+            $sortStmt = $pdo->prepare(
                 'SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products WHERE client_id = ?'
             );
             $sortStmt->execute([$clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
-            $stmt = db()->prepare(
+            $stmt = $pdo->prepare(
                 'INSERT INTO products (client_id, name, sort_order, active)
                  VALUES (?, ?, ?, 1)'
             );
@@ -43,10 +56,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $f['name'],
                 $nextSort,
             ]);
+            $newProductId = (int) $pdo->lastInsertId();
+
+            // Markup row goes in straight away so the pricing engine has
+            // an explicit value for every product — no NULL fall-backs.
+            $pdo->prepare(
+                'INSERT INTO client_markups (client_id, product_id, markup_percent)
+                 VALUES (?, ?, ?)'
+            )->execute([$clientId, $newProductId, (float) $f['markup_percent']]);
+
+            // Discount only if the user actually entered one.
+            $dp = (float) $f['discount_percent'];
+            if ($dp > 0) {
+                $pdo->prepare(
+                    'INSERT INTO client_discounts (client_id, product_id, discount_percent)
+                     VALUES (?, ?, ?)'
+                )->execute([$clientId, $newProductId, $dp]);
+            }
+
+            $pdo->commit();
             $_SESSION['flash_success'] = 'Product "' . $f['name'] . '" added.';
             header('Location: /admin/products/index.php');
             exit;
         } catch (Throwable $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_product_client_name')) {
                 $error = 'A product with that name already exists.';
             } else {
@@ -102,6 +135,31 @@ $activeNav = 'products';
                                placeholder="e.g. Vertical Blinds">
                     </div>
                 </div>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Pricing
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                        Markup is added on top of the price-table base to get the sell
+                        price. Discount comes off after that. You can change these any
+                        time from the product Edit page.
+                    </p>
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label for="markup_percent">Markup %</label>
+                            <input id="markup_percent" name="markup_percent" type="number"
+                                   step="0.01" min="0"
+                                   value="<?= e((string) $f['markup_percent']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="discount_percent">Discount %</label>
+                            <input id="discount_percent" name="discount_percent" type="number"
+                                   step="0.01" min="0"
+                                   value="<?= e((string) $f['discount_percent']) ?>">
+                        </div>
+                    </div>
+                </fieldset>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add product</button>
