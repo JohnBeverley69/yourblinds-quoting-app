@@ -5,7 +5,7 @@ declare(strict_types=1);
  * AJAX endpoint for the calendar's drag-and-drop rescheduling.
  *
  * Two flows:
- *   - Drag from the Pending Scheduling tray onto a calendar date
+ *   - Drag from the Pending Fitting tray onto a calendar date
  *     → set appointment_date to that date.
  *   - Drag from one calendar date to another → set appointment_date.
  *   - Drag from a calendar date back to the tray (drop on the tray

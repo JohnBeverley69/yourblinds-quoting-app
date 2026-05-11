@@ -5,7 +5,7 @@ declare(strict_types=1);
  * AJAX endpoint — current calendar state for the live-refresh loop.
  *
  * Two payloads in one round-trip:
- *   pending  — appointments with NULL date (the Pending Scheduling tray)
+ *   pending  — appointments with NULL date (the Pending Fitting tray)
  *   grid     — scheduled appointments for ?month=YYYY-MM, grouped by date
  *
  * Powers the calendar page's auto-refresh so newly-accepted quotes,

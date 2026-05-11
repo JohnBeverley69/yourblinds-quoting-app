@@ -92,7 +92,7 @@ foreach ($stmt->fetchAll() as $row) {
     $byDate[$row['appointment_date']][] = $row;
 }
 
-// Pending Scheduling tray — appointments with NO date set yet, e.g.
+// Pending Fitting tray — appointments with NO date set yet, e.g.
 // auto-created on quote acceptance and waiting for the trade user to
 // drag them onto the right day. Always queried for the same tenant
 // scope as the main grid (and the same mine=1 filter — fitters see
@@ -315,13 +315,14 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         .cal-appt.status-cancelled { background: #dc2626; }
         .cal-appt.status-no_show   { background: #6b7280; }
 
-        /* Cards born from an accepted-quote drag (quote_id is set)
-           render in green so confirmed installations stand out from
-           plain manual bookings. Overrides the status-* colour
-           because it's a more specific signal — "this is work the
-           customer has signed off, schedule with confidence". */
-        .cal-appt.from-quote.status-booked,
-        .cal-appt.from-quote.status-completed { background: #16a34a; }
+        /* Cards born from an accepted-quote (quote_id is set) — a more
+           specific signal: "this is work the customer has signed off,
+           schedule with confidence". Purple so it doesn't clash with
+           the green Completed swatch in the legend. Once the
+           appointment is marked completed the .status-completed rule
+           still wins and the card turns green as expected (no .from-
+           quote override on completed). */
+        .cal-appt.from-quote.status-booked { background: #7c3aed; }
 
         /* ----- Tablet portrait & smaller: stack toolbar, slightly smaller cells. */
         @media (max-width: 900px) {
@@ -351,7 +352,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
         }
 
         /* ===========================================================
-           Pending Scheduling tray + drag-and-drop affordances.
+           Pending Fitting tray + drag-and-drop affordances.
            Pending appointments live above the calendar grid as
            draggable cards. Drop targets:
              - any calendar cell with a real date → schedules to that date
@@ -458,14 +459,14 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                 : '/calendar/index.php';
         ?>
 
-        <!-- Pending Scheduling tray. Appointments with no date set
+        <!-- Pending Fitting tray. Appointments with no date set
              (typically auto-created on quote acceptance) live here as
              draggable cards. Drop one onto a calendar cell to schedule
              it; drop a scheduled appointment back onto the tray to
              unschedule. -->
         <div class="pending-tray" id="pending-tray">
             <div class="pending-tray-head">
-                <h3>Pending Scheduling</h3>
+                <h3>Pending Fitting</h3>
                 <span class="pending-count" id="pending-count"><?= count($pendingAppts) ?></span>
                 <span class="pending-hint">Drag a card onto a date to schedule it.</span>
             </div>
@@ -512,6 +513,7 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
                 </div>
                 <div class="cal-legend" aria-label="Status colours">
                     <span><i style="background:#2563eb"></i> Booked</span>
+                    <span><i style="background:#7c3aed"></i> From quote</span>
                     <span><i style="background:#16a34a"></i> Completed</span>
                     <span><i style="background:#dc2626"></i> Cancelled</span>
                     <span><i style="background:#6b7280"></i> No-show</span>

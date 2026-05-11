@@ -62,7 +62,7 @@ try {
         $apptId = qb_create_appointment_from_quote($pdo, $quoteId);
         if ($apptId !== null) {
             $appointmentMsg = ' Installation appointment is in the calendar\'s'
-                            . ' "Pending Scheduling" tray — drag it onto the'
+                            . ' "Pending Fitting" tray — drag it onto the'
                             . ' right date and assign a fitter when ready.';
         }
     }

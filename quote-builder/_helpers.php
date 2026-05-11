@@ -204,7 +204,7 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         return (int) $existingId;
     }
 
-    // Land in the Pending Scheduling tray (NULL appointment_date) so
+    // Land in the Pending Fitting tray (NULL appointment_date) so
     // the trade user has to consciously place it on a real date —
     // dragging from the tray onto a calendar cell, or opening the
     // appointment to edit. Default time + duration are set so once
