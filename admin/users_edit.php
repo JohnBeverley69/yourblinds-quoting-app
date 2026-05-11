@@ -27,6 +27,34 @@ if (!$target) {
 }
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+
+// Priority for picking the "primary" role to write into client_users.role
+// when the user has more than one selected. Highest-privilege wins, so
+// existing requireAdmin() / role === 'admin' checks behave intuitively
+// for someone who's, say, admin AND fitter.
+$rolePriority = array_flip($validRoles);   // 'admin' => 0, 'readonly' => 6
+$pickPrimary = static function (array $roles) use ($rolePriority): string {
+    if (!$roles) return 'sales';
+    usort($roles, static fn ($a, $b)
+        => ($rolePriority[$a] ?? 99) <=> ($rolePriority[$b] ?? 99));
+    return $roles[0];
+};
+
+// Load the target user's currently-assigned roles from the junction.
+// Falls back to the single legacy role if the junction doesn't have any
+// rows yet (e.g. immediately after the migration before any save).
+$existingRoles = [];
+try {
+    $rs = db()->prepare('SELECT role FROM client_user_roles WHERE user_id = ?');
+    $rs->execute([$id]);
+    $existingRoles = $rs->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    // junction missing → silent fallback
+}
+if (!$existingRoles && !empty($target['role'])) {
+    $existingRoles = [(string) $target['role']];
+}
+
 $error      = null;
 $flashMsg   = $_SESSION['flash_success'] ?? null;
 unset($_SESSION['flash_success']);
@@ -38,7 +66,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $last  = trim((string) ($_POST['last_name']  ?? ''));
     $email = trim((string) ($_POST['email']      ?? ''));
     $uname = trim((string) ($_POST['username']   ?? ''));
-    $role  = (string) ($_POST['role'] ?? 'sales');
+    // Multi-role: roles[] is the checkbox group. Accept a legacy
+    // scalar `role` too so the form still works if anyone POSTs the
+    // old shape (e.g. for self-edits where the hidden role=admin
+    // input is still there).
+    $rolesRaw = $_POST['roles'] ?? null;
+    if (is_array($rolesRaw)) {
+        $rolesIn = array_values(array_unique(array_filter(
+            array_map('strval', $rolesRaw),
+            static fn ($r) => $r !== ''
+        )));
+    } else {
+        $rolesIn = isset($_POST['role']) && (string) $_POST['role'] !== ''
+            ? [(string) $_POST['role']]
+            : [];
+    }
+    // Validate every picked role is in the allowed set.
+    $rolesIn = array_values(array_intersect($rolesIn, $validRoles));
+    $role  = $pickPrimary($rolesIn);   // highest-privilege one
     $active = !empty($_POST['active']) ? 1 : 0;
     $newPassword = (string) ($_POST['password'] ?? '');
     $perms = [
@@ -61,14 +106,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'Name and email are required.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
-    } elseif (!in_array($role, $validRoles, true)) {
-        $error = 'Invalid role.';
+    } elseif (!$rolesIn) {
+        $error = 'Pick at least one role for this user.';
     } elseif ($newPassword !== '' && strlen($newPassword) < 8) {
         $error = 'New password must be at least 8 characters (or leave blank to keep the current one).';
     } elseif ($id === $myUserId && $active === 0) {
         $error = 'You cannot deactivate your own account.';
-    } elseif ($id === $myUserId && $role !== 'admin') {
-        $error = 'You cannot remove admin role from your own account.';
+    } elseif ($id === $myUserId && !in_array('admin', $rolesIn, true)) {
+        $error = 'You cannot remove admin from your own account.';
     } else {
         try {
             $sql = 'UPDATE client_users
@@ -114,11 +159,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $params[] = $id;
             $params[] = $clientId;
 
-            db()->prepare($sql)->execute($params);
+            $pdo = db();
+            $pdo->beginTransaction();
+            $pdo->prepare($sql)->execute($params);
+
+            // Sync the junction: wipe + reinsert. Simpler and faster
+            // than diffing, and the FK to client_users + CASCADE on
+            // delete makes it safe.
+            $pdo->prepare('DELETE FROM client_user_roles WHERE user_id = ?')
+                ->execute([$id]);
+            $insRole = $pdo->prepare(
+                'INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)'
+            );
+            foreach ($rolesIn as $r) {
+                $insRole->execute([$id, $r]);
+            }
+            $pdo->commit();
+
+            // If we just edited our own roles, refresh the live session
+            // so the change takes effect without needing a log-out.
+            if ($id === $myUserId) {
+                $_SESSION['role']  = $role;
+                $_SESSION['roles'] = $rolesIn;
+            }
+
             $_SESSION['flash_success'] = 'User updated.';
             header('Location: /admin/users_edit.php?id=' . $id);
             exit;
         } catch (Throwable $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_client_user_email')) {
                 $error = 'That email address is already in use.';
             } elseif (str_contains($e->getMessage(), 'uniq_client_user_username')) {
@@ -139,6 +208,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'role'       => $role,
         'active'     => $active,
     ] + $perms + $home);
+    // Reflect the user's typed checkbox selection on re-render too.
+    $existingRoles = $rolesIn;
 }
 
 // Postcode-lookup feature flag (gates the optional Find-by-postcode widget).
@@ -217,16 +288,40 @@ $activeNav = 'users';
                                autocomplete="new-password" placeholder="Leave blank to keep current">
                     </div>
                     <div class="form-group">
-                        <label for="role">Role</label>
-                        <select id="role" name="role" <?= (int) $target['id'] === $myUserId ? 'disabled' : '' ?>>
-                            <?php foreach ($validRoles as $r): ?>
-                                <option value="<?= e($r) ?>" <?= ((string) $target['role']) === $r ? 'selected' : '' ?>><?= e(ucfirst($r)) ?></option>
+                        <label>Roles</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;
+                                    padding:0.5rem 0.625rem; border:1px solid #d1d5db;
+                                    border-radius:8px; background:#fff;
+                                    font-size:0.9375rem;">
+                            <?php $isSelf = (int) $target['id'] === $myUserId; ?>
+                            <?php foreach ($validRoles as $r):
+                                $checked = in_array($r, $existingRoles, true);
+                                // For self-edits, force admin to stay
+                                // ticked + disabled so the user can't
+                                // lock themselves out.
+                                $forcedSelf = $isSelf && $r === 'admin';
+                            ?>
+                                <label style="display:inline-flex; align-items:center;
+                                              gap:0.4rem; font-weight:400;">
+                                    <input type="checkbox" name="roles[]"
+                                           value="<?= e($r) ?>"
+                                           <?= $checked || $forcedSelf ? 'checked' : '' ?>
+                                           <?= $forcedSelf ? 'disabled' : '' ?>>
+                                    <?= e(ucfirst($r)) ?>
+                                </label>
+                                <?php if ($forcedSelf): ?>
+                                    <input type="hidden" name="roles[]" value="admin">
+                                <?php endif; ?>
                             <?php endforeach; ?>
-                        </select>
-                        <?php if ((int) $target['id'] === $myUserId): ?>
-                            <input type="hidden" name="role" value="admin">
-                            <p style="font-size:.8125rem; color:#6b7280; margin:.4rem 0 0;">You cannot change your own role.</p>
-                        <?php endif; ?>
+                        </div>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            Tick every role this person fills — e.g. someone who fits
+                            and also closes sales should have both ticked. The most
+                            privileged role drives admin-only access.
+                            <?php if ($isSelf): ?>
+                                You can't untick your own admin.
+                            <?php endif; ?>
+                        </p>
                     </div>
                 </div>
 

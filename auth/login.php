@@ -53,10 +53,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['user_id']        = (int) $user['id'];
             $_SESSION['client_id']      = (int) $user['client_id'];
-            $_SESSION['role']           = (string) $user['role'];
+            $_SESSION['role']           = (string) $user['role'];   // primary
             $_SESSION['company_name']   = (string) $user['company_name'];
             $_SESSION['full_name']      = (string) $user['full_name'];
             $_SESSION['is_super_admin'] = (int) ($user['is_super_admin'] ?? 0) === 1;
+
+            // Load the user's full role set into the session. Falls back
+            // gracefully if migrate_user_multi_roles.php hasn't been run
+            // (table missing) — in that case we keep the legacy
+            // single-role behaviour.
+            $rolesArr = [(string) $user['role']];
+            try {
+                $rs = db()->prepare(
+                    'SELECT role FROM client_user_roles WHERE user_id = ?'
+                );
+                $rs->execute([(int) $user['id']]);
+                $fetched = $rs->fetchAll(PDO::FETCH_COLUMN);
+                if ($fetched) {
+                    // Primary first, then the rest. Deduped.
+                    $rolesArr = array_values(array_unique(array_merge(
+                        [(string) $user['role']],
+                        array_map('strval', $fetched)
+                    )));
+                }
+            } catch (Throwable $e) {
+                // junction table missing → stick with single-role.
+            }
+            $_SESSION['roles'] = $rolesArr;
 
             // Best-effort last-login update; don't fail login if this errors.
             try {

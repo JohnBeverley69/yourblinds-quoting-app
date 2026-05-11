@@ -28,6 +28,13 @@ function current_user(): ?array
         'user_id'        => (int) $_SESSION['user_id'],
         'client_id'      => (int) $_SESSION['client_id'],
         'role'           => (string) $_SESSION['role'],
+        // All roles assigned to this user, primary first. Reads from
+        // session if the migration has run; falls back to a one-element
+        // array containing the primary role for older sessions or
+        // databases that pre-date migrate_user_multi_roles.php.
+        'roles'          => isset($_SESSION['roles']) && is_array($_SESSION['roles'])
+            ? array_values(array_map('strval', $_SESSION['roles']))
+            : [(string) $_SESSION['role']],
         'company_name'   => (string) ($_SESSION['company_name'] ?? ''),
         'full_name'      => (string) ($_SESSION['full_name'] ?? ''),
         'is_super_admin' => (bool) ($_SESSION['is_super_admin'] ?? false),
@@ -37,6 +44,20 @@ function current_user(): ?array
 function is_super_admin(): bool
 {
     return (bool) ($_SESSION['is_super_admin'] ?? false);
+}
+
+/**
+ * True if the logged-in user has the given role assigned. Checks the
+ * full multi-role set, not just the primary. Use this in preference
+ * to $user['role'] === 'X' for any new code.
+ */
+function current_user_has_role(string $role): bool
+{
+    $roles = $_SESSION['roles'] ?? null;
+    if (is_array($roles)) {
+        return in_array($role, $roles, true);
+    }
+    return (string) ($_SESSION['role'] ?? '') === $role;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +77,12 @@ function requireLogin(): void
 function requireRole(array $roles): void
 {
     requireLogin();
-    if (!in_array($_SESSION['role'] ?? '', $roles, true)) {
+    // Users can have multiple roles. Pass if ANY of the user's assigned
+    // roles overlaps with the required set. Falls back to the legacy
+    // single-role session key for sessions established before the
+    // multi-role migration ran.
+    $userRoles = $_SESSION['roles'] ?? [(string) ($_SESSION['role'] ?? '')];
+    if (!array_intersect($userRoles, $roles)) {
         http_response_code(403);
         header('Content-Type: text/html; charset=utf-8');
         echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'

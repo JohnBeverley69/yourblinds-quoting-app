@@ -15,13 +15,20 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+$rolePriority = array_flip($validRoles);
+$pickPrimary = static function (array $roles) use ($rolePriority): string {
+    if (!$roles) return 'sales';
+    usort($roles, static fn ($a, $b)
+        => ($rolePriority[$a] ?? 99) <=> ($rolePriority[$b] ?? 99));
+    return $roles[0];
+};
 
 $form = [
     'first_name' => '',
     'last_name'  => '',
     'username'   => '',
     'email'      => '',
-    'role'       => 'sales',
+    'roles'      => ['sales'],
     'can_create_quotes'          => 1,
     'can_create_orders'          => 0,
     'can_view_all_customer_jobs' => 0,
@@ -32,13 +39,21 @@ $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
-    foreach (['first_name','last_name','username','email','role'] as $f) {
+    foreach (['first_name','last_name','username','email'] as $f) {
         $form[$f] = trim((string) ($_POST[$f] ?? ''));
     }
     foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
     $password = (string) ($_POST['password'] ?? '');
+
+    // Multi-role checkbox group. Filter to known roles, dedupe.
+    $rolesIn = is_array($_POST['roles'] ?? null) ? $_POST['roles'] : [];
+    $rolesIn = array_values(array_unique(array_intersect(
+        array_map('strval', $rolesIn), $validRoles
+    )));
+    $form['roles'] = $rolesIn ?: ['sales'];
+    $primaryRole   = $pickPrimary($rolesIn);
 
     $fullName = trim($form['first_name'] . ' ' . $form['last_name']);
     if ($fullName === '' || $form['email'] === '') {
@@ -47,11 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'Please enter a valid email address.';
     } elseif (strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
-    } elseif (!in_array($form['role'], $validRoles, true)) {
-        $error = 'Invalid role.';
+    } elseif (!$rolesIn) {
+        $error = 'Pick at least one role.';
     } else {
+        $pdo = db();
+        $pdo->beginTransaction();
         try {
-            $stmt = db()->prepare(
+            $stmt = $pdo->prepare(
                 'INSERT INTO client_users
                   (client_id, username, full_name, first_name, last_name,
                    email, password_hash, role,
@@ -67,16 +84,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $form['last_name']  !== '' ? $form['last_name']  : null,
                 $form['email'],
                 password_hash($password, PASSWORD_DEFAULT),
-                $form['role'],
+                $primaryRole,
                 $form['can_create_quotes'],
                 $form['can_create_orders'],
                 $form['can_view_all_customer_jobs'],
                 $form['can_view_costs'],
             ]);
+            $newUserId = (int) $pdo->lastInsertId();
+            $insRole = $pdo->prepare(
+                'INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)'
+            );
+            foreach ($rolesIn as $r) {
+                $insRole->execute([$newUserId, $r]);
+            }
+            $pdo->commit();
             $_SESSION['flash_success'] = 'User added.';
             header('Location: /admin/users.php');
             exit;
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             if (str_contains($e->getMessage(), 'uniq_client_user_email')) {
                 $error = 'That email address is already in use.';
             } elseif (str_contains($e->getMessage(), 'uniq_client_user_username')) {
@@ -96,6 +122,27 @@ $users = db()->prepare(
 );
 $users->execute([$clientId]);
 $users = $users->fetchAll();
+
+// Pull each user's full role set from the junction in one query and
+// fold into a [user_id => [role, ...]] map for the list rendering.
+// Falls back gracefully if the table isn't there yet.
+$rolesByUser = [];
+if ($users) {
+    try {
+        $ids = array_map(static fn ($u) => (int) $u['id'], $users);
+        $ph  = implode(',', array_fill(0, count($ids), '?'));
+        $rs  = db()->prepare(
+            "SELECT user_id, role FROM client_user_roles WHERE user_id IN ($ph)"
+        );
+        $rs->execute($ids);
+        foreach ($rs->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $rolesByUser[(int) $r['user_id']][] = (string) $r['role'];
+        }
+    } catch (Throwable $e) {
+        // table missing → leave $rolesByUser empty; we'll fall back
+        // to displaying the legacy single role per user in the loop.
+    }
+}
 $activeNav = 'users';
 ?><!doctype html>
 <html lang="en">
@@ -168,12 +215,20 @@ $activeNav = 'users';
                                autocomplete="new-password">
                     </div>
                     <div class="form-group">
-                        <label for="role">Role</label>
-                        <select id="role" name="role">
+                        <label>Roles</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;
+                                    padding:0.5rem 0.625rem; border:1px solid #d1d5db;
+                                    border-radius:8px; background:#fff;
+                                    font-size:0.9375rem;">
                             <?php foreach ($validRoles as $r): ?>
-                                <option value="<?= e($r) ?>" <?= $form['role'] === $r ? 'selected' : '' ?>><?= e(ucfirst($r)) ?></option>
+                                <label style="display:inline-flex; align-items:center;
+                                              gap:0.4rem; font-weight:400;">
+                                    <input type="checkbox" name="roles[]" value="<?= e($r) ?>"
+                                           <?= in_array($r, $form['roles'], true) ? 'checked' : '' ?>>
+                                    <?= e(ucfirst($r)) ?>
+                                </label>
                             <?php endforeach; ?>
-                        </select>
+                        </div>
                     </div>
                 </div>
 
@@ -220,7 +275,7 @@ $activeNav = 'users';
                             <tr>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
+                                <th>Roles</th>
                                 <th>Status</th>
                                 <th>Last login</th>
                                 <th></th>
@@ -236,7 +291,18 @@ $activeNav = 'users';
                                         <?php endif; ?>
                                     </td>
                                     <td><?= e((string) $u['email']) ?></td>
-                                    <td style="text-transform:capitalize;"><?= e((string) $u['role']) ?></td>
+                                    <td style="text-transform:capitalize;">
+                                        <?php
+                                            // Show every role from the
+                                            // junction. Falls back to the
+                                            // legacy single role column if
+                                            // the junction is empty (e.g.
+                                            // before the migration).
+                                            $rs = $rolesByUser[(int) $u['id']]
+                                                ?? [(string) $u['role']];
+                                            echo e(implode(', ', $rs));
+                                        ?>
+                                    </td>
                                     <td>
                                         <?php if ((int) $u['active'] === 1): ?>
                                             <span class="badge badge-accepted">active</span>
