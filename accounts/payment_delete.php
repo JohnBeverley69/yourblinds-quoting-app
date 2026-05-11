@@ -26,7 +26,9 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 
 $id       = (int) ($_POST['id']        ?? 0);
-$returnTo = (string) ($_POST['return_to'] ?? '/accounts/index.php');
+$returnTo = safe_local_redirect(
+    (string) ($_POST['return_to'] ?? ''), '/accounts/index.php'
+);
 
 if ($id <= 0) {
     $_SESSION['flash_error'] = 'No payment id supplied.';

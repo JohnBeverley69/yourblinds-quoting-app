@@ -387,7 +387,17 @@ function pe_restore_file(PDO $pdo, string $path): array
     $ran     = 0;
     $skipped = 0;
 
+    // Wrap the whole restore in a transaction so a SQL file that
+    // errors halfway through rolls back to the pre-restore state.
+    // The auto-snapshot taken just before this call is the last-resort
+    // safety net; the transaction is the first-resort one. NOTE:
+    // statements that DDL the schema (DROP/CREATE TABLE, ALTER) cause
+    // MySQL to implicitly commit any open transaction — so for the
+    // backup files we generate (which are heavy on DROP+CREATE) the
+    // transaction is effectively bracket-only. Still useful for the
+    // INSERT-heavy restore patterns and for clarity of intent.
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    $pdo->beginTransaction();
     try {
         foreach ($stmts as $s) {
             $trim = trim($s);
@@ -395,6 +405,10 @@ function pe_restore_file(PDO $pdo, string $path): array
             $pdo->exec($trim);
             $ran++;
         }
+        if ($pdo->inTransaction()) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
     } finally {
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     }

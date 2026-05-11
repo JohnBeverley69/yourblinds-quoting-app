@@ -127,6 +127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // in the DB for back-compat but no longer written from the UI.
         $prefix     = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
         $vat        = (float) ($_POST['vat_percent'] ?? 20);
+        // VAT bounded like the deposit % — accept 0–100 only.
+        if ($vat < 0)   $vat = 0;
+        if ($vat > 100) $vat = 100;
         $depMode    = (string) ($_POST['default_deposit_mode'] ?? 'percent');
         if (!in_array($depMode, ['percent', 'flat'], true)) {
             $depMode = 'percent';
@@ -140,28 +143,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $replyTo    = trim((string) ($_POST['reply_to_email']  ?? '')) ?: null;
         $footer     = trim((string) ($_POST['quote_footer']    ?? '')) ?: null;
 
-        $stmt = db()->prepare(
-            'INSERT INTO client_settings
-              (client_id, quote_prefix, vat_percent,
-               default_deposit_mode, default_deposit_percent, default_deposit_flat,
-               email_from_name, reply_to_email, quote_footer)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-              quote_prefix            = VALUES(quote_prefix),
-              vat_percent             = VALUES(vat_percent),
-              default_deposit_mode    = VALUES(default_deposit_mode),
-              default_deposit_percent = VALUES(default_deposit_percent),
-              default_deposit_flat    = VALUES(default_deposit_flat),
-              email_from_name         = VALUES(email_from_name),
-              reply_to_email          = VALUES(reply_to_email),
-              quote_footer            = VALUES(quote_footer)'
-        );
-        $stmt->execute([
-            $clientId, $prefix ?: null, $vat,
-            $depMode, $depPct, $depFlat,
-            $emailFrom, $replyTo, $footer,
-        ]);
-        $_SESSION['flash_success'] = 'Quote settings saved.';
+        // Two-tier save: try the full multi-mode-deposit shape first.
+        // If the deposit-mode columns aren't there yet (admin uploaded
+        // the new settings.php before running migrate_deposit_flat_mode.php),
+        // fall back to writing the percent-only column. Anything else
+        // wrong bubbles up to the user as a flash error rather than
+        // 500ing the page.
+        try {
+            try {
+                $stmt = db()->prepare(
+                    'INSERT INTO client_settings
+                      (client_id, quote_prefix, vat_percent,
+                       default_deposit_mode, default_deposit_percent, default_deposit_flat,
+                       email_from_name, reply_to_email, quote_footer)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                      quote_prefix            = VALUES(quote_prefix),
+                      vat_percent             = VALUES(vat_percent),
+                      default_deposit_mode    = VALUES(default_deposit_mode),
+                      default_deposit_percent = VALUES(default_deposit_percent),
+                      default_deposit_flat    = VALUES(default_deposit_flat),
+                      email_from_name         = VALUES(email_from_name),
+                      reply_to_email          = VALUES(reply_to_email),
+                      quote_footer            = VALUES(quote_footer)'
+                );
+                $stmt->execute([
+                    $clientId, $prefix ?: null, $vat,
+                    $depMode, $depPct, $depFlat,
+                    $emailFrom, $replyTo, $footer,
+                ]);
+            } catch (PDOException $e) {
+                // SQLSTATE 42S22 = column not found (MySQL 1054).
+                // Older DB without the flat-mode columns: drop those
+                // from the INSERT and keep percent only.
+                if ($e->getCode() !== '42S22') throw $e;
+                $stmt = db()->prepare(
+                    'INSERT INTO client_settings
+                      (client_id, quote_prefix, vat_percent,
+                       default_deposit_percent,
+                       email_from_name, reply_to_email, quote_footer)
+                      VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                      quote_prefix            = VALUES(quote_prefix),
+                      vat_percent             = VALUES(vat_percent),
+                      default_deposit_percent = VALUES(default_deposit_percent),
+                      email_from_name         = VALUES(email_from_name),
+                      reply_to_email          = VALUES(reply_to_email),
+                      quote_footer            = VALUES(quote_footer)'
+                );
+                $stmt->execute([
+                    $clientId, $prefix ?: null, $vat, $depPct,
+                    $emailFrom, $replyTo, $footer,
+                ]);
+                $_SESSION['flash_error'] =
+                    'Settings saved, but the deposit-mode columns are missing. '
+                  . 'Run migrate_deposit_flat_mode.php to unlock the flat-amount option.';
+                header('Location: /admin/settings.php');
+                exit;
+            }
+            $_SESSION['flash_success'] = 'Quote settings saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save settings: ' . $e->getMessage();
+        }
         header('Location: /admin/settings.php');
         exit;
     }

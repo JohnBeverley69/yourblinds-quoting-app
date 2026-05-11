@@ -57,20 +57,70 @@ if (!$ids) {
     exit;
 }
 
-// Parametrised IN. Tenant-scoped via the trailing client_id placeholder
-// so the user can never accidentally reach another tenant's quotes
-// even with a crafted form post.
-$ph     = implode(',', array_fill(0, count($ids), '?'));
-$stmt   = db()->prepare(
-    "DELETE FROM quotes WHERE id IN ($ph) AND client_id = ?"
-);
-$params = array_merge($ids, [$clientId]);
-$stmt->execute($params);
-$deleted = $stmt->rowCount();
+$pdo = db();
+$ph  = implode(',', array_fill(0, count($ids), '?'));
 
-$_SESSION['flash_success'] =
-    $deleted === 1
-        ? '1 quote deleted.'
-        : "$deleted quotes deleted.";
+// Refuse to silently bin quotes that have payment rows attached —
+// payments.quote_id is ON DELETE SET NULL, so the rows would become
+// orphans in /accounts (linked to no order). Surface them to the
+// user so they can decide: delete the payments first, OR keep the
+// quote for the audit trail.
+//
+// Defensive: if the payments table doesn't exist yet (migration not
+// run), skip this check entirely. The DELETE below works either way.
+$blocked = [];
+try {
+    $payStmt = $pdo->prepare(
+        "SELECT q.id, q.quote_number, COUNT(p.id) AS n_payments
+           FROM quotes q
+           JOIN payments p ON p.quote_id = q.id
+          WHERE q.id IN ($ph) AND q.client_id = ?
+       GROUP BY q.id, q.quote_number"
+    );
+    $payStmt->execute(array_merge($ids, [$clientId]));
+    foreach ($payStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $blocked[(int) $r['id']] = (string) $r['quote_number'];
+    }
+} catch (Throwable $e) {
+    // payments table missing — skip the check, proceed with all.
+}
+
+$deletable = array_values(array_diff(
+    array_map('intval', $ids), array_keys($blocked)
+));
+
+$deleted = 0;
+if ($deletable) {
+    $delPh  = implode(',', array_fill(0, count($deletable), '?'));
+    $stmt   = $pdo->prepare(
+        "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"
+    );
+    $stmt->execute(array_merge($deletable, [$clientId]));
+    $deleted = $stmt->rowCount();
+}
+
+$msgs = [];
+if ($deleted > 0) {
+    $msgs[] = ($deleted === 1 ? '1 quote' : "$deleted quotes") . ' deleted.';
+}
+if ($blocked) {
+    $list = implode(', ', $blocked);
+    $msgs[] = (count($blocked) === 1
+        ? '1 quote was kept because it has payment(s) recorded against it: '
+        : count($blocked) . ' quotes were kept because they have payments recorded against them: ')
+        . $list
+        . '. Delete the payments first if you really want to remove these.';
+}
+
+if (!$msgs) {
+    $_SESSION['flash_error'] = 'No quotes deleted.';
+} elseif ($blocked) {
+    // Use error styling so the "kept" message is conspicuous; the
+    // success bit is included in the same line so it doesn't get lost.
+    $_SESSION['flash_error'] = implode(' ', $msgs);
+} else {
+    $_SESSION['flash_success'] = implode(' ', $msgs);
+}
+
 header('Location: ' . $back);
 exit;

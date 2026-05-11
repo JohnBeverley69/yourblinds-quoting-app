@@ -77,8 +77,12 @@ try {
                 );
                 $dpStmt->execute([$clientId]);
                 $dp = $dpStmt->fetch() ?: [];
-            } catch (Throwable $e) {
+            } catch (PDOException $e) {
+                // SQLSTATE 42S22 = column not found (MySQL 1054).
                 // Flat-mode columns missing → fall back to percent-only.
+                // Anything else (real DB error) bubbles up to the
+                // outer catch below where it's properly handled.
+                if ($e->getCode() !== '42S22') throw $e;
                 $dpStmt = $pdo->prepare(
                     'SELECT default_deposit_percent
                        FROM client_settings WHERE client_id = ? LIMIT 1'
@@ -99,13 +103,14 @@ try {
             $pdo->prepare(
                 'UPDATE quotes SET deposit_amount = ? WHERE id = ?'
             )->execute([$depositAmt, $quoteId]);
-        } catch (Throwable $e) {
-            // deposit_amount column missing OR another deposit-table
-            // problem — just skip the seed quietly so the accept
-            // action still succeeds. The trade user will see the
-            // status change to 'accepted' and can deal with the
-            // deposit once migrations are deployed.
-            error_log('Deposit auto-seed skipped on accept: ' . $e->getMessage());
+        } catch (PDOException $e) {
+            // deposit_amount column missing → skip seed quietly. Any
+            // other PDOException bubbles up to the outer transaction
+            // handler. Tightened from a blanket Throwable catch so
+            // genuine errors (connection drop, etc.) aren't hidden.
+            if ($e->getCode() !== '42S22') throw $e;
+            error_log('Deposit auto-seed skipped on accept (column missing): '
+                . $e->getMessage());
         }
     }
 

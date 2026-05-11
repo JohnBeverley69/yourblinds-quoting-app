@@ -45,7 +45,9 @@ $dateRaw   = trim((string) ($_POST['received_at'] ?? ''));
 $method    = (string) ($_POST['method']      ?? 'bank_transfer');
 $reference = trim((string) ($_POST['reference']   ?? '')) ?: null;
 $notes     = trim((string) ($_POST['notes']       ?? '')) ?: null;
-$returnTo  = (string) ($_POST['return_to']        ?? '/accounts/index.php');
+$returnTo  = safe_local_redirect(
+    (string) ($_POST['return_to'] ?? ''), '/accounts/index.php'
+);
 
 // Validation.
 $error = null;

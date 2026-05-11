@@ -47,6 +47,26 @@ function is_super_admin(): bool
 }
 
 /**
+ * Sanitise a return-to URL coming from POST. Accepts ONLY same-origin
+ * absolute paths — anything starting with a protocol or "//" (which
+ * the browser treats as protocol-relative, so navigating to it leaves
+ * the site) is rejected. Used by handlers that take a return_to
+ * field from user input and pass it to a Location: header.
+ *
+ * Returns the input if safe, otherwise the supplied fallback.
+ */
+function safe_local_redirect(string $url, string $fallback = '/calendar/index.php'): string
+{
+    if ($url === '')                    return $fallback;
+    if ($url[0] !== '/')                return $fallback;   // must be absolute path
+    if (strncmp($url, '//', 2) === 0)   return $fallback;   // protocol-relative — escapes origin
+    if (strncmp($url, '/\\', 2) === 0)  return $fallback;   // backslash bypass (some old browsers)
+    // Defensive: anything containing a "\r" or "\n" is a header-injection attempt.
+    if (strpbrk($url, "\r\n") !== false) return $fallback;
+    return $url;
+}
+
+/**
  * True if the logged-in user has the given role assigned. Checks the
  * full multi-role set, not just the primary. Use this in preference
  * to $user['role'] === 'X' for any new code.
