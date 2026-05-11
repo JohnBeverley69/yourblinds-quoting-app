@@ -181,6 +181,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
            drifting around the grid. */
         .extras-grid .extra-cell {
             display: flex; flex-direction: column; gap: 0.5rem;
+            background: rgba(243, 244, 246, 0.5);   /* light gray @ 50% */
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.75rem 0.875rem;
+        }
+        .extras-grid .extra-cell select {
+            width: 100%;
+            padding: 0.4375rem 0.625rem;
+            font: inherit;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-sizing: border-box;
         }
         .extras-grid .extra-cell .extra-child {
             margin-left: 0.625rem;
