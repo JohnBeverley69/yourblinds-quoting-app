@@ -259,16 +259,24 @@ foreach (
         $ops[] = "$table: unique uniq_client_product_system already present";
     }
 
-    // ---- 5. FK system_id → product_systems(id). With types matched at
-    //        step 1, this should now succeed cleanly.
+    // ---- 5. FK system_id → product_systems(id).
+    //
+    //        Note on referential actions: InnoDB forbids cascading
+    //        actions (CASCADE / SET NULL / SET DEFAULT) on a column
+    //        that's referenced by a STORED generated column — and
+    //        system_id_key is exactly that. So we use NO ACTION on
+    //        both sides. The systems-delete handler now manually
+    //        wipes a system's markup/discount rows before deleting
+    //        the system itself, restoring the cascade behaviour at
+    //        the application layer.
     if (!fk_exists($pdo, $table, $meta['fk_name'])) {
         $pdo->exec(
             "ALTER TABLE $table
                 ADD CONSTRAINT {$meta['fk_name']}
                     FOREIGN KEY (system_id) REFERENCES product_systems(id)
-                    ON DELETE CASCADE ON UPDATE CASCADE"
+                    ON DELETE NO ACTION ON UPDATE NO ACTION"
         );
-        $ops[] = "$table: added FK {$meta['fk_name']}";
+        $ops[] = "$table: added FK {$meta['fk_name']} (NO ACTION)";
     } else {
         $ops[] = "$table: FK {$meta['fk_name']} already present";
     }
