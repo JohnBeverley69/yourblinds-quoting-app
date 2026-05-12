@@ -39,8 +39,26 @@ $canSeeAllJobs    = $isAdmin || $_perms['can_view_all_customer_jobs'];
 // installing to verify details and take balance payments at the door.
 // The Orders page row-filters down to "yours" automatically when the
 // user lacks view-all, so the menu link isn't lying.
+// "Staff" = anyone working the back-office side of jobs (creates
+// quotes, processes orders, or has dispatcher visibility). Used to
+// gate sidebar entries that aren't part of a pure fitter's daily
+// flow.
+//
+// Fitters reach their orders via the in-context workflow:
+//   My Schedule → tap appointment → tap "Open order" → Take payment.
+// They don't navigate to a list-view of Customers / Orders / Accounts,
+// so those entries are noise on their sidebar. Hiding them simplifies
+// the menu to the screens they actually use.
+//
+// Page-level access on /orders/, /accounts/, /customer-manager/ is
+// still permissive (row-filtered to their assignments) so the
+// in-context workflow + any direct links keep working.
+$isStaff = $canCreateQuotes || $canCreateOrders || $canSeeAllJobs;
+
 $canSeeQuoteHistory = $canCreateQuotes || $canSeeAllJobs;
-$canSeeOrders       = true;   // page filters per user; never an empty menu noise problem
+$canSeeOrders       = $isStaff;
+$canSeeCustomers    = $isStaff;
+$canSeeAccountsLink = $isStaff;   // separately AND-ed with the feature flag below
 
 // Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
 // missing, hide the entries that would 500 on click. The check is a single
@@ -72,12 +90,11 @@ $navLinks = [
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
     'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
-    // Accounts is the paid add-on. Visible to ALL users (not just
-    // admins) when the tenant has the feature on — fitters need it
-    // to take balance payments at the door. The page row-filters
-    // their view to just the orders they're assigned to.
-    'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature],
-    'customers'     => ['/customer-manager/index.php', 'Customers',     true],
+    // Accounts: paid add-on, AND restricted to staff (not pure
+    // fitters — fitters take payment from the order page itself,
+    // they don't need the listing).
+    'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+    'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
