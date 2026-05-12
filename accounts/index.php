@@ -293,6 +293,84 @@ $activeNav = 'accounts';
             padding: 2rem 1rem; text-align: center;
             color: #6b7280; font-size: 0.9375rem;
         }
+
+        /* Payment history: grouped by order (or by customer for
+           standalone payments). One collapsible card per group so a
+           single order with 5 part-payments doesn't blow out the
+           list. Click the summary row to expand and see individual
+           payments + their delete buttons. */
+        .payment-groups {
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+        .pg-card {
+            border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; overflow: hidden;
+        }
+        .pg-card[open] { border-color: #1f3b5b; }
+        .pg-summary {
+            list-style: none;
+            cursor: pointer;
+            display: grid;
+            grid-template-columns: 1.5fr auto 1fr 1fr auto;
+            gap: 0.5rem 1rem;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            font-size: 0.9375rem;
+        }
+        .pg-summary::-webkit-details-marker { display: none; }
+        .pg-summary::before {
+            content: '▸';
+            color: #9ca3af;
+            font-weight: 700;
+            margin-right: -0.5rem;
+        }
+        .pg-card[open] .pg-summary::before { content: '▾'; color: #1f3b5b; }
+
+        .pg-summary .pg-customer { font-weight: 600; color: #111827; }
+        .pg-summary .pg-quote-link {
+            font-weight: 600; color: #1f3b5b; text-decoration: none;
+            font-size: 0.875rem;
+            padding: 0.125rem 0.5rem;
+            background: #eef2f7; border-radius: 4px;
+        }
+        .pg-summary .pg-quote-link:hover { background: #dbe4f0; }
+        .pg-summary .pg-standalone {
+            color: #9ca3af; font-size: 0.8125rem; font-style: italic;
+        }
+        .pg-summary .pg-count {
+            color: #6b7280; font-size: 0.8125rem;
+        }
+        .pg-summary .pg-latest {
+            color: #6b7280; font-size: 0.8125rem;
+        }
+        .pg-summary .pg-total {
+            font-weight: 700; color: #065f46;
+            font-variant-numeric: tabular-nums;
+            text-align: right; min-width: 5rem;
+        }
+        .pg-detail {
+            border-top: 1px solid #e5e7eb; background: #fafafa;
+            padding: 0.5rem 1rem 0.75rem;
+        }
+        .pg-detail .table { font-size: 0.875rem; }
+
+        /* On narrower screens, stack the summary fields vertically. */
+        @media (max-width: 700px) {
+            .pg-summary {
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "customer  quote"
+                    "latest    count"
+                    "total     total";
+                row-gap: 0.25rem;
+            }
+            .pg-summary .pg-customer  { grid-area: customer; }
+            .pg-summary .pg-quote-link,
+            .pg-summary .pg-standalone { grid-area: quote; justify-self: end; }
+            .pg-summary .pg-latest    { grid-area: latest; }
+            .pg-summary .pg-count     { grid-area: count; justify-self: end; }
+            .pg-summary .pg-total     { grid-area: total; font-size: 1.0625rem; }
+        }
     </style>
 </head>
 <body>
@@ -496,60 +574,106 @@ $activeNav = 'accounts';
                     <?php endif; ?>
                 </div>
             <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Customer</th>
-                                <th>Quote #</th>
-                                <th>Method</th>
-                                <th>Reference</th>
-                                <th class="num">Amount</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($payments as $p): ?>
-                                <tr>
-                                    <td><?= e(date('j M Y', strtotime((string) $p['received_at']))) ?></td>
-                                    <td><?= e((string) ($p['customer_name'] ?? '—')) ?></td>
-                                    <td>
-                                        <?php if (!empty($p['quote_number'])): ?>
-                                            <a href="/quote-builder/edit.php?id=<?= (int) $p['quote_id'] ?>"
-                                               style="color:#1f3b5b;font-weight:600;text-decoration:none">
-                                                <?= e((string) $p['quote_number']) ?>
-                                            </a>
-                                        <?php else: ?>
-                                            <span style="color:#9ca3af">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <span class="method-pill">
-                                            <?= e(acct_method_label((string) $p['method'])) ?>
-                                        </span>
-                                    </td>
-                                    <td><?= e((string) ($p['reference'] ?? '')) ?></td>
-                                    <td class="num">
-                                        <?= e(acct_fmt_money((float) $p['amount'])) ?>
-                                    </td>
-                                    <td style="white-space:nowrap">
-                                        <form method="post" action="/accounts/payment_delete.php"
-                                              style="display:inline;margin:0"
-                                              data-confirm="Delete this payment? (Won't undo the bank entry — adjust on your bank reconciliation if needed.)">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                            <input type="hidden" name="return_to" value="/accounts/index.php">
-                                            <button type="submit" class="btn btn-sm btn-danger"
-                                                    style="padding:0.1875rem 0.5rem;font-size:0.75rem">
-                                                ×
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <?php
+                    // Group payments so multiple part-payments on the
+                    // same order roll up into a single collapsible
+                    // card. Standalone payments (no quote_id) get their
+                    // own group keyed by 'standalone:<customer_id>' so
+                    // they don't all pile together.
+                    $groups = [];
+                    foreach ($payments as $p) {
+                        $qid = (int) ($p['quote_id'] ?? 0);
+                        $key = $qid > 0
+                            ? 'q:' . $qid
+                            : 's:' . (int) ($p['customer_id'] ?? 0);
+                        if (!isset($groups[$key])) {
+                            $groups[$key] = [
+                                'quote_id'      => $qid ?: null,
+                                'quote_number'  => $p['quote_number'] ?? null,
+                                'customer_name' => $p['customer_name'] ?? null,
+                                'payments'      => [],
+                                'total'         => 0.0,
+                                'latest'        => '',
+                            ];
+                        }
+                        $groups[$key]['payments'][] = $p;
+                        $groups[$key]['total']     += (float) $p['amount'];
+                        $d = (string) $p['received_at'];
+                        if ($d > $groups[$key]['latest']) $groups[$key]['latest'] = $d;
+                    }
+                    // Sort groups by most-recent payment desc.
+                    uasort($groups, static fn ($a, $b) => strcmp($b['latest'], $a['latest']));
+                ?>
+                <div class="payment-groups">
+                    <?php foreach ($groups as $g):
+                        $count = count($g['payments']);
+                    ?>
+                        <details class="pg-card">
+                            <summary class="pg-summary">
+                                <span class="pg-customer">
+                                    <?= e((string) ($g['customer_name'] ?? '—')) ?>
+                                </span>
+                                <?php if (!empty($g['quote_number'])): ?>
+                                    <a class="pg-quote-link"
+                                       href="/quote-builder/edit.php?id=<?= (int) $g['quote_id'] ?>"
+                                       onclick="event.stopPropagation()">
+                                        <?= e((string) $g['quote_number']) ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="pg-standalone">Standalone</span>
+                                <?php endif; ?>
+                                <span class="pg-count">
+                                    <?= $count ?> payment<?= $count === 1 ? '' : 's' ?>
+                                </span>
+                                <span class="pg-latest">
+                                    Latest: <?= e(date('j M Y', strtotime($g['latest']))) ?>
+                                </span>
+                                <span class="pg-total"><?= e(acct_fmt_money($g['total'])) ?></span>
+                            </summary>
+                            <div class="pg-detail">
+                                <table class="table" style="margin:0">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Method</th>
+                                            <th>Reference</th>
+                                            <th class="num">Amount</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($g['payments'] as $p): ?>
+                                            <tr>
+                                                <td><?= e(date('j M Y', strtotime((string) $p['received_at']))) ?></td>
+                                                <td>
+                                                    <span class="method-pill">
+                                                        <?= e(acct_method_label((string) $p['method'])) ?>
+                                                    </span>
+                                                </td>
+                                                <td><?= e((string) ($p['reference'] ?? '')) ?></td>
+                                                <td class="num">
+                                                    <?= e(acct_fmt_money((float) $p['amount'])) ?>
+                                                </td>
+                                                <td style="white-space:nowrap">
+                                                    <form method="post" action="/accounts/payment_delete.php"
+                                                          style="display:inline;margin:0"
+                                                          data-confirm="Delete this payment? (Won't undo the bank entry — adjust on your bank reconciliation if needed.)">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                                        <input type="hidden" name="return_to" value="/accounts/index.php">
+                                                        <button type="submit" class="btn btn-sm btn-danger"
+                                                                style="padding:0.1875rem 0.5rem;font-size:0.75rem">
+                                                            ×
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </section>
