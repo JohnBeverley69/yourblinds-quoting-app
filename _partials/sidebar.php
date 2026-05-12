@@ -33,13 +33,14 @@ $_perms = function_exists('current_user_permissions')
 $canCreateQuotes  = $isAdmin || $_perms['can_create_quotes'];
 $canCreateOrders  = $isAdmin || $_perms['can_create_orders'];
 $canSeeAllJobs    = $isAdmin || $_perms['can_view_all_customer_jobs'];
-// "Worth showing the Quote History / Orders entry?" — only if the
-// user can create the things OR see everyone's, otherwise the page
-// would be empty/useless anyway. (Fitters get assigned to jobs via
-// the Calendar, so they don't need a list-view of orders to do their
-// work; Calendar + My Schedule cover them.)
+// Quote History is hidden for users with no quote-related permission
+// (they have nothing to see). Orders stays VISIBLE to everyone in the
+// tenant, including fitters — they need to open the orders they're
+// installing to verify details and take balance payments at the door.
+// The Orders page row-filters down to "yours" automatically when the
+// user lacks view-all, so the menu link isn't lying.
 $canSeeQuoteHistory = $canCreateQuotes || $canSeeAllJobs;
-$canSeeOrders       = $canCreateOrders || $canSeeAllJobs;
+$canSeeOrders       = true;   // page filters per user; never an empty menu noise problem
 
 // Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
 // missing, hide the entries that would 500 on click. The check is a single
@@ -71,7 +72,11 @@ $navLinks = [
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
     'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
-    'accounts'      => ['/accounts/index.php',         'Accounts',      $isAdmin && $hasQuotes && $hasAccountsFeature],
+    // Accounts is the paid add-on. Visible to ALL users (not just
+    // admins) when the tenant has the feature on — fitters need it
+    // to take balance payments at the door. The page row-filters
+    // their view to just the orders they're assigned to.
+    'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],

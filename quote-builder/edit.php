@@ -9,9 +9,38 @@ requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
+$_perms   = current_user_permissions();
 
 $id    = (int) ($_GET['id'] ?? 0);
 $quote = qb_load_quote_or_404($id, $clientId);
+
+// Access gate: admin / view-all / quote-creator-equivalents see any
+// quote in their tenant. Restricted users (typical fitter) can view
+// ONLY quotes where they have at least one appointment assigned —
+// these are the orders they're installing and need to verify blind
+// details + take balance payments against. 404 (not 403) on mismatch
+// so we don't leak the existence of other tenants' or other fitters'
+// quotes to a guessing attacker.
+$canSeeAllQuotes = $isAdmin
+    || $_perms['can_view_all_customer_jobs']
+    || $_perms['can_create_quotes'];
+if (!$canSeeAllQuotes) {
+    $assignedSt = db()->prepare(
+        'SELECT 1 FROM appointments
+          WHERE quote_id = ? AND client_user_id = ? AND client_id = ?
+          LIMIT 1'
+    );
+    $assignedSt->execute([$id, (int) $user['user_id'], $clientId]);
+    if (!$assignedSt->fetchColumn()) {
+        http_response_code(404);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+           . '<h1>Quote not found</h1>'
+           . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+        exit;
+    }
+}
 $editable = qb_is_editable($quote);
 
 // Edit-blind mode: ?edit_item=N pre-populates the Add-blind form with this

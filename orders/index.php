@@ -30,21 +30,11 @@ $clientId = (int) $user['client_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 
-// Page access: must be able to either CREATE orders or VIEW ALL.
-// Without either, this page would be empty (no creations, no
-// visibility) — 403 so URL-poking can't reach it.
-if (!$isAdmin && !$_perms['can_create_orders'] && !$_perms['can_view_all_customer_jobs']) {
-    http_response_code(403);
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
-       . '<h1>403 Forbidden</h1>'
-       . '<p>You don\'t have permission to view orders.</p>'
-       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
-    exit;
-}
-
-// Row filter: non-admin users without view-all see only orders
-// linked to appointments assigned to them.
+// No access-403 here: fitters need to open the orders they're
+// installing to verify blind details and take balance payments at
+// the door. Row-filter below restricts non-view-all users to just
+// the orders linked to appointments assigned to them — they don't
+// see other people's customers.
 $canViewAll     = $isAdmin || $_perms['can_view_all_customer_jobs'];
 $restrictToMine = !$canViewAll;
 
