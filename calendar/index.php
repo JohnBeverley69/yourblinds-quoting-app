@@ -341,6 +341,32 @@ $activeNav = 'calendar';
             min-height: 32px;
         }
         .cal-appt:hover { filter: brightness(0.95); }
+        /* "Open order" tap target on quote-linked appointments. Sits
+           inside the card on the right; one-tap goes straight to the
+           order page. Bigger min-size than its visible content so
+           thumbs can hit it on touch screens. */
+        .cal-appt.from-quote { padding-right: 1.5rem; position: relative; }
+        .cal-appt-open-order {
+            position: absolute;
+            right: 0.25rem; top: 50%;
+            transform: translateY(-50%);
+            min-width: 1.5rem; min-height: 1.5rem;
+            padding: 0 0.25rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.25);
+            color: #fff;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            line-height: 1;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cal-appt-open-order:hover,
+        .cal-appt-open-order:focus {
+            background: rgba(255, 255, 255, 0.5);
+            outline: none;
+        }
         .cal-appt-time {
             font-weight: 700;
             font-size: 0.75rem;
@@ -634,9 +660,19 @@ $activeNav = 'calendar';
                                        <?php if (!empty($a['quote_id'])): ?>
                                            data-quote-id="<?= (int) $a['quote_id'] ?>"
                                        <?php endif; ?>
-                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' (double-click to open the order)' : '' ?>">
+                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
+                                        <?php if (!empty($a['quote_id'])): ?>
+                                            <!-- Single-tap shortcut to the order page. Stops the
+                                                 click bubbling so the parent's view.php link
+                                                 doesn't also fire. -->
+                                            <span class="cal-appt-open-order"
+                                                  role="link" tabindex="0"
+                                                  data-quote-id="<?= (int) $a['quote_id'] ?>"
+                                                  title="Open order"
+                                                  aria-label="Open order">→</span>
+                                        <?php endif; ?>
                                     </a>
                                 <?php endforeach; ?>
                             </div>
@@ -751,19 +787,32 @@ $activeNav = 'calendar';
     var lastPendingJson = null;
     var lastGridJson    = null;
 
-    // Double-clicking an appointment that's been promoted to an order
-    // (i.e. has a data-quote-id) jumps straight to the order edit
-    // page, bypassing the appointment-detail view. Saves a tap for
-    // fitters who are heading to a job and just want to verify blinds
-    // + take payment.
-    //
-    // Delegated to the grid so it covers cards added later via the
-    // 15s poll-refresh too.
-    document.addEventListener('dblclick', function (e) {
-        var card = e.target.closest('.cal-appt[data-quote-id]');
-        if (!card) return;
+    // "Open order" tap target on quote-linked appointments. Single tap
+    // (not dblclick — natively fussy, especially on touch) jumps to
+    // the order page. Stops propagation so the parent <a>'s view.php
+    // link doesn't ALSO fire on the same gesture. Delegated to
+    // document so it works for both server-rendered cards and the
+    // cards re-rendered by the 15s poll refresh.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cal-appt-open-order');
+        if (!btn) return;
         e.preventDefault();
-        window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(card.dataset.quoteId);
+        e.stopPropagation();
+        var qid = btn.getAttribute('data-quote-id');
+        if (qid) {
+            window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(qid);
+        }
+    });
+    // Keyboard accessibility — Enter / Space on the focused → link.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var btn = document.activeElement;
+        if (!btn || !btn.classList || !btn.classList.contains('cal-appt-open-order')) return;
+        e.preventDefault();
+        var qid = btn.getAttribute('data-quote-id');
+        if (qid) {
+            window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(qid);
+        }
     });
 
     function refreshAll() {
@@ -829,20 +878,26 @@ $activeNav = 'calendar';
             var html = '';
             appts.forEach(function (a) {
                 var fromQuoteCls = a.quote_id ? ' from-quote' : '';
-                // data-quote-id powers the dblclick-to-open-order
-                // shortcut. Emit only when there's actually a quote
-                // backing the appointment.
                 var quoteAttr = a.quote_id
                     ? ' data-quote-id="' + a.quote_id + '"'
                     : '';
-                var titleSuffix = a.quote_id ? ' (double-click to open the order)' : '';
+                // Mirrors the server-rendered card — a small "→" tap
+                // target on quote-linked appointments that opens the
+                // order page directly. Click handler is delegated on
+                // document so this works for re-rendered cards too.
+                var openOrderHtml = a.quote_id
+                    ? '<span class="cal-appt-open-order" role="link" tabindex="0"'
+                      + ' data-quote-id="' + a.quote_id + '"'
+                      + ' title="Open order" aria-label="Open order">&rarr;</span>'
+                    : '';
                 html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
-                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status + titleSuffix) + '">'
+                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
                      +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
+                     +    openOrderHtml
                      +  '</a>';
             });
 
