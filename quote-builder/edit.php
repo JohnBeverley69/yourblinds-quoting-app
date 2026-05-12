@@ -406,6 +406,65 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .quote-sticky-bar .qsb-actions button.is-decline {
             background: rgba(220, 38, 38, 0.85); border-color: rgba(220, 38, 38, 1);
         }
+        /* ===========================================================
+           Record-a-new-payment card. The form used to just be a row
+           of inputs flowing off the bottom of the Payments panel —
+           users tapped "Take payment", got scrolled here, and didn't
+           realise the inputs were where to type. Now wrapped in a
+           highlighted card with a clear heading so it reads as
+           "you're here to enter a payment."
+           =========================================================== */
+        .record-payment-card {
+            background: #eff6ff;
+            border: 2px solid #1f3b5b;
+            border-radius: 12px;
+            padding: 1rem 1.125rem;
+            margin: 0.5rem 0 0;
+        }
+        .record-payment-card__title {
+            margin: 0 0 0.25rem;
+            font-size: 1.0625rem; font-weight: 700; color: #1f3b5b;
+        }
+        .record-payment-card__hint {
+            margin: 0 0 0.875rem; color: #4b5563; font-size: 0.875rem;
+        }
+        .record-payment-card__form {
+            display: flex; flex-wrap: wrap; gap: 0.625rem; align-items: end;
+        }
+        .record-payment-card .rp-field {
+            display: flex; flex-direction: column; gap: 0.1875rem;
+            flex: 1 1 8rem; min-width: 8rem;
+        }
+        .record-payment-card .rp-field--amount { flex: 0 0 8rem; }
+        .record-payment-card .rp-field--ref    { flex: 2 1 12rem; }
+        .record-payment-card .rp-field label {
+            font-size: 0.8125rem; color: #1f3b5b; font-weight: 600;
+        }
+        .record-payment-card .rp-field input,
+        .record-payment-card .rp-field select {
+            padding: 0.5rem 0.625rem;
+            border: 1px solid #93c5fd; border-radius: 6px;
+            font: inherit; background: #fff;
+        }
+        .record-payment-card .rp-field input:focus,
+        .record-payment-card .rp-field select:focus {
+            border-color: #1f3b5b;
+            outline: 3px solid rgba(31, 59, 91, 0.18);
+        }
+        /* The Amount field is the only one that almost always needs
+           confirmation/edit — make it visibly bigger so the eye lands
+           on it first when scrolled into view from the Take-payment
+           button. */
+        .record-payment-card #rp-amount {
+            font-size: 1.25rem; font-weight: 700;
+            padding: 0.625rem 0.75rem;
+        }
+        .record-payment-card .rp-submit { flex: 0 0 auto; }
+        .record-payment-card__btn {
+            font-size: 0.9375rem; font-weight: 700;
+            padding: 0.5625rem 1.125rem;
+        }
+
         /* "Take payment" — anchor, not a button, so the .is-accept
            button rule above didn't catch it; it was inheriting the
            default link colour (blue on dark blue, near-invisible).
@@ -1273,53 +1332,53 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <?php endif; ?>
 
             <?php if ($editable && $outstandingHere > 0.0049): ?>
-                <form method="post" action="/accounts/payment_save.php"
-                      style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:end">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                    <input type="hidden" name="return_to"
-                           value="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>">
-                    <div style="flex:1 1 6rem">
-                        <label style="font-size:0.75rem;color:#6b7280;display:block">Amount £</label>
-                        <input type="number" name="amount" step="0.01" required
-                               value="<?= e(number_format($outstandingHere, 2, '.', '')) ?>"
-                               style="width:100%;padding:0.4375rem 0.625rem;
-                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
-                    </div>
-                    <div style="flex:1 1 8rem">
-                        <label style="font-size:0.75rem;color:#6b7280;display:block">Date</label>
-                        <input type="date" name="received_at" required
-                               value="<?= e(date('Y-m-d')) ?>"
-                               style="width:100%;padding:0.4375rem 0.625rem;
-                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
-                    </div>
-                    <div style="flex:1 1 8rem">
-                        <label style="font-size:0.75rem;color:#6b7280;display:block">Method</label>
-                        <select name="method"
-                                style="width:100%;padding:0.4375rem 0.625rem;
-                                       border:1px solid #d1d5db;border-radius:6px;font:inherit">
-                            <?php foreach ($acctMethodLabels as $k => $lbl): ?>
-                                <option value="<?= e($k) ?>"
-                                        <?= $k === 'bank_transfer' ? 'selected' : '' ?>>
-                                    <?= e($lbl) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div style="flex:2 1 10rem">
-                        <label style="font-size:0.75rem;color:#6b7280;display:block">Reference (optional)</label>
-                        <input type="text" name="reference" maxlength="200"
-                               placeholder="e.g. cheque #, Stripe id..."
-                               style="width:100%;padding:0.4375rem 0.625rem;
-                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
-                    </div>
-                    <div>
-                        <button type="submit" class="btn btn-primary"
-                                style="padding:0.4375rem 0.875rem;font-size:0.875rem">
-                            Record payment
-                        </button>
-                    </div>
-                </form>
+                <div class="record-payment-card">
+                    <h3 class="record-payment-card__title">
+                        💷 Record a new payment
+                    </h3>
+                    <p class="record-payment-card__hint">
+                        Outstanding amount pre-filled. Adjust if it's a
+                        part-payment, then click <strong>Record payment</strong>.
+                    </p>
+                    <form method="post" action="/accounts/payment_save.php"
+                          class="record-payment-card__form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <input type="hidden" name="return_to"
+                               value="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>#payments">
+                        <div class="rp-field rp-field--amount">
+                            <label for="rp-amount">Amount £</label>
+                            <input id="rp-amount" type="number" name="amount" step="0.01" required
+                                   value="<?= e(number_format($outstandingHere, 2, '.', '')) ?>">
+                        </div>
+                        <div class="rp-field">
+                            <label for="rp-date">Date received</label>
+                            <input id="rp-date" type="date" name="received_at" required
+                                   value="<?= e(date('Y-m-d')) ?>">
+                        </div>
+                        <div class="rp-field">
+                            <label for="rp-method">Method</label>
+                            <select id="rp-method" name="method">
+                                <?php foreach ($acctMethodLabels as $k => $lbl): ?>
+                                    <option value="<?= e($k) ?>"
+                                            <?= $k === 'bank_transfer' ? 'selected' : '' ?>>
+                                        <?= e($lbl) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="rp-field rp-field--ref">
+                            <label for="rp-ref">Reference (optional)</label>
+                            <input id="rp-ref" type="text" name="reference" maxlength="200"
+                                   placeholder="e.g. cheque #, Stripe id...">
+                        </div>
+                        <div class="rp-submit">
+                            <button type="submit" class="btn btn-primary record-payment-card__btn">
+                                ✓ Record payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
             <?php endif; ?>
         </section>
         <?php endif; ?>
@@ -2082,7 +2141,10 @@ window.__editingBlind__ = <?= json_encode([
     if (!trigger) return;
     trigger.addEventListener('click', function () {
         setTimeout(function () {
-            var amt = document.querySelector('#payments input[name="amount"]');
+            // The Amount input inside the Record-payment card — focused
+            // + selected so the user can immediately type or hit Enter
+            // to record the outstanding figure (which is pre-filled).
+            var amt = document.getElementById('rp-amount');
             if (amt) {
                 amt.focus();
                 amt.select();
