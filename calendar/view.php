@@ -44,6 +44,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /calendar/view.php?id=' . $id);
         exit;
     }
+
+    if ($action === 'update_assignee') {
+        // Permission re-check on the server — the form's hidden in the
+        // UI for users without it but we can't trust that alone.
+        $canReassign = $isAdmin;
+        if (!$canReassign) {
+            $permSt = db()->prepare(
+                'SELECT COALESCE(can_view_all_customer_jobs, 0)
+                   FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+            );
+            $permSt->execute([(int) $user['user_id'], $clientId]);
+            $canReassign = ((int) $permSt->fetchColumn()) === 1;
+        }
+        if (!$canReassign) {
+            $_SESSION['flash_error'] = 'You don\'t have permission to reassign appointments.';
+            header('Location: /calendar/view.php?id=' . $id);
+            exit;
+        }
+
+        // Empty value = unassign. Otherwise must be a real active user
+        // in THIS tenant — otherwise we silently ignore (the SQL has
+        // a tenant-scoped EXISTS subquery via the FK + WHERE).
+        $newAssigneeRaw = (string) ($_POST['assignee_id'] ?? '');
+        $newAssignee   = $newAssigneeRaw === '' ? null : (int) $newAssigneeRaw;
+
+        if ($newAssignee !== null) {
+            $chk = db()->prepare(
+                'SELECT 1 FROM client_users
+                  WHERE id = ? AND client_id = ? AND active = 1 LIMIT 1'
+            );
+            $chk->execute([$newAssignee, $clientId]);
+            if (!$chk->fetchColumn()) {
+                $_SESSION['flash_error'] = 'That user isn\'t available to assign.';
+                header('Location: /calendar/view.php?id=' . $id);
+                exit;
+            }
+        }
+
+        $u = db()->prepare(
+            'UPDATE appointments SET client_user_id = ?
+              WHERE id = ? AND client_id = ?'
+        );
+        $u->execute([$newAssignee, $id, $clientId]);
+        $_SESSION['flash_success'] = $newAssignee === null
+            ? 'Appointment unassigned.'
+            : 'Appointment reassigned.';
+        header('Location: /calendar/view.php?id=' . $id);
+        exit;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +143,32 @@ if ($timeObj instanceof DateTimeImmutable && (int) $appt['duration_minutes'] > 0
 }
 
 $statusLabel = ucfirst(str_replace('_', '-', (string) $appt['status']));
+
+// Can the current user reassign this appointment? Admin or anyone
+// with can_view_all_customer_jobs (the dispatcher / office role).
+$canReassign = $isAdmin;
+if (!$canReassign) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canReassign = ((int) $permSt->fetchColumn()) === 1;
+}
+
+// List of active users in this tenant for the assignee dropdown,
+// only loaded if the user can actually reassign.
+$tenantUsers = [];
+if ($canReassign) {
+    $usSt = db()->prepare(
+        'SELECT id, full_name, role
+           FROM client_users
+          WHERE client_id = ? AND active = 1
+       ORDER BY full_name'
+    );
+    $usSt->execute([$clientId]);
+    $tenantUsers = $usSt->fetchAll();
+}
 
 // Build the joined installation address as a single human-readable line.
 $instParts = array_values(array_filter([
@@ -266,10 +341,38 @@ $activeNav = 'calendar';
                 </dd>
                 <dt>Assigned to</dt>
                 <dd>
-                    <?php if (!empty($appt['assignee_name'])): ?>
-                        <?= e((string) $appt['assignee_name']) ?>
+                    <?php if ($canReassign): ?>
+                        <form method="post"
+                              action="/calendar/view.php?id=<?= (int) $appt['id'] ?>"
+                              style="display:flex;gap:0.375rem;align-items:center;margin:0;flex-wrap:wrap">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_action" value="update_assignee">
+                            <select name="assignee_id"
+                                    style="padding:0.3125rem 0.5rem;border:1px solid #d1d5db;
+                                           border-radius:6px;font:inherit;min-width:10rem">
+                                <option value="">— Unassigned —</option>
+                                <?php foreach ($tenantUsers as $u): ?>
+                                    <option value="<?= (int) $u['id'] ?>"
+                                            <?= (int) ($appt['assignee_id'] ?? 0) === (int) $u['id']
+                                                ? 'selected' : '' ?>>
+                                        <?= e((string) $u['full_name']) ?>
+                                        <?php if (!empty($u['role'])): ?>
+                                            (<?= e((string) $u['role']) ?>)
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-secondary btn-sm"
+                                    style="padding:0.3125rem 0.75rem;font-size:0.8125rem">
+                                Save
+                            </button>
+                        </form>
                     <?php else: ?>
-                        <span style="color:#6b7280">Unassigned</span>
+                        <?php if (!empty($appt['assignee_name'])): ?>
+                            <?= e((string) $appt['assignee_name']) ?>
+                        <?php else: ?>
+                            <span style="color:#6b7280">Unassigned</span>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </dd>
             </dl>
