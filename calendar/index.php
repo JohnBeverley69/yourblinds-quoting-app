@@ -42,12 +42,28 @@ $trailingBlanks = (7 - ($totalCells % 7)) % 7;
 // Fetch appointments visible to this client, falling within the month window.
 // Grouped by date for fast per-cell rendering.
 //
-// ?mine=1 filters to appointments assigned to the logged-in user only —
-// this is what powers the "My Diary" sidebar entry that fitters use to
-// see just their own jobs. Without the flag, the calendar shows every
-// appointment for the tenant (the admin/office view).
+// ?mine=1 filters to appointments assigned to the logged-in user only.
+// Non-admin users without the "view all customer jobs" permission have
+// mineOnly FORCED on — they can only ever see their own appointments,
+// regardless of URL. Admins and users with the permission see the toggle
+// and can switch freely.
 // ---------------------------------------------------------------------------
 $mineOnly = isset($_GET['mine']) && (string) $_GET['mine'] === '1';
+
+// Permission check: anyone non-admin without can_view_all_customer_jobs
+// is locked to mineOnly. Look the flag up once for this request.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+if (!$canViewAll) {
+    $mineOnly = true;   // forced — URL ?mine=0 / no param is ignored
+}
 
 if ($mineOnly) {
     $stmt = db()->prepare(
@@ -457,7 +473,9 @@ $activeNav = 'calendar';
             <div>
                 <h1 class="page-title">Calendar</h1>
                 <p class="page-subtitle">
-                    <?php if ($mineOnly): ?>
+                    <?php if (!$canViewAll): ?>
+                        Your appointments.
+                    <?php elseif ($mineOnly): ?>
                         Filtered to <?= e($user['full_name']) ?>'s appointments only.
                     <?php else: ?>
                         Appointments for <?= e($user['company_name']) ?>.
@@ -465,19 +483,21 @@ $activeNav = 'calendar';
                 </p>
             </div>
             <div class="actions-bar">
-                <!-- View toggle. Two pill-style buttons that stay visible
-                     regardless of which is active so users see both
-                     options. Active one is filled; inactive is outlined. -->
-                <div class="cal-view-toggle" role="group" aria-label="Calendar view">
-                    <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
-                       class="cal-toggle-btn <?= $mineOnly ? '' : 'is-active' ?>">
-                        Everyone
-                    </a>
-                    <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>"
-                       class="cal-toggle-btn <?= $mineOnly ? 'is-active' : '' ?>">
-                        Just me
-                    </a>
-                </div>
+                <?php if ($canViewAll): ?>
+                    <!-- View toggle. Only shown to admins and users with
+                         can_view_all_customer_jobs — others are locked
+                         to their own appointments and don't need it. -->
+                    <div class="cal-view-toggle" role="group" aria-label="Calendar view">
+                        <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                           class="cal-toggle-btn <?= $mineOnly ? '' : 'is-active' ?>">
+                            Everyone
+                        </a>
+                        <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                           class="cal-toggle-btn <?= $mineOnly ? 'is-active' : '' ?>">
+                            Just me
+                        </a>
+                    </div>
+                <?php endif; ?>
                 <?php if ($mapsEnabled): ?>
                     <a href="/calendar/run.php" class="btn btn-success">Today's run &rarr;</a>
                 <?php endif; ?>
@@ -556,6 +576,26 @@ $activeNav = 'calendar';
                     <span><i style="background:#6b7280"></i> No-show</span>
                 </div>
             </div>
+
+            <?php if ($mineOnly && empty($byDate)): ?>
+                <!-- Empty-state hint when the user can't see Everyone and
+                     hasn't got any appointments of their own yet. Without
+                     this the grid just looks empty and broken. -->
+                <div style="background:#eef2f7;border:1px dashed #cbd5e1;
+                            border-radius:10px;padding:1rem 1.125rem;
+                            margin:0 0 1rem;color:#1f3b5b;font-size:0.9375rem">
+                    No appointments assigned to you this month.
+                    <?php if (!$canViewAll): ?>
+                        Once an admin assigns you to a job, it'll appear
+                        here and on your <a href="/calendar/schedule.php"
+                        style="color:#1f3b5b;font-weight:600">My Schedule</a> page.
+                    <?php else: ?>
+                        Switch back to <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                        style="color:#1f3b5b;font-weight:600">Everyone</a>
+                        to see the whole team's diary.
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <div class="cal-grid" role="grid" aria-label="<?= e($firstOfMonth->format('F Y')) ?>">
                 <?php foreach ($weekdayLabels as $wd): ?>
