@@ -300,76 +300,86 @@ $activeNav = 'accounts';
            list. Click the summary row to expand and see individual
            payments + their delete buttons. */
         .payment-groups {
-            display: flex; flex-direction: column; gap: 0.5rem;
+            display: flex; flex-direction: column; gap: 0.375rem;
         }
         .pg-card {
-            border: 1px solid #e5e7eb; border-radius: 10px;
+            border: 1px solid #e5e7eb; border-radius: 8px;
             background: #fff; overflow: hidden;
         }
-        .pg-card[open] { border-color: #1f3b5b; }
+        .pg-card[open]    { border-color: #1f3b5b; }
+        .pg-card.is-paid  { background: #f0fdf4; border-color: #bbf7d0; }
+
         .pg-summary {
             list-style: none;
             cursor: pointer;
-            display: grid;
-            grid-template-columns: 1.5fr auto 1fr 1fr auto;
-            gap: 0.5rem 1rem;
-            align-items: center;
-            padding: 0.75rem 1rem;
+            display: flex; align-items: center;
+            gap: 0.875rem; flex-wrap: wrap;
+            padding: 0.5rem 0.875rem;
             font-size: 0.9375rem;
+            line-height: 1.3;
         }
         .pg-summary::-webkit-details-marker { display: none; }
-        .pg-summary::before {
-            content: '▸';
-            color: #9ca3af;
-            font-weight: 700;
-            margin-right: -0.5rem;
+        .pg-summary .pg-caret {
+            color: #9ca3af; font-weight: 700;
+            width: 0.75rem; flex: 0 0 auto;
+            font-size: 0.875rem; line-height: 1;
         }
-        .pg-card[open] .pg-summary::before { content: '▾'; color: #1f3b5b; }
+        .pg-summary .pg-caret::before { content: '▸'; }
+        .pg-card[open] .pg-summary .pg-caret         { color: #1f3b5b; }
+        .pg-card[open] .pg-summary .pg-caret::before { content: '▾'; }
 
-        .pg-summary .pg-customer { font-weight: 600; color: #111827; }
+        .pg-summary .pg-customer {
+            font-weight: 600; color: #111827;
+            flex: 0 0 auto;
+        }
         .pg-summary .pg-quote-link {
             font-weight: 600; color: #1f3b5b; text-decoration: none;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             padding: 0.125rem 0.5rem;
             background: #eef2f7; border-radius: 4px;
+            flex: 0 0 auto;
         }
         .pg-summary .pg-quote-link:hover { background: #dbe4f0; }
         .pg-summary .pg-standalone {
             color: #9ca3af; font-size: 0.8125rem; font-style: italic;
         }
-        .pg-summary .pg-count {
-            color: #6b7280; font-size: 0.8125rem;
+
+        /* Money group — pushed to the right of the row by margin-left:
+           auto, so the customer + quote sit on the left and the figures
+           hug the right. */
+        .pg-summary .pg-money {
+            margin-left: auto;
+            display: flex; gap: 0.75rem 1rem; flex-wrap: wrap;
+            font-size: 0.875rem; color: #4b5563;
+            align-items: baseline;
         }
-        .pg-summary .pg-latest {
-            color: #6b7280; font-size: 0.8125rem;
+        .pg-summary .pg-money-bit strong {
+            font-variant-numeric: tabular-nums; color: #111827;
         }
-        .pg-summary .pg-total {
-            font-weight: 700; color: #065f46;
-            font-variant-numeric: tabular-nums;
-            text-align: right; min-width: 5rem;
+        .pg-summary .pg-money-bit.is-owed     { color: #92400e; }
+        .pg-summary .pg-money-bit.is-owed strong     { color: #92400e; }
+        .pg-summary .pg-money-bit.is-paid     { color: #065f46; font-weight: 600; }
+        .pg-summary .pg-money-bit.is-overpaid { color: #1e40af; }
+        .pg-summary .pg-money-bit.is-overpaid strong { color: #1e40af; }
+        .pg-summary .pg-money-sub {
+            color: #9ca3af; font-size: 0.75rem;
         }
+
         .pg-detail {
             border-top: 1px solid #e5e7eb; background: #fafafa;
-            padding: 0.5rem 1rem 0.75rem;
+            padding: 0.375rem 0.875rem 0.625rem;
         }
         .pg-detail .table { font-size: 0.875rem; }
 
-        /* On narrower screens, stack the summary fields vertically. */
-        @media (max-width: 700px) {
-            .pg-summary {
-                grid-template-columns: 1fr auto;
-                grid-template-areas:
-                    "customer  quote"
-                    "latest    count"
-                    "total     total";
-                row-gap: 0.25rem;
+        /* Narrow screens — money group breaks to a second line under
+           the customer/quote, but each card stays one summary line tall
+           on a typical phone. */
+        @media (max-width: 640px) {
+            .pg-summary { gap: 0.5rem; }
+            .pg-summary .pg-money {
+                margin-left: 0; width: 100%;
+                gap: 0.5rem 0.875rem;
             }
-            .pg-summary .pg-customer  { grid-area: customer; }
-            .pg-summary .pg-quote-link,
-            .pg-summary .pg-standalone { grid-area: quote; justify-self: end; }
-            .pg-summary .pg-latest    { grid-area: latest; }
-            .pg-summary .pg-count     { grid-area: count; justify-self: end; }
-            .pg-summary .pg-total     { grid-area: total; font-size: 1.0625rem; }
         }
     </style>
 </head>
@@ -592,24 +602,69 @@ $activeNav = 'accounts';
                                 'quote_number'  => $p['quote_number'] ?? null,
                                 'customer_name' => $p['customer_name'] ?? null,
                                 'payments'      => [],
-                                'total'         => 0.0,
+                                'paid_total'    => 0.0,
                                 'latest'        => '',
+                                'order_total'   => null,   // filled below if quote-linked
+                                'outstanding'   => null,   // filled below if quote-linked
                             ];
                         }
                         $groups[$key]['payments'][] = $p;
-                        $groups[$key]['total']     += (float) $p['amount'];
+                        $groups[$key]['paid_total'] += (float) $p['amount'];
                         $d = (string) $p['received_at'];
                         if ($d > $groups[$key]['latest']) $groups[$key]['latest'] = $d;
                     }
+
+                    // Decorate quote-linked groups with the order total
+                    // and outstanding figure. One bulk SELECT covers
+                    // them all so we don't N+1 per card.
+                    $quoteIds = [];
+                    foreach ($groups as $g) {
+                        if ($g['quote_id']) $quoteIds[] = $g['quote_id'];
+                    }
+                    if ($quoteIds) {
+                        $ph = implode(',', array_fill(0, count($quoteIds), '?'));
+                        $qSt = $pdo->prepare(
+                            "SELECT id, total, deposit_amount, deposit_paid_at
+                               FROM quotes
+                              WHERE id IN ($ph) AND client_id = ?"
+                        );
+                        $qSt->execute(array_merge($quoteIds, [$clientId]));
+                        $quoteInfo = [];
+                        foreach ($qSt->fetchAll() as $r) {
+                            $quoteInfo[(int) $r['id']] = $r;
+                        }
+                        foreach ($groups as $key => &$g) {
+                            if (!$g['quote_id']) continue;
+                            $q = $quoteInfo[$g['quote_id']] ?? null;
+                            if (!$q) continue;
+                            $depCounted = $q['deposit_paid_at']
+                                ? (float) ($q['deposit_amount'] ?? 0) : 0.0;
+                            $g['order_total'] = (float) $q['total'];
+                            $g['outstanding'] = round(
+                                $g['order_total'] - $g['paid_total'] - $depCounted, 2
+                            );
+                            // Roll the deposit-as-payment into the
+                            // displayed "paid" figure so the user sees
+                            // ONE total they recognise as "money in."
+                            $g['paid_total'] = round($g['paid_total'] + $depCounted, 2);
+                        }
+                        unset($g);
+                    }
+
                     // Sort groups by most-recent payment desc.
                     uasort($groups, static fn ($a, $b) => strcmp($b['latest'], $a['latest']));
                 ?>
                 <div class="payment-groups">
                     <?php foreach ($groups as $g):
-                        $count = count($g['payments']);
+                        $count       = count($g['payments']);
+                        $hasOrder    = $g['order_total'] !== null;
+                        $outstanding = $g['outstanding'];
+                        $fullyPaid   = $hasOrder && $outstanding !== null
+                                       && abs($outstanding) < 0.005;
                     ?>
-                        <details class="pg-card">
+                        <details class="pg-card<?= $hasOrder && $fullyPaid ? ' is-paid' : '' ?>">
                             <summary class="pg-summary">
+                                <span class="pg-caret" aria-hidden="true"></span>
                                 <span class="pg-customer">
                                     <?= e((string) ($g['customer_name'] ?? '—')) ?>
                                 </span>
@@ -622,13 +677,32 @@ $activeNav = 'accounts';
                                 <?php else: ?>
                                     <span class="pg-standalone">Standalone</span>
                                 <?php endif; ?>
-                                <span class="pg-count">
-                                    <?= $count ?> payment<?= $count === 1 ? '' : 's' ?>
+                                <span class="pg-money">
+                                    <?php if ($hasOrder): ?>
+                                        <span class="pg-money-bit">
+                                            Total <strong><?= e(acct_fmt_money((float) $g['order_total'])) ?></strong>
+                                        </span>
+                                    <?php endif; ?>
+                                    <span class="pg-money-bit">
+                                        Paid <strong><?= e(acct_fmt_money($g['paid_total'])) ?></strong>
+                                        <span class="pg-money-sub">(<?= $count ?>)</span>
+                                    </span>
+                                    <?php if ($hasOrder): ?>
+                                        <?php if ($fullyPaid): ?>
+                                            <span class="pg-money-bit is-paid">
+                                                ✓ Fully paid
+                                            </span>
+                                        <?php elseif ($outstanding > 0): ?>
+                                            <span class="pg-money-bit is-owed">
+                                                Owed <strong><?= e(acct_fmt_money($outstanding)) ?></strong>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="pg-money-bit is-overpaid">
+                                                Overpaid <strong><?= e(acct_fmt_money(-$outstanding)) ?></strong>
+                                            </span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </span>
-                                <span class="pg-latest">
-                                    Latest: <?= e(date('j M Y', strtotime($g['latest']))) ?>
-                                </span>
-                                <span class="pg-total"><?= e(acct_fmt_money($g['total'])) ?></span>
                             </summary>
                             <div class="pg-detail">
                                 <table class="table" style="margin:0">
