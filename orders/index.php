@@ -27,6 +27,20 @@ requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
+
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// only see orders that have at least one appointment assigned to them.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+$restrictToMine = !$canViewAll;
 
 // Paid Accounts add-on toggles the Outstanding column on/off. The
 // column uses payments-table data, which only exists / has data when
@@ -67,6 +81,11 @@ if ($q !== '') {
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
 
+if ($restrictToMine) {
+    $where[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $params[] = (int) $user['user_id'];
+}
+
 $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
                q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
                q.deposit_amount, q.deposit_paid_at,
@@ -97,15 +116,19 @@ try {
 
 // Per-status counts for the filter chips — scoped to the order
 // subset (so "ordered (3)" etc. always refers to the orders pool,
-// not the full quotes pool).
+// not the full quotes pool). Applies the same per-user restriction
+// as the list query so the chip totals match.
+$statusPlaceholders = implode(',', array_fill(0, count($orderStatuses), '?'));
+$countWhere   = "client_id = ? AND status IN ($statusPlaceholders)";
+$countParams  = array_merge([$clientId], $orderStatuses);
+if ($restrictToMine) {
+    $countWhere   .= ' AND id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $countParams[] = (int) $user['user_id'];
+}
 $countSt = db()->prepare(
-    "SELECT status, COUNT(*) AS n
-       FROM quotes
-      WHERE client_id = ?
-        AND status IN (" . implode(',', array_fill(0, count($orderStatuses), '?')) . ")
-   GROUP BY status"
+    "SELECT status, COUNT(*) AS n FROM quotes WHERE $countWhere GROUP BY status"
 );
-$countSt->execute(array_merge([$clientId], $orderStatuses));
+$countSt->execute($countParams);
 $counts = [];
 $grandTotal = 0;
 foreach ($countSt->fetchAll() as $r) {

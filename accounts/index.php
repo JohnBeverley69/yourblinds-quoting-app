@@ -25,6 +25,21 @@ $clientId = (int) $user['client_id'];
 // Paid add-on — gate the whole module behind the per-tenant flag.
 acct_require_feature($clientId);
 
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// only see payments + outstanding for orders they're assigned to.
+$isAdmin    = ($user['role'] ?? '') === 'admin';
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+$restrictToMine = !$canViewAll;
+$myUserId       = (int) $user['user_id'];
+
 $q       = trim((string) ($_GET['q']      ?? ''));
 $from    = trim((string) ($_GET['from']   ?? ''));
 $to      = trim((string) ($_GET['to']     ?? ''));
@@ -32,6 +47,11 @@ $method  = trim((string) ($_GET['method'] ?? ''));
 
 $where  = ['p.client_id = ?'];
 $params = [$clientId];
+
+if ($restrictToMine) {
+    $where[]  = 'p.quote_id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $params[] = $myUserId;
+}
 
 if ($q !== '') {
     $where[]  = '(c.name LIKE ? OR qq.quote_number LIKE ? OR p.reference LIKE ?)';
@@ -66,23 +86,39 @@ $st->execute($params);
 $payments = $st->fetchAll();
 
 // Summary stats — all-time, this-month, outstanding receivables.
+// Restricted to the user's own assigned orders if they don't have
+// the view-all permission.
 $pdo = db();
-$summary = $pdo->prepare(
-    'SELECT
-       IFNULL(SUM(amount), 0)                 AS all_time,
-       IFNULL(SUM(CASE WHEN received_at >= ? THEN amount ELSE 0 END), 0)
-                                              AS this_month
-       FROM payments WHERE client_id = ?'
-);
 $monthStart = (new DateTimeImmutable('first day of this month'))->format('Y-m-d');
-$summary->execute([$monthStart, $clientId]);
+
+if ($restrictToMine) {
+    $summary = $pdo->prepare(
+        'SELECT
+           IFNULL(SUM(amount), 0) AS all_time,
+           IFNULL(SUM(CASE WHEN received_at >= ? THEN amount ELSE 0 END), 0)
+                                  AS this_month
+           FROM payments
+          WHERE client_id = ?
+            AND quote_id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)'
+    );
+    $summary->execute([$monthStart, $clientId, $myUserId]);
+} else {
+    $summary = $pdo->prepare(
+        'SELECT
+           IFNULL(SUM(amount), 0) AS all_time,
+           IFNULL(SUM(CASE WHEN received_at >= ? THEN amount ELSE 0 END), 0)
+                                  AS this_month
+           FROM payments WHERE client_id = ?'
+    );
+    $summary->execute([$monthStart, $clientId]);
+}
 $summaryRow = $summary->fetch() ?: ['all_time' => 0, 'this_month' => 0];
 
 // Outstanding across all accepted-or-beyond quotes. Same formula as
 // acct_outstanding_for_quote(), but folded into a single SQL so we
-// don't have to walk every quote in PHP.
-$outSt = db()->prepare(
-    "SELECT
+// don't have to walk every quote in PHP. Restricted to user-assigned
+// orders when the permission requires it.
+$outSql = "SELECT
        IFNULL(SUM(
          q.total
          - IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
@@ -92,26 +128,35 @@ $outSt = db()->prepare(
        ), 0) AS outstanding
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','invoiced','paid')"
-);
-$outSt->execute([$clientId]);
+        AND q.status IN ('accepted','ordered','invoiced','paid')";
+$outParams = [$clientId];
+if ($restrictToMine) {
+    $outSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $outParams[]  = $myUserId;
+}
+$outSt = $pdo->prepare($outSql);
+$outSt->execute($outParams);
 $outstandingTotal = (float) $outSt->fetchColumn();
 
 // Quotes available to attach a new payment to — anything accepted or
 // beyond, with their per-quote outstanding pre-computed so the picker
-// can offer a sensible default amount when one is chosen.
-$pickSt = db()->prepare(
-    "SELECT q.id, q.quote_number, q.end_customer_name, q.total,
+// can offer a sensible default amount when one is chosen. Same
+// restriction as the rest of the page.
+$pickSql = "SELECT q.id, q.quote_number, q.end_customer_name, q.total,
             q.deposit_amount, q.deposit_paid_at,
             IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
               AS payments_total
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','invoiced','paid')
-   ORDER BY COALESCE(q.accepted_at, q.created_at) DESC
-      LIMIT 200"
-);
-$pickSt->execute([$clientId]);
+        AND q.status IN ('accepted','ordered','invoiced','paid')";
+$pickParams = [$clientId];
+if ($restrictToMine) {
+    $pickSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $pickParams[]  = $myUserId;
+}
+$pickSql .= ' ORDER BY COALESCE(q.accepted_at, q.created_at) DESC LIMIT 200';
+$pickSt = db()->prepare($pickSql);
+$pickSt->execute($pickParams);
 $payableQuotes = $pickSt->fetchAll();
 
 // ?prefill_quote=N — clicked through from the Orders page's

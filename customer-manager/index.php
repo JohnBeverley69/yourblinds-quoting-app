@@ -10,6 +10,21 @@ $user     = current_user();
 $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// only see customers linked to jobs they're personally assigned to.
+// Admin (and users with the permission) see everything.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+$restrictToMine = !$canViewAll;
+$myUserId = (int) $user['user_id'];
+
 $q = trim((string) ($_GET['q'] ?? ''));
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
@@ -31,6 +46,27 @@ if ($hasQuotes) {
     $groupBy     = '';
 }
 
+// Permission filter: only customers whose quotes have at least one
+// appointment assigned to the current user. Skipped when the user can
+// see everything. Defensive against quotes/appointments tables not
+// existing (early in the schema lifecycle) — the EXISTS subquery just
+// never fires under those conditions.
+$permClause = '';
+$permParams = [];
+if ($restrictToMine && $hasQuotes) {
+    $permClause = ' AND c.id IN (
+        SELECT q.customer_id FROM quotes q
+        WHERE q.client_id = ?
+          AND q.customer_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM appointments a
+             WHERE a.quote_id = q.id
+               AND a.client_user_id = ?
+          )
+    )';
+    $permParams = [$clientId, $myUserId];
+}
+
 if ($q !== '') {
     $like = '%' . $q . '%';
     $stmt = db()->prepare(
@@ -41,11 +77,15 @@ if ($q !== '') {
           WHERE c.client_id = ?
             AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?
                  OR c.postcode LIKE ? OR c.town LIKE ?)
+            $permClause
           $groupBy
           ORDER BY c.name
           LIMIT 100"
     );
-    $stmt->execute([$clientId, $like, $like, $like, $like, $like]);
+    $stmt->execute(array_merge(
+        [$clientId, $like, $like, $like, $like, $like],
+        $permParams
+    ));
 } else {
     $stmt = db()->prepare(
         "SELECT c.id, c.name, c.email, c.phone, c.town, c.postcode, c.updated_at
@@ -53,11 +93,12 @@ if ($q !== '') {
            FROM customers c
            $joinExtra
           WHERE c.client_id = ?
+            $permClause
           $groupBy
           ORDER BY c.name
           LIMIT 100"
     );
-    $stmt->execute([$clientId]);
+    $stmt->execute(array_merge([$clientId], $permParams));
 }
 $customers = $stmt->fetchAll();
 

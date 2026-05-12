@@ -8,12 +8,31 @@ requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
+
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// only see quotes that have at least one appointment assigned to them.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+$restrictToMine = !$canViewAll;
 
 $status = trim((string) ($_GET['status'] ?? ''));
 $q      = trim((string) ($_GET['q'] ?? ''));
 
 $where  = ['client_id = ?'];
 $params = [$clientId];
+
+if ($restrictToMine) {
+    $where[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $params[] = (int) $user['user_id'];
+}
 
 if ($status !== '' && in_array($status, ['draft','sent','accepted','declined','ordered','invoiced','paid'], true)) {
     $where[]  = 'status = ?';
@@ -35,11 +54,24 @@ $st = db()->prepare($sql);
 $st->execute($params);
 $quotes = $st->fetchAll();
 
-// Status counts for the filter chips.
-$countSt = db()->prepare(
-    'SELECT status, COUNT(*) AS n FROM quotes WHERE client_id = ? GROUP BY status'
-);
-$countSt->execute([$clientId]);
+// Status counts for the filter chips. Apply the same permission
+// restriction as the main query so the chip totals match the rows
+// the user can actually see.
+if ($restrictToMine) {
+    $countSt = db()->prepare(
+        'SELECT status, COUNT(*) AS n
+           FROM quotes
+          WHERE client_id = ?
+            AND id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)
+       GROUP BY status'
+    );
+    $countSt->execute([$clientId, (int) $user['user_id']]);
+} else {
+    $countSt = db()->prepare(
+        'SELECT status, COUNT(*) AS n FROM quotes WHERE client_id = ? GROUP BY status'
+    );
+    $countSt->execute([$clientId]);
+}
 $counts = [];
 $total  = 0;
 foreach ($countSt->fetchAll() as $r) {
