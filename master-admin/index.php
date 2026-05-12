@@ -92,6 +92,7 @@ $activeNav = 'master-admin';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/master-admin/subscriptions.php" class="btn btn-secondary">Subscriptions</a>
                 <a href="/master-admin/backup.php" class="btn btn-secondary">Backup &amp; restore</a>
                 <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
             </div>

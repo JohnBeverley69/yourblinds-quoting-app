@@ -98,7 +98,9 @@ $navLinks = [
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
+    'billing'       => ['/billing/index.php',          'Billing',       $isAdmin],
     'master-admin'  => ['/master-admin/index.php',     'Master Admin',  $isSuperAdmin],
+    'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
     'backup'        => ['/master-admin/backup.php',    'Backup',        $isSuperAdmin],
 ];
 ?>
