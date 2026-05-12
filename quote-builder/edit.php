@@ -406,6 +406,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .quote-sticky-bar .qsb-actions button.is-decline {
             background: rgba(220, 38, 38, 0.85); border-color: rgba(220, 38, 38, 1);
         }
+        /* "Take payment" — anchor, not a button, so the .is-accept
+           button rule above didn't catch it; it was inheriting the
+           default link colour (blue on dark blue, near-invisible).
+           Dedicated style: white pill, dark text, slightly bigger so
+           it reads as the primary action on the bar. */
+        .quote-sticky-bar #qsb-take-payment {
+            background: #fff;
+            color: #1f3b5b;
+            border: 1px solid #fff;
+            font-size: 0.9375rem;
+            font-weight: 700;
+            padding: 0.4375rem 0.9375rem;
+            border-radius: 999px;
+            text-decoration: none;
+        }
+        .quote-sticky-bar #qsb-take-payment:hover {
+            background: #f3f4f6;
+        }
 
         /* ===========================================================
            Customer details — collapsible section. Once the customer
@@ -597,8 +615,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                      fitter-at-the-door action. Scrolls to the panel and
                      focuses the Amount field via the anchor + JS hook. -->
                 <span class="qsb-actions">
-                    <a href="#payments" id="qsb-take-payment" class="is-accept"
-                       style="text-decoration:none">
+                    <a href="#payments" id="qsb-take-payment">
                         💷 Take payment
                     </a>
                 </span>
