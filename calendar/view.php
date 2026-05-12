@@ -127,6 +127,31 @@ if (!$appt) {
     exit;
 }
 
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// can only view appointments they're personally assigned to. 404
+// (not 403) on a mismatch — don't leak existence to a fitter who's
+// guessing IDs.
+$canViewThis = $isAdmin;
+if (!$canViewThis) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewThis = ((int) $permSt->fetchColumn()) === 1;
+}
+if (!$canViewThis) {
+    $canViewThis = ((int) ($appt['client_user_id'] ?? 0)) === (int) $user['user_id'];
+}
+if (!$canViewThis) {
+    http_response_code(404);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+       . '<h1>Appointment not found</h1>'
+       . '<p><a href="/calendar/index.php">Back to calendar</a></p>';
+    exit;
+}
+
 $dateObj = DateTimeImmutable::createFromFormat('Y-m-d', (string) $appt['appointment_date'])
         ?: new DateTimeImmutable($appt['appointment_date']);
 $timeObj = DateTimeImmutable::createFromFormat('H:i:s', (string) $appt['appointment_time'])

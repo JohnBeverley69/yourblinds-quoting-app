@@ -47,6 +47,7 @@ if (!hash_equals(csrf_token(), $token)) {
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
 
 $apptId   = (int)    ($_POST['appointment_id']  ?? 0);
 $dateRaw  = (string) ($_POST['appointment_date'] ?? '');
@@ -55,6 +56,34 @@ if ($apptId <= 0) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'appointment_id required']);
     exit;
+}
+
+// Permission gate: non-admin users without can_view_all_customer_jobs
+// can only move their own appointments. Without this, a restricted
+// fitter could crafted-POST to reschedule someone else's job.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+if (!$canViewAll) {
+    // Confirm the appointment is actually assigned to this user before
+    // any UPDATE. 404 (not 403) to avoid leaking existence of records
+    // belonging to other fitters.
+    $ownChk = db()->prepare(
+        'SELECT 1 FROM appointments
+          WHERE id = ? AND client_id = ? AND client_user_id = ? LIMIT 1'
+    );
+    $ownChk->execute([$apptId, $clientId, (int) $user['user_id']]);
+    if (!$ownChk->fetchColumn()) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Appointment not found.']);
+        exit;
+    }
 }
 
 // Empty date = unschedule (back to the pending tray). Otherwise must

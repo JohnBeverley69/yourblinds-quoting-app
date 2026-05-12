@@ -35,7 +35,26 @@ header('Cache-Control: no-store');
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
 $mineOnly = isset($_GET['mine']) && (string) $_GET['mine'] === '1';
+
+// Same permission gate as /calendar/index.php — non-admin users
+// without can_view_all_customer_jobs are forced to mine-only here too,
+// regardless of what the polling URL sends. Without this, the JS
+// auto-refresh would silently leak everyone's appointments back to a
+// restricted fitter ~5s after page load.
+$canViewAll = $isAdmin;
+if (!$canViewAll) {
+    $permSt = db()->prepare(
+        'SELECT COALESCE(can_view_all_customer_jobs, 0)
+           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $permSt->execute([(int) $user['user_id'], $clientId]);
+    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+}
+if (!$canViewAll) {
+    $mineOnly = true;
+}
 
 if ($mineOnly) {
     $st = db()->prepare(
