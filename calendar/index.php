@@ -631,7 +631,10 @@ $activeNav = 'calendar';
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
-                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
+                                       <?php if (!empty($a['quote_id'])): ?>
+                                           data-quote-id="<?= (int) $a['quote_id'] ?>"
+                                       <?php endif; ?>
+                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' (double-click to open the order)' : '' ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
                                     </a>
@@ -748,6 +751,21 @@ $activeNav = 'calendar';
     var lastPendingJson = null;
     var lastGridJson    = null;
 
+    // Double-clicking an appointment that's been promoted to an order
+    // (i.e. has a data-quote-id) jumps straight to the order edit
+    // page, bypassing the appointment-detail view. Saves a tap for
+    // fitters who are heading to a job and just want to verify blinds
+    // + take payment.
+    //
+    // Delegated to the grid so it covers cards added later via the
+    // 15s poll-refresh too.
+    document.addEventListener('dblclick', function (e) {
+        var card = e.target.closest('.cal-appt[data-quote-id]');
+        if (!card) return;
+        e.preventDefault();
+        window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(card.dataset.quoteId);
+    });
+
     function refreshAll() {
         // Bail if the user is mid-drag — don't yank the card out from
         // under them, and don't shuffle the cells while they're aiming.
@@ -811,10 +829,18 @@ $activeNav = 'calendar';
             var html = '';
             appts.forEach(function (a) {
                 var fromQuoteCls = a.quote_id ? ' from-quote' : '';
+                // data-quote-id powers the dblclick-to-open-order
+                // shortcut. Emit only when there's actually a quote
+                // backing the appointment.
+                var quoteAttr = a.quote_id
+                    ? ' data-quote-id="' + a.quote_id + '"'
+                    : '';
+                var titleSuffix = a.quote_id ? ' (double-click to open the order)' : '';
                 html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
-                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status) + '">'
+                     +  quoteAttr
+                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status + titleSuffix) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
                      +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
                      +  '</a>';

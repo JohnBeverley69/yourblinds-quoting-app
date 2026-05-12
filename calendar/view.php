@@ -359,8 +359,18 @@ $activeNav = 'calendar';
                        class="btn btn-success"
                        target="_blank" rel="noopener">Waze &rarr;</a>
                 <?php endif; ?>
-                <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
-                   class="btn btn-primary">Start quote</a>
+                <?php if (!empty($appt['quote_id'])): ?>
+                    <!-- The appointment has a linked quote (auto-created
+                         on customer acceptance). It's an order by this
+                         point, not a draft quote — label accordingly.
+                         Primary CTA so fitters can jump straight from
+                         the appointment to verify blinds + take payment. -->
+                    <a href="/quote-builder/edit.php?id=<?= (int) $appt['quote_id'] ?>"
+                       class="btn btn-primary">Open order &rarr;</a>
+                <?php else: ?>
+                    <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
+                       class="btn btn-primary">Start quote</a>
+                <?php endif; ?>
                 <a href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                    class="btn btn-secondary">Edit</a>
             </div>

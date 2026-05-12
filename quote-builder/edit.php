@@ -43,6 +43,27 @@ if (!$canSeeAllQuotes) {
 }
 $editable = qb_is_editable($quote);
 
+// Hoisted up from the Payments-panel block so the sticky header bar
+// can also use it (to show the "Take payment" shortcut when relevant).
+// Tenant-level paid add-on; defensive against the column not existing.
+$accountsEnabled = false;
+try {
+    $accStmt = db()->prepare(
+        'SELECT COALESCE(feature_accounts, 0)
+           FROM client_settings WHERE client_id = ? LIMIT 1'
+    );
+    $accStmt->execute([$clientId]);
+    $accountsEnabled = ((int) $accStmt->fetchColumn()) === 1;
+} catch (Throwable $e) {
+    // feature_accounts column missing — treat as disabled.
+}
+// Quote is in a state that could carry an outstanding balance.
+$quoteIsOrder = in_array(
+    (string) $quote['status'],
+    ['accepted', 'ordered', 'invoiced', 'paid'],
+    true
+);
+
 // Edit-blind mode: ?edit_item=N pre-populates the Add-blind form with this
 // item's values and switches its submit handler to update_item.php so saving
 // updates the row in place rather than creating a new one. Falls back to
@@ -569,6 +590,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             </button>
                         </form>
                     <?php endforeach; ?>
+                </span>
+            <?php endif; ?>
+            <?php if ($quoteIsOrder && $accountsEnabled): ?>
+                <!-- One-tap shortcut to the Payments panel — the typical
+                     fitter-at-the-door action. Scrolls to the panel and
+                     focuses the Amount field via the anchor + JS hook. -->
+                <span class="qsb-actions">
+                    <a href="#payments" id="qsb-take-payment" class="is-accept"
+                       style="text-decoration:none">
+                        💷 Take payment
+                    </a>
                 </span>
             <?php endif; ?>
             <span class="qsb-total">
@@ -1117,20 +1149,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <?php
             // Payments section — recorded against this quote. Hidden
             // entirely when the tenant doesn't have the paid Accounts
-            // add-on enabled. Also defensive against the payments table
-            // not yet existing (separate try/catch).
-            $accountsEnabled = false;
-            try {
-                $accStmt = db()->prepare(
-                    'SELECT COALESCE(feature_accounts, 0)
-                       FROM client_settings WHERE client_id = ? LIMIT 1'
-                );
-                $accStmt->execute([$clientId]);
-                $accountsEnabled = ((int) $accStmt->fetchColumn()) === 1;
-            } catch (Throwable $e) {
-                // feature_accounts column missing — treat as disabled.
-            }
-
+            // add-on enabled. $accountsEnabled was hoisted up earlier
+            // in the file so the sticky bar can use it too.
             $paymentsList    = [];
             $paymentsTotal   = 0.0;
             $paymentsLoaded  = false;
@@ -1167,7 +1187,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             ];
         ?>
         <?php if ($paymentsLoaded): ?>
-        <section class="section">
+        <section class="section" id="payments" style="scroll-margin-top:4rem">
             <div class="section-header">
                 <h2 class="section-title">Payments</h2>
             </div>
@@ -2030,6 +2050,28 @@ window.__editingBlind__ = <?= json_encode([
 
     search.addEventListener('input',  syncFromMatch);
     search.addEventListener('change', syncFromMatch);
+})();
+</script>
+<script>
+// "Take payment" shortcut in the sticky header — when clicked, the
+// browser's anchor-scroll takes the user to #payments (already
+// scroll-margin-top'd so the sticky bar doesn't cover it). Once
+// scrolling has likely settled, focus the Amount input on the
+// inline Record-payment form so the fitter can type the figure and
+// Enter to save without any more clicks. Defensive against the form
+// not being present (e.g. already-fully-paid order: no input to focus).
+(function () {
+    var trigger = document.getElementById('qsb-take-payment');
+    if (!trigger) return;
+    trigger.addEventListener('click', function () {
+        setTimeout(function () {
+            var amt = document.querySelector('#payments input[name="amount"]');
+            if (amt) {
+                amt.focus();
+                amt.select();
+            }
+        }, 350);
+    });
 })();
 </script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>

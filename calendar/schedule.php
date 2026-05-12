@@ -300,7 +300,11 @@ $activeNav = 'my-schedule';
                 <div class="actions">
                     <a href="/calendar/view.php?id=<?= (int) $r['id'] ?>">Details</a>
                     <?php if (!empty($r['quote_id'])): ?>
-                        <a href="/quote-builder/edit.php?id=<?= (int) $r['quote_id'] ?>">Open quote</a>
+                        <!-- Appointments only get a quote_id when their
+                             source quote was accepted (auto-creation
+                             on status=accepted), so it's always an
+                             "order" by this point — never a draft quote. -->
+                        <a href="/quote-builder/edit.php?id=<?= (int) $r['quote_id'] ?>">Open order</a>
                     <?php endif; ?>
                 </div>
             </div>
