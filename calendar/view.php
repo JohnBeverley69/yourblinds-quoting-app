@@ -33,14 +33,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newStatus = (string) ($_POST['status'] ?? '');
         if (!in_array($newStatus, $validStatuses, true)) {
             $_SESSION['flash_error'] = 'Invalid status.';
-        } else {
-            $u = db()->prepare(
-                'UPDATE appointments SET status = ?
-                  WHERE id = ? AND client_id = ?'
-            );
-            $u->execute([$newStatus, $id, $clientId]);
-            $_SESSION['flash_success'] = 'Status updated to ' . $newStatus . '.';
+            header('Location: /calendar/view.php?id=' . $id);
+            exit;
         }
+
+        // Defence-in-depth — the view gate further down protects GET
+        // but the POST handler fires before that. Anyone without admin
+        // / view-all must be the assignee of THIS appointment to flip
+        // its status.
+        $canUpdateAny = $isAdmin;
+        if (!$canUpdateAny) {
+            $pSt = db()->prepare(
+                'SELECT COALESCE(can_view_all_customer_jobs, 0)
+                   FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+            );
+            $pSt->execute([(int) $user['user_id'], $clientId]);
+            $canUpdateAny = ((int) $pSt->fetchColumn()) === 1;
+        }
+        if (!$canUpdateAny) {
+            $ownChk = db()->prepare(
+                'SELECT 1 FROM appointments
+                  WHERE id = ? AND client_id = ? AND client_user_id = ? LIMIT 1'
+            );
+            $ownChk->execute([$id, $clientId, (int) $user['user_id']]);
+            if (!$ownChk->fetchColumn()) {
+                http_response_code(404);
+                exit('Appointment not found.');
+            }
+        }
+
+        $u = db()->prepare(
+            'UPDATE appointments SET status = ?
+              WHERE id = ? AND client_id = ?'
+        );
+        $u->execute([$newStatus, $id, $clientId]);
+        $_SESSION['flash_success'] = 'Status updated to ' . $newStatus . '.';
         header('Location: /calendar/view.php?id=' . $id);
         exit;
     }

@@ -158,6 +158,52 @@ function qb_allowed_transitions(string $current): array
 }
 
 /**
+ * Which user-permission flag does this target status require?
+ *
+ *   'can_create_quotes' — sales-side transitions (sent / accepted /
+ *                         declined). Closing a sale belongs to whoever
+ *                         can also originate a quote.
+ *   'can_create_orders' — order-lifecycle transitions (ordered /
+ *                         invoiced / paid). Office / admin action.
+ *   ''                  — no specific flag required beyond being able
+ *                         to access the quote at all (draft reopen).
+ *
+ * Admins bypass this entirely.
+ */
+function qb_target_permission(string $target): string
+{
+    switch ($target) {
+        case 'sent':
+        case 'accepted':
+        case 'declined':
+            return 'can_create_quotes';
+        case 'ordered':
+        case 'invoiced':
+        case 'paid':
+            return 'can_create_orders';
+        case 'draft':
+        default:
+            return '';   // either role can reopen as draft
+    }
+}
+
+/**
+ * Convenience: given a user's perm flags + admin flag, can they move
+ * the quote to this target status?
+ */
+function qb_user_can_change_to(bool $isAdmin, array $perms, string $target): bool
+{
+    if ($isAdmin) return true;
+    $need = qb_target_permission($target);
+    if ($need === '') {
+        // 'draft' reopen — either creator-style perm is enough.
+        return !empty($perms['can_create_quotes'])
+            || !empty($perms['can_create_orders']);
+    }
+    return !empty($perms[$need]);
+}
+
+/**
  * Create an installation appointment off the back of a quote acceptance.
  *
  * Idempotent: if an appointment already exists pointing at this quote

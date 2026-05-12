@@ -544,6 +544,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 $quickActions = array_values(array_intersect(
                     ['accepted', 'declined'], $transitions
                 ));
+                // Filter further by the user's permission — sales-side
+                // transitions (accepted / declined) need
+                // can_create_quotes. A fitter shouldn't see these
+                // buttons because they don't close sales.
+                $quickActions = array_values(array_filter(
+                    $quickActions,
+                    static fn ($t) => qb_user_can_change_to($isAdmin, $_perms, $t)
+                ));
             ?>
             <?php if ($editable && $quickActions): ?>
                 <span class="qsb-actions">
@@ -1403,6 +1411,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     Download PDF
                 </a>
                 <?php foreach ($transitions as $t): ?>
+                    <?php if (!qb_user_can_change_to($isAdmin, $_perms, $t)) continue; ?>
                     <form method="post" action="/quote-builder/change_status.php">
                         <?= csrf_field() ?>
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -1871,8 +1880,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (qty > 1) bits.push('× ' + qty + ' = <strong>£' + total + '</strong>');
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
+            <?php if ($isAdmin || $_perms['can_view_costs']): ?>
+            // Internal-cost breakdown (markup % / discount %) — visible
+            // only to admins and users with can_view_costs. Hidden from
+            // fitters etc. who would otherwise see the trade margin.
             if (data.markup_percent > 0)   bits.push('markup ' + Number(data.markup_percent).toFixed(2) + '%');
             if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
+            <?php endif; ?>
             // Rounded-up cell size used to be shown here ("rounded up
             // to 1600 × 2000 mm") — trade users found it noisy / not
             // actionable, since the engine always rounds up to the

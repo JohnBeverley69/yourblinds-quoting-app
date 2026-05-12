@@ -31,6 +31,19 @@ if (!in_array($target, qb_allowed_transitions($current), true)) {
     );
 }
 
+// Permission gate. Sales-side targets (sent/accepted/declined) need
+// can_create_quotes; order-side targets (ordered/invoiced/paid) need
+// can_create_orders. Admins bypass.
+$isAdmin = ($user['role'] ?? '') === 'admin';
+$_perms  = current_user_permissions();
+if (!qb_user_can_change_to($isAdmin, $_perms, $target)) {
+    qb_flash_redirect(
+        '/quote-builder/edit.php?id=' . $quoteId,
+        'error',
+        'You don\'t have permission to mark this quote as "' . $target . '".'
+    );
+}
+
 // Update status, plus the timestamp columns where relevant.
 $pdo = db();
 $pdo->beginTransaction();
