@@ -9,18 +9,24 @@ requireLogin();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
+$_perms   = current_user_permissions();
 
-// Permission gate: non-admin users without can_view_all_customer_jobs
-// only see quotes that have at least one appointment assigned to them.
-$canViewAll = $isAdmin;
-if (!$canViewAll) {
-    $permSt = db()->prepare(
-        'SELECT COALESCE(can_view_all_customer_jobs, 0)
-           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
-    );
-    $permSt->execute([(int) $user['user_id'], $clientId]);
-    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
+// Page access: must be able to either CREATE quotes or VIEW ALL.
+// Without either, the page would be empty (no creations, no
+// visibility) — block it with a 403 so URL-poking goes nowhere.
+if (!$isAdmin && !$_perms['can_create_quotes'] && !$_perms['can_view_all_customer_jobs']) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>403 Forbidden</h1>'
+       . '<p>You don\'t have permission to view the quote history.</p>'
+       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+    exit;
 }
+
+// Row filter: non-admin users without view-all see only quotes
+// that have at least one appointment assigned to them.
+$canViewAll     = $isAdmin || $_perms['can_view_all_customer_jobs'];
 $restrictToMine = !$canViewAll;
 
 $status = trim((string) ($_GET['status'] ?? ''));
@@ -130,7 +136,9 @@ $activeNav = 'quote-history';
                 <h1 class="page-title">Quote history</h1>
                 <p class="page-subtitle">All quotes for <?= e((string) $user['company_name']) ?>.</p>
             </div>
-            <a href="/quote-builder/new.php" class="btn btn-primary">+ New quote</a>
+            <?php if ($isAdmin || $_perms['can_create_quotes']): ?>
+                <a href="/quote-builder/new.php" class="btn btn-primary">+ New quote</a>
+            <?php endif; ?>
         </div>
 
         <?php if ($flashMsg !== null): ?>
@@ -171,7 +179,11 @@ $activeNav = 'quote-history';
                 <div class="placeholder">
                     <p class="placeholder-title">No quotes <?= $status !== '' || $q !== '' ? 'match' : 'yet' ?></p>
                     <p class="placeholder-body">
-                        <a href="/quote-builder/new.php">Start a new quote &rarr;</a>
+                        <?php if ($isAdmin || $_perms['can_create_quotes']): ?>
+                            <a href="/quote-builder/new.php">Start a new quote &rarr;</a>
+                        <?php else: ?>
+                            Quotes you're assigned to fit will appear here.
+                        <?php endif; ?>
                     </p>
                 </div>
             <?php else: ?>

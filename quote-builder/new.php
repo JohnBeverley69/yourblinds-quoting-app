@@ -9,6 +9,21 @@ requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+$isAdmin  = ($user['role'] ?? '') === 'admin';
+
+// Permission gate — only admins and users with can_create_quotes
+// can land here. URL-poke without permission = 403.
+$_perms = current_user_permissions();
+if (!$isAdmin && !$_perms['can_create_quotes']) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>403 Forbidden</h1>'
+       . '<p>You don\'t have permission to create quotes. Speak to your admin '
+       . 'if you think this is wrong.</p>'
+       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+    exit;
+}
 
 $f = [
     'customer_id'           => 0,

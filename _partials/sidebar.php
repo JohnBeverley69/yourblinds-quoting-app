@@ -23,6 +23,24 @@ $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
+// Per-user permission flags from client_users. Used to gate menu
+// entries for non-admin users — admins always pass via $isAdmin.
+$_perms = function_exists('current_user_permissions')
+    ? current_user_permissions()
+    : ['can_create_quotes' => false, 'can_create_orders' => false,
+       'can_view_all_customer_jobs' => false, 'can_view_costs' => false];
+
+$canCreateQuotes  = $isAdmin || $_perms['can_create_quotes'];
+$canCreateOrders  = $isAdmin || $_perms['can_create_orders'];
+$canSeeAllJobs    = $isAdmin || $_perms['can_view_all_customer_jobs'];
+// "Worth showing the Quote History / Orders entry?" — only if the
+// user can create the things OR see everyone's, otherwise the page
+// would be empty/useless anyway. (Fitters get assigned to jobs via
+// the Calendar, so they don't need a list-view of orders to do their
+// work; Calendar + My Schedule cover them.)
+$canSeeQuoteHistory = $canCreateQuotes || $canSeeAllJobs;
+$canSeeOrders       = $canCreateOrders || $canSeeAllJobs;
+
 // Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
 // missing, hide the entries that would 500 on click. The check is a single
 // metadata lookup — cheap enough to do per page render, and self-heals
@@ -50,9 +68,9 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
 $navLinks = [
     'calendar'      => ['/calendar/index.php',         'Calendar',      true],
     'my-schedule'   => ['/calendar/schedule.php',      'My Schedule',   true],
-    'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
-    'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
-    'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes],
+    'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
+    'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
+    'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
     'accounts'      => ['/accounts/index.php',         'Accounts',      $isAdmin && $hasQuotes && $hasAccountsFeature],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],

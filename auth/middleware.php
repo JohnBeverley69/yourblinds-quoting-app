@@ -47,6 +47,62 @@ function is_super_admin(): bool
 }
 
 /**
+ * Per-request cached lookup of the logged-in user's permission flags
+ * (the four checkboxes on /admin/users_edit.php). Returns an array
+ * with keys for each flag, each a bool.
+ *
+ * Admin users are NOT auto-granted these — admins still get their
+ * permissions from the actual columns on client_users — but in
+ * practice the admin's row will have them all ticked. Pages that
+ * need "admin-or-flagged" semantics should compose with the role
+ * check explicitly: $isAdmin || $perms['can_create_quotes'].
+ *
+ * Defensive against missing columns / users (returns all-false).
+ */
+function current_user_permissions(): array
+{
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $user = current_user();
+    if (!$user) {
+        return $cache = [
+            'can_create_quotes'          => false,
+            'can_create_orders'          => false,
+            'can_view_all_customer_jobs' => false,
+            'can_view_costs'             => false,
+        ];
+    }
+
+    try {
+        $st = db()->prepare(
+            'SELECT COALESCE(can_create_quotes, 0)          AS can_create_quotes,
+                    COALESCE(can_create_orders, 0)          AS can_create_orders,
+                    COALESCE(can_view_all_customer_jobs, 0) AS can_view_all_customer_jobs,
+                    COALESCE(can_view_costs, 0)             AS can_view_costs
+               FROM client_users
+              WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
+        $row = $st->fetch() ?: [];
+        $cache = [
+            'can_create_quotes'          => ((int) ($row['can_create_quotes'] ?? 0)) === 1,
+            'can_create_orders'          => ((int) ($row['can_create_orders'] ?? 0)) === 1,
+            'can_view_all_customer_jobs' => ((int) ($row['can_view_all_customer_jobs'] ?? 0)) === 1,
+            'can_view_costs'             => ((int) ($row['can_view_costs'] ?? 0)) === 1,
+        ];
+    } catch (Throwable $e) {
+        $cache = [
+            'can_create_quotes'          => false,
+            'can_create_orders'          => false,
+            'can_view_all_customer_jobs' => false,
+            'can_view_costs'             => false,
+        ];
+    }
+    return $cache;
+}
+
+/**
  * Sanitise a return-to URL coming from POST. Accepts ONLY same-origin
  * absolute paths — anything starting with a protocol or "//" (which
  * the browser treats as protocol-relative, so navigating to it leaves
