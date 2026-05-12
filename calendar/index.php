@@ -136,7 +136,10 @@ $fmtTime = static function (string $time): string {
         ?: DateTimeImmutable::createFromFormat('H:i', $time);
     return $t === false ? $time : strtolower($t->format('g:ia'));
 };
-$activeNav = $mineOnly ? 'my-diary' : 'calendar';
+// Calendar highlights the same sidebar entry in both modes — the
+// "My Diary" entry was retired (it was just Calendar?mine=1, which is
+// reachable via the toggle button on the page header now).
+$activeNav = 'calendar';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -190,6 +193,31 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
             min-width: 11rem;
             text-align: center;
         }
+        /* Everyone / Just-me pill toggle in the page header — replaces
+           the old "My Diary" sidebar entry. Two adjacent anchors,
+           filled when active, outlined when not. */
+        .cal-view-toggle {
+            display: inline-flex;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            overflow: hidden;
+            font-size: 0.875rem;
+            background: #fff;
+        }
+        .cal-toggle-btn {
+            padding: 0.4375rem 0.875rem;
+            color: #4b5563;
+            text-decoration: none;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .cal-toggle-btn:hover { background: #f3f4f6; }
+        .cal-toggle-btn.is-active {
+            background: #1f3b5b;
+            color: #fff;
+        }
+        .cal-toggle-btn + .cal-toggle-btn { border-left: 1px solid #d1d5db; }
+
         .cal-legend {
             display: flex;
             gap: 0.875rem;
@@ -427,20 +455,29 @@ $activeNav = $mineOnly ? 'my-diary' : 'calendar';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">
-                    <?= $mineOnly ? 'My Diary' : 'Calendar' ?>
-                </h1>
+                <h1 class="page-title">Calendar</h1>
                 <p class="page-subtitle">
                     <?php if ($mineOnly): ?>
-                        Appointments assigned to <?= e($user['full_name']) ?>.
-                        <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>">Show all</a>
+                        Filtered to <?= e($user['full_name']) ?>'s appointments only.
                     <?php else: ?>
                         Appointments for <?= e($user['company_name']) ?>.
-                        <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>">My diary only</a>
                     <?php endif; ?>
                 </p>
             </div>
             <div class="actions-bar">
+                <!-- View toggle. Two pill-style buttons that stay visible
+                     regardless of which is active so users see both
+                     options. Active one is filled; inactive is outlined. -->
+                <div class="cal-view-toggle" role="group" aria-label="Calendar view">
+                    <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                       class="cal-toggle-btn <?= $mineOnly ? '' : 'is-active' ?>">
+                        Everyone
+                    </a>
+                    <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                       class="cal-toggle-btn <?= $mineOnly ? 'is-active' : '' ?>">
+                        Just me
+                    </a>
+                </div>
                 <?php if ($mapsEnabled): ?>
                     <a href="/calendar/run.php" class="btn btn-success">Today's run &rarr;</a>
                 <?php endif; ?>

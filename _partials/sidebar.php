@@ -49,7 +49,6 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
 // just a placeholder pointing at /admin/index.php and got removed.
 $navLinks = [
     'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-    'my-diary'      => ['/calendar/index.php?mine=1',  'My Diary',      true],
     'my-schedule'   => ['/calendar/schedule.php',      'My Schedule',   true],
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
