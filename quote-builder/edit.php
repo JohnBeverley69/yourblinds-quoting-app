@@ -1078,27 +1078,42 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <?php endif; ?>
 
         <?php
-            // Payments section — recorded against this quote. Defensive
-            // against the payments table not yet existing (try/catch).
+            // Payments section — recorded against this quote. Hidden
+            // entirely when the tenant doesn't have the paid Accounts
+            // add-on enabled. Also defensive against the payments table
+            // not yet existing (separate try/catch).
+            $accountsEnabled = false;
+            try {
+                $accStmt = db()->prepare(
+                    'SELECT COALESCE(feature_accounts, 0)
+                       FROM client_settings WHERE client_id = ? LIMIT 1'
+                );
+                $accStmt->execute([$clientId]);
+                $accountsEnabled = ((int) $accStmt->fetchColumn()) === 1;
+            } catch (Throwable $e) {
+                // feature_accounts column missing — treat as disabled.
+            }
+
             $paymentsList    = [];
             $paymentsTotal   = 0.0;
             $paymentsLoaded  = false;
-            try {
-                $pStmt = db()->prepare(
-                    'SELECT id, amount, received_at, method, reference, notes
-                       FROM payments
-                      WHERE quote_id = ? AND client_id = ?
-                   ORDER BY received_at DESC, id DESC'
-                );
-                $pStmt->execute([(int) $quote['id'], $clientId]);
-                $paymentsList   = $pStmt->fetchAll();
-                $paymentsTotal  = array_sum(array_map(
-                    static fn ($p) => (float) $p['amount'], $paymentsList
-                ));
-                $paymentsLoaded = true;
-            } catch (Throwable $e) {
-                // payments table missing — migration not run yet. Skip
-                // the panel rather than 500 the whole quote page.
+            if ($accountsEnabled) {
+                try {
+                    $pStmt = db()->prepare(
+                        'SELECT id, amount, received_at, method, reference, notes
+                           FROM payments
+                          WHERE quote_id = ? AND client_id = ?
+                       ORDER BY received_at DESC, id DESC'
+                    );
+                    $pStmt->execute([(int) $quote['id'], $clientId]);
+                    $paymentsList   = $pStmt->fetchAll();
+                    $paymentsTotal  = array_sum(array_map(
+                        static fn ($p) => (float) $p['amount'], $paymentsList
+                    ));
+                    $paymentsLoaded = true;
+                } catch (Throwable $e) {
+                    // payments table missing — migration not run yet.
+                }
             }
             // Outstanding = total − payments − (deposit if marked paid).
             $depositCounted   = $depositPaidAt ? (float) ($depositAmount ?? 0) : 0.0;

@@ -28,6 +28,21 @@ requireLogin();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Paid Accounts add-on toggles the Outstanding column on/off. The
+// column uses payments-table data, which only exists / has data when
+// the tenant has the feature. Defensive against missing column.
+$accountsEnabled = false;
+try {
+    $accSt = db()->prepare(
+        'SELECT COALESCE(feature_accounts, 0)
+           FROM client_settings WHERE client_id = ? LIMIT 1'
+    );
+    $accSt->execute([$clientId]);
+    $accountsEnabled = ((int) $accSt->fetchColumn()) === 1;
+} catch (Throwable $e) {
+    // Column missing — feature disabled.
+}
+
 $orderStatuses = ['accepted', 'ordered', 'invoiced', 'paid'];
 
 $status = trim((string) ($_GET['status'] ?? ''));
@@ -214,7 +229,9 @@ $activeNav = 'orders';
                                 <th>Accepted</th>
                                 <th class="num">Total</th>
                                 <th>Deposit</th>
-                                <th class="num">Outstanding</th>
+                                <?php if ($accountsEnabled): ?>
+                                    <th class="num">Outstanding</th>
+                                <?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -259,23 +276,25 @@ $activeNav = 'orders';
                                             </span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="num">
-                                        <?php if ($outstanding > 0.0049): ?>
-                                            <a href="/accounts/index.php?prefill_quote=<?= (int) $o['id'] ?>"
-                                               title="Click to take a payment against this order"
-                                               style="color:#92400e;font-weight:700;text-decoration:none;
-                                                      border-bottom:1px dashed #92400e">
-                                                <?= e($money($outstanding)) ?>
-                                            </a>
-                                        <?php elseif ($outstanding < -0.0049): ?>
-                                            <span style="color:#1e40af;font-weight:700"
-                                                  title="Overpaid">
-                                                +<?= e($money(-$outstanding)) ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span style="color:#065f46;font-weight:700">✓ paid</span>
-                                        <?php endif; ?>
-                                    </td>
+                                    <?php if ($accountsEnabled): ?>
+                                        <td class="num">
+                                            <?php if ($outstanding > 0.0049): ?>
+                                                <a href="/accounts/index.php?prefill_quote=<?= (int) $o['id'] ?>"
+                                                   title="Click to take a payment against this order"
+                                                   style="color:#92400e;font-weight:700;text-decoration:none;
+                                                          border-bottom:1px dashed #92400e">
+                                                    <?= e($money($outstanding)) ?>
+                                                </a>
+                                            <?php elseif ($outstanding < -0.0049): ?>
+                                                <span style="color:#1e40af;font-weight:700"
+                                                      title="Overpaid">
+                                                    +<?= e($money(-$outstanding)) ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span style="color:#065f46;font-weight:700">✓ paid</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

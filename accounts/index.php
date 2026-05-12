@@ -22,6 +22,9 @@ requireLogin();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Paid add-on — gate the whole module behind the per-tenant flag.
+acct_require_feature($clientId);
+
 $q       = trim((string) ($_GET['q']      ?? ''));
 $from    = trim((string) ($_GET['from']   ?? ''));
 $to      = trim((string) ($_GET['to']     ?? ''));

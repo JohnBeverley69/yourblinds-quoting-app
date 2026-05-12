@@ -29,6 +29,21 @@ $activeNav    = $activeNav    ?? '';
 // the moment Phase 3 lands the table.
 $hasQuotes = $hasQuotes ?? (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
 
+// Paid Accounts add-on flag (per tenant). Defensive: the column might
+// not exist yet on tenants who haven't run migrate_feature_accounts.php —
+// treat that as "feature off" so the sidebar entry stays hidden.
+$hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
+    try {
+        $st = db()->prepare(
+            'SELECT COALESCE(feature_accounts, 0) FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $st->execute([(int) ($user['client_id'] ?? 0)]);
+        return ((int) $st->fetchColumn()) === 1;
+    } catch (Throwable $e) {
+        return false;
+    }
+})();
+
 // [href, label, visible]. Order = display order. Calendar is the de-facto
 // landing page (login redirects there); a separate "Dashboard" link was
 // just a placeholder pointing at /admin/index.php and got removed.
@@ -39,7 +54,7 @@ $navLinks = [
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes],
     'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes],
-    'accounts'      => ['/accounts/index.php',         'Accounts',      $isAdmin && $hasQuotes],
+    'accounts'      => ['/accounts/index.php',         'Accounts',      $isAdmin && $hasQuotes && $hasAccountsFeature],
     'customers'     => ['/customer-manager/index.php', 'Customers',     true],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],

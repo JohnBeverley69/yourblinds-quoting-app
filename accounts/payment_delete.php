@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/_helpers.php';
 
 requireLogin();
 
@@ -24,6 +25,9 @@ csrf_check();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+
+// Paid add-on — gate at the handler too, not just the UI.
+acct_require_feature($clientId);
 
 $id       = (int) ($_POST['id']        ?? 0);
 $returnTo = safe_local_redirect(

@@ -38,6 +38,9 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 $pdo      = db();
 
+// Paid add-on — gate at the handler too, not just the UI.
+acct_require_feature($clientId);
+
 $id        = (int) ($_POST['id']          ?? 0);
 $quoteId   = (int) ($_POST['quote_id']    ?? 0) ?: null;
 $amountRaw = trim((string) ($_POST['amount']      ?? ''));

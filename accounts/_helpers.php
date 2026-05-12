@@ -78,3 +78,49 @@ function acct_fmt_money($n): string
 {
     return '£' . number_format((float) $n, 2);
 }
+
+/**
+ * Is the paid Accounts add-on enabled for this tenant?
+ *
+ * Result is cached per-request so the sidebar + page-body + handler
+ * gates don't all hit the DB separately. Defensive against the
+ * column not existing yet (treats as disabled).
+ */
+function acct_feature_enabled(int $clientId): bool
+{
+    static $cache = [];
+    if (array_key_exists($clientId, $cache)) {
+        return $cache[$clientId];
+    }
+    try {
+        $st = db()->prepare(
+            'SELECT COALESCE(feature_accounts, 0)
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $st->execute([$clientId]);
+        $cache[$clientId] = ((int) $st->fetchColumn()) === 1;
+    } catch (Throwable $e) {
+        // Column not present yet (pre-migration) — treat as disabled.
+        $cache[$clientId] = false;
+    }
+    return $cache[$clientId];
+}
+
+/**
+ * Server-side gate. Use at the top of any /accounts/* page or
+ * payment handler — 403s if the tenant doesn't have the add-on.
+ * Keeps URL-poking attackers out, even if their sidebar UI is
+ * hiding the link.
+ */
+function acct_require_feature(int $clientId): void
+{
+    if (acct_feature_enabled($clientId)) return;
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>Accounts module not enabled</h1>'
+       . '<p>The Accounts add-on isn\'t enabled for your account. '
+       . 'Contact your supplier to enable it.</p>'
+       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+    exit;
+}
