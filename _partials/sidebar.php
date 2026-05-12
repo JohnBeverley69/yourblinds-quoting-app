@@ -102,7 +102,17 @@ $navLinks = [
         <div class="app-sidebar-user">
             <div class="app-sidebar-user-name"><?= e($user['full_name']) ?></div>
             <div class="app-sidebar-user-meta">
-                <?= e($user['company_name']) ?> &middot; <?= e($user['role']) ?>
+                <?php
+                    // Show ALL ticked roles, not just the primary. The
+                    // "primary" was picked by privilege priority (sales
+                    // > fitter, etc.), so a fitter who also had sales
+                    // ticked showed up as "sales" — confusing. Joining
+                    // the full set is more honest.
+                    $roleLabel = !empty($user['roles']) && is_array($user['roles'])
+                        ? implode(', ', $user['roles'])
+                        : (string) ($user['role'] ?? '');
+                ?>
+                <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
         <nav class="app-sidebar-nav">
