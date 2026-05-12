@@ -1299,7 +1299,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <th>Method</th>
                             <th>Reference</th>
                             <th class="num">Amount</th>
-                            <?php if ($editable): ?><th></th><?php endif; ?>
+                            <?php if ($quoteIsOrder): ?><th></th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -1309,7 +1309,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <td><?= e($acctMethodLabels[$p['method']] ?? ucfirst((string) $p['method'])) ?></td>
                                 <td><?= e((string) ($p['reference'] ?? '')) ?></td>
                                 <td class="num"><?= e(qb_fmt_money((float) $p['amount'])) ?></td>
-                                <?php if ($editable): ?>
+                                <?php if ($quoteIsOrder): ?>
                                     <td style="white-space:nowrap">
                                         <form method="post" action="/accounts/payment_delete.php"
                                               style="display:inline;margin:0"
@@ -1331,7 +1331,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </table>
             <?php endif; ?>
 
-            <?php if ($editable && $outstandingHere > 0.0049): ?>
+            <?php if ($quoteIsOrder && $outstandingHere > 0.0049): ?>
                 <div class="record-payment-card">
                     <h3 class="record-payment-card__title">
                         💷 Record a new payment
