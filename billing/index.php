@@ -15,6 +15,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/billing_helpers.php';
+require __DIR__ . '/../_partials/paypal.php';
 
 requireAdmin();
 
@@ -26,6 +27,22 @@ $plan   = $sub ? billing_plan((string) $sub['plan_code']) : null;
 $active = billing_subscription_is_active($sub);
 $plans  = billing_plans();
 $statuses = billing_status_labels();
+$paypalReady = paypal_is_configured();
+
+// What the primary CTA on the Billing page should do.
+//   'subscribe' — tenant is on the free plan, can upgrade
+//   'cancel'    — tenant has an active paid plan, can cancel
+//   'contact'   — paid plan but in an odd state (past_due/expired),
+//                 contact support so we don't double-charge
+$ctaMode = 'subscribe';
+if ($sub && ((string) $sub['plan_code']) === 'accounts') {
+    $s = (string) $sub['status'];
+    $ctaMode = ($s === 'active' || $s === 'trial') ? 'cancel' : 'contact';
+}
+
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $activeNav = 'billing';
 ?><!doctype html>
@@ -101,6 +118,13 @@ $activeNav = 'billing';
             </div>
         </div>
 
+        <?php if ($flashMsg): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
         <section class="section">
             <div class="bill-current">
                 <span class="b-plan"><?= e($plan['name'] ?? 'Free') ?></span>
@@ -131,8 +155,9 @@ $activeNav = 'billing';
                 <h2 class="section-title">Plans</h2>
             </div>
             <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem">
-                To change plan, contact your account manager.
-                Online self-service via PayPal is coming soon.
+                Subscribe or cancel via PayPal below. You can cancel at any time —
+                your features stay active until cancellation completes on PayPal's
+                end (usually instant). Billing happens monthly in GBP through PayPal.
             </p>
 
             <div class="plan-grid">
@@ -153,10 +178,42 @@ $activeNav = 'billing';
                         <div class="p-action">
                             <?php if ($isCurrent): ?>
                                 <span class="p-current-tag">✓ Current plan</span>
+                                <?php if ($code === 'accounts' && $ctaMode === 'cancel'): ?>
+                                    <form method="post" action="/billing/cancel.php"
+                                          style="display:inline;margin-left:0.5rem"
+                                          data-confirm="Cancel your subscription? Paid features will turn off straight away.">
+                                        <?= csrf_field() ?>
+                                        <button type="submit" class="btn btn-secondary"
+                                                style="padding:0.3125rem 0.75rem;font-size:0.8125rem">
+                                            Cancel subscription
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            <?php elseif ($code === 'accounts'): ?>
+                                <?php if (!$paypalReady): ?>
+                                    <span style="color:#9ca3af;font-size:0.875rem">
+                                        Online subscription not yet configured —
+                                        contact your account manager.
+                                    </span>
+                                <?php else: ?>
+                                    <form method="post" action="/billing/subscribe.php"
+                                          style="margin:0">
+                                        <?= csrf_field() ?>
+                                        <button type="submit" class="btn btn-primary"
+                                                style="background:#ffc439;color:#111;border:0;
+                                                       font-weight:700;padding:0.5rem 1rem">
+                                            Subscribe via PayPal
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                             <?php else: ?>
-                                <span style="color:#9ca3af;font-size:0.875rem">
-                                    Contact your account manager to switch.
-                                </span>
+                                <?php if ($ctaMode === 'cancel'): ?>
+                                    <span style="color:#9ca3af;font-size:0.875rem">
+                                        Cancel current plan to switch back to Free.
+                                    </span>
+                                <?php else: ?>
+                                    <span style="color:#9ca3af;font-size:0.875rem">—</span>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>
