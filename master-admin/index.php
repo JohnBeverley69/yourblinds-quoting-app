@@ -3,12 +3,38 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/billing_helpers.php';
 
 requireSuperAdmin();
 
 $user        = current_user();
 $myClientId  = (int) $user['client_id'];
 $flags       = require __DIR__ . '/../_partials/feature_flags.php';
+$plans       = billing_plans();
+
+// Reverse-lookup: which plan grants each feature flag, and at what
+// monthly price? Used in the feature-table header so the master admin
+// sees price + subscription-status at a glance.
+//
+// Features not currently part of any plan show as "Manual" — they
+// can still be toggled here but aren't subscribable via PayPal yet.
+// Adding a new paid feature is two steps:
+//   1. Add the column + label to _partials/feature_flags.php
+//   2. Add (or extend) a plan in _partials/billing_plans.php listing
+//      the new flag in its 'features' array
+// The new feature then shows up here AND on the tenant Billing page.
+$flagPricing = [];   // ['feature_accounts' => ['plan' => 'accounts', 'price' => 10.00], ...]
+foreach ($flags as $col => $_label) {
+    $flagPricing[$col] = null;   // null = no plan grants this yet
+    foreach ($plans as $planCode => $plan) {
+        if (!in_array($col, $plan['features'] ?? [], true)) continue;
+        $flagPricing[$col] = [
+            'plan'  => $planCode,
+            'price' => (float) ($plan['price_gbp_monthly'] ?? 0),
+        ];
+        break;
+    }
+}
 
 // Build a SELECT that pulls every flag column dynamically. Column names come
 // from a server-side allowlist (the $flags array) — never from user input —
@@ -41,6 +67,24 @@ $activeNav = 'master-admin';
         .feature-table th { white-space: nowrap; }
         .feature-table td.toggle { width: 1%; text-align: center; }
         .feature-table input[type="checkbox"] { width: 18px; height: 18px; }
+        /* Price stamp under each paid-feature header. Subscription-
+           managed features get a £/mo figure; manual-only features
+           get a small "Manual" tag in grey to flag they're not
+           billable via PayPal yet. */
+        .feature-table .feature-price {
+            font-size: 0.6875rem;
+            color: #065f46;
+            font-weight: 600;
+            margin-top: 0.125rem;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .feature-table .feature-price .unit {
+            color: #6b7280; font-weight: 500;
+        }
+        .feature-table .feature-price .manual {
+            color: #9ca3af; font-weight: 500; font-style: italic;
+        }
         .feature-table tr.is-inactive td:first-child { color: #6b7280; }
         .feature-table tr.is-inactive .inactive-tag {
             display: inline-block;
@@ -106,6 +150,21 @@ $activeNav = 'master-admin';
         <?php endif; ?>
 
         <section class="section">
+            <p style="color:#4b5563;font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
+                Each column is a paid (or paid-able) feature. The
+                <strong>£/mo</strong> figure under the heading is the
+                advertised price on the
+                <a href="/billing/index.php" style="color:#1f3b5b">tenant Billing page</a>
+                — defined in <code>_partials/billing_plans.php</code>. Tenants
+                self-subscribe via PayPal, and their subscription state is
+                managed on the
+                <a href="/master-admin/subscriptions.php" style="color:#1f3b5b">Subscriptions</a> page.
+                Boxes here are still useful for comping a client (overriding the
+                subscription state for testing or as a freebie). Features marked
+                <em>Manual</em> aren't subscribable yet — to make a new feature
+                paid, add a plan in <code>_partials/billing_plans.php</code>
+                referencing its flag column.
+            </p>
             <!--
                 The feature-flags form is a sibling of the table, not its
                 ancestor. Each <input> in the table uses form="flags-form"
@@ -122,8 +181,19 @@ $activeNav = 'master-admin';
                     <thead>
                         <tr>
                             <th>Client</th>
-                            <?php foreach ($flags as $col => $label): ?>
-                                <th class="toggle"><?= e($label) ?></th>
+                            <?php foreach ($flags as $col => $label): $p = $flagPricing[$col] ?? null; ?>
+                                <th class="toggle">
+                                    <?= e($label) ?>
+                                    <div class="feature-price">
+                                        <?php if ($p && $p['price'] > 0): ?>
+                                            £<?= number_format($p['price'], 2) ?><span class="unit">/mo</span>
+                                        <?php elseif ($p): ?>
+                                            Free
+                                        <?php else: ?>
+                                            <span class="manual">Manual</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </th>
                             <?php endforeach; ?>
                             <th></th>
                         </tr>
