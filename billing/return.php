@@ -27,9 +27,25 @@ requireAdmin();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Log everything PayPal sent us — invaluable when something looks
+// odd later (different param names between sandbox/live, order
+// tokens sneaking into subscription_id, etc.).
+error_log('PayPal return.php hit. $_GET=' . json_encode($_GET));
+
 $subId = trim((string) ($_GET['subscription_id'] ?? ''));
-if ($subId === '') {
-    $_SESSION['flash_error'] = 'No subscription id returned by PayPal.';
+
+// Sanity-check the format. PayPal Subscription IDs are
+// "I-" followed by ~13 alphanumeric chars. Order tokens (which
+// PayPal sometimes accidentally returns) look like
+// "5EU12928FA5744921" — 17 alphanumerics, no prefix. Calling
+// /v1/billing/subscriptions/<order-token> gives a confusing 400
+// "request not well-formed" — surface a clearer message and bail.
+if ($subId === '' || !preg_match('/^I-[A-Z0-9]+$/i', $subId)) {
+    error_log('PayPal return.php: bad subscription_id "' . $subId . '". $_GET=' . json_encode($_GET));
+    $_SESSION['flash_error'] = $subId === ''
+        ? 'No subscription id returned by PayPal.'
+        : 'PayPal returned an unexpected id (' . $subId . '). Try Subscribe again, '
+        . 'or contact support if it keeps happening.';
     header('Location: /billing/index.php');
     exit;
 }
@@ -37,7 +53,7 @@ if ($subId === '') {
 try {
     $r = paypal_request('GET', '/v1/billing/subscriptions/' . rawurlencode($subId));
 } catch (Throwable $e) {
-    error_log('PayPal return lookup error: ' . $e->getMessage());
+    error_log('PayPal return lookup error for ' . $subId . ': ' . $e->getMessage());
     $_SESSION['flash_error'] = 'Could not verify subscription with PayPal: ' . $e->getMessage();
     header('Location: /billing/index.php');
     exit;
