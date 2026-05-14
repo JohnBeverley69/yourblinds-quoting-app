@@ -23,21 +23,29 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 
 $sub    = billing_subscription_for($clientId);
-$plan   = $sub ? billing_plan((string) $sub['plan_code']) : null;
 $active = billing_subscription_is_active($sub);
 $plans  = billing_plans();
 $statuses = billing_status_labels();
 $paypalReady = paypal_is_configured();
 
-// What the primary CTA on the Billing page should do.
-//   'subscribe' — tenant is on the free plan, can upgrade
-//   'cancel'    — tenant has an active paid plan, can cancel
-//   'contact'   — paid plan but in an odd state (past_due/expired),
-//                 contact support so we don't double-charge
+// Effective plan = what the tenant ACTUALLY has access to right now,
+// regardless of what plan_code says on a stale/cancelled row.
+// A cancelled "accounts" subscription is effectively free — paid
+// features are off, and they should be able to subscribe again.
+$rawPlanCode    = $sub ? (string) $sub['plan_code'] : 'free';
+$effectivePlan  = $active ? $rawPlanCode : 'free';
+$plan           = billing_plan($effectivePlan) ?: billing_plan('free');
+
+// CTA on the Accounts card:
+//   'cancel'    — paid plan currently active → cancel option
+//   'subscribe' — free OR cancelled-paid → can (re-)subscribe
+//   'contact'   — paid plan in past_due (mid-retry) → contact support
 $ctaMode = 'subscribe';
-if ($sub && ((string) $sub['plan_code']) === 'accounts') {
-    $s = (string) $sub['status'];
-    $ctaMode = ($s === 'active' || $s === 'trial') ? 'cancel' : 'contact';
+$rawStatus = $sub ? (string) $sub['status'] : '';
+if ($active && $rawPlanCode === 'accounts') {
+    $ctaMode = 'cancel';
+} elseif ($rawPlanCode === 'accounts' && $rawStatus === 'past_due') {
+    $ctaMode = 'contact';
 }
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
@@ -128,12 +136,27 @@ $activeNav = 'billing';
         <section class="section">
             <div class="bill-current">
                 <span class="b-plan"><?= e($plan['name'] ?? 'Free') ?></span>
-                <?php $sStatus = (string) ($sub['status'] ?? 'active'); ?>
+                <?php
+                    // For the badge, prefer the live status from the
+                    // subscription row. But if the sub is on "accounts /
+                    // cancelled", show it as "Free" effectively — they're
+                    // back to the free plan now, the cancelled row is
+                    // just a record of what happened.
+                    $sStatus = $sub && $active
+                        ? (string) $sub['status']
+                        : ($rawStatus === 'cancelled' && $effectivePlan === 'free' ? 'cancelled' : 'active');
+                ?>
                 <span class="b-status b-<?= e($sStatus) ?>"><?= e($statuses[$sStatus] ?? $sStatus) ?></span>
                 <span class="b-meta">
-                    <?php if (!$active && $sStatus !== 'active'): ?>
+                    <?php if ($effectivePlan === 'free' && $rawPlanCode === 'accounts' && $rawStatus === 'cancelled'): ?>
+                        Previous Accounts subscription cancelled
+                        <?php if (!empty($sub['cancelled_at'])): ?>
+                            on <strong><?= e(date('j M Y', strtotime((string) $sub['cancelled_at']))) ?></strong>
+                        <?php endif; ?>.
+                        Re-subscribe below any time.
+                    <?php elseif (!$active && $sStatus !== 'active'): ?>
                         Some paid features may be unavailable while in this state.
-                    <?php elseif (!empty($sub['current_period_end'])): ?>
+                    <?php elseif (!empty($sub['current_period_end']) && $active): ?>
                         Current period ends
                         <strong><?= e(date('j M Y', strtotime((string) $sub['current_period_end']))) ?></strong>
                     <?php elseif (($plan['price_gbp_monthly'] ?? 0) > 0): ?>
@@ -162,7 +185,12 @@ $activeNav = 'billing';
 
             <div class="plan-grid">
                 <?php foreach ($plans as $code => $p):
-                    $isCurrent = $sub && ((string) $sub['plan_code']) === $code;
+                    // "Current" = the plan they actually have access to,
+                    // not just what's recorded on a stale row. So a
+                    // tenant whose Accounts sub was cancelled lands
+                    // back on Free as the current plan, and can
+                    // subscribe to Accounts afresh.
+                    $isCurrent = ($code === $effectivePlan);
                 ?>
                     <div class="plan-card <?= $isCurrent ? 'is-current' : '' ?>">
                         <div class="p-name"><?= e($p['name']) ?></div>
