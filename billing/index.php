@@ -157,8 +157,9 @@ $activeNav = 'billing';
                     <?php elseif (!$active && $sStatus !== 'active'): ?>
                         Some paid features may be unavailable while in this state.
                     <?php elseif (!empty($sub['current_period_end']) && $active): ?>
-                        Current period ends
+                        Next billing
                         <strong><?= e(date('j M Y', strtotime((string) $sub['current_period_end']))) ?></strong>
+                        — renews automatically.
                     <?php elseif (($plan['price_gbp_monthly'] ?? 0) > 0): ?>
                         Active subscription.
                     <?php else: ?>
