@@ -82,6 +82,11 @@ if (is_string($nbt) && strlen($nbt) >= 10) {
 }
 
 $pdo = db();
+// Also clear any "Backfilled from feature_accounts=…" note left by
+// migrate_tenant_subscriptions — once a real PayPal subscription is
+// in place, the migration's audit blurb is stale + visible to the
+// tenant on their Billing page, which looks odd. Admin-set notes
+// (anything not starting with "Backfilled") are preserved.
 $pdo->prepare(
     "INSERT INTO tenant_subscriptions
        (client_id, plan_code, status,
@@ -94,7 +99,11 @@ $pdo->prepare(
        external_provider        = 'paypal',
        external_subscription_id = VALUES(external_subscription_id),
        current_period_end       = VALUES(current_period_end),
-       cancelled_at             = NULL"
+       cancelled_at             = NULL,
+       notes                    = CASE
+                                    WHEN notes LIKE 'Backfilled%' THEN NULL
+                                    ELSE notes
+                                  END"
 )->execute([$clientId, $localStatus, $subId, $periodEnd]);
 
 billing_sync_feature_flags($clientId);
