@@ -31,50 +31,73 @@ $masterClientId = (int) $user['client_id'];
 $prefix         = 'Beverley';   // currently fixed; could be a setting later
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_check();
-    $targetIds = is_array($_POST['target_ids'] ?? null) ? $_POST['target_ids'] : [];
-    $targetIds = array_values(array_unique(array_filter(
-        array_map('intval', $targetIds),
-        static fn ($v) => $v > 0 && $v !== $masterClientId
-    )));
+    // Outer try/catch so an unexpected fatal (memory, timeout, schema
+    // mismatch on a column we forgot) flashes a readable error instead
+    // of dumping a bare 500. Also logs the full exception so the next
+    // diagnosis only needs the server's PHP error log.
+    try {
+        csrf_check();
+        $targetIds = is_array($_POST['target_ids'] ?? null) ? $_POST['target_ids'] : [];
+        $targetIds = array_values(array_unique(array_filter(
+            array_map('intval', $targetIds),
+            static fn ($v) => $v > 0 && $v !== $masterClientId
+        )));
 
-    if (!$targetIds) {
-        $_SESSION['flash_error'] = 'Pick at least one tenant to push to.';
+        if (!$targetIds) {
+            $_SESSION['flash_error'] = 'Pick at least one tenant to push to.';
+            header('Location: /master-admin/push-updates.php');
+            exit;
+        }
+
+        $pdo = db();
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Resolve tenant names upfront so the summary reads nicely.
+        $names = [];
+        $st = $pdo->prepare('SELECT id, company_name FROM clients WHERE id = ? LIMIT 1');
+        foreach ($targetIds as $tid) {
+            $st->execute([$tid]);
+            $row = $st->fetch();
+            if ($row) $names[$tid] = (string) $row['company_name'];
+        }
+
+        $results = [];
+        foreach ($targetIds as $tid) {
+            try {
+                $summary = push_catalogue_to_client($pdo, $masterClientId, $tid, $prefix);
+                $results[$tid] = ['name' => $names[$tid] ?? ('client #' . $tid), 'summary' => $summary, 'failed' => false];
+            } catch (Throwable $e) {
+                // Per-tenant failure — log AND record on the summary so
+                // the UI shows it. Other tenants in the batch still get
+                // processed.
+                error_log(
+                    'push-updates: tenant=' . $tid . ' FAILED: '
+                    . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()
+                );
+                $results[$tid] = [
+                    'name'    => $names[$tid] ?? ('client #' . $tid),
+                    'summary' => null,
+                    'failed'  => true,
+                    'error'   => $e->getMessage(),
+                ];
+            }
+        }
+
+        $_SESSION['push_results'] = $results;
+        $_SESSION['flash_success'] = 'Push complete — see the summary below.';
+        header('Location: /master-admin/push-updates.php');
+        exit;
+    } catch (Throwable $outer) {
+        // Whole-batch fatal (CSRF, DB connect, etc.). Log + flash, never 500.
+        error_log(
+            'push-updates: top-level failure: '
+            . $outer->getMessage() . ' at ' . $outer->getFile() . ':' . $outer->getLine()
+            . "\n" . $outer->getTraceAsString()
+        );
+        $_SESSION['flash_error'] = 'Push could not run: ' . $outer->getMessage();
         header('Location: /master-admin/push-updates.php');
         exit;
     }
-
-    $pdo = db();
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Resolve tenant names upfront so the summary reads nicely.
-    $names = [];
-    $st = $pdo->prepare('SELECT id, company_name FROM clients WHERE id = ? LIMIT 1');
-    foreach ($targetIds as $tid) {
-        $st->execute([$tid]);
-        $row = $st->fetch();
-        if ($row) $names[$tid] = (string) $row['company_name'];
-    }
-
-    $results = [];
-    foreach ($targetIds as $tid) {
-        try {
-            $summary = push_catalogue_to_client($pdo, $masterClientId, $tid, $prefix);
-            $results[$tid] = ['name' => $names[$tid] ?? ('client #' . $tid), 'summary' => $summary, 'failed' => false];
-        } catch (Throwable $e) {
-            $results[$tid] = [
-                'name'    => $names[$tid] ?? ('client #' . $tid),
-                'summary' => null,
-                'failed'  => true,
-                'error'   => $e->getMessage(),
-            ];
-        }
-    }
-
-    $_SESSION['push_results'] = $results;
-    $_SESSION['flash_success'] = 'Push complete — see the summary below.';
-    header('Location: /master-admin/push-updates.php');
-    exit;
 }
 
 // GET — list master's prefixed products + other tenants.
