@@ -30,6 +30,46 @@ $user           = current_user();
 $masterClientId = (int) $user['client_id'];
 $prefix         = 'Beverley';   // currently fixed; could be a setting later
 
+// Push can be a long, memory-heavy operation when the master tenant
+// has many products with large price grids (10k+ cells). Default PHP
+// limits on shared hosting are usually 30s / 128M which is exactly
+// where a 500-without-trail comes from. Bump both for this page;
+// these are upper bounds, not targets — most pushes complete in a
+// few seconds.
+if (!headers_sent()) {
+    set_time_limit(300);             // 5 minutes
+    @ini_set('memory_limit', '512M');
+}
+
+// Fatal-error catcher. set_time_limit / memory exhaustion don't throw
+// — they trigger PHP's shutdown sequence. If one of those (or a parse
+// error in something we required) takes us down, log it to the PHP
+// error log AND flash a readable message before the page dies, so
+// the user sees something useful instead of a bare 500.
+//
+// The shutdown function only fires if the previous page render
+// hadn't already completed cleanly, so it's safe to register
+// unconditionally.
+register_shutdown_function(static function () {
+    $err = error_get_last();
+    if (!$err) return;
+    if (!in_array($err['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE, E_USER_ERROR], true)) {
+        return;   // non-fatal, ignore
+    }
+    error_log(
+        'push-updates SHUTDOWN fatal: ' . $err['message']
+        . ' at ' . $err['file'] . ':' . $err['line']
+    );
+    // Best-effort flash + redirect. If headers are already sent the
+    // user gets the bare 500 anyway but at least the log has the
+    // root cause.
+    if (!headers_sent() && session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['flash_error'] = 'Push hit a fatal error — check the server log. '
+            . 'Message: ' . $err['message'];
+        header('Location: /master-admin/push-updates.php');
+    }
+});
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Outer try/catch so an unexpected fatal (memory, timeout, schema
     // mismatch on a column we forgot) flashes a readable error instead
