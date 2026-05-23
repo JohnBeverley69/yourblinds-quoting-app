@@ -124,7 +124,15 @@ $activeNav = 'customers';
                     End-customers belonging to <?= e($user['company_name']) ?>.
                 </p>
             </div>
-            <a href="/customer-manager/new.php" class="btn btn-primary">+ Add customer</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <?php if ($isAdmin): ?>
+                    <a href="/customer-manager/dedupe.php" class="btn btn-secondary"
+                       title="Find and merge customers with the same name">
+                        Find duplicates
+                    </a>
+                <?php endif; ?>
+                <a href="/customer-manager/new.php" class="btn btn-primary">+ Add customer</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>

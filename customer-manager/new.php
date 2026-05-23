@@ -27,10 +27,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $customer['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
 
+    // Soft duplicate check: if a customer with the same case-
+    // insensitive trimmed name already exists for this tenant, stop
+    // and offer the user a choice — proceed anyway, or use the
+    // existing one. Hidden field "confirm_duplicate=1" bypasses the
+    // check on resubmit. This prevents the most common cause of
+    // dupes (typing the same name twice without realising) without
+    // blocking legitimate cases like two real customers named "John
+    // Smith".
+    $duplicates = [];
+    if ($customer['name'] !== ''
+        && empty($_POST['confirm_duplicate'])) {
+        $dupSt = db()->prepare(
+            'SELECT id, name, town, postcode, email, phone
+               FROM customers
+              WHERE client_id = ?
+                AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+           ORDER BY id LIMIT 5'
+        );
+        $dupSt->execute([$clientId, $customer['name']]);
+        $duplicates = $dupSt->fetchAll();
+    }
+
     if ($customer['name'] === '') {
         $error = 'Name is required.';
     } elseif ($customer['email'] !== '' && !filter_var($customer['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
+    } elseif ($duplicates) {
+        // Don't insert yet — surface the duplicate warning. The form
+        // is re-rendered below with the duplicate banner and a
+        // "Save anyway" button (carries confirm_duplicate=1).
     } else {
         $stmt = db()->prepare(
             'INSERT INTO customers
@@ -86,9 +112,54 @@ $activeNav = 'customers';
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
+        <?php if (!empty($duplicates)): ?>
+            <!--
+                Soft duplicate warning. Lists matching existing rows
+                so the user can pick one (most likely outcome — they
+                were re-adding a customer that already exists) OR
+                proceed regardless via the hidden confirm_duplicate
+                field on the form below.
+            -->
+            <div class="alert alert-error" role="alert"
+                 style="background:#fef3c7;border:1px solid #fde047;color:#78350f">
+                <strong>A customer with this name already exists.</strong><br>
+                <span style="font-size:0.875rem">
+                    Pick the existing customer below, or scroll down and
+                    click <strong>Save anyway</strong> if this really is a
+                    different person with the same name.
+                </span>
+                <ul style="margin:0.625rem 0 0;padding-left:1.25rem;font-size:0.875rem;line-height:1.6">
+                    <?php foreach ($duplicates as $d):
+                        $bits = array_filter([
+                            (string) ($d['town']     ?? ''),
+                            (string) ($d['postcode'] ?? ''),
+                            (string) ($d['email']    ?? ''),
+                            (string) ($d['phone']    ?? ''),
+                        ], static fn ($s) => $s !== '');
+                    ?>
+                        <li>
+                            <a href="/customer-manager/edit.php?id=<?= (int) $d['id'] ?>"
+                               style="color:#78350f;font-weight:600">
+                                <?= e((string) $d['name']) ?>
+                            </a>
+                            <?php if ($bits): ?>
+                                <span style="color:#92400e">
+                                    — <?= e(implode(' · ', $bits)) ?>
+                                </span>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+
         <section class="section">
             <form method="post" action="/customer-manager/new.php" class="form" novalidate>
                 <?= csrf_field() ?>
+                <?php if (!empty($duplicates)): ?>
+                    <!-- Carries the user's "yes, really save this one" decision. -->
+                    <input type="hidden" name="confirm_duplicate" value="1">
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">
@@ -158,7 +229,9 @@ $activeNav = 'customers';
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save customer</button>
+                    <button type="submit" class="btn btn-primary">
+                        <?= !empty($duplicates) ? 'Save anyway (it really is a different person)' : 'Save customer' ?>
+                    </button>
                     <a href="/customer-manager/index.php" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
