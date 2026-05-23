@@ -197,16 +197,36 @@ function pe_apply_extra(
     //    (flat/percent/per-metre/width-table all describe how it's
     //    CHARGED to the customer; cost is what's PAID to the supplier
     //    per fitted unit). NULL = treat as 0.
-    $st = $pdo->prepare(
-        'SELECT id, product_extra_id, system_id, label,
-                price_delta, price_percent, price_per_metre,
-                cost_price
-           FROM product_extra_choices
-          WHERE id = ? AND product_extra_id = ? AND active = 1
-          LIMIT 1'
-    );
-    $st->execute([$choiceId, $extraId]);
-    $choice = $st->fetch();
+    //
+    //    markup_pct_override: per-choice escape hatch. NULL = use the
+    //    tenant default (client_settings.default_options_markup_pct);
+    //    any number (including 0) = explicit override for this choice.
+    //    Try-fallback in case the column isn't there yet on older
+    //    schemas (migrate_default_margins.php not run).
+    try {
+        $st = $pdo->prepare(
+            'SELECT id, product_extra_id, system_id, label,
+                    price_delta, price_percent, price_per_metre,
+                    cost_price, markup_pct_override
+               FROM product_extra_choices
+              WHERE id = ? AND product_extra_id = ? AND active = 1
+              LIMIT 1'
+        );
+        $st->execute([$choiceId, $extraId]);
+        $choice = $st->fetch();
+    } catch (Throwable $colErr) {
+        $st = $pdo->prepare(
+            'SELECT id, product_extra_id, system_id, label,
+                    price_delta, price_percent, price_per_metre,
+                    cost_price
+               FROM product_extra_choices
+              WHERE id = ? AND product_extra_id = ? AND active = 1
+              LIMIT 1'
+        );
+        $st->execute([$choiceId, $extraId]);
+        $choice = $st->fetch();
+        if ($choice) $choice['markup_pct_override'] = 0;
+    }
     if (!$choice) {
         return ['error' => "Choice #$choiceId not found for option '" . $extra['name'] . "'."];
     }
@@ -269,7 +289,28 @@ function pe_apply_extra(
         }
     }
 
-    // 6. Pick the primary mode for the snapshot.
+    // 6. Apply the options markup. Per-choice override wins if set
+    //    (including 0, which explicitly opts out); otherwise the
+    //    tenant-wide default kicks in. The migration backfills
+    //    override=0 on every choice that existed before this feature
+    //    landed, so legacy prices never inflate unexpectedly — the
+    //    default only acts on choices created after migration.
+    //
+    //    The markup is a uniform uplift across ALL four contribution
+    //    modes (flat / percent / per-metre / width-table) since the
+    //    tenant thinks of it as "my margin on top of supplier cost"
+    //    regardless of how that cost is expressed.
+    $markupOverride = isset($choice['markup_pct_override']) && $choice['markup_pct_override'] !== null
+        ? (float) $choice['markup_pct_override']
+        : null;
+    $optionsMarkup = $markupOverride !== null
+        ? $markupOverride
+        : pe_tenant_defaults($pdo, $clientId)['options'];
+    if ($optionsMarkup != 0.0) {
+        $amount *= (1 + $optionsMarkup / 100.0);
+    }
+
+    // 7. Pick the primary mode for the snapshot.
     $primary = 'flat';
     foreach (['width_table', 'per_metre', 'percent', 'flat'] as $m) {
         if (in_array($m, $modesApplied, true)) { $primary = $m; break; }
@@ -305,13 +346,46 @@ function pe_apply_extra(
 }
 
 /**
+ * Read the two tenant-wide default margins from client_settings.
+ * Cached per-request because they're hit for every price-table /
+ * option lookup. Returns ['price_table' => float, 'options' => float]
+ * — both 0.0 if the columns don't exist (older schema).
+ */
+function pe_tenant_defaults(PDO $pdo, int $clientId): array
+{
+    static $cache = [];
+    if (isset($cache[$clientId])) return $cache[$clientId];
+    $out = ['price_table' => 0.0, 'options' => 0.0];
+    try {
+        $st = $pdo->prepare(
+            'SELECT default_price_table_markup_pct,
+                    default_options_markup_pct
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $st->execute([$clientId]);
+        $row = $st->fetch();
+        if ($row) {
+            $out['price_table'] = (float) ($row['default_price_table_markup_pct'] ?? 0);
+            $out['options']     = (float) ($row['default_options_markup_pct']     ?? 0);
+        }
+    } catch (Throwable $e) {
+        // Columns missing on older schemas — migration not yet run.
+        // Defaults of 0 mean engine behaves identically to before.
+    }
+    return $cache[$clientId] = $out;
+}
+
+/**
  * Markup % for (client, product, system). Per-system is the only
  * source — premium / motorised / standard each carry their own margin
  * since they're priced very differently in real life.
  *
  * Resolution: look for an exact (client, product, system_id) row.
- * Products without systems use the (system_id IS NULL) row. Missing
- * row = 0%, no fall-back.
+ * Products without systems use the (system_id IS NULL) row. If no
+ * explicit row exists, fall back to the tenant-wide default from
+ * client_settings.default_price_table_markup_pct (introduced by
+ * migrate_default_margins.php). Lets tenants set their margin once
+ * and only override on the products that need a different rate.
  *
  * The unique key uses a generated column IFNULL(system_id, 0), so we
  * can pass NULL for products with no systems without MySQL treating
@@ -338,7 +412,11 @@ function pe_markup_for_system(PDO $pdo, int $clientId, int $productId, ?int $sys
         $st->execute([$clientId, $productId, $systemId]);
     }
     $val = $st->fetchColumn();
-    return ($val !== false && $val !== null) ? (float) $val : 0.0;
+    if ($val !== false && $val !== null) {
+        return (float) $val;
+    }
+    // No explicit override — use the tenant default.
+    return pe_tenant_defaults($pdo, $clientId)['price_table'];
 }
 
 /**

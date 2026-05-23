@@ -121,6 +121,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'margins') {
+        // Tenant-wide default margins. Saves to client_settings columns
+        // added by migrate_default_margins.php. Defensive against the
+        // columns not existing — the UI shouldn't have rendered the
+        // form in that case, but a manual POST could still arrive.
+        $ptMarkup  = (float) ($_POST['default_price_table_markup_pct'] ?? 0);
+        $optMarkup = (float) ($_POST['default_options_markup_pct']     ?? 0);
+        // Bound 0–999 — sky-high markups are presumably typos rather
+        // than legitimate. (We don't bound negatively because we let
+        // them set 0 to "turn off".)
+        $ptMarkup  = max(0, min(999, $ptMarkup));
+        $optMarkup = max(0, min(999, $optMarkup));
+
+        try {
+            db()->prepare(
+                'UPDATE client_settings
+                    SET default_price_table_markup_pct = ?,
+                        default_options_markup_pct     = ?
+                  WHERE client_id = ?'
+            )->execute([$ptMarkup, $optMarkup, $clientId]);
+            $_SESSION['flash_success'] = 'Default margins saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save margins — '
+                . 'has migrate_default_margins.php been run? '
+                . $e->getMessage();
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'quote') {
         // default_markup_percent has been retired — markup is now set
         // per-product (Product → Edit → Markup %). The column is still
@@ -393,6 +423,99 @@ $activeNav = 'settings';
                     </button>
                 </div>
             </form>
+        </section>
+
+        <!--
+            Default margins. Two tenant-wide percentages that act as
+            fallbacks so a tenant doesn't have to set the same margin
+            on every product × system or every option choice. Each is
+            overridable at the more-specific level (product edit for
+            price tables; per-choice for options).
+
+            Defensive against the schema migration not having run —
+            we read the columns inside a try/catch and the section
+            shows a banner pointing at the migration if absent.
+        -->
+        <?php
+            $defaultMarginsAvailable = true;
+            $defaultPtMarkup  = 0.0;
+            $defaultOptMarkup = 0.0;
+            try {
+                $dmSt = db()->prepare(
+                    'SELECT default_price_table_markup_pct,
+                            default_options_markup_pct
+                       FROM client_settings WHERE client_id = ? LIMIT 1'
+                );
+                $dmSt->execute([$clientId]);
+                $dmRow = $dmSt->fetch();
+                if ($dmRow) {
+                    $defaultPtMarkup  = (float) ($dmRow['default_price_table_markup_pct'] ?? 0);
+                    $defaultOptMarkup = (float) ($dmRow['default_options_markup_pct']     ?? 0);
+                }
+            } catch (Throwable $e) {
+                $defaultMarginsAvailable = false;
+            }
+        ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Default margins</h2>
+            </div>
+            <?php if (!$defaultMarginsAvailable): ?>
+                <div class="alert alert-error" role="alert">
+                    The default-margins columns aren't on this database yet —
+                    run <a href="/migrate_default_margins.php"><code>/migrate_default_margins.php</code></a>
+                    (super-admin) to enable this section.
+                </div>
+            <?php else: ?>
+                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
+                    Set your usual margin once and the engine applies it
+                    everywhere &mdash; no need to set markup on every product
+                    or option choice. You can still override at the
+                    product / option level when needed.
+                </p>
+                <form method="post" action="/admin/settings.php" class="form" novalidate>
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="margins">
+
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label for="default_price_table_markup_pct">
+                                Default price-table markup %
+                            </label>
+                            <input id="default_price_table_markup_pct"
+                                   name="default_price_table_markup_pct"
+                                   type="number" step="0.01" min="0" max="999"
+                                   value="<?= e(number_format($defaultPtMarkup, 2, '.', '')) ?>">
+                            <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                                Applied to every (product, system) that
+                                doesn't have an explicit markup set on the
+                                product edit page.
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label for="default_options_markup_pct">
+                                Default options &amp; extras markup %
+                            </label>
+                            <input id="default_options_markup_pct"
+                                   name="default_options_markup_pct"
+                                   type="number" step="0.01" min="0" max="999"
+                                   value="<?= e(number_format($defaultOptMarkup, 2, '.', '')) ?>">
+                            <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                                Uniform uplift on every option choice's
+                                price &mdash; fixed-£, per-metre, and
+                                width-table modes all included. Only
+                                applies to new choices you add after
+                                this feature went live; existing choices
+                                stay at their entered prices.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save margins</button>
+                    </div>
+                </form>
+            <?php endif; ?>
         </section>
 
         <section class="section">
