@@ -77,14 +77,30 @@ $extrasByItem = [];
 if ($items) {
     $itemIds = array_map(static fn ($r) => (int) $r['id'], $items);
     $ph = implode(',', array_fill(0, count($itemIds), '?'));
-    $st = db()->prepare(
-        "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, amount_applied
-           FROM quote_item_extras
-          WHERE quote_item_id IN ($ph)
-          ORDER BY id"
-    );
-    $st->execute($itemIds);
-    foreach ($st->fetchAll() as $r) {
+    // user_value column may not exist yet — fall back to column-less.
+    try {
+        $st = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
+                    amount_applied, user_value
+               FROM quote_item_extras
+              WHERE quote_item_id IN ($ph)
+              ORDER BY id"
+        );
+        $st->execute($itemIds);
+        $rows = $st->fetchAll();
+    } catch (Throwable $e) {
+        $st = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, amount_applied
+               FROM quote_item_extras
+              WHERE quote_item_id IN ($ph)
+              ORDER BY id"
+        );
+        $st->execute($itemIds);
+        $rows = $st->fetchAll();
+        foreach ($rows as &$r) $r['user_value'] = null;
+        unset($r);
+    }
+    foreach ($rows as $r) {
         $extrasByItem[(int) $r['quote_item_id']][] = $r;
     }
 }
@@ -357,7 +373,11 @@ if ($depositStored !== null) {
                         <?php if ($exs): ?>
                             <div class="extras">
                                 <?php foreach ($exs as $ex): ?>
-                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?><br>
+                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php
+                                        if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0):
+                                            echo ' &mdash; ' . e(rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.')) . 'mm';
+                                        endif;
+                                    ?><br>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>

@@ -80,16 +80,33 @@ if ($editingItemId > 0) {
     if (!$editingItem) {
         $editingItemId = 0;
     } else {
-        $exSt = db()->prepare(
-            'SELECT product_extra_id, product_extra_choice_id
-               FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
-        );
-        $exSt->execute([$editingItemId]);
-        foreach ($exSt->fetchAll() as $r) {
-            $editingExtras[] = [
-                'extra_id'  => (int) $r['product_extra_id'],
-                'choice_id' => (int) $r['product_extra_choice_id'],
-            ];
+        // user_value is optional (added by migrate_extra_length_input).
+        // Try-fallback so editing still works pre-migration.
+        try {
+            $exSt = db()->prepare(
+                'SELECT product_extra_id, product_extra_choice_id, user_value
+                   FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
+            );
+            $exSt->execute([$editingItemId]);
+            foreach ($exSt->fetchAll() as $r) {
+                $editingExtras[] = [
+                    'extra_id'   => (int) $r['product_extra_id'],
+                    'choice_id'  => (int) $r['product_extra_choice_id'],
+                    'user_value' => $r['user_value'] !== null ? (float) $r['user_value'] : null,
+                ];
+            }
+        } catch (Throwable $e) {
+            $exSt = db()->prepare(
+                'SELECT product_extra_id, product_extra_choice_id
+                   FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
+            );
+            $exSt->execute([$editingItemId]);
+            foreach ($exSt->fetchAll() as $r) {
+                $editingExtras[] = [
+                    'extra_id'  => (int) $r['product_extra_id'],
+                    'choice_id' => (int) $r['product_extra_choice_id'],
+                ];
+            }
         }
     }
 }
@@ -105,15 +122,32 @@ $extrasByItem = [];
 if ($items) {
     $itemIds = array_map(static fn ($r) => (int) $r['id'], $items);
     $ph = implode(',', array_fill(0, count($itemIds), '?'));
-    $st = db()->prepare(
-        "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
-                mode, amount_applied
-           FROM quote_item_extras
-          WHERE quote_item_id IN ($ph)
-          ORDER BY id"
-    );
-    $st->execute($itemIds);
-    foreach ($st->fetchAll() as $r) {
+    // user_value is added by migrate_extra_length_input.php — fall back
+    // to a column-less SELECT if the migration hasn't run.
+    try {
+        $st = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
+                    mode, amount_applied, user_value
+               FROM quote_item_extras
+              WHERE quote_item_id IN ($ph)
+              ORDER BY id"
+        );
+        $st->execute($itemIds);
+        $rows = $st->fetchAll();
+    } catch (Throwable $e) {
+        $st = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
+                    mode, amount_applied
+               FROM quote_item_extras
+              WHERE quote_item_id IN ($ph)
+              ORDER BY id"
+        );
+        $st->execute($itemIds);
+        $rows = $st->fetchAll();
+        foreach ($rows as &$r) $r['user_value'] = null;
+        unset($r);
+    }
+    foreach ($rows as $r) {
         $extrasByItem[(int) $r['quote_item_id']][] = $r;
     }
 }
@@ -912,37 +946,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <input type="hidden" name="item_id" value="<?= (int) $editingItemId ?>">
                 <?php endif; ?>
 
+                <!--
+                    Field order matches the natural decision flow the
+                    salesperson walks: pick the Product first (it gates
+                    Systems + Fabric), then System (gates which fabric
+                    bands apply), then Fabric, then Room (purely a label).
+                -->
                 <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label for="item-room">Room name</label>
-                        <input id="item-room" name="room_name" type="text" maxlength="80"
-                               list="room-options"
-                               value="<?= e((string) ($editingItem['room_name'] ?? '')) ?>"
-                               placeholder="Type or pick — e.g. Living Room">
-                        <datalist id="room-options">
-                            <option value="Bathroom">
-                            <option value="Bedroom">
-                            <option value="Bedroom 2">
-                            <option value="Bedroom 3">
-                            <option value="Cloakroom">
-                            <option value="Conservatory">
-                            <option value="Dining Room">
-                            <option value="En-suite">
-                            <option value="Hallway">
-                            <option value="Kitchen">
-                            <option value="Kitchen / Diner">
-                            <option value="Landing">
-                            <option value="Living Room">
-                            <option value="Lounge">
-                            <option value="Master Bedroom">
-                            <option value="Nursery">
-                            <option value="Office">
-                            <option value="Snug">
-                            <option value="Spare Room">
-                            <option value="Study">
-                            <option value="Utility">
-                        </datalist>
-                    </div>
                     <div class="form-group">
                         <label for="item-product">Product <span class="required">*</span></label>
                         <select id="item-product" name="product_id" required>
@@ -955,15 +965,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <?php endforeach; ?>
                         </select>
                     </div>
-                </div>
-
-                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="item-system">System</label>
                         <select id="item-system" name="system_id" disabled>
                             <option value="">Choose product first</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="item-fabric-search">Fabric <span class="required">*</span></label>
                         <div class="fabric-picker">
@@ -973,6 +983,105 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <input type="hidden" id="item-fabric" name="option_id" required>
                             <div id="item-fabric-results" class="fabric-results" hidden></div>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-room">Room name</label>
+                        <!--
+                            Custom combobox replaces the <datalist> + text
+                            input pattern. <datalist> requires a double-
+                            click in most browsers to show the dropdown on
+                            an empty input — confusing and slow. This
+                            widget opens on the first click (input OR
+                            chevron) and filters as you type.
+
+                            Keeps the original input id/name so backend
+                            POST and editing-mode prefill keep working.
+                        -->
+                        <div class="room-combobox" style="position:relative">
+                            <input id="item-room" name="room_name" type="text" maxlength="80"
+                                   autocomplete="off"
+                                   value="<?= e((string) ($editingItem['room_name'] ?? '')) ?>"
+                                   placeholder="Type or pick — e.g. Living Room"
+                                   style="padding-right:2rem">
+                            <button type="button" id="item-room-chevron"
+                                    aria-label="Show room name suggestions"
+                                    style="position:absolute;right:0.375rem;top:50%;transform:translateY(-50%);
+                                           background:transparent;border:0;color:#6b7280;cursor:pointer;
+                                           padding:0.25rem 0.375rem;font-size:0.75rem;line-height:1">▾</button>
+                            <div id="item-room-popup" hidden
+                                 style="position:absolute;top:100%;left:0;right:0;
+                                        margin-top:4px;background:#fff;border:1px solid #d1d5db;
+                                        border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,0.08);
+                                        z-index:20;max-height:240px;overflow-y:auto;padding:0.25rem">
+                                <?php
+                                $rooms = [
+                                    'Bathroom', 'Bedroom', 'Bedroom 2', 'Bedroom 3',
+                                    'Cloakroom', 'Conservatory', 'Dining Room', 'En-suite',
+                                    'Hallway', 'Kitchen', 'Kitchen / Diner', 'Landing',
+                                    'Living Room', 'Lounge', 'Master Bedroom', 'Nursery',
+                                    'Office', 'Snug', 'Spare Room', 'Study', 'Utility',
+                                ];
+                                foreach ($rooms as $r): ?>
+                                    <div class="room-opt" data-room="<?= e($r) ?>"
+                                         style="padding:0.4375rem 0.5625rem;cursor:pointer;
+                                                border-radius:6px;font-size:0.9375rem;color:#111827"
+                                         onmouseover="this.style.background='#eef2f7'"
+                                         onmouseout="this.style.background='transparent'">
+                                        <?= e($r) ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <script>
+                        (function () {
+                            var wrap   = document.currentScript.previousElementSibling;
+                            var input  = document.getElementById('item-room');
+                            var chev   = document.getElementById('item-room-chevron');
+                            var popup  = document.getElementById('item-room-popup');
+                            if (!wrap || !input || !popup) return;
+                            var opts = popup.querySelectorAll('.room-opt');
+
+                            function open()  { popup.hidden = false; filter(input.value); }
+                            function close() { popup.hidden = true;  }
+                            function toggle() {
+                                if (popup.hidden) { open(); input.focus(); }
+                                else close();
+                            }
+                            function filter(q) {
+                                var s = (q || '').toLowerCase().trim();
+                                var anyVisible = false;
+                                opts.forEach(function (el) {
+                                    var hit = s === '' || el.dataset.room.toLowerCase().indexOf(s) !== -1;
+                                    el.style.display = hit ? '' : 'none';
+                                    if (hit) anyVisible = true;
+                                });
+                                popup.style.display = anyVisible ? '' : 'none';
+                            }
+
+                            input.addEventListener('focus', open);
+                            input.addEventListener('click', open);
+                            input.addEventListener('input', function () { filter(input.value); });
+                            chev.addEventListener('mousedown', function (e) {
+                                e.preventDefault();   // don't steal focus
+                                toggle();
+                            });
+                            opts.forEach(function (el) {
+                                el.addEventListener('mousedown', function (e) {
+                                    e.preventDefault();
+                                    input.value = el.dataset.room;
+                                    close();
+                                });
+                            });
+                            // Click outside the combobox closes the popup.
+                            document.addEventListener('click', function (e) {
+                                if (!wrap.contains(e.target)) close();
+                            });
+                            // Escape closes too.
+                            input.addEventListener('keydown', function (e) {
+                                if (e.key === 'Escape') close();
+                            });
+                        })();
+                        </script>
                     </div>
                 </div>
 
@@ -1091,6 +1200,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <div class="item-extras">
                                                 <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
                                                     + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?>
+                                                    <?php if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0): ?>
+                                                        — <?= e(rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.')) ?>mm
+                                                    <?php endif; ?>
                                                     <?php if ((float) $ex['amount_applied'] != 0): ?>
                                                         (<?= e(qb_fmt_money($ex['amount_applied'])) ?>)
                                                     <?php endif; ?>
@@ -1711,10 +1823,28 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Capture currently-selected values so re-renders preserve user
         // selections instead of reverting to defaults. Distinguishes
         // "user picked None" ("") from "never rendered yet" (undefined).
+        // Three flavours captured under different keys:
+        //   preset[<eid>]         — single-pick string value
+        //   preset[<eid>__multi]  — array of choice_ids for multi-pick
+        //   preset[<eid>__uv]     — typed user_value (length input)
         var preset = {};
         extrasBox.querySelectorAll('[data-extra-id]').forEach(function (div) {
+            var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             var sel = div.querySelector('select');
-            if (sel) preset[parseInt(div.getAttribute('data-extra-id'), 10)] = sel.value;
+            if (sel) preset[eid] = sel.value;
+
+            // Multi-pick: tick-boxes carry data-multi-choice="<id>".
+            var multiBoxes = div.querySelectorAll('input[data-multi-choice]');
+            if (multiBoxes.length) {
+                var picked = [];
+                multiBoxes.forEach(function (cb) {
+                    if (cb.checked) picked.push(parseInt(cb.dataset.multiChoice, 10));
+                });
+                preset[eid + '__multi'] = picked;
+            }
+
+            var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
+            if (uvIn) preset[eid + '__uv'] = uvIn.value;
         });
 
         var systemId = parseInt(systemSel.value, 10) || 0;
@@ -1745,24 +1875,44 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             }
         });
 
-        // What's the effective selected choice for an extra right now?
-        // Uses the live DOM value if we have one (preset captured at the
-        // top of renderExtras), otherwise falls back to the extra's
-        // default for the current system. This matters on the FIRST
-        // render — the DOM is empty so preset is empty, but the parent
-        // <select> will default-select its is_default choice as soon as
-        // it renders. Without this fallback, child extras whose gate
-        // matches the parent's default would never appear on first paint.
-        function effectiveChoiceId(extra) {
+        // What choices are currently selected on an extra? Returns an
+        // ARRAY of choice_ids (as integers) — single-pick extras give
+        // 0 or 1 entries, multi-pick extras can give any number.
+        //
+        // Falls back to the extra's defaults for the current system if
+        // nothing's been picked yet — covers the first-paint case where
+        // the DOM hasn't been written and preset is empty.
+        function effectiveChoiceIds(extra) {
+            // Multi-pick: the multi preset is an array of ids.
+            if (extra.allow_multi) {
+                var multi = preset[extra.id + '__multi'];
+                if (multi !== undefined) return multi.slice();
+                // First paint — pick all defaults.
+                var visibleChoices = extra.choices.filter(function (c) {
+                    if (c.system_id === null || c.system_id === undefined) return true;
+                    return c.system_id === systemId;
+                });
+                return visibleChoices.filter(function (c) { return c.is_default; })
+                                     .map(function (c) { return c.id; });
+            }
+            // Single-pick — single preset value (string).
             if (preset[extra.id] !== undefined) {
-                return preset[extra.id];   // user-picked (incl. "" for None)
+                var v = preset[extra.id];
+                return v ? [parseInt(v, 10)] : [];
             }
             var visibleChoices = extra.choices.filter(function (c) {
                 if (c.system_id === null || c.system_id === undefined) return true;
                 return c.system_id === systemId;
             });
             var def = visibleChoices.find(function (c) { return c.is_default; });
-            return def ? String(def.id) : '';
+            return def ? [def.id] : [];
+        }
+
+        // Backwards-compat wrapper — some callers want a single value.
+        // Returns the first selected choice id as a string, or "".
+        function effectiveChoiceId(extra) {
+            var ids = effectiveChoiceIds(extra);
+            return ids.length ? String(ids[0]) : '';
         }
 
         function isVisible(extra) {
@@ -1771,8 +1921,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 var ok = false;
                 productData.extras.forEach(function (other) {
                     if (other.id === extra.id) return;
-                    var v = effectiveChoiceId(other);
-                    if (v && parents.indexOf(parseInt(v, 10)) !== -1) ok = true;
+                    // Multi-pick parents satisfy the gate if ANY of
+                    // their selected choices matches one of the
+                    // parent_choice_ids on this child.
+                    var ids = effectiveChoiceIds(other);
+                    for (var i = 0; i < ids.length; i++) {
+                        if (parents.indexOf(ids[i]) !== -1) { ok = true; break; }
+                    }
                 });
                 if (!ok) return false;
             }
@@ -1783,18 +1938,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             return visibleChoices.length > 0;
         }
 
-        // Render a single extra's inner HTML (label + select + optional
+        // Render a single extra's inner HTML (label + picker + optional
         // thumbnail). Doesn't include the outer .extra-cell wrapper —
         // caller decides whether this is a top-level cell or nested inside
-        // its parent.
+        // its parent. Two flavours of picker:
+        //   - single-pick (default): a <select>
+        //   - multi-pick (allow_multi=1): a list of tick-boxes
         function renderOne(extra, isChild) {
             var idx = productData.extras.indexOf(extra);
             var visibleChoices = extra.choices.filter(function (c) {
                 if (c.system_id === null || c.system_id === undefined) return true;
                 return c.system_id === systemId;
             });
-            var presetVal = preset[extra.id];
-            var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
             var selectedThumb = null;
 
             var out = '<div data-extra-id="' + extra.id + '"'
@@ -1804,35 +1959,106 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                  + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '')
                  + '</label>';
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
-            out += '<select name="extras[' + idx + '][choice_id]"'
-                 + (extra.is_required ? ' required' : '') + '>';
-            // "None" is only useful when there's no default to fall back
-            // to — otherwise the default IS the "natural" pick and giving
-            // the customer a None escape-hatch just adds noise (and lets
-            // them ship a Bottom Weight with no Colour, which is silly).
-            if (!hasDefault) {
-                out += '<option value=""'
-                     + (presetVal === '' ? ' selected' : '')
-                     + '>— None —</option>';
-            }
-            visibleChoices.forEach(function (c) {
-                var isSelected;
-                if (presetVal !== undefined && presetVal !== '') {
-                    isSelected = String(c.id) === presetVal;
-                } else if (presetVal === '') {
-                    isSelected = false;
+
+            if (extra.allow_multi) {
+                // ---------- Multi-pick tick-box list ----------
+                //
+                // Each ticked choice becomes its own quote_item_extras
+                // row at save time. Submitted via
+                //   extras[<idx>][choice_ids][] = <choice_id>
+                // for each ticked box. add_item.php fans these out into
+                // multiple pricing-engine entries that share extra_id.
+                var presetMulti = preset[extra.id + '__multi'];
+                var preselectIds = null;
+                if (Array.isArray(presetMulti)) {
+                    // Re-render: respect the user's exact ticks (incl.
+                    // "all unticked" → no default backfill).
+                    preselectIds = presetMulti.slice();
                 } else {
-                    isSelected = c.is_default;
+                    // First paint — tick whichever choices are defaults.
+                    preselectIds = visibleChoices.filter(function (c) {
+                        return c.is_default;
+                    }).map(function (c) { return c.id; });
                 }
-                if (isSelected && c.image_url) selectedThumb = c.image_url;
-                out += '<option value="' + c.id + '"'
-                     + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
-            });
-            out += '</select>';
+
+                out += '<div class="multi-choice-list"'
+                     + ' style="display:flex;flex-direction:column;gap:0.3125rem;'
+                     + 'padding:0.4375rem 0.5rem;background:#fff;'
+                     + 'border:1px solid #d1d5db;border-radius:8px">';
+                visibleChoices.forEach(function (c) {
+                    var ticked = preselectIds.indexOf(c.id) !== -1;
+                    if (ticked && c.image_url) selectedThumb = c.image_url;
+                    out += '<label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400">'
+                         + '<input type="checkbox"'
+                         + ' name="extras[' + idx + '][choice_ids][]"'
+                         + ' value="' + c.id + '"'
+                         + ' data-multi-choice="' + c.id + '"'
+                         + (ticked ? ' checked' : '')
+                         + '>'
+                         + ' ' + escapeHtml(c.label)
+                         + '</label>';
+                });
+                out += '</div>';
+            } else {
+                // ---------- Single-pick <select> (original) ----------
+                var presetVal = preset[extra.id];
+                var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
+
+                out += '<select name="extras[' + idx + '][choice_id]"'
+                     + (extra.is_required ? ' required' : '') + '>';
+                // Placeholder "Select" option — only useful when there's no
+                // default to fall back to. If a default exists, it IS the
+                // natural pick and an extra escape-hatch just adds noise
+                // (and lets them ship a Bottom Weight with no Colour, which
+                // is silly).
+                if (!hasDefault) {
+                    out += '<option value=""'
+                         + (presetVal === '' ? ' selected' : '')
+                         + '>— Select —</option>';
+                }
+                visibleChoices.forEach(function (c) {
+                    var isSelected;
+                    if (presetVal !== undefined && presetVal !== '') {
+                        isSelected = String(c.id) === presetVal;
+                    } else if (presetVal === '') {
+                        isSelected = false;
+                    } else {
+                        isSelected = c.is_default;
+                    }
+                    if (isSelected && c.image_url) selectedThumb = c.image_url;
+                    out += '<option value="' + c.id + '"'
+                         + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+                });
+                out += '</select>';
+            }
+
             if (selectedThumb) {
                 out += '<img class="choice-thumb" src="' + escapeAttr(selectedThumb)
                      + '" alt="" loading="lazy">';
             }
+
+            // length_input_label set on this extra → render a number
+            // input next to the picker. The salesperson types e.g. 1230
+            // (mm) for a wand length and it's submitted alongside the
+            // chosen choice_id. Spec only — doesn't change price.
+            if (extra.length_input_label) {
+                var presetUv = preset[extra.id + '__uv'];
+                var uvValue  = presetUv !== undefined && presetUv !== null && presetUv !== ''
+                    ? String(presetUv) : '';
+                out += '<div class="extra-user-value" style="margin-top:0.375rem">'
+                     + '<label style="display:block;font-size:0.75rem;font-weight:600;'
+                     + 'color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;'
+                     + 'margin-bottom:0.1875rem">'
+                     + escapeHtml(extra.length_input_label) + '</label>'
+                     + '<input type="number" min="0" step="1"'
+                     + ' name="extras[' + idx + '][user_value]"'
+                     + ' value="' + escapeAttr(uvValue) + '"'
+                     + ' data-uv-for="' + extra.id + '"'
+                     + ' style="width:100%;padding:0.375rem 0.5rem;'
+                     + 'border:1px solid #d1d5db;border-radius:6px;font:inherit">'
+                     + '</div>';
+            }
+
             out += '</div>';
             return out;
         }
@@ -1863,10 +2089,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         extrasBox.innerHTML  = html;
         extrasWrap.style.display = anyVisible ? '' : 'none';
 
-        // Re-bind change listeners on the choice selects so conditional
-        // extras can re-render when their parent's value changes.
+        // Re-bind change listeners on the choice pickers so conditional
+        // extras can re-render when their parent's value changes. Both
+        // <select>s (single-pick) and the multi-choice tick-boxes need
+        // listeners; ticking/unticking a multi-pick parent affects
+        // which children are visible.
         extrasBox.querySelectorAll('select').forEach(function (sel) {
             sel.addEventListener('change', function () {
+                renderExtras();
+                schedulePreview();
+            });
+        });
+        extrasBox.querySelectorAll('input[data-multi-choice]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
                 renderExtras();
                 schedulePreview();
             });
@@ -1889,23 +2124,40 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // (which is all the schema currently supports). Each pass sets values
         // for extras that exist in the DOM and re-renders to reveal newly-
         // unlocked conditional ones.
-        for (var pass = 0; pass < 3; pass++) {
-            (initial.extras || []).forEach(function (ex) {
+        // Apply each saved extra. Handles both:
+        //   single-pick — set the <select> value to ex.choice_id
+        //   multi-pick  — tick the checkbox matching ex.choice_id
+        // The saved extras array may have MULTIPLE entries with the
+        // same extra_id (one per ticked choice on a multi-pick option);
+        // each gets applied independently.
+        function applyOneExtra(ex) {
+            // Multi-pick checkbox?
+            var cb = document.querySelector(
+                '[data-extra-id="' + ex.extra_id + '"] input[data-multi-choice="' + ex.choice_id + '"]'
+            );
+            if (cb) {
+                cb.checked = true;
+            } else {
                 var sel = document.querySelector(
                     '[data-extra-id="' + ex.extra_id + '"] select'
                 );
                 if (sel) sel.value = String(ex.choice_id);
-            });
+            }
+            if (ex.user_value !== undefined && ex.user_value !== null) {
+                var uvIn = document.querySelector(
+                    'input[data-uv-for="' + ex.extra_id + '"]'
+                );
+                if (uvIn) uvIn.value = String(ex.user_value);
+            }
+        }
+
+        for (var pass = 0; pass < 3; pass++) {
+            (initial.extras || []).forEach(applyOneExtra);
             renderExtras();
         }
         // Final pass after the last render — renderExtras' sticky preset
         // already applies the values, but a defensive pass costs nothing.
-        (initial.extras || []).forEach(function (ex) {
-            var sel = document.querySelector(
-                '[data-extra-id="' + ex.extra_id + '"] select'
-            );
-            if (sel) sel.value = String(ex.choice_id);
-        });
+        (initial.extras || []).forEach(applyOneExtra);
         schedulePreview();
     }
 
@@ -1914,15 +2166,50 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         previewTimer = setTimeout(runPreview, 250);
     }
 
+    // Emit one record per (extra, choice). For multi-pick extras with
+    // N ticked boxes, that's N records all sharing extra_id. The
+    // pricing engine + save handler iterate the array and naturally
+    // handle this without further special-casing.
     function collectExtras() {
         var out = [];
         var divs = extrasBox.querySelectorAll('[data-extra-id]');
         divs.forEach(function (div) {
-            var sel = div.querySelector('select');
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
+            if (eid <= 0) return;
+
+            // user_value is optional — only present when the extra has
+            // a length_input_label. Same value used for every ticked
+            // choice on a multi-pick option.
+            var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
+            var userValue = null;
+            if (uvIn && uvIn.value !== '') {
+                var uv = parseFloat(uvIn.value);
+                if (uv > 0) userValue = uv;
+            }
+
+            // Multi-pick: one record per ticked checkbox.
+            var multiBoxes = div.querySelectorAll('input[data-multi-choice]');
+            if (multiBoxes.length) {
+                multiBoxes.forEach(function (cb) {
+                    if (!cb.checked) return;
+                    var cid = parseInt(cb.dataset.multiChoice, 10);
+                    if (cid > 0) {
+                        var rec = { extra_id: eid, choice_id: cid };
+                        if (userValue !== null) rec.user_value = userValue;
+                        out.push(rec);
+                    }
+                });
+                return;
+            }
+
+            // Single-pick: read the <select>'s value.
+            var sel = div.querySelector('select');
+            if (!sel) return;
             var cid = parseInt(sel.value, 10);
-            if (eid > 0 && cid > 0) {
-                out.push({ extra_id: eid, choice_id: cid });
+            if (cid > 0) {
+                var rec = { extra_id: eid, choice_id: cid };
+                if (userValue !== null) rec.user_value = userValue;
+                out.push(rec);
             }
         });
         return out;
@@ -1957,6 +2244,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]',  ex.extra_id);
             params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            // Optional user-typed length/spec value — only present when
+            // the extra has a length_input_label. Server-side pricing
+            // engine snapshots it onto quote_item_extras.user_value.
+            if (ex.user_value !== undefined) {
+                params.append('extras[' + i + '][user_value]', ex.user_value);
+            }
         });
 
         try {
