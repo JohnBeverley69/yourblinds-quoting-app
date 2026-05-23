@@ -219,7 +219,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $validKeys[]       = '';
     }
 
+    // Empty string is valid — it means "inherit the default" and the
+    // save handler will DELETE the row. Non-empty must parse as a
+    // non-negative number.
     $validateNum = static function (string $v, string $label) {
+        if ($v === '') return null;
         if (!is_numeric($v) || (float) $v < 0) {
             return "$label must be a non-negative number.";
         }
