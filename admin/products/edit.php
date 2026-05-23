@@ -481,7 +481,7 @@ $activeNav = 'products';
             if ($catalogueIssues):
                 $worst = catalogue_worst_severity($catalogueIssues);
         ?>
-            <details open style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;
+            <details id="catalogue-health" open style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;
                                   padding:0.625rem 0.875rem;margin-bottom:0.875rem">
                 <summary style="cursor:pointer;list-style:none;display:flex;
                                 align-items:center;gap:0.5rem;font-weight:600;

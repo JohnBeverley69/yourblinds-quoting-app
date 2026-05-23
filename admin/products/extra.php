@@ -507,5 +507,18 @@ $activeNav = 'products';
     require __DIR__ . '/../../_partials/choices_grid_js.php';
 ?>
 
+<?php
+    // Floating "Fix next →" pill. Shows when the current product has
+    // unresolved catalogue-health issues. Lets the user chain through
+    // a list of fixes without navigating back to the product page
+    // between each one.
+    require_once __DIR__ . '/../../_partials/catalogue_validator.php';
+    echo catalogue_render_fix_next_pill(
+        (int) $extra['product_id'],
+        (int) $clientId,
+        (string) ($_SERVER['REQUEST_URI'] ?? ''),
+        (string) ($extra['product_name'] ?? '')
+    );
+?>
 </body>
 </html>

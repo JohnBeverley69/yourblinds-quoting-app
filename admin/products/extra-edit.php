@@ -437,5 +437,17 @@ $activeNav = 'products';
         </section>
     </main>
 </div>
+<?php
+    // Floating "Fix next →" pill — same as on extra.php. Lets the
+    // user chain through catalogue-health fixes without going back
+    // to the product page each time.
+    require_once __DIR__ . '/../../_partials/catalogue_validator.php';
+    echo catalogue_render_fix_next_pill(
+        (int) $extra['product_id'],
+        (int) $clientId,
+        (string) ($_SERVER['REQUEST_URI'] ?? ''),
+        (string) ($extra['product_name'] ?? '')
+    );
+?>
 </body>
 </html>

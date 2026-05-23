@@ -548,5 +548,17 @@ $activeNav = 'products';
         <?php endif; ?>
     </main>
 </div>
+<?php
+    // Floating "Fix next →" pill — drops the user into the next
+    // catalogue-health issue without going back to the product
+    // page first. Same helper used on extra.php / extra-edit.php.
+    require_once __DIR__ . '/../../_partials/catalogue_validator.php';
+    echo catalogue_render_fix_next_pill(
+        (int) $table['product_id'],
+        (int) $clientId,
+        (string) ($_SERVER['REQUEST_URI'] ?? ''),
+        (string) ($table['product_name'] ?? '')
+    );
+?>
 </body>
 </html>

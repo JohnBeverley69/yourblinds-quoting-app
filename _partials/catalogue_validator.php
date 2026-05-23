@@ -315,6 +315,133 @@ function catalogue_worst_severity(array $issues): ?string
 }
 
 /**
+ * Render a floating "Fix next →" pill for the deep-link fix pages.
+ *
+ * When the user is on extra.php / extra-edit.php / price-table.php
+ * having clicked "Fix" on a chip, they often have several more
+ * issues to work through. The pill stays visible in the corner of
+ * every fix-target page so they can chain through without going
+ * back to the product edit page between each one.
+ *
+ *   $productId       — the product we're checking
+ *   $clientId        — tenant scope
+ *   $currentFixUrl   — the URL of the page the user is on right now
+ *                      (typically the current REQUEST_URI). Used to
+ *                      skip the issue belonging to the current
+ *                      entity when picking the "next" link target.
+ *   $productName     — optional, used in the pill label
+ *
+ * Returns empty string when there are no remaining issues (the user
+ * has cleaned up — pill disappears as a reward signal).
+ */
+function catalogue_render_fix_next_pill(
+    int $productId,
+    int $clientId,
+    string $currentFixUrl = '',
+    string $productName = ''
+): string {
+    $issues = catalogue_validate_product($productId, $clientId);
+    if (!$issues) return '';
+
+    // Normalise the current URL down to path + id param so the
+    // pill can detect "this issue points at the page we're on"
+    // and skip it when picking the next target.
+    $normalise = static function (string $url): string {
+        $path = strtok($url, '?');
+        $qs   = parse_url($url, PHP_URL_QUERY) ?? '';
+        parse_str($qs, $params);
+        $id   = (int) ($params['id'] ?? 0);
+        return $path . '|' . $id;
+    };
+    $currentKey = $currentFixUrl !== '' ? $normalise($currentFixUrl) : '';
+
+    // Pick the next issue whose fix URL is NOT the page we're on.
+    $next = null;
+    foreach ($issues as $iss) {
+        if (empty($iss['fix_url'])) continue;
+        if ($currentKey !== '' && $normalise((string) $iss['fix_url']) === $currentKey) continue;
+        $next = $iss;
+        break;
+    }
+
+    // If every remaining issue points at the page we're already on,
+    // there's no useful "next" — just hint at the count and link
+    // back to the product page where the chip list lives.
+    $totalCount = count($issues);
+
+    // Severity-aware colour. Worst issue's colour wins so the pill
+    // visibly screams when criticals are outstanding.
+    $worst = catalogue_worst_severity($issues) ?? 'hint';
+    $palettes = [
+        'critical' => ['bg' => '#fef2f2', 'border' => '#fecaca', 'fg' => '#991b1b', 'tag' => '#dc2626'],
+        'warning'  => ['bg' => '#fffbeb', 'border' => '#fde68a', 'fg' => '#78350f', 'tag' => '#d97706'],
+        'hint'     => ['bg' => '#f3f4f6', 'border' => '#e5e7eb', 'fg' => '#374151', 'tag' => '#6b7280'],
+    ];
+    $p = $palettes[$worst];
+
+    $productHref = '/admin/products/edit.php?id=' . $productId . '#catalogue-health';
+
+    ob_start();
+    ?>
+    <!--
+        Floating "Fix next" pill. Sits in the bottom-right of the
+        viewport (above the page chrome) so it survives long-scroll
+        pages without getting lost. Disappears the moment the
+        validator returns zero issues — that's the reward signal.
+    -->
+    <div style="position:fixed;bottom:1rem;right:1rem;z-index:100;
+                background:<?= $p['bg'] ?>;border:1px solid <?= $p['border'] ?>;
+                color:<?= $p['fg'] ?>;border-radius:10px;
+                padding:0.625rem 0.75rem;font-size:0.8125rem;
+                box-shadow:0 8px 24px rgba(0,0,0,0.08);
+                max-width:24rem;line-height:1.4">
+        <div style="display:flex;align-items:center;gap:0.5rem;
+                    margin-bottom:0.375rem">
+            <span style="background:<?= $p['tag'] ?>;color:#fff;
+                          padding:0.0625rem 0.4375rem;border-radius:999px;
+                          font-size:0.6875rem;font-weight:700;
+                          text-transform:uppercase;letter-spacing:0.04em">
+                <?= (int) $totalCount ?> remaining
+            </span>
+            <strong style="font-size:0.875rem">
+                Catalogue health<?= $productName !== '' ? ' &middot; ' . htmlspecialchars($productName, ENT_QUOTES) : '' ?>
+            </strong>
+        </div>
+        <?php if ($next): ?>
+            <div style="margin-bottom:0.375rem;color:<?= $p['fg'] ?>">
+                <?= htmlspecialchars((string) $next['message'], ENT_QUOTES) ?>
+            </div>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <a href="<?= htmlspecialchars((string) $next['fix_url'], ENT_QUOTES) ?>"
+                   style="background:<?= $p['tag'] ?>;color:#fff;text-decoration:none;
+                          padding:0.3125rem 0.75rem;border-radius:6px;
+                          font-weight:600;font-size:0.8125rem">
+                    Fix next &rarr;
+                </a>
+                <a href="<?= htmlspecialchars($productHref, ENT_QUOTES) ?>"
+                   style="color:<?= $p['fg'] ?>;text-decoration:underline;
+                          font-size:0.75rem">
+                    View all
+                </a>
+            </div>
+        <?php else: ?>
+            <!-- Every remaining issue points at THIS page, so the user
+                 is in the right place — they just need to save their
+                 current fix and the pill will re-evaluate. -->
+            <div style="margin-bottom:0.375rem">
+                Save the fix above to refresh and see what's next.
+            </div>
+            <a href="<?= htmlspecialchars($productHref, ENT_QUOTES) ?>"
+               style="color:<?= $p['fg'] ?>;text-decoration:underline;font-size:0.75rem">
+                &larr; Back to product
+            </a>
+        <?php endif; ?>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
  * Render the chip strip — used on edit.php. Self-contained HTML +
  * inline styles so callers don't have to know the markup. Returns
  * empty string when there are no issues so the caller can wrap with
