@@ -64,41 +64,71 @@ function current_user_permissions(): array
     static $cache = null;
     if ($cache !== null) return $cache;
 
-    $user = current_user();
-    if (!$user) {
-        return $cache = [
-            'can_create_quotes'          => false,
-            'can_create_orders'          => false,
-            'can_view_all_customer_jobs' => false,
-            'can_view_costs'             => false,
-        ];
-    }
+    $blank = [
+        'can_create_quotes'          => false,
+        'can_create_orders'          => false,
+        'can_view_all_customer_jobs' => false,
+        'can_view_costs'             => false,
+        // Dashboard panel flags — see migrate_dashboard_perms.php.
+        // Admins (role='admin') bypass these checks at the page level;
+        // these only affect non-admin users.
+        'dash_view_revenue'          => false,
+        'dash_view_team'             => false,
+        'dash_view_products'         => false,
+        'dash_view_profit'           => false,
+        'dash_view_recent'           => false,
+    ];
 
+    $user = current_user();
+    if (!$user) return $cache = $blank;
+
+    // Try with the dashboard flags first; fall back to the legacy SELECT
+    // if the migration hasn't run yet so the page still works.
     try {
         $st = db()->prepare(
             'SELECT COALESCE(can_create_quotes, 0)          AS can_create_quotes,
                     COALESCE(can_create_orders, 0)          AS can_create_orders,
                     COALESCE(can_view_all_customer_jobs, 0) AS can_view_all_customer_jobs,
-                    COALESCE(can_view_costs, 0)             AS can_view_costs
+                    COALESCE(can_view_costs, 0)             AS can_view_costs,
+                    COALESCE(dash_view_revenue,  0)         AS dash_view_revenue,
+                    COALESCE(dash_view_team,     0)         AS dash_view_team,
+                    COALESCE(dash_view_products, 0)         AS dash_view_products,
+                    COALESCE(dash_view_profit,   0)         AS dash_view_profit,
+                    COALESCE(dash_view_recent,   0)         AS dash_view_recent
                FROM client_users
               WHERE id = ? AND client_id = ? LIMIT 1'
         );
         $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
         $row = $st->fetch() ?: [];
-        $cache = [
-            'can_create_quotes'          => ((int) ($row['can_create_quotes'] ?? 0)) === 1,
-            'can_create_orders'          => ((int) ($row['can_create_orders'] ?? 0)) === 1,
-            'can_view_all_customer_jobs' => ((int) ($row['can_view_all_customer_jobs'] ?? 0)) === 1,
-            'can_view_costs'             => ((int) ($row['can_view_costs'] ?? 0)) === 1,
-        ];
     } catch (Throwable $e) {
-        $cache = [
-            'can_create_quotes'          => false,
-            'can_create_orders'          => false,
-            'can_view_all_customer_jobs' => false,
-            'can_view_costs'             => false,
-        ];
+        try {
+            $st = db()->prepare(
+                'SELECT COALESCE(can_create_quotes, 0)          AS can_create_quotes,
+                        COALESCE(can_create_orders, 0)          AS can_create_orders,
+                        COALESCE(can_view_all_customer_jobs, 0) AS can_view_all_customer_jobs,
+                        COALESCE(can_view_costs, 0)             AS can_view_costs
+                   FROM client_users
+                  WHERE id = ? AND client_id = ? LIMIT 1'
+            );
+            $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
+            $row = $st->fetch() ?: [];
+        } catch (Throwable $e2) {
+            return $cache = $blank;
+        }
     }
+
+    $b = static fn ($k) => ((int) ($row[$k] ?? 0)) === 1;
+    $cache = [
+        'can_create_quotes'          => $b('can_create_quotes'),
+        'can_create_orders'          => $b('can_create_orders'),
+        'can_view_all_customer_jobs' => $b('can_view_all_customer_jobs'),
+        'can_view_costs'             => $b('can_view_costs'),
+        'dash_view_revenue'          => $b('dash_view_revenue'),
+        'dash_view_team'             => $b('dash_view_team'),
+        'dash_view_products'         => $b('dash_view_products'),
+        'dash_view_profit'           => $b('dash_view_profit'),
+        'dash_view_recent'           => $b('dash_view_recent'),
+    ];
     return $cache;
 }
 

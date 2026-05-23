@@ -84,9 +84,22 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
 // [href, label, visible]. Order = display order. Calendar is the de-facto
 // landing page (login redirects there); a separate "Dashboard" link was
 // just a placeholder pointing at /admin/index.php and got removed.
+// Dashboard visibility: admins always; non-admins only if they have
+// at least one dash_view_* permission ticked. Tenant admins see the
+// full Dashboard regardless of these flags.
+$canSeeAnyDashPanel = $isAdmin
+    || !empty($_perms['dash_view_revenue'])
+    || !empty($_perms['dash_view_team'])
+    || !empty($_perms['dash_view_products'])
+    || !empty($_perms['dash_view_profit'])
+    || !empty($_perms['dash_view_recent']);
+
 $navLinks = [
     'calendar'      => ['/calendar/index.php',         'Calendar',      true],
     'my-schedule'   => ['/calendar/schedule.php',      'My Schedule',   true],
+    // Dashboard is sales-analytics; hidden until the admin grants at
+    // least one panel on /admin/users_edit.php for non-admins.
+    'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
     'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
@@ -100,7 +113,10 @@ $navLinks = [
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
     'billing'       => ['/billing/index.php',          'Billing',       $isAdmin],
     'master-admin'  => ['/master-admin/index.php',     'Master Admin',  $isSuperAdmin],
+    'pricing'       => ['/master-admin/pricing.php',   'Pricing',       $isSuperAdmin],
     'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
+    'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
+    'push-updates'  => ['/master-admin/push-updates.php', 'Push updates', $isSuperAdmin],
     'backup'        => ['/master-admin/backup.php',    'Backup',        $isSuperAdmin],
 ];
 ?>

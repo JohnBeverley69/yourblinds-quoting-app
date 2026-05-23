@@ -91,6 +91,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'can_create_orders'          => !empty($_POST['can_create_orders']) ? 1 : 0,
         'can_view_all_customer_jobs' => !empty($_POST['can_view_all_customer_jobs']) ? 1 : 0,
         'can_view_costs'             => !empty($_POST['can_view_costs']) ? 1 : 0,
+        // Dashboard panel flags. Tenant admins ignore these (always
+        // see the full dashboard); they only affect non-admin users.
+        'dash_view_revenue'          => !empty($_POST['dash_view_revenue'])  ? 1 : 0,
+        'dash_view_team'             => !empty($_POST['dash_view_team'])     ? 1 : 0,
+        'dash_view_products'         => !empty($_POST['dash_view_products']) ? 1 : 0,
+        'dash_view_profit'           => !empty($_POST['dash_view_profit'])   ? 1 : 0,
+        'dash_view_recent'           => !empty($_POST['dash_view_recent'])   ? 1 : 0,
     ];
     $home = [
         'home_address1' => trim((string) ($_POST['home_address1'] ?? '')),
@@ -115,6 +122,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     } elseif ($id === $myUserId && !in_array('admin', $rolesIn, true)) {
         $error = 'You cannot remove admin from your own account.';
     } else {
+        // Whether the dashboard-permission columns exist (migration may
+        // not have run yet). Decided once before building SQL so we
+        // don't slip into "wrote half the columns" territory on failure.
+        try {
+            db()->query("SELECT dash_view_revenue FROM client_users LIMIT 0");
+            $hasDashCols = true;
+        } catch (Throwable $e) {
+            $hasDashCols = false;
+        }
+
         try {
             $sql = 'UPDATE client_users
                        SET first_name                 = ?,
@@ -127,8 +144,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                            can_create_quotes          = ?,
                            can_create_orders          = ?,
                            can_view_all_customer_jobs = ?,
-                           can_view_costs             = ?,
-                           home_address1              = ?,
+                           can_view_costs             = ?,';
+            if ($hasDashCols) {
+                $sql .= '   dash_view_revenue          = ?,
+                           dash_view_team             = ?,
+                           dash_view_products         = ?,
+                           dash_view_profit           = ?,
+                           dash_view_recent           = ?,';
+            }
+            $sql .= '       home_address1              = ?,
                            home_address2              = ?,
                            home_town                  = ?,
                            home_county                = ?,
@@ -145,12 +169,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $perms['can_create_orders'],
                 $perms['can_view_all_customer_jobs'],
                 $perms['can_view_costs'],
+            ];
+            if ($hasDashCols) {
+                $params[] = $perms['dash_view_revenue'];
+                $params[] = $perms['dash_view_team'];
+                $params[] = $perms['dash_view_products'];
+                $params[] = $perms['dash_view_profit'];
+                $params[] = $perms['dash_view_recent'];
+            }
+            array_push($params,
                 $home['home_address1'] !== '' ? $home['home_address1'] : null,
                 $home['home_address2'] !== '' ? $home['home_address2'] : null,
                 $home['home_town']     !== '' ? $home['home_town']     : null,
                 $home['home_county']   !== '' ? $home['home_county']   : null,
                 $home['home_postcode'] !== '' ? $home['home_postcode'] : null,
-            ];
+            );
             if ($newPassword !== '') {
                 $sql .= ', password_hash = ?';
                 $params[] = password_hash($newPassword, PASSWORD_DEFAULT);
@@ -348,6 +381,54 @@ $activeNav = 'users';
                         </div>
                     </div>
                 </div>
+
+                <!--
+                    Dashboard permissions — tick which panels of /dashboard/
+                    this user is allowed to see. Tenant admins (role 'admin')
+                    ignore these flags entirely and see the full Dashboard.
+                    A non-admin user with NONE of these ticked has the
+                    Dashboard menu entry hidden and is bounced to Calendar if
+                    they hit /dashboard/index.php directly.
+                -->
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Dashboard
+                    </legend>
+                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem;line-height:1.45">
+                        Which Dashboard panels this user can see. Admins always see
+                        everything; these checkboxes only apply to non-admin users.
+                        Tick none to hide the Dashboard menu entry entirely for this user.
+                        <strong>Gross profit</strong> also requires the
+                        <em>View costs</em> permission above.
+                    </p>
+                    <div style="display:flex; flex-wrap:wrap; gap:1rem; font-size:0.9375rem;">
+                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
+                            <input type="checkbox" name="dash_view_revenue" value="1"
+                                <?= !empty($target['dash_view_revenue']) ? 'checked' : '' ?>>
+                            Revenue &amp; KPIs
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
+                            <input type="checkbox" name="dash_view_team" value="1"
+                                <?= !empty($target['dash_view_team']) ? 'checked' : '' ?>>
+                            Sales-team leaderboard
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
+                            <input type="checkbox" name="dash_view_products" value="1"
+                                <?= !empty($target['dash_view_products']) ? 'checked' : '' ?>>
+                            Product mix
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
+                            <input type="checkbox" name="dash_view_profit" value="1"
+                                <?= !empty($target['dash_view_profit']) ? 'checked' : '' ?>>
+                            Gross profit
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
+                            <input type="checkbox" name="dash_view_recent" value="1"
+                                <?= !empty($target['dash_view_recent']) ? 'checked' : '' ?>>
+                            Recent wins
+                        </label>
+                    </div>
+                </fieldset>
 
                 <div class="form-row full">
                     <div class="form-group">

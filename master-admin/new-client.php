@@ -3,8 +3,13 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/billing_helpers.php';
 
 requireSuperAdmin();
+
+// How long a new tenant's free trial lasts on every paid add-on.
+// 30 days is the industry-standard "try before you buy" window.
+const NEW_CLIENT_TRIAL_DAYS = 30;
 
 $user        = current_user();
 $myClientId  = (int) $user['client_id']; // master admin's own client = template source
@@ -78,6 +83,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $summary = seed_client_from_template($pdo, $myClientId, $newClientId);
                 }
 
+                // 5. Grant a 30-day free trial on every paid add-on.
+                //    One row per paid plan in client_plan_overrides
+                //    with override_type='trial' and expires_at = today
+                //    + NEW_CLIENT_TRIAL_DAYS. After expiry, the row
+                //    stops granting access automatically (the helper
+                //    filters by CURDATE()). The tenant Billing page
+                //    surfaces the countdown so they can subscribe
+                //    before it lapses.
+                //
+                //    If the expires_at column doesn't exist yet
+                //    (migrate_trials.php not run), we degrade
+                //    gracefully — the trial row is still inserted as
+                //    a comp (free forever), which is arguably more
+                //    generous than no trial at all and easy to clean
+                //    up later from the Pricing page.
+                $trialExpiry = date('Y-m-d', strtotime('+' . NEW_CLIENT_TRIAL_DAYS . ' days'));
+                $paidPlans   = billing_paid_plans();
+                $trialsAdded = 0;
+                foreach (array_keys($paidPlans) as $planCode) {
+                    try {
+                        $pdo->prepare(
+                            "INSERT INTO client_plan_overrides
+                               (client_id, plan_code, override_type, expires_at,
+                                notes, active)
+                               VALUES (?, ?, 'trial', ?, ?, 1)
+                             ON DUPLICATE KEY UPDATE
+                               override_type = 'trial',
+                               expires_at    = VALUES(expires_at),
+                               notes         = VALUES(notes),
+                               active        = 1"
+                        )->execute([
+                            $newClientId, $planCode, $trialExpiry,
+                            sprintf('Auto-granted %d-day trial on tenant creation (%s).',
+                                NEW_CLIENT_TRIAL_DAYS, date('Y-m-d')),
+                        ]);
+                        $trialsAdded++;
+                    } catch (Throwable $trialErr) {
+                        // Column missing — fall back to a plain comp.
+                        try {
+                            $pdo->prepare(
+                                "INSERT INTO client_plan_overrides
+                                   (client_id, plan_code, override_type, notes, active)
+                                   VALUES (?, ?, 'comp', ?, 1)
+                                 ON DUPLICATE KEY UPDATE active = 1"
+                            )->execute([
+                                $newClientId, $planCode,
+                                'Auto-granted on creation (migrate_trials.php not run yet).',
+                            ]);
+                            $trialsAdded++;
+                        } catch (Throwable $compErr) {
+                            error_log('new-client trial-grant fallback failed for plan '
+                                . $planCode . ': ' . $compErr->getMessage());
+                        }
+                    }
+                }
+
+                // Sync feature flags so the trial features turn on
+                // immediately — first time they log in, paid features
+                // are already enabled.
+                billing_sync_feature_flags_force($newClientId);
+
                 $pdo->commit();
 
                 $_SESSION['flash_success'] =
@@ -92,7 +158,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . $summary['price_tables'] . ' price tables ('
                           . $summary['price_table_rows'] . ' cells), '
                           . $summary['width_table_rows'] . ' width-table rows.'
-                        : ' (empty catalogue — no seed).');
+                        : ' (empty catalogue — no seed).')
+                    . ' Granted ' . $trialsAdded . '-add-on trial through '
+                    . date('j M Y', strtotime($trialExpiry)) . '.';
                 header('Location: /master-admin/index.php');
                 exit;
             } catch (Throwable $e) {
@@ -176,6 +244,12 @@ $activeNav = 'master-admin';
                 Creates a new tenant (company) plus its first admin user, and
                 optionally clones your master-admin catalogue across so the new
                 client launches with sensible defaults they can then edit.
+                Every new tenant also gets a <strong><?= NEW_CLIENT_TRIAL_DAYS ?>-day
+                free trial</strong> on every paid add-on (Maps, Postcode lookup,
+                Accounts) — they can subscribe via PayPal before the trial ends to
+                keep features active. Trials are visible on
+                <a href="/master-admin/pricing.php" style="color:#1f3b5b">Pricing</a>
+                where you can extend, shorten, or revoke them per tenant.
             </p>
 
             <form method="post" action="/master-admin/new-client.php" class="form" novalidate>

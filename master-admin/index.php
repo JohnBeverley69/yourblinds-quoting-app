@@ -136,6 +136,7 @@ $activeNav = 'master-admin';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/master-admin/pricing.php" class="btn btn-secondary">Pricing</a>
                 <a href="/master-admin/subscriptions.php" class="btn btn-secondary">Subscriptions</a>
                 <a href="/master-admin/backup.php" class="btn btn-secondary">Backup &amp; restore</a>
                 <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
@@ -151,19 +152,20 @@ $activeNav = 'master-admin';
 
         <section class="section">
             <p style="color:#4b5563;font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
-                Each column is a paid (or paid-able) feature. The
+                Each column is a paid feature. The
                 <strong>£/mo</strong> figure under the heading is the
-                advertised price on the
-                <a href="/billing/index.php" style="color:#1f3b5b">tenant Billing page</a>
-                — defined in <code>_partials/billing_plans.php</code>. Tenants
-                self-subscribe via PayPal, and their subscription state is
-                managed on the
+                advertised price — edit it on the
+                <a href="/master-admin/pricing.php" style="color:#1f3b5b">Pricing</a> page
+                (price changes propagate to existing PayPal subscribers
+                automatically). Tenants self-subscribe to each add-on independently
+                via PayPal on their <a href="/billing/index.php" style="color:#1f3b5b">Billing</a> page;
+                subscription state is then managed on the
                 <a href="/master-admin/subscriptions.php" style="color:#1f3b5b">Subscriptions</a> page.
-                Boxes here are still useful for comping a client (overriding the
-                subscription state for testing or as a freebie). Features marked
-                <em>Manual</em> aren't subscribable yet — to make a new feature
-                paid, add a plan in <code>_partials/billing_plans.php</code>
-                referencing its flag column.
+                For <strong>free access</strong>, use
+                <a href="/master-admin/pricing.php#comps" style="color:#1f3b5b">Pricing → Comp overrides</a>
+                — preferred over ticking the boxes below, because it survives
+                subscription cancellations and is the documented audit trail.
+                The checkboxes here remain as an emergency manual override.
             </p>
             <!--
                 The feature-flags form is a sibling of the table, not its
