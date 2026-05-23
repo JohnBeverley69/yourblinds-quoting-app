@@ -31,7 +31,12 @@ $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $productId = (int) ($_GET['product_id'] ?? 0);
 $q         = trim((string) ($_GET['q'] ?? ''));
-$limit     = max(1, min(500, (int) ($_GET['limit'] ?? 500)));
+// Cap raised from 500 → 2000 so server-side typeahead can handle
+// large supplier catalogues. Default lowered to 200 — for the
+// empty-query "what's there?" focus case 200 is plenty, and any
+// real search will narrow further. Callers wanting more pass
+// limit= explicitly.
+$limit     = max(1, min(2000, (int) ($_GET['limit'] ?? 200)));
 
 if ($productId <= 0) {
     echo json_encode(['fabrics' => [], 'error' => 'product_id required']);

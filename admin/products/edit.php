@@ -1608,8 +1608,10 @@ $activeNav = 'products';
 
         body.innerHTML = html;
 
-        // Load fabrics list once.
-        loadFabrics();
+        // No pre-load — fabrics are fetched server-side on demand
+        // when the user focuses or types into the fabric input.
+        // Scales to any catalogue size; nothing wasted if the
+        // operator doesn't open the picker.
 
         // Re-render extras whenever System or any extra select changes.
         var sysSel = document.getElementById('pv-system');
@@ -1618,11 +1620,14 @@ $activeNav = 'products';
         renderExtras();
     }
 
-    // Cached list of all fabrics for the current product. Populated
-    // once by loadFabrics(); the typeahead filters this in-memory so
-    // typing doesn't round-trip to the server per keystroke.
-    var fabricCache = [];
-    var fabricHighlightIdx = -1;   // keyboard nav cursor in the dropdown
+    // Fabric typeahead — server-side search per keystroke. We don't
+    // cache the whole catalogue locally any more because tenants with
+    // thousands of fabrics (franchise scale) exceed any sensible
+    // pre-load limit. The API has the right SQL indexes to filter
+    // fast, so we just round-trip with the query.
+    var fabricHighlightIdx = -1;
+    var fabricQueryCounter = 0;       // increments per search → guards stale responses
+    var fabricSearchTimer  = null;    // debounce handle
 
     function fabricLabel(f) {
         // The API returns {id, band, supplier, name, colour, code,
@@ -1637,75 +1642,84 @@ $activeNav = 'products';
         return bits.length ? bits.join(' · ') : ('#' + f.id);
     }
 
-    var fabricsLoading = false;
-
-    async function loadFabrics() {
-        fabricsLoading = true;
-        try {
-            var r = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + PRODUCT_ID + '&q=&limit=500',
-                                { credentials: 'same-origin' });
-            var data = await r.json();
-            fabricCache = data.fabrics || [];
-        } catch (e) {
-            fabricCache = [];
-        }
-        fabricsLoading = false;
-        // If the dropdown is already open (user clicked the input
-        // before the fetch finished), re-render with the real data.
+    /**
+     * Search the API and render the dropdown. Called directly on
+     * focus (immediate) and via scheduleFabricSearch() on input
+     * (debounced 150ms). Stale responses are dropped via the
+     * fabricQueryCounter guard so a slow earlier request can't
+     * overwrite a newer one's results.
+     */
+    async function searchAndRenderFabrics(query) {
         var listEl = document.getElementById('pv-fabric-list');
-        if (listEl && !listEl.hidden) {
-            var input = document.getElementById('pv-fabric-text');
-            renderFabricDropdown(input ? input.value : '');
+        if (!listEl) return;
+
+        query = (query || '').trim();
+        var myRequest = ++fabricQueryCounter;
+
+        // Loading indicator — only show after a tiny delay so quick
+        // fetches don't flash a "Searching…" then immediately replace
+        // it. If the fetch resolves before this fires, the indicator
+        // never appears.
+        var loadingTimer = setTimeout(function () {
+            if (myRequest !== fabricQueryCounter) return;
+            listEl.innerHTML = '<div class="pv-typeahead-item is-empty">Searching…</div>';
+            listEl.hidden = false;
+        }, 120);
+
+        try {
+            // limit=2000 — server-side filter narrows aggressively by
+            // query, so this is just a safety ceiling; typical queries
+            // return single/double-digit results.
+            var url = '/quote-builder/api/fabrics-search.php?product_id=' + PRODUCT_ID
+                    + '&q='     + encodeURIComponent(query)
+                    + '&limit=2000';
+            var r = await fetch(url, { credentials: 'same-origin' });
+            var data = await r.json();
+            clearTimeout(loadingTimer);
+            // Stale check — if a newer search has fired since this
+            // one started, drop the result.
+            if (myRequest !== fabricQueryCounter) return;
+            renderFabricMatches(data.fabrics || [], query);
+        } catch (e) {
+            clearTimeout(loadingTimer);
+            if (myRequest !== fabricQueryCounter) return;
+            listEl.innerHTML = '<div class="pv-typeahead-item is-empty">Search failed: '
+                             + esc(e.message || String(e)) + '</div>';
+            listEl.hidden = false;
         }
     }
 
-    function renderFabricDropdown(query) {
+    function renderFabricMatches(matches, query) {
         var listEl = document.getElementById('pv-fabric-list');
         if (!listEl) return;
-        query = (query || '').trim().toLowerCase();
 
-        var matches = fabricCache;
-        if (query) {
-            matches = fabricCache.filter(function (f) {
-                return fabricLabel(f).toLowerCase().indexOf(query) !== -1;
-            });
-        }
-
-        if (!fabricCache.length) {
-            listEl.innerHTML = fabricsLoading
-                ? '<div class="pv-typeahead-item is-empty">Loading fabrics…</div>'
-                : '<div class="pv-typeahead-item is-empty">No fabrics on this product</div>';
-            listEl.hidden = false;
-            return;
-        }
         if (!matches.length) {
-            listEl.innerHTML = '<div class="pv-typeahead-item is-empty">No matches for "' + esc(query) + '"</div>';
+            listEl.innerHTML = query === ''
+                ? '<div class="pv-typeahead-item is-empty">No fabrics on this product</div>'
+                : '<div class="pv-typeahead-item is-empty">No matches for "' + esc(query) + '"</div>';
             listEl.hidden = false;
             return;
         }
 
-        // Render ALL matches — the dropdown is height-capped + scrollable
-        // (.pv-typeahead-list { max-height: 16rem; overflow-y: auto }),
-        // so even a 500-item list renders fast and stays usable.
-        //
-        // The previous MAX = 50 cap was reported as "only searching
-        // the first 50 lines" — even though the filter ran against the
-        // full cache, the user couldn't see matches beyond #50 in the
-        // result list, which felt like the search was broken.
-        var html = matches.map(function (f, i) {
-            return '<div class="pv-typeahead-item" data-id="' + f.id + '" data-idx="' + i + '">'
+        var html = matches.map(function (f) {
+            return '<div class="pv-typeahead-item" data-id="' + f.id + '">'
                  + esc(fabricLabel(f))
                  + '</div>';
         }).join('');
-        // Footer with the result count, useful so the user knows how
-        // many matched (and whether more typing would help narrow).
         html += '<div class="pv-typeahead-pinned">'
              + matches.length + ' match' + (matches.length === 1 ? '' : 'es')
-             + (matches.length === fabricCache.length ? '' : ' of ' + fabricCache.length)
+             + (query === '' ? ' (start typing to filter)' : '')
              + '</div>';
         listEl.innerHTML = html;
         listEl.hidden = false;
-        fabricHighlightIdx = -1;   // reset cursor when list changes
+        fabricHighlightIdx = -1;
+    }
+
+    function scheduleFabricSearch(query) {
+        if (fabricSearchTimer) clearTimeout(fabricSearchTimer);
+        fabricSearchTimer = setTimeout(function () {
+            searchAndRenderFabrics(query);
+        }, 150);
     }
 
     function selectFabric(id, label) {
@@ -1752,18 +1766,21 @@ $activeNav = 'products';
     // the body which we replace wholesale on a Refresh.
     document.addEventListener('focusin', function (e) {
         if (e.target && e.target.id === 'pv-fabric-text') {
-            renderFabricDropdown(e.target.value);
+            // Focus → fetch immediately (no debounce) so the dropdown
+            // shows up the moment the user clicks the input.
+            searchAndRenderFabrics(e.target.value);
         }
     });
     document.addEventListener('input', function (e) {
         if (e.target && e.target.id === 'pv-fabric-text') {
-            // Typing — refilter. If user cleared the input, also
-            // clear the hidden id so calc shows "Pick a fabric…".
+            // Typing — server-side fetch, debounced. Clearing the
+            // input also clears the hidden id so the price panel
+            // reverts to "Pick a fabric…".
             if (e.target.value === '') {
                 var hidden = document.getElementById('pv-fabric');
                 if (hidden) hidden.value = '';
             }
-            renderFabricDropdown(e.target.value);
+            scheduleFabricSearch(e.target.value);
         }
     });
     document.addEventListener('click', function (e) {
