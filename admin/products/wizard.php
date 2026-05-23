@@ -256,7 +256,11 @@ $STEPS = [
     4 => ['Done',     'Time to add price tables'],
 ];
 
-$activeNav = 'products';
+// Highlight the "Setup wizard" sidebar entry while in the wizard
+// flow, not "Products" — the user is doing focused setup work and
+// the breadcrumb should reflect that. Once they hit "Open product
+// edit page →" at the end, they're back on the Products nav.
+$activeNav = 'wizard';
 ?><!doctype html>
 <html lang="en">
 <head>

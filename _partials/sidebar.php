@@ -109,6 +109,13 @@ $navLinks = [
     'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
     'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
     'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
+    // Wizard sits under Products in the nav because it's a path
+    // INTO catalogue setup — not a separate concern. Same admin gate
+    // as Products itself. Discoverable from the products empty state
+    // and the index header too; this is the third entry point for
+    // tenants who already have one product and want the guided flow
+    // for the next.
+    'wizard'        => ['/admin/products/wizard.php',  'Setup wizard',  $isAdmin],
     'users'         => ['/admin/users.php',            'Users',         $isAdmin],
     'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
     'billing'       => ['/billing/index.php',          'Billing',       $isAdmin],

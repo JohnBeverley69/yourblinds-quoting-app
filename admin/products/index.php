@@ -95,7 +95,20 @@ $activeNav = 'products';
                     price tables.
                 </p>
             </div>
-            <a href="/admin/products/new.php" class="btn btn-primary">+ New product</a>
+            <!-- Two ways to add a product: the wizard (guided, recommended
+                 for the first few until the user gets a feel for the setup
+                 surface) and the bare "+ New product" form (faster once
+                 they know what they're doing). Wizard is the secondary
+                 button so it doesn't compete with the primary action for
+                 users with existing products. -->
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                <a href="/admin/products/wizard.php" class="btn btn-secondary"
+                   style="display:inline-flex;align-items:center;gap:0.4375rem">
+                    <span aria-hidden="true">✨</span>
+                    Setup wizard
+                </a>
+                <a href="/admin/products/new.php" class="btn btn-primary">+ New product</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>
