@@ -268,13 +268,25 @@ function pp_sync_options(
     );
     $src->execute([$sourceClientId, $sourceProductId]);
 
-    // Match by (band_code, name, colour) within the product. Three-way
-    // match is conservative — a fabric with the same name in a
-    // different band is a different SKU, so they shouldn't collide.
+    // Match by the FULL unique key (band_code, supplier_name, name,
+    // colour) within the product. Must match what's on
+    // product_options.uniq_option_per_product — anything less risks
+    // updating the wrong row when a fabric with the same band/name/
+    // colour comes from multiple suppliers (same "Stratford Cream" in
+    // band A from two wholesalers, very common). The original
+    // 5-field find returned the wrong row, the UPDATE silently
+    // corrupted its supplier_name, then the NEXT iteration's INSERT
+    // tripped a duplicate-key violation against the row we'd just
+    // moved out of the way.
+    //
+    // <=> is MySQL's null-safe equals — needed because supplier_name
+    // and colour are nullable and `column = NULL` is always NULL,
+    // never matched.
     $find = $pdo->prepare(
         "SELECT id FROM product_options
           WHERE client_id = ? AND product_id = ?
             AND band_code = ?
+            AND (supplier_name <=> ?)
             AND name = ?
             AND (colour <=> ?)
           LIMIT 1"
@@ -284,6 +296,7 @@ function pp_sync_options(
         $find->execute([
             $targetClientId, $targetProductId,
             (string) $r['band_code'],
+            $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
             (string) $r['name'],
             $r['colour'] !== null ? (string) $r['colour'] : null,
         ]);
