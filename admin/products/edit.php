@@ -305,17 +305,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     AND ((system_id IS NULL AND ? IS NULL) OR system_id = ?)'
             );
 
+            // Diagnostic logging — written to PHP error_log so we can
+            // trace "I typed 50 but it didn't save" reports without
+            // having to repro in dev. Captures the raw POST shape, the
+            // parsed values, and the INSERT/DELETE decisions.
+            error_log(
+                'edit.php markup save: product=' . $id
+                . ' raw_POST_markup=' . json_encode($_POST['markup'] ?? null)
+                . ' raw_POST_discount=' . json_encode($_POST['discount'] ?? null)
+                . ' parsed=' . json_encode($f['markup'])
+                . ' validKeys=' . json_encode($validKeys)
+            );
+
             foreach ($validKeys as $k) {
                 $sysId = $k === '' ? null : (int) $k;
 
                 $mp = (float) $f['markup'][$k];
                 if ($mp > 0) {
                     $insMarkup->execute([$clientId, $id, $sysId, $mp]);
+                    error_log("  → INSERT markup product=$id system=$sysId pct=$mp rows=" . $insMarkup->rowCount());
                 } else {
                     // The "IS NULL ... = ?" trick needs the same value
                     // twice so the prepared statement covers both the
                     // NULL and non-NULL system_id cases.
                     $delMarkup->execute([$clientId, $id, $sysId, $sysId]);
+                    error_log("  → DELETE markup product=$id system=$sysId rows=" . $delMarkup->rowCount());
                 }
 
                 $dp = (float) $f['discount'][$k];
