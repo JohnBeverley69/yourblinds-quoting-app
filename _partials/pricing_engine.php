@@ -412,10 +412,14 @@ function pe_markup_for_system(PDO $pdo, int $clientId, int $productId, ?int $sys
         $st->execute([$clientId, $productId, $systemId]);
     }
     $val = $st->fetchColumn();
-    if ($val !== false && $val !== null) {
+    // 0 = "use the default" (matches the natural reading on the form
+    // — a tenant who types 0 means "no specific value", not "make
+    // this loss-leader at cost"). Tenants who genuinely want 0%
+    // override set the tenant default to 0 and override the products
+    // that DO need markup. Same rule applies to a missing row.
+    if ($val !== false && $val !== null && (float) $val > 0) {
         return (float) $val;
     }
-    // No explicit override — use the tenant default.
     return pe_tenant_defaults($pdo, $clientId)['price_table'];
 }
 

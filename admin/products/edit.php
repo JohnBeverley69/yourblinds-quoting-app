@@ -671,11 +671,30 @@ $activeNav = 'products';
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
                         Pricing per system
                     </legend>
+                    <?php
+                        // Read the tenant-wide default so we can show it
+                        // as a hint here — "leave at 0 to inherit the
+                        // default X%". Defensive against the migration
+                        // not having run yet.
+                        $_tenantDefaultMarkup = 0.0;
+                        try {
+                            $_dmSt = db()->prepare(
+                                'SELECT default_price_table_markup_pct
+                                   FROM client_settings WHERE client_id = ? LIMIT 1'
+                            );
+                            $_dmSt->execute([$clientId]);
+                            $_tenantDefaultMarkup = (float) ($_dmSt->fetchColumn() ?: 0);
+                        } catch (Throwable $e) { /* migration not yet run */ }
+                    ?>
                     <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
                         Margin and discount can be tuned per system (premium / motorised /
                         standard are usually priced differently). Markup is applied on top
-                        of the price-table base; discount comes off after that. Leave at 0
-                        to skip.
+                        of the price-table base; discount comes off after that.
+                        <strong>Set markup to 0 to inherit the tenant default
+                        (<?= number_format($_tenantDefaultMarkup, 2) ?>%
+                        — change on
+                        <a href="/admin/settings.php#default_price_table_markup_pct"
+                           style="color:#1f3b5b">Settings</a>).</strong>
                         <?php if (!$systems): ?>
                             <br><em>No systems on this product yet — values below apply to
                             every quote. Add systems on the
