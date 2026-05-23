@@ -14,7 +14,11 @@ declare(strict_types=1);
  *   4. selected extras      → extras_applied[] with mode + amount each
  *   5. markup % = client_markups row (per product+system) OR 0
  *   6. discount % = client_discounts row (per product+system) OR 0
- *   7. sell_price = subtotal × (1 + markup/100) × (1 − discount/100)
+ *   7. sell_price = base × (1 − discount/100) × (1 + markup/100) + extras_total
+ *      — discount comes off the price-table first, then the markup
+ *        is added to the discounted price. Both apply ONLY to the
+ *        base (the material price). Extras are pure pass-through;
+ *        tenants set the customer price directly in the options page.
  *   8. line_total = sell_price × quantity
  *
  * All helpers take $clientId explicitly. There is no global state — this is
@@ -38,8 +42,12 @@ declare(strict_types=1);
  */
 function pe_resolve_fabric(PDO $pdo, int $clientId, int $optionId): ?array
 {
+    // cost_price = optional wholesale cost the tenant pays for this
+    // fabric per blind. Defaults to NULL (treated as 0 downstream)
+    // until they fill it in on /admin/products/option-edit.php.
     $st = $pdo->prepare(
-        'SELECT id, product_id, band_code, supplier_name, name, colour, code
+        'SELECT id, product_id, band_code, supplier_name, name, colour, code,
+                cost_price
            FROM product_options
           WHERE id = ? AND client_id = ? AND active = 1
           LIMIT 1'
@@ -145,29 +153,54 @@ function pe_apply_extra(
     int   $extraId,
     int   $choiceId,
     int   $widthMm,
-    float $basePrice
+    float $basePrice,
+    ?float $userValue = null
 ): array {
     // 1. Verify the extra belongs to this product + tenant. Option-level
     //    system scope no longer exists in this model — an option appears
     //    whenever any of its choices is available for the selected system,
     //    which the choice-level guard below enforces.
-    $st = $pdo->prepare(
-        'SELECT id, name, parent_choice_id
-           FROM product_extras
-          WHERE id = ? AND product_id = ? AND client_id = ? AND active = 1
-          LIMIT 1'
-    );
-    $st->execute([$extraId, $productId, $clientId]);
-    $extra = $st->fetch();
+    //
+    //    length_input_label = optional column (added by migrate_extra
+    //    _length_input.php). When non-NULL, the quote builder renders a
+    //    number input next to the choice picker; the typed value is
+    //    passed in as $userValue and snapshotted on quote_item_extras.
+    //    Try-fallback for pre-migration installs.
+    try {
+        $st = $pdo->prepare(
+            'SELECT id, name, parent_choice_id, length_input_label
+               FROM product_extras
+              WHERE id = ? AND product_id = ? AND client_id = ? AND active = 1
+              LIMIT 1'
+        );
+        $st->execute([$extraId, $productId, $clientId]);
+        $extra = $st->fetch();
+    } catch (Throwable $e) {
+        $st = $pdo->prepare(
+            'SELECT id, name, parent_choice_id
+               FROM product_extras
+              WHERE id = ? AND product_id = ? AND client_id = ? AND active = 1
+              LIMIT 1'
+        );
+        $st->execute([$extraId, $productId, $clientId]);
+        $extra = $st->fetch();
+        if ($extra) $extra['length_input_label'] = null;
+    }
     if (!$extra) {
         return ['error' => "Option #$extraId not found for this product."];
     }
 
     // 2. Look up the choice. system_id is now read straight off the
-    //    choice row (NULL = "available on every system").
+    //    choice row (NULL = "available on every system"). cost_price
+    //    is the optional wholesale cost the tenant pays per use of
+    //    this choice — flat number regardless of sell-pricing mode
+    //    (flat/percent/per-metre/width-table all describe how it's
+    //    CHARGED to the customer; cost is what's PAID to the supplier
+    //    per fitted unit). NULL = treat as 0.
     $st = $pdo->prepare(
         'SELECT id, product_extra_id, system_id, label,
-                price_delta, price_percent, price_per_metre
+                price_delta, price_percent, price_per_metre,
+                cost_price
            FROM product_extra_choices
           WHERE id = ? AND product_extra_id = ? AND active = 1
           LIMIT 1'
@@ -242,13 +275,32 @@ function pe_apply_extra(
         if (in_array($m, $modesApplied, true)) { $primary = $m; break; }
     }
 
+    // cost_snapshot rides alongside amount_applied. NULL on the
+    // choice → 0 cost; tenant hasn't filled cost in yet, dashboard
+    // will show this extra as pure profit until they do.
+    $costSnapshot = isset($choice['cost_price']) && $choice['cost_price'] !== null
+        ? round((float) $choice['cost_price'], 2)
+        : 0.0;
+
+    // user_value: pass-through for now. The salesperson typed e.g. 1230
+    // (mm) and we record it so the supplier docs show the spec. Could
+    // also drive pricing later (multiply choice.price_per_metre by
+    // userValue/1000 instead of widthMm/1000) — out of scope for v1.
+    $resolvedUserValue = null;
+    if (!empty($extra['length_input_label']) && $userValue !== null && $userValue > 0) {
+        $resolvedUserValue = round((float) $userValue, 2);
+    }
+
     return [
-        'extra_id'       => (int)    $extra['id'],
-        'extra_name'     => (string) $extra['name'],
-        'choice_id'      => (int)    $choice['id'],
-        'choice_label'   => (string) $choice['label'],
-        'mode'           => $primary,
-        'amount_applied' => round($amount, 2),
+        'extra_id'            => (int)    $extra['id'],
+        'extra_name'          => (string) $extra['name'],
+        'choice_id'           => (int)    $choice['id'],
+        'choice_label'        => (string) $choice['label'],
+        'mode'                => $primary,
+        'amount_applied'      => round($amount, 2),
+        'cost_snapshot'       => $costSnapshot,
+        'length_input_label'  => $extra['length_input_label'] ?? null,
+        'user_value'          => $resolvedUserValue,
     ];
 }
 
@@ -360,9 +412,10 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     if ($widthMm   <= 0) return ['error' => 'Width must be greater than zero.'];
     if ($dropMm    <= 0) return ['error' => 'Drop must be greater than zero.'];
 
-    // 1. Product (tenant scope).
+    // 1. Product (tenant scope). cost_price = default wholesale cost
+    //    per blind for this product (set on /admin/products/edit.php).
     $st = $pdo->prepare(
-        'SELECT id, name FROM products
+        'SELECT id, name, cost_price FROM products
           WHERE id = ? AND client_id = ? AND active = 1
           LIMIT 1'
     );
@@ -414,7 +467,9 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     }
     $basePrice = (float) $row['price'];
 
-    // 6. Apply extras.
+    // 6. Apply extras. Each $sel may now carry a `user_value` (typed
+    //    length / count / etc.) — pass through to pe_apply_extra so it
+    //    can snapshot the value alongside the choice.
     $extrasApplied = [];
     $extrasTotal   = 0.0;
     foreach ($extras as $sel) {
@@ -422,8 +477,16 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         $cid = (int) ($sel['choice_id'] ?? 0);
         if ($eid <= 0 || $cid <= 0) continue;
 
+        // Accept either 'user_value' or 'value' (the JS form might use
+        // either name). Empty / non-numeric → null.
+        $rawUserValue = $sel['user_value'] ?? $sel['value'] ?? null;
+        $userValue = (is_numeric($rawUserValue) && (float) $rawUserValue > 0)
+            ? (float) $rawUserValue
+            : null;
+
         $applied = pe_apply_extra(
-            $pdo, $clientId, $productId, $systemId, $eid, $cid, $widthMm, $basePrice
+            $pdo, $clientId, $productId, $systemId, $eid, $cid,
+            $widthMm, $basePrice, $userValue
         );
         if (isset($applied['error'])) {
             return ['error' => $applied['error']];
@@ -440,11 +503,40 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $discount = pe_discount_for_system($pdo, $clientId, $productId, $systemId);
 
     // 8. Sell price + line total.
-    $sellPrice = round(
-        $subtotalPerBlind * (1 + $markup / 100) * (1 - $discount / 100),
-        2
-    );
-    $lineTotal = round($sellPrice * $quantity, 2);
+    //
+    //    Order matches how the tenant thinks about it:
+    //      a) Take the discount off the price-table base
+    //      b) Apply the markup to that discounted price
+    //      c) Add the extras at face value (pass-through)
+    //
+    //    Note: a + b are mathematically equivalent to "markup then
+    //    discount" because they're both percentage multipliers, but
+    //    writing it in the natural reading order makes the code
+    //    easier to follow.
+    //
+    //    Extras (price_delta, price_percent, price_per_metre,
+    //    width_table) are NEVER marked up or discounted here — the
+    //    tenant sets the customer-facing price directly in the
+    //    options page.
+    $discountedBase = $basePrice    * (1 - $discount / 100);
+    $sellBase       = $discountedBase * (1 + $markup / 100);
+    $sellPrice      = round($sellBase + $extrasTotal, 2);
+    $lineTotal      = round($sellPrice * $quantity, 2);
+
+    // 9. Cost snapshot — per-blind cost = product + fabric (both NULL
+    //    columns treated as 0). Extras' cost is summed separately so
+    //    the dashboard can break it down later if useful.
+    $productCost = isset($product['cost_price']) && $product['cost_price'] !== null
+        ? (float) $product['cost_price'] : 0.0;
+    $fabricCost  = isset($fabric['cost_price']) && $fabric['cost_price'] !== null
+        ? (float) $fabric['cost_price']  : 0.0;
+    $costPricePerBlind = round($productCost + $fabricCost, 2);
+
+    $extrasCostTotal = 0.0;
+    foreach ($extrasApplied as $ea) {
+        $extrasCostTotal += (float) ($ea['cost_snapshot'] ?? 0);
+    }
+    $extrasCostTotal = round($extrasCostTotal, 2);
 
     return [
         // Resolved FKs (for quote_items)
@@ -483,5 +575,12 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         'sell_price'         => $sellPrice,
         'quantity'           => $quantity,
         'line_total'         => $lineTotal,
+
+        // Cost breakdown (per-blind). Stored on quote_items as the
+        // cost_price_snapshot (blind) + extras_cost_snapshot (extras),
+        // both frozen at save-time so editing the product later
+        // doesn't move historic gross-profit numbers.
+        'cost_price_per_blind' => $costPricePerBlind,
+        'extras_cost_total'    => $extrasCostTotal,
     ];
 }

@@ -43,15 +43,38 @@ if ($dropMm === null) {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read drop "' . $dropRaw . '".');
 }
 
-// Selected extras: extras[N][extra_id], extras[N][choice_id].
+// Selected extras: each entry has extra_id plus either:
+//   - choice_id (scalar)  — single-pick option (the historical shape)
+//   - choice_ids[] (array) — multi-pick option, one record fanned out
+//                            per ticked checkbox
+// extras[N][user_value] is optional (length-input extras only). For
+// multi-pick options, the same user_value applies to every fanned-out
+// record (the spec value belongs to the extra, not each choice).
 $extras = [];
 if (isset($_POST['extras']) && is_array($_POST['extras'])) {
     foreach ($_POST['extras'] as $e) {
         if (!is_array($e)) continue;
-        $eid = (int) ($e['extra_id']  ?? 0);
-        $cid = (int) ($e['choice_id'] ?? 0);
-        if ($eid > 0 && $cid > 0) {
-            $extras[] = ['extra_id' => $eid, 'choice_id' => $cid];
+        $eid = (int) ($e['extra_id'] ?? 0);
+        if ($eid <= 0) continue;
+
+        $uv  = $e['user_value'] ?? null;
+        $uvFloat = ($uv !== null && $uv !== '' && is_numeric($uv) && (float) $uv > 0)
+            ? (float) $uv : null;
+
+        $mkRow = static function (int $eid, int $cid) use ($uvFloat): array {
+            $row = ['extra_id' => $eid, 'choice_id' => $cid];
+            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            return $row;
+        };
+
+        if (isset($e['choice_ids']) && is_array($e['choice_ids'])) {
+            foreach ($e['choice_ids'] as $rawCid) {
+                $cid = (int) $rawCid;
+                if ($cid > 0) $extras[] = $mkRow($eid, $cid);
+            }
+        } else {
+            $cid = (int) ($e['choice_id'] ?? 0);
+            if ($cid > 0) $extras[] = $mkRow($eid, $cid);
         }
     }
 }
@@ -86,6 +109,11 @@ try {
     $room  = trim((string) ($_POST['room_name'] ?? ''));
     $note  = trim((string) ($_POST['notes']     ?? ''));
 
+    // cost_price_snapshot + extras_cost_snapshot freeze the per-blind
+    // wholesale cost at save-time, so historic gross-profit numbers
+    // stay correct if the admin edits products/fabrics later. NULL on
+    // any underlying cost_price column → 0 here; tenants see no
+    // profit erosion until they fill cost data in.
     $ins = $pdo->prepare(
         'INSERT INTO quote_items
           (quote_id, line_no,
@@ -98,7 +126,8 @@ try {
            width_mm, drop_mm, width_matrix_mm, drop_matrix_mm,
            quantity,
            price_table_id, price_table_row_id,
-           base_price, extras_total, subtotal_per_blind,
+           base_price, cost_price_snapshot, extras_cost_snapshot,
+           extras_total, subtotal_per_blind,
            markup_percent, discount_percent,
            sell_price, line_total,
            notes)
@@ -116,6 +145,7 @@ try {
            ?, ?, ?,
            ?, ?,
            ?, ?,
+           ?, ?,
            ?)'
     );
     $ins->execute([
@@ -130,30 +160,57 @@ try {
         $priced['matrix_width_mm'], $priced['matrix_drop_mm'],
         $priced['quantity'],
         $priced['price_table_id'], $priced['price_table_row_id'],
-        $priced['base_price'], $priced['extras_total'], $priced['subtotal_per_blind'],
+        $priced['base_price'], $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0,
+        $priced['extras_total'], $priced['subtotal_per_blind'],
         $priced['markup_percent'], $priced['discount_percent'],
         $priced['sell_price'], $priced['line_total'],
         $note !== '' ? $note : null,
     ]);
     $newItemId = (int) $pdo->lastInsertId();
 
-    // Insert one row per applied extra.
+    // Insert one row per applied extra. cost_snapshot freezes the
+    // wholesale cost. user_value snapshots the user-typed length / spec
+    // (NULL when the extra doesn't have a length_input_label, or when
+    // nothing was typed). Try-fallback so this still works pre-
+    // migrate_extra_length_input.php.
     if (!empty($priced['extras_applied'])) {
-        $insE = $pdo->prepare(
-            'INSERT INTO quote_item_extras
-               (quote_item_id,
-                product_extra_id, extra_name_snapshot,
-                product_extra_choice_id, choice_label_snapshot,
-                mode, amount_applied)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        foreach ($priced['extras_applied'] as $ex) {
-            $insE->execute([
-                $newItemId,
-                $ex['extra_id'], $ex['extra_name'],
-                $ex['choice_id'], $ex['choice_label'],
-                $ex['mode'], $ex['amount_applied'],
-            ]);
+        try {
+            $insE = $pdo->prepare(
+                'INSERT INTO quote_item_extras
+                   (quote_item_id,
+                    product_extra_id, extra_name_snapshot,
+                    product_extra_choice_id, choice_label_snapshot,
+                    mode, amount_applied, cost_snapshot, user_value)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($priced['extras_applied'] as $ex) {
+                $insE->execute([
+                    $newItemId,
+                    $ex['extra_id'], $ex['extra_name'],
+                    $ex['choice_id'], $ex['choice_label'],
+                    $ex['mode'], $ex['amount_applied'],
+                    $ex['cost_snapshot'] ?? 0,
+                    $ex['user_value']    ?? null,
+                ]);
+            }
+        } catch (Throwable $e) {
+            $insE = $pdo->prepare(
+                'INSERT INTO quote_item_extras
+                   (quote_item_id,
+                    product_extra_id, extra_name_snapshot,
+                    product_extra_choice_id, choice_label_snapshot,
+                    mode, amount_applied, cost_snapshot)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($priced['extras_applied'] as $ex) {
+                $insE->execute([
+                    $newItemId,
+                    $ex['extra_id'], $ex['extra_name'],
+                    $ex['choice_id'], $ex['choice_label'],
+                    $ex['mode'], $ex['amount_applied'],
+                    $ex['cost_snapshot'] ?? 0,
+                ]);
+            }
         }
     }
 

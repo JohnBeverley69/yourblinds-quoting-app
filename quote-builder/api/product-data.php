@@ -72,29 +72,85 @@ $systems = array_map(static fn ($r) => [
 //    is available for the chosen system, which the JS handles client-
 //    side after the filter runs.
 //    (Fabrics moved to /api/fabrics-search.php for typeahead — see header.)
-$st = $pdo->prepare(
-    'SELECT id, name, is_required, parent_choice_id, sort_order
-       FROM product_extras
-      WHERE product_id = ? AND client_id = ? AND active = 1
-   ORDER BY sort_order, name'
-);
-$st->execute([$productId, $clientId]);
-$extrasRaw = $st->fetchAll();
+// Optional columns:
+//   length_input_label (migrate_extra_length_input.php)
+//   allow_multi        (migrate_extra_allow_multi.php)
+// Try the full SELECT first; cascade down if either column is missing.
+try {
+    $st = $pdo->prepare(
+        'SELECT id, name, is_required, parent_choice_id,
+                length_input_label, allow_multi, sort_order
+           FROM product_extras
+          WHERE product_id = ? AND client_id = ? AND active = 1
+       ORDER BY sort_order, name'
+    );
+    $st->execute([$productId, $clientId]);
+    $extrasRaw = $st->fetchAll();
+} catch (Throwable $eA) {
+    try {
+        $st = $pdo->prepare(
+            'SELECT id, name, is_required, parent_choice_id,
+                    length_input_label, sort_order
+               FROM product_extras
+              WHERE product_id = ? AND client_id = ? AND active = 1
+           ORDER BY sort_order, name'
+        );
+        $st->execute([$productId, $clientId]);
+        $extrasRaw = $st->fetchAll();
+        foreach ($extrasRaw as &$r) $r['allow_multi'] = 0;
+        unset($r);
+    } catch (Throwable $eB) {
+        $st = $pdo->prepare(
+            'SELECT id, name, is_required, parent_choice_id, sort_order
+               FROM product_extras
+              WHERE product_id = ? AND client_id = ? AND active = 1
+           ORDER BY sort_order, name'
+        );
+        $st->execute([$productId, $clientId]);
+        $extrasRaw = $st->fetchAll();
+        foreach ($extrasRaw as &$r) {
+            $r['length_input_label'] = null;
+            $r['allow_multi']        = 0;
+        }
+        unset($r);
+    }
+}
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
-// Parent-choice gating now uses the junction table — an option can be
-// gated to MULTIPLE parents. Fold into [extra_id => [choice_id, ...]].
+// Parent-choice gating uses the junction table — an option can be
+// gated to MULTIPLE parents. We fold into [extra_id => [choice_id, ...]].
+//
+// **Label expansion**: when a choice gets duplicated across systems
+// (e.g. "Corded" exists three times — one per system — so each can
+// have its own pricing), the gate stays linked to whichever of those
+// rows existed when the admin set it up. From the admin's mental
+// model these are "the same choice", just system-specific. So when
+// we hand the list to the front-end we expand it: for every gated
+// choice, include every sibling in the same product_extra that has
+// the same active label. "Gated on Corded" effectively means "gated
+// on any choice called Corded".
 $parentsByExtra = [];
 if ($extraIds) {
     $pph = implode(',', array_fill(0, count($extraIds), '?'));
     $pSt = $pdo->prepare(
-        "SELECT product_extra_id, product_extra_choice_id
-           FROM product_extra_parent_choices
-          WHERE product_extra_id IN ($pph)"
+        "SELECT DISTINCT pep.product_extra_id, sibling.id AS choice_id
+           FROM product_extra_parent_choices pep
+           JOIN product_extra_choices anchor
+                ON anchor.id = pep.product_extra_choice_id
+           JOIN product_extra_choices sibling
+                ON sibling.product_extra_id = anchor.product_extra_id
+               AND sibling.label  = anchor.label
+               AND sibling.active = 1
+          WHERE pep.product_extra_id IN ($pph)"
     );
     $pSt->execute($extraIds);
     foreach ($pSt->fetchAll() as $r) {
-        $parentsByExtra[(int) $r['product_extra_id']][] = (int) $r['product_extra_choice_id'];
+        $parentsByExtra[(int) $r['product_extra_id']][] = (int) $r['choice_id'];
+    }
+    // De-dup per extra (the DISTINCT covers the SQL side but the
+    // multi-row fold can still drop dupes via array_unique).
+    foreach ($parentsByExtra as $eid => $ids) {
+        $parentsByExtra[$eid] = array_values(array_unique($ids));
     }
 }
 
@@ -133,6 +189,14 @@ $extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra) 
         // Empty list = always visible. Any one match in the user's
         // current selections is enough to show the extra.
         'parent_choice_ids'  => $parentsByExtra[$eid] ?? [],
+        // length_input_label — when non-empty, the quote builder JS
+        // renders a number input next to this extra so the salesperson
+        // can capture a spec value (e.g. "Wand length (mm)") alongside
+        // the chosen option. Empty / null = choice-only (the default).
+        'length_input_label' => $r['length_input_label'] ?? null,
+        // allow_multi — when truthy, the quote builder renders this
+        // option as checkboxes (multi-pick) instead of a dropdown.
+        'allow_multi'        => (int) ($r['allow_multi'] ?? 0) === 1,
         'choices'            => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);

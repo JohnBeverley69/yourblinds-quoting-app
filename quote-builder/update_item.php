@@ -67,14 +67,34 @@ if ($dropMm === null) {
     );
 }
 
+// Same parsing as add_item.php — handles both single-pick
+// (extras[N][choice_id]) and multi-pick (extras[N][choice_ids][])
+// options. See add_item.php for the full comment.
 $extras = [];
 if (isset($_POST['extras']) && is_array($_POST['extras'])) {
     foreach ($_POST['extras'] as $e) {
         if (!is_array($e)) continue;
-        $eid = (int) ($e['extra_id']  ?? 0);
-        $cid = (int) ($e['choice_id'] ?? 0);
-        if ($eid > 0 && $cid > 0) {
-            $extras[] = ['extra_id' => $eid, 'choice_id' => $cid];
+        $eid = (int) ($e['extra_id'] ?? 0);
+        if ($eid <= 0) continue;
+
+        $uv  = $e['user_value'] ?? null;
+        $uvFloat = ($uv !== null && $uv !== '' && is_numeric($uv) && (float) $uv > 0)
+            ? (float) $uv : null;
+
+        $mkRow = static function (int $eid, int $cid) use ($uvFloat): array {
+            $row = ['extra_id' => $eid, 'choice_id' => $cid];
+            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            return $row;
+        };
+
+        if (isset($e['choice_ids']) && is_array($e['choice_ids'])) {
+            foreach ($e['choice_ids'] as $rawCid) {
+                $cid = (int) $rawCid;
+                if ($cid > 0) $extras[] = $mkRow($eid, $cid);
+            }
+        } else {
+            $cid = (int) ($e['choice_id'] ?? 0);
+            if ($cid > 0) $extras[] = $mkRow($eid, $cid);
         }
     }
 }
@@ -108,6 +128,11 @@ try {
 
     // Re-snapshot every catalogue field — the user may have changed product
     // / system / fabric, so the previous snapshots are stale.
+    // cost_price_snapshot + extras_cost_snapshot get re-frozen on every
+    // edit, same as the price snapshots, so they always reflect the
+    // CURRENT product cost at the moment of last edit (not at original
+    // creation). That's the right behaviour: if you fix a wrong line
+    // item, the cost numbers re-snapshot to match.
     $upd = $pdo->prepare(
         'UPDATE quote_items
             SET product_id               = ?,
@@ -129,6 +154,8 @@ try {
                 price_table_id           = ?,
                 price_table_row_id       = ?,
                 base_price               = ?,
+                cost_price_snapshot      = ?,
+                extras_cost_snapshot     = ?,
                 extras_total             = ?,
                 subtotal_per_blind       = ?,
                 markup_percent           = ?,
@@ -149,7 +176,8 @@ try {
         $priced['matrix_width_mm'], $priced['matrix_drop_mm'],
         $priced['quantity'],
         $priced['price_table_id'], $priced['price_table_row_id'],
-        $priced['base_price'], $priced['extras_total'], $priced['subtotal_per_blind'],
+        $priced['base_price'], $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0,
+        $priced['extras_total'], $priced['subtotal_per_blind'],
         $priced['markup_percent'], $priced['discount_percent'],
         $priced['sell_price'], $priced['line_total'],
         $note !== '' ? $note : null,
@@ -160,22 +188,46 @@ try {
     $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id = ?')
         ->execute([$itemId]);
 
+    // Same try-fallback as add_item.php — user_value column may not
+    // exist pre-migration.
     if (!empty($priced['extras_applied'])) {
-        $insE = $pdo->prepare(
-            'INSERT INTO quote_item_extras
-               (quote_item_id,
-                product_extra_id, extra_name_snapshot,
-                product_extra_choice_id, choice_label_snapshot,
-                mode, amount_applied)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        foreach ($priced['extras_applied'] as $ex) {
-            $insE->execute([
-                $itemId,
-                $ex['extra_id'], $ex['extra_name'],
-                $ex['choice_id'], $ex['choice_label'],
-                $ex['mode'], $ex['amount_applied'],
-            ]);
+        try {
+            $insE = $pdo->prepare(
+                'INSERT INTO quote_item_extras
+                   (quote_item_id,
+                    product_extra_id, extra_name_snapshot,
+                    product_extra_choice_id, choice_label_snapshot,
+                    mode, amount_applied, cost_snapshot, user_value)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($priced['extras_applied'] as $ex) {
+                $insE->execute([
+                    $itemId,
+                    $ex['extra_id'], $ex['extra_name'],
+                    $ex['choice_id'], $ex['choice_label'],
+                    $ex['mode'], $ex['amount_applied'],
+                    $ex['cost_snapshot'] ?? 0,
+                    $ex['user_value']    ?? null,
+                ]);
+            }
+        } catch (Throwable $e) {
+            $insE = $pdo->prepare(
+                'INSERT INTO quote_item_extras
+                   (quote_item_id,
+                    product_extra_id, extra_name_snapshot,
+                    product_extra_choice_id, choice_label_snapshot,
+                    mode, amount_applied, cost_snapshot)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($priced['extras_applied'] as $ex) {
+                $insE->execute([
+                    $itemId,
+                    $ex['extra_id'], $ex['extra_name'],
+                    $ex['choice_id'], $ex['choice_label'],
+                    $ex['mode'], $ex['amount_applied'],
+                    $ex['cost_snapshot'] ?? 0,
+                ]);
+            }
         }
     }
 

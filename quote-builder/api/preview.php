@@ -53,15 +53,34 @@ if ($dropMm === null) {
     exit;
 }
 
-// Extras come in as extras[N][extra_id] / extras[N][choice_id].
+// Each entry has extra_id + either choice_id (single-pick) or
+// choice_ids[] (multi-pick). user_value optional. See add_item.php
+// for the full notes — same parsing shape.
 $extras = [];
 if (isset($_GET['extras']) && is_array($_GET['extras'])) {
     foreach ($_GET['extras'] as $e) {
         if (!is_array($e)) continue;
-        $eid = (int) ($e['extra_id']  ?? 0);
-        $cid = (int) ($e['choice_id'] ?? 0);
-        if ($eid > 0 && $cid > 0) {
-            $extras[] = ['extra_id' => $eid, 'choice_id' => $cid];
+        $eid = (int) ($e['extra_id'] ?? 0);
+        if ($eid <= 0) continue;
+
+        $uv  = $e['user_value'] ?? null;
+        $uvFloat = ($uv !== null && $uv !== '' && is_numeric($uv) && (float) $uv > 0)
+            ? (float) $uv : null;
+
+        $mkRow = static function (int $eid, int $cid) use ($uvFloat): array {
+            $row = ['extra_id' => $eid, 'choice_id' => $cid];
+            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            return $row;
+        };
+
+        if (isset($e['choice_ids']) && is_array($e['choice_ids'])) {
+            foreach ($e['choice_ids'] as $rawCid) {
+                $cid = (int) $rawCid;
+                if ($cid > 0) $extras[] = $mkRow($eid, $cid);
+            }
+        } else {
+            $cid = (int) ($e['choice_id'] ?? 0);
+            if ($cid > 0) $extras[] = $mkRow($eid, $cid);
         }
     }
 }
