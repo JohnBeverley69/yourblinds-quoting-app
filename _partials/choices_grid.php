@@ -86,11 +86,11 @@
                             <a href="/admin/products/extras.php?product_id=<?= (int) $productId ?>&parent_choice=<?= $cid ?>#add-option"
                                class="btn-sub"
                                title="Add a follow-up option that only appears when this choice is selected">
-                                + Sub
+                                + Sub-option
                             </a>
                             <button type="button" class="btn-duplicate"
-                                    title="Clone this choice (same label, another system at a different price)">
-                                Dup
+                                    title="Clone this choice (e.g. same label on a different system at a different price)">
+                                Duplicate
                             </button>
                             <button type="button" class="btn-delete"
                                     title="Delete this choice">×</button>
@@ -99,7 +99,10 @@
                 <?php endforeach; ?>
 
                 <!-- "Type to add" row. Always present, never has data-id.
-                     Classes (not ids) so multiple grids on a page don't collide. -->
+                     Classes (not ids) so multiple grids on a page don't collide.
+                     The price / toggle cells stay visually empty here — the
+                     helper hint lives in a caption BELOW the table so it
+                     doesn't visually clash with the column headers. -->
                 <tr class="new-row">
                     <td class="col-drag">+</td>
                     <td class="col-label">
@@ -133,12 +136,22 @@
                             </div>
                         </details>
                     </td>
-                    <td colspan="6" style="color:#9ca3af;font-size:0.8125rem">
-                        Tick one or more systems, then press <strong>Enter</strong> on the label.
-                        One row per ticked system; prices and toggles become editable on each new row.
-                    </td>
+                    <td class="col-price"></td>
+                    <td class="col-price"></td>
+                    <td class="col-price"></td>
+                    <td class="col-toggle"></td>
+                    <td class="col-toggle"></td>
+                    <td class="col-actions"></td>
                 </tr>
             </tbody>
         </table>
     </div>
+    <!-- Helper caption sits under the table, not inside it, so it
+         doesn't visually overlap the Flat / % / £/m / Default / Active
+         columns of the new-row. -->
+    <p style="color:#6b7280;font-size:0.8125rem;margin:0.5rem 0.25rem 0;line-height:1.45">
+        <strong>Tip:</strong> tick one or more systems in the dropdown above, then press
+        <strong>Enter</strong> on the label to add the row. One row per ticked system &mdash;
+        prices and toggles become editable on each new row once added.
+    </p>
 </div>

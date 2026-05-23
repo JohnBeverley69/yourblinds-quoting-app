@@ -16,19 +16,40 @@ if ($id <= 0) {
 }
 
 // Tenant-scoped lookup of the choice + parents.
-$loadStmt = db()->prepare(
-    'SELECT c.id, c.product_extra_id, c.system_id, c.label,
-            c.price_delta, c.price_percent, c.price_per_metre,
-            c.is_default, c.sort_order, c.active, c.image_path,
-            e.name AS extra_name, e.product_id, e.client_id,
-            p.name AS product_name
-       FROM product_extra_choices c
-       JOIN product_extras e ON e.id = c.product_extra_id
-       JOIN products p       ON p.id = e.product_id
-      WHERE c.id = ? AND e.client_id = ?'
-);
-$loadStmt->execute([$id, $clientId]);
-$choice = $loadStmt->fetch();
+// cost_price is added by migrate_product_costs.php — try-fallback so
+// the page still works pre-migration.
+try {
+    $loadStmt = db()->prepare(
+        'SELECT c.id, c.product_extra_id, c.system_id, c.label,
+                c.price_delta, c.price_percent, c.price_per_metre,
+                c.cost_price,
+                c.is_default, c.sort_order, c.active, c.image_path,
+                e.name AS extra_name, e.product_id, e.client_id,
+                p.name AS product_name
+           FROM product_extra_choices c
+           JOIN product_extras e ON e.id = c.product_extra_id
+           JOIN products p       ON p.id = e.product_id
+          WHERE c.id = ? AND e.client_id = ?'
+    );
+    $loadStmt->execute([$id, $clientId]);
+    $choice = $loadStmt->fetch();
+    $hasCostColumn = true;
+} catch (Throwable $e) {
+    $loadStmt = db()->prepare(
+        'SELECT c.id, c.product_extra_id, c.system_id, c.label,
+                c.price_delta, c.price_percent, c.price_per_metre,
+                c.is_default, c.sort_order, c.active, c.image_path,
+                e.name AS extra_name, e.product_id, e.client_id,
+                p.name AS product_name
+           FROM product_extra_choices c
+           JOIN product_extras e ON e.id = c.product_extra_id
+           JOIN products p       ON p.id = e.product_id
+          WHERE c.id = ? AND e.client_id = ?'
+    );
+    $loadStmt->execute([$id, $clientId]);
+    $choice = $loadStmt->fetch();
+    $hasCostColumn = false;
+}
 
 if (!$choice) {
     http_response_code(404);
@@ -42,6 +63,9 @@ $f = [
     'price_delta'     => (string) $choice['price_delta'],
     'price_percent'   => (string) $choice['price_percent'],
     'price_per_metre' => (string) $choice['price_per_metre'],
+    'cost_price'      => isset($choice['cost_price']) && $choice['cost_price'] !== null
+                            ? (string) $choice['cost_price']
+                            : '',
     'is_default'      => (int)    $choice['is_default'],
     'active'          => (int)    $choice['active'],
     'system_id'       => $choice['system_id'] !== null ? (int) $choice['system_id'] : 0,
@@ -72,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
+    $f['cost_price']      = trim((string) ($_POST['cost_price']      ?? ''));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
     $f['system_id']       = (int) ($_POST['system_id'] ?? 0);
@@ -157,25 +182,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $u = $pdo->prepare(
-                    'UPDATE product_extra_choices
-                        SET label = ?, system_id = ?,
-                            price_delta = ?, price_percent = ?, price_per_metre = ?,
-                            is_default = ?, active = ?
-                      WHERE id = ?'
-                );
-                // sort_order is intentionally not touched — drag-and-drop
-                // on the choices list is the only writer.
-                $u->execute([
-                    $f['label'],
-                    $systemIdToStore,
-                    (float) $f['price_delta'],
-                    (float) $f['price_percent'],
-                    (float) $f['price_per_metre'],
-                    $f['is_default'],
-                    $f['active'],
-                    $id,
-                ]);
+                // cost_price: empty = NULL (= unentered, treat as 0).
+                $costValue = ($f['cost_price'] === '' || !is_numeric($f['cost_price']))
+                    ? null
+                    : (float) $f['cost_price'];
+
+                if ($hasCostColumn) {
+                    $u = $pdo->prepare(
+                        'UPDATE product_extra_choices
+                            SET label = ?, system_id = ?,
+                                price_delta = ?, price_percent = ?, price_per_metre = ?,
+                                cost_price = ?,
+                                is_default = ?, active = ?
+                          WHERE id = ?'
+                    );
+                    $u->execute([
+                        $f['label'],
+                        $systemIdToStore,
+                        (float) $f['price_delta'],
+                        (float) $f['price_percent'],
+                        (float) $f['price_per_metre'],
+                        $costValue,
+                        $f['is_default'],
+                        $f['active'],
+                        $id,
+                    ]);
+                } else {
+                    $u = $pdo->prepare(
+                        'UPDATE product_extra_choices
+                            SET label = ?, system_id = ?,
+                                price_delta = ?, price_percent = ?, price_per_metre = ?,
+                                is_default = ?, active = ?
+                          WHERE id = ?'
+                    );
+                    // sort_order is intentionally not touched — drag-and-drop
+                    // on the choices list is the only writer.
+                    $u->execute([
+                        $f['label'],
+                        $systemIdToStore,
+                        (float) $f['price_delta'],
+                        (float) $f['price_percent'],
+                        (float) $f['price_per_metre'],
+                        $f['is_default'],
+                        $f['active'],
+                        $id,
+                    ]);
+                }
 
                 // Replace the width table.
                 $del = $pdo->prepare(
@@ -233,6 +285,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
+
+                // Smart post-save routing:
+                //   - If the user touched the width-based price table
+                //     (uploaded a file OR pasted into the textarea),
+                //     stay on this page with a "X rows imported"
+                //     message so they can verify the data landed
+                //     correctly. Bouncing back to the choices list
+                //     hides the imported rows behind another click.
+                //   - Otherwise (plain label/price/system edit), go
+                //     back to the choices list as before — the user
+                //     can see their change in the inline grid.
+                $touchedWidthTable = $uploadedPath !== null
+                                  || trim($widthTablePasted) !== '';
+                if ($touchedWidthTable) {
+                    $rowCount = count($widthRows);
+                    if ($rowCount > 0) {
+                        $_SESSION['flash_success'] = 'Choice updated. '
+                            . $rowCount . ' width-priced row'
+                            . ($rowCount === 1 ? '' : 's')
+                            . ' imported — check the table below to verify.';
+                    } else {
+                        // The width-table was cleared (empty textarea +
+                        // no file = "clear the table" per the parser).
+                        $_SESSION['flash_success'] = 'Choice updated. Width-based price table cleared.';
+                    }
+                    header('Location: /admin/products/extra-choice-edit.php?id=' . $id);
+                    exit;
+                }
 
                 $_SESSION['flash_success'] = 'Choice updated.';
                 header('Location: /admin/products/extra.php?id=' . (int) $choice['product_extra_id']);
@@ -304,16 +384,30 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Edit choice</h1>
-                <p class="page-subtitle">
-                    <a href="/admin/products/extra.php?id=<?= (int) $choice['product_extra_id'] ?>">
-                        &larr; Back to <?= e((string) $choice['product_name']) ?>
-                        / <?= e((string) $choice['extra_name']) ?>
-                    </a>
-                </p>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                                 '/admin/products/index.php'],
+                        [(string) $choice['product_name'],           '/admin/products/edit.php?id='   . (int) $choice['product_id']],
+                        ['Options',                                  '/admin/products/extras.php?product_id=' . (int) $choice['product_id']],
+                        [(string) $choice['extra_name'],             '/admin/products/extra.php?id='  . (int) $choice['product_extra_id']],
+                        [(string) $choice['label'],                  null],
+                    ]);
+                ?>
+                <h1 class="page-title">Edit choice: <?= e((string) $choice['label']) ?></h1>
             </div>
         </div>
 
+        <?php
+            // Flash messages set by the save handler (e.g. "N rows
+            // imported") get rendered here, then immediately cleared
+            // so a refresh doesn't show them again.
+            $flashMsg = $_SESSION['flash_success'] ?? null;
+            unset($_SESSION['flash_success']);
+        ?>
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
@@ -356,6 +450,13 @@ $activeNav = 'products';
                                step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
                     </div>
                 </div>
+
+                <?php /* Per-extra-choice wholesale cost field removed —
+                         cost is captured by the price/percent/per-metre
+                         fields above (they're treated as the cost basis;
+                         Markup % on the product adds sell margin on top).
+                         The product_extra_choices.cost_price column still
+                         exists in the schema but no UI for now. */ ?>
 
                 <?php if ($systems): ?>
                 <div class="form-row full">
@@ -443,7 +544,11 @@ $activeNav = 'products';
                         Option B — upload Excel
                     </p>
                     <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
-                        Two-column .xlsx: width in column A, price in column B. Header row optional. If a file is provided, it overrides the textarea above.
+                        Either layout works (auto-detected): <strong>vertical</strong> — two columns,
+                        width in column A and price in column B, one row per width;
+                        <strong>or horizontal</strong> — widths across row 1, prices across row 2
+                        (the layout many supplier sheets use). Widths can be in mm or metres.
+                        Header row is optional. If a file is provided, it overrides the textarea above.
                     </p>
                     <input type="file" name="width_price_file" id="width_price_file"
                            accept=".xlsx,.xlsm,.xls,.csv,.ods"

@@ -93,6 +93,115 @@ if (!function_exists('ptp_parse_width_price_input')) {
             try {
                 $ss        = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
                 $sheetRows = $ss->getActiveSheet()->toArray(null, true, true, true);
+
+                // ── Layout auto-detection ─────────────────────────────
+                //
+                // We accept TWO shapes for the same data:
+                //
+                //   "vertical"   — width in column A, price in column B,
+                //                  one row per width. The historic format.
+                //
+                //   "horizontal" — widths spread across row 1, prices
+                //                  spread across the last numeric row.
+                //                  Common in supplier price sheets;
+                //                  the bottom bar pricing from Eclipse
+                //                  uses this, sometimes with a metric
+                //                  + imperial inches reference row in
+                //                  between.
+                //
+                // "Numeric" here uses the parsers, not raw is_numeric() —
+                // otherwise currency-formatted cells ("£3.92" with the
+                // numFmt applied by PhpSpreadsheet when formatData=true)
+                // get rejected as non-numeric and rows of real prices
+                // are missed entirely. The parsers strip £ / , / spaces
+                // before testing, which is the behaviour we want here.
+                $rowIsPriceLike = static function (string $v): bool {
+                    return ptp_parse_price($v) !== null;
+                };
+
+                $dataRows = [];
+                foreach ($sheetRows as $rowNum => $row) {
+                    $numeric = 0;
+                    foreach ($row as $val) {
+                        $v = trim((string) ($val ?? ''));
+                        if ($v === '') continue;
+                        if ($rowIsPriceLike($v)) $numeric++;
+                    }
+                    if ($numeric > 0) $dataRows[$rowNum] = $row;
+                }
+
+                $rowNums = array_keys($dataRows);
+                // Horizontal layout if there are 2+ data rows and the
+                // FIRST + LAST both look "wide" (more than 2 numeric
+                // cells). Middle rows are tolerated and ignored — many
+                // supplier sheets include a metric row, an imperial-
+                // inches reference row, then prices. We pair first
+                // (widths) with last (prices) and skip any inches /
+                // labels rows in between.
+                if (count($rowNums) >= 2) {
+                    $firstRowNum = $rowNums[0];
+                    $lastRowNum  = $rowNums[count($rowNums) - 1];
+                    $widthsRow   = $dataRows[$firstRowNum];
+                    $pricesRow   = $dataRows[$lastRowNum];
+                    // Same parser-based filter as the row-detection step
+                    // above — survives currency-formatted price cells.
+                    $widthCells  = array_values(array_filter($widthsRow, static fn ($v) => $rowIsPriceLike(trim((string) ($v ?? '')))));
+                    $priceCells  = array_values(array_filter($pricesRow, static fn ($v) => $rowIsPriceLike(trim((string) ($v ?? '')))));
+                    if (count($widthCells) > 2 && count($priceCells) > 2) {
+                        // Horizontal layout. Pair up cell-for-cell.
+                        // Sanity check: prices should look like prices
+                        // (positive, generally <= 10,000 for a single
+                        // blind component). Widths should look like
+                        // widths (positive). If the "prices" row has
+                        // values that look like inches (24..200, in a
+                        // sequence that matches the metres row × 39.4),
+                        // someone's almost certainly given us a 2-row
+                        // file with metres + inches but no real prices.
+                        // Refuse and tell them.
+                        if (count($widthCells) === count($priceCells)) {
+                            $looksLikeInches = true;
+                            for ($i = 0; $i < count($widthCells); $i++) {
+                                // Use the parser to strip currency / unit
+                                // suffixes before casting; raw (float)
+                                // on "£3.92" returns 0.0 and would
+                                // falsely trigger this check.
+                                $wRaw = ptp_parse_price((string) $widthCells[$i]);
+                                $pRaw = ptp_parse_price((string) $priceCells[$i]);
+                                $w = $wRaw !== null ? (float) $wRaw : 0.0;
+                                $p = $pRaw !== null ? (float) $pRaw : 0.0;
+                                if ($w <= 0) { $looksLikeInches = false; break; }
+                                $ratio = $p / $w;
+                                // 39.37 = inches per metre. Allow a
+                                // generous ±10% so rounding doesn't
+                                // bite, but flag if every cell looks
+                                // like that conversion.
+                                if ($ratio < 35.0 || $ratio > 43.0) {
+                                    $looksLikeInches = false;
+                                    break;
+                                }
+                            }
+                            if ($looksLikeInches) {
+                                return [
+                                    'rows'  => [],
+                                    'error' => 'The "prices" row looks like inches — every value is roughly the width × 39.4. '
+                                             . 'Add a real prices row to the spreadsheet and re-upload.',
+                                ];
+                            }
+                        }
+
+                        $pairs = min(count($widthCells), count($priceCells));
+                        for ($i = 0; $i < $pairs; $i++) {
+                            $w = ptp_parse_dimension((string) $widthCells[$i]);
+                            $p = ptp_parse_price((string) $priceCells[$i]);
+                            if ($w === null || $p === null || $p <= 0) continue;
+                            $rows[$w] = (float) $p;
+                        }
+                        return ['rows' => $rows, 'error' => null];
+                    }
+                }
+
+                // Vertical layout — original behaviour: each row holds
+                // a (width, price) pair in its first two non-empty cells.
                 foreach ($sheetRows as $rowNum => $row) {
                     $cells = [];
                     foreach ($row as $val) {

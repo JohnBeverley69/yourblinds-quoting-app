@@ -31,11 +31,13 @@ if (!$product) {
     exit;
 }
 
-// Hardcoded for now. The product's option_label column still exists if we
-// later need per-product labels (e.g. "Slat type" for woods/faux venetians),
-// but the UI just says "Fabric" to keep things simple.
-$label  = 'Fabric';
-$labelL = 'fabric';
+// Per-product option label — admin sets it on the product Edit page
+// ("Fabric" for rollers/romans, "Colour" for metal venetians,
+// "Finish" for wood venetians, etc.). Falls back to "Fabric" for any
+// product that hasn't had a label set.
+$label  = (string) ($product['option_label'] ?? 'Fabric');
+if ($label === '') $label = 'Fabric';
+$labelL = strtolower($label);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -99,7 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $_SESSION['_options_last_band']     = strtoupper($f['band_code']);
             $_SESSION['_options_last_supplier'] = $f['supplier_name'];
             $_SESSION['flash_success'] = ucfirst($labelL) . ' "' . $f['name'] . '" added.';
-            header('Location: /admin/products/options.php?product_id=' . $productId);
+            // Same return_to handling as systems.php — lets the inline
+            // quick-add on the product edit page bounce straight back.
+            $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+            if ($returnTo !== ''
+                && $returnTo[0] === '/'
+                && !str_starts_with($returnTo, '//')
+                && !preg_match('#^/?\w+://#', $returnTo)) {
+                header('Location: ' . $returnTo);
+            } else {
+                header('Location: /admin/products/options.php?product_id=' . $productId);
+            }
             exit;
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
@@ -188,12 +200,18 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                  '/admin/products/index.php'],
+                        [(string) $product['name'],   '/admin/products/edit.php?id=' . (int) $productId],
+                        [$label . 's',                null],
+                    ]);
+                ?>
                 <h1 class="page-title">
                     <?= e((string) $product['name']) ?> &mdash; <?= e($label) ?>s
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/index.php">&larr; All products</a>
-                    &middot;
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                 </p>
             </div>
@@ -210,6 +228,23 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
+            <p style="margin:0 0 0.625rem;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
+                <strong><?= e($label) ?>s</strong> are what the customer picks for the
+                blind &mdash; the actual material / colour / slat type they want.
+                Each one belongs to a <strong>band</strong> &mdash; a letter code
+                (A, B, C&hellip;) you assign by supplier price tier.
+            </p>
+            <p style="margin:0;color:#0c4a6e;font-size:0.875rem;line-height:1.5">
+                <strong>About bands:</strong> a band groups <?= e($labelL) ?>s
+                that all cost the same per blind size, so they share <em>one</em>
+                price table instead of needing one each.
+                E.g. give all your basic plain fabrics band <em>A</em>, all premium
+                textured ones band <em>B</em>, etc. The price tables (next page)
+                are keyed by band.
+            </p>
+        </section>
 
         <section class="section">
             <div class="section-header">

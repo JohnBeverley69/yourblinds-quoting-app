@@ -103,7 +103,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
             $pdo->commit();
             $_SESSION['flash_success'] = 'System "' . $f['name'] . '" added.';
-            header('Location: /admin/products/systems.php?product_id=' . $productId);
+            // Honour an explicit return_to so the inline quick-add on
+            // the product edit page can bounce straight back to itself
+            // rather than dumping the user on the systems list. Only
+            // accept SAME-ORIGIN paths (starts with /, no protocol or //)
+            // — defends against open-redirect via crafted POSTs.
+            $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+            if ($returnTo !== ''
+                && $returnTo[0] === '/'
+                && !str_starts_with($returnTo, '//')
+                && !preg_match('#^/?\w+://#', $returnTo)) {
+                header('Location: ' . $returnTo);
+            } else {
+                header('Location: /admin/products/systems.php?product_id=' . $productId);
+            }
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -204,12 +217,18 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                  '/admin/products/index.php'],
+                        [(string) $product['name'],   '/admin/products/edit.php?id=' . (int) $productId],
+                        ['Systems',                   null],
+                    ]);
+                ?>
                 <h1 class="page-title">
                     <?= e((string) $product['name']) ?> &mdash; Systems
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/index.php">&larr; All products</a>
-                    &middot;
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                     &middot;
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
@@ -226,6 +245,17 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
+            <p style="margin:0;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
+                <strong>What's a system?</strong>
+                A variant of the blind that has its <em>own price grid</em> &mdash;
+                e.g. <em>Standard</em> vs <em>Motorised</em>, or <em>25mm slat</em>
+                vs <em>50mm slat</em> on wood venetians. Each system gets its own
+                width × drop price table per fabric band. Add one if this product
+                has variants that cost different amounts; skip if not.
+            </p>
+        </section>
 
         <section class="section">
             <div class="section-header">
@@ -302,8 +332,10 @@ $activeNav = 'products';
                                             <?= (int) $s['table_count'] ?>
                                         </a>
                                     </td>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
-                                        <?= e((string) $s['updated_at']) ?>
+                                    <?php require_once __DIR__ . '/../../_partials/time_ago.php'; ?>
+                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap"
+                                        title="<?= e((string) $s['updated_at']) ?>">
+                                        <?= e(time_ago((string) $s['updated_at'])) ?>
                                     </td>
                                     <td class="row-actions">
                                         <?php if ((int) $s['is_default'] !== 1): ?>

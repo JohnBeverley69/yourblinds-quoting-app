@@ -133,13 +133,21 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                              '/admin/products/index.php'],
+                        [(string) $system['product_name'],        '/admin/products/edit.php?id=' . (int) $productId],
+                        ['Systems',                               '/admin/products/systems.php?product_id=' . (int) $productId],
+                        [(string) $system['system_name'],         null],
+                        ['Price tables',                          null],
+                    ]);
+                ?>
                 <h1 class="page-title">
                     <?= e((string) $system['product_name']) ?>
                     &mdash; <?= e((string) $system['system_name']) ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/systems.php?product_id=<?= (int) $productId ?>">&larr; All systems</a>
-                    &middot;
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
                 </p>
             </div>
@@ -160,6 +168,22 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
+            <p style="margin:0 0 0.625rem;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
+                <strong>What's a price table?</strong>
+                A grid of prices indexed by <em>width</em> &times; <em>drop</em> &mdash; the
+                lookup the pricing engine uses when quoting a blind at a specific size.
+                One table per fabric <strong>band</strong> in this system (so all Band A
+                fabrics use the same grid, Band B fabrics use another, etc.).
+            </p>
+            <p style="margin:0;color:#0c4a6e;font-size:0.875rem;line-height:1.5">
+                <strong>Quickest way to get started:</strong> click <em>Bulk import</em>
+                (top right) and upload one Excel file with a sheet per band &mdash; we'll create
+                every table in one go. Or add bands manually below and fill the grids one
+                at a time via the <em>Open</em> link on each row.
+            </p>
+        </section>
 
         <section class="section">
             <div class="section-header">
@@ -233,8 +257,10 @@ $activeNav = 'products';
                                     <td class="num<?= ((int) $t['row_count']) === 0 ? ' empty-cells' : '' ?>">
                                         <?= (int) $t['row_count'] ?>
                                     </td>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
-                                        <?= e((string) $t['updated_at']) ?>
+                                    <?php require_once __DIR__ . '/../../_partials/time_ago.php'; ?>
+                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap"
+                                        title="<?= e((string) $t['updated_at']) ?>">
+                                        <?= e(time_ago((string) $t['updated_at'])) ?>
                                     </td>
                                     <td class="row-actions">
                                         <a href="/admin/products/price-table.php?id=<?= (int) $t['id'] ?>">Open</a>

@@ -28,9 +28,11 @@ if (!$product) {
     exit;
 }
 
-// Hardcoded — see options.php for rationale.
-$label  = 'Fabric';
-$labelL = 'fabric';
+// Per-product option label (set on the product Edit page).
+// Falls back to "Fabric" for legacy products.
+$label  = (string) ($product['option_label'] ?? 'Fabric');
+if ($label === '') $label = 'Fabric';
+$labelL = strtolower($label);
 
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 

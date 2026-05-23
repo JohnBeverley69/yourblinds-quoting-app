@@ -16,16 +16,33 @@ if ($id <= 0) {
 }
 
 // Tenant-scoped lookup of the option + its parent product.
-$loadStmt = db()->prepare(
-    'SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
-            o.colour, o.code, o.sort_order, o.active,
-            p.name AS product_name, p.option_label
-       FROM product_options o
-       JOIN products p ON p.id = o.product_id
-      WHERE o.id = ? AND o.client_id = ?'
-);
-$loadStmt->execute([$id, $clientId]);
-$option = $loadStmt->fetch();
+// cost_price is added by migrate_product_costs.php — try-fallback so
+// the page still works pre-migration.
+try {
+    $loadStmt = db()->prepare(
+        'SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
+                o.colour, o.code, o.sort_order, o.active, o.cost_price,
+                p.name AS product_name, p.option_label
+           FROM product_options o
+           JOIN products p ON p.id = o.product_id
+          WHERE o.id = ? AND o.client_id = ?'
+    );
+    $loadStmt->execute([$id, $clientId]);
+    $option = $loadStmt->fetch();
+    $hasCostColumn = true;
+} catch (Throwable $e) {
+    $loadStmt = db()->prepare(
+        'SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
+                o.colour, o.code, o.sort_order, o.active,
+                p.name AS product_name, p.option_label
+           FROM product_options o
+           JOIN products p ON p.id = o.product_id
+          WHERE o.id = ? AND o.client_id = ?'
+    );
+    $loadStmt->execute([$id, $clientId]);
+    $option = $loadStmt->fetch();
+    $hasCostColumn = false;
+}
 
 if (!$option) {
     http_response_code(404);
@@ -35,8 +52,12 @@ if (!$option) {
     exit;
 }
 
-$label  = 'Fabric';
-$labelL = 'fabric';
+// The product carries its own per-product option label
+// ("Fabric" / "Colour" / "Finish" / etc.). Fall back to "Fabric" for
+// any legacy product that hasn't had a label set.
+$label  = (string) ($option['option_label'] ?? 'Fabric');
+if ($label === '') $label = 'Fabric';
+$labelL = strtolower($label);
 
 $f = [
     'band_code'     => (string) $option['band_code'],
@@ -46,6 +67,9 @@ $f = [
     'code'          => (string) ($option['code'] ?? ''),
     'sort_order'    => (int)    $option['sort_order'],
     'active'        => (int)    $option['active'],
+    'cost_price'    => isset($option['cost_price']) && $option['cost_price'] !== null
+                          ? (string) $option['cost_price']
+                          : '',
 ];
 $error = null;
 
@@ -57,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
     $f['active']     = !empty($_POST['active']) ? 1 : 0;
+    $f['cost_price'] = trim((string) ($_POST['cost_price'] ?? ''));
 
     if ($f['band_code'] === '') {
         $error = 'Band code is required.';
@@ -68,23 +93,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = ucfirst($labelL) . ' name is too long (max 150 chars).';
     } else {
         try {
-            $u = db()->prepare(
-                'UPDATE product_options
-                    SET band_code = ?, supplier_name = ?, name = ?, colour = ?,
-                        code = ?, sort_order = ?, active = ?
-                  WHERE id = ? AND client_id = ?'
-            );
-            $u->execute([
-                strtoupper($f['band_code']),
-                $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
-                $f['name'],
-                $f['colour'] !== '' ? $f['colour'] : null,
-                $f['code']   !== '' ? $f['code']   : null,
-                $f['sort_order'],
-                $f['active'],
-                $id,
-                $clientId,
-            ]);
+            // cost_price: empty = NULL (= not entered yet, treat as 0
+            // for profit calc). Explicit 0 saves as 0.
+            $costValue = ($f['cost_price'] === '' || !is_numeric($f['cost_price']))
+                ? null
+                : (float) $f['cost_price'];
+
+            if ($hasCostColumn) {
+                $u = db()->prepare(
+                    'UPDATE product_options
+                        SET band_code = ?, supplier_name = ?, name = ?, colour = ?,
+                            code = ?, sort_order = ?, active = ?, cost_price = ?
+                      WHERE id = ? AND client_id = ?'
+                );
+                $u->execute([
+                    strtoupper($f['band_code']),
+                    $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
+                    $f['name'],
+                    $f['colour'] !== '' ? $f['colour'] : null,
+                    $f['code']   !== '' ? $f['code']   : null,
+                    $f['sort_order'],
+                    $f['active'],
+                    $costValue,
+                    $id,
+                    $clientId,
+                ]);
+            } else {
+                $u = db()->prepare(
+                    'UPDATE product_options
+                        SET band_code = ?, supplier_name = ?, name = ?, colour = ?,
+                            code = ?, sort_order = ?, active = ?
+                      WHERE id = ? AND client_id = ?'
+                );
+                $u->execute([
+                    strtoupper($f['band_code']),
+                    $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
+                    $f['name'],
+                    $f['colour'] !== '' ? $f['colour'] : null,
+                    $f['code']   !== '' ? $f['code']   : null,
+                    $f['sort_order'],
+                    $f['active'],
+                    $id,
+                    $clientId,
+                ]);
+            }
             $_SESSION['flash_success'] = ucfirst($labelL) . ' updated.';
             header('Location: /admin/products/options.php?product_id=' . (int) $option['product_id']);
             exit;
@@ -125,12 +177,16 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Edit <?= e($labelL) ?></h1>
-                <p class="page-subtitle">
-                    <a href="/admin/products/options.php?product_id=<?= (int) $option['product_id'] ?>">
-                        &larr; Back to <?= e((string) $option['product_name']) ?> &mdash; <?= e($label) ?>s
-                    </a>
-                </p>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                              '/admin/products/index.php'],
+                        [(string) $option['product_name'],        '/admin/products/edit.php?id='   . (int) $option['product_id']],
+                        [$label . 's',                            '/admin/products/options.php?product_id=' . (int) $option['product_id']],
+                        [(string) $option['name'],                null],
+                    ]);
+                ?>
+                <h1 class="page-title">Edit <?= e($labelL) ?>: <?= e((string) $option['name']) ?></h1>
             </div>
         </div>
 
@@ -181,6 +237,12 @@ $activeNav = 'products';
                                value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
+
+                <?php /* Per-option wholesale cost field removed — cost is
+                         captured by the price tables (band-priced cells
+                         already reflect higher-cost fabrics). The
+                         product_options.cost_price column still exists in
+                         the schema but no UI for now. */ ?>
 
                 <label class="checkbox-row" for="active">
                     <input type="checkbox" id="active" name="active" value="1"

@@ -9,23 +9,29 @@ requireAdmin();
 $user     = current_user();
 $clientId = $user['client_id'];
 
-$f = ['name' => ''];
+$f = ['name' => '', 'option_label' => 'Fabric'];
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name'] = trim((string) ($_POST['name'] ?? ''));
+    $f['name']         = trim((string) ($_POST['name']         ?? ''));
+    $f['option_label'] = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
 
     if ($f['name'] === '') {
         $error = 'Product name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = 'Product name is too long (max 150 characters).';
+    } elseif (strlen($f['option_label']) > 40) {
+        $error = 'Option label is too long (max 40 characters).';
     } else {
         try {
-            // option_label uses the schema default ('Fabric') — no longer
-            // settable from the form. sort_order = MAX+1 so new products
-            // append to the end of the list (drag-and-drop owns ordering).
+            // option_label is set per-product — controls what the "fabric"
+            // axis is called in the quote builder and admin options pages.
+            // Defaults to 'Fabric' when the user leaves it blank.
+            //
+            // sort_order = MAX+1 so new products append to the end of the
+            // list (drag-and-drop owns ordering).
             // active hard-coded to 1 — new products always start active;
             // flip via the edit page if you need to hide one.
             //
@@ -41,12 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nextSort = (int) $sortStmt->fetchColumn();
 
             $stmt = $pdo->prepare(
-                'INSERT INTO products (client_id, name, sort_order, active)
-                 VALUES (?, ?, ?, 1)'
+                'INSERT INTO products (client_id, name, option_label, sort_order, active)
+                 VALUES (?, ?, ?, ?, 1)'
             );
             $stmt->execute([
                 $clientId,
                 $f['name'],
+                $f['option_label'],
                 $nextSort,
             ]);
             $newProductId = (int) $pdo->lastInsertId();
@@ -116,10 +123,26 @@ $activeNav = 'products';
                     </div>
                 </div>
 
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="option_label">Option label</label>
+                        <input id="option_label" name="option_label" type="text"
+                               maxlength="40"
+                               value="<?= e((string) $f['option_label']) ?>"
+                               placeholder="Fabric">
+                        <small style="color:#6b7280;font-size:0.8125rem">
+                            What the per-blind option axis is called for this product.
+                            Use <em>Fabric</em> for rollers/romans, <em>Colour</em> for
+                            metal venetians, <em>Finish</em> for wood, etc. You can change
+                            it later on the product's Edit page.
+                        </small>
+                    </div>
+                </div>
+
                 <p style="color:#6b7280;font-size:0.875rem;margin:0.5rem 0 1rem">
-                    Name first. Once the product's saved, the Edit page lets you add
+                    Once the product's saved, the Edit page lets you add
                     systems (Standard / Premium / Motorised / …), set a margin and
-                    discount per system, upload fabrics, and configure options.
+                    discount per system, upload options, and configure extras.
                 </p>
 
                 <div class="form-actions">

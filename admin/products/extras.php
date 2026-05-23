@@ -35,7 +35,17 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // parent_choice_ids — a list now, not a single id. A follow-up option
 // can be gated to multiple parent choices (e.g. one Colour option that
 // shows when EITHER Chained OR Chainless is selected).
-$f = ['name' => '', 'is_required' => 1, 'parent_choice_ids' => []];
+$f = [
+    'name'               => '',
+    'is_required'        => 1,
+    'parent_choice_ids'  => [],
+    // Optional: salesperson types a value alongside the choice. Same
+    // tickbox+label pattern as on extra-edit.php. Pre-saving here
+    // saves the user a round-trip into the edit page after creation.
+    'length_input_label' => '',
+    // 0 = single-pick dropdown (default), 1 = multi-pick tick-boxes.
+    'allow_multi'        => 0,
+];
 $error = null;
 
 // "+ Sub" deep link from extra.php pre-fills the parent picker
@@ -54,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     $f['name']              = trim((string) ($_POST['name'] ?? ''));
     $f['is_required']       = !empty($_POST['is_required']) ? 1 : 0;
+    $f['length_input_label'] = trim((string) ($_POST['length_input_label'] ?? ''));
+    $f['allow_multi']        = !empty($_POST['allow_multi']) ? 1 : 0;
     $f['parent_choice_ids'] = array_values(array_unique(array_filter(array_map(
         'intval',
         is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
@@ -82,15 +94,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             // sensible. The junction is the source of truth.
             $legacyParent = $f['parent_choice_ids'][0] ?? null;
 
-            $stmt = $pdo->prepare(
-                'INSERT INTO product_extras
-                   (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, 1)'
-            );
-            $stmt->execute([
-                $clientId, $productId, $legacyParent,
-                $f['name'], $f['is_required'], $nextSort,
-            ]);
+            // Both new columns (length_input_label, allow_multi) are
+            // optional. Cascade through three INSERT shapes so the page
+            // works against the historic schema, the schema after the
+            // length-input migration, and the full schema.
+            $lengthLabel = $f['length_input_label'] !== '' ? $f['length_input_label'] : null;
+            try {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO product_extras
+                       (client_id, product_id, parent_choice_id, name,
+                        is_required, length_input_label, allow_multi,
+                        sort_order, active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                );
+                $stmt->execute([
+                    $clientId, $productId, $legacyParent,
+                    $f['name'], $f['is_required'], $lengthLabel, $f['allow_multi'],
+                    $nextSort,
+                ]);
+            } catch (Throwable $eA) {
+                try {
+                    $stmt = $pdo->prepare(
+                        'INSERT INTO product_extras
+                           (client_id, product_id, parent_choice_id, name,
+                            is_required, length_input_label, sort_order, active)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
+                    );
+                    $stmt->execute([
+                        $clientId, $productId, $legacyParent,
+                        $f['name'], $f['is_required'], $lengthLabel, $nextSort,
+                    ]);
+                } catch (Throwable $eB) {
+                    $stmt = $pdo->prepare(
+                        'INSERT INTO product_extras
+                           (client_id, product_id, parent_choice_id, name,
+                            is_required, sort_order, active)
+                         VALUES (?, ?, ?, ?, ?, ?, 1)'
+                    );
+                    $stmt->execute([
+                        $clientId, $productId, $legacyParent,
+                        $f['name'], $f['is_required'], $nextSort,
+                    ]);
+                }
+            }
             $newId = (int) $pdo->lastInsertId();
 
             // Junction rows for every ticked parent choice. Validate
@@ -118,7 +164,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
             $pdo->commit();
             $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added.';
-            header('Location: /admin/products/extra.php?id=' . $newId);
+            // Honour return_to from the inline quick-add on the
+            // product edit page so the user stays in their flow
+            // (instead of jumping to the new option's choices
+            // editor, which is the default for the dedicated form).
+            $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+            if ($returnTo !== ''
+                && $returnTo[0] === '/'
+                && !str_starts_with($returnTo, '//')
+                && !preg_match('#^/?\w+://#', $returnTo)) {
+                header('Location: ' . $returnTo);
+            } else {
+                header('Location: /admin/products/extra.php?id=' . $newId);
+            }
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -234,12 +292,18 @@ $activeNav = 'products';
     <main class="app-main">
         <div class="page-header">
             <div>
+                <?php
+                    require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                    echo render_breadcrumb([
+                        ['Products',                  '/admin/products/index.php'],
+                        [(string) $product['name'],   '/admin/products/edit.php?id=' . (int) $productId],
+                        ['Options',                   null],
+                    ]);
+                ?>
                 <h1 class="page-title">
                     <?= e((string) $product['name']) ?> &mdash; Options
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/index.php">&larr; All products</a>
-                    &middot;
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                     &middot;
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
@@ -258,6 +322,15 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
+            <p style="margin:0;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
+                <strong>Options</strong> are the things your salesperson picks for each blind
+                when building a quote &mdash; e.g. <em>Bottom Weight</em>, <em>Bracket colour</em>,
+                <em>Control side</em>. Add an option below, then click into it to set up its
+                <strong>choices</strong> (the values the customer can pick from).
+            </p>
+        </section>
 
         <?php
             // Resolve the pre-filled parent choices, if any, so we can show
@@ -308,6 +381,14 @@ $activeNav = 'products';
                                    <?= $f['is_required'] === 1 ? 'checked' : '' ?>>
                             Required
                         </label>
+                        <label class="checkbox-row" for="allow_multi" style="margin-top:0.375rem">
+                            <input type="checkbox" id="allow_multi" name="allow_multi" value="1"
+                                   <?= $f['allow_multi'] === 1 ? 'checked' : '' ?>>
+                            Allow multiple choices
+                            <small style="color:#6b7280;font-size:0.8125rem">
+                                renders as tick-boxes &mdash; salesperson can pick any combination
+                            </small>
+                        </label>
                     </div>
                 </div>
 
@@ -338,6 +419,61 @@ $activeNav = 'products';
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <!--
+                    Same tickbox+label pattern as on extra-edit.php —
+                    keeps the two forms consistent so users who learn
+                    one immediately recognise the other. Saving here
+                    skips the round-trip "create → edit → save" dance.
+                -->
+                <?php $hasLen = $f['length_input_label'] !== ''; ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:inline-flex;align-items:flex-start;gap:0.5rem;font-weight:500;cursor:pointer;margin:0">
+                            <input type="checkbox" id="add_show_length"
+                                   <?= $hasLen ? 'checked' : '' ?>
+                                   style="margin-top:0.25rem">
+                            <span>
+                                Also show a number input next to this option
+                                <small style="display:block;color:#6b7280;font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
+                                    For things like wand length, cable length, etc. &mdash;
+                                    the salesperson types a value alongside picking a choice.
+                                    Recorded on the quote line for supplier docs.
+                                </small>
+                            </span>
+                        </label>
+                        <div id="add_length_label_wrap"
+                             style="<?= $hasLen ? '' : 'display:none' ?>;margin:0.375rem 0 0 1.625rem">
+                            <label for="add_length_input_label" style="font-size:0.8125rem;font-weight:600;color:#374151">
+                                What to call this field
+                            </label>
+                            <input id="add_length_input_label" name="length_input_label" type="text"
+                                   maxlength="60"
+                                   value="<?= e((string) $f['length_input_label']) ?>"
+                                   placeholder="e.g. Wand length (mm)"
+                                   style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                (function () {
+                    var tick = document.getElementById('add_show_length');
+                    var wrap = document.getElementById('add_length_label_wrap');
+                    var lbl  = document.getElementById('add_length_input_label');
+                    if (!tick || !wrap || !lbl) return;
+                    tick.addEventListener('change', function () {
+                        if (tick.checked) {
+                            wrap.style.display = '';
+                            if (lbl.value.trim() === '') lbl.value = 'Length (mm)';
+                            setTimeout(function () { lbl.focus(); lbl.select(); }, 0);
+                        } else {
+                            wrap.style.display = 'none';
+                            lbl.value = '';
+                        }
+                    });
+                })();
+                </script>
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add option</button>
