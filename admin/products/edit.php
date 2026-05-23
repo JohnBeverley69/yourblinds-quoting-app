@@ -1684,21 +1684,25 @@ $activeNav = 'products';
             return;
         }
 
-        // Cap the rendered list at 50 to keep the DOM light. Tenants
-        // with 500+ fabrics need to refine the query to scroll past
-        // — but in practice nobody scrolls through 500 rows anyway.
-        var MAX = 50;
-        var shown = matches.slice(0, MAX);
-        var html = shown.map(function (f, i) {
+        // Render ALL matches — the dropdown is height-capped + scrollable
+        // (.pv-typeahead-list { max-height: 16rem; overflow-y: auto }),
+        // so even a 500-item list renders fast and stays usable.
+        //
+        // The previous MAX = 50 cap was reported as "only searching
+        // the first 50 lines" — even though the filter ran against the
+        // full cache, the user couldn't see matches beyond #50 in the
+        // result list, which felt like the search was broken.
+        var html = matches.map(function (f, i) {
             return '<div class="pv-typeahead-item" data-id="' + f.id + '" data-idx="' + i + '">'
                  + esc(fabricLabel(f))
                  + '</div>';
         }).join('');
-        if (matches.length > MAX) {
-            html += '<div class="pv-typeahead-pinned">'
-                 + 'Showing first ' + MAX + ' of ' + matches.length
-                 + ' matches — refine your search to see more</div>';
-        }
+        // Footer with the result count, useful so the user knows how
+        // many matched (and whether more typing would help narrow).
+        html += '<div class="pv-typeahead-pinned">'
+             + matches.length + ' match' + (matches.length === 1 ? '' : 'es')
+             + (matches.length === fabricCache.length ? '' : ' of ' + fabricCache.length)
+             + '</div>';
         listEl.innerHTML = html;
         listEl.hidden = false;
         fabricHighlightIdx = -1;   // reset cursor when list changes
