@@ -45,45 +45,79 @@ $tenants = $pdo->prepare(
 $tenants->execute([$masterClientId]);
 $tenantRows = $tenants->fetchAll();
 
-// For each tenant, find all fabric mismatches against the master.
+// For each tenant, find every MASTER fabric where the client doesn't
+// have an exact 6-field match (band + supplier + name + colour).
 //
-// Match key: same product name + same band + same fabric name +
-// same colour (null-safe). The thing we're checking equality on:
-// supplier_name (null-safe).
+// Earlier the query joined on the 4-field "human key" (product, band,
+// name, colour) and reported any supplier_name mismatch. That hugely
+// over-counted when both sides legitimately stocked the same fabric
+// under two supplier brands (e.g. Bamboo from both Eclipse and Market
+// Place) — every cross-pairing was reported as a mismatch even though
+// both sides actually had matching pairs.
 //
-// Returns one row per mismatched fabric with both supplier_names
-// side by side so the operator can eyeball "which one's right".
+// New approach:
+//   1. List master's Beverley fabrics
+//   2. For each, NOT EXISTS check: client has an exact 6-field match?
+//   3. If not, this is a genuine "missing" / "different supplier"
+//      situation. Include it, with a side-column listing what the
+//      client DOES have for the same (band, name, colour) — usually
+//      a different supplier or nothing.
+//
+// Sub-select fetches client's supplier names for the same fabric so
+// the operator can see "master says Market Place, client only stocks
+// it under Eclipse" at a glance. NULL → '(none)' rendered downstream.
 $mismatchSql = <<<'SQL'
     SELECT
-        mp.name                AS product_name,
-        mo.band_code           AS band_code,
-        mo.name                AS fabric_name,
-        mo.colour              AS colour,
-        mo.supplier_name       AS master_supplier,
-        co.id                  AS client_fabric_id,
-        co.supplier_name       AS client_supplier
+        mp.name           AS product_name,
+        mo.band_code      AS band_code,
+        mo.name           AS fabric_name,
+        mo.colour         AS colour,
+        mo.supplier_name  AS master_supplier,
+        (SELECT GROUP_CONCAT(co2.supplier_name ORDER BY co2.supplier_name SEPARATOR ', ')
+           FROM products cp2
+           JOIN product_options co2
+             ON co2.product_id = cp2.id AND co2.client_id = cp2.client_id
+          WHERE cp2.client_id  = ?
+            AND cp2.name       = mp.name
+            AND co2.band_code  = mo.band_code
+            AND co2.name       = mo.name
+            AND (co2.colour <=> mo.colour)
+        ) AS client_suppliers
       FROM products mp
       JOIN product_options mo
         ON mo.product_id = mp.id AND mo.client_id = mp.client_id
-      JOIN products cp
-        ON cp.name = mp.name AND cp.client_id = ?
-      JOIN product_options co
-        ON co.product_id = cp.id
-       AND co.client_id  = cp.client_id
-       AND co.band_code  = mo.band_code
-       AND co.name       = mo.name
-       AND (co.colour <=> mo.colour)
      WHERE mp.client_id = ?
        AND mp.name LIKE ?
-       AND NOT (co.supplier_name <=> mo.supplier_name)
-  ORDER BY mp.name, mo.band_code, mo.name, mo.colour
+       AND NOT EXISTS (
+            SELECT 1
+              FROM products cp
+              JOIN product_options co
+                ON co.product_id = cp.id AND co.client_id = cp.client_id
+             WHERE cp.client_id   = ?
+               AND cp.name        = mp.name
+               AND co.band_code   = mo.band_code
+               AND co.name        = mo.name
+               AND (co.colour <=> mo.colour)
+               AND (co.supplier_name <=> mo.supplier_name)
+       )
+  ORDER BY mp.name, mo.band_code, mo.name, mo.colour, mo.supplier_name
 SQL;
 
 $mismatchSt = $pdo->prepare($mismatchSql);
 
 $tenantResults = [];
 foreach ($tenantRows as $t) {
-    $mismatchSt->execute([(int) $t['id'], $masterClientId, $prefix . '%']);
+    // Params in order:
+    //   1. client_id for the GROUP_CONCAT sub-select
+    //   2. master_id (mp.client_id =)
+    //   3. prefix (mp.name LIKE)
+    //   4. client_id for the NOT EXISTS check
+    $mismatchSt->execute([
+        (int) $t['id'],
+        $masterClientId,
+        $prefix . '%',
+        (int) $t['id'],
+    ]);
     $tenantResults[] = [
         'id'         => (int) $t['id'],
         'name'       => (string) $t['company_name'],
@@ -154,20 +188,27 @@ $activeNav = 'push-updates';
 
         <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.75rem 1rem">
             <p style="margin:0;color:#0c4a6e;font-size:0.875rem;line-height:1.55">
-                <strong>What this checks:</strong> for every Beverley-prefixed product,
-                for every fabric on the master with a (band, name, colour) match on a
-                client, is the <code>supplier_name</code> the same?
+                <strong>What this lists:</strong> for every Beverley-prefixed fabric
+                on the master, the tenant rows where the client does <em>not</em>
+                have an exact match on
+                <code>(band, supplier, name, colour)</code>. The right-hand column
+                shows what suppliers the client has for the same fabric — either a
+                different brand (e.g. Eclipse vs. Market Place — same fabric, two
+                supplier collections; totally legitimate) or <code>(not stocked)</code>
+                if they don't carry it at all.
                 <br>
-                <strong>What to do with mismatches:</strong> eyeball the rows. If a
-                client's supplier looks wrong (almost certainly a victim of the bug),
-                re-push from
-                <a href="/master-admin/push-updates.php" style="color:#0c4a6e;text-decoration:underline">Push updates</a>
-                — the fix in commit <code>1cc2084</code> now matches on the full
-                unique key, so the next push will correctly identify and update the
-                affected rows.
+                <strong>Earlier version was misleading.</strong> The previous query
+                cross-joined and reported every supplier-pairing as a mismatch even
+                when both sides legitimately stocked both supplier versions. The
+                rewrite uses a <code>NOT EXISTS</code> check on the full unique key
+                so a tenant who has both Eclipse and Market Place versions of a
+                fabric now shows <em>zero</em> mismatches for it.
                 <br>
-                <strong>What this does NOT do:</strong> change anything. Pure read-only.
-                Run again after a re-push to confirm the count's dropped to zero.
+                <strong>What this does NOT do:</strong> change anything. Pure
+                read-only. After a re-push from
+                <a href="/master-admin/push-updates.php" style="color:#0c4a6e;text-decoration:underline">Push updates</a>,
+                this is the catalogue-divergence dashboard — useful long-term to
+                see who's missing what.
             </p>
         </section>
 
@@ -205,12 +246,14 @@ $activeNav = 'push-updates';
                                     <th>Band</th>
                                     <th>Fabric</th>
                                     <th>Colour</th>
-                                    <th>Master supplier</th>
-                                    <th>Client supplier</th>
+                                    <th>Master supplier (missing on client)</th>
+                                    <th>Client's other suppliers for this fabric</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($tr['mismatches'] as $m): ?>
+                                <?php foreach ($tr['mismatches'] as $m):
+                                    $clientSuppliers = (string) ($m['client_suppliers'] ?? '');
+                                ?>
                                     <tr>
                                         <td><?= e((string) $m['product_name']) ?></td>
                                         <td><?= e((string) $m['band_code']) ?></td>
@@ -227,10 +270,10 @@ $activeNav = 'push-updates';
                                                 ? '(none)'
                                                 : e((string) $m['master_supplier']) ?>
                                         </td>
-                                        <td class="<?= $m['client_supplier'] === null ? 'null' : 'client' ?>">
-                                            <?= $m['client_supplier'] === null
-                                                ? '(none)'
-                                                : e((string) $m['client_supplier']) ?>
+                                        <td class="<?= $clientSuppliers === '' ? 'null' : 'client' ?>">
+                                            <?= $clientSuppliers === ''
+                                                ? '(not stocked)'
+                                                : e($clientSuppliers) ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
