@@ -437,9 +437,15 @@ function pp_sync_choices(
     // cost_price exists on product_extra_choices but the boss decided
     // tenants set their own costs (and the UI is currently hidden) —
     // skip it from the push payload.
+    //
+    // image_path IS pushed — choice thumbnails live in the shared
+    // /uploads/choice-images/ directory (not tenant-scoped) so all
+    // tenants can resolve the same path. Without this the client side
+    // shows the choice but no thumbnail, which is what triggered the
+    // "wand image doesn't show on client side" report.
     $src = $pdo->prepare(
         'SELECT id, label, system_id, price_delta, price_percent, price_per_metre,
-                is_default, sort_order, active
+                is_default, sort_order, active, image_path
            FROM product_extra_choices
           WHERE product_extra_id = ?
           ORDER BY id'
@@ -465,12 +471,14 @@ function pp_sync_choices(
             // leave NULL — degrade to "all systems" rather than crash.
         }
 
+        $imagePath = $r['image_path'] !== null ? (string) $r['image_path'] : null;
+
         if ($tgtId === false) {
             $ins = $pdo->prepare(
                 'INSERT INTO product_extra_choices
                    (product_extra_id, label, system_id, price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    is_default, sort_order, active, image_path)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $ins->execute([
                 $targetExtraId,
@@ -482,16 +490,19 @@ function pp_sync_choices(
                 (int)   ($r['is_default']      ?? 0),
                 (int)   ($r['sort_order']      ?? 0),
                 (int)   ($r['active']          ?? 1),
+                $imagePath,
             ]);
             $tgtId = (int) $pdo->lastInsertId();
             $summary['choices_added']++;
         } else {
             $tgtId = (int) $tgtId;
             // Don't update is_default — the tenant may have moved it.
+            // image_path IS updated so a master-side image swap
+            // propagates on the next push.
             $pdo->prepare(
                 'UPDATE product_extra_choices
                     SET system_id = ?, price_delta = ?, price_percent = ?, price_per_metre = ?,
-                        sort_order = ?, active = ?
+                        sort_order = ?, active = ?, image_path = ?
                   WHERE id = ?'
             )->execute([
                 $tgtSystemId,
@@ -500,6 +511,7 @@ function pp_sync_choices(
                 (float) ($r['price_per_metre'] ?? 0),
                 (int)   ($r['sort_order']      ?? 0),
                 (int)   ($r['active']          ?? 1),
+                $imagePath,
                 $tgtId,
             ]);
             $summary['choices_updated']++;
