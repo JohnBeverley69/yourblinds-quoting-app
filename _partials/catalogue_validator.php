@@ -121,10 +121,12 @@ function catalogue_validate_product(int $productId, int $clientId): array
 
     // Price tables exist but a system reference is now inactive /
     // missing (system was archived after the table was built). The
-    // table is orphaned — the quote builder can't surface it.
+    // table is orphaned — the quote builder can't surface it. One
+    // chip per orphan, deep-linking to that table so the user can
+    // delete it or re-link it to an active system.
     if ($ptCount > 0) {
         $orphanTables = $fetchAll(
-            'SELECT t.id, t.name, t.system_id
+            'SELECT t.id, t.band_code, t.name, t.system_id
                FROM price_tables t
           LEFT JOIN product_systems s
                  ON s.id = t.system_id AND s.active = 1
@@ -134,17 +136,19 @@ function catalogue_validate_product(int $productId, int $clientId): array
                 AND s.id IS NULL',
             [$productId, $clientId]
         );
-        if ($orphanTables) {
-            $n = count($orphanTables);
+        foreach ($orphanTables as $t) {
+            $tLabel = ($t['name'] !== null && $t['name'] !== '')
+                ? (string) $t['name']
+                : 'Band ' . (string) $t['band_code'];
             $issue($issues, 'critical', 'price_table_orphan_system',
-                $n . ' price table' . ($n === 1 ? '' : 's') . ' reference a system that\'s been deleted '
-                . 'or made inactive. Salespeople can\'t reach ' . ($n === 1 ? 'it' : 'them') . '.',
-                $systemsUrl);
+                'Price table "' . $tLabel . '" references a system that\'s been deleted. '
+                . 'Salespeople can\'t reach it.',
+                '/admin/products/price-table.php?id=' . (int) $t['id']);
         }
 
         // Active price tables with zero rows = empty grid = no price.
         $emptyTables = $fetchAll(
-            'SELECT t.id, t.name
+            'SELECT t.id, t.band_code, t.name
                FROM price_tables t
               WHERE t.product_id = ? AND t.client_id = ?
                 AND t.active = 1
@@ -154,16 +158,22 @@ function catalogue_validate_product(int $productId, int $clientId): array
                 )',
             [$productId, $clientId]
         );
-        if ($emptyTables) {
-            $n = count($emptyTables);
+        foreach ($emptyTables as $t) {
+            $tLabel = ($t['name'] !== null && $t['name'] !== '')
+                ? (string) $t['name']
+                : 'Band ' . (string) $t['band_code'];
             $issue($issues, 'critical', 'price_table_no_rows',
-                $n . ' price table' . ($n === 1 ? ' has' : 's have') . ' no width × drop rows yet '
-                . '— quoting will fall through to "no price".',
-                $editUrl);
+                'Price table "' . $tLabel . '" has no width × drop rows yet — quoting will fall through to "no price".',
+                '/admin/products/price-table.php?id=' . (int) $t['id']);
         }
     }
 
     // ── WARNING — catalogue half-built ─────────────────────────────
+    //
+    // Per-entity emit: one chip per affected option/system/table so
+    // the "Fix →" link can deep-link to the specific row the user
+    // needs to edit, not a generic list page. Saves a "where do I
+    // even start?" round-trip.
 
     // Active options with zero active choices. Salesperson would see
     // an empty dropdown, which is worse than the option not existing.
@@ -177,22 +187,19 @@ function catalogue_validate_product(int $productId, int $clientId): array
             )',
         [$productId, $clientId]
     );
-    if ($emptyExtras) {
-        $names = array_slice(
-            array_map(static fn ($r) => (string) $r['name'], $emptyExtras),
-            0, 3
-        );
-        $extra = count($emptyExtras) > 3 ? ' (+' . (count($emptyExtras) - 3) . ' more)' : '';
+    foreach ($emptyExtras as $e) {
         $issue($issues, 'warning', 'option_no_choices',
-            'Options with no choices: ' . implode(', ', $names) . $extra
-            . '. They\'ll render as empty dropdowns.',
-            $extrasUrl);
+            'Option "' . (string) $e['name'] . '" has no choices — '
+            . 'it\'ll render as an empty dropdown.',
+            '/admin/products/extra.php?id=' . (int) $e['id']);
     }
 
     // Choices that point at an inactive/missing system. They'll be
-    // hidden from the picker but still sit in the DB.
-    $orphanChoices = $count(
-        'SELECT COUNT(*)
+    // hidden from the picker but still sit in the DB. Emit one chip
+    // per affected option (deduping at the option level so we don't
+    // spam a chip per choice).
+    $orphanChoiceExtras = $fetchAll(
+        'SELECT DISTINCT e.id, e.name
            FROM product_extra_choices c
            JOIN product_extras e ON e.id = c.product_extra_id
       LEFT JOIN product_systems  s ON s.id = c.system_id AND s.active = 1
@@ -202,18 +209,19 @@ function catalogue_validate_product(int $productId, int $clientId): array
             AND s.id IS NULL',
         [$productId, $clientId]
     );
-    if ($orphanChoices > 0) {
+    foreach ($orphanChoiceExtras as $e) {
         $issue($issues, 'warning', 'choice_orphan_system',
-            $orphanChoices . ' option choice' . ($orphanChoices === 1 ? '' : 's')
-            . ' reference a deleted system. They\'ll be invisible to salespeople.',
-            $extrasUrl);
+            'Option "' . (string) $e['name'] . '" has choices pointing at a deleted system. '
+            . 'Those choices are invisible to salespeople.',
+            '/admin/products/extra.php?id=' . (int) $e['id']);
     }
 
     // Extras whose parent_choice_id points at an inactive/missing
     // choice. The extra would never become visible to the salesperson
-    // because its trigger condition can never be met.
+    // because its trigger condition can never be met. Link to the
+    // option's edit page where the "Appears when" cascade is set.
     $orphanCascade = $fetchAll(
-        'SELECT e.id, e.name, e.parent_choice_id
+        'SELECT e.id, e.name
            FROM product_extras e
       LEFT JOIN product_extra_choices c
              ON c.id = e.parent_choice_id AND c.active = 1
@@ -223,47 +231,42 @@ function catalogue_validate_product(int $productId, int $clientId): array
             AND c.id IS NULL',
         [$productId, $clientId]
     );
-    if ($orphanCascade) {
-        $n = count($orphanCascade);
+    foreach ($orphanCascade as $e) {
         $issue($issues, 'warning', 'extra_orphan_parent',
-            $n . ' option' . ($n === 1 ? '' : 's')
-            . ' depend on a parent choice that no longer exists '
-            . '— ' . ($n === 1 ? "it'll" : "they'll") . ' never show up in the quote builder.',
-            $extrasUrl);
+            'Option "' . (string) $e['name'] . '" depends on a parent choice that no longer exists '
+            . '— it\'ll never show up in the quote builder.',
+            '/admin/products/extra-edit.php?id=' . (int) $e['id']);
     }
 
     // ── HINT — nice-to-have ────────────────────────────────────────
 
     // Systems with no price tables. Salesperson would pick the
-    // system, then hit a wall. Not strictly broken if the user
-    // intends to add tables later, but worth flagging.
-    $sysNoPt = $fetchAll(
-        'SELECT s.id, s.name
-           FROM product_systems s
-          WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
-            AND NOT EXISTS (
-                SELECT 1 FROM price_tables t
-                 WHERE t.system_id = s.id AND t.active = 1
-            )',
-        [$productId, $clientId]
-    );
-    if ($sysNoPt && $ptCount > 0) {
-        // Only worth flagging if SOME systems have tables. If ZERO
-        // tables exist anywhere, the critical "no_active_price_table"
-        // covers it.
-        $names = array_slice(
-            array_map(static fn ($r) => (string) $r['name'], $sysNoPt),
-            0, 3
+    // system, then hit a wall. Only worth flagging if SOME systems
+    // have tables — if zero exist anywhere, the critical
+    // "no_active_price_table" already covers it.
+    if ($ptCount > 0) {
+        $sysNoPt = $fetchAll(
+            'SELECT s.id, s.name
+               FROM product_systems s
+              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
+                AND NOT EXISTS (
+                    SELECT 1 FROM price_tables t
+                     WHERE t.system_id = s.id AND t.active = 1
+                )',
+            [$productId, $clientId]
         );
-        $extra = count($sysNoPt) > 3 ? ' (+' . (count($sysNoPt) - 3) . ' more)' : '';
-        $issue($issues, 'hint', 'system_no_price_table',
-            'Systems with no price table yet: ' . implode(', ', $names) . $extra . '.',
-            $systemsUrl);
+        foreach ($sysNoPt as $s) {
+            $issue($issues, 'hint', 'system_no_price_table',
+                'System "' . (string) $s['name'] . '" has no price table yet.',
+                '/admin/products/price-tables.php?system_id=' . (int) $s['id']);
+        }
     }
 
     // Required options with no default choice. The salesperson can
-    // still pick one, but the form opens with "— pick — " which is
-    // an extra click for the most-common case.
+    // still pick one, but the form opens with "— pick —" which is
+    // an extra click for the most-common case. One chip per option
+    // with a deep link to its choices editor so the user can land
+    // on the right page and just tick "Default".
     $needsDefault = $fetchAll(
         'SELECT e.id, e.name
            FROM product_extras e
@@ -280,16 +283,11 @@ function catalogue_validate_product(int $productId, int $clientId): array
             )',
         [$productId, $clientId]
     );
-    if ($needsDefault) {
-        $names = array_slice(
-            array_map(static fn ($r) => (string) $r['name'], $needsDefault),
-            0, 3
-        );
-        $extra = count($needsDefault) > 3 ? ' (+' . (count($needsDefault) - 3) . ' more)' : '';
+    foreach ($needsDefault as $e) {
         $issue($issues, 'hint', 'required_no_default',
-            'Required options with no default choice: ' . implode(', ', $names) . $extra
-            . '. Pick a default so the form opens pre-filled.',
-            $extrasUrl);
+            'Required option "' . (string) $e['name'] . '" has no default choice. '
+            . 'Pick a default so the form opens pre-filled.',
+            '/admin/products/extra.php?id=' . (int) $e['id']);
     }
 
     // ── Sort: critical first, then warning, then hint ──────────────
