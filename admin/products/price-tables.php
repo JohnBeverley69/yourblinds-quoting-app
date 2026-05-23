@@ -69,6 +69,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['notes'] !== '' ? $f['notes'] : null,
             ]);
             $newId = (int) db()->lastInsertId();
+
+            // Audit. system_id, band, and name are all useful diff
+            // fields if the table is later renamed/moved/deactivated.
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            catalogue_audit_log(
+                'price_table', $newId, 'create',
+                'Band ' . strtoupper($f['band_code']) . ($f['name'] !== '' ? ' (' . $f['name'] . ')' : ''),
+                null,
+                [
+                    'system_id' => $systemId,
+                    'band_code' => strtoupper($f['band_code']),
+                    'name'      => $f['name']  !== '' ? $f['name']  : null,
+                ],
+                $productId
+            );
+
             $_SESSION['flash_success'] = 'Price table for band "' . strtoupper($f['band_code']) . '" created.';
             header('Location: /admin/products/price-table.php?id=' . $newId);
             exit;

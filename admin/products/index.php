@@ -124,20 +124,25 @@ $activeNav = 'products';
                     <p style="margin:0 0 1.25rem;color:#4b5563;font-size:0.9375rem;max-width:34rem;margin-left:auto;margin-right:auto;line-height:1.55">
                         Products are the types of blind you sell &mdash; e.g. Roller,
                         Vertical, Roman, Metal Venetian. Each product gets its own
-                        fabrics, systems, options and price tables. Three steps to
-                        get started:
+                        fabrics, systems, options and price tables.
                     </p>
-                    <ol style="display:inline-block;text-align:left;color:#374151;
-                               font-size:0.9375rem;margin:0 auto 1.25rem;padding-left:1.25rem;
-                               line-height:1.7">
-                        <li>Add a product (give it a name).</li>
-                        <li>Add at least one fabric and one price table.</li>
-                        <li>Optional: add systems, options, choices.</li>
-                    </ol>
-                    <div>
-                        <a href="/admin/products/new.php" class="btn btn-primary"
-                           style="padding:0.625rem 1.25rem;font-size:1rem">
-                            + Add your first product
+                    <!--
+                        Primary CTA = guided wizard (4 steps: Name → Systems
+                        → Fabrics → done). Steers brand-new tenants away from
+                        the "click around and figure out the rest" experience
+                        that came before. The plain "skip wizard" link below
+                        keeps the old new.php flow accessible for users who'd
+                        rather wing it.
+                    -->
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:0.625rem">
+                        <a href="/admin/products/wizard.php" class="btn btn-primary"
+                           style="padding:0.625rem 1.5rem;font-size:1rem;display:inline-flex;align-items:center;gap:0.5rem">
+                            <span aria-hidden="true">✨</span>
+                            Start the setup wizard
+                        </a>
+                        <a href="/admin/products/new.php"
+                           style="color:#6b7280;font-size:0.8125rem;text-decoration:underline">
+                            Skip the wizard &mdash; just add a product
                         </a>
                     </div>
                 </div>
@@ -231,8 +236,27 @@ $activeNav = 'products';
                                         <?= e(time_ago((string) $p['updated_at'])) ?>
                                     </td>
                                     <td class="row-actions">
+                                        <!--
+                                            Duplicate spawns a deep-copy of every
+                                            row tied to this product (systems,
+                                            fabrics, options, choices, price
+                                            tables, markups, discounts) and
+                                            drops the user on the new product's
+                                            edit page. Most useful when adding
+                                            a variant of an existing product —
+                                            e.g. "Premium" from "Standard".
+                                        -->
+                                        <form method="post"
+                                              action="/admin/products/duplicate.php"
+                                              style="display:inline"
+                                              data-confirm="Duplicate <?= e((string) $p['name']) ?>? Creates a full copy (systems, fabrics, options, choices, price tables) with '(copy)' appended to the name.">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                            <button type="submit" style="color:#1f3b5b">Duplicate</button>
+                                        </form>
                                         <form method="post"
                                               action="/admin/products/delete.php"
+                                              style="display:inline"
                                               data-confirm="Delete <?= e((string) $p['name']) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">

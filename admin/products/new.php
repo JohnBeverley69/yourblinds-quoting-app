@@ -58,6 +58,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newProductId = (int) $pdo->lastInsertId();
 
+            // Audit
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            catalogue_audit_log(
+                'product', $newProductId, 'create',
+                $f['name'],
+                null,
+                ['name' => $f['name'], 'option_label' => $f['option_label']],
+                $newProductId
+            );
+
             // Drop the user straight onto the new product's Edit page so
             // they can add systems / set margins / configure options
             // without an extra click.

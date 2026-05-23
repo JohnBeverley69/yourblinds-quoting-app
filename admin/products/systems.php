@@ -102,6 +102,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             }
 
             $pdo->commit();
+
+            // Audit
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            catalogue_audit_log(
+                'system', $newSystemId, 'create',
+                $f['name'],
+                null,
+                ['name' => $f['name']],
+                $productId
+            );
+
             $_SESSION['flash_success'] = 'System "' . $f['name'] . '" added.';
             // Honour an explicit return_to so the inline quick-add on
             // the product edit page can bounce straight back to itself

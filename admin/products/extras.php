@@ -163,6 +163,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             }
 
             $pdo->commit();
+
+            // Audit
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            catalogue_audit_log(
+                'extra', $newId, 'create',
+                $f['name'],
+                null,
+                [
+                    'name'         => $f['name'],
+                    'is_required'  => (int) $f['is_required'],
+                    'allow_multi'  => (int) $f['allow_multi'],
+                    'parent_count' => count($f['parent_choice_ids'] ?? []),
+                ],
+                $productId
+            );
+
             $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added.';
             // Honour return_to from the inline quick-add on the
             // product edit page so the user stays in their flow

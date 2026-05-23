@@ -416,15 +416,35 @@ $activeNav = 'products';
                 ?>
                 <h1 class="page-title">Edit <?= e((string) $product['name']) ?></h1>
             </div>
-            <!-- "Preview as salesperson" launches a drawer that mounts
-                 a mini quote-builder for this product. Lets the admin
-                 verify their setup (cascading selects, conditional
-                 options, computed price) without leaving the page. -->
-            <button type="button" id="preview-open-btn" class="btn btn-secondary"
-                    style="display:inline-flex;align-items:center;gap:0.4375rem">
-                <span aria-hidden="true">👁</span>
-                Preview as salesperson
-            </button>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                <!-- Duplicate clones this product (systems, fabrics, options,
+                     choices, price tables, markups, discounts) and drops the
+                     user on the new product's edit page. Saves a lot of
+                     re-entry when building a "Premium" variant of a
+                     "Standard" product. -->
+                <form method="post"
+                      action="/admin/products/duplicate.php"
+                      style="display:inline;margin:0"
+                      data-confirm="Duplicate <?= e((string) $product['name']) ?>? Creates a full copy (systems, fabrics, options, choices, price tables) with '(copy)' appended to the name.">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" value="<?= (int) $id ?>">
+                    <button type="submit" class="btn btn-secondary"
+                            style="display:inline-flex;align-items:center;gap:0.4375rem">
+                        <span aria-hidden="true">📋</span>
+                        Duplicate product
+                    </button>
+                </form>
+
+                <!-- "Preview as salesperson" launches a drawer that mounts
+                     a mini quote-builder for this product. Lets the admin
+                     verify their setup (cascading selects, conditional
+                     options, computed price) without leaving the page. -->
+                <button type="button" id="preview-open-btn" class="btn btn-secondary"
+                        style="display:inline-flex;align-items:center;gap:0.4375rem">
+                    <span aria-hidden="true">👁</span>
+                    Preview as salesperson
+                </button>
+            </div>
         </div>
 
         <?php
@@ -444,6 +464,51 @@ $activeNav = 'products';
         <?php endif; ?>
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
+        <?php endif; ?>
+
+        <!--
+            Catalogue health. Runs the validator and surfaces anything
+            broken / risky / nice-to-fix as colour-coded chips. Empty
+            on a clean product so the page doesn't shout when there's
+            nothing to say. Critical issues mean the product can't be
+            quoted at all (no fabric / no price table / orphan tables);
+            warnings mean something's half-built; hints are
+            nice-to-haves.
+        -->
+        <?php
+            require_once __DIR__ . '/../../_partials/catalogue_validator.php';
+            $catalogueIssues = catalogue_validate_product((int) $id, (int) $clientId);
+            if ($catalogueIssues):
+                $worst = catalogue_worst_severity($catalogueIssues);
+        ?>
+            <details open style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;
+                                  padding:0.625rem 0.875rem;margin-bottom:0.875rem">
+                <summary style="cursor:pointer;list-style:none;display:flex;
+                                align-items:center;gap:0.5rem;font-weight:600;
+                                color:#1f3b5b;font-size:0.9375rem">
+                    <span aria-hidden="true">
+                        <?= $worst === 'critical' ? '🚨' : ($worst === 'warning' ? '⚠️' : 'ℹ️') ?>
+                    </span>
+                    Catalogue health
+                    <span style="font-weight:400;color:#6b7280;font-size:0.8125rem">
+                        — <?= count($catalogueIssues) ?> issue<?= count($catalogueIssues) === 1 ? '' : 's' ?> to look at
+                    </span>
+                </summary>
+                <div style="margin-top:0.625rem">
+                    <?= catalogue_render_chips($catalogueIssues) ?>
+                </div>
+            </details>
+        <?php else: ?>
+            <!-- All clear — small green confirmation strip so the user
+                 sees the validator is actually running and has nothing
+                 to flag. -->
+            <div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;
+                        padding:0.4375rem 0.75rem;border-radius:8px;
+                        margin-bottom:0.875rem;font-size:0.8125rem;
+                        display:flex;align-items:center;gap:0.5rem">
+                <span aria-hidden="true">✓</span>
+                <strong>Catalogue health:</strong> All checks pass — this product is ready to quote.
+            </div>
         <?php endif; ?>
 
         <!--
@@ -1129,6 +1194,42 @@ $activeNav = 'products';
                     spreadsheet, use the <em>Bulk import</em> link next to each system.
                 </p>
                 <?php endif; ?>
+            </div>
+        </details>
+
+        <!--
+            Recent changes feed. Reads from catalogue_audit (which the
+            mutation handlers append to as they go). Collapsed by
+            default — most editors don't need it in their face, but
+            it's invaluable for the "who renamed this?" / "what did
+            I just save?" moment.
+
+            Defensive against the audit table not existing yet — the
+            helper returns an empty array, and we just don't render
+            anything if so.
+        -->
+        <?php
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            $auditRows = catalogue_audit_recent_for_product((int) $id, (int) $clientId, 25);
+        ?>
+        <details class="cat-section">
+            <summary>
+                <span class="cat-section-title">
+                    📜 Recent changes
+                </span>
+                <span class="cat-section-meta">
+                    <?= $auditRows
+                        ? count($auditRows) . ' event' . (count($auditRows) === 1 ? '' : 's') . ' shown'
+                        : 'no changes recorded yet' ?>
+                </span>
+            </summary>
+            <div class="cat-section-body">
+                <?= catalogue_audit_render_feed($auditRows) ?>
+                <p style="margin:0.625rem 0 0;color:#9ca3af;font-size:0.75rem;line-height:1.45">
+                    Shows the 25 most recent changes affecting this product.
+                    Click any row to see the field-by-field diff. The log is
+                    append-only — events can't be edited or deleted.
+                </p>
             </div>
         </details>
     </main>

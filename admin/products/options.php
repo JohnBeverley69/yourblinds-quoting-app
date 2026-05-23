@@ -98,8 +98,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['sort_order'],
                 $f['active'],
             ]);
+            $newFabricId = (int) db()->lastInsertId();
             $_SESSION['_options_last_band']     = strtoupper($f['band_code']);
             $_SESSION['_options_last_supplier'] = $f['supplier_name'];
+
+            // Audit
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            catalogue_audit_log(
+                'fabric', $newFabricId, 'create',
+                $f['name'],
+                null,
+                [
+                    'band_code'     => strtoupper($f['band_code']),
+                    'supplier_name' => $f['supplier_name'],
+                    'name'          => $f['name'],
+                    'colour'        => $f['colour'],
+                    'code'          => $f['code'],
+                ],
+                $productId
+            );
+
             $_SESSION['flash_success'] = ucfirst($labelL) . ' "' . $f['name'] . '" added.';
             // Same return_to handling as systems.php — lets the inline
             // quick-add on the product edit page bounce straight back.
