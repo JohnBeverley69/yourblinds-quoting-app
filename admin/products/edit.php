@@ -1588,7 +1588,7 @@ $activeNav = 'products';
               +   ' <span class="req-mark">*</span>'
               + '</label>'
               + '<input id="pv-fabric-text" type="text" autocomplete="off"'
-              +       ' placeholder="Type to search by band, supplier, name, colour…">'
+              +       ' placeholder="Type to search (e.g. polaris cream)…">'
               + '<input id="pv-fabric" type="hidden">'
               + '<div id="pv-fabric-list" class="pv-typeahead-list" hidden></div>'
               + '</div>';

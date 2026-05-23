@@ -63,20 +63,43 @@ if ($q === '') {
     );
     $st->execute([$productId, $clientId]);
 } else {
-    $like = '%' . $q . '%';
+    // Multi-word search — each whitespace-separated word in the
+    // query must appear in AT LEAST ONE of (name, colour,
+    // supplier_name, band_code, code). The query as a whole ANDs
+    // the per-word clauses together, so "polaris cream" returns
+    // ONLY fabrics where both "polaris" AND "cream" appear (across
+    // any of the searched fields), instead of the old OR-only
+    // behaviour that matched anything containing either word.
+    //
+    // Empty words (from double-spaces) are skipped. We also cap at
+    // 10 words so a malicious 1000-word query can't blow up the
+    // prepared statement.
+    $words = preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $words = array_slice($words, 0, 10);
+
+    // Build one (col LIKE ? OR col LIKE ? OR …) clause per word,
+    // then AND them. Collect the bound params in the same order.
+    $clauses = [];
+    $params  = [$productId, $clientId];
+    foreach ($words as $w) {
+        $like = '%' . $w . '%';
+        $clauses[] = '(name LIKE ? OR colour LIKE ? OR supplier_name LIKE ? '
+                   . 'OR band_code LIKE ? OR code LIKE ?)';
+        for ($i = 0; $i < 5; $i++) $params[] = $like;
+    }
+    $whereWords = $clauses
+        ? ' AND ' . implode(' AND ', $clauses)
+        : '';
+
     $st = $pdo->prepare(
         "SELECT id, band_code, supplier_name, name, colour, code
            FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1
-            AND (name           LIKE ?
-              OR colour         LIKE ?
-              OR supplier_name  LIKE ?
-              OR band_code      LIKE ?
-              OR code           LIKE ?)
+            $whereWords
        ORDER BY band_code, supplier_name, name, colour
           LIMIT $limit"
     );
-    $st->execute([$productId, $clientId, $like, $like, $like, $like, $like]);
+    $st->execute($params);
 }
 
 $fabrics = [];
