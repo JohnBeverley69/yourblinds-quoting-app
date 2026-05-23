@@ -1420,6 +1420,38 @@ $activeNav = 'products';
         display: grid; gap: 0.5rem;
         grid-template-columns: 1fr 1fr 5rem;
     }
+    /* Fabric typeahead — replaces the plain <select> that was
+       impossible to navigate with 500+ fabrics. The wrap is
+       position:relative so the dropdown can be absolutely
+       positioned beneath the input, layered above the rest of
+       the form. */
+    .pv-typeahead-wrap { position: relative; }
+    .pv-typeahead-list {
+        position: absolute; top: 100%; left: 0; right: 0;
+        z-index: 10;
+        max-height: 16rem; overflow-y: auto;
+        background: #fff; border: 1px solid #d1d5db; border-top: 0;
+        border-radius: 0 0 6px 6px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+        font-size: 0.8125rem;
+    }
+    .pv-typeahead-item {
+        padding: 0.375rem 0.625rem; cursor: pointer;
+        border-top: 1px solid #f3f4f6;
+    }
+    .pv-typeahead-item:first-child { border-top: 0; }
+    .pv-typeahead-item:hover,
+    .pv-typeahead-item.is-active { background: #eff6ff; color: #1e40af; }
+    .pv-typeahead-item.is-empty {
+        color: #9ca3af; cursor: default; font-style: italic;
+    }
+    .pv-typeahead-item.is-empty:hover { background: #fff; color: #9ca3af; }
+    .pv-typeahead-pinned {
+        font-size: 0.6875rem; color: #6b7280;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        background: #f9fafb; padding: 0.25rem 0.625rem;
+        border-top: 1px solid #e5e7eb;
+    }
     /* Live-recalc spinner — fades the result while a fetch is in
        flight so the price doesn't look stuck when the user makes
        quick consecutive changes. */
@@ -1544,13 +1576,21 @@ $activeNav = 'products';
             html += '</select></div>';
         }
 
-        // Fabric — typeahead like the main quote-builder. For brevity
-        // here we use a simple <select> populated from fabrics-search
-        // (no query = all fabrics). Same end result for verification.
-        html += '<div class="pv-row">'
-              + '<label for="pv-fabric">' + esc(productData.product.option_label || 'Fabric')
-              + ' <span class="req-mark">*</span></label>'
-              + '<select id="pv-fabric"><option value="">Loading…</option></select>'
+        // Fabric — type-to-search combo. A plain <select> with 500+
+        // fabrics is impossible to navigate. The visible input is
+        // pv-fabric-text (the user types into it to filter); the
+        // hidden #pv-fabric carries the selected fabric id and is
+        // what calculate() reads (so the rest of the JS doesn't have
+        // to care that the widget changed).
+        html += '<div class="pv-row pv-typeahead-wrap">'
+              + '<label for="pv-fabric-text">'
+              +   esc(productData.product.option_label || 'Fabric')
+              +   ' <span class="req-mark">*</span>'
+              + '</label>'
+              + '<input id="pv-fabric-text" type="text" autocomplete="off"'
+              +       ' placeholder="Type to search by band, supplier, name, colour…">'
+              + '<input id="pv-fabric" type="hidden">'
+              + '<div id="pv-fabric-list" class="pv-typeahead-list" hidden></div>'
               + '</div>';
 
         // Options
@@ -1578,37 +1618,178 @@ $activeNav = 'products';
         renderExtras();
     }
 
+    // Cached list of all fabrics for the current product. Populated
+    // once by loadFabrics(); the typeahead filters this in-memory so
+    // typing doesn't round-trip to the server per keystroke.
+    var fabricCache = [];
+    var fabricHighlightIdx = -1;   // keyboard nav cursor in the dropdown
+
+    function fabricLabel(f) {
+        // The API returns {id, band, supplier, name, colour, code,
+        // label}. NOTE the field names — earlier JS read band_code /
+        // supplier_name which silently came back undefined, which is
+        // why labels rendered as "Band ?" and the band was missing.
+        var bits = [];
+        if (f.band)     bits.push('Band ' + f.band);
+        if (f.supplier) bits.push(f.supplier);
+        if (f.name)     bits.push(f.name);
+        if (f.colour)   bits.push(f.colour);
+        return bits.length ? bits.join(' · ') : ('#' + f.id);
+    }
+
+    var fabricsLoading = false;
+
     async function loadFabrics() {
-        var fabSel = document.getElementById('pv-fabric');
-        if (!fabSel) return;
+        fabricsLoading = true;
         try {
             var r = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + PRODUCT_ID + '&q=&limit=500',
                                 { credentials: 'same-origin' });
             var data = await r.json();
-            var rows = data.fabrics || [];
-            if (!rows.length) {
-                fabSel.innerHTML = '<option value="">(no fabrics)</option>';
-                return;
-            }
-            // Build the option label from the bits that are actually
-            // present. Old format was 'Band ' + (band||'?') + ' — '
-            // + (supplier||'') + ' / ' + (name||'') + ... which
-            // produced ugly fragments like "Band ? — / ACACIA BO /
-            // CARAWAY" when band or supplier was missing. New format
-            // joins the populated fields with " · ".
-            fabSel.innerHTML = rows.map(function (f) {
-                var bits = [];
-                if (f.band_code)     bits.push('Band ' + f.band_code);
-                if (f.supplier_name) bits.push(f.supplier_name);
-                if (f.name)          bits.push(f.name);
-                if (f.colour)        bits.push(f.colour);
-                var label = bits.length ? bits.join(' · ') : ('#' + f.id);
-                return '<option value="' + f.id + '">' + esc(label) + '</option>';
-            }).join('');
+            fabricCache = data.fabrics || [];
         } catch (e) {
-            fabSel.innerHTML = '<option value="">(failed to load)</option>';
+            fabricCache = [];
+        }
+        fabricsLoading = false;
+        // If the dropdown is already open (user clicked the input
+        // before the fetch finished), re-render with the real data.
+        var listEl = document.getElementById('pv-fabric-list');
+        if (listEl && !listEl.hidden) {
+            var input = document.getElementById('pv-fabric-text');
+            renderFabricDropdown(input ? input.value : '');
         }
     }
+
+    function renderFabricDropdown(query) {
+        var listEl = document.getElementById('pv-fabric-list');
+        if (!listEl) return;
+        query = (query || '').trim().toLowerCase();
+
+        var matches = fabricCache;
+        if (query) {
+            matches = fabricCache.filter(function (f) {
+                return fabricLabel(f).toLowerCase().indexOf(query) !== -1;
+            });
+        }
+
+        if (!fabricCache.length) {
+            listEl.innerHTML = fabricsLoading
+                ? '<div class="pv-typeahead-item is-empty">Loading fabrics…</div>'
+                : '<div class="pv-typeahead-item is-empty">No fabrics on this product</div>';
+            listEl.hidden = false;
+            return;
+        }
+        if (!matches.length) {
+            listEl.innerHTML = '<div class="pv-typeahead-item is-empty">No matches for "' + esc(query) + '"</div>';
+            listEl.hidden = false;
+            return;
+        }
+
+        // Cap the rendered list at 50 to keep the DOM light. Tenants
+        // with 500+ fabrics need to refine the query to scroll past
+        // — but in practice nobody scrolls through 500 rows anyway.
+        var MAX = 50;
+        var shown = matches.slice(0, MAX);
+        var html = shown.map(function (f, i) {
+            return '<div class="pv-typeahead-item" data-id="' + f.id + '" data-idx="' + i + '">'
+                 + esc(fabricLabel(f))
+                 + '</div>';
+        }).join('');
+        if (matches.length > MAX) {
+            html += '<div class="pv-typeahead-pinned">'
+                 + 'Showing first ' + MAX + ' of ' + matches.length
+                 + ' matches — refine your search to see more</div>';
+        }
+        listEl.innerHTML = html;
+        listEl.hidden = false;
+        fabricHighlightIdx = -1;   // reset cursor when list changes
+    }
+
+    function selectFabric(id, label) {
+        var hidden = document.getElementById('pv-fabric');
+        var text   = document.getElementById('pv-fabric-text');
+        var list   = document.getElementById('pv-fabric-list');
+        if (!hidden || !text || !list) return;
+        hidden.value = String(id);
+        text.value   = label;
+        list.hidden  = true;
+        // Trigger calc — the hidden field's change doesn't fire
+        // automatically because we set .value programmatically.
+        scheduleCalc();
+    }
+
+    function moveFabricHighlight(delta) {
+        var listEl = document.getElementById('pv-fabric-list');
+        if (!listEl || listEl.hidden) return;
+        var items = listEl.querySelectorAll('.pv-typeahead-item:not(.is-empty)');
+        if (!items.length) return;
+        fabricHighlightIdx = Math.max(0, Math.min(items.length - 1, fabricHighlightIdx + delta));
+        items.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === fabricHighlightIdx);
+        });
+        // Scroll into view if off-screen.
+        var active = items[fabricHighlightIdx];
+        if (active && typeof active.scrollIntoView === 'function') {
+            active.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function commitFabricHighlight() {
+        var listEl = document.getElementById('pv-fabric-list');
+        if (!listEl || listEl.hidden) return false;
+        var items = listEl.querySelectorAll('.pv-typeahead-item:not(.is-empty)');
+        var pick = items[fabricHighlightIdx] || items[0];
+        if (!pick) return false;
+        selectFabric(parseInt(pick.dataset.id, 10), pick.textContent.trim());
+        return true;
+    }
+
+    // Typeahead event wiring. Attached at the document level so it
+    // survives any renderForm re-render — the input lives inside
+    // the body which we replace wholesale on a Refresh.
+    document.addEventListener('focusin', function (e) {
+        if (e.target && e.target.id === 'pv-fabric-text') {
+            renderFabricDropdown(e.target.value);
+        }
+    });
+    document.addEventListener('input', function (e) {
+        if (e.target && e.target.id === 'pv-fabric-text') {
+            // Typing — refilter. If user cleared the input, also
+            // clear the hidden id so calc shows "Pick a fabric…".
+            if (e.target.value === '') {
+                var hidden = document.getElementById('pv-fabric');
+                if (hidden) hidden.value = '';
+            }
+            renderFabricDropdown(e.target.value);
+        }
+    });
+    document.addEventListener('click', function (e) {
+        // Click on a dropdown item → select. Click outside →
+        // close (but not if click is on the input itself).
+        var item = e.target.closest && e.target.closest('.pv-typeahead-item');
+        if (item && !item.classList.contains('is-empty')) {
+            selectFabric(parseInt(item.dataset.id, 10), item.textContent.trim());
+            return;
+        }
+        var input = document.getElementById('pv-fabric-text');
+        var list  = document.getElementById('pv-fabric-list');
+        if (!list || list.hidden) return;
+        if (input && input.contains(e.target)) return;
+        if (list.contains(e.target)) return;
+        list.hidden = true;
+    });
+    document.addEventListener('keydown', function (e) {
+        var input = document.getElementById('pv-fabric-text');
+        if (!input || e.target !== input) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveFabricHighlight(+1); }
+        else if (e.key === 'ArrowUp')   { e.preventDefault(); moveFabricHighlight(-1); }
+        else if (e.key === 'Enter')     {
+            if (commitFabricHighlight()) e.preventDefault();
+        }
+        else if (e.key === 'Escape')    {
+            var list = document.getElementById('pv-fabric-list');
+            if (list) list.hidden = true;
+        }
+    });
 
     // Mirror the extras-rendering logic from the real quote-builder.
     function renderExtras() {
