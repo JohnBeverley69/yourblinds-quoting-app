@@ -71,6 +71,85 @@ register_shutdown_function(static function () {
 });
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ── JSON branch ──────────────────────────────────────────────
+    //
+    // Sequential push driven by JS — see the inline script below.
+    // The browser sends ONE tenant per request, waits for the JSON
+    // response, then advances to the next. This keeps every request
+    // small (one tenant's catalogue, ~5–30 sec) so the shared-host
+    // resource limits never get touched.
+    //
+    // We return JSON for these requests and don't write to session —
+    // the JS aggregates the per-tenant results client-side.
+    $isJson = (string) ($_POST['_format'] ?? '') === 'json';
+
+    if ($isJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            csrf_check();
+            $rawIds = is_array($_POST['target_ids'] ?? null) ? $_POST['target_ids'] : [];
+            $rawIds = array_values(array_unique(array_filter(
+                array_map('intval', $rawIds),
+                static fn ($v) => $v > 0 && $v !== $masterClientId
+            )));
+
+            // JSON mode is one-tenant-per-call by design. If the
+            // caller sends more than one, we still only process the
+            // first — keeps the per-request budget predictable.
+            if (!$rawIds) {
+                echo json_encode(['ok' => false, 'error' => 'No tenant id supplied.']);
+                exit;
+            }
+            $tid = $rawIds[0];
+
+            $pdo = db();
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+            // Resolve the tenant name upfront so the JSON payload
+            // reads nicely client-side without an extra round-trip.
+            $st = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+            $st->execute([$tid]);
+            $name = (string) ($st->fetchColumn() ?: ('client #' . $tid));
+
+            try {
+                $summary = push_catalogue_to_client($pdo, $masterClientId, $tid, $prefix);
+                echo json_encode([
+                    'ok'        => true,
+                    'tenant_id' => $tid,
+                    'name'      => $name,
+                    'summary'   => $summary,
+                ]);
+                exit;
+            } catch (Throwable $e) {
+                error_log(
+                    'push-updates JSON: tenant=' . $tid . ' FAILED: '
+                    . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()
+                );
+                echo json_encode([
+                    'ok'        => false,
+                    'tenant_id' => $tid,
+                    'name'      => $name,
+                    'error'     => $e->getMessage(),
+                ]);
+                exit;
+            }
+        } catch (Throwable $outer) {
+            error_log(
+                'push-updates JSON: top-level failure: '
+                . $outer->getMessage() . ' at ' . $outer->getFile() . ':' . $outer->getLine()
+            );
+            // best-effort — headers may already be sent if PHP died
+            // mid-output, but the log line has the full picture.
+            echo json_encode(['ok' => false, 'error' => $outer->getMessage()]);
+            exit;
+        }
+    }
+
+    // ── Legacy HTML/redirect branch ─────────────────────────────────
+    //
+    // Still works for non-JS fallback or one-tenant-at-a-time manual
+    // pushes. Same behaviour as before this commit.
+    //
     // Outer try/catch so an unexpected fatal (memory, timeout, schema
     // mismatch on a column we forgot) flashes a readable error instead
     // of dumping a bare 500. Also logs the full exception so the next
@@ -362,8 +441,15 @@ $activeNav = 'push-updates';
                 <div class="section-header">
                     <h2 class="section-title">Push to which tenants?</h2>
                 </div>
+                <!--
+                    No data-confirm on the form — the confirm-modal
+                    partial calls form.submit() on OK which skips event
+                    listeners, so our JS submit handler would never
+                    fire. The confirmation is done in JS below using a
+                    native confirm() dialog instead.
+                -->
                 <form method="post" action="/master-admin/push-updates.php"
-                      data-confirm="Push <?= count($srcProducts) ?> &quot;<?= e($prefix) ?>&quot;-prefixed products to the selected tenants? Matched items will be updated, missing ones added. Tenant markups, discounts, and non-prefixed products are not touched.">
+                      id="push-form">
                     <?= csrf_field() ?>
                     <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.625rem">
                         Tick the tenants who should receive these products.
@@ -378,7 +464,7 @@ $activeNav = 'push-updates';
                         <div class="tenant-row">
                             <label>
                                 <input type="checkbox" name="target_ids[]" value="<?= (int) $t['id'] ?>"
-                                       class="tenant-cb">
+                                       class="tenant-cb" data-tenant-name="<?= e((string) $t['company_name']) ?>">
                                 <?= e((string) $t['company_name']) ?>
                             </label>
                             <?php if ((int) $t['active'] !== 1): ?>
@@ -387,20 +473,213 @@ $activeNav = 'push-updates';
                         </div>
                     <?php endforeach; ?>
                     <div class="form-actions" style="margin-top:1rem">
-                        <button type="submit" class="btn btn-primary"
+                        <button type="submit" class="btn btn-primary" id="push-submit"
                                 style="background:#b91c1c;border-color:#b91c1c">
                             Push to selected tenants &raquo;
                         </button>
                     </div>
                 </form>
+
+                <!--
+                    Live progress + per-tenant results. Hidden until the
+                    JS push begins. Each tenant card flips green/red as
+                    its fetch() resolves.
+                -->
+                <div id="push-progress" style="display:none;margin-top:1rem">
+                    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:0.875rem 1.125rem">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.625rem">
+                            <strong style="color:#1f3b5b;font-size:1rem">
+                                Pushing… <span id="pp-current">0</span> of <span id="pp-total">0</span>
+                            </strong>
+                            <span id="pp-current-name" style="color:#6b7280;font-size:0.875rem;flex:1"></span>
+                        </div>
+                        <div style="background:#f3f4f6;border-radius:999px;height:0.5rem;overflow:hidden">
+                            <div id="pp-bar" style="background:#1f3b5b;height:100%;width:0%;transition:width 200ms"></div>
+                        </div>
+                        <div id="pp-results" style="margin-top:0.875rem"></div>
+                    </div>
+                </div>
+
                 <script>
                 (function () {
                     var all = document.getElementById('select-all-tenants');
-                    if (!all) return;
-                    all.addEventListener('change', function () {
-                        document.querySelectorAll('.tenant-cb').forEach(function (cb) {
-                            cb.checked = all.checked;
+                    if (all) {
+                        all.addEventListener('change', function () {
+                            document.querySelectorAll('.tenant-cb').forEach(function (cb) {
+                                cb.checked = all.checked;
+                            });
                         });
+                    }
+
+                    // ── Sequential push controller ────────────────────
+                    //
+                    // Replaces the form's default submit with a JS
+                    // controller that POSTs each ticked tenant in turn,
+                    // waiting for the previous response before sending
+                    // the next. Each request is JSON (_format=json) and
+                    // only carries one tenant — that's what keeps every
+                    // request under the shared-host resource limits.
+                    //
+                    // The "data-confirm" attribute on the form is
+                    // handled by the global confirm_modal partial; once
+                    // it resolves the form fires a real "submit" event,
+                    // which we intercept here.
+                    var form     = document.getElementById('push-form');
+                    var btn      = document.getElementById('push-submit');
+                    var progEl   = document.getElementById('push-progress');
+                    var curEl    = document.getElementById('pp-current');
+                    var totEl    = document.getElementById('pp-total');
+                    var nameEl   = document.getElementById('pp-current-name');
+                    var barEl    = document.getElementById('pp-bar');
+                    var resEl    = document.getElementById('pp-results');
+                    if (!form || !btn) return;
+
+                    var csrfInput = form.querySelector('input[name="csrf_token"], input[name="_csrf"], input[name="csrf"]');
+
+                    function esc(s) {
+                        return String(s).replace(/[&<>"']/g, function (c) {
+                            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+                        });
+                    }
+
+                    function renderResultRow(r) {
+                        // r is the JSON the server returned (ok / failed
+                        // / summary). Builds one card per tenant in the
+                        // same visual style as the post-redirect summary.
+                        var failed = !r.ok;
+                        var bg = failed ? '#fef2f2' : '#fff';
+                        var border = failed ? '#fecaca' : '#e5e7eb';
+                        var nameClr = failed ? '#991b1b' : '#1f3b5b';
+
+                        var stats = '';
+                        if (!failed && r.summary) {
+                            var s = r.summary;
+                            var bits = [
+                                [s.products_added,     'products added'],
+                                [s.products_updated,   'products refreshed'],
+                                [s.systems_added,      'systems added'],
+                                [s.fabrics_added,      'fabrics added'],
+                                [s.fabrics_updated,    'fabrics updated'],
+                                [s.extras_added,       'options added'],
+                                [s.extras_updated,     'options updated'],
+                                [s.choices_added,      'choices added'],
+                                [s.choices_updated,    'choices updated'],
+                                [s.price_tables_added, 'price tables added'],
+                                [s.price_table_cells,  'price cells synced'],
+                                [s.width_table_cells,  'width-table cells synced']
+                            ];
+                            stats = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.5rem;font-size:0.875rem;color:#374151">';
+                            bits.forEach(function (b) {
+                                stats += '<span><strong style="color:#065f46">' + (b[0] | 0) + '</strong> ' + b[1] + '</span>';
+                            });
+                            stats += '</div>';
+
+                            if (s.errors && s.errors.length) {
+                                stats += '<div style="margin-top:0.5rem;font-size:0.8125rem;color:#991b1b">';
+                                stats += '<strong>' + s.errors.length + ' product(s) failed:</strong>';
+                                s.errors.forEach(function (err) {
+                                    stats += '<div>&middot; ' + esc(err.product || '?') + ': ' + esc(err.message || '') + '</div>';
+                                });
+                                stats += '</div>';
+                            }
+                        } else {
+                            stats = '<div style="margin-top:0.5rem;font-size:0.8125rem;color:#991b1b">'
+                                  + esc(r.error || 'Unknown error') + '</div>';
+                        }
+
+                        return '<div style="background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;padding:0.5rem 0.75rem;margin-bottom:0.375rem">'
+                             +   '<div style="font-weight:700;color:' + nameClr + '">'
+                             +     esc(r.name || ('client #' + r.tenant_id))
+                             +     (failed ? ' &mdash; <span style="color:#991b1b">failed</span>' : '')
+                             +   '</div>'
+                             +   stats
+                             + '</div>';
+                    }
+
+                    async function pushOne(tenantId) {
+                        var fd = new FormData();
+                        fd.append('_format', 'json');
+                        fd.append('target_ids[]', String(tenantId));
+                        if (csrfInput) fd.append(csrfInput.name, csrfInput.value);
+                        try {
+                            var resp = await fetch('/master-admin/push-updates.php', {
+                                method:      'POST',
+                                body:        fd,
+                                credentials: 'same-origin',
+                                cache:       'no-store'
+                            });
+                            // Server returns JSON for both success + failure.
+                            // A truly fatal PHP error might return a 500 with
+                            // HTML — handle that gracefully.
+                            if (!resp.ok && resp.status >= 500) {
+                                return { ok: false, tenant_id: tenantId, error: 'Server error (' + resp.status + '). Check error log.' };
+                            }
+                            var text = await resp.text();
+                            try {
+                                return JSON.parse(text);
+                            } catch (e) {
+                                return { ok: false, tenant_id: tenantId, error: 'Bad response: ' + text.substring(0, 200) };
+                            }
+                        } catch (e) {
+                            return { ok: false, tenant_id: tenantId, error: 'Network error: ' + e.message };
+                        }
+                    }
+
+                    form.addEventListener('submit', function (ev) {
+                        // Collect ticked tenants. If none, let the form's
+                        // server-side path handle it (cleaner error).
+                        var ticked = Array.from(form.querySelectorAll('.tenant-cb:checked'));
+                        if (!ticked.length) return;
+
+                        // Intercept and drive the push from JS.
+                        ev.preventDefault();
+                        ev.stopImmediatePropagation();
+
+                        var queue = ticked.map(function (cb) {
+                            return { id: parseInt(cb.value, 10), name: cb.dataset.tenantName || ('client #' + cb.value) };
+                        });
+
+                        // Confirmation step — replaces the data-confirm
+                        // modal which can't be used here (see HTML
+                        // comment above the form for why).
+                        var names = queue.map(function (q) { return q.name; }).join(', ');
+                        var msg = 'Push to ' + queue.length + ' tenant'
+                                + (queue.length === 1 ? '' : 's') + '?'
+                                + '\n\n' + names + '\n\n'
+                                + 'Matched items will be updated, missing ones added. '
+                                + 'Tenant markups, discounts, and non-prefixed products are not touched.';
+                        if (!confirm(msg)) return;
+
+                        progEl.style.display = '';
+                        totEl.textContent = String(queue.length);
+                        curEl.textContent = '0';
+                        nameEl.textContent = '';
+                        barEl.style.width = '0%';
+                        resEl.innerHTML = '';
+
+                        btn.disabled = true;
+                        btn.textContent = 'Pushing…';
+
+                        (async function () {
+                            for (var i = 0; i < queue.length; i++) {
+                                var t = queue[i];
+                                curEl.textContent = String(i + 1);
+                                nameEl.textContent = '— ' + t.name;
+                                barEl.style.width = (((i) / queue.length) * 100).toFixed(1) + '%';
+
+                                var r = await pushOne(t.id);
+                                // Ensure name is populated even on
+                                // top-level failures where the server
+                                // didn't get a chance to look it up.
+                                if (!r.name) r.name = t.name;
+
+                                resEl.insertAdjacentHTML('beforeend', renderResultRow(r));
+                                barEl.style.width = (((i + 1) / queue.length) * 100).toFixed(1) + '%';
+                            }
+                            nameEl.textContent = '— all done';
+                            btn.disabled = false;
+                            btn.textContent = 'Push to selected tenants »';
+                        })();
                     });
                 })();
                 </script>
