@@ -32,6 +32,12 @@ require __DIR__ . '/../_partials/paypal.php';
 
 requireSuperAdmin();
 
+// The sidebar partial reads $user to decide which entries to show
+// (admin / super-admin / staff gates). Without this the menu
+// collapses to just "Calendar" + "My Schedule" because every
+// permission check evaluates against null.
+$user = current_user();
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);

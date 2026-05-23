@@ -31,6 +31,11 @@ require __DIR__ . '/../_partials/paypal.php';
 
 requireSuperAdmin();
 
+// The sidebar partial reads $user to decide which entries to show.
+// Without this the menu collapses because every gated entry's
+// permission check evaluates against null.
+$user = current_user();
+
 $cfg = paypal_config();
 
 // ─── Live API ping ────────────────────────────────────────────────────
