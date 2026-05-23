@@ -277,17 +277,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $u->execute([$f['name'], $f['active'], $f['option_label'], $id, $clientId]);
             }
 
-            // Markup: upsert one row per system (or one NULL-system row
-            // for products without systems). The unique key uses a
-            // generated system_id_key (IFNULL(system_id, 0)) so the
-            // ON DUPLICATE KEY UPDATE catches the NULL case too.
+            // Markup: 0 (or empty) DELETES the row so the engine falls
+            // back to the tenant default (client_settings
+            // .default_price_table_markup_pct). Non-zero values upsert
+            // an explicit override row. Mirrors the discount semantics
+            // below — keeps the table from accumulating stale 0% rows
+            // that look like overrides but aren't.
             $insMarkup = $pdo->prepare(
                 'INSERT INTO client_markups (client_id, product_id, system_id, markup_percent)
                  VALUES (?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE markup_percent = VALUES(markup_percent)'
             );
-            // Discount: same shape, but 0 deletes the row (no need to
-            // store an explicit zero — missing row also reads as 0).
+            $delMarkup = $pdo->prepare(
+                'DELETE FROM client_markups
+                  WHERE client_id = ? AND product_id = ?
+                    AND ((system_id IS NULL AND ? IS NULL) OR system_id = ?)'
+            );
+            // Discount: same shape, 0 also deletes the row.
             $insDiscount = $pdo->prepare(
                 'INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent)
                  VALUES (?, ?, ?, ?)
@@ -301,15 +307,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             foreach ($validKeys as $k) {
                 $sysId = $k === '' ? null : (int) $k;
-                $insMarkup->execute([$clientId, $id, $sysId, (float) $f['markup'][$k]]);
+
+                $mp = (float) $f['markup'][$k];
+                if ($mp > 0) {
+                    $insMarkup->execute([$clientId, $id, $sysId, $mp]);
+                } else {
+                    // The "IS NULL ... = ?" trick needs the same value
+                    // twice so the prepared statement covers both the
+                    // NULL and non-NULL system_id cases.
+                    $delMarkup->execute([$clientId, $id, $sysId, $sysId]);
+                }
 
                 $dp = (float) $f['discount'][$k];
                 if ($dp > 0) {
                     $insDiscount->execute([$clientId, $id, $sysId, $dp]);
                 } else {
-                    // The "IS NULL ... = ?" trick needs the same value
-                    // twice so the prepared statement covers both
-                    // branches without juggling SQL strings.
                     $delDiscount->execute([$clientId, $id, $sysId, $sysId]);
                 }
             }
@@ -715,13 +727,35 @@ $activeNav = 'products';
                             <tbody>
                                 <?php foreach ($systems as $s):
                                     $key = (string) (int) $s['id'];
+                                    $markupVal = (float) ($f['markup'][$key] ?? 0);
+                                    // 0 (or missing) = inheriting the default. Show as
+                                    // empty input with a "using default (X%)" tag so the
+                                    // row's actual effective rate is visible at a glance.
+                                    $isMarkupDefault = $markupVal === 0.0;
+                                    $markupDisplay   = $isMarkupDefault
+                                        ? ''
+                                        : (string) ($f['markup'][$key] ?? '');
                                 ?>
                                     <tr>
                                         <td class="system-name"><?= e((string) $s['name']) ?></td>
                                         <td class="num">
                                             <input type="number" step="0.01" min="0"
                                                    name="markup[<?= (int) $s['id'] ?>]"
-                                                   value="<?= e((string) ($f['markup'][$key] ?? '0.00')) ?>">
+                                                   value="<?= e($markupDisplay) ?>"
+                                                   placeholder="<?= e(number_format($_tenantDefaultMarkup, 2)) ?>"
+                                                   title="<?= $isMarkupDefault
+                                                       ? 'Inheriting tenant default — leave empty / 0 to keep using it.'
+                                                       : 'Override of the tenant default. Clear or set 0 to revert.' ?>">
+                                            <?php if ($isMarkupDefault): ?>
+                                                <div style="font-size:0.6875rem;color:#6b7280;margin-top:0.125rem;line-height:1.2">
+                                                    using default
+                                                    (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
+                                                </div>
+                                            <?php else: ?>
+                                                <div style="font-size:0.6875rem;color:#9333ea;margin-top:0.125rem;line-height:1.2;font-weight:600">
+                                                    override
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="num">
                                             <input type="number" step="0.01" min="0"
@@ -732,13 +766,30 @@ $activeNav = 'products';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                    <?php else: ?>
+                    <?php else:
+                        // Same default-inheritance UX for products without
+                        // systems: empty/0 input → inherit default; non-zero
+                        // → explicit override.
+                        $nsMarkupVal = (float) ($f['markup'][''] ?? 0);
+                        $nsIsDefault = $nsMarkupVal === 0.0;
+                        $nsMarkupDisplay = $nsIsDefault ? '' : (string) ($f['markup'][''] ?? '');
+                    ?>
                         <div class="form-row cols-2">
                             <div class="form-group">
                                 <label for="markup_no_sys">Markup %</label>
                                 <input id="markup_no_sys" name="markup" type="number"
                                        step="0.01" min="0"
-                                       value="<?= e((string) ($f['markup'][''] ?? '0.00')) ?>">
+                                       value="<?= e($nsMarkupDisplay) ?>"
+                                       placeholder="<?= e(number_format($_tenantDefaultMarkup, 2)) ?>">
+                                <?php if ($nsIsDefault): ?>
+                                    <small style="color:#6b7280;font-size:0.75rem;display:block;margin-top:0.1875rem">
+                                        Using default (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
+                                    </small>
+                                <?php else: ?>
+                                    <small style="color:#9333ea;font-size:0.75rem;font-weight:600;display:block;margin-top:0.1875rem">
+                                        Override
+                                    </small>
+                                <?php endif; ?>
                             </div>
                             <div class="form-group">
                                 <label for="discount_no_sys">Discount %</label>
