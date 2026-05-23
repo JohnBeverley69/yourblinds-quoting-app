@@ -1346,85 +1346,93 @@ $activeNav = 'products';
     .preview-backdrop.is-open { display: block; }
     .preview-drawer {
         position: fixed; top: 0; right: 0; bottom: 0;
-        width: min(440px, 100vw);
+        width: min(480px, 100vw);
         background: #fff; box-shadow: -8px 0 30px rgba(0,0,0,0.15);
         z-index: 9001; display: flex; flex-direction: column;
         transform: translateX(100%); transition: transform 220ms ease-out;
     }
     .preview-drawer.is-open { transform: translateX(0); }
     .preview-drawer-head {
-        display: flex; align-items: center; gap: 0.625rem;
-        padding: 0.875rem 1rem; border-bottom: 1px solid #e5e7eb;
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb;
         background: #f8fafc;
+        flex-shrink: 0;
     }
     .preview-drawer-head h2 {
-        margin: 0; font-size: 1rem; color: #1f3b5b;
+        margin: 0; font-size: 0.9375rem; color: #1f3b5b;
     }
     .preview-drawer-head .badge {
-        font-size: 0.6875rem; font-weight: 600; color: #6b7280;
-        background: #e5e7eb; padding: 0.0625rem 0.5rem;
+        font-size: 0.625rem; font-weight: 600; color: #6b7280;
+        background: #e5e7eb; padding: 0.0625rem 0.4375rem;
         border-radius: 999px; text-transform: uppercase;
         letter-spacing: 0.05em;
     }
     .preview-drawer-head .head-btns {
-        margin-left: auto; display: flex; gap: 0.375rem;
+        margin-left: auto; display: flex; gap: 0.25rem;
     }
     .preview-drawer-head .head-btns button {
         background: transparent; border: 0; cursor: pointer;
-        padding: 0.3125rem 0.625rem; border-radius: 6px;
+        padding: 0.25rem 0.5rem; border-radius: 6px;
         font-size: 0.8125rem; color: #1f3b5b;
     }
     .preview-drawer-head .head-btns button:hover { background: #e5e7eb; }
+    /* Sticky result panel: pinned to the top of the scroll area so
+       the price stays visible as the user changes fields below it.
+       Replaces the foot-button + result-below pattern, which forced
+       the user to scroll past the form to see the answer. */
+    .preview-result-pin {
+        position: sticky; top: 0; z-index: 2;
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+    }
     .preview-drawer-body {
-        flex: 1 1 auto; overflow-y: auto; padding: 1rem;
+        flex: 1 1 auto; overflow-y: auto; padding: 0.625rem 0.75rem;
     }
     .preview-drawer-body .pv-row {
-        display: flex; flex-direction: column; gap: 0.25rem;
-        margin-bottom: 0.875rem;
+        display: flex; flex-direction: column; gap: 0.1875rem;
+        margin-bottom: 0.5rem;
     }
     .preview-drawer-body .pv-row label {
-        font-size: 0.75rem; font-weight: 600; color: #6b7280;
+        font-size: 0.6875rem; font-weight: 600; color: #6b7280;
         text-transform: uppercase; letter-spacing: 0.05em;
     }
     .preview-drawer-body .pv-row input,
     .preview-drawer-body .pv-row select {
-        padding: 0.4375rem 0.5625rem; border: 1px solid #d1d5db;
+        padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
         border-radius: 6px; font: inherit; background: #fff;
+        font-size: 0.875rem;
     }
     .preview-drawer-body .pv-row .req-mark { color: #b91c1c; }
     .preview-drawer-body .pv-extras {
         background: #f9fafb; border: 1px solid #e5e7eb;
-        border-radius: 8px; padding: 0.625rem 0.75rem;
-        margin-bottom: 0.875rem;
+        border-radius: 8px; padding: 0.4375rem 0.625rem;
+        margin-bottom: 0.5rem;
     }
     .preview-drawer-body .pv-extras > .pv-row:last-child { margin-bottom: 0; }
     .preview-drawer-body .pv-extra-child {
-        margin-left: 0.875rem; padding-left: 0.625rem;
+        margin-left: 0.625rem; padding-left: 0.5rem;
         border-left: 2px solid #cbd5e1;
-        margin-top: 0.5rem;
+        margin-top: 0.375rem;
     }
     .preview-drawer-body .pv-dim-row {
         display: grid; gap: 0.5rem;
         grid-template-columns: 1fr 1fr 5rem;
     }
-    .preview-drawer-foot {
-        padding: 0.875rem 1rem; border-top: 1px solid #e5e7eb;
-        background: #f8fafc;
-    }
-    .preview-drawer-foot button {
-        width: 100%; padding: 0.5625rem 0.875rem;
-        background: #1f3b5b; color: #fff; border: 0;
-        border-radius: 8px; font-weight: 700; cursor: pointer;
-        font-size: 0.9375rem;
-    }
-    .preview-drawer-foot button:hover { background: #15273d; }
+    /* Live-recalc spinner — fades the result while a fetch is in
+       flight so the price doesn't look stuck when the user makes
+       quick consecutive changes. */
+    .preview-result.is-calculating { opacity: 0.55; }
     .preview-result {
-        margin-top: 0.625rem; padding: 0.75rem 0.875rem;
-        border-radius: 8px; font-size: 0.9375rem; line-height: 1.5;
+        padding: 0.5625rem 0.75rem;
+        border-radius: 8px; font-size: 0.875rem; line-height: 1.45;
+        transition: opacity 120ms;
     }
     .preview-result.is-ok { background: #d1fae5; color: #065f46; }
     .preview-result.is-err { background: #fee2e2; color: #991b1b; }
-    .preview-result strong { font-size: 1.125rem; }
+    .preview-result.is-idle { background: #f3f4f6; color: #6b7280; font-style: italic; }
+    .preview-result strong { font-size: 1.0625rem; }
     .preview-empty {
         color: #9ca3af; font-style: italic; padding: 1rem 0.5rem;
         text-align: center;
@@ -1444,12 +1452,19 @@ $activeNav = 'products';
             <button type="button" id="preview-close" title="Close (Esc)">✕</button>
         </div>
     </div>
+    <!--
+        Price result pinned at the top of the scrollable area. Live-
+        updates ~250ms after any field change so the price stays
+        visible as the user tweaks options. No more "click Calculate,
+        scroll back up to see the price" round-trip.
+    -->
+    <div class="preview-result-pin">
+        <div id="preview-result" class="preview-result is-idle">
+            Enter a width and drop to see the price.
+        </div>
+    </div>
     <div class="preview-drawer-body" id="preview-body">
         <div class="preview-empty">Loading…</div>
-    </div>
-    <div class="preview-drawer-foot">
-        <button type="button" id="preview-calc">Calculate price</button>
-        <div id="preview-result"></div>
     </div>
 </aside>
 
@@ -1463,7 +1478,6 @@ $activeNav = 'products';
     var closeBtn = document.getElementById('preview-close');
     var refBtn   = document.getElementById('preview-refresh');
     var body     = document.getElementById('preview-body');
-    var calcBtn  = document.getElementById('preview-calc');
     var resultEl = document.getElementById('preview-result');
     if (!openBtn || !drawer) return;
 
@@ -1505,7 +1519,8 @@ $activeNav = 'products';
     refBtn.addEventListener('click', function () {
         productData = null;
         loadData();
-        resultEl.innerHTML = '';
+        // Reset the sticky result to its idle prompt while we reload.
+        setResult('is-idle', 'Enter a width and drop to see the price.');
     });
 
     // --- Form render ---------------------------------------------------
@@ -1575,10 +1590,19 @@ $activeNav = 'products';
                 fabSel.innerHTML = '<option value="">(no fabrics)</option>';
                 return;
             }
+            // Build the option label from the bits that are actually
+            // present. Old format was 'Band ' + (band||'?') + ' — '
+            // + (supplier||'') + ' / ' + (name||'') + ... which
+            // produced ugly fragments like "Band ? — / ACACIA BO /
+            // CARAWAY" when band or supplier was missing. New format
+            // joins the populated fields with " · ".
             fabSel.innerHTML = rows.map(function (f) {
-                var label = 'Band ' + (f.band_code || '?')
-                          + ' — ' + (f.supplier_name || '') + ' / '
-                          + (f.name || '') + (f.colour ? ' / ' + f.colour : '');
+                var bits = [];
+                if (f.band_code)     bits.push('Band ' + f.band_code);
+                if (f.supplier_name) bits.push(f.supplier_name);
+                if (f.name)          bits.push(f.name);
+                if (f.colour)        bits.push(f.colour);
+                var label = bits.length ? bits.join(' · ') : ('#' + f.id);
                 return '<option value="' + f.id + '">' + esc(label) + '</option>';
             }).join('');
         } catch (e) {
@@ -1739,28 +1763,45 @@ $activeNav = 'products';
             });
     }
 
-    // --- Calculate -----------------------------------------------------
-    calcBtn.addEventListener('click', async function () {
-        if (!productData) return;
-        resultEl.innerHTML = '';
-        resultEl.className = '';
+    // --- Live calculate ------------------------------------------------
+    //
+    // calculate() fetches the price from the engine and renders into
+    // the sticky result panel. It's debounced so quick consecutive
+    // edits (typing 1, 2, 0, 0 in width) only fire one request after
+    // the user stops, not one per keystroke. Wired to every input
+    // and select inside the drawer body via the catch-all listener
+    // below, so the user never has to click anything to see the
+    // price update.
+    function setResult(cls, html) {
+        resultEl.className = 'preview-result ' + cls;
+        resultEl.innerHTML = html;
+    }
 
-        var sysSel = document.getElementById('pv-system');
-        var fabSel = document.getElementById('pv-fabric');
+    async function calculate() {
+        if (!productData) return;
+
+        var sysSel  = document.getElementById('pv-system');
+        var fabSel  = document.getElementById('pv-fabric');
         var widthIn = document.getElementById('pv-width');
         var dropIn  = document.getElementById('pv-drop');
         var qtyIn   = document.getElementById('pv-qty');
 
+        // Soft validation — show a guidance message in the panel
+        // rather than a red error. The user just hasn't filled in
+        // the required fields yet; that's the normal opening state.
         if (!fabSel || !fabSel.value) {
-            resultEl.className = 'preview-result is-err';
-            resultEl.textContent = 'Pick a fabric first.';
+            setResult('is-idle', 'Pick a fabric to see the price.');
             return;
         }
-        if (!widthIn.value || !dropIn.value) {
-            resultEl.className = 'preview-result is-err';
-            resultEl.textContent = 'Enter width and drop.';
+        if (!widthIn || !widthIn.value || !dropIn || !dropIn.value) {
+            setResult('is-idle', 'Enter a width and drop to see the price.');
             return;
         }
+
+        // Visual hint that a recalc is in flight. The opacity fade
+        // is subtle but reassures the user "something's happening"
+        // for the ~300ms the fetch takes.
+        resultEl.classList.add('is-calculating');
 
         var params = new URLSearchParams({
             product_id: String(PRODUCT_ID),
@@ -1808,8 +1849,7 @@ $activeNav = 'products';
                                 { credentials: 'same-origin' });
             var data = await r.json();
             if (data.error) {
-                resultEl.className = 'preview-result is-err';
-                resultEl.textContent = data.error;
+                setResult('is-err', esc(data.error));
                 return;
             }
             // Build the result block — per-blind price + line total.
@@ -1819,19 +1859,31 @@ $activeNav = 'products';
             if (data.quantity > 1) {
                 html += ' &middot; £' + Number(line).toFixed(2) + ' for ' + data.quantity + ' blinds';
             }
-            html += '<div style="margin-top:0.25rem;color:#374151;font-size:0.8125rem">'
+            html += '<div style="margin-top:0.1875rem;color:#374151;font-size:0.75rem">'
                   + 'Base £' + Number(data.base_price).toFixed(2)
                   + (data.extras_total ? ' + extras £' + Number(data.extras_total).toFixed(2) : '')
                   + (Number(data.markup_percent) ? ' · markup ' + data.markup_percent + '%' : '')
                   + (Number(data.discount_percent) ? ' · discount ' + data.discount_percent + '%' : '')
                   + '</div>';
-            resultEl.className = 'preview-result is-ok';
-            resultEl.innerHTML = html;
+            setResult('is-ok', html);
         } catch (err) {
-            resultEl.className = 'preview-result is-err';
-            resultEl.textContent = 'Could not calculate: ' + (err.message || err);
+            setResult('is-err', 'Could not calculate: ' + esc(err.message || String(err)));
+        } finally {
+            resultEl.classList.remove('is-calculating');
         }
-    });
+    }
+
+    // Debounced live-update. Any input/change in the drawer body
+    // schedules a calculate after 280ms of quiet — short enough that
+    // it feels instant, long enough that we don't bombard the engine
+    // mid-keystroke. Single trailing-edge timer, not leading.
+    var calcTimer = null;
+    function scheduleCalc() {
+        if (calcTimer) clearTimeout(calcTimer);
+        calcTimer = setTimeout(calculate, 280);
+    }
+    body.addEventListener('input',  scheduleCalc);
+    body.addEventListener('change', scheduleCalc);
 
     function esc(s) {
         return String(s).replace(/[&<>"']/g, function (c) {
