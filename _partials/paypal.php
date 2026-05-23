@@ -215,6 +215,132 @@ function paypal_verify_webhook(string $rawPayload, array $headers, string $webho
 }
 
 /**
+ * Update an existing PayPal Plan's pricing scheme — i.e. change the
+ * monthly fee. Existing subscribers don't get re-billed at the new
+ * rate immediately; PayPal applies the new price at each subscriber's
+ * next billing cycle automatically. New subscribers get the new price
+ * straight away.
+ *
+ * Used by /master-admin/pricing.php when the admin saves a price
+ * change. The plan_pricing row is updated in our DB regardless of
+ * whether this call succeeds — the admin sees a warning in that case
+ * but the local source of truth stays consistent.
+ *
+ * Throws RuntimeException on API error (caller catches).
+ *
+ * NB: PayPal's plan-update API replaces ALL existing billing cycles
+ * for the plan, so we have to pull the current ones, swap in the new
+ * price, and PUT them back. Subscription plans typically only have
+ * one regular cycle (no trial); we handle that common case plus the
+ * trial-cycle case defensively.
+ */
+function paypal_update_plan_price(string $planId, float $newPriceGbp): void
+{
+    if ($planId === '') {
+        throw new RuntimeException('Plan id required.');
+    }
+    if ($newPriceGbp < 0) {
+        throw new RuntimeException('Price must be non-negative.');
+    }
+
+    // Fetch the current plan to see what cycles exist.
+    $r = paypal_request('GET', '/v1/billing/plans/' . rawurlencode($planId));
+    $cycles = (array) ($r['data']['billing_cycles'] ?? []);
+    if (!$cycles) {
+        throw new RuntimeException('Plan has no billing cycles to update.');
+    }
+
+    $newCycles = [];
+    foreach ($cycles as $cycle) {
+        $seq    = (int) ($cycle['sequence'] ?? 1);
+        $type   = (string) ($cycle['tenure_type'] ?? 'REGULAR');
+        // Trial cycles are usually free; we only update the regular
+        // (paid) one. If a plan is genuinely tiered we'd need a UI for
+        // that — out of scope for v1.
+        if ($type === 'REGULAR') {
+            $newCycles[] = [
+                'sequence'      => $seq,
+                'pricing_scheme' => [
+                    'fixed_price' => [
+                        'value'         => number_format($newPriceGbp, 2, '.', ''),
+                        'currency_code' => 'GBP',
+                    ],
+                ],
+            ];
+        }
+    }
+
+    if (!$newCycles) {
+        throw new RuntimeException('No REGULAR billing cycle found to reprice.');
+    }
+
+    paypal_request(
+        'POST',
+        '/v1/billing/plans/' . rawurlencode($planId) . '/update-pricing-schemes',
+        ['pricing_schemes' => $newCycles]
+    );
+}
+
+/**
+ * Create a PayPal Product + Plan from scratch and return the new
+ * Plan ID. Used by /master-admin/pricing.php when an admin types a
+ * price for a plan that has no PayPal Plan ID yet (e.g. a brand new
+ * paid plan was just added to the static registry).
+ *
+ * Returns the new plan_id (e.g. "P-XXXXXXXXX").
+ */
+function paypal_create_plan(string $planCode, string $name, string $description, float $priceGbp): string
+{
+    if ($priceGbp <= 0) {
+        throw new RuntimeException('Cannot create a PayPal plan with zero or negative price.');
+    }
+
+    // 1. Product.
+    $prodId = 'yb-' . preg_replace('/[^a-z0-9_-]/i', '', $planCode) . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $r = paypal_request('POST', '/v1/catalogs/products', [
+        'id'          => $prodId,
+        'name'        => $name,
+        'description' => $description ?: $name,
+        'type'        => 'SERVICE',
+        'category'    => 'SOFTWARE',
+    ]);
+    $productId = (string) ($r['data']['id'] ?? $prodId);
+
+    // 2. Plan — monthly billing, no trial, in GBP, fixed price, auto-renewing.
+    $r2 = paypal_request('POST', '/v1/billing/plans', [
+        'product_id'   => $productId,
+        'name'         => $name,
+        'description'  => $description ?: $name,
+        'status'       => 'ACTIVE',
+        'billing_cycles' => [[
+            'frequency'      => ['interval_unit' => 'MONTH', 'interval_count' => 1],
+            'tenure_type'    => 'REGULAR',
+            'sequence'       => 1,
+            'total_cycles'   => 0,   // 0 = infinite
+            'pricing_scheme' => [
+                'fixed_price' => [
+                    'value'         => number_format($priceGbp, 2, '.', ''),
+                    'currency_code' => 'GBP',
+                ],
+            ],
+        ]],
+        'payment_preferences' => [
+            'auto_bill_outstanding'     => true,
+            'setup_fee'                 => [
+                'value' => '0', 'currency_code' => 'GBP',
+            ],
+            'setup_fee_failure_action'  => 'CONTINUE',
+            'payment_failure_threshold' => 3,
+        ],
+    ]);
+    $planId = (string) ($r2['data']['id'] ?? '');
+    if ($planId === '') {
+        throw new RuntimeException('PayPal created a plan but returned no id.');
+    }
+    return $planId;
+}
+
+/**
  * Pull a `Bearer`-ish set of HTTP headers off $_SERVER, since the
  * standard getallheaders() isn't always present (mod_php on some
  * shared hosts, FPM with weird configs). Returns name => value with

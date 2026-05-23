@@ -7,14 +7,15 @@ declare(strict_types=1);
  * PayPal redirects them here with ?subscription_id=I-xxx. We:
  *   1. Look the subscription up via PayPal's API.
  *   2. Verify it belongs to this tenant via the custom_id we set
- *      during subscribe.php (defence against approval-URL tampering).
+ *      during subscribe.php ("client:N|plan:CODE"). custom_id is
+ *      also where we get the plan_code — guarantees the UPSERT lands
+ *      on the correct (client_id, plan_code) row.
  *   3. Map PayPal status → our local enum + save.
- *   4. Sync feature flags so Accounts goes live immediately if
- *      status === ACTIVE.
+ *   4. Sync feature flags so the relevant add-on goes live immediately
+ *      if status === ACTIVE.
  *
- * The webhook (paypal_webhook.php) is the source of truth long-term,
- * but this return handler gives the user immediate feedback without
- * waiting for the webhook to land.
+ * The webhook (paypal_webhook.php) is the source of truth long-term;
+ * this is just for immediate UX feedback.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -27,19 +28,13 @@ requireAdmin();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
-// Log everything PayPal sent us — invaluable when something looks
-// odd later (different param names between sandbox/live, order
-// tokens sneaking into subscription_id, etc.).
 error_log('PayPal return.php hit. $_GET=' . json_encode($_GET));
 
 $subId = trim((string) ($_GET['subscription_id'] ?? ''));
 
-// Sanity-check the format. PayPal Subscription IDs are
-// "I-" followed by ~13 alphanumeric chars. Order tokens (which
-// PayPal sometimes accidentally returns) look like
-// "5EU12928FA5744921" — 17 alphanumerics, no prefix. Calling
-// /v1/billing/subscriptions/<order-token> gives a confusing 400
-// "request not well-formed" — surface a clearer message and bail.
+// PayPal Subscription IDs are "I-" followed by alphanumerics. Reject
+// anything else with a clear error message rather than calling the
+// API on garbage.
 if ($subId === '' || !preg_match('/^I-[A-Z0-9]+$/i', $subId)) {
     error_log('PayPal return.php: bad subscription_id "' . $subId . '". $_GET=' . json_encode($_GET));
     $_SESSION['flash_error'] = $subId === ''
@@ -61,12 +56,30 @@ try {
 
 $sub = $r['data'];
 
-// Verify custom_id matches our tenant. If it doesn't, someone has
-// fed us a different tenant's subscription_id via URL tampering —
-// refuse to update anything.
+// Decode custom_id back to (clientId, planCode). Format:
+// "client:N|plan:CODE" (new), or legacy "client:N" (old subscriptions
+// that pre-date multi-add-on; treat those as 'accounts').
 $customId = (string) ($sub['custom_id'] ?? '');
-if ($customId !== 'client:' . $clientId) {
+$claimedClient = 0;
+$planCode = 'accounts';
+if (preg_match('/^client:(\d+)\|plan:([a-z0-9_]+)$/i', $customId, $m)) {
+    $claimedClient = (int) $m[1];
+    $planCode      = strtolower($m[2]);
+} elseif (preg_match('/^client:(\d+)$/', $customId, $m)) {
+    $claimedClient = (int) $m[1];
+    // legacy: pre-multi-add-on subscriptions were always Accounts.
+    $planCode = 'accounts';
+}
+
+if ($claimedClient !== $clientId) {
     $_SESSION['flash_error'] = 'Subscription does not match your account.';
+    header('Location: /billing/index.php');
+    exit;
+}
+
+// Defence-in-depth: only accept plan codes we actually know about.
+if (!billing_plan($planCode) || $planCode === 'free') {
+    $_SESSION['flash_error'] = 'PayPal returned an unknown plan code: ' . $planCode;
     header('Location: /billing/index.php');
     exit;
 }
@@ -82,19 +95,16 @@ if (is_string($nbt) && strlen($nbt) >= 10) {
 }
 
 $pdo = db();
-// Also clear any "Backfilled from feature_accounts=…" note left by
-// migrate_tenant_subscriptions — once a real PayPal subscription is
-// in place, the migration's audit blurb is stale + visible to the
-// tenant on their Billing page, which looks odd. Admin-set notes
-// (anything not starting with "Backfilled") are preserved.
+// UPSERT on the (client_id, plan_code) row. Also clear any
+// "Backfilled from feature_*=…" note from the historical migration
+// — once a real PayPal sub is in place, that audit blurb is stale.
 $pdo->prepare(
     "INSERT INTO tenant_subscriptions
        (client_id, plan_code, status,
         external_provider, external_subscription_id,
         current_period_end)
-       VALUES (?, 'accounts', ?, 'paypal', ?, ?)
+       VALUES (?, ?, ?, 'paypal', ?, ?)
      ON DUPLICATE KEY UPDATE
-       plan_code                = 'accounts',
        status                   = VALUES(status),
        external_provider        = 'paypal',
        external_subscription_id = VALUES(external_subscription_id),
@@ -104,14 +114,14 @@ $pdo->prepare(
                                     WHEN notes LIKE 'Backfilled%' THEN NULL
                                     ELSE notes
                                   END"
-)->execute([$clientId, $localStatus, $subId, $periodEnd]);
+)->execute([$clientId, $planCode, $localStatus, $subId, $periodEnd]);
 
-billing_sync_feature_flags($clientId);
+billing_sync_feature_flags_force($clientId);
 
+$planName = (string) (billing_plan($planCode)['name'] ?? $planCode);
 if ($localStatus === 'active') {
     $_SESSION['flash_success'] =
-        '✓ Subscription active — the Accounts add-on is now enabled. '
-        . 'Thanks!';
+        '✓ Subscription active — the ' . $planName . ' is now enabled. Thanks!';
 } else {
     $_SESSION['flash_error'] =
         'Subscription saved but PayPal reports status "' . $paypalStatus . '". '
