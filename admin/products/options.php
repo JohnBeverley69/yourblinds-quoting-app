@@ -209,6 +209,26 @@ $activeNav = 'products';
         .bulk-bar .selected-count { font-size: 0.875rem; color: #6b7280; }
         .row-check { width: 1%; text-align: center; }
         .row-check input { width: 18px; height: 18px; cursor: pointer; }
+        /* Filter search above the table — finds fabrics by any field
+           (name, colour, supplier, band, code). Multi-word ANDs:
+           "polaris cream" returns only Polaris fabrics in Cream. */
+        .fabric-search-bar {
+            display: flex; gap: 0.625rem; align-items: center;
+            margin-bottom: 0.75rem; flex-wrap: wrap;
+        }
+        .fabric-search-bar input {
+            flex: 1 1 18rem; max-width: 28rem;
+            padding: 0.4375rem 0.6875rem;
+            border: 1px solid #d1d5db; border-radius: 8px;
+            font: inherit; font-size: 0.9375rem;
+        }
+        .fabric-search-bar .clear-btn {
+            background: transparent; border: 0; cursor: pointer;
+            color: #6b7280; font-size: 0.8125rem; text-decoration: underline;
+        }
+        .fabric-search-bar .clear-btn:hover { color: #1f3b5b; }
+        .fabric-count { font-size: 0.875rem; color: #6b7280; }
+        tr.is-hidden { display: none; }
     </style>
 </head>
 <body>
@@ -327,6 +347,27 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
+                <!--
+                    Filter search — client-side because all rows are
+                    already on the page. Whitespace-separated terms ALL
+                    have to appear in the row's combined text (name +
+                    colour + supplier + band + code), so "polaris cream"
+                    narrows to just Polaris in Cream. Survives sort
+                    order and lives on across keystrokes without a
+                    server round-trip.
+                -->
+                <div class="fabric-search-bar">
+                    <input type="search" id="fabric-search"
+                           placeholder="Filter (e.g. polaris cream)…"
+                           autocomplete="off">
+                    <span class="fabric-count" id="fabric-count">
+                        <?= count($options) ?>
+                        <?= count($options) === 1 ? $labelL : $labelL . 's' ?>
+                    </span>
+                    <button type="button" id="fabric-search-clear"
+                            class="clear-btn" hidden>Clear</button>
+                </div>
+
                 <div class="bulk-bar">
                     <button type="button" id="bulk-delete-btn"
                             class="btn btn-secondary btn-sm" disabled>
@@ -354,8 +395,20 @@ $activeNav = 'products';
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($options as $o): ?>
-                                    <tr>
+                                <?php foreach ($options as $o):
+                                    // Pre-built lower-case search blob so the JS
+                                    // filter doesn't have to walk td.textContent
+                                    // every keystroke. Includes every field the
+                                    // user might type to find a row.
+                                    $searchBlob = strtolower(implode(' ', array_filter([
+                                        (string) ($o['band_code']     ?? ''),
+                                        (string) ($o['name']          ?? ''),
+                                        (string) ($o['colour']        ?? ''),
+                                        (string) ($o['supplier_name'] ?? ''),
+                                        (string) ($o['code']          ?? ''),
+                                    ])));
+                                ?>
+                                    <tr data-search="<?= e($searchBlob) ?>">
                                         <td class="row-check">
                                             <input type="checkbox" class="row-checkbox"
                                                    name="ids[]" value="<?= (int) $o['id'] ?>"
@@ -397,18 +450,88 @@ $activeNav = 'products';
     if (!form) return;
     var checkAll = document.getElementById('check-all');
     var rowBoxes = form.querySelectorAll('.row-checkbox');
+    var allRows  = form.querySelectorAll('tbody tr[data-search]');
     var btn      = document.getElementById('bulk-delete-btn');
     var counter  = document.getElementById('bulk-count');
 
+    // ── Filter search ───────────────────────────────────────────
+    //
+    // Client-side, runs on every keystroke. Whitespace-separated
+    // words ALL have to appear in the row's data-search blob, so
+    // "polaris cream" returns only Polaris fabrics in cream
+    // (mirrors the preview drawer's typeahead semantic).
+    //
+    // Hidden rows still exist in the DOM — bulk-delete / select-all
+    // simply ignore them, so an operator filtering to "polaris bo"
+    // and clicking "Select all" only selects what's visible.
+    var searchInput = document.getElementById('fabric-search');
+    var clearBtn    = document.getElementById('fabric-search-clear');
+    var countEl     = document.getElementById('fabric-count');
+    var origCountText = countEl ? countEl.textContent.trim() : '';
+
+    function visibleRows() {
+        var out = [];
+        allRows.forEach(function (tr) {
+            if (!tr.classList.contains('is-hidden')) out.push(tr);
+        });
+        return out;
+    }
+    function visibleRowBoxes() {
+        return visibleRows()
+            .map(function (tr) { return tr.querySelector('.row-checkbox'); })
+            .filter(Boolean);
+    }
+
+    function applyFilter() {
+        if (!searchInput) return;
+        var q = (searchInput.value || '').trim().toLowerCase();
+        var words = q ? q.split(/\s+/) : [];
+        var visible = 0;
+        allRows.forEach(function (tr) {
+            var hay = tr.dataset.search || '';
+            var matches = words.every(function (w) { return hay.indexOf(w) !== -1; });
+            tr.classList.toggle('is-hidden', !matches);
+            // Uncheck rows that just got hidden so they don't sneak
+            // into a bulk-delete.
+            if (!matches) {
+                var cb = tr.querySelector('.row-checkbox');
+                if (cb) cb.checked = false;
+            }
+            if (matches) visible++;
+        });
+        if (countEl) {
+            countEl.textContent = q
+                ? 'Showing ' + visible + ' of ' + allRows.length
+                : origCountText;
+        }
+        if (clearBtn) clearBtn.hidden = (q === '');
+        refresh();
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilter);
+    }
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            searchInput.value = '';
+            applyFilter();
+            searchInput.focus();
+        });
+    }
+
+    // ── Bulk delete (filter-aware) ──────────────────────────────
     function checkedIds() {
         var ids = [];
-        rowBoxes.forEach(function (cb) { if (cb.checked) ids.push(cb.value); });
+        visibleRowBoxes().forEach(function (cb) {
+            if (cb.checked) ids.push(cb.value);
+        });
         return ids;
     }
 
     function refresh() {
         var ids = checkedIds();
         var n   = ids.length;
+        var visBoxes = visibleRowBoxes();
         btn.disabled = n === 0;
         if (n === 0) {
             counter.textContent = 'No rows selected';
@@ -416,14 +539,14 @@ $activeNav = 'products';
             counter.textContent = n + ' row' + (n === 1 ? '' : 's') + ' selected';
         }
         if (checkAll) {
-            checkAll.checked       = (n > 0 && n === rowBoxes.length);
-            checkAll.indeterminate = (n > 0 && n < rowBoxes.length);
+            checkAll.checked       = (n > 0 && n === visBoxes.length);
+            checkAll.indeterminate = (n > 0 && n < visBoxes.length);
         }
     }
 
     if (checkAll) {
         checkAll.addEventListener('change', function () {
-            rowBoxes.forEach(function (cb) { cb.checked = checkAll.checked; });
+            visibleRowBoxes().forEach(function (cb) { cb.checked = checkAll.checked; });
             refresh();
         });
     }
