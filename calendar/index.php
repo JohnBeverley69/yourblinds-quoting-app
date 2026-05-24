@@ -506,6 +506,11 @@ $activeNav = 'calendar';
                     <?php else: ?>
                         Appointments for <?= e($user['company_name']) ?>.
                     <?php endif; ?>
+                    &middot;
+                    <a href="/calendar/sync-setup.php"
+                       style="color:#1f3b5b;font-weight:600">
+                        📲 Sync to your phone calendar
+                    </a>
                 </p>
             </div>
             <div class="actions-bar">
