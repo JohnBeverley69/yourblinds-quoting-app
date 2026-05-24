@@ -283,6 +283,7 @@ $activeNav = 'calendar';
             overflow: hidden;
             text-decoration: none; color: inherit;
             transition: box-shadow 100ms;
+            cursor: pointer;
         }
         .appt-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 2; }
         .appt-card .ac-time {
@@ -485,28 +486,27 @@ $activeNav = 'calendar';
                                 $hasOnlyHeading = $custName === '' && $title === ''
                                                   && $addr === '' && $phone === '';
                             ?>
-                                <a class="appt-card"
-                                   href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
-                                   style="top:<?= $top ?>px;
-                                          height:<?= $height ?>px;
-                                          background:<?= $palette['bg'] ?>;
-                                          border:2px solid red !important;
-                                          color:#000 !important;">
-                                    <!-- DEBUG marker — impossible to hide via CSS.
-                                         If you see "#N · TIME" in red, the card IS
-                                         rendering and the bug is elsewhere. If you
-                                         don't, the HTML isn't generating. -->
-                                    <div style="background:red;color:white;font-size:0.6875rem;
-                                                padding:0.0625rem 0.375rem;display:inline-block;
-                                                border-radius:3px;font-weight:700">
-                                        DEBUG #<?= (int) $appt['id'] ?> &middot; <?= e($timeLabel) ?>
-                                    </div>
-                                    <div class="ac-time" style="color:#000 !important;background:#fff;display:inline-block;padding:0 0.25rem;border-radius:2px">
-                                        time: <?= e($timeLabel) ?>
-                                    </div>
-                                    <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>"
-                                         style="color:#000 !important;background:#fff;display:inline-block;padding:0 0.25rem;margin-top:0.125rem;border-radius:2px">
-                                        head: <?= e($heading) ?>
+                                <!--
+                                    Card is a <div>, NOT an <a>. We have <a>
+                                    children (the action icons), and nested
+                                    anchors are illegal in HTML5 — the
+                                    browser auto-closes the parent on
+                                    encountering a nested <a>, ejecting all
+                                    the card content. data-href + the JS
+                                    click handler at the bottom of the page
+                                    gives us the navigate-on-click behaviour
+                                    without the nesting trap.
+                                -->
+                                <div class="appt-card"
+                                     data-href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
+                                     style="top:<?= $top ?>px;
+                                            height:<?= $height ?>px;
+                                            background:<?= $palette['bg'] ?>;
+                                            border-left-color:<?= $palette['border'] ?>;
+                                            color:<?= $palette['fg'] ?>;">
+                                    <div class="ac-time"><?= e($timeLabel) ?></div>
+                                    <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>">
+                                        <?= e($heading) ?>
                                     </div>
                                     <?php if ($custName !== '' && $title !== ''): ?>
                                         <div class="ac-desc"><?= e($title) ?></div>
@@ -543,7 +543,7 @@ $activeNav = 'calendar';
                                                onclick="event.stopPropagation();">📧</a>
                                         <?php endif; ?>
                                     </div>
-                                </a>
+                                </div>
                             <?php endforeach; ?>
                         </div>
                     <?php endforeach; ?>
@@ -580,13 +580,6 @@ $activeNav = 'calendar';
             <?php endif; ?>
 
         <?php endif; ?>
-        <!-- Version stamp — used to confirm we're not looking at a
-             cached/old file. If you can read this in the page source
-             but the cards still render blank, the issue is something
-             other than caching. -->
-        <p style="text-align:center;color:#9ca3af;font-size:0.6875rem;margin-top:1rem">
-            Day view <?= e('v6 · ' . date('Y-m-d H:i')) ?>
-        </p>
     </main>
 </div>
 
@@ -595,12 +588,23 @@ $activeNav = 'calendar';
     // Click on empty space in a fitter column → open the new-
     // appointment form with the date, time (snapped to 15-min slots
     // from where you clicked), and assigned-to (the fitter whose
-    // column you clicked) pre-filled. Existing appointment cards
-    // intercept clicks via their own anchor, so this only fires on
-    // genuine empty-column clicks.
+    // column you clicked) pre-filled. Click on an existing card →
+    // open the appointment edit page (the card is a div, not an
+    // anchor, because nested <a> tags from action icons would
+    // auto-close the parent and eject all the card content).
     var startHour = <?= (int) $startHour ?>;
     var pxPerHour = <?= (int) $pxPerHour ?>;
     var dateYmd   = '<?= e($dateYmd) ?>';
+
+    // Existing card → navigate to edit page on click. Icon
+    // anchors inside the card have their own onclick=stopPropagation
+    // so the right action runs (tel:, mailto:, etc.) without ALSO
+    // firing this navigate.
+    document.querySelectorAll('.appt-card[data-href]').forEach(function (card) {
+        card.addEventListener('click', function () {
+            window.location.href = card.dataset.href;
+        });
+    });
 
     document.querySelectorAll('.fitter-col').forEach(function (col) {
         col.addEventListener('click', function (ev) {
