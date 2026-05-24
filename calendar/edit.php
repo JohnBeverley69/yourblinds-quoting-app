@@ -58,6 +58,7 @@ $f = [
     'appointment_time'          => substr((string) $appt['appointment_time'], 0, 5),
     'duration_minutes'          => (int) $appt['duration_minutes'],
     'assigned_to'               => (int) ($appt['client_user_id'] ?? 0),
+    'quote_id'                  => (int) ($appt['quote_id'] ?? 0),
     'installation_address1'     => (string) ($appt['installation_address1'] ?? ''),
     'installation_address2'     => (string) ($appt['installation_address2'] ?? ''),
     'installation_town'         => (string) ($appt['installation_town'] ?? ''),
@@ -84,16 +85,72 @@ $usersStmt = db()->prepare(
 $usersStmt->execute([$clientId]);
 $bookableUsers = $usersStmt->fetchAll();
 
+// Quotes available for linking. Most-recent first, capped at 200 —
+// covers small/medium tenants; bigger ones get the search box below
+// the select. Defensive against the quotes table being absent.
+$linkableQuotes = [];
+$hasQuotes = false;
+try {
+    $hasQuotes = (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
+} catch (Throwable $e) { /* ignore */ }
+
+if ($hasQuotes) {
+    try {
+        $qSt = db()->prepare(
+            'SELECT q.id, q.quote_number, q.end_customer_name, q.status,
+                    q.created_at
+               FROM quotes q
+              WHERE q.client_id = ?
+           ORDER BY q.created_at DESC
+              LIMIT 200'
+        );
+        $qSt->execute([$clientId]);
+        $linkableQuotes = $qSt->fetchAll();
+    } catch (Throwable $e) {
+        $linkableQuotes = [];
+    }
+}
+
+// Currently-linked quote (if any) — used to render a small summary
+// pill above the picker so the user can see at a glance "this is
+// already linked to BEV-2026-0002 (John Smith)".
+$linkedQuote = null;
+if ((int) ($appt['quote_id'] ?? 0) > 0 && $hasQuotes) {
+    try {
+        $lqSt = db()->prepare(
+            'SELECT id, quote_number, end_customer_name, status
+               FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $lqSt->execute([(int) $appt['quote_id'], $clientId]);
+        $linkedQuote = $lqSt->fetch() ?: null;
+    } catch (Throwable $e) { /* ignore */ }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
     foreach (array_keys($f) as $k) {
         if ($k === 'different_billing_address') {
             $f[$k] = !empty($_POST[$k]) ? 1 : 0;
-        } elseif ($k === 'duration_minutes' || $k === 'assigned_to') {
+        } elseif ($k === 'duration_minutes' || $k === 'assigned_to' || $k === 'quote_id') {
             $f[$k] = (int) ($_POST[$k] ?? 0);
         } else {
             $f[$k] = trim((string) ($_POST[$k] ?? ''));
+        }
+    }
+
+    // Validate quote_id — must be 0 (= "no link") OR an actual
+    // quote on THIS tenant. Stops a user from POSTing a foreign
+    // quote_id and stitching their appointment to someone else's
+    // quote. Failure resets to 0 (= "no link") rather than
+    // throwing; that's the safer default.
+    if ($f['quote_id'] > 0 && $hasQuotes) {
+        $vq = db()->prepare(
+            'SELECT 1 FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $vq->execute([$f['quote_id'], $clientId]);
+        if (!$vq->fetchColumn()) {
+            $f['quote_id'] = 0;
         }
     }
 
@@ -141,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     appointment_date          = ?,
                     appointment_time          = ?,
                     duration_minutes          = ?,
+                    quote_id                  = ?,
                     installation_address1     = ?,
                     installation_address2     = ?,
                     installation_town         = ?,
@@ -161,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $f['appointment_date'],
                 $timeStored,
                 $f['duration_minutes'],
+                $f['quote_id'] > 0 ? $f['quote_id'] : null,
                 $f['installation_address1'] !== '' ? $f['installation_address1'] : null,
                 $f['installation_address2'] !== '' ? $f['installation_address2'] : null,
                 $f['installation_town']     !== '' ? $f['installation_town']     : null,
@@ -309,6 +368,57 @@ $activeNav = 'calendar';
                                    value="<?= e((string) $f['title']) ?>">
                         </div>
                     </div>
+
+                    <!--
+                        Quote linker — connect this appointment to an
+                        existing quote so the day/week views pick up the
+                        Q-number chip and the status-progress bars on the
+                        card. Appointments auto-created from quote
+                        acceptance already have this set; manually-created
+                        appointments need to be linked here.
+                    -->
+                    <?php if ($hasQuotes): ?>
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label for="quote_id">Linked quote</label>
+                                <?php if ($linkedQuote): ?>
+                                    <div style="background:#ecfdf5;border:1px solid #a7f3d0;
+                                                color:#065f46;padding:0.4375rem 0.625rem;
+                                                border-radius:6px;margin-bottom:0.375rem;
+                                                font-size:0.875rem;display:flex;
+                                                align-items:center;gap:0.625rem;flex-wrap:wrap">
+                                        <span>
+                                            <strong><?= e((string) $linkedQuote['quote_number']) ?></strong>
+                                            &middot; <?= e((string) ($linkedQuote['end_customer_name'] ?? 'no name')) ?>
+                                            &middot; <em><?= e((string) ($linkedQuote['status'] ?? 'unknown')) ?></em>
+                                        </span>
+                                        <a href="/quote-builder/edit.php?id=<?= (int) $linkedQuote['id'] ?>"
+                                           style="color:#065f46;font-weight:600">Open quote &rarr;</a>
+                                    </div>
+                                <?php endif; ?>
+                                <select id="quote_id" name="quote_id">
+                                    <option value="0">
+                                        <?= $linkedQuote ? '— Unlink (no quote) —' : '— No quote linked —' ?>
+                                    </option>
+                                    <?php foreach ($linkableQuotes as $q):
+                                        $sel = (int) $q['id'] === (int) $f['quote_id'];
+                                        $lbl = (string) $q['quote_number']
+                                             . ' — ' . (string) ($q['end_customer_name'] ?? 'no name')
+                                             . ' (' . (string) ($q['status'] ?? '?') . ')';
+                                    ?>
+                                        <option value="<?= (int) $q['id'] ?>" <?= $sel ? 'selected' : '' ?>>
+                                            <?= e($lbl) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                                    Shows the 200 most recent quotes for this tenant.
+                                    Linking surfaces the Q-number + status bars on calendar
+                                    cards. Set to <em>"— No quote —"</em> to unlink.
+                                </small>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
                     <div class="form-row cols-4">
                         <div class="form-group">
