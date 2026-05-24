@@ -507,6 +507,11 @@ $activeNav = 'calendar';
                         Appointments for <?= e($user['company_name']) ?>.
                     <?php endif; ?>
                     &middot;
+                    <a href="/calendar/day.php"
+                       style="color:#1f3b5b;font-weight:600">
+                        📅 Day view
+                    </a>
+                    &middot;
                     <a href="/calendar/sync-setup.php"
                        style="color:#1f3b5b;font-weight:600">
                         📲 Sync to your phone calendar
