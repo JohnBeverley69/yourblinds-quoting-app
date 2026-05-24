@@ -370,6 +370,7 @@ $activeNav = 'calendar';
             </form>
             <div class="view-switch">
                 <a href="/calendar/index.php?month=<?= e($date->format('Y-m')) ?>">Month</a>
+                <a href="/calendar/week.php?date=<?= e($dateYmd) ?>">Week</a>
                 <a href="/calendar/day.php?date=<?= e($dateYmd) ?>" class="is-active">Day</a>
                 <?php if (!$canViewAll): ?>
                     <a href="/calendar/schedule.php">List</a>
