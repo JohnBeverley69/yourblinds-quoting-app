@@ -96,6 +96,10 @@ if ($canViewAll) {
 // phone. installation_* fields override the customer's home address
 // when filled in (which is most of the time — that's where the
 // fitter actually goes).
+// LEFT JOIN quotes too so each card can show the job reference
+// number and a status-progress indicator derived from the quote
+// lifecycle. Quotes table may be missing on Phase 2 builds — the
+// LEFT JOIN handles that (NULLs everywhere on the quote columns).
 $apStmt = $pdo->prepare(
     "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
             a.status, a.quote_id, a.client_user_id,
@@ -106,15 +110,45 @@ $apStmt = $pdo->prepare(
             c.address1  AS customer_address1,
             c.address2  AS customer_address2,
             c.town      AS customer_town,
-            c.postcode  AS customer_postcode
+            c.postcode  AS customer_postcode,
+            q.quote_number AS quote_number,
+            q.status       AS quote_status
        FROM appointments a
   LEFT JOIN customers c ON c.id = a.customer_id
+  LEFT JOIN quotes    q ON q.id = a.quote_id
       WHERE a.client_id = ?
         AND a.appointment_date = ?
    ORDER BY a.appointment_time"
 );
-$apStmt->execute([$clientId, $dateYmd]);
-$apRows = $apStmt->fetchAll();
+try {
+    $apStmt->execute([$clientId, $dateYmd]);
+    $apRows = $apStmt->fetchAll();
+} catch (Throwable $e) {
+    // Quotes table missing → fallback to the no-join query so the
+    // page still loads. Quote-info columns will just be NULL.
+    error_log('day.php: quotes JOIN failed, falling back: ' . $e->getMessage());
+    $fallback = $pdo->prepare(
+        "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
+                a.status, a.quote_id, a.client_user_id,
+                a.installation_town, a.installation_postcode,
+                c.name      AS customer_name,
+                c.phone     AS customer_phone,
+                c.email     AS customer_email,
+                c.address1  AS customer_address1,
+                c.address2  AS customer_address2,
+                c.town      AS customer_town,
+                c.postcode  AS customer_postcode,
+                NULL AS quote_number,
+                NULL AS quote_status
+           FROM appointments a
+      LEFT JOIN customers c ON c.id = a.customer_id
+          WHERE a.client_id = ?
+            AND a.appointment_date = ?
+       ORDER BY a.appointment_time"
+    );
+    $fallback->execute([$clientId, $dateYmd]);
+    $apRows = $fallback->fetchAll();
+}
 
 // Group by user_id so each column knows what to render. Unassigned
 // rows (NULL client_user_id) go into the "Unassigned" virtual column
@@ -144,6 +178,30 @@ $statusColour = static function (string $s): array {
         'cancelled'    => ['bg' => '#fecaca', 'fg' => '#991b1b', 'border' => '#fca5a5'],
         'rescheduled'  => ['bg' => '#fed7aa', 'fg' => '#9a3412', 'border' => '#fdba74'],
         default        => ['bg' => '#fef3c7', 'fg' => '#78350f', 'border' => '#fde68a'],
+    };
+};
+
+// Quote status → 5-segment progress bar. Mirrors what Once shows
+// as the stacked horizontal bars on each card: a glanceable
+// indicator of where the job is in the quote→ordered→fitted→paid
+// pipeline. Returns:
+//   filled (0–5): how many bars to colour
+//   colour: progress colour (green normal, grey for "done",
+//           red for declined/cancelled)
+//   label: short word for the title attribute hover tooltip
+$quoteProgress = static function (?string $status): array {
+    if ($status === null || $status === '') {
+        return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
+    }
+    return match ($status) {
+        'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
+        'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT to customer'],
+        'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED · ready to fit'],
+        'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED · materials inbound'],
+        'invoiced'  => ['filled' => 5, 'colour' => '#059669', 'label' => 'INVOICED · awaiting payment'],
+        'paid'      => ['filled' => 5, 'colour' => '#065f46', 'label' => 'PAID · job closed'],
+        'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'Quote DECLINED'],
+        default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
     };
 };
 
@@ -318,6 +376,41 @@ $activeNav = 'calendar';
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 0.75rem; color: #374151;
         }
+        /* Quote reference label — small monospace chip at the top
+           of the card alongside the time. Once-style "260429-sc-2"
+           identifier. Only renders when the appointment is linked
+           to a quote. */
+        .appt-card .ac-qref {
+            display: inline-block;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 0.6875rem;
+            color: #4b5563;
+            background: rgba(255,255,255,0.6);
+            border-radius: 3px;
+            padding: 0 0.25rem;
+            margin-left: 0.25rem;
+        }
+        /* Quote-progress bars — bottom-right of the card. 5 thin
+           horizontal lines, "filled" ones get the status colour,
+           rest stay light grey. Visible at a glance, doesn't compete
+           with the action icons up top. */
+        .appt-card .ac-progress {
+            position: absolute;
+            bottom: 0.3125rem; right: 0.375rem;
+            display: flex; flex-direction: column;
+            gap: 1px;
+            pointer-events: none;
+        }
+        .appt-card .ac-progress span {
+            display: block;
+            width: 1.625rem;
+            height: 2px;
+            background: rgba(0,0,0,0.12);
+            border-radius: 1px;
+        }
+        .appt-card .ac-progress span.is-on {
+            background: var(--prog-clr, #10b981);
+        }
         /* Action icons in a horizontal row at top-right of the
            card. Vertical stack ran out of room on short (60px)
            cards — 4 icons would overflow the bottom. Row layout
@@ -481,6 +574,8 @@ $activeNav = 'calendar';
                                 $title = trim((string) ($appt['title'] ?? ''));
                                 $custName = trim((string) ($appt['customer_name'] ?? ''));
                                 $durMin = (int) ($appt['duration_minutes'] ?? 60);
+                                $qref   = trim((string) ($appt['quote_number'] ?? ''));
+                                $prog   = $quoteProgress($appt['quote_status'] ?? null);
 
                                 // Time chip — always shown so the user can
                                 // glance at the card and read the booked
@@ -516,8 +611,14 @@ $activeNav = 'calendar';
                                             height:<?= $height ?>px;
                                             background:<?= $palette['bg'] ?>;
                                             border-left-color:<?= $palette['border'] ?>;
-                                            color:<?= $palette['fg'] ?>;">
-                                    <div class="ac-time"><?= e($timeLabel) ?></div>
+                                            color:<?= $palette['fg'] ?>;
+                                            --prog-clr:<?= e($prog['colour']) ?>;">
+                                    <div class="ac-time">
+                                        <?= e($timeLabel) ?>
+                                        <?php if ($qref !== ''): ?>
+                                            <span class="ac-qref"><?= e($qref) ?></span>
+                                        <?php endif; ?>
+                                    </div>
                                     <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>">
                                         <?= e($heading) ?>
                                     </div>
@@ -529,6 +630,16 @@ $activeNav = 'calendar';
                                     <?php endif; ?>
                                     <?php if ($phone !== ''): ?>
                                         <div class="ac-phone"><?= e($phone) ?></div>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($appt['quote_status'])): ?>
+                                        <!-- Status-progress bars — 5 thin lines bottom-right.
+                                             Hover the card to see the verbal label via title=. -->
+                                        <div class="ac-progress" title="<?= e($prog['label']) ?>">
+                                            <?php for ($i = 0; $i < 5; $i++): ?>
+                                                <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
+                                            <?php endfor; ?>
+                                        </div>
                                     <?php endif; ?>
 
                                     <!-- Action icons — tap on phone goes
