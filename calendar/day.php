@@ -568,6 +568,13 @@ $activeNav = 'calendar';
             <?php endif; ?>
 
         <?php endif; ?>
+        <!-- Version stamp — used to confirm we're not looking at a
+             cached/old file. If you can read this in the page source
+             but the cards still render blank, the issue is something
+             other than caching. -->
+        <p style="text-align:center;color:#9ca3af;font-size:0.6875rem;margin-top:1rem">
+            Day view <?= e('v6 · ' . date('Y-m-d H:i')) ?>
+        </p>
     </main>
 </div>
 
