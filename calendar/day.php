@@ -290,12 +290,17 @@ $activeNav = 'calendar';
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 0.6875rem; color: #6b7280;
             margin-bottom: 0.125rem;
+            /* Right padding leaves room for the absolutely-positioned
+               action icons at top-right of the card so the time
+               chip doesn't run under them. */
+            padding-right: 5.5rem;
         }
         .appt-card .ac-title {
             font-weight: 700; color: #111827;
             text-transform: uppercase;
             font-size: 0.8125rem;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding-right: 5.5rem;
         }
         .appt-card .ac-placeholder {
             color: #6b7280; font-style: italic;
@@ -313,17 +318,25 @@ $activeNav = 'calendar';
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 0.75rem; color: #374151;
         }
+        /* Action icons in a horizontal row at top-right of the
+           card. Vertical stack ran out of room on short (60px)
+           cards — 4 icons would overflow the bottom. Row layout
+           always fits. Icons are smaller (18px) to leave more
+           room for the heading text alongside. */
         .appt-card .ac-actions {
             position: absolute; top: 0.25rem; right: 0.25rem;
-            display: flex; flex-direction: column; gap: 0.1875rem;
+            display: flex; flex-direction: row; gap: 0.1875rem;
+            z-index: 2;
         }
         .appt-card .ac-actions a {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 1.25rem; height: 1.25rem;
-            background: rgba(255,255,255,0.7);
-            border-radius: 4px; text-decoration: none;
-            font-size: 0.8125rem;
+            width: 1.125rem; height: 1.125rem;
+            background: rgba(255,255,255,0.85);
+            border-radius: 3px; text-decoration: none;
+            font-size: 0.6875rem;
+            line-height: 1;
         }
+        .appt-card .ac-actions a:hover { background: #fff; }
         .appt-card .ac-actions a:hover { background: #fff; }
 
         .day-empty {
