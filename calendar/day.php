@@ -220,7 +220,11 @@ $activeNav = 'calendar';
         }
         .day-board-head {
             display: grid;
-            grid-template-columns: 4rem repeat(var(--cols, 1), minmax(13rem, 1fr));
+            /* Fixed 18rem columns (not 1fr) so a single-fitter day
+               doesn't sprawl across the whole page. Wider tenants
+               get horizontal scroll, which is right — Once does
+               this too. */
+            grid-template-columns: 4rem repeat(var(--cols, 1), 18rem);
             background: #f9fafb; border-bottom: 1px solid #e5e7eb;
             position: sticky; top: 0; z-index: 3;
         }
@@ -232,7 +236,7 @@ $activeNav = 'calendar';
         }
         .day-board-body {
             display: grid;
-            grid-template-columns: 4rem repeat(var(--cols, 1), minmax(13rem, 1fr));
+            grid-template-columns: 4rem repeat(var(--cols, 1), 18rem);
             overflow-x: auto;
         }
         .time-axis {
@@ -263,11 +267,19 @@ $activeNav = 'calendar';
             transition: box-shadow 100ms;
         }
         .appt-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 2; }
+        .appt-card .ac-time {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 0.6875rem; color: #6b7280;
+            margin-bottom: 0.125rem;
+        }
         .appt-card .ac-title {
             font-weight: 700; color: #111827;
             text-transform: uppercase;
             font-size: 0.8125rem;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .appt-card .ac-placeholder {
+            color: #6b7280; font-style: italic;
         }
         .appt-card .ac-desc {
             font-weight: 600; font-style: italic; color: #374151;
@@ -431,6 +443,24 @@ $activeNav = 'calendar';
 
                                 $title = trim((string) ($appt['title'] ?? ''));
                                 $custName = trim((string) ($appt['customer_name'] ?? ''));
+                                $durMin = (int) ($appt['duration_minutes'] ?? 60);
+
+                                // Time chip — always shown so the user can
+                                // glance at the card and read the booked
+                                // window without inferring from row position.
+                                $timeLabel = substr($time, 0, 5);
+                                if ($durMin > 0 && $durMin !== 60) {
+                                    $timeLabel .= ' · ' . $durMin . 'min';
+                                }
+
+                                // Heading — customer name if known, else
+                                // the job title, else "Appointment #N" so
+                                // the card never renders blank.
+                                $heading = $custName !== ''
+                                    ? $custName
+                                    : ($title !== '' ? $title : ('Appointment #' . (int) $appt['id']));
+                                $hasOnlyHeading = $custName === '' && $title === ''
+                                                  && $addr === '' && $phone === '';
                             ?>
                                 <a class="appt-card"
                                    href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
@@ -439,10 +469,11 @@ $activeNav = 'calendar';
                                           background:<?= $palette['bg'] ?>;
                                           border-left-color:<?= $palette['border'] ?>;
                                           color:<?= $palette['fg'] ?>;">
-                                    <?php if ($custName !== ''): ?>
-                                        <div class="ac-title"><?= e($custName) ?></div>
-                                    <?php endif; ?>
-                                    <?php if ($title !== ''): ?>
+                                    <div class="ac-time"><?= e($timeLabel) ?></div>
+                                    <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>">
+                                        <?= e($heading) ?>
+                                    </div>
+                                    <?php if ($custName !== '' && $title !== ''): ?>
                                         <div class="ac-desc"><?= e($title) ?></div>
                                     <?php endif; ?>
                                     <?php if ($addr !== ''): ?>
