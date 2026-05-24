@@ -26,6 +26,18 @@ $defaultDate = ($qsDate !== '' && DateTimeImmutable::createFromFormat('!Y-m-d', 
     ? $qsDate
     : (new DateTimeImmutable('today'))->format('Y-m-d');
 
+// Also accept ?time=HH:MM and ?assigned_to=N — these come from
+// the day-view's click-an-empty-slot handler so the new
+// appointment opens with the right time + fitter already picked.
+// Both are sanity-checked, with sensible defaults on bad input.
+$qsTime = (string) ($_GET['time'] ?? '');
+$defaultTime = preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', $qsTime) === 1
+    ? $qsTime
+    : '09:00';
+
+$qsAssigned = (int) ($_GET['assigned_to'] ?? 0);
+$defaultAssigned = $qsAssigned > 0 ? $qsAssigned : (int) $user['user_id'];
+
 // Form defaults — refilled from $_POST after a validation error.
 $f = [
     'customer_name'             => '',
@@ -44,9 +56,9 @@ $f = [
     'billing_county'            => '',
     'billing_postcode'          => '',
     'appointment_date'          => $defaultDate,
-    'appointment_time'          => '09:00',
+    'appointment_time'          => $defaultTime,
     'duration_minutes'          => 60,
-    'assigned_to'               => $user['user_id'],
+    'assigned_to'               => $defaultAssigned,
     'notes'                     => '',
 ];
 

@@ -157,7 +157,9 @@ $timeToTop = static function (string $t) use ($startHour, $pxPerHour): float {
 };
 $durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
     $m = $minutes && $minutes > 0 ? $minutes : 60;
-    return max(34, ($m / 60) * $pxPerHour);
+    // Min height 60px = enough for time chip + heading line + a bit
+    // of breathing room. Below this the card looked blank.
+    return max(60, ($m / 60) * $pxPerHour);
 };
 
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
@@ -253,10 +255,25 @@ $activeNav = 'calendar';
         .fitter-col {
             position: relative; background: #fff;
             border-left: 1px solid #e5e7eb;
+            cursor: cell;       /* hint: click anywhere to create */
         }
         .fitter-col .hour-line {
             position: absolute; left: 0; right: 0;
             border-top: 1px solid #f3f4f6;
+            pointer-events: none;   /* don't steal clicks from the column */
+        }
+        .fitter-col:hover .new-hint {
+            opacity: 0.6;
+        }
+        .fitter-col .new-hint {
+            position: absolute; pointer-events: none;
+            left: 0.25rem; right: 0.25rem;
+            opacity: 0; transition: opacity 100ms;
+            font-size: 0.75rem; color: #6b7280;
+            font-style: italic; text-align: center;
+            padding: 0.25rem 0.5rem;
+            background: #eff6ff; border: 1px dashed #93c5fd;
+            border-radius: 4px;
         }
         .appt-card {
             position: absolute; left: 0.25rem; right: 0.25rem;
@@ -403,7 +420,11 @@ $activeNav = 'calendar';
                         $colId = (int) $col['id'];
                         $colRows = $byUser[$colId] ?? [];
                     ?>
-                        <div class="fitter-col" style="height: <?= $gridHeight ?>px">
+                        <div class="fitter-col"
+                             data-user-id="<?= $colId ?>"
+                             data-user-name="<?= e((string) $col['full_name']) ?>"
+                             style="height: <?= $gridHeight ?>px">
+                            <div class="new-hint">Click to create appointment</div>
                             <!-- Faint hour grid lines so eyes can snap to the time axis -->
                             <?php for ($h = $startHour; $h < $endHour; $h++): ?>
                                 <div class="hour-line"
@@ -548,5 +569,61 @@ $activeNav = 'calendar';
         <?php endif; ?>
     </main>
 </div>
+
+<script>
+(function () {
+    // Click on empty space in a fitter column → open the new-
+    // appointment form with the date, time (snapped to 15-min slots
+    // from where you clicked), and assigned-to (the fitter whose
+    // column you clicked) pre-filled. Existing appointment cards
+    // intercept clicks via their own anchor, so this only fires on
+    // genuine empty-column clicks.
+    var startHour = <?= (int) $startHour ?>;
+    var pxPerHour = <?= (int) $pxPerHour ?>;
+    var dateYmd   = '<?= e($dateYmd) ?>';
+
+    document.querySelectorAll('.fitter-col').forEach(function (col) {
+        col.addEventListener('click', function (ev) {
+            // Only act on direct empty-area clicks, not bubbled from
+            // cards / hour-lines / hint banners.
+            if (ev.target !== col && !ev.target.classList.contains('hour-line')
+                                 && !ev.target.classList.contains('new-hint')) {
+                return;
+            }
+            var rect = col.getBoundingClientRect();
+            var y    = ev.clientY - rect.top;        // 0 = top of column
+            var mins = (y / pxPerHour) * 60;         // minutes since startHour
+            mins     = Math.max(0, Math.round(mins / 15) * 15);   // snap to 15min
+            var h    = startHour + Math.floor(mins / 60);
+            var m    = mins % 60;
+            if (h > 23) h = 23;
+            var hh = (h < 10 ? '0' : '') + h;
+            var mm = (m < 10 ? '0' : '') + m;
+            var url = '/calendar/new.php?date=' + encodeURIComponent(dateYmd)
+                    + '&time=' + hh + ':' + mm
+                    + '&assigned_to=' + (col.dataset.userId || '');
+            window.location.href = url;
+        });
+
+        // Move the hint banner to track the cursor so the user
+        // sees WHERE clicking will create the appointment.
+        var hint = col.querySelector('.new-hint');
+        if (hint) {
+            col.addEventListener('mousemove', function (ev) {
+                var rect = col.getBoundingClientRect();
+                var y    = ev.clientY - rect.top;
+                var mins = (y / pxPerHour) * 60;
+                mins     = Math.max(0, Math.round(mins / 15) * 15);
+                var h    = startHour + Math.floor(mins / 60);
+                var m    = mins % 60;
+                var hh = (h < 10 ? '0' : '') + h;
+                var mm = (m < 10 ? '0' : '') + m;
+                hint.textContent = '+ New at ' + hh + ':' + mm;
+                hint.style.top = ((mins / 60) * pxPerHour) + 'px';
+            });
+        }
+    });
+})();
+</script>
 </body>
 </html>
