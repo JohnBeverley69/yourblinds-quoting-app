@@ -103,6 +103,11 @@ $navLinks = [
     'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
     'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
     'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
+    // Pipeline — Kanban view of every quote/order in the funnel.
+    // Same audience as Orders (it's the same data, different shape)
+    // and reuses the orders' permission gate. Sits next to Orders so
+    // operators discover it naturally.
+    'pipeline'      => ['/orders/pipeline.php',        'Pipeline',      $hasQuotes && $canSeeOrders],
     // Accounts: paid add-on, AND restricted to staff (not pure
     // fitters — fitters take payment from the order page itself,
     // they don't need the listing).
