@@ -125,10 +125,11 @@ foreach ($apRows as $r) {
     $byUser[$uid][] = $r;
 }
 
-// Hour range. Once shows 7-17 but tradespeople sometimes do early
-// or evening fittings — 7-19 catches both without being huge.
+// Hour range. 7am → 10pm covers early starts, normal daytime, and
+// evening fittings (some tenants quote installs after the homeowner
+// gets in from work). Vertical scroll handles the height.
 $startHour = 7;
-$endHour   = 19;
+$endHour   = 22;
 $totalHours = $endHour - $startHour;
 $pxPerHour  = 60;   // 1 hour = 60 px → roughly 1 minute = 1 px (easy maths)
 $gridHeight = $totalHours * $pxPerHour;
