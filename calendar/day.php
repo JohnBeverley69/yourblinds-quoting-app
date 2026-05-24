@@ -490,11 +490,23 @@ $activeNav = 'calendar';
                                    style="top:<?= $top ?>px;
                                           height:<?= $height ?>px;
                                           background:<?= $palette['bg'] ?>;
-                                          border-left-color:<?= $palette['border'] ?>;
-                                          color:<?= $palette['fg'] ?>;">
-                                    <div class="ac-time"><?= e($timeLabel) ?></div>
-                                    <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>">
-                                        <?= e($heading) ?>
+                                          border:2px solid red !important;
+                                          color:#000 !important;">
+                                    <!-- DEBUG marker — impossible to hide via CSS.
+                                         If you see "#N · TIME" in red, the card IS
+                                         rendering and the bug is elsewhere. If you
+                                         don't, the HTML isn't generating. -->
+                                    <div style="background:red;color:white;font-size:0.6875rem;
+                                                padding:0.0625rem 0.375rem;display:inline-block;
+                                                border-radius:3px;font-weight:700">
+                                        DEBUG #<?= (int) $appt['id'] ?> &middot; <?= e($timeLabel) ?>
+                                    </div>
+                                    <div class="ac-time" style="color:#000 !important;background:#fff;display:inline-block;padding:0 0.25rem;border-radius:2px">
+                                        time: <?= e($timeLabel) ?>
+                                    </div>
+                                    <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>"
+                                         style="color:#000 !important;background:#fff;display:inline-block;padding:0 0.25rem;margin-top:0.125rem;border-radius:2px">
+                                        head: <?= e($heading) ?>
                                     </div>
                                     <?php if ($custName !== '' && $title !== ''): ?>
                                         <div class="ac-desc"><?= e($title) ?></div>
