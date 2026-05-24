@@ -346,26 +346,35 @@ $activeNav = 'calendar';
            order page. Bigger min-size than its visible content so
            thumbs can hit it on touch screens. */
         .cal-appt.from-quote { padding-right: 1.5rem; position: relative; }
+        /* "Open order" tap target. Previously rendered as white-on-
+           translucent-white which fell off most card colours. Now a
+           solid white pill with a dark arrow — readable on any
+           coloured card background, still small enough to not
+           dominate the appointment card. */
         .cal-appt-open-order {
             position: absolute;
             right: 0.25rem; top: 50%;
             transform: translateY(-50%);
             min-width: 1.5rem; min-height: 1.5rem;
-            padding: 0 0.25rem;
+            padding: 0 0.375rem;
             display: inline-flex; align-items: center; justify-content: center;
-            background: rgba(255, 255, 255, 0.25);
-            color: #fff;
+            background: #fff;
+            color: #1f3b5b;
             border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
             font-weight: 700;
-            font-size: 0.875rem;
+            font-size: 0.9375rem;
             line-height: 1;
             cursor: pointer;
             user-select: none;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
         }
         .cal-appt-open-order:hover,
         .cal-appt-open-order:focus {
-            background: rgba(255, 255, 255, 0.5);
+            background: #1f3b5b;
+            color: #fff;
             outline: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
         }
         .cal-appt-time {
             font-weight: 700;
