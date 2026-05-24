@@ -68,27 +68,47 @@ for ($i = 0; $i < 7; $i++) {
     ];
 }
 
-// Pull every appointment that falls in the window.
+// Pull every appointment that falls in the window. LEFT JOIN quotes
+// for the Q-number + status indicator, same as day.php. Try/catch
+// around the JOIN handles the Phase-2-schema case where quotes is
+// missing.
 $pdo = db();
-$apStmt = $pdo->prepare(
-    "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-            a.duration_minutes, a.status, a.quote_id, a.client_user_id,
-            a.installation_town, a.installation_postcode,
-            c.name      AS customer_name,
-            c.phone     AS customer_phone,
-            u.full_name AS assignee_name
-       FROM appointments a
-  LEFT JOIN customers c    ON c.id = a.customer_id
-  LEFT JOIN client_users u ON u.id = a.client_user_id
-      WHERE a.client_id = ?
-        AND a.appointment_date BETWEEN ? AND ?
-        " . ($canViewAll ? '' : 'AND a.client_user_id = ?') . "
-   ORDER BY a.appointment_date, a.appointment_time"
-);
+$sql = "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+               a.duration_minutes, a.status, a.quote_id, a.client_user_id,
+               a.installation_town, a.installation_postcode,
+               c.name      AS customer_name,
+               c.phone     AS customer_phone,
+               u.full_name AS assignee_name,
+               q.quote_number AS quote_number,
+               q.status       AS quote_status
+          FROM appointments a
+     LEFT JOIN customers    c ON c.id = a.customer_id
+     LEFT JOIN client_users u ON u.id = a.client_user_id
+     LEFT JOIN quotes       q ON q.id = a.quote_id
+         WHERE a.client_id = ?
+           AND a.appointment_date BETWEEN ? AND ?
+           " . ($canViewAll ? '' : 'AND a.client_user_id = ?') . "
+      ORDER BY a.appointment_date, a.appointment_time";
 $params = [$clientId, $weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d')];
 if (!$canViewAll) $params[] = $myUserId;
-$apStmt->execute($params);
-$apRows = $apStmt->fetchAll();
+try {
+    $apStmt = $pdo->prepare($sql);
+    $apStmt->execute($params);
+    $apRows = $apStmt->fetchAll();
+} catch (Throwable $e) {
+    // Fallback without the quotes JOIN.
+    error_log('week.php: quotes JOIN failed, falling back: ' . $e->getMessage());
+    $fallbackSql = str_replace(
+        ['LEFT JOIN quotes       q ON q.id = a.quote_id',
+         'q.quote_number AS quote_number,',
+         'q.status       AS quote_status'],
+        ['', 'NULL AS quote_number,', 'NULL AS quote_status'],
+        $sql
+    );
+    $apStmt = $pdo->prepare($fallbackSql);
+    $apStmt->execute($params);
+    $apRows = $apStmt->fetchAll();
+}
 
 $byDate = [];
 foreach ($apRows as $r) {
@@ -116,6 +136,24 @@ $statusColour = static function (string $s): array {
         'cancelled'    => ['bg' => '#fecaca', 'fg' => '#991b1b'],
         'rescheduled'  => ['bg' => '#fed7aa', 'fg' => '#9a3412'],
         default        => ['bg' => '#fef3c7', 'fg' => '#78350f'],
+    };
+};
+
+// Quote-status → 5-segment progress indicator. Matches day.php
+// exactly so the same job shows the same bars across both views.
+$quoteProgress = static function (?string $status): array {
+    if ($status === null || $status === '') {
+        return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
+    }
+    return match ($status) {
+        'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
+        'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT'],
+        'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED'],
+        'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED'],
+        'invoiced'  => ['filled' => 5, 'colour' => '#059669', 'label' => 'INVOICED'],
+        'paid'      => ['filled' => 5, 'colour' => '#065f46', 'label' => 'PAID'],
+        'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'DECLINED'],
+        default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
     };
 };
 
@@ -263,6 +301,37 @@ $activeNav = 'calendar';
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .wk-card .wc-placeholder { color: #6b7280; font-style: italic; }
+        /* Q-number chip alongside time — same role as on day view,
+           but tighter to fit the narrower week column. */
+        .wk-card .wc-qref {
+            display: inline-block;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 0.625rem;
+            color: #4b5563;
+            background: rgba(255,255,255,0.6);
+            border-radius: 3px;
+            padding: 0 0.1875rem;
+            margin-left: 0.25rem;
+        }
+        /* Progress bars bottom-right of card. Slightly smaller than
+           day view's because week-card cells are tighter. */
+        .wk-card .wc-progress {
+            position: absolute;
+            bottom: 0.25rem; right: 0.3125rem;
+            display: flex; flex-direction: column;
+            gap: 1px;
+            pointer-events: none;
+        }
+        .wk-card .wc-progress span {
+            display: block;
+            width: 1.25rem;
+            height: 2px;
+            background: rgba(0,0,0,0.12);
+            border-radius: 1px;
+        }
+        .wk-card .wc-progress span.is-on {
+            background: var(--prog-clr, #10b981);
+        }
     </style>
 </head>
 <body>
@@ -354,6 +423,8 @@ $activeNav = 'calendar';
                                 : ($title !== '' ? $title : ('Appointment #' . (int) $appt['id']));
                             $hasOnly  = $custName === '' && $title === '';
                             $timeLabel = substr($time, 0, 5);
+                            $qref     = trim((string) ($appt['quote_number'] ?? ''));
+                            $prog     = $quoteProgress($appt['quote_status'] ?? null);
                         ?>
                             <a class="wk-card"
                                href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
@@ -361,14 +432,27 @@ $activeNav = 'calendar';
                                       height:<?= $height ?>px;
                                       background:<?= $palette['bg'] ?>;
                                       border-left-color:<?= $borderClr ?>;
-                                      color:<?= $palette['fg'] ?>;">
-                                <div class="wc-time"><?= e($timeLabel) ?></div>
+                                      color:<?= $palette['fg'] ?>;
+                                      --prog-clr:<?= e($prog['colour']) ?>;">
+                                <div class="wc-time">
+                                    <?= e($timeLabel) ?>
+                                    <?php if ($qref !== ''): ?>
+                                        <span class="wc-qref"><?= e($qref) ?></span>
+                                    <?php endif; ?>
+                                </div>
                                 <div class="wc-title <?= $hasOnly ? 'wc-placeholder' : '' ?>">
                                     <?= e($heading) ?>
                                 </div>
                                 <?php if (!empty($appt['assignee_name'])): ?>
                                     <div class="wc-assignee">
                                         <?= e((string) $appt['assignee_name']) ?>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($appt['quote_status'])): ?>
+                                    <div class="wc-progress" title="<?= e($prog['label']) ?>">
+                                        <?php for ($i = 0; $i < 5; $i++): ?>
+                                            <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
+                                        <?php endfor; ?>
                                     </div>
                                 <?php endif; ?>
                             </a>
