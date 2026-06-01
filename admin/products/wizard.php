@@ -869,64 +869,12 @@ $activeNav = 'wizard';
                         </div>
                     <?php endif; ?>
 
-                    <!-- Reusable system <select> snippet. Only shows when
-                         the product has 2+ systems; with 0 or 1 system
-                         there's nothing meaningful to scope to. -->
-                    <?php
-                        $renderSystemSelect = function (string $id, string $name) use ($systems) {
-                            if (count($systems) < 2) {
-                                return '';
-                            }
-                            $html = '<div><label for="' . e($id) . '">Available on</label>'
-                                  . '<select id="' . e($id) . '" name="' . e($name) . '"'
-                                  . ' style="padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input);color:var(--text-body);width:100%">'
-                                  . '<option value="">All systems (universal)</option>';
-                            foreach ($systems as $s) {
-                                $html .= '<option value="' . (int) $s['id'] . '">'
-                                       . e((string) $s['name']) . ' only</option>';
-                            }
-                            $html .= '</select></div>';
-                            return $html;
-                        };
-                    ?>
-
-                    <!-- Single-add row — fast one-off entry. -->
+                    <!-- One unified add form — pick a band (and scope, if
+                         the product has multiple systems) once, then put
+                         one OR many names in the textarea. Single-name
+                         and bulk-name behave the same on the server. -->
                     <h3 style="margin:1.25rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
-                        Add one
-                    </h3>
-                    <form method="post" class="wiz-form">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="_step" value="3">
-                        <input type="hidden" name="_action" value="add">
-
-                        <div class="row" style="grid-template-columns:6rem 1fr<?= count($systems) >= 2 ? ' 11rem' : '' ?> auto;align-items:end;gap:0.5rem">
-                            <div>
-                                <label for="band_code">Band *</label>
-                                <input id="band_code" name="band_code" type="text"
-                                       required maxlength="20"
-                                       placeholder="A"
-                                       style="text-transform:uppercase"
-                                       value="">
-                            </div>
-                            <div>
-                                <label for="fabric_name"><?= e(ucfirst($labelL)) ?> name *</label>
-                                <input id="fabric_name" name="fabric_name" type="text"
-                                       required maxlength="150"
-                                       placeholder="e.g. Plain White"
-                                       value="">
-                            </div>
-                            <?= $renderSystemSelect('system_id', 'system_id') ?>
-                            <div style="align-self:end">
-                                <button type="submit" class="btn btn-secondary">+ Add</button>
-                            </div>
-                        </div>
-                    </form>
-
-                    <!-- Bulk-add — pick a band ONCE, paste a list of names.
-                         This is the right tool for the 50-200 colour ranges
-                         common on metal venetians, verticals, etc. -->
-                    <h3 style="margin:1.5rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
-                        Add many at once
+                        Add <?= e($labelL) ?>s
                     </h3>
                     <form method="post" class="wiz-form">
                         <?= csrf_field() ?>
@@ -942,9 +890,24 @@ $activeNav = 'wizard';
                                        style="text-transform:uppercase"
                                        value="">
                             </div>
-                            <?= $renderSystemSelect('bulk_system_id', 'bulk_system_id') ?>
+                            <?php if (count($systems) >= 2): ?>
+                                <div>
+                                    <label for="bulk_system_id">Available on</label>
+                                    <select id="bulk_system_id" name="bulk_system_id"
+                                            style="padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input);color:var(--text-body);width:100%">
+                                        <option value="">All systems (universal)</option>
+                                        <?php foreach ($systems as $s): ?>
+                                            <option value="<?= (int) $s['id'] ?>">
+                                                <?= e((string) $s['name']) ?> only
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
                             <div>
-                                <label for="bulk_names">Names (one per line)</label>
+                                <label for="bulk_names">
+                                    <?= e(ucfirst($labelL)) ?>s (one per line — paste from Excel or type)
+                                </label>
                                 <textarea id="bulk_names" name="bulk_names"
                                           rows="8"
                                           required
@@ -953,11 +916,11 @@ $activeNav = 'wizard';
                             </div>
                         </div>
                         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
-                            <button type="submit" class="btn btn-secondary">+ Add all</button>
+                            <button type="submit" class="btn btn-secondary">+ Add</button>
                             <span style="color:var(--text-faint);font-size:0.8125rem">
-                                Every line becomes a <?= e($labelL) ?> in the chosen band
-                                <?php if (count($systems) >= 2): ?>and scope<?php endif; ?>.
-                                Paste straight from a column in Excel / a supplier list.
+                                One line = one <?= e($labelL) ?>. To add to multiple bands
+                                <?php if (count($systems) >= 2): ?>or scopes<?php endif; ?>,
+                                do one batch per <?php if (count($systems) >= 2): ?>combo<?php else: ?>band<?php endif; ?>.
                             </span>
                         </div>
                     </form>
