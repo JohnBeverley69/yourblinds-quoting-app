@@ -394,42 +394,13 @@ if ($product && $step >= 3) {
 $priceTables   = [];
 $missingCombos = [];
 if ($product && $step === 4) {
-    // Has the product ever had a price table? Used to decide
-    // whether to auto-create on first visit.
-    $hasAnyStmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM price_tables
-          WHERE product_id = ? AND client_id = ?'
-    );
-    $hasAnyStmt->execute([$productId, $clientId]);
-    $hasAnyTables = (int) $hasAnyStmt->fetchColumn() > 0;
-
-    if (!$hasAnyTables) {
-        // First-time setup: auto-create stubs only for combos that
-        // have at least one matching fabric (universal OR scoped to
-        // this specific system). Avoids generating stubs for
-        // combinations that don't physically exist — e.g. on a
-        // Venetian where Special-band colours only apply to the
-        // Special system, the (Standard system × Special band)
-        // combo isn't created.
-        $stubStmt = $pdo->prepare(
-            "INSERT IGNORE INTO price_tables
-                (client_id, product_id, system_id, band_code, active)
-             SELECT DISTINCT ?, ?, s.id, po.band_code, 1
-               FROM product_systems s
-               JOIN product_options po
-                 ON po.product_id = s.product_id
-                AND po.client_id  = s.client_id
-                AND po.active     = 1
-                AND po.band_code IS NOT NULL
-                AND po.band_code != ''
-                AND (po.system_id IS NULL OR po.system_id = s.id)
-              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
-        );
-        $stubStmt->execute([
-            $clientId, $productId,
-            $productId, $clientId,
-        ]);
-    }
+    // NOTE: no implicit auto-create here. The previous "create
+    // stubs on first visit" heuristic couldn't distinguish "tenant
+    // hasn't set up yet" from "tenant just deleted everything" —
+    // both look like zero tables — so deletions could bounce back
+    // on the next page load. Stub creation is now ALWAYS explicit
+    // via the "Create the missing tables" button below, which
+    // hits the create_missing POST action.
 
     // Load every existing (system, band) combo with its fill status.
     $combosStmt = $pdo->prepare(
@@ -1004,7 +975,9 @@ $activeNav = 'wizard';
                         <div class="wiz-list" style="background:transparent;border:0;padding:0;margin-bottom:0.875rem">
                             <?php foreach ($missingCombos as $m): ?>
                                 <div class="wiz-list-item" style="border-bottom-color:#fde68a">
-                                    <span class="check" style="color:#b45309">○</span>
+                                    <span style="background:#fde68a;color:#78350f;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.125rem 0.4375rem;border-radius:999px;line-height:1.4">
+                                        Missing
+                                    </span>
                                     <strong><?= e((string) $m['system_name']) ?></strong>
                                     <span style="color:#92400e">— Band <?= e((string) $m['band_code']) ?></span>
                                 </div>
@@ -1041,17 +1014,21 @@ $activeNav = 'wizard';
                                          . '&from=wizard&product_id=' . (int) $productId;
                             ?>
                                 <div class="wiz-list-item" style="padding:0.5rem 0.25rem">
-                                    <span class="check" style="<?= $filled ? '' : 'color:var(--text-faint)' ?>">
-                                        <?= $filled ? '&check;' : '○' ?>
-                                    </span>
+                                    <?php if ($filled): ?>
+                                        <span style="color:#16a34a;font-weight:700;font-size:1rem">&check;</span>
+                                    <?php else: ?>
+                                        <span style="background:#fef3c7;color:#92400e;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.125rem 0.4375rem;border-radius:999px;line-height:1.4">
+                                            Empty
+                                        </span>
+                                    <?php endif; ?>
                                     <div style="flex:1;display:flex;flex-wrap:wrap;gap:0.375rem;align-items:baseline">
                                         <strong><?= e((string) $t['system_name']) ?></strong>
                                         <span style="color:var(--text-faint)">— Band <?= e((string) $t['band_code']) ?></span>
-                                        <span style="color:var(--text-faint);font-size:0.8125rem">
-                                            <?= $filled
-                                                ? '· ' . $cells . ' cell' . ($cells === 1 ? '' : 's')
-                                                : '· empty' ?>
-                                        </span>
+                                        <?php if ($filled): ?>
+                                            <span style="color:var(--text-faint);font-size:0.8125rem">
+                                                · <?= $cells ?> cell<?= $cells === 1 ? '' : 's' ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                     <a href="<?= e($href) ?>"
                                        class="btn <?= $filled ? 'btn-secondary' : 'btn-primary' ?> btn-sm">
