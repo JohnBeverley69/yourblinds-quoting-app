@@ -156,7 +156,10 @@ function push_one_product(
     $systemMap = pp_sync_systems($pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid, $summary);
 
     // ---- 3. Fabrics / options ----
-    pp_sync_options($pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid, $summary);
+    pp_sync_options(
+        $pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid,
+        $systemMap, $summary
+    );
 
     // ---- 4. Extras + choices + width-table cells.
     //         The 2-pass parent_choice_id wiring matches what the
@@ -258,13 +261,33 @@ function pp_sync_options(
     int   $sourceProductId,
     int   $targetClientId,
     int   $targetProductId,
+    array $systemMap,
     array &$summary
 ): void {
+    // Schema-aware: tenants on a target DB that hasn't run
+    // migrate_option_system_scope.php yet won't have the system_id
+    // column. Detect once and degrade gracefully — we'll skip the
+    // scope copy entirely on those targets and behave like the
+    // pre-scope version.
+    $hasSystemIdCol = false;
+    try {
+        $colStmt = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME   = 'product_options'
+                AND COLUMN_NAME  = 'system_id'"
+        );
+        $hasSystemIdCol = (bool) $colStmt->fetchColumn();
+    } catch (Throwable $e) { /* keep false */ }
+
+    $selectCols = $hasSystemIdCol
+        ? 'id, system_id, band_code, supplier_name, name, colour, code, sort_order, active'
+        : 'id, band_code, supplier_name, name, colour, code, sort_order, active';
     $src = $pdo->prepare(
-        'SELECT id, band_code, supplier_name, name, colour, code, sort_order, active
+        "SELECT $selectCols
            FROM product_options
           WHERE client_id = ? AND product_id = ?
-          ORDER BY id'
+          ORDER BY id"
     );
     $src->execute([$sourceClientId, $sourceProductId]);
 
@@ -293,6 +316,18 @@ function pp_sync_options(
     );
 
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        // Translate the source system_id → target's via the system
+        // map built during the systems pass. NULL means "universal
+        // fabric" — keeps NULL on the target so it stays universal.
+        // Missing map entry (system on source that wasn't present
+        // on target somehow) → drop to NULL so the fabric still
+        // works, just universally on the target.
+        $tgtSystemId = null;
+        if ($hasSystemIdCol && $r['system_id'] !== null) {
+            $srcSys = (int) $r['system_id'];
+            $tgtSystemId = $systemMap[$srcSys] ?? null;
+        }
+
         $find->execute([
             $targetClientId, $targetProductId,
             (string) $r['band_code'],
@@ -302,34 +337,76 @@ function pp_sync_options(
         ]);
         $tgtId = $find->fetchColumn();
         if ($tgtId === false) {
-            $ins = $pdo->prepare(
-                'INSERT INTO product_options
-                   (client_id, product_id, band_code, supplier_name, name, colour, code, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $ins->execute([
-                $targetClientId, $targetProductId,
-                strtoupper((string) $r['band_code']),
-                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                (string) $r['name'],
-                $r['colour'] !== null ? (string) $r['colour'] : null,
-                $r['code']   !== null ? (string) $r['code']   : null,
-                (int) ($r['sort_order'] ?? 0),
-                (int) ($r['active']     ?? 1),
-            ]);
+            // INSERT — include system_id only when the column exists.
+            if ($hasSystemIdCol) {
+                $ins = $pdo->prepare(
+                    'INSERT INTO product_options
+                       (client_id, product_id, system_id, band_code,
+                        supplier_name, name, colour, code, sort_order, active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $ins->execute([
+                    $targetClientId, $targetProductId,
+                    $tgtSystemId,
+                    (string) $r['band_code'],
+                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                    (string) $r['name'],
+                    $r['colour'] !== null ? (string) $r['colour'] : null,
+                    $r['code']   !== null ? (string) $r['code']   : null,
+                    (int) ($r['sort_order'] ?? 0),
+                    (int) ($r['active']     ?? 1),
+                ]);
+            } else {
+                $ins = $pdo->prepare(
+                    'INSERT INTO product_options
+                       (client_id, product_id, band_code, supplier_name, name, colour, code, sort_order, active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $ins->execute([
+                    $targetClientId, $targetProductId,
+                    (string) $r['band_code'],
+                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                    (string) $r['name'],
+                    $r['colour'] !== null ? (string) $r['colour'] : null,
+                    $r['code']   !== null ? (string) $r['code']   : null,
+                    (int) ($r['sort_order'] ?? 0),
+                    (int) ($r['active']     ?? 1),
+                ]);
+            }
             $summary['fabrics_added']++;
         } else {
-            $pdo->prepare(
-                'UPDATE product_options
-                    SET supplier_name = ?, code = ?, sort_order = ?, active = ?
-                  WHERE id = ?'
-            )->execute([
-                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                $r['code']          !== null ? (string) $r['code']          : null,
-                (int) ($r['sort_order'] ?? 0),
-                (int) ($r['active']     ?? 1),
-                (int) $tgtId,
-            ]);
+            // UPDATE — re-sync system_id too, so a re-push after the
+            // user fixes scoping on the source tenant actually
+            // updates the target. Otherwise existing rows would
+            // stay stuck with their original (possibly wrong)
+            // system_id forever.
+            if ($hasSystemIdCol) {
+                $pdo->prepare(
+                    'UPDATE product_options
+                        SET system_id = ?, supplier_name = ?, code = ?,
+                            sort_order = ?, active = ?
+                      WHERE id = ?'
+                )->execute([
+                    $tgtSystemId,
+                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                    $r['code']          !== null ? (string) $r['code']          : null,
+                    (int) ($r['sort_order'] ?? 0),
+                    (int) ($r['active']     ?? 1),
+                    (int) $tgtId,
+                ]);
+            } else {
+                $pdo->prepare(
+                    'UPDATE product_options
+                        SET supplier_name = ?, code = ?, sort_order = ?, active = ?
+                      WHERE id = ?'
+                )->execute([
+                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                    $r['code']          !== null ? (string) $r['code']          : null,
+                    (int) ($r['sort_order'] ?? 0),
+                    (int) ($r['active']     ?? 1),
+                    (int) $tgtId,
+                ]);
+            }
             $summary['fabrics_updated']++;
         }
     }
