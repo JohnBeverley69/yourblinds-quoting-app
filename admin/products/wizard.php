@@ -172,6 +172,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=2');
                 exit;
             }
+            if ($action === 'add_bulk') {
+                // Same shape as the fabric bulk-add. Paste one system
+                // name per line; each line becomes a system in
+                // sort_order. Skips blank / overlong lines and counts
+                // dupe-name failures separately so one bad row doesn't
+                // sink the whole batch.
+                $raw   = (string) ($_POST['bulk_names'] ?? '');
+                $lines = preg_split('/\r\n|\r|\n/', $raw) ?: [];
+                $names = [];
+                foreach ($lines as $line) {
+                    $n = trim($line);
+                    if ($n === '' || strlen($n) > 150) continue;
+                    $names[] = $n;
+                }
+                if (!$names) {
+                    throw new RuntimeException('No system names — paste at least one name into the box.');
+                }
+
+                $sortStmt = $pdo->prepare(
+                    'SELECT COALESCE(MAX(sort_order), -1) + 1
+                       FROM product_systems
+                      WHERE product_id = ? AND client_id = ?'
+                );
+                $sortStmt->execute([$productId, $clientId]);
+                $nextSort = (int) $sortStmt->fetchColumn();
+
+                $ins = $pdo->prepare(
+                    'INSERT INTO product_systems
+                      (client_id, product_id, name, sort_order, active)
+                      VALUES (?, ?, ?, ?, 1)'
+                );
+                $added   = 0;
+                $skipped = 0;
+                foreach ($names as $n) {
+                    try {
+                        $ins->execute([$clientId, $productId, $n, $nextSort]);
+                        $added++;
+                        $nextSort++;
+                    } catch (Throwable $e) {
+                        $skipped++;
+                    }
+                }
+                $msg = "Added $added system" . ($added === 1 ? '' : 's') . '.';
+                if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
+                $_SESSION['flash_success'] = $msg;
+                header('Location: /admin/products/wizard.php?id=' . $productId . '&step=2');
+                exit;
+            }
             if ($action === 'continue') {
                 // Server-side guard — the button is also disabled in HTML
                 // when count = 0, but defence-in-depth.
@@ -762,28 +810,36 @@ $activeNav = 'wizard';
                         </div>
                     <?php endif; ?>
 
+                    <!-- Bulk-add: paste a list of system names, one per
+                         line. Each line becomes a system in sort_order.
+                         Same pattern as the fabric bulk-add. -->
+                    <h3 style="margin:1.25rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
+                        Add systems
+                    </h3>
                     <form method="post" class="wiz-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_step" value="2">
-                        <input type="hidden" name="_action" value="add">
+                        <input type="hidden" name="_action" value="add_bulk">
 
-                        <div class="row" style="grid-template-columns:1fr auto">
-                            <div>
-                                <label for="system_name">Add a system</label>
-                                <input id="system_name" name="system_name" type="text"
-                                       required maxlength="150" autofocus
-                                       placeholder="Standard"
-                                       value="">
-                            </div>
-                            <div style="align-self:end">
-                                <button type="submit" class="btn btn-secondary">+ Add</button>
-                            </div>
+                        <div>
+                            <label for="bulk_names">One system per line (paste from Excel or type)</label>
+                            <textarea id="bulk_names" name="bulk_names" rows="6" required
+                                      placeholder="Standard&#10;Motorised&#10;FW 35mm String&#10;FW 50mm Tape&#10;…"
+                                      style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body)"></textarea>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
+                            <button type="submit" class="btn btn-secondary">+ Add</button>
+                            <span style="color:var(--text-faint);font-size:0.8125rem">
+                                One line = one system. Single name = single add.
+                            </span>
                         </div>
                     </form>
 
-                    <div class="helper">
-                        <strong>Tip:</strong> Adding multiple? Add the first now, then
-                        click <em>Add</em>. The form re-opens ready for the next one.
+                    <div class="helper" style="margin-top:1rem">
+                        <strong>What's a system?</strong> The operating mechanism
+                        or physical variant — e.g. <em>Standard</em>, <em>Motorised</em>,
+                        or size variants like <em>35mm String</em>, <em>50mm Tape</em>.
+                        Each system gets its own price table.
                     </div>
 
                     <form method="post" class="wiz-actions" style="margin:0">
