@@ -450,10 +450,10 @@ if ($product && $step === 4) {
 
 // Steps metadata for the stepper UI.
 $STEPS = [
-    1 => ['Name',     'What kind of blind is this?'],
-    2 => ['Systems',  'Standard / Motorised / etc.'],
-    3 => ['Fabrics',  'The materials you actually sell'],
-    4 => ['Done',     'Time to add price tables'],
+    1 => ['Name',         'What kind of blind is this?'],
+    2 => ['Systems',      'Standard / Motorised / etc.'],
+    3 => ['Fabrics',      'The materials you actually sell'],
+    4 => ['Price tables', 'Width × drop grids per band / system'],
 ];
 
 // Highlight the "Setup wizard" sidebar entry while in the wizard
