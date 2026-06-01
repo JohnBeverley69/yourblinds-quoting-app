@@ -844,14 +844,26 @@ $activeNav = 'products';
                     Each line / cell is one value. Defaults are filled in for
                     you — clear them if you want to start from scratch.
                 </p>
-                <label style="display:block;margin:0.625rem 0 0.25rem;font-weight:600;font-size:0.8125rem">
-                    Widths (mm)
-                </label>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
+                    <label for="qs-widths" style="font-weight:600;font-size:0.8125rem">
+                        Widths (mm)
+                    </label>
+                    <button type="button" id="qs-clear-widths"
+                            style="background:transparent;border:0;color:var(--link);cursor:pointer;font:inherit;font-size:0.75rem;text-decoration:underline">
+                        Clear
+                    </button>
+                </div>
                 <textarea id="qs-widths" rows="3"
                           style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"></textarea>
-                <label style="display:block;margin:0.625rem 0 0.25rem;font-weight:600;font-size:0.8125rem">
-                    Drops (mm)
-                </label>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
+                    <label for="qs-drops" style="font-weight:600;font-size:0.8125rem">
+                        Drops (mm)
+                    </label>
+                    <button type="button" id="qs-clear-drops"
+                            style="background:transparent;border:0;color:var(--link);cursor:pointer;font:inherit;font-size:0.75rem;text-decoration:underline">
+                        Clear
+                    </button>
+                </div>
                 <textarea id="qs-drops" rows="6"
                           style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"></textarea>
                 <div class="axis-actions">
@@ -965,6 +977,14 @@ $activeNav = 'products';
             else qsDialog.removeAttribute('open');
         });
     }
+    var qsClearW = document.getElementById('qs-clear-widths');
+    var qsClearD = document.getElementById('qs-clear-drops');
+    if (qsClearW) qsClearW.addEventListener('click', function () {
+        qsWidths.value = ''; qsWidths.focus();
+    });
+    if (qsClearD) qsClearD.addEventListener('click', function () {
+        qsDrops.value = ''; qsDrops.focus();
+    });
     if (qsConfirm) {
         qsConfirm.addEventListener('click', function () {
             var ws = parseAxisValues(qsWidths.value);
