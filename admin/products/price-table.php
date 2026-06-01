@@ -57,6 +57,66 @@ if (!$table) {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Rename / edit the table's metadata. Band code, name, notes. Used when
+// a tenant realises the band they typed at create time (e.g. "FW35ML
+// String") wasn't quite right and needs tweaking — without this, they'd
+// have to delete the whole table and rebuild.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
+    csrf_check();
+
+    $newBand  = trim((string) ($_POST['band_code'] ?? ''));
+    $newName  = trim((string) ($_POST['name']      ?? ''));
+    $newNotes = trim((string) ($_POST['notes']     ?? ''));
+    // Strip a leading "Band " — users sometimes type "Band A" out
+    // of habit; the prefix is added back at render time.
+    $newBand  = (string) preg_replace('/^band\s+/i', '', $newBand);
+
+    if ($newBand === '') {
+        $_SESSION['flash_error'] = 'Band code is required.';
+    } elseif (strlen($newBand) > 20) {
+        $_SESSION['flash_error'] = 'Band code too long (max 20 chars).';
+    } elseif (strlen($newName) > 150) {
+        $_SESSION['flash_error'] = 'Name too long (max 150 chars).';
+    } elseif (strlen($newNotes) > 255) {
+        $_SESSION['flash_error'] = 'Notes too long (max 255 chars).';
+    } else {
+        try {
+            db()->prepare(
+                'UPDATE price_tables
+                    SET band_code = ?, name = ?, notes = ?, updated_at = NOW()
+                  WHERE id = ? AND client_id = ?'
+            )->execute([
+                $newBand,
+                $newName  !== '' ? $newName  : null,
+                $newNotes !== '' ? $newNotes : null,
+                $tableId,
+                $clientId,
+            ]);
+            $_SESSION['flash_success'] = 'Saved.';
+        } catch (Throwable $e) {
+            // UNIQUE(product_id, system_id, band_code) — the only
+            // realistic constraint trip. Surface it clearly so the
+            // user knows the band code collides with a sibling table
+            // on this system.
+            if (str_contains($e->getMessage(), 'uniq_price_table_product_system_band')) {
+                $_SESSION['flash_error'] = 'A price table for that band already exists on this system. Pick a different band code.';
+            } else {
+                $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            }
+        }
+    }
+
+    // PRG so the user sees the result on a clean reload.
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Inline-grid save — replaces every cell with what came up the wire.
 // Posted shape:
 //   action      = save_grid
@@ -716,7 +776,7 @@ $activeNav = 'products';
             $wizardBackId = $fromWizard ? (int) ($_GET['product_id'] ?? 0) : 0;
         ?>
         <div class="page-header">
-            <div>
+            <div style="flex:1">
                 <h1 class="page-title">
                     <?= e((string) $table['product_name']) ?>
                     / <?= e((string) $table['system_name']) ?>
@@ -735,9 +795,93 @@ $activeNav = 'products';
                             &larr; All <?= e((string) $table['system_name']) ?> price tables
                         </a>
                     <?php endif; ?>
+                    &middot;
+                    <a href="#edit-meta" id="edit-meta-link"
+                       style="color:var(--link);font-weight:600">
+                        Edit band / name / notes
+                    </a>
                 </p>
             </div>
         </div>
+
+        <!-- Inline edit form for the table's metadata. Hidden by
+             default; the "Edit band / name / notes" link above
+             toggles it. Saves via PRG to the same page. -->
+        <details id="edit-meta-details"
+                 style="margin:0 0 1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-sm)">
+            <summary style="list-style:none;cursor:pointer;padding:0.75rem 1.125rem;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:0.5rem">
+                <span style="color:var(--text-faint);font-size:0.8125rem">▸</span>
+                Table details
+                <span style="color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-left:0.5rem">
+                    Band code, name, notes
+                </span>
+            </summary>
+            <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                  style="border-top:1px solid var(--border);padding:1rem 1.125rem">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_meta">
+                <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+
+                <div style="display:grid;grid-template-columns:8rem 1fr 1fr;gap:0.75rem;align-items:end">
+                    <div>
+                        <label for="meta-band" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
+                            Band *
+                        </label>
+                        <input id="meta-band" name="band_code" type="text"
+                               required maxlength="20"
+                               value="<?= e((string) $table['band_code']) ?>"
+                               style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                    </div>
+                    <div>
+                        <label for="meta-name" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
+                            Name (optional)
+                        </label>
+                        <input id="meta-name" name="name" type="text" maxlength="150"
+                               value="<?= e((string) ($table['name'] ?? '')) ?>"
+                               placeholder="e.g. 2026 Slim Line Band A"
+                               style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                    </div>
+                    <div>
+                        <label for="meta-notes" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
+                            Notes (optional)
+                        </label>
+                        <input id="meta-notes" name="notes" type="text" maxlength="255"
+                               value="<?= e((string) ($table['notes'] ?? '')) ?>"
+                               placeholder="Anything to remember about this sheet"
+                               style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                    </div>
+                </div>
+                <div style="margin-top:0.75rem">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.625rem">
+                        Changing the band code keeps all existing prices intact.
+                    </span>
+                </div>
+            </form>
+        </details>
+        <style>
+            #edit-meta-details > summary::-webkit-details-marker { display: none; }
+            #edit-meta-details[open] > summary > span:first-child {
+                display: inline-block; transform: rotate(90deg);
+            }
+        </style>
+        <script>
+            // Clicking "Edit band / name / notes" in the subtitle opens
+            // the details panel and scrolls it into view.
+            (function () {
+                var link = document.getElementById('edit-meta-link');
+                var d    = document.getElementById('edit-meta-details');
+                if (link && d) {
+                    link.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        d.open = true;
+                        d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        var first = document.getElementById('meta-band');
+                        if (first) setTimeout(function () { first.focus(); first.select(); }, 200);
+                    });
+                }
+            })();
+        </script>
 
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
