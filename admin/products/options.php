@@ -259,6 +259,28 @@ $rows = db()->prepare(
 $rows->execute([$productId, $clientId]);
 $options = $rows->fetchAll();
 
+// Distinct band codes already in use on this product (across both
+// fabrics and price tables) — used to populate the <datalist>
+// autocomplete on the band input so the user can pick rather than
+// retype. Typing a new value still works for the first band on a
+// fresh product.
+$knownBandsStmt = db()->prepare(
+    "SELECT DISTINCT band_code FROM (
+        SELECT band_code FROM product_options
+         WHERE product_id = ? AND client_id = ? AND active = 1
+        UNION
+        SELECT band_code FROM price_tables
+         WHERE product_id = ? AND client_id = ? AND active = 1
+     ) x
+     WHERE band_code IS NOT NULL AND band_code != ''
+     ORDER BY band_code"
+);
+$knownBandsStmt->execute([$productId, $clientId, $productId, $clientId]);
+$knownBands = array_map(
+    static fn ($v) => (string) $v,
+    $knownBandsStmt->fetchAll(PDO::FETCH_COLUMN)
+);
+
 $activeNav = 'products';
 ?><!doctype html>
 <html lang="en">
@@ -392,11 +414,24 @@ $activeNav = 'products';
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="create">
 
+                <?php if ($knownBands): ?>
+                    <!-- Autocomplete options for the Band input below.
+                         Picked from bands already in use on this
+                         product (fabrics + price tables). Typing a
+                         new value still works for the first band on
+                         a fresh product. -->
+                    <datalist id="known-bands">
+                        <?php foreach ($knownBands as $b): ?>
+                            <option value="<?= e($b) ?>">
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php endif; ?>
                 <div class="form-row cols-5">
                     <div class="form-group">
                         <label for="band_code">Band <span class="required">*</span></label>
                         <input id="band_code" name="band_code" type="text"
                                required maxlength="20" autofocus
+                               list="known-bands"
                                value="<?= e((string) $f['band_code']) ?>" placeholder="A">
                     </div>
                     <div class="form-group">
