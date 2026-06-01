@@ -301,19 +301,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // Split on any newline kind. Skip blanks and overlong
-                // lines silently so a stray empty line in a paste
-                // doesn't blow up the whole submission.
+                // Two formats accepted in the same textarea:
+                //
+                // 1. Single-section: every line is a colour name; all
+                //    rows land on the system picked in the "Available
+                //    on" dropdown above (or universal if nothing's
+                //    picked). The original behaviour.
+                //
+                // 2. Multi-section: lines that look like "[System Name]"
+                //    act as section headers. Subsequent rows go to
+                //    that system until the next header. Unknown system
+                //    names get skipped silently. This lets a tenant
+                //    with 10+ systems paste every colour batch in one
+                //    submission instead of repeating the form per
+                //    system.
+                //
+                // Detection: if ANY line matches the [Name] shape we
+                // switch to multi-section parsing. Otherwise the
+                // textarea is treated as one flat colour list.
                 $lines = preg_split('/\r\n|\r|\n/', $namesRaw) ?: [];
-                $names = [];
+                $hasSections = false;
                 foreach ($lines as $line) {
-                    $name = trim($line);
-                    if ($name === '')          continue;
-                    if (strlen($name) > 150)   continue;
-                    $names[] = $name;
-                }
-                if (!$names) {
-                    throw new RuntimeException('No names to add — paste at least one name into the box.');
+                    if (preg_match('/^\s*\[(.+)\]\s*$/', $line)) {
+                        $hasSections = true;
+                        break;
+                    }
                 }
 
                 $ins = $pdo->prepare(
@@ -323,22 +335,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $added   = 0;
                 $skipped = 0;
-                foreach ($names as $name) {
-                    try {
-                        $ins->execute([$clientId, $productId, $sysId, $band, $name]);
-                        $added++;
-                    } catch (Throwable $e) {
-                        // Duplicates (uniq constraint) and any other
-                        // row-level errors get counted as skips so
-                        // the whole batch doesn't fail.
-                        $skipped++;
+                $unknownSystems = [];
+                $touchedSystems = [];
+
+                if ($hasSections) {
+                    // Build a name → id lookup for systems on this
+                    // product. Case-insensitive on the assumption
+                    // tenants paste system names sloppily.
+                    $sysLookup = [];
+                    foreach ($systems as $s) {
+                        $sysLookup[strtolower(trim((string) $s['name']))] = (int) $s['id'];
+                    }
+
+                    $currentSysId = $sysId;  // fall back to dropdown
+                    foreach ($lines as $line) {
+                        if (preg_match('/^\s*\[(.+)\]\s*$/', $line, $m)) {
+                            $key = strtolower(trim($m[1]));
+                            if (isset($sysLookup[$key])) {
+                                $currentSysId = $sysLookup[$key];
+                            } else {
+                                $currentSysId = null;
+                                $unknownSystems[$m[1]] = true;
+                            }
+                            continue;
+                        }
+                        $name = trim($line);
+                        if ($name === '' || strlen($name) > 150) continue;
+                        if ($currentSysId === null) {
+                            $skipped++;
+                            continue;
+                        }
+                        try {
+                            $ins->execute([$clientId, $productId, $currentSysId, $band, $name]);
+                            $added++;
+                            $touchedSystems[$currentSysId] = true;
+                        } catch (Throwable $e) {
+                            $skipped++;
+                        }
+                    }
+                } else {
+                    // Single-section — original behaviour.
+                    $names = [];
+                    foreach ($lines as $line) {
+                        $name = trim($line);
+                        if ($name === '')          continue;
+                        if (strlen($name) > 150)   continue;
+                        $names[] = $name;
+                    }
+                    if (!$names) {
+                        throw new RuntimeException('No names to add — paste at least one name into the box.');
+                    }
+                    foreach ($names as $name) {
+                        try {
+                            $ins->execute([$clientId, $productId, $sysId, $band, $name]);
+                            $added++;
+                        } catch (Throwable $e) {
+                            $skipped++;
+                        }
+                    }
+                    if ($added > 0 && $sysId !== null) {
+                        $touchedSystems[$sysId] = true;
                     }
                 }
 
-                $msg = "Added $added to Band $band"
-                     . ($sysId !== null ? ' (one system only)' : ' (all systems)')
-                     . '.';
-                if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
+                if ($added === 0) {
+                    throw new RuntimeException('Nothing added. Check the paste — colours need a [System Name] header above them, or pick a system in the dropdown.');
+                }
+
+                $msg = "Added $added to Band $band";
+                if ($hasSections) {
+                    $msg .= ' across ' . count($touchedSystems) . ' system'
+                          . (count($touchedSystems) === 1 ? '' : 's') . '.';
+                } else {
+                    $msg .= ($sysId !== null ? ' (one system only).' : ' (all systems).');
+                }
+                if ($skipped > 0)        $msg .= " Skipped $skipped (likely duplicates).";
+                if ($unknownSystems)     $msg .= ' Unknown system names: "'
+                    . implode('", "', array_keys($unknownSystems)) . '".';
                 $_SESSION['flash_success'] = $msg;
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
                 exit;
@@ -1002,18 +1075,20 @@ $activeNav = 'wizard';
                                     <?= e(ucfirst($labelL)) ?>s (one per line — paste from Excel or type)
                                 </label>
                                 <textarea id="bulk_names" name="bulk_names"
-                                          rows="8"
+                                          rows="10"
                                           required
-                                          placeholder="Plain White&#10;Plain Cream&#10;Plain Black&#10;Silver&#10;…"
-                                          style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body)"></textarea>
+                                          placeholder="Plain White&#10;Plain Cream&#10;Plain Black&#10;Silver&#10;…&#10;&#10;Or paste multiple systems at once:&#10;&#10;[Forest Wood 35mm String]&#10;Plain White&#10;Plain Cream&#10;&#10;[Forest Wood 35mm Tape]&#10;Cherry&#10;Mahogany&#10;…"
+                                          style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8125rem"></textarea>
                             </div>
                         </div>
                         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
                             <button type="submit" class="btn btn-secondary">+ Add</button>
                             <span style="color:var(--text-faint);font-size:0.8125rem">
-                                One line = one <?= e($labelL) ?>. To add to multiple bands
-                                <?php if (count($systems) >= 2): ?>or systems<?php endif; ?>,
-                                do one batch for each.
+                                One line = one <?= e($labelL) ?>.
+                                <?php if (count($systems) >= 2): ?>
+                                    Or use <code>[System Name]</code> headers in the textarea to
+                                    add to many systems in one go.
+                                <?php endif; ?>
                             </span>
                         </div>
                     </form>
