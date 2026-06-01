@@ -190,13 +190,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // filled in later. Keeps the cognitive load low at the worst
         // moment (brand-new tenant doesn't yet know which fields
         // actually matter to them).
+        //
+        // Two add modes: single-add (one row at a time) and bulk-add
+        // (paste a list of names, all go into the chosen band). The
+        // bulk path is the workhorse — a typical venetian / vertical
+        // tenant has 50-200 colours per band, and one-at-a-time was
+        // unusable for that scale.
         if ($postStep === 3 && $product) {
             if ($action === 'add') {
                 $band = trim((string) ($_POST['band_code'] ?? ''));
                 $fab  = trim((string) ($_POST['fabric_name'] ?? ''));
                 $band = (string) preg_replace('/^band\s+/i', '', $band);
 
-                if ($band === '')          throw new RuntimeException('Band code is required (e.g. A, B, C).');
+                if ($band === '')          throw new RuntimeException('Band code is required (e.g. A, B, C, or Standard, Special).');
                 if (strlen($band) > 20)    throw new RuntimeException('Band code too long (max 20).');
                 if ($fab === '')           throw new RuntimeException('Fabric name is required.');
                 if (strlen($fab) > 150)    throw new RuntimeException('Fabric name too long (max 150).');
@@ -209,6 +215,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ins->execute([$clientId, $productId, strtoupper($band), $fab]);
 
                 $_SESSION['flash_success'] = 'Added "' . $fab . '" (Band ' . strtoupper($band) . ').';
+                header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
+                exit;
+            }
+            if ($action === 'add_bulk') {
+                $band = trim((string) ($_POST['bulk_band'] ?? ''));
+                $band = (string) preg_replace('/^band\s+/i', '', $band);
+                $namesRaw = (string) ($_POST['bulk_names'] ?? '');
+
+                if ($band === '')         throw new RuntimeException('Band code is required.');
+                if (strlen($band) > 20)   throw new RuntimeException('Band code too long (max 20).');
+
+                // Split on any newline kind. Skip blanks and overlong
+                // lines silently so a stray empty line in a paste
+                // doesn't blow up the whole submission.
+                $lines = preg_split('/\r\n|\r|\n/', $namesRaw) ?: [];
+                $names = [];
+                foreach ($lines as $line) {
+                    $name = trim($line);
+                    if ($name === '')          continue;
+                    if (strlen($name) > 150)   continue;
+                    $names[] = $name;
+                }
+                if (!$names) {
+                    throw new RuntimeException('No names to add — paste at least one name into the box.');
+                }
+
+                $bandUp = strtoupper($band);
+                $ins = $pdo->prepare(
+                    'INSERT INTO product_options
+                      (client_id, product_id, band_code, name, sort_order, active)
+                      VALUES (?, ?, ?, ?, 0, 1)'
+                );
+                $added   = 0;
+                $skipped = 0;
+                foreach ($names as $name) {
+                    try {
+                        $ins->execute([$clientId, $productId, $bandUp, $name]);
+                        $added++;
+                    } catch (Throwable $e) {
+                        // Duplicates (uniq constraint) and any other
+                        // row-level errors get counted as skips so
+                        // the whole batch doesn't fail.
+                        $skipped++;
+                    }
+                }
+
+                $msg = "Added $added to Band $bandUp.";
+                if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
+                $_SESSION['flash_success'] = $msg;
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
                 exit;
             }
@@ -618,14 +673,17 @@ $activeNav = 'wizard';
                 <div class="wiz-card">
                     <h2>What <?= e($labelL) ?>s do you sell?</h2>
                     <p class="lede">
-                        Add at least one <?= e($labelL) ?> with a band code (the
-                        price-band letter from your supplier — e.g. A, B, C).
-                        You can add more later from the product edit page;
-                        for now, one's enough to keep moving.
+                        Add at least one <?= e($labelL) ?> with a <strong>band
+                        code</strong>. The band groups <?= e($labelL) ?>s that
+                        share the same price table — your "cheap range" and
+                        "premium range" are usually different bands. Common
+                        codes: <code>A</code>/<code>B</code>/<code>C</code>
+                        from a supplier price list, or words like
+                        <code>Standard</code>/<code>Special</code>.
                     </p>
 
                     <?php if ($fabrics): ?>
-                        <div class="wiz-list">
+                        <div class="wiz-list" style="max-height:18rem;overflow-y:auto">
                             <?php foreach ($fabrics as $f): ?>
                                 <div class="wiz-list-item">
                                     <span class="check">&check;</span>
@@ -645,6 +703,10 @@ $activeNav = 'wizard';
                         </div>
                     <?php endif; ?>
 
+                    <!-- Single-add row — fast one-off entry. -->
+                    <h3 style="margin:1.25rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
+                        Add one
+                    </h3>
                     <form method="post" class="wiz-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_step" value="3">
@@ -662,7 +724,7 @@ $activeNav = 'wizard';
                             <div>
                                 <label for="fabric_name"><?= e(ucfirst($labelL)) ?> name *</label>
                                 <input id="fabric_name" name="fabric_name" type="text"
-                                       required maxlength="150" autofocus
+                                       required maxlength="150"
                                        placeholder="e.g. Plain White"
                                        value="">
                             </div>
@@ -672,11 +734,51 @@ $activeNav = 'wizard';
                         </div>
                     </form>
 
-                    <div class="helper">
-                        <strong>Tip:</strong> Once you're set up, the standard
-                        <?= e($labelL) ?> editor on the edit page lets you bulk-
-                        import from an XLSX and add supplier / colour / code
-                        details — useful for big ranges.
+                    <!-- Bulk-add — pick a band ONCE, paste a list of names.
+                         This is the right tool for the 50-200 colour ranges
+                         common on metal venetians, verticals, etc. -->
+                    <h3 style="margin:1.5rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
+                        Add many at once
+                    </h3>
+                    <form method="post" class="wiz-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_step" value="3">
+                        <input type="hidden" name="_action" value="add_bulk">
+
+                        <div class="row" style="grid-template-columns:8rem 1fr;align-items:start">
+                            <div>
+                                <label for="bulk_band">Band *</label>
+                                <input id="bulk_band" name="bulk_band" type="text"
+                                       required maxlength="20"
+                                       placeholder="A"
+                                       style="text-transform:uppercase"
+                                       value="">
+                            </div>
+                            <div>
+                                <label for="bulk_names">Names (one per line)</label>
+                                <textarea id="bulk_names" name="bulk_names"
+                                          rows="8"
+                                          required
+                                          placeholder="Plain White&#10;Plain Cream&#10;Plain Black&#10;Silver&#10;…"
+                                          style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body)"></textarea>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
+                            <button type="submit" class="btn btn-secondary">+ Add all</button>
+                            <span style="color:var(--text-faint);font-size:0.8125rem">
+                                Every line becomes a <?= e($labelL) ?> in the chosen band.
+                                To add to multiple bands, do one batch per band.
+                                Paste straight from a column in Excel / a supplier list.
+                            </span>
+                        </div>
+                    </form>
+
+                    <div class="helper" style="margin-top:1.25rem">
+                        <strong>Tip:</strong> The full
+                        <?= e($labelL) ?> editor on the edit page lets you
+                        bulk-import from an XLSX and add supplier / colour /
+                        code details too — useful when you already have a
+                        spreadsheet.
                     </div>
 
                     <form method="post" class="wiz-actions" style="margin:0">
