@@ -912,8 +912,8 @@ $activeNav = 'wizard';
                             <button type="submit" class="btn btn-secondary">+ Add</button>
                             <span style="color:var(--text-faint);font-size:0.8125rem">
                                 One line = one <?= e($labelL) ?>. To add to multiple bands
-                                <?php if (count($systems) >= 2): ?>or scopes<?php endif; ?>,
-                                do one batch per <?php if (count($systems) >= 2): ?>combo<?php else: ?>band<?php endif; ?>.
+                                <?php if (count($systems) >= 2): ?>or systems<?php endif; ?>,
+                                do one batch for each.
                             </span>
                         </div>
                     </form>
@@ -986,22 +986,20 @@ $activeNav = 'wizard';
                 <?php if (!empty($missingCombos)): ?>
                     <div class="wiz-card" style="background:#fffbeb;border-color:#fcd34d">
                         <h2 style="color:#78350f">
-                            <?= count($missingCombos) ?>
-                            missing (system × band)
-                            combo<?= count($missingCombos) === 1 ? '' : 's' ?>
+                            <?= count($missingCombos) === 1
+                                ? '1 price table not created yet'
+                                : count($missingCombos) . ' price tables not created yet' ?>
                         </h2>
                         <p class="lede" style="color:#92400e">
-                            These combinations have no price table yet — they
-                            won't generate a price at quote time.
+                            You have <?= e($labelL) ?>s that need a price grid but don't
+                            have one yet. Without a grid, the salesperson can't get a
+                            price when these combinations come up.
                         </p>
                         <div class="wiz-list" style="background:transparent;border:0;padding:0;margin-bottom:0.875rem">
                             <?php foreach ($missingCombos as $m): ?>
                                 <div class="wiz-list-item" style="border-bottom-color:#fde68a">
-                                    <span style="background:#fde68a;color:#78350f;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.125rem 0.4375rem;border-radius:999px;line-height:1.4">
-                                        Missing
-                                    </span>
                                     <strong><?= e((string) $m['system_name']) ?></strong>
-                                    <span style="color:#92400e">— Band <?= e((string) $m['band_code']) ?></span>
+                                    <span style="color:#92400e">+ Band <?= e((string) $m['band_code']) ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1010,10 +1008,10 @@ $activeNav = 'wizard';
                             <input type="hidden" name="_step" value="4">
                             <input type="hidden" name="_action" value="create_missing">
                             <button type="submit" class="btn btn-primary">
-                                Create the missing tables
+                                Create <?= count($missingCombos) === 1 ? 'it' : 'them all' ?>
                             </button>
                             <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.625rem">
-                                Or leave them out if a combo doesn't apply to your range.
+                                Or leave them — if a pairing doesn't apply to what you sell.
                             </span>
                         </form>
                     </div>
@@ -1023,7 +1021,7 @@ $activeNav = 'wizard';
                     <div class="wiz-card">
                         <h2>Price tables</h2>
                         <p class="lede">
-                            One per <em>(system × band)</em>. Empty tables won't
+                            One price grid per system + band. Empty tables won't
                             generate a price at quote time — fill them in now,
                             or come back via the product edit page later.
                         </p>
