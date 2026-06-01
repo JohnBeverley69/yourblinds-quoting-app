@@ -185,25 +185,26 @@ $ageOf = static function (?string $ts): string {
         .pl-filters {
             display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem;
             align-items: center; margin-bottom: 0.875rem;
-            background: #fff; border: 1px solid #e5e7eb;
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; padding: 0.625rem 0.875rem;
         }
         .pl-filters input[type="search"] {
-            padding: 0.375rem 0.625rem; border: 1px solid #d1d5db;
+            padding: 0.375rem 0.625rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; font-size: 0.875rem;
             flex: 0 1 16rem;
+            background: var(--bg-input); color: var(--text-body);
         }
         .pl-filters select, .pl-filters .pl-chip {
-            padding: 0.3125rem 0.625rem; border: 1px solid #d1d5db;
-            border-radius: 6px; font-size: 0.8125rem; background: #fff;
-            text-decoration: none; color: #1f3b5b;
+            padding: 0.3125rem 0.625rem; border: 1px solid var(--border-strong);
+            border-radius: 6px; font-size: 0.8125rem; background: var(--bg-card);
+            text-decoration: none; color: var(--link);
         }
         .pl-filters .pl-chip.is-active {
-            background: #1f3b5b; color: #fff; border-color: #1f3b5b;
+            background: var(--brand); color: #fff; border-color: var(--brand);
         }
-        .pl-filters label { font-size: 0.8125rem; color: #6b7280; }
+        .pl-filters label { font-size: 0.8125rem; color: var(--text-faint); }
         .pl-filters .pl-summary {
-            margin-left: auto; font-size: 0.875rem; color: #374151;
+            margin-left: auto; font-size: 0.875rem; color: var(--text-secondary);
         }
         .pl-board {
             display: grid;
@@ -214,15 +215,15 @@ $ageOf = static function (?string $ts): string {
             padding-bottom: 0.5rem;
         }
         .pl-col {
-            background: #f9fafb; border: 1px solid #e5e7eb;
+            background: var(--bg-subtle); border: 1px solid var(--border);
             border-radius: 10px;
             display: flex; flex-direction: column;
             min-height: 24rem; max-height: calc(100vh - 16rem);
         }
         .pl-col-head {
             padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid #e5e7eb;
-            position: sticky; top: 0; background: #f9fafb;
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; background: var(--bg-subtle);
             border-radius: 10px 10px 0 0;
         }
         .pl-col-head .pl-col-name {
@@ -234,15 +235,15 @@ $ageOf = static function (?string $ts): string {
             display: flex; align-items: baseline; gap: 0.5rem;
             margin-top: 0.25rem; font-size: 0.875rem;
         }
-        .pl-col-head .pl-col-count { font-weight: 700; color: #1f3b5b; }
-        .pl-col-head .pl-col-value { color: #6b7280; font-size: 0.8125rem; }
+        .pl-col-head .pl-col-count { font-weight: 700; color: var(--text-primary); }
+        .pl-col-head .pl-col-value { color: var(--text-faint); font-size: 0.8125rem; }
         .pl-col-body {
             flex: 1 1 auto; overflow-y: auto;
             padding: 0.5rem;
             display: flex; flex-direction: column; gap: 0.4375rem;
         }
         .pl-card {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 8px; padding: 0.5rem 0.625rem;
             text-decoration: none; color: inherit;
             display: block;
@@ -250,15 +251,15 @@ $ageOf = static function (?string $ts): string {
             transition: border-color 100ms, box-shadow 100ms;
         }
         .pl-card:hover {
-            border-color: #1f3b5b;
+            border-color: var(--link);
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }
         .pl-card .pl-card-name {
-            font-weight: 600; color: #111827;
+            font-weight: 600; color: var(--text-primary);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .pl-card .pl-card-num {
-            color: #6b7280; font-size: 0.75rem;
+            color: var(--text-faint); font-size: 0.75rem;
             font-family: ui-monospace, Menlo, Consolas, monospace;
         }
         .pl-card .pl-card-row {
@@ -266,14 +267,14 @@ $ageOf = static function (?string $ts): string {
             margin-top: 0.1875rem;
         }
         .pl-card .pl-card-total {
-            font-weight: 700; color: #065f46;
+            font-weight: 700; color: #16a34a;
         }
-        .pl-card .pl-card-age { color: #9ca3af; font-size: 0.6875rem; }
+        .pl-card .pl-card-age { color: var(--text-faint); font-size: 0.6875rem; }
         .pl-card .pl-card-outstanding {
-            color: #b91c1c; font-size: 0.6875rem; font-weight: 600;
+            color: #ef4444; font-size: 0.6875rem; font-weight: 600;
         }
         .pl-card .pl-card-place {
-            color: #6b7280; font-size: 0.6875rem;
+            color: var(--text-faint); font-size: 0.6875rem;
         }
         /* Payment chip — surfaced on every card, regardless of column.
            A paid-up-front quote sitting in 'accepted' was previously
@@ -299,14 +300,14 @@ $ageOf = static function (?string $ts): string {
            doesn't sit on top of long customer names. */
         .pl-card.has-paid-chip .pl-card-name { padding-right: 4.5rem; }
         .pl-col-empty {
-            color: #9ca3af; font-style: italic; font-size: 0.8125rem;
+            color: var(--text-faint); font-style: italic; font-size: 0.8125rem;
             text-align: center; padding: 1rem 0.5rem;
         }
         .pl-col-truncated {
-            font-size: 0.6875rem; color: #6b7280;
+            font-size: 0.6875rem; color: var(--text-faint);
             text-align: center; padding: 0.375rem 0;
-            border-top: 1px dashed #e5e7eb;
-            background: #f3f4f6;
+            border-top: 1px dashed var(--border);
+            background: var(--bg-subtle-2);
             border-radius: 0 0 10px 10px;
         }
     </style>

@@ -160,10 +160,13 @@ $activeNav = 'order-history';
         .filter-chips a {
             display: inline-block; padding: 0.25rem 0.625rem;
             font-size: 0.8125rem; border-radius: 999px; text-decoration: none;
-            background: #f3f4f6; color: #4b5563; border: 1px solid transparent;
+            background: var(--bg-subtle-2); color: var(--text-muted); border: 1px solid transparent;
         }
-        .filter-chips a.active { background: #1f3b5b; color: #fff; }
-        .filter-chips a:hover  { border-color: #d1d5db; }
+        .filter-chips a.active { background: var(--brand); color: #fff; }
+        .filter-chips a:hover  { border-color: var(--border-strong); }
+        /* Status pills intentionally keep a literal palette so they
+           remain instantly recognisable in both themes (paid = green
+           regardless of dark/light). */
         .status-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
@@ -177,16 +180,17 @@ $activeNav = 'order-history';
         .status-fitted    { background: #a7f3d0; color: #065f46; }
         .status-invoiced  { background: #fef3c7; color: #92400e; }
         .status-paid      { background: #14532d; color: #fff; }
-        a.q-link { font-weight: 600; color: #111827; text-decoration: none; }
-        a.q-link:hover { color: #1f3b5b; text-decoration: underline; }
+        a.q-link { font-weight: 600; color: var(--text-primary); text-decoration: none; }
+        a.q-link:hover { color: var(--link); text-decoration: underline; }
         .search-form { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
         .search-form input {
             flex: 1; padding: 0.5rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; font: inherit;
+            border: 1px solid var(--border-strong); border-radius: 8px; font: inherit;
+            background: var(--bg-input); color: var(--text-body);
         }
         .empty-state {
             padding: 2rem 1rem; text-align: center;
-            color: #6b7280; font-size: 0.9375rem;
+            color: var(--text-faint); font-size: 0.9375rem;
         }
         /* Pipeline shortcut — same row as the filter chips so it
            doesn't take extra vertical space. */
@@ -196,10 +200,10 @@ $activeNav = 'order-history';
         }
         .view-toggle a {
             font-size: 0.8125rem; padding: 0.25rem 0.625rem;
-            background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
-            color: #1f3b5b; text-decoration: none;
+            background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: 6px;
+            color: var(--link); text-decoration: none;
         }
-        .view-toggle a:hover { border-color: #1f3b5b; }
+        .view-toggle a:hover { border-color: var(--link); }
     </style>
 </head>
 <body>

@@ -187,16 +187,16 @@ $activeNav = 'calendar';
             min-width: 44px;
             min-height: 44px;
             padding: 0 0.875rem;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
-            background: #fff;
-            color: #1f3b5b;
+            background: var(--bg-card);
+            color: var(--text-primary);
             text-decoration: none;
             font-weight: 600;
             font-size: 1.125rem;
             line-height: 1;
         }
-        .cal-nav-btn:hover { background: #f3f4f6; }
+        .cal-nav-btn:hover { background: var(--bg-subtle-2); }
         .cal-nav-today {
             font-size: 0.9375rem;
             padding: 0 0.875rem;
@@ -205,7 +205,7 @@ $activeNav = 'calendar';
         .cal-month-label {
             font-size: 1.25rem;
             font-weight: 700;
-            color: #111827;
+            color: var(--text-primary);
             min-width: 11rem;
             text-align: center;
         }
@@ -214,31 +214,31 @@ $activeNav = 'calendar';
            filled when active, outlined when not. */
         .cal-view-toggle {
             display: inline-flex;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 999px;
             overflow: hidden;
             font-size: 0.875rem;
-            background: #fff;
+            background: var(--bg-card);
         }
         .cal-toggle-btn {
             padding: 0.4375rem 0.875rem;
-            color: #4b5563;
+            color: var(--text-muted);
             text-decoration: none;
             font-weight: 500;
             white-space: nowrap;
         }
-        .cal-toggle-btn:hover { background: #f3f4f6; }
+        .cal-toggle-btn:hover { background: var(--bg-subtle-2); }
         .cal-toggle-btn.is-active {
-            background: #1f3b5b;
+            background: var(--brand);
             color: #fff;
         }
-        .cal-toggle-btn + .cal-toggle-btn { border-left: 1px solid #d1d5db; }
+        .cal-toggle-btn + .cal-toggle-btn { border-left: 1px solid var(--border-strong); }
 
         .cal-legend {
             display: flex;
             gap: 0.875rem;
             font-size: 0.8125rem;
-            color: #4b5563;
+            color: var(--text-muted);
             flex-wrap: wrap;
         }
         .cal-legend span {
@@ -256,13 +256,13 @@ $activeNav = 'calendar';
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
             gap: 1px;
-            background: #e5e7eb;
-            border: 1px solid #e5e7eb;
+            background: var(--border);
+            border: 1px solid var(--border);
             border-radius: 10px;
             overflow: hidden;
         }
         .cal-weekday {
-            background: #1f3b5b;
+            background: var(--bg-sidebar);
             color: #fff;
             text-align: center;
             font-size: 0.8125rem;
@@ -272,7 +272,7 @@ $activeNav = 'calendar';
             letter-spacing: 0.05em;
         }
         .cal-cell {
-            background: #fff;
+            background: var(--bg-card);
             min-height: 120px;
             padding: 0.5rem;
             display: flex;
@@ -280,15 +280,20 @@ $activeNav = 'calendar';
             gap: 0.375rem;
             position: relative;
         }
-        .cal-cell.is-other-month { background: #f9fafb; }
+        .cal-cell.is-other-month { background: var(--bg-subtle); }
         /* Today: darker blue tint + navy inset stripe down the left
            edge. Tyler reported #eff6ff was too washed out on his
            monitor to spot at a glance. The stripe gives a strong
            visual anchor without making the whole cell read as an
-           alert state. */
+           alert state. In dark mode, uses a translucent overlay so
+           appt cards still read against it. */
         .cal-cell.is-today {
             background: #dbeafe;
             box-shadow: inset 3px 0 0 #1f3b5b;
+        }
+        [data-theme="dark"] .cal-cell.is-today {
+            background: rgba(96, 165, 250, 0.15);
+            box-shadow: inset 3px 0 0 #60a5fa;
         }
         .cal-cell-add {
             position: absolute;
@@ -302,7 +307,7 @@ $activeNav = 'calendar';
             position: absolute;
             bottom: 0.25rem;
             right: 0.5rem;
-            color: #1f3b5b;
+            color: var(--link);
             font-size: 1.25rem;
             font-weight: 600;
             line-height: 1;
@@ -315,7 +320,7 @@ $activeNav = 'calendar';
         .cal-day-num {
             font-size: 0.875rem;
             font-weight: 600;
-            color: #6b7280;
+            color: var(--text-faint);
             line-height: 1;
             pointer-events: none;
         }
@@ -427,7 +432,7 @@ $activeNav = 'calendar';
             .cal-cell {
                 min-height: 0;
                 padding: 0.75rem 1rem;
-                border-bottom: 1px solid #e5e7eb;
+                border-bottom: 1px solid var(--border);
             }
             .cal-cell.is-other-month { display: none; }
             .cal-day-num::after {

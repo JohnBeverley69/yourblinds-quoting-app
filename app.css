@@ -1,15 +1,147 @@
-/* YourBlinds app pages — shared dashboard styles. Mobile-first. */
+/* YourBlinds app pages — shared dashboard styles. Mobile-first.
+ *
+ * Theming model
+ * -------------
+ * All colours route through CSS custom properties defined on :root.
+ * The light defaults match the original palette so nothing visually
+ * changes by default. A [data-theme="dark"] block at the top of the
+ * file overrides the same names to dark equivalents — the sidebar
+ * sets the attribute on <html> before paint via an inline script in
+ * _partials/sidebar.php (cookie-backed).
+ *
+ * To honour the theme in page-specific styles, prefer var(--name)
+ * over literal hex codes. Status badges intentionally stay literal
+ * because they need to read as the SAME colour on both themes (a
+ * "paid" pill is green regardless of theme).
+ */
+
+:root {
+    /* Backgrounds */
+    --bg-body:        #f4f7fb;
+    --bg-card:        #fff;
+    --bg-subtle:      #f9fafb;
+    --bg-subtle-2:    #f3f4f6;
+    --bg-input:       #fff;
+    --bg-sidebar:     #1f3b5b;
+    --bg-sidebar-active: rgba(255, 255, 255, 0.1);
+    --bg-sidebar-hover:  rgba(255, 255, 255, 0.06);
+
+    /* Text */
+    --text-primary:   #111827;
+    --text-body:      #1f2937;
+    --text-secondary: #374151;
+    --text-muted:     #4b5563;
+    --text-faint:     #6b7280;
+    --text-on-brand:  #fff;
+    --text-on-sidebar:       rgba(255, 255, 255, 0.85);
+    --text-on-sidebar-meta:  rgba(255, 255, 255, 0.7);
+
+    /* Borders */
+    --border:         #e5e7eb;
+    --border-strong:  #d1d5db;
+    --border-faint:   #f3f4f6;
+    --border-dashed:  #cbd5e1;
+    --border-on-sidebar: rgba(255, 255, 255, 0.1);
+
+    /* Brand + links */
+    --brand:          #1f3b5b;
+    --brand-hover:    #15294a;
+    --brand-accent:   #93c5fd;
+    --link:           #2563eb;
+    --link-ring:      rgba(37, 99, 235, 0.15);
+
+    /* Shadows */
+    --shadow-sm:      0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-fab:     0 2px 6px rgba(0, 0, 0, 0.15);
+
+    /* Status: success / error / info / warning palettes used in
+       .alert and similar. These tint the same hue on both themes
+       but with adjusted opacity in dark mode. */
+    --alert-success-bg:     #f0fdf4;
+    --alert-success-text:   #166534;
+    --alert-success-border: #bbf7d0;
+    --alert-error-bg:       #fef2f2;
+    --alert-error-text:     #991b1b;
+    --alert-error-border:   #fecaca;
+    --alert-info-bg:        #eff6ff;
+    --alert-info-text:      #1e40af;
+    --alert-info-border:    #bfdbfe;
+
+    /* Danger button */
+    --danger-text:    #b91c1c;
+    --danger-border:  #fecaca;
+    --danger-bg-hover:#fef2f2;
+    --danger-border-hover: #fca5a5;
+
+    color-scheme: light;
+}
+
+/* Dark theme overrides — same variable names, dark palette. The
+   sidebar's existing #1f3b5b stays roughly as-is (it was already
+   dark); page chrome flips. */
+[data-theme="dark"] {
+    --bg-body:        #0f172a;
+    --bg-card:        #1e293b;
+    --bg-subtle:      #1a2335;
+    --bg-subtle-2:    #243042;
+    --bg-input:       #0f172a;
+    --bg-sidebar:     #0b1424;
+    --bg-sidebar-active: rgba(255, 255, 255, 0.12);
+    --bg-sidebar-hover:  rgba(255, 255, 255, 0.06);
+
+    --text-primary:   #f1f5f9;
+    --text-body:      #e2e8f0;
+    --text-secondary: #cbd5e1;
+    --text-muted:     #94a3b8;
+    --text-faint:     #94a3b8;
+    --text-on-brand:  #fff;
+
+    --border:         #334155;
+    --border-strong:  #475569;
+    --border-faint:   #1e293b;
+    --border-dashed:  #475569;
+
+    --brand:          #2563eb;
+    --brand-hover:    #1d4ed8;
+    --brand-accent:   #60a5fa;
+    --link:           #60a5fa;
+    --link-ring:      rgba(96, 165, 250, 0.25);
+
+    --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-fab:     0 2px 6px rgba(0, 0, 0, 0.5);
+
+    /* Alerts darken nicely with translucent fills so the text
+       contrasts against the panel under them. */
+    --alert-success-bg:     rgba(22, 101, 52, 0.22);
+    --alert-success-text:   #86efac;
+    --alert-success-border: rgba(34, 197, 94, 0.4);
+    --alert-error-bg:       rgba(153, 27, 27, 0.25);
+    --alert-error-text:     #fca5a5;
+    --alert-error-border:   rgba(248, 113, 113, 0.4);
+    --alert-info-bg:        rgba(30, 64, 175, 0.25);
+    --alert-info-text:      #93c5fd;
+    --alert-info-border:    rgba(96, 165, 250, 0.4);
+
+    --danger-text:    #f87171;
+    --danger-border:  rgba(248, 113, 113, 0.4);
+    --danger-bg-hover:rgba(153, 27, 27, 0.25);
+    --danger-border-hover: rgba(248, 113, 113, 0.6);
+
+    color-scheme: dark;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: #f4f7fb;
-    color: #1f2937;
+    background: var(--bg-body);
+    color: var(--text-body);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.15s, color 0.15s;
 }
-a { color: #2563eb; }
+a { color: var(--link); }
 
 /* ===========================================================================
    Shell layout — sidebar + main
@@ -21,7 +153,7 @@ a { color: #2563eb; }
 
 .app-sidebar {
     width: 240px;
-    background: #1f3b5b;
+    background: var(--bg-sidebar);
     color: #fff;
     display: flex;
     flex-direction: column;
@@ -30,7 +162,7 @@ a { color: #2563eb; }
 
 .app-sidebar-brand {
     padding: 1.5rem 1.25rem 1.125rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid var(--border-on-sidebar);
 }
 .app-brand-mark {
     font-weight: 700;
@@ -41,25 +173,25 @@ a { color: #2563eb; }
     line-height: 1;
     letter-spacing: -0.01em;
 }
-.app-brand-mark .accent { color: #93c5fd; }
+.app-brand-mark .accent { color: var(--brand-accent); }
 .app-brand-tag {
     display: block;
     margin-top: 0.4rem;
     font-size: 0.6875rem;
-    color: rgba(255,255,255,0.6);
+    color: var(--text-on-sidebar-meta);
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
 
 .app-sidebar-user {
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid var(--border-on-sidebar);
     font-size: 0.875rem;
     line-height: 1.35;
 }
 .app-sidebar-user-name { font-weight: 600; color: #fff; }
 .app-sidebar-user-meta {
-    color: rgba(255,255,255,0.7);
+    color: var(--text-on-sidebar-meta);
     font-size: 0.75rem;
     margin-top: 0.125rem;
 }
@@ -72,29 +204,29 @@ a { color: #2563eb; }
 .app-sidebar-nav a {
     display: block;
     padding: 0.625rem 1.25rem;
-    color: rgba(255,255,255,0.85);
+    color: var(--text-on-sidebar);
     text-decoration: none;
     font-size: 0.9375rem;
     border-left: 3px solid transparent;
     transition: background 0.15s, border-left-color 0.15s, color 0.15s;
 }
 .app-sidebar-nav a:hover {
-    background: rgba(255,255,255,0.06);
+    background: var(--bg-sidebar-hover);
     color: #fff;
 }
 .app-sidebar-nav a.active {
-    background: rgba(255,255,255,0.1);
-    border-left-color: #93c5fd;
+    background: var(--bg-sidebar-active);
+    border-left-color: var(--brand-accent);
     color: #fff;
     font-weight: 600;
 }
 
 .app-sidebar-foot {
     padding: 1rem 1.25rem;
-    border-top: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid var(--border-on-sidebar);
 }
 .app-sidebar-foot a {
-    color: #93c5fd;
+    color: var(--brand-accent);
     text-decoration: none;
     font-size: 0.875rem;
     display: inline-block;
@@ -126,19 +258,19 @@ a { color: #2563eb; }
     margin: 0;
     font-size: 1.5rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 .page-subtitle {
     margin: 0.25rem 0 0;
-    color: #6b7280;
+    color: var(--text-faint);
     font-size: 0.9375rem;
 }
 
 .section {
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 10px;
     padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    box-shadow: var(--shadow-sm);
     margin-bottom: 1.5rem;
 }
 .section-header {
@@ -153,11 +285,11 @@ a { color: #2563eb; }
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary);
 }
 .section-link {
     font-size: 0.875rem;
-    color: #2563eb;
+    color: var(--link);
     text-decoration: none;
 }
 .section-link:hover { text-decoration: underline; }
@@ -177,17 +309,21 @@ a { color: #2563eb; }
     transition: background 0.15s, box-shadow 0.15s;
     line-height: 1.4;
 }
-.btn-primary { background: #1f3b5b; color: #fff; }
-.btn-primary:hover { background: #15294a; }
+.btn-primary { background: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-hover); }
 .btn-secondary {
-    background: #fff;
-    color: #1f3b5b;
-    border: 1px solid #d1d5db;
+    background: var(--bg-card);
+    color: var(--brand);
+    border: 1px solid var(--border-strong);
 }
-.btn-secondary:hover { background: #f9fafb; }
+.btn-secondary:hover { background: var(--bg-subtle); }
 .btn-success { background: #16a34a; color: #fff; }
 .btn-success:hover { background: #15803d; }
 .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
+
+/* In dark mode the brand colour was tuned brighter so secondary
+   buttons need their text colour to follow it. */
+[data-theme="dark"] .btn-secondary { color: var(--text-primary); }
 
 /* ===========================================================================
    Tables / badges (kept for future module pages)
@@ -201,23 +337,24 @@ a { color: #2563eb; }
 .table th, .table td {
     text-align: left;
     padding: 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
     vertical-align: middle;
+    color: var(--text-body);
 }
 .table th {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #6b7280;
+    color: var(--text-faint);
     font-weight: 600;
 }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table tr:last-child td { border-bottom: 0; }
-.table a { text-decoration: none; color: #2563eb; }
+.table a { text-decoration: none; color: var(--link); }
 .table a:hover { text-decoration: underline; }
 .table-empty {
     text-align: center;
-    color: #6b7280;
+    color: var(--text-faint);
     padding: 2.5rem 1rem;
     font-size: 0.9375rem;
 }
@@ -257,7 +394,7 @@ a { color: #2563eb; }
     font-size: 0.8125rem;
     font-weight: 500;
     margin-bottom: 0.375rem;
-    color: #374151;
+    color: var(--text-secondary);
 }
 .form-group .required { color: #dc2626; }
 
@@ -265,23 +402,27 @@ a { color: #2563eb; }
 .form-group input[type="email"],
 .form-group input[type="tel"],
 .form-group input[type="search"],
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group input[type="time"],
+.form-group input[type="password"],
 .form-group textarea,
 .form-group select {
     width: 100%;
     font: inherit;
     padding: 0.5625rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
-    background: #fff;
-    color: inherit;
+    background: var(--bg-input);
+    color: var(--text-body);
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    border-color: var(--link);
+    box-shadow: 0 0 0 3px var(--link-ring);
 }
 .form-group textarea {
     min-height: 100px;
@@ -301,12 +442,12 @@ a { color: #2563eb; }
 
 .btn-danger {
     background: transparent;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
 }
 .btn-danger:hover {
-    background: #fef2f2;
-    border-color: #fca5a5;
+    background: var(--danger-bg-hover);
+    border-color: var(--danger-border-hover);
 }
 
 /* ===========================================================================
@@ -323,14 +464,15 @@ a { color: #2563eb; }
     min-width: 220px;
     font: inherit;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
-    background: #fff;
+    background: var(--bg-input);
+    color: var(--text-body);
 }
 .search-form input:focus {
     outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    border-color: var(--link);
+    box-shadow: 0 0 0 3px var(--link-ring);
 }
 
 /* ===========================================================================
@@ -342,9 +484,9 @@ a { color: #2563eb; }
     font-size: 0.9rem;
     margin-bottom: 1.25rem;
 }
-.alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-.alert-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.alert-info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.alert-success { background: var(--alert-success-bg); color: var(--alert-success-text); border: 1px solid var(--alert-success-border); }
+.alert-error   { background: var(--alert-error-bg);   color: var(--alert-error-text);   border: 1px solid var(--alert-error-border); }
+.alert-info    { background: var(--alert-info-bg);    color: var(--alert-info-text);    border: 1px solid var(--alert-info-border); }
 
 /* ===========================================================================
    Filter tabs (status filtering on list pages)
@@ -354,22 +496,26 @@ a { color: #2563eb; }
     gap: 0.25rem;
     margin-bottom: 1rem;
     flex-wrap: wrap;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
 }
 .tabs .tab {
     padding: 0.5rem 0.875rem;
     font-size: 0.875rem;
-    color: #6b7280;
+    color: var(--text-faint);
     text-decoration: none;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
     white-space: nowrap;
 }
-.tabs .tab:hover { color: #111827; }
+.tabs .tab:hover { color: var(--text-primary); }
 .tabs .tab.active {
-    color: #1f3b5b;
+    color: var(--brand);
     font-weight: 600;
-    border-bottom-color: #1f3b5b;
+    border-bottom-color: var(--brand);
+}
+[data-theme="dark"] .tabs .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--brand-accent);
 }
 .tabs .tab-count {
     opacity: 0.6;
@@ -390,7 +536,7 @@ a { color: #2563eb; }
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #6b7280;
+    color: var(--text-faint);
     font-weight: 600;
     margin: 0 0 0.5rem;
 }
@@ -402,10 +548,10 @@ a { color: #2563eb; }
     font-size: 0.9375rem;
 }
 .detail-cols dt {
-    color: #6b7280;
+    color: var(--text-faint);
     font-weight: 500;
 }
-.detail-cols dd { margin: 0; color: #111827; }
+.detail-cols dd { margin: 0; color: var(--text-primary); }
 .detail-cols dd.address-line { white-space: pre-line; }
 
 @media (max-width: 600px) {
@@ -415,16 +561,16 @@ a { color: #2563eb; }
 
 .totals-row td {
     font-weight: 600;
-    background: #f9fafb;
+    background: var(--bg-subtle);
 }
 .totals-row td.label {
     text-align: right;
-    color: #6b7280;
+    color: var(--text-faint);
     font-weight: 500;
 }
 .totals-row.grand td {
     font-size: 1.0625rem;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .pre-line { white-space: pre-line; }
@@ -433,16 +579,16 @@ a { color: #2563eb; }
    "Coming soon" placeholder
    =========================================================================== */
 .placeholder {
-    background: #fff;
-    border: 1px dashed #cbd5e1;
+    background: var(--bg-card);
+    border: 1px dashed var(--border-dashed);
     border-radius: 10px;
     padding: 2.5rem 1.5rem;
     text-align: center;
-    color: #6b7280;
+    color: var(--text-faint);
 }
 .placeholder-title {
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary);
     margin: 0 0 0.5rem;
     font-size: 1rem;
 }
@@ -450,6 +596,28 @@ a { color: #2563eb; }
     margin: 0;
     font-size: 0.9375rem;
 }
+
+/* ===========================================================================
+   Theme toggle button (sits in the sidebar foot)
+   =========================================================================== */
+.theme-toggle {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 999px;
+    padding: 0.25rem 0.625rem;
+    font: inherit; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+.theme-toggle .theme-icon { font-size: 0.875rem; line-height: 1; }
 
 /* ===========================================================================
    Mobile navigation drawer
@@ -488,18 +656,18 @@ a { color: #2563eb; }
         width: 44px;
         height: 44px;
         border-radius: 8px;
-        background: #1f3b5b;
+        background: var(--bg-sidebar);
         color: #fff;
         cursor: pointer;
         z-index: 1002;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        box-shadow: var(--shadow-fab);
         align-items: center;
         justify-content: center;
         border: 0;
     }
     .nav-fab { display: inline-flex; }
     .nav-fab:hover,
-    .nav-close:hover { background: #16294a; }
+    .nav-close:hover { background: var(--brand-hover); }
     .nav-toggle-input:checked ~ .nav-fab { display: none; }
     .nav-toggle-input:checked ~ .nav-close { display: inline-flex; }
 

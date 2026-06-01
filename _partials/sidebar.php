@@ -138,6 +138,22 @@ $navLinks = [
     'backup'        => ['/master-admin/backup.php',    'Backup',        $isSuperAdmin],
 ];
 ?>
+<script>
+(function () {
+    // Theme = dark/light. Cookie-backed (no DB column needed).
+    // Runs before paint of the content below — no FOUC.
+    // Logic: explicit cookie wins; otherwise honour the OS preference.
+    try {
+        var m = document.cookie.match(/(?:^|; )yb_theme=([^;]+)/);
+        var pref = m ? decodeURIComponent(m[1]) : '';
+        if (pref !== 'dark' && pref !== 'light') {
+            pref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                 ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', pref);
+    } catch (e) { /* swallow — defaults to light */ }
+})();
+</script>
     <input type="checkbox" id="navToggle" class="nav-toggle-input">
     <label class="nav-fab" for="navToggle" aria-label="Open menu" tabindex="0">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -178,5 +194,43 @@ $navLinks = [
             <a href="/auth/change_password.php">Change password</a>
             &middot;
             <a href="/auth/logout.php">Sign out &rarr;</a>
+            <div>
+                <button type="button" class="theme-toggle" id="ybThemeToggle"
+                        aria-label="Toggle dark mode">
+                    <span class="theme-icon" id="ybThemeIcon">🌙</span>
+                    <span id="ybThemeLabel">Dark mode</span>
+                </button>
+            </div>
         </div>
     </aside>
+<script>
+(function () {
+    // Theme toggle. Writes the cookie (1 year) and flips the
+    // data-theme attribute on <html>. The pre-paint script at the
+    // top of this partial picks it up on every subsequent page load.
+    var btn   = document.getElementById('ybThemeToggle');
+    var icon  = document.getElementById('ybThemeIcon');
+    var label = document.getElementById('ybThemeLabel');
+    if (!btn || !icon || !label) return;
+
+    function paintLabel() {
+        var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        icon.textContent  = dark ? '☀️' : '🌙';
+        label.textContent = dark ? 'Light mode' : 'Dark mode';
+    }
+    paintLabel();
+
+    btn.addEventListener('click', function () {
+        var next = document.documentElement.getAttribute('data-theme') === 'dark'
+                 ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        // 1-year cookie, Lax SameSite — same site, no CSRF concern.
+        var d = new Date();
+        d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
+        document.cookie = 'yb_theme=' + next
+                        + '; expires=' + d.toUTCString()
+                        + '; path=/; SameSite=Lax';
+        paintLabel();
+    });
+})();
+</script>
