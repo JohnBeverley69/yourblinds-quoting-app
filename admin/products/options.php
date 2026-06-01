@@ -264,13 +264,16 @@ $options = $rows->fetchAll();
 // autocomplete on the band input so the user can pick rather than
 // retype. Typing a new value still works for the first band on a
 // fresh product.
+// No active filter — deactivated tables / fabrics still represent
+// a band the tenant has defined; gating them out of autocomplete
+// would silently swallow bands the user expects to see.
 $knownBandsStmt = db()->prepare(
     "SELECT DISTINCT band_code FROM (
         SELECT band_code FROM product_options
-         WHERE product_id = ? AND client_id = ? AND active = 1
+         WHERE product_id = ? AND client_id = ?
         UNION
         SELECT band_code FROM price_tables
-         WHERE product_id = ? AND client_id = ? AND active = 1
+         WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
      ORDER BY band_code"

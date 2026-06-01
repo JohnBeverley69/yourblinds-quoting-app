@@ -86,13 +86,14 @@ $fabricsTotal = array_sum(array_map('count', $fabricsByBand));
 // Fabrics section. Pulled from BOTH product_options and
 // price_tables so a band created on the price-tables page is
 // still pickable here without retyping.
+// No active filter — see comment in wizard.php on the same query.
 $knownBandsStmt = db()->prepare(
     "SELECT DISTINCT band_code FROM (
         SELECT band_code FROM product_options
-         WHERE product_id = ? AND client_id = ? AND active = 1
+         WHERE product_id = ? AND client_id = ?
         UNION
         SELECT band_code FROM price_tables
-         WHERE product_id = ? AND client_id = ? AND active = 1
+         WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
      ORDER BY band_code"

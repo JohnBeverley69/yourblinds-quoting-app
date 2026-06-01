@@ -375,15 +375,21 @@ if ($product && $step >= 3) {
 // user can pick from existing bands rather than retyping. Pulls
 // from BOTH product_options and price_tables so a band created in
 // step 4 is still pickable from step 3 and vice versa.
+//
+// Note: no active filter here. A deactivated price_table or option
+// still represents a band the tenant has defined on this product;
+// surfacing it on autocomplete is more helpful than gating on
+// active=1 (where typos / deactivations would silently swallow
+// bands the user expects to see).
 $knownBands = [];
 if ($product) {
     $bandSt = $pdo->prepare(
         "SELECT DISTINCT band_code FROM (
             SELECT band_code FROM product_options
-             WHERE product_id = ? AND client_id = ? AND active = 1
+             WHERE product_id = ? AND client_id = ?
             UNION
             SELECT band_code FROM price_tables
-             WHERE product_id = ? AND client_id = ? AND active = 1
+             WHERE product_id = ? AND client_id = ?
          ) x
          WHERE band_code IS NOT NULL AND band_code != ''
          ORDER BY band_code"
