@@ -247,46 +247,47 @@ $activeNav = 'calendar';
         }
         .day-nav {
             display: inline-flex; align-items: center; gap: 0.25rem;
-            background: #fff; border: 1px solid #d1d5db;
+            background: var(--bg-card); border: 1px solid var(--border-strong);
             border-radius: 8px; padding: 0.1875rem;
         }
         .day-nav a, .day-nav span {
             display: inline-flex; align-items: center; justify-content: center;
             min-width: 2rem; height: 2rem; padding: 0 0.5rem;
-            text-decoration: none; color: #1f3b5b;
+            text-decoration: none; color: var(--text-primary);
             font-weight: 600; font-size: 0.875rem;
             border-radius: 5px;
         }
-        .day-nav a:hover { background: #f3f4f6; }
+        .day-nav a:hover { background: var(--bg-subtle-2); }
         .day-nav .today-pill {
-            background: #1f3b5b; color: #fff;
+            background: var(--brand); color: #fff;
         }
         .day-date {
-            font-size: 1.125rem; font-weight: 700; color: #1f3b5b;
+            font-size: 1.125rem; font-weight: 700; color: var(--text-primary);
             min-width: 12rem;
         }
-        .day-date .day-of-week { color: #6b7280; font-weight: 500; }
+        .day-date .day-of-week { color: var(--text-faint); font-weight: 500; }
         .day-jump input[type="date"] {
-            padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+            padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; font-size: 0.875rem;
+            background: var(--bg-input); color: var(--text-body);
         }
         .view-switch {
-            display: inline-flex; background: #f3f4f6; border-radius: 8px;
+            display: inline-flex; background: var(--bg-subtle-2); border-radius: 8px;
             padding: 0.125rem; margin-left: auto;
         }
         .view-switch a {
             padding: 0.3125rem 0.75rem; border-radius: 6px;
-            text-decoration: none; color: #6b7280;
+            text-decoration: none; color: var(--text-faint);
             font-size: 0.875rem; font-weight: 600;
         }
-        .view-switch a.is-active { background: #fff; color: #1f3b5b;
+        .view-switch a.is-active { background: var(--bg-card); color: var(--text-primary);
                                     box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
         /* Grid layout. Time axis is fixed on the left; fitter columns
            scroll horizontally on narrow screens. Time markers + grid
            lines align with hour boundaries. */
         .day-board {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; overflow: hidden;
         }
         .day-board-head {
@@ -296,14 +297,15 @@ $activeNav = 'calendar';
                get horizontal scroll, which is right — Once does
                this too. */
             grid-template-columns: 4rem repeat(var(--cols, 1), 18rem);
-            background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+            background: var(--bg-subtle); border-bottom: 1px solid var(--border);
             position: sticky; top: 0; z-index: 3;
         }
         .day-board-head .col-spacer { /* corner above the time axis */ }
         .day-board-head .col-name {
             padding: 0.625rem 0.75rem; font-weight: 700; font-size: 0.9375rem;
             text-align: center;
-            border-left: 1px solid #e5e7eb;
+            border-left: 1px solid var(--border);
+            color: var(--text-primary);
         }
         .day-board-body {
             display: grid;
@@ -311,23 +313,23 @@ $activeNav = 'calendar';
             overflow-x: auto;
         }
         .time-axis {
-            position: relative; background: #fff;
-            border-right: 1px solid #e5e7eb;
+            position: relative; background: var(--bg-card);
+            border-right: 1px solid var(--border);
         }
         .time-axis .time-tick {
             position: absolute; left: 0; right: 0;
             padding: 0.125rem 0.375rem;
-            font-size: 0.6875rem; color: #6b7280; text-align: right;
-            border-top: 1px solid #f3f4f6;
+            font-size: 0.6875rem; color: var(--text-faint); text-align: right;
+            border-top: 1px solid var(--border-faint);
         }
         .fitter-col {
-            position: relative; background: #fff;
-            border-left: 1px solid #e5e7eb;
+            position: relative; background: var(--bg-card);
+            border-left: 1px solid var(--border);
             cursor: cell;       /* hint: click anywhere to create */
         }
         .fitter-col .hour-line {
             position: absolute; left: 0; right: 0;
-            border-top: 1px solid #f3f4f6;
+            border-top: 1px solid var(--border-faint);
             pointer-events: none;   /* don't steal clicks from the column */
         }
         .fitter-col:hover .new-hint {
@@ -356,7 +358,7 @@ $activeNav = 'calendar';
         .appt-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 2; }
         .appt-card .ac-time {
             font-family: ui-monospace, Menlo, Consolas, monospace;
-            font-size: 0.6875rem; color: #6b7280;
+            font-size: 0.6875rem; color: var(--text-faint);
             margin-bottom: 0.125rem;
             /* Right padding leaves room for the absolutely-positioned
                action icons at top-right of the card so the time
@@ -364,27 +366,27 @@ $activeNav = 'calendar';
             padding-right: 5.5rem;
         }
         .appt-card .ac-title {
-            font-weight: 700; color: #111827;
+            font-weight: 700; color: var(--text-primary);
             text-transform: uppercase;
             font-size: 0.8125rem;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             padding-right: 5.5rem;
         }
         .appt-card .ac-placeholder {
-            color: #6b7280; font-style: italic;
+            color: var(--text-faint); font-style: italic;
         }
         .appt-card .ac-desc {
-            font-weight: 600; font-style: italic; color: #374151;
+            font-weight: 600; font-style: italic; color: var(--text-secondary);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             font-size: 0.75rem;
         }
         .appt-card .ac-addr {
-            color: #374151; font-size: 0.75rem;
+            color: var(--text-secondary); font-size: 0.75rem;
             margin-top: 0.125rem;
         }
         .appt-card .ac-phone {
             font-family: ui-monospace, Menlo, Consolas, monospace;
-            font-size: 0.75rem; color: #374151;
+            font-size: 0.75rem; color: var(--text-secondary);
         }
         /* Quote reference label — small monospace chip at the top
            of the card alongside the time. Once-style "260429-sc-2"

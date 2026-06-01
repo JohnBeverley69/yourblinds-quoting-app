@@ -221,50 +221,53 @@ $activeNav = 'calendar';
             grid-template-columns: 4rem repeat(7, minmax(9rem, 1fr));
         }
         .wk-board-head {
-            background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+            background: var(--bg-subtle); border-bottom: 1px solid var(--border);
         }
         .wk-board-body { overflow-x: auto; }
         .wk-day-name {
             padding: 0.5rem 0.5rem; text-align: center;
-            border-left: 1px solid #e5e7eb;
+            border-left: 1px solid var(--border);
             font-size: 0.8125rem;
         }
         .wk-day-name .wk-dow {
-            font-weight: 700; color: #1f3b5b;
+            font-weight: 700; color: var(--text-primary);
             text-transform: uppercase; letter-spacing: 0.04em;
             font-size: 0.75rem;
         }
         .wk-day-name .wk-dom {
             font-size: 1.0625rem; font-weight: 700;
-            color: #111827; margin-top: 0.125rem;
+            color: var(--text-primary); margin-top: 0.125rem;
         }
-        .wk-day-name.is-today .wk-dow { color: #dc2626; }
+        .wk-day-name.is-today .wk-dow { color: #ef4444; }
         .wk-day-name.is-today .wk-dom {
-            background: #dc2626; color: #fff;
+            background: #ef4444; color: #fff;
             display: inline-block; min-width: 1.625rem;
             border-radius: 999px; padding: 0.0625rem 0.4375rem;
         }
-        .wk-day-name .wk-count { color: #6b7280; font-size: 0.6875rem; }
+        .wk-day-name .wk-count { color: var(--text-faint); font-size: 0.6875rem; }
 
         .time-axis {
-            position: relative; background: #fff;
-            border-right: 1px solid #e5e7eb;
+            position: relative; background: var(--bg-card);
+            border-right: 1px solid var(--border);
         }
         .time-axis .time-tick {
             position: absolute; left: 0; right: 0;
             padding: 0.125rem 0.375rem;
-            font-size: 0.6875rem; color: #6b7280; text-align: right;
-            border-top: 1px solid #f3f4f6;
+            font-size: 0.6875rem; color: var(--text-faint); text-align: right;
+            border-top: 1px solid var(--border-faint);
         }
         .wk-day-col {
-            position: relative; background: #fff;
-            border-left: 1px solid #e5e7eb;
+            position: relative; background: var(--bg-card);
+            border-left: 1px solid var(--border);
             cursor: cell;
         }
         .wk-day-col.is-today { background: #fffbeb; }
+        [data-theme="dark"] .wk-day-col.is-today {
+            background: rgba(251, 191, 36, 0.10);
+        }
         .wk-day-col .hour-line {
             position: absolute; left: 0; right: 0;
-            border-top: 1px solid #f3f4f6;
+            border-top: 1px solid var(--border-faint);
             pointer-events: none;
         }
         .wk-day-col:hover .new-hint { opacity: 0.6; }
@@ -291,20 +294,23 @@ $activeNav = 'calendar';
         .wk-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 2; }
         .wk-card .wc-time {
             font-family: ui-monospace, Menlo, Consolas, monospace;
-            font-size: 0.6875rem; color: #6b7280;
+            font-size: 0.6875rem; color: var(--text-faint);
         }
         .wk-card .wc-title {
-            font-weight: 700; color: #111827;
+            font-weight: 700; color: var(--text-primary);
             text-transform: uppercase;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .wk-card .wc-assignee {
-            font-size: 0.6875rem; color: #6b7280;
+            font-size: 0.6875rem; color: var(--text-faint);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .wk-card .wc-placeholder { color: #6b7280; font-style: italic; }
+        .wk-card .wc-placeholder { color: var(--text-faint); font-style: italic; }
         /* Q-number chip alongside time — same role as on day view,
-           but tighter to fit the narrower week column. */
+           but tighter to fit the narrower week column. The chip
+           background stays translucent-white because the parent
+           card is colour-coded (the chip needs to read on any
+           card colour, not just the theme). */
         .wk-card .wc-qref {
             display: inline-block;
             font-family: ui-monospace, Menlo, Consolas, monospace;
