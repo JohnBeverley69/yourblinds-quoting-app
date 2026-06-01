@@ -13,12 +13,29 @@ declare(strict_types=1);
  * Optional scope (sensible defaults applied if missing):
  *   $isAdmin    bool   defaults to ($user['role'] === 'admin')
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
- *   $activeNav  string one of: calendar, my-schedule, dashboard,
- *                      order-history, pipeline, accounts, customers,
- *                      products, wizard, users, settings, billing,
- *                      master-admin, pricing, subscriptions,
+ *   $activeNav  string one of: calendar, dashboard, order-history,
+ *                      customers, accounts, products, users, settings,
+ *                      billing, master-admin, pricing, subscriptions,
  *                      paypal-health, push-updates, backup.
  *                      Empty = no highlight.
+ *
+ * Layout: items are grouped into "Work" (everyday) and "Setup"
+ * (admin config) sections, with a collapsible "Master admin" block
+ * at the bottom for super-admins. A prominent "+ New quote" call-to-
+ * action sits at the very top of the sidebar for users with
+ * can_create_quotes — saves a Calendar → Order history → button
+ * navigation chain when raising a fresh quote.
+ *
+ * Items dropped in this layout (vs. the legacy flat list):
+ *   - "My Schedule"  — duplicated Calendar with ?mine=1. Use the
+ *                      Everyone / Just me toggle on the Calendar
+ *                      header instead.
+ *   - "Pipeline"     — same data as Order history, different view.
+ *                      Reachable via the "Pipeline view →" link in
+ *                      the Order-history filter chip row.
+ *   - "Setup wizard" — discoverable from the Products page (empty
+ *                      state + header CTA). A third sidebar entry
+ *                      was menu noise.
  */
 
 $isAdmin      = $isAdmin      ?? (($user['role'] ?? '') === 'admin');
@@ -97,45 +114,46 @@ $canSeeAnyDashPanel = $isAdmin
     || !empty($_perms['dash_view_profit'])
     || !empty($_perms['dash_view_recent']);
 
-$navLinks = [
-    'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-    'my-schedule'   => ['/calendar/schedule.php',      'My Schedule',   true],
-    // Dashboard is sales-analytics; hidden until the admin grants at
-    // least one panel on /admin/users_edit.php for non-admins.
-    'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
-    // Per Tyler's review (Quotes #3): the old separate "New Quote",
-    // "Quote History" and "Orders" sidebar links have been merged
-    // into one "Order history" entry that covers every status from
-    // draft to paid. New quotes start via the "+ New quote" button
-    // on the page itself (and on the dashboard / calendar headers).
-    'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
-    // Pipeline — Kanban view of every quote/order in the funnel.
-    // Same audience as Orders (it's the same data, different shape)
-    // and reuses the orders' permission gate. Sits next to Orders so
-    // operators discover it naturally.
-    'pipeline'      => ['/orders/pipeline.php',        'Pipeline',      $hasQuotes && $canSeeOrders],
-    // Accounts: paid add-on, AND restricted to staff (not pure
-    // fitters — fitters take payment from the order page itself,
-    // they don't need the listing).
-    'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
-    'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
-    'products'      => ['/admin/products/index.php',   'Products',      $isAdmin],
-    // Wizard sits under Products in the nav because it's a path
-    // INTO catalogue setup — not a separate concern. Same admin gate
-    // as Products itself. Discoverable from the products empty state
-    // and the index header too; this is the third entry point for
-    // tenants who already have one product and want the guided flow
-    // for the next.
-    'wizard'        => ['/admin/products/wizard.php',  'Setup wizard',  $isAdmin],
-    'users'         => ['/admin/users.php',            'Users',         $isAdmin],
-    'settings'      => ['/admin/settings.php',         'Settings',      $isAdmin],
-    'billing'       => ['/billing/index.php',          'Billing',       $isAdmin],
-    'master-admin'  => ['/master-admin/index.php',     'Master Admin',  $isSuperAdmin],
-    'pricing'       => ['/master-admin/pricing.php',   'Pricing',       $isSuperAdmin],
-    'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
-    'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
-    'push-updates'  => ['/master-admin/push-updates.php', 'Push updates', $isSuperAdmin],
-    'backup'        => ['/master-admin/backup.php',    'Backup',        $isSuperAdmin],
+// Grouped navigation. Each section emits a small heading; sections
+// with no visible items get suppressed entirely (so a pure fitter
+// doesn't see an empty "Setup" header).
+//
+// [href, label, visible]. Within a section: display order.
+$navSections = [
+    [
+        'name'  => 'Work',
+        'items' => [
+            'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
+            'calendar'      => ['/calendar/index.php',         'Calendar',      true],
+            'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
+            'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
+            'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+        ],
+    ],
+    [
+        'name'  => 'Setup',
+        'items' => [
+            'products' => ['/admin/products/index.php', 'Products', $isAdmin],
+            'users'    => ['/admin/users.php',          'Users',    $isAdmin],
+            'settings' => ['/admin/settings.php',       'Settings', $isAdmin],
+            'billing'  => ['/billing/index.php',        'Billing',  $isAdmin],
+        ],
+    ],
+    [
+        // Super-admin only. Collapsed by default — six entries that
+        // only one user sees, no need to clutter the sidebar with
+        // them all expanded.
+        'name'        => 'Master admin',
+        'collapsible' => true,
+        'items'       => [
+            'master-admin'  => ['/master-admin/index.php',         'Master Admin',  $isSuperAdmin],
+            'pricing'       => ['/master-admin/pricing.php',       'Pricing',       $isSuperAdmin],
+            'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
+            'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
+            'push-updates'  => ['/master-admin/push-updates.php',  'Push updates',  $isSuperAdmin],
+            'backup'        => ['/master-admin/backup.php',        'Backup',        $isSuperAdmin],
+        ],
+    ],
 ];
 ?>
 <script>
@@ -184,10 +202,46 @@ $navLinks = [
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
+        <?php if ($hasQuotes && $canCreateQuotes): ?>
+            <!-- Primary CTA — pinned at the top of the sidebar so
+                 raising a new quote is one click from any page.
+                 Visually distinct from nav links so it reads as
+                 "this is the main action", not "yet another link". -->
+            <div class="sidebar-cta">
+                <a href="/quote-builder/new.php" class="sidebar-cta-btn">
+                    <span aria-hidden="true">+</span>
+                    New quote
+                </a>
+            </div>
+        <?php endif; ?>
+
         <nav class="app-sidebar-nav">
-<?php foreach ($navLinks as $navKey => [$navHref, $navLabel, $navShow]): ?>
-<?php if (!$navShow) continue; ?>
-            <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+<?php foreach ($navSections as $section):
+    $visibleItems = array_filter(
+        $section['items'],
+        static fn ($it) => !empty($it[2])
+    );
+    if (!$visibleItems) continue;
+    $isCollapsible = !empty($section['collapsible']);
+    // If the active page lives inside a collapsible section, open
+    // it by default so the user sees their context.
+    $isOpen = $isCollapsible && array_key_exists($activeNav, $visibleItems);
+?>
+    <?php if ($isCollapsible): ?>
+        <details class="nav-section nav-section-collapsible"<?= $isOpen ? ' open' : '' ?>>
+            <summary class="nav-section-heading"><?= e($section['name']) ?></summary>
+            <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+            <?php endforeach; ?>
+        </details>
+    <?php else: ?>
+        <div class="nav-section">
+            <div class="nav-section-heading"><?= e($section['name']) ?></div>
+            <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 <?php endforeach; ?>
         </nav>
         <div class="app-sidebar-foot">
