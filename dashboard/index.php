@@ -354,6 +354,60 @@ if ($canSeeProfit) {
     }
 }
 
+// ---- 6. Upcoming jobs (calendar peek) -------------------------------
+//
+// Forward-looking widget — next N booked appointments from the
+// calendar. Not subject to the period filter (that's a sales-history
+// scope; "upcoming" is forward-looking and always = next-from-now).
+//
+// Permission scope: matches the calendar — users without
+// can_view_all_customer_jobs see only appointments assigned to them.
+// Status filter: only 'booked' (active future jobs). Completed,
+// cancelled and no-show aren't "upcoming" by any useful definition.
+//
+// Schema safety: appointments table may be absent on pre-Phase-2
+// builds; the try/catch lets the page still render.
+$upcomingJobs   = [];
+$upcomingLimit  = 8;
+$canViewAllJobs = $isAdmin || !empty($perms['can_view_all_customer_jobs']);
+
+try {
+    $upWhere  = [
+        'a.client_id = ?',
+        "a.status = 'booked'",
+        "(a.appointment_date > CURDATE()
+          OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))",
+    ];
+    $upParams = [$clientId];
+    if (!$canViewAllJobs) {
+        $upWhere[]  = 'a.client_user_id = ?';
+        $upParams[] = $myUserId;
+    }
+    $st = $pdo->prepare(
+        "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                a.duration_minutes, a.client_user_id,
+                a.installation_town, a.installation_postcode,
+                c.name      AS customer_name,
+                c.postcode  AS customer_postcode,
+                u.full_name AS fitter_name,
+                q.id        AS quote_id,
+                q.quote_number,
+                q.status    AS quote_status
+           FROM appointments a
+      LEFT JOIN customers    c ON c.id = a.customer_id
+      LEFT JOIN client_users u ON u.id = a.client_user_id
+      LEFT JOIN quotes       q ON q.id = a.quote_id
+          WHERE " . implode(' AND ', $upWhere) . "
+       ORDER BY a.appointment_date ASC, a.appointment_time ASC
+          LIMIT " . (int) $upcomingLimit
+    );
+    $st->execute($upParams);
+    $upcomingJobs = $st->fetchAll();
+} catch (Throwable $e) {
+    // appointments table absent or schema mismatch — silent degrade.
+    error_log('dashboard upcoming jobs query failed: ' . $e->getMessage());
+}
+
 // ---- 5. Recent activity ----------------------------------------------
 $recent = [];
 if ($canSeeRecent) {
@@ -595,6 +649,56 @@ $activeNav = 'dashboard';
             .panel-flex { flex-direction: column; }
             .panel-flex-pie { width: 100%; }
         }
+
+        /* Upcoming jobs widget — forward-looking calendar peek that
+           sits above the KPI tiles. Each row is a click-through to
+           the calendar's appointment view. The Today date pill is
+           red so the eye lands on it first. */
+        .upcoming-row {
+            display: grid;
+            grid-template-columns: 5.5rem 1fr 9rem 8rem;
+            gap: 0.75rem; align-items: center;
+            padding: 0.5rem 0.5rem;
+            border-bottom: 1px solid #f3f4f6;
+            text-decoration: none; color: inherit;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            transition: background-color 100ms;
+        }
+        .upcoming-row:hover { background: #f3f4f6; }
+        .upcoming-row:last-of-type { border-bottom: 0; }
+        .up-when .up-date {
+            font-weight: 700; color: #111827; font-size: 0.8125rem;
+        }
+        .up-when .up-date.is-today { color: #b91c1c; }
+        .up-when .up-time { color: #6b7280; font-size: 0.75rem; }
+        .up-customer .up-name {
+            font-weight: 600; color: #1f3b5b;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .up-customer .up-place { color: #6b7280; font-size: 0.75rem; }
+        .up-fitter { color: #4b5563; font-size: 0.8125rem; }
+        .up-quote {
+            display: flex; align-items: center; gap: 0.375rem;
+            font-size: 0.75rem; flex-wrap: wrap;
+        }
+        .up-quote .status-pill {
+            margin: 0; font-size: 0.625rem; padding: 0.0625rem 0.375rem;
+        }
+        .up-quote-num {
+            color: #6b7280;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+        }
+        .upcoming-more {
+            display: inline-block; margin-top: 0.625rem;
+            color: #1f3b5b; font-size: 0.8125rem; font-weight: 600;
+            text-decoration: none;
+        }
+        .upcoming-more:hover { text-decoration: underline; }
+        @media (max-width: 700px) {
+            .upcoming-row { grid-template-columns: 4.5rem 1fr; }
+            .up-fitter, .up-quote { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -698,6 +802,83 @@ $activeNav = 'dashboard';
                 </noscript>
             </form>
         <?php endif; ?>
+
+        <!-- Upcoming jobs widget --------------------------------------->
+        <!-- Forward-looking calendar peek. Shown to anyone who reaches
+             the dashboard (the existing canSeeAnything gate already
+             bounces pure fitters back to /calendar/index.php, so
+             they get the calendar directly). -->
+        <div class="panel">
+            <h2>Upcoming jobs</h2>
+            <p class="panel-sub">
+                <?php if (!$upcomingJobs): ?>
+                    Nothing booked yet — head to the calendar to add one.
+                <?php else: ?>
+                    Next <?= count($upcomingJobs) ?>
+                    <?= count($upcomingJobs) === 1 ? 'appointment' : 'appointments' ?>
+                    on the calendar — soonest first.
+                <?php endif; ?>
+            </p>
+            <?php if (!$upcomingJobs): ?>
+                <div class="empty">No upcoming jobs booked.</div>
+            <?php else:
+                $tomorrowYmd = date('Y-m-d', strtotime('tomorrow'));
+                $todayYmd    = date('Y-m-d');
+                foreach ($upcomingJobs as $j):
+                    $apptDate = (string) ($j['appointment_date'] ?? '');
+                    $apptTime = (string) ($j['appointment_time'] ?? '');
+                    $whenTs   = $apptDate !== '' ? strtotime($apptDate . ' ' . $apptTime) : 0;
+                    if ($apptDate === $todayYmd) {
+                        $dateLabel = 'Today';
+                        $isToday   = true;
+                    } elseif ($apptDate === $tomorrowYmd) {
+                        $dateLabel = 'Tomorrow';
+                        $isToday   = false;
+                    } else {
+                        $dateLabel = $whenTs ? date('D j M', $whenTs) : '';
+                        $isToday   = false;
+                    }
+                    $timeLabel = $whenTs ? date('g:ia', $whenTs) : '';
+                    $custName  = trim((string) ($j['customer_name'] ?? $j['title'] ?? ''));
+                    if ($custName === '') $custName = 'No customer';
+                    $postcode  = trim((string) ($j['installation_postcode']
+                                                ?? $j['customer_postcode']
+                                                ?? ''));
+            ?>
+                <a class="upcoming-row" href="/calendar/view.php?id=<?= (int) $j['id'] ?>">
+                    <div class="up-when">
+                        <div class="up-date<?= $isToday ? ' is-today' : '' ?>">
+                            <?= e($dateLabel) ?>
+                        </div>
+                        <div class="up-time"><?= e($timeLabel) ?></div>
+                    </div>
+                    <div class="up-customer">
+                        <div class="up-name"><?= e($custName) ?></div>
+                        <?php if ($postcode !== ''): ?>
+                            <div class="up-place"><?= e($postcode) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="up-fitter">
+                        <?php if ($canViewAllJobs && !empty($j['fitter_name'])): ?>
+                            <?= e((string) $j['fitter_name']) ?>
+                        <?php elseif ($canViewAllJobs): ?>
+                            <em style="color:#9ca3af">Unassigned</em>
+                        <?php else: ?>
+                            &nbsp;
+                        <?php endif; ?>
+                    </div>
+                    <div class="up-quote">
+                        <?php if (!empty($j['quote_number'])): ?>
+                            <span class="status-pill status-<?= e((string) $j['quote_status']) ?>">
+                                <?= e((string) $j['quote_status']) ?>
+                            </span>
+                            <span class="up-quote-num"><?= e((string) $j['quote_number']) ?></span>
+                        <?php endif; ?>
+                    </div>
+                </a>
+            <?php endforeach; endif; ?>
+            <a href="/calendar/index.php" class="upcoming-more">Open calendar &rarr;</a>
+        </div>
 
         <!-- KPI tiles ---------------------------------------------------->
         <?php if ($canSeeRevenue): ?>
