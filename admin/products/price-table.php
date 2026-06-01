@@ -1,6 +1,25 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Single price-table editor.
+ *
+ * Primary UX (Phase-3 redesign): inline-editable matrix. Each cell
+ * is a numeric input; "+ Width" and "+ Drop" controls extend the
+ * grid; the "×" beside each header removes that column/row on save.
+ * Saving REPLACES every cell — same atomic semantics as the XLSX
+ * upload paths.
+ *
+ * Secondary UX (kept for bulk operations): download a pre-populated
+ * XLSX template, edit in Excel, upload — and the "flexible parser"
+ * import for raw supplier sheets. Both live in a collapsed
+ * "Advanced" section so they don't clutter the page for the common
+ * case of "tweak one or two prices".
+ *
+ * Tenant-scoped throughout — load query, save handler, and audit
+ * trail all key on client_id.
+ */
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -38,6 +57,74 @@ if (!$table) {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Inline-grid save — replaces every cell with what came up the wire.
+// Posted shape:
+//   action      = save_grid
+//   cells[W_D]  = price string (blank = no price for that combination)
+// W/D are mm integers. Blank or non-numeric values are skipped (so
+// "delete a column" works by removing the inputs client-side and
+// resubmitting — those keys simply don't appear in $_POST).
+// ---------------------------------------------------------------------------
+$summary = null;
+$error   = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
+    csrf_check();
+
+    $cells = $_POST['cells'] ?? [];
+    if (!is_array($cells)) $cells = [];
+
+    $bulk    = [];
+    $rowErrs = [];
+
+    foreach ($cells as $key => $val) {
+        if ($val === '' || $val === null) continue;
+        if (!preg_match('/^(\d+)_(\d+)$/', (string) $key, $m)) continue;
+        $w = (int) $m[1];
+        $d = (int) $m[2];
+        if ($w <= 0 || $d <= 0) continue;
+        if (!is_numeric($val)) {
+            $rowErrs[] = "Non-numeric value at {$w}×{$d}: " . substr((string) $val, 0, 30);
+            continue;
+        }
+        $price = (float) $val;
+        if ($price < 0) {
+            $rowErrs[] = "Negative price at {$w}×{$d}: " . $price;
+            continue;
+        }
+        $bulk[] = [$tableId, $w, $d, $price];
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
+        $del->execute([$tableId]);
+        if ($bulk) {
+            $ins = $pdo->prepare(
+                'INSERT INTO price_table_rows
+                   (price_table_id, width_mm, drop_mm, price)
+                 VALUES (?, ?, ?, ?)'
+            );
+            foreach ($bulk as $args) { $ins->execute($args); }
+        }
+        // Bump the updated_at on the parent table so the products
+        // list reflects the change in its "Updated" column.
+        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+            ->execute([$tableId]);
+        $pdo->commit();
+        $summary = [
+            'inserted' => count($bulk),
+            'blank'    => 0,
+            'errors'   => $rowErrs,
+            'mode'     => 'inline',
+        ];
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        $error = 'Database error: ' . $e->getMessage();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Template download — generate a pre-populated XLSX matrix.
 // Includes existing data if the table has any rows; otherwise seeds with
 // a sensible default UK grid (800–4800 mm wide × 800–4000 mm drop, step 400).
@@ -45,7 +132,6 @@ $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     require __DIR__ . '/../../vendor/autoload.php';
 
-    // Pull existing cells (if any) so we can pre-fill the template for editing.
     $cellStmt = db()->prepare(
         'SELECT width_mm, drop_mm, price FROM price_table_rows WHERE price_table_id = ?'
     );
@@ -74,7 +160,6 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $sheet = $ss->getActiveSheet();
     $sheet->setTitle('Band ' . $table['band_code']);
 
-    // Corner header + width row + drop column.
     $sheet->setCellValue('A1', 'Drop \\ Width (mm)');
     foreach ($widths as $i => $w) {
         $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 2);
@@ -84,7 +169,6 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     foreach ($drops as $j => $d) {
         $sheet->setCellValue('A' . ($j + 2), $d);
     }
-    // Fill price cells from existing data (if any).
     foreach ($drops as $j => $d) {
         foreach ($widths as $i => $w) {
             $key = "$w|$d";
@@ -95,7 +179,6 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    // Style the header row + column.
     $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($widths) + 1);
     $headerRange = "A1:{$lastCol}1";
     $headerCol   = 'A1:A' . (count($drops) + 1);
@@ -122,19 +205,9 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 // ---------------------------------------------------------------------------
-// File upload — parse + REPLACE (delete all existing rows, insert new).
-//
-// Two modes:
-//   ?action=upload         — rigid template (widths in row 1, drops in column A,
-//                            single-band, no header — what the Download template
-//                            generates)
-//   ?action=upload_flex    — flexible parser, any supplier sheet. Picks the band
-//                            matching this table's band_code if present; otherwise
-//                            takes the first band found.
+// Rigid-template upload — widths in row 1, drops in column A, single band.
+// REPLACE strategy: wipe all existing cells, insert new.
 // ---------------------------------------------------------------------------
-$summary = null;
-$error   = null;
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
     csrf_check();
 
@@ -149,8 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
             $sheet  = $ss->getActiveSheet();
             $rows   = $sheet->toArray(null, true, true, true);
 
-            // Row 1 holds widths from column B onwards; column A holds drops
-            // from row 2 down. A1 is the corner label and is ignored.
             $headerRow = $rows[1] ?? [];
             $widths    = [];
             foreach ($headerRow as $col => $val) {
@@ -167,13 +238,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                 $bulk     = [];
 
                 foreach ($rows as $rowNum => $row) {
-                    if ($rowNum === 1) continue; // header row
+                    if ($rowNum === 1) continue;
                     $dRaw = $row['A'] ?? null;
                     $d = is_numeric($dRaw) ? (int) round((float) $dRaw) : 0;
-                    if ($d <= 0) {
-                        // Skip rows whose A column doesn't contain a number.
-                        continue;
-                    }
+                    if ($d <= 0) continue;
                     foreach ($widths as $col => $w) {
                         $val = $row[$col] ?? null;
                         if ($val === null || $val === '' || !is_numeric($val)) {
@@ -196,7 +264,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                     $pdo = db();
                     $pdo->beginTransaction();
                     try {
-                        // Replace strategy: wipe existing cells, then insert.
                         $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
                         $del->execute([$tableId]);
                         $ins = $pdo->prepare(
@@ -205,11 +272,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                              VALUES (?, ?, ?, ?)'
                         );
                         foreach ($bulk as $args) { $ins->execute($args); }
+                        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+                            ->execute([$tableId]);
                         $pdo->commit();
                         $summary = [
                             'inserted' => $inserted,
                             'blank'    => $blank,
                             'errors'   => $rowErrs,
+                            'mode'     => 'upload',
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
@@ -251,8 +321,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
                        . 'For multi-band files, use the bulk-import page instead. '
                        . 'For a single-band file, the parser still expects a "Band X" header row.';
             } else {
-                // Prefer a band matching this table's band_code; otherwise use
-                // the first band found.
                 $myCode = strtoupper((string) $table['band_code']);
                 $picked = null;
                 foreach ($bands as $b) {
@@ -283,6 +351,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
                         foreach ($picked['cells'] as [$w, $d, $p]) {
                             $ins->execute([$tableId, $w, $d, $p]);
                         }
+                        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+                            ->execute([$tableId]);
                         $pdo->commit();
                         $summary = [
                             'inserted'        => count($picked['cells']),
@@ -291,6 +361,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
                             'flex_band'       => $picked['code'],
                             'flex_fallback'   => $usedFallback,
                             'flex_total_seen' => count($bands),
+                            'mode'            => 'flex',
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
@@ -304,7 +375,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
     }
 }
 
-// Load existing cells for the matrix preview.
+// ---------------------------------------------------------------------------
+// Load current cells for the editor.
+// "Quick start" default grid (UK standard sizes) is only suggested when the
+// table is empty — once populated we always render exactly what's stored.
+// ---------------------------------------------------------------------------
 $cellStmt = db()->prepare(
     'SELECT width_mm, drop_mm, price FROM price_table_rows WHERE price_table_id = ?'
 );
@@ -323,6 +398,12 @@ foreach ($cells as $c) {
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 
+$isEmpty = !$matrixWidths && !$matrixDrops;
+
+// "Quick start" grid for empty tables.
+$DEFAULT_WIDTHS = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
+$DEFAULT_DROPS  = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
+
 $activeNav = 'products';
 ?><!doctype html>
 <html lang="en">
@@ -338,23 +419,157 @@ $activeNav = 'products';
             margin-bottom: 1rem;
         }
         .tip-box code {
-            background: #fff; padding: 0.0625rem 0.375rem; border-radius: 4px;
+            background: var(--bg-card); padding: 0.0625rem 0.375rem; border-radius: 4px;
             border: 1px solid var(--border); font-size: 0.8125rem;
         }
-        .matrix-table {
-            border-collapse: collapse; font-size: 0.8125rem; width: auto;
-            font-variant-numeric: tabular-nums;
-        }
-        .matrix-table th, .matrix-table td {
-            border: 1px solid var(--border); padding: 0.375rem 0.625rem; text-align: right;
-            white-space: nowrap;
-        }
-        .matrix-table thead th, .matrix-table tbody th {
-            background: #1f3b5b; color: #fff; font-weight: 700; text-align: center;
-        }
-        .matrix-table tbody td.empty { color: var(--border-strong); }
         .summary-list { margin: 0; padding-left: 1.25rem; }
         .summary-list li { font-size: 0.9375rem; color: var(--text-muted); }
+
+        /* Editable matrix.
+           Sticky first column + first row so big grids stay
+           navigable. Compact inputs (right-aligned numerics) so a
+           20×20 grid fits a normal screen without horizontal scroll. */
+        .grid-wrap {
+            overflow: auto;
+            max-height: 70vh;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+        }
+        table.grid-table {
+            border-collapse: separate; border-spacing: 0;
+            font-size: 0.8125rem;
+            font-variant-numeric: tabular-nums;
+        }
+        table.grid-table th, table.grid-table td {
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 0;
+            white-space: nowrap;
+            background: var(--bg-card);
+        }
+        table.grid-table thead th {
+            position: sticky; top: 0;
+            background: var(--brand); color: #fff;
+            font-weight: 700;
+            padding: 0.375rem 0.5rem;
+            text-align: center;
+            z-index: 2;
+        }
+        table.grid-table thead th.corner {
+            left: 0; z-index: 3;
+            background: var(--brand-hover);
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        table.grid-table tbody th {
+            position: sticky; left: 0;
+            background: var(--brand); color: #fff;
+            font-weight: 700;
+            padding: 0.375rem 0.5rem;
+            text-align: center;
+            z-index: 1;
+        }
+        table.grid-table tbody th.adder,
+        table.grid-table thead th.adder {
+            background: var(--bg-subtle-2);
+            color: var(--text-primary);
+        }
+        .grid-cell-input {
+            width: 5.5rem;
+            border: 0; outline: 0;
+            background: transparent;
+            padding: 0.375rem 0.5rem;
+            font: inherit; font-variant-numeric: tabular-nums;
+            text-align: right;
+            color: var(--text-primary);
+        }
+        .grid-cell-input:focus {
+            background: #fef9c3;
+            color: var(--text-primary);
+        }
+        [data-theme="dark"] .grid-cell-input:focus { background: rgba(254,243,123,0.18); }
+        .grid-cell-input::-webkit-outer-spin-button,
+        .grid-cell-input::-webkit-inner-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+        .grid-cell-input { -moz-appearance: textfield; }
+        .grid-axis-rm {
+            background: transparent; border: 0;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 0.75rem; font-weight: 700;
+            margin-left: 0.25rem;
+            padding: 0 0.25rem;
+            line-height: 1;
+        }
+        .grid-axis-rm:hover { color: #fff; }
+        .grid-add-btn {
+            background: transparent; border: 0;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8125rem; font-weight: 600;
+            padding: 0.5rem 0.75rem;
+            width: 100%; height: 100%;
+        }
+        .grid-add-btn:hover { color: var(--brand); }
+        .grid-toolbar {
+            display: flex; gap: 0.625rem; align-items: center;
+            flex-wrap: wrap;
+            margin-top: 0.875rem;
+        }
+        .grid-toolbar .muted {
+            color: var(--text-faint); font-size: 0.8125rem;
+        }
+
+        /* "Quick start" empty-state hero — only shown when the table
+           has no cells yet. Big primary button to populate with the
+           UK default grid; secondary "build from scratch" link. */
+        .qs-tile {
+            background: var(--bg-subtle); border: 1px solid var(--border);
+            border-radius: 12px; padding: 1.5rem 1.25rem;
+            text-align: center;
+        }
+        .qs-tile h3 { margin: 0 0 0.375rem; color: var(--text-primary); font-size: 1.125rem; }
+        .qs-tile p  { margin: 0 0 1rem; color: var(--text-muted); font-size: 0.9375rem; }
+        .qs-tile .qs-secondary {
+            display: block; margin-top: 0.625rem;
+            color: var(--text-faint); font-size: 0.8125rem; text-decoration: underline;
+        }
+
+        /* Advanced section — closed by default. Discoverable but out
+           of the way for the common case. */
+        details.advanced {
+            margin-top: 1.25rem;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-sm);
+        }
+        details.advanced > summary {
+            cursor: pointer;
+            padding: 0.875rem 1.125rem;
+            font-weight: 600; color: var(--text-primary);
+            list-style: none;
+        }
+        details.advanced > summary::-webkit-details-marker { display: none; }
+        details.advanced > summary::before {
+            content: '▸';
+            display: inline-block;
+            margin-right: 0.5rem;
+            color: var(--text-faint);
+            transition: transform 150ms;
+        }
+        details.advanced[open] > summary::before { transform: rotate(90deg); }
+        details.advanced > .advanced-body {
+            border-top: 1px solid var(--border);
+            padding: 1rem 1.125rem;
+        }
+        details.advanced .sub-section { margin-bottom: 1.25rem; }
+        details.advanced .sub-section:last-child { margin-bottom: 0; }
+        details.advanced .sub-section h3 {
+            margin: 0 0 0.5rem; font-size: 0.9375rem; color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -386,8 +601,8 @@ $activeNav = 'products';
 
         <?php if ($summary !== null): ?>
             <div class="alert alert-success" role="status">
-                Imported <strong><?= (int) $summary['inserted'] ?></strong> price cells.
-                <?php if ($summary['blank'] > 0): ?>
+                Saved <strong><?= (int) $summary['inserted'] ?></strong> price cells.
+                <?php if (!empty($summary['blank']) && $summary['blank'] > 0): ?>
                     Skipped <?= (int) $summary['blank'] ?> blank cell<?= $summary['blank'] === 1 ? '' : 's' ?>.
                 <?php endif; ?>
                 <?php if (!empty($summary['flex_band'])): ?>
@@ -398,7 +613,7 @@ $activeNav = 'products';
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
-            <?php if ($summary['errors']): ?>
+            <?php if (!empty($summary['errors'])): ?>
                 <div class="alert alert-error" role="alert">
                     <strong>Some cells had problems:</strong>
                     <ul class="summary-list">
@@ -413,141 +628,390 @@ $activeNav = 'products';
             <?php endif; ?>
         <?php endif; ?>
 
+        <!-- ============== INLINE-EDITABLE GRID ============== -->
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">1. Download the template</h2>
+                <h2 class="section-title">
+                    Edit prices
+                    <?php if (!$isEmpty): ?>
+                        <span style="color:var(--text-faint);font-weight:400;font-size:0.875rem">
+                            — <?= count($cells) ?> cell<?= count($cells) === 1 ? '' : 's' ?>,
+                            <?= count($matrixWidths) ?> width<?= count($matrixWidths) === 1 ? '' : 's' ?>
+                            × <?= count($matrixDrops) ?> drop<?= count($matrixDrops) === 1 ? '' : 's' ?>
+                        </span>
+                    <?php endif; ?>
+                </h2>
             </div>
-            <div class="tip-box">
-                Excel grid: widths across the top row in mm, drops down column A in mm,
-                prices in £ in the cells. Header row and column auto-fill with sensible
-                defaults if this is a new table; if there's data already, the template
-                comes pre-populated so you can edit and re-upload.
-                Blank cells are stored as "no price for that combination".
-            </div>
-            <p>
-                <a class="btn btn-primary"
-                   href="/admin/products/price-table.php?id=<?= (int) $tableId ?>&action=template">
-                    Download template (.xlsx)
-                </a>
-            </p>
-        </section>
 
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">2. Upload</h2>
-            </div>
-            <div class="tip-box">
-                Importing <strong>replaces</strong> all cells in this price table with what's
-                in the file. Add or remove columns / rows in the Excel file to change which
-                widths and drops are stored.
-            </div>
+            <?php if ($isEmpty): ?>
+                <!-- Empty state — offer Quick Start or Start blank.
+                     Both routes land you on the same editor; "Quick start"
+                     pre-fills the UK default grid client-side (no DB write
+                     yet, just inputs ready for filling). -->
+                <div class="qs-tile">
+                    <h3>This price table is empty</h3>
+                    <p>
+                        Start with a standard UK grid (widths 800&ndash;4000mm,
+                        drops 800&ndash;4000mm in 400mm steps), then type
+                        prices straight into the cells. Or build the grid
+                        column by column.
+                    </p>
+                    <button type="button" id="qs-fill" class="btn btn-primary">
+                        Quick start &mdash; default grid
+                    </button>
+                    <a href="#" id="qs-blank" class="qs-secondary">
+                        Or build from scratch — start blank
+                    </a>
+                </div>
+                <!-- Hidden defaults so the JS knows what to expand. -->
+                <script id="qs-defaults" type="application/json">{
+                    "widths": <?= json_encode($DEFAULT_WIDTHS) ?>,
+                    "drops":  <?= json_encode($DEFAULT_DROPS) ?>
+                }</script>
+            <?php endif; ?>
+
             <form method="post" action="/admin/products/price-table.php"
-                  enctype="multipart/form-data">
+                  id="grid-form"
+                  <?= $isEmpty ? 'style="display:none"' : '' ?>>
                 <?= csrf_field() ?>
-                <input type="hidden" name="action" value="upload">
+                <input type="hidden" name="action" value="save_grid">
                 <input type="hidden" name="id" value="<?= (int) $tableId ?>">
 
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="file">Filled template (.xlsx)</label>
-                        <input id="file" name="file" type="file"
-                               accept=".xlsx,.xlsm,.xls,.csv,.ods"
-                               required>
-                    </div>
-                </div>
+                <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.625rem">
+                    Click any cell, type the new price, hit <kbd>Tab</kbd> to move on.
+                    Leave a cell blank to skip that width × drop combo (no price quoted).
+                    Use the <strong>×</strong> next to a header to drop a column or row;
+                    <strong>+ Width</strong> / <strong>+ Drop</strong> extends the grid.
+                </p>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Upload &amp; replace</button>
-                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>"
-                       class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
-        </section>
-
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Or: import a supplier file directly</h2>
-            </div>
-            <div class="tip-box">
-                Skip the template if you already have a supplier sheet. The flexible parser handles:
-                <ul style="margin:0.5rem 0 0;padding-left:1.25rem">
-                    <li>"Band X" or "Price Band X" headers, with or without typos like "Bnad"</li>
-                    <li>Widths in <strong>mm</strong> (e.g. <code>610mm</code>) or <strong>metres</strong> (e.g. <code>0.800</code>) — auto-detected per cell</li>
-                    <li>Prices with <strong>£</strong>, commas, or bare numbers</li>
-                    <li>Stray label rows ("DROP", "WIDTH", "Metric", inches references) get skipped</li>
-                </ul>
-                If the file contains multiple bands, the parser uses the one matching this table's
-                <strong>Band <?= e((string) $table['band_code']) ?></strong>; failing that, the first band found.
-                Replace strategy still applies — every cell in this table is wiped and reinserted.
-            </div>
-            <form method="post" action="/admin/products/price-table.php"
-                  enctype="multipart/form-data">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="upload_flex">
-                <input type="hidden" name="id" value="<?= (int) $tableId ?>">
-
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="file_flex">Supplier file (.xlsx)</label>
-                        <input id="file_flex" name="file" type="file"
-                               accept=".xlsx,.xlsm,.xls,.csv,.ods"
-                               required>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Import &amp; replace</button>
-                </div>
-            </form>
-        </section>
-
-        <?php if ($matrixWidths && $matrixDrops): ?>
-            <section class="section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        Current matrix (<?= count($cells) ?> cells)
-                    </h2>
-                </div>
-                <div class="table-wrap">
-                    <table class="matrix-table">
+                <div class="grid-wrap">
+                    <table class="grid-table" id="grid-table">
                         <thead>
                             <tr>
-                                <th>Drop \ Width (mm)</th>
+                                <th class="corner">Drop \ Width (mm)</th>
                                 <?php foreach ($matrixWidths as $w): ?>
-                                    <th><?= (int) $w ?></th>
+                                    <th data-w="<?= (int) $w ?>">
+                                        <?= (int) $w ?>
+                                        <button type="button" class="grid-axis-rm"
+                                                data-rm-w="<?= (int) $w ?>" title="Remove this width">×</button>
+                                    </th>
                                 <?php endforeach; ?>
+                                <th class="adder">
+                                    <button type="button" class="grid-add-btn" id="add-width">+ Width</button>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($matrixDrops as $d): ?>
-                                <tr>
-                                    <th><?= (int) $d ?></th>
-                                    <?php foreach ($matrixWidths as $w): ?>
-                                        <?php $price = $matrixByPair["$w|$d"] ?? null; ?>
-                                        <?php if ($price === null): ?>
-                                            <td class="empty">—</td>
-                                        <?php else: ?>
-                                            <td><?= number_format((float) $price, 2) ?></td>
-                                        <?php endif; ?>
+                                <tr data-d="<?= (int) $d ?>">
+                                    <th>
+                                        <?= (int) $d ?>
+                                        <button type="button" class="grid-axis-rm"
+                                                data-rm-d="<?= (int) $d ?>" title="Remove this drop">×</button>
+                                    </th>
+                                    <?php foreach ($matrixWidths as $w):
+                                        $val = $matrixByPair["$w|$d"] ?? null;
+                                    ?>
+                                        <td>
+                                            <input class="grid-cell-input"
+                                                   type="number"
+                                                   step="0.01"
+                                                   min="0"
+                                                   inputmode="decimal"
+                                                   name="cells[<?= (int) $w ?>_<?= (int) $d ?>]"
+                                                   value="<?= $val === null ? '' : e(number_format((float) $val, 2, '.', '')) ?>">
+                                        </td>
                                     <?php endforeach; ?>
+                                    <td></td>
                                 </tr>
                             <?php endforeach; ?>
+                            <tr>
+                                <th class="adder">
+                                    <button type="button" class="grid-add-btn" id="add-drop">+ Drop</button>
+                                </th>
+                                <?php for ($i = 0, $n = count($matrixWidths) + 1; $i < $n; $i++): ?>
+                                    <td></td>
+                                <?php endfor; ?>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
-            </section>
-        <?php else: ?>
-            <section class="section">
-                <div class="placeholder">
-                    <p class="placeholder-title">Empty price table</p>
-                    <p class="placeholder-body">
-                        Download the template, paste your prices into the matrix, and upload to populate this table.
-                    </p>
+
+                <div class="grid-toolbar">
+                    <button type="submit" class="btn btn-primary">Save grid</button>
+                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>"
+                       class="btn btn-secondary">Cancel</a>
+                    <span class="muted">
+                        Saving replaces every cell in this table with what's on screen.
+                    </span>
                 </div>
-            </section>
-        <?php endif; ?>
+            </form>
+        </section>
+
+        <!-- ============== ADVANCED (XLSX template + supplier import) ============== -->
+        <details class="advanced">
+            <summary>Advanced — XLSX import / export</summary>
+            <div class="advanced-body">
+                <div class="sub-section">
+                    <h3>Download as XLSX</h3>
+                    <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 0.625rem">
+                        Pre-populated Excel matrix — useful for backup, sharing with suppliers,
+                        or making lots of edits in Excel before re-uploading.
+                    </p>
+                    <a class="btn btn-secondary"
+                       href="/admin/products/price-table.php?id=<?= (int) $tableId ?>&action=template">
+                        Download template (.xlsx)
+                    </a>
+                </div>
+
+                <div class="sub-section">
+                    <h3>Upload — rigid template</h3>
+                    <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 0.625rem">
+                        Widths across row 1, drops down column A, prices in the cells.
+                        <strong>Replaces every cell</strong> in this table on import.
+                    </p>
+                    <form method="post" action="/admin/products/price-table.php"
+                          enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="upload">
+                        <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                        <input type="file" name="file"
+                               accept=".xlsx,.xlsm,.xls,.csv,.ods"
+                               required style="flex:1;min-width:18rem">
+                        <button type="submit" class="btn btn-secondary">Upload &amp; replace</button>
+                    </form>
+                </div>
+
+                <div class="sub-section">
+                    <h3>Upload — supplier file (flexible parser)</h3>
+                    <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 0.625rem">
+                        Drop a supplier sheet straight in. Detects "Band X" headers, widths in mm or metres,
+                        prices with £ / commas. Picks the band matching this table's
+                        <strong>Band <?= e((string) $table['band_code']) ?></strong>;
+                        falls back to the first band found.
+                    </p>
+                    <form method="post" action="/admin/products/price-table.php"
+                          enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="upload_flex">
+                        <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                        <input type="file" name="file"
+                               accept=".xlsx,.xlsm,.xls,.csv,.ods"
+                               required style="flex:1;min-width:18rem">
+                        <button type="submit" class="btn btn-secondary">Import &amp; replace</button>
+                    </form>
+                </div>
+            </div>
+        </details>
     </main>
 </div>
+
+<script>
+(function () {
+    // Grid editor — pure DOM manipulation of the cell inputs. Server
+    // sees the form as a flat cells[<width>_<drop>] map; widths and
+    // drops are inferred from the keys, so adding/removing rows or
+    // columns is just adding/removing inputs on the client.
+    'use strict';
+
+    var qsFill  = document.getElementById('qs-fill');
+    var qsBlank = document.getElementById('qs-blank');
+    var qsData  = document.getElementById('qs-defaults');
+    var form    = document.getElementById('grid-form');
+    var table   = document.getElementById('grid-table');
+
+    // ----- empty-state Quick Start handlers ----- //
+    if (qsFill && qsData) {
+        var defaults = JSON.parse(qsData.textContent);
+        qsFill.addEventListener('click', function () {
+            // Populate the empty grid with default widths and drops.
+            defaults.widths.forEach(function (w) { addWidth(w); });
+            defaults.drops.forEach(function (d)  { addDrop(d);  });
+            showGrid();
+        });
+    }
+    if (qsBlank) {
+        qsBlank.addEventListener('click', function (e) {
+            e.preventDefault();
+            showGrid();
+        });
+    }
+
+    function showGrid() {
+        var tile = document.querySelector('.qs-tile');
+        if (tile) tile.style.display = 'none';
+        if (form) form.style.display = '';
+    }
+
+    // ----- helpers to read / mutate the current matrix ----- //
+
+    // Read the current width column ids from the header row.
+    function currentWidths() {
+        var ths = table.querySelectorAll('thead th[data-w]');
+        var ws  = [];
+        ths.forEach(function (th) { ws.push(parseInt(th.getAttribute('data-w'), 10)); });
+        return ws;
+    }
+    function currentDrops() {
+        var rows = table.querySelectorAll('tbody tr[data-d]');
+        var ds   = [];
+        rows.forEach(function (r) { ds.push(parseInt(r.getAttribute('data-d'), 10)); });
+        return ds;
+    }
+
+    function makeCellInput(w, d) {
+        var inp = document.createElement('input');
+        inp.className = 'grid-cell-input';
+        inp.type = 'number';
+        inp.step = '0.01';
+        inp.min  = '0';
+        inp.inputMode = 'decimal';
+        inp.name = 'cells[' + w + '_' + d + ']';
+        inp.value = '';
+        return inp;
+    }
+
+    // Add a new width column.
+    function addWidth(w) {
+        if (!w && w !== 0) {
+            var ws = currentWidths();
+            var suggested = ws.length ? Math.max.apply(null, ws) + 400 : 800;
+            var raw = window.prompt('New width (mm):', String(suggested));
+            if (raw === null) return;
+            w = parseInt(raw, 10);
+            if (!w || w <= 0) return;
+        }
+        if (currentWidths().indexOf(w) !== -1) {
+            alert('Width ' + w + 'mm already exists.');
+            return;
+        }
+
+        // Insert the new <th> in the right position (sorted ascending).
+        var headerRow = table.querySelector('thead tr');
+        var adderTh   = headerRow.querySelector('th.adder');
+        var newTh = document.createElement('th');
+        newTh.setAttribute('data-w', String(w));
+        newTh.innerHTML = w +
+            ' <button type="button" class="grid-axis-rm" data-rm-w="' + w + '" title="Remove this width">×</button>';
+        // Insert before the first existing width that's larger, or before the adder.
+        var inserted = false;
+        headerRow.querySelectorAll('th[data-w]').forEach(function (th) {
+            if (inserted) return;
+            if (parseInt(th.getAttribute('data-w'), 10) > w) {
+                headerRow.insertBefore(newTh, th);
+                inserted = true;
+            }
+        });
+        if (!inserted) headerRow.insertBefore(newTh, adderTh);
+
+        // For each existing drop row, insert a matching empty cell at
+        // the same column index.
+        var newIdx = Array.prototype.indexOf.call(headerRow.children, newTh);
+        table.querySelectorAll('tbody tr[data-d]').forEach(function (row) {
+            var d = parseInt(row.getAttribute('data-d'), 10);
+            var td = document.createElement('td');
+            td.appendChild(makeCellInput(w, d));
+            // newIdx counts from 0 in the header (corner = 0). In the
+            // body row, the row header is the first child too, so the
+            // same index works.
+            var ref = row.children[newIdx] || null;
+            row.insertBefore(td, ref);
+        });
+        // Pad the trailing "+ Drop" row.
+        var lastRow = table.querySelector('tbody tr:last-child');
+        if (lastRow && !lastRow.hasAttribute('data-d')) {
+            var blank = document.createElement('td');
+            var ref2  = lastRow.children[newIdx] || null;
+            lastRow.insertBefore(blank, ref2);
+        }
+    }
+
+    function addDrop(d) {
+        if (!d && d !== 0) {
+            var ds = currentDrops();
+            var suggested = ds.length ? Math.max.apply(null, ds) + 400 : 800;
+            var raw = window.prompt('New drop (mm):', String(suggested));
+            if (raw === null) return;
+            d = parseInt(raw, 10);
+            if (!d || d <= 0) return;
+        }
+        if (currentDrops().indexOf(d) !== -1) {
+            alert('Drop ' + d + 'mm already exists.');
+            return;
+        }
+
+        var tbody = table.querySelector('tbody');
+        var trailingRow = table.querySelector('tbody tr:last-child');
+        var ws = currentWidths();
+
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-d', String(d));
+        var th = document.createElement('th');
+        th.innerHTML = d +
+            ' <button type="button" class="grid-axis-rm" data-rm-d="' + d + '" title="Remove this drop">×</button>';
+        tr.appendChild(th);
+        ws.forEach(function (w) {
+            var td = document.createElement('td');
+            td.appendChild(makeCellInput(w, d));
+            tr.appendChild(td);
+        });
+        var endTd = document.createElement('td');
+        tr.appendChild(endTd);
+
+        // Insert sorted by drop value.
+        var inserted = false;
+        tbody.querySelectorAll('tr[data-d]').forEach(function (row) {
+            if (inserted) return;
+            if (parseInt(row.getAttribute('data-d'), 10) > d) {
+                tbody.insertBefore(tr, row);
+                inserted = true;
+            }
+        });
+        if (!inserted) {
+            // Insert just before the trailing "+ Drop" row.
+            tbody.insertBefore(tr, trailingRow);
+        }
+    }
+
+    function removeWidth(w) {
+        if (!confirm('Remove the ' + w + 'mm width column? Any prices in it will be lost on next save.')) return;
+        var headerRow = table.querySelector('thead tr');
+        var ths = Array.prototype.slice.call(headerRow.children);
+        var idx = -1;
+        ths.forEach(function (th, i) {
+            if (th.getAttribute && th.getAttribute('data-w') === String(w)) idx = i;
+        });
+        if (idx < 0) return;
+        headerRow.removeChild(headerRow.children[idx]);
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+            if (row.children[idx]) row.removeChild(row.children[idx]);
+        });
+    }
+
+    function removeDrop(d) {
+        if (!confirm('Remove the ' + d + 'mm drop row? Any prices in it will be lost on next save.')) return;
+        var row = table.querySelector('tbody tr[data-d="' + d + '"]');
+        if (row) row.parentNode.removeChild(row);
+    }
+
+    // ----- click-delegated event handlers ----- //
+    var addW = document.getElementById('add-width');
+    var addD = document.getElementById('add-drop');
+    if (addW) addW.addEventListener('click', function () { addWidth(); });
+    if (addD) addD.addEventListener('click', function () { addDrop();  });
+
+    if (table) {
+        table.addEventListener('click', function (e) {
+            var t = e.target;
+            if (!t || !t.getAttribute) return;
+            var rmW = t.getAttribute('data-rm-w');
+            var rmD = t.getAttribute('data-rm-d');
+            if (rmW) { e.preventDefault(); removeWidth(parseInt(rmW, 10)); }
+            if (rmD) { e.preventDefault(); removeDrop(parseInt(rmD, 10));  }
+        });
+    }
+})();
+</script>
 <?php
     // Floating "Fix next →" pill — drops the user into the next
     // catalogue-health issue without going back to the product
