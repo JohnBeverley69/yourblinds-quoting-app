@@ -149,9 +149,17 @@
     <!-- Helper caption sits under the table, not inside it, so it
          doesn't visually overlap the Flat / % / £/m / Default / Active
          columns of the new-row. -->
-    <p style="color:#6b7280;font-size:0.8125rem;margin:0.5rem 0.25rem 0;line-height:1.45">
-        <strong>Tip:</strong> tick one or more systems in the dropdown above, then press
-        <strong>Enter</strong> on the label to add the row. One row per ticked system &mdash;
-        prices and toggles become editable on each new row once added.
-    </p>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem;margin:0.5rem 0.25rem 0;flex-wrap:wrap">
+        <p style="color:#6b7280;font-size:0.8125rem;margin:0;line-height:1.45;flex:1 1 18rem">
+            <strong>Tip:</strong> type a label and press
+            <strong>Enter</strong> to add one row at a time. For multiple
+            (e.g. <em>Left</em> + <em>Right</em>, or a list of slat sizes), use
+            <strong>Bulk add</strong> &rarr;
+        </p>
+        <button type="button" class="bulk-add-choices"
+                data-extra-id="<?= (int) $gridExtraId ?>"
+                style="background:transparent;border:1px solid var(--border-strong);color:var(--text-primary);border-radius:6px;padding:0.3125rem 0.75rem;font:inherit;font-size:0.8125rem;cursor:pointer;white-space:nowrap">
+            + Bulk add
+        </button>
+    </div>
 </div>
