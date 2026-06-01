@@ -280,6 +280,18 @@ function record_login_attempt(string $ip, string $identifier, bool $success): vo
 // ---------------------------------------------------------------------------
 // Post-login redirect
 // Honours an optional ?next=/safe/path parameter (relative URLs only).
+//
+// Default landing follows Tyler's review feedback (Dashboard #1):
+// the Dashboard should be the main page when opening the app.
+// Routing rules:
+//   - Admins                       → /dashboard
+//   - Users with any dash_* flag   → /dashboard
+//   - Everyone else (pure fitters) → /calendar
+//
+// The dashboard itself has a self-redirect to /calendar for users
+// who fail the canSeeAnything check, but doing it here saves a
+// round-trip and means the URL bar shows the right page from the
+// off.
 // ---------------------------------------------------------------------------
 function redirect_after_login(): void
 {
@@ -293,6 +305,22 @@ function redirect_after_login(): void
         header('Location: ' . $next);
         exit;
     }
-    header('Location: /calendar/index.php');
+
+    // Pick a landing based on role + dashboard panel perms. Anyone
+    // with dashboard access lands there; everyone else lands on the
+    // calendar (where fitters do their day-to-day).
+    $user  = current_user();
+    $perms = function_exists('current_user_permissions')
+        ? current_user_permissions()
+        : [];
+    $isAdmin = ($user['role'] ?? '') === 'admin';
+    $hasDashAccess = $isAdmin
+        || !empty($perms['dash_view_revenue'])
+        || !empty($perms['dash_view_team'])
+        || !empty($perms['dash_view_products'])
+        || !empty($perms['dash_view_profit'])
+        || !empty($perms['dash_view_recent']);
+
+    header('Location: ' . ($hasDashAccess ? '/dashboard/index.php' : '/calendar/index.php'));
     exit;
 }
