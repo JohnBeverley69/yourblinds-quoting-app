@@ -138,6 +138,66 @@ function qb_is_editable(array $quote): bool
  * with declined as a terminal alternative to accepted, and "Reopen" allowing
  * a return to draft from any state for late edits.
  */
+/**
+ * Auto-advance a quote to 'fitted' when the linked fitting
+ * appointment is marked complete. Called from /calendar/view.php
+ * after the appointment's status updates.
+ *
+ * Guarded so we don't downgrade or override anything we shouldn't:
+ *   - Only advances if current quote status is 'accepted' or
+ *     'ordered' (the two pre-fit states). Anything else is a no-op.
+ *   - 'declined' → don't touch (the customer said no, finishing
+ *     a phantom appointment shouldn't resurrect it).
+ *   - 'fitted' / 'invoiced' / 'paid' → already past this point,
+ *     don't rewind.
+ *
+ * Returns the updated quote_number on success (so the caller can
+ * mention it in the flash message), or null if nothing changed
+ * (already fitted, no quote linked, terminal state, etc.).
+ *
+ * Idempotent — safe to call multiple times. The single UPDATE has
+ * status IN ('accepted','ordered') in its WHERE, so a second call
+ * affects zero rows.
+ */
+function qb_advance_quote_to_fitted(PDO $pdo, int $quoteId, int $clientId): ?string
+{
+    if ($quoteId <= 0 || $clientId <= 0) return null;
+
+    try {
+        // Pull current status + quote_number so we can both check
+        // the state machine and return a friendly identifier on the
+        // success flash. Tenant-scoped via client_id.
+        $st = $pdo->prepare(
+            'SELECT status, quote_number FROM quotes
+              WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $st->execute([$quoteId, $clientId]);
+        $q = $st->fetch();
+        if (!$q) return null;
+
+        $status = (string) ($q['status'] ?? '');
+        if (!in_array($status, ['accepted', 'ordered'], true)) {
+            return null;
+        }
+
+        $upd = $pdo->prepare(
+            "UPDATE quotes
+                SET status = 'fitted'
+              WHERE id = ? AND client_id = ?
+                AND status IN ('accepted', 'ordered')"
+        );
+        $upd->execute([$quoteId, $clientId]);
+
+        if ($upd->rowCount() < 1) return null;
+        return (string) ($q['quote_number'] ?? ('#' . $quoteId));
+    } catch (Throwable $e) {
+        // Quotes table missing / column drift — log and skip rather
+        // than blow up the appointment-status update.
+        error_log('qb_advance_quote_to_fitted failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
 function qb_allowed_transitions(string $current): array
 {
     switch ($current) {

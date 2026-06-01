@@ -67,7 +67,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               WHERE id = ? AND client_id = ?'
         );
         $u->execute([$newStatus, $id, $clientId]);
-        $_SESSION['flash_success'] = 'Status updated to ' . $newStatus . '.';
+
+        // Auto-advance the linked quote to 'fitted' when the
+        // appointment is marked complete. Only fires for the
+        // 'completed' status (not 'cancelled' or 'no_show'), only
+        // when there's a quote_id, and only when the quote is
+        // currently 'accepted' or 'ordered' (the helper guards the
+        // state machine internally). Adds a sentence to the flash
+        // so the user knows it happened.
+        $autoAdvanceNote = '';
+        if ($newStatus === 'completed') {
+            $qLink = db()->prepare(
+                'SELECT quote_id FROM appointments
+                  WHERE id = ? AND client_id = ? LIMIT 1'
+            );
+            $qLink->execute([$id, $clientId]);
+            $quoteId = (int) ($qLink->fetchColumn() ?: 0);
+            if ($quoteId > 0) {
+                require_once __DIR__ . '/../quote-builder/_helpers.php';
+                $advancedRef = qb_advance_quote_to_fitted(db(), $quoteId, $clientId);
+                if ($advancedRef !== null) {
+                    $autoAdvanceNote = ' Linked quote ' . $advancedRef
+                                     . ' advanced to "fitted".';
+                }
+            }
+        }
+
+        $_SESSION['flash_success'] = 'Status updated to ' . $newStatus . '.'
+                                   . $autoAdvanceNote;
         header('Location: /calendar/view.php?id=' . $id);
         exit;
     }
