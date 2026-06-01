@@ -281,7 +281,15 @@ $activeNav = 'calendar';
             position: relative;
         }
         .cal-cell.is-other-month { background: #f9fafb; }
-        .cal-cell.is-today { background: #eff6ff; }
+        /* Today: darker blue tint + navy inset stripe down the left
+           edge. Tyler reported #eff6ff was too washed out on his
+           monitor to spot at a glance. The stripe gives a strong
+           visual anchor without making the whole cell read as an
+           alert state. */
+        .cal-cell.is-today {
+            background: #dbeafe;
+            box-shadow: inset 3px 0 0 #1f3b5b;
+        }
         .cal-cell-add {
             position: absolute;
             inset: 0;
