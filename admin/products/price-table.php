@@ -832,6 +832,35 @@ $activeNav = 'products';
             </form>
         </dialog>
 
+        <!-- "Quick start" dialog — collects widths AND drops in one
+             go so the user can paste both straight from Excel before
+             we build the grid. Defaults are pre-filled as suggestions
+             that the user can replace wholesale. -->
+        <dialog id="qs-dialog" class="axis-dialog" style="width:min(34rem,92vw)">
+            <form method="dialog">
+                <h3>Start your grid</h3>
+                <p>
+                    Type or paste the widths and drops your supplier sells in.
+                    Each line / cell is one value. Defaults are filled in for
+                    you — clear them if you want to start from scratch.
+                </p>
+                <label style="display:block;margin:0.625rem 0 0.25rem;font-weight:600;font-size:0.8125rem">
+                    Widths (mm)
+                </label>
+                <textarea id="qs-widths" rows="3"
+                          style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"></textarea>
+                <label style="display:block;margin:0.625rem 0 0.25rem;font-weight:600;font-size:0.8125rem">
+                    Drops (mm)
+                </label>
+                <textarea id="qs-drops" rows="6"
+                          style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"></textarea>
+                <div class="axis-actions">
+                    <button type="button" id="qs-cancel" class="btn btn-secondary">Cancel</button>
+                    <button type="button" id="qs-confirm" class="btn btn-primary">Build grid</button>
+                </div>
+            </form>
+        </dialog>
+
         <!-- ============== ADVANCED (XLSX template + supplier import) ============== -->
         <details class="advanced">
             <summary>Advanced — XLSX import / export</summary>
@@ -905,12 +934,49 @@ $activeNav = 'products';
     var table   = document.getElementById('grid-table');
 
     // ----- empty-state Quick Start handlers ----- //
-    if (qsFill && qsData) {
+    //
+    // Quick start opens a dialog with two textareas — widths and
+    // drops — pre-filled with sensible UK defaults. The user can
+    // wholesale replace either by pasting from Excel (a single row
+    // for widths, a column for drops). On confirm we parse both,
+    // build the grid in one go, then reveal it.
+    var qsDialog = document.getElementById('qs-dialog');
+    var qsWidths = document.getElementById('qs-widths');
+    var qsDrops  = document.getElementById('qs-drops');
+    var qsCancel = document.getElementById('qs-cancel');
+    var qsConfirm = document.getElementById('qs-confirm');
+
+    if (qsFill && qsData && qsDialog) {
         var defaults = JSON.parse(qsData.textContent);
         qsFill.addEventListener('click', function () {
-            // Populate the empty grid with default widths and drops.
-            defaults.widths.forEach(function (w) { addWidth(w); });
-            defaults.drops.forEach(function (d)  { addDrop(d);  });
+            qsWidths.value = defaults.widths.join('\n');
+            qsDrops.value  = defaults.drops.join('\n');
+            if (typeof qsDialog.showModal === 'function') {
+                qsDialog.showModal();
+            } else {
+                qsDialog.setAttribute('open', '');
+            }
+            setTimeout(function () { qsWidths.focus(); qsWidths.select(); }, 0);
+        });
+    }
+    if (qsCancel) {
+        qsCancel.addEventListener('click', function () {
+            if (qsDialog.close) qsDialog.close();
+            else qsDialog.removeAttribute('open');
+        });
+    }
+    if (qsConfirm) {
+        qsConfirm.addEventListener('click', function () {
+            var ws = parseAxisValues(qsWidths.value);
+            var ds = parseAxisValues(qsDrops.value);
+            if (!ws.length || !ds.length) {
+                alert('Add at least one width and one drop.');
+                return;
+            }
+            ws.forEach(function (w) { addWidth(w); });
+            ds.forEach(function (d) { addDrop(d);  });
+            if (qsDialog.close) qsDialog.close();
+            else qsDialog.removeAttribute('open');
             showGrid();
         });
     }
