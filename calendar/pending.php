@@ -88,65 +88,84 @@ foreach ($st->fetchAll() as $r) {
 }
 
 // ---------------------------------------------------------------------------
-// Grid payload — only built when the client tells us which month it's
-// looking at. Same tenant + mine=1 scoping as the page-render query.
+// Grid payload — only built when the client tells us which date range
+// it's looking at. Same tenant + mine=1 scoping as the page-render query.
+//
+// Two accepted shapes (in order of preference):
+//   ?start=YYYY-MM-DD&end=YYYY-MM-DD   (rolling-6-weeks view)
+//   ?month=YYYY-MM                      (legacy month view)
 // ---------------------------------------------------------------------------
-$grid = [];
+$grid       = [];
+$startParam = (string) ($_GET['start'] ?? '');
+$endParam   = (string) ($_GET['end']   ?? '');
 $monthParam = (string) ($_GET['month'] ?? '');
-if ($monthParam !== '' && preg_match('/^\d{4}-\d{2}$/', $monthParam) === 1) {
+$first = null;
+$last  = null;
+
+if ($startParam !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $startParam) === 1
+ && $endParam   !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $endParam)   === 1) {
+    $maybeStart = DateTimeImmutable::createFromFormat('!Y-m-d', $startParam);
+    $maybeEnd   = DateTimeImmutable::createFromFormat('!Y-m-d', $endParam);
+    if ($maybeStart !== false && $maybeEnd !== false) {
+        $first = $maybeStart->setTime(0, 0);
+        $last  = $maybeEnd->setTime(23, 59, 59);
+    }
+} elseif ($monthParam !== '' && preg_match('/^\d{4}-\d{2}$/', $monthParam) === 1) {
     $cursor = DateTimeImmutable::createFromFormat('!Y-m', $monthParam);
     if ($cursor !== false) {
         $first = $cursor->modify('first day of this month')->setTime(0, 0);
         $last  = $cursor->modify('last day of this month')->setTime(23, 59, 59);
+    }
+}
 
-        $gridSql = $mineOnly
-            ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                      a.duration_minutes, a.status, a.quote_id,
-                      a.installation_town, a.installation_postcode,
-                      c.name AS customer_name
-                 FROM appointments a
-            LEFT JOIN customers c ON c.id = a.customer_id
-                WHERE a.client_id = ?
-                  AND a.client_user_id = ?
-                  AND a.appointment_date BETWEEN ? AND ?
-             ORDER BY a.appointment_date, a.appointment_time'
-            : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                      a.duration_minutes, a.status, a.quote_id,
-                      a.installation_town, a.installation_postcode,
-                      c.name AS customer_name
-                 FROM appointments a
-            LEFT JOIN customers c ON c.id = a.customer_id
-                WHERE a.client_id = ?
-                  AND a.appointment_date BETWEEN ? AND ?
-             ORDER BY a.appointment_date, a.appointment_time'  ;
+if ($first !== null && $last !== null) {
+    $gridSql = $mineOnly
+        ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                  a.duration_minutes, a.status, a.quote_id,
+                  a.installation_town, a.installation_postcode,
+                  c.name AS customer_name
+             FROM appointments a
+        LEFT JOIN customers c ON c.id = a.customer_id
+            WHERE a.client_id = ?
+              AND a.client_user_id = ?
+              AND a.appointment_date BETWEEN ? AND ?
+         ORDER BY a.appointment_date, a.appointment_time'
+        : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                  a.duration_minutes, a.status, a.quote_id,
+                  a.installation_town, a.installation_postcode,
+                  c.name AS customer_name
+             FROM appointments a
+        LEFT JOIN customers c ON c.id = a.customer_id
+            WHERE a.client_id = ?
+              AND a.appointment_date BETWEEN ? AND ?
+         ORDER BY a.appointment_date, a.appointment_time';
 
-        $gStmt = db()->prepare($gridSql);
-        $gStmt->execute(
-            $mineOnly
-                ? [$clientId, (int) $user['user_id'], $first->format('Y-m-d'), $last->format('Y-m-d')]
-                : [$clientId, $first->format('Y-m-d'), $last->format('Y-m-d')]
-        );
+    $gStmt = db()->prepare($gridSql);
+    $gStmt->execute(
+        $mineOnly
+            ? [$clientId, (int) $user['user_id'], $first->format('Y-m-d'), $last->format('Y-m-d')]
+            : [$clientId, $first->format('Y-m-d'), $last->format('Y-m-d')]
+    );
 
-        // Format time the same way the JS expects ("9:00am" lowercase).
-        $fmt = static function (string $time): string {
-            $t = DateTimeImmutable::createFromFormat('H:i:s', $time)
-                ?: DateTimeImmutable::createFromFormat('H:i', $time);
-            return $t === false ? $time : strtolower($t->format('g:ia'));
-        };
+    // Format time the same way the JS expects ("9:00am" lowercase).
+    $fmt = static function (string $time): string {
+        $t = DateTimeImmutable::createFromFormat('H:i:s', $time)
+            ?: DateTimeImmutable::createFromFormat('H:i', $time);
+        return $t === false ? $time : strtolower($t->format('g:ia'));
+    };
 
-        foreach ($gStmt->fetchAll() as $r) {
-            $date = (string) $r['appointment_date'];
-            $grid[$date][] = [
-                'id'            => (int)    $r['id'],
-                'title'         => (string) $r['title'],
-                'time'          => $fmt((string) $r['appointment_time']),
-                'status'        => (string) $r['status'],
-                'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
-                'town'          => (string) ($r['installation_town']     ?? ''),
-                'postcode'      => (string) ($r['installation_postcode'] ?? ''),
-                'customer_name' => (string) ($r['customer_name']         ?? ''),
-            ];
-        }
+    foreach ($gStmt->fetchAll() as $r) {
+        $date = (string) $r['appointment_date'];
+        $grid[$date][] = [
+            'id'            => (int)    $r['id'],
+            'title'         => (string) $r['title'],
+            'time'          => $fmt((string) $r['appointment_time']),
+            'status'        => (string) $r['status'],
+            'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
+            'town'          => (string) ($r['installation_town']     ?? ''),
+            'postcode'      => (string) ($r['installation_postcode'] ?? ''),
+            'customer_name' => (string) ($r['customer_name']         ?? ''),
+        ];
     }
 }
 

@@ -11,41 +11,85 @@ $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
 // ---------------------------------------------------------------------------
-// Resolve the month being viewed. ?month=YYYY-MM, defaulting to current month.
-// All date maths is done in the app timezone (set in bootstrap.php).
+// Resolve the date range being viewed.
+//
+// Rolling 6-week window anchored on a specific Monday. Trade businesses
+// plan week-by-week, not month-by-month — and the previous "current
+// month" view forced an awkward flip whenever the planning week
+// straddled a month boundary. The new model: pick a Monday, render the
+// 42 days starting from it.
+//
+// URL conventions:
+//   ?week=YYYY-MM-DD  — explicit Monday. Snaps to the Monday of the
+//                       containing week if given a non-Monday date,
+//                       so deep-links from elsewhere don't blow up.
+//   ?month=YYYY-MM    — legacy. Used by older bookmarks and a few
+//                       sibling pages. Anchors to the Monday of the
+//                       week containing the 1st of that month, so
+//                       the user's chosen month still mostly fills
+//                       the view.
+//   (no param)        — Monday of this week (i.e. "what's coming up").
+//
+// All date maths in the app timezone (set in bootstrap.php).
 // ---------------------------------------------------------------------------
+$weekParam  = (string) ($_GET['week']  ?? '');
 $monthParam = (string) ($_GET['month'] ?? '');
-if ($monthParam !== '' && preg_match('/^\d{4}-\d{2}$/', $monthParam) === 1) {
-    $cursor = DateTimeImmutable::createFromFormat('!Y-m', $monthParam);
-    if ($cursor === false) {
-        $cursor = new DateTimeImmutable('first day of this month');
+
+$anchorMonday = null;
+if ($weekParam !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $weekParam) === 1) {
+    $maybe = DateTimeImmutable::createFromFormat('!Y-m-d', $weekParam);
+    if ($maybe !== false) {
+        // Snap to the Monday of the week that contains this date.
+        $dayOfWeek = (int) $maybe->format('N');     // 1=Mon..7=Sun
+        $anchorMonday = $maybe->modify('-' . ($dayOfWeek - 1) . ' days')->setTime(0, 0);
     }
-} else {
-    $cursor = new DateTimeImmutable('first day of this month');
+}
+if ($anchorMonday === null && $monthParam !== '' && preg_match('/^\d{4}-\d{2}$/', $monthParam) === 1) {
+    $maybeMonth = DateTimeImmutable::createFromFormat('!Y-m', $monthParam);
+    if ($maybeMonth !== false) {
+        $firstOfMonth = $maybeMonth->modify('first day of this month');
+        $dow          = (int) $firstOfMonth->format('N');
+        $anchorMonday = $firstOfMonth->modify('-' . ($dow - 1) . ' days')->setTime(0, 0);
+    }
+}
+if ($anchorMonday === null) {
+    $today        = new DateTimeImmutable('today');
+    $dow          = (int) $today->format('N');
+    $anchorMonday = $today->modify('-' . ($dow - 1) . ' days')->setTime(0, 0);
 }
 
-$firstOfMonth = $cursor->modify('first day of this month')->setTime(0, 0);
-$lastOfMonth  = $cursor->modify('last day of this month')->setTime(23, 59, 59);
-$prevMonth    = $firstOfMonth->modify('-1 month')->format('Y-m');
-$nextMonth    = $firstOfMonth->modify('+1 month')->format('Y-m');
+// Range: 42 days starting at the anchor Monday → 6 full weeks.
+$WEEKS_VISIBLE = 6;
+$rangeStart    = $anchorMonday;
+$rangeEnd      = $anchorMonday->modify('+' . ($WEEKS_VISIBLE * 7 - 1) . ' days')->setTime(23, 59, 59);
+
+// Helpers for nav links.
+$prevWeek      = $anchorMonday->modify('-7 days')->format('Y-m-d');
+$nextWeek      = $anchorMonday->modify('+7 days')->format('Y-m-d');
+$thisWeekMonday = (new DateTimeImmutable('today'))
+    ->modify('-' . ((int) (new DateTimeImmutable('today'))->format('N') - 1) . ' days')
+    ->format('Y-m-d');
+$todayStr      = (new DateTimeImmutable('today'))->format('Y-m-d');
+$isOnThisWeek  = $anchorMonday->format('Y-m-d') === $thisWeekMonday;
+
+// Dominant month — for the title + for the "this is the focal month"
+// visual cue. Count how many days of each month fall in the 42-day
+// window; the highest count wins (later month on ties).
+$monthDayCounts = [];
+for ($i = 0; $i < $WEEKS_VISIBLE * 7; $i++) {
+    $d  = $anchorMonday->modify('+' . $i . ' days');
+    $ym = $d->format('Y-m');
+    $monthDayCounts[$ym] = ($monthDayCounts[$ym] ?? 0) + 1;
+}
+arsort($monthDayCounts);   // most days first
+$dominantYm = array_key_first($monthDayCounts);
+$dominantLabel = $dominantYm
+    ? (new DateTimeImmutable($dominantYm . '-01'))->format('F Y')
+    : '';
+
+// Legacy variables kept for sibling pages that read $thisMonth etc.
+$firstOfMonth = $anchorMonday;   // kept name for downstream references
 $thisMonth    = (new DateTimeImmutable('first day of this month'))->format('Y-m');
-$todayStr     = (new DateTimeImmutable('today'))->format('Y-m-d');
-
-// UK convention: weeks start Monday. PHP 'N' is 1=Mon..7=Sun, so leading
-// blanks = ('N' of first-of-month) - 1.
-$leadingBlanks = ((int) $firstOfMonth->format('N')) - 1;
-$daysInMonth   = (int) $firstOfMonth->format('t');
-$totalCells    = $leadingBlanks + $daysInMonth;
-$trailingBlanks = (7 - ($totalCells % 7)) % 7;
-
-// Tyler's review: show the first week of the next month too. If your
-// month ends mid-week you need to see the rest of that week without
-// flipping over to next month. We render the trailing partial week
-// (which used to be empty grey cells) AS REAL days from next month,
-// then one additional full Mon-Sun week beyond.
-$nextMonthFirst   = $firstOfMonth->modify('+1 month');
-$overhangDays     = $trailingBlanks + 7;
-$overhangLastDate = $nextMonthFirst->modify('+' . ($overhangDays - 1) . ' days');
 
 // ---------------------------------------------------------------------------
 // Fetch appointments visible to this client, falling within the month window.
@@ -90,8 +134,8 @@ if ($mineOnly) {
     $stmt->execute([
         $clientId,
         (int) $user['user_id'],
-        $firstOfMonth->format('Y-m-d'),
-        $overhangLastDate->format('Y-m-d'),
+        $rangeStart->format('Y-m-d'),
+        $rangeEnd->format('Y-m-d'),
     ]);
 } else {
     $stmt = db()->prepare(
@@ -107,8 +151,8 @@ if ($mineOnly) {
     );
     $stmt->execute([
         $clientId,
-        $firstOfMonth->format('Y-m-d'),
-        $overhangLastDate->format('Y-m-d'),
+        $rangeStart->format('Y-m-d'),
+        $rangeEnd->format('Y-m-d'),
     ]);
 }
 
@@ -289,16 +333,13 @@ $activeNav = 'calendar';
             gap: 0.375rem;
             position: relative;
         }
-        .cal-cell.is-other-month { background: var(--bg-subtle); }
-        /* Next-month overhang — subtly muted background (lighter than
-           is-other-month, which is for non-functional fill cells) so
-           the eye distinguishes "this is next month" without it
-           reading as disabled. Add affordance and appointments still
-           work as on current-month cells. */
-        .cal-cell.is-overhang { background: var(--bg-subtle); }
-        .cal-cell.is-overhang .cal-day-num {
-            opacity: 0.7;
-        }
+        /* Days that fall outside the dominant month in the rolling
+           6-week view get a muted background — the user still has
+           a "what month am I mostly looking at" anchor without
+           those cells reading as disabled. Add affordance,
+           appointments, and drag-and-drop work normally on them. */
+        .cal-cell.is-outside-focus { background: var(--bg-subtle); }
+        .cal-cell.is-outside-focus .cal-day-num { opacity: 0.7; }
         /* Today: darker blue tint + navy inset stripe down the left
            edge. Tyler reported #eff6ff was too washed out on his
            monitor to spot at a glance. The stripe gives a strong
@@ -334,7 +375,6 @@ $activeNav = 'calendar';
             pointer-events: none;
         }
         .cal-cell:hover .cal-cell-add::after { opacity: 0.45; }
-        .cal-cell.is-other-month .cal-cell-add { display: none; }
         .cal-day-num {
             font-size: 0.875rem;
             font-weight: 600;
@@ -452,7 +492,6 @@ $activeNav = 'calendar';
                 padding: 0.75rem 1rem;
                 border-bottom: 1px solid var(--border);
             }
-            .cal-cell.is-other-month { display: none; }
             .cal-day-num::after {
                 content: attr(data-weekday);
                 font-weight: 400;
@@ -569,11 +608,11 @@ $activeNav = 'calendar';
                          can_view_all_customer_jobs — others are locked
                          to their own appointments and don't need it. -->
                     <div class="cal-view-toggle" role="group" aria-label="Calendar view">
-                        <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                        <a href="/calendar/index.php?week=<?= e($anchorMonday->format('Y-m-d')) ?>"
                            class="cal-toggle-btn <?= $mineOnly ? '' : 'is-active' ?>">
                             Everyone
                         </a>
-                        <a href="/calendar/index.php?mine=1&month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                        <a href="/calendar/index.php?mine=1&week=<?= e($anchorMonday->format('Y-m-d')) ?>"
                            class="cal-toggle-btn <?= $mineOnly ? 'is-active' : '' ?>">
                             Just me
                         </a>
@@ -601,11 +640,11 @@ $activeNav = 'calendar';
         </div>
 
         <?php
-            // Preserve mine=1 across month navigation so the diary view
+            // Preserve mine=1 across week navigation so the diary view
             // doesn't break out to "show all" when the user clicks
-            // prev/next month.
-            $monthQs = static fn (string $ym): string =>
-                '?month=' . urlencode($ym) . ($mineOnly ? '&mine=1' : '');
+            // prev/next week. Helper hands back a fully-formed href.
+            $weekQs = static fn (string $ymd): string =>
+                '?week=' . urlencode($ymd) . ($mineOnly ? '&mine=1' : '');
             $todayHref = $mineOnly
                 ? '/calendar/index.php?mine=1'
                 : '/calendar/index.php';
@@ -650,15 +689,21 @@ $activeNav = 'calendar';
             <div class="cal-toolbar">
                 <div class="cal-nav">
                     <a class="cal-nav-btn"
-                       href="<?= e($monthQs($prevMonth)) ?>"
-                       aria-label="Previous month"
+                       href="<?= e($weekQs($prevWeek)) ?>"
+                       aria-label="Previous week"
                        rel="prev">&lsaquo;</a>
-                    <span class="cal-month-label"><?= e($firstOfMonth->format('F Y')) ?></span>
+                    <span class="cal-month-label">
+                        <?= e($dominantLabel) ?>
+                        <small style="display:block;font-size:0.6875rem;font-weight:500;color:var(--text-faint);text-transform:none;letter-spacing:0;margin-top:0.0625rem">
+                            <?= e($rangeStart->format('D j M')) ?> &mdash;
+                            <?= e($rangeEnd->format('D j M')) ?>
+                        </small>
+                    </span>
                     <a class="cal-nav-btn"
-                       href="<?= e($monthQs($nextMonth)) ?>"
-                       aria-label="Next month"
+                       href="<?= e($weekQs($nextWeek)) ?>"
+                       aria-label="Next week"
                        rel="next">&rsaquo;</a>
-                    <?php if ($firstOfMonth->format('Y-m') !== $thisMonth): ?>
+                    <?php if (!$isOnThisWeek): ?>
                         <a class="cal-nav-btn cal-nav-today"
                            href="<?= e($todayHref) ?>">Today</a>
                     <?php endif; ?>
@@ -679,91 +724,46 @@ $activeNav = 'calendar';
                 <div style="background:#eef2f7;border:1px dashed #cbd5e1;
                             border-radius:10px;padding:1rem 1.125rem;
                             margin:0 0 1rem;color:#1f3b5b;font-size:0.9375rem">
-                    No appointments assigned to you this month.
+                    No appointments assigned to you in this 6-week window.
                     <?php if (!$canViewAll): ?>
                         Once an admin assigns you to a job, it'll appear
                         here and on your <a href="/calendar/schedule.php"
                         style="color:#1f3b5b;font-weight:600">My Schedule</a> page.
                     <?php else: ?>
-                        Switch back to <a href="/calendar/index.php?month=<?= e($firstOfMonth->format('Y-m')) ?>"
+                        Switch back to <a href="/calendar/index.php?week=<?= e($anchorMonday->format('Y-m-d')) ?>"
                         style="color:#1f3b5b;font-weight:600">Everyone</a>
                         to see the whole team's diary.
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
 
-            <div class="cal-grid" role="grid" aria-label="<?= e($firstOfMonth->format('F Y')) ?>">
+            <div class="cal-grid" role="grid" aria-label="<?= e($dominantLabel) ?>">
                 <?php foreach ($weekdayLabels as $wd): ?>
                     <div class="cal-weekday" role="columnheader"><?= e($wd) ?></div>
                 <?php endforeach; ?>
 
-                <?php for ($i = 0; $i < $leadingBlanks; $i++): ?>
-                    <div class="cal-cell is-other-month" aria-hidden="true"></div>
-                <?php endfor; ?>
-
-                <?php for ($d = 1; $d <= $daysInMonth; $d++): ?>
-                    <?php
-                        $cellDate = $firstOfMonth->setDate(
-                            (int) $firstOfMonth->format('Y'),
-                            (int) $firstOfMonth->format('n'),
-                            $d
-                        );
-                        $iso       = $cellDate->format('Y-m-d');
-                        $isToday   = $iso === $todayStr;
-                        $weekday3  = $cellDate->format('D');
-                        $appts     = $byDate[$iso] ?? [];
-                    ?>
-                    <div class="cal-cell<?= $isToday ? ' is-today' : '' ?>" role="gridcell"
-                         data-date="<?= e($iso) ?>">
-                        <a class="cal-cell-add"
-                           href="/calendar/new.php?date=<?= e($iso) ?>"
-                           aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
-                        <span class="cal-day-num" data-weekday="<?= e($weekday3) ?>"><?= $d ?></span>
-                        <?php if ($appts): ?>
-                            <div class="cal-appts">
-                                <?php foreach ($appts as $a): ?>
-                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?>"
-                                       href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
-                                       draggable="true"
-                                       data-id="<?= (int) $a['id'] ?>"
-                                       <?php if (!empty($a['quote_id'])): ?>
-                                           data-quote-id="<?= (int) $a['quote_id'] ?>"
-                                       <?php endif; ?>
-                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
-                                        <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
-                                        <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
-                                        <?php if (!empty($a['quote_id'])): ?>
-                                            <!-- Single-tap shortcut to the order page. Stops the
-                                                 click bubbling so the parent's view.php link
-                                                 doesn't also fire. -->
-                                            <span class="cal-appt-open-order"
-                                                  role="link" tabindex="0"
-                                                  data-quote-id="<?= (int) $a['quote_id'] ?>"
-                                                  title="Open order"
-                                                  aria-label="Open order">→</span>
-                                        <?php endif; ?>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php endfor; ?>
-
                 <?php
-                    // Next-month overhang. Same markup as current-month
-                    // cells (so appointments, add-affordance, drag &
-                    // drop, hover all behave identically) but tagged
-                    // with .is-overhang for a subtly muted background.
-                    for ($i = 0; $i < $overhangDays; $i++):
-                        $cellDate  = $nextMonthFirst->modify('+' . $i . ' days');
-                        $iso       = $cellDate->format('Y-m-d');
-                        $isToday   = $iso === $todayStr;
-                        $weekday3  = $cellDate->format('D');
-                        $appts     = $byDate[$iso] ?? [];
-                        $dayLabel  = (int) $cellDate->format('j');
+                    // Rolling 6-week grid: 42 cells from $anchorMonday.
+                    // Days that fall OUTSIDE the dominant month get a
+                    // muted background (.is-outside-focus) so the user
+                    // still has a visual anchor for "which month is
+                    // mostly on screen" without losing functionality.
+                    $totalCells = $WEEKS_VISIBLE * 7;
+                    for ($i = 0; $i < $totalCells; $i++):
+                        $cellDate    = $anchorMonday->modify('+' . $i . ' days');
+                        $iso         = $cellDate->format('Y-m-d');
+                        $isToday     = $iso === $todayStr;
+                        $weekday3    = $cellDate->format('D');
+                        $appts       = $byDate[$iso] ?? [];
+                        $dayLabel    = (int) $cellDate->format('j');
+                        $isOutside   = $dominantYm !== null
+                                    && $cellDate->format('Y-m') !== $dominantYm;
+                        $cellClasses = 'cal-cell';
+                        if ($isOutside) $cellClasses .= ' is-outside-focus';
+                        if ($isToday)   $cellClasses .= ' is-today';
                 ?>
-                    <div class="cal-cell is-overhang<?= $isToday ? ' is-today' : '' ?>"
-                         role="gridcell" data-date="<?= e($iso) ?>">
+                    <div class="<?= e($cellClasses) ?>" role="gridcell"
+                         data-date="<?= e($iso) ?>">
                         <a class="cal-cell-add"
                            href="/calendar/new.php?date=<?= e($iso) ?>"
                            aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
@@ -782,6 +782,9 @@ $activeNav = 'calendar';
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
                                         <?php if (!empty($a['quote_id'])): ?>
+                                            <!-- Single-tap shortcut to the order page. Stops the
+                                                 click bubbling so the parent's view.php link
+                                                 doesn't also fire. -->
                                             <span class="cal-appt-open-order"
                                                   role="link" tabindex="0"
                                                   data-quote-id="<?= (int) $a['quote_id'] ?>"
@@ -890,8 +893,10 @@ $activeNav = 'calendar';
     // is visible, only swaps DOM if the relevant payload actually
     // changed (so a card the user is looking at doesn't get re-rendered
     // under their cursor every 15s).
-    var currentMonth = '<?= e($firstOfMonth->format('Y-m')) ?>';
-    var pollEndpoint = '/calendar/pending.php?month=' + encodeURIComponent(currentMonth)
+    var rangeStart   = '<?= e($rangeStart->format('Y-m-d')) ?>';
+    var rangeEnd     = '<?= e($rangeEnd->format('Y-m-d')) ?>';
+    var pollEndpoint = '/calendar/pending.php?start=' + encodeURIComponent(rangeStart)
+                     + '&end=' + encodeURIComponent(rangeEnd)
         + (window.location.search.indexOf('mine=1') !== -1 ? '&mine=1' : '');
     var pollMs = 15000;
     var pollTimer = null;
