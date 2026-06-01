@@ -248,6 +248,56 @@ if ($product && $step >= 3) {
     $fabrics = $fabSt->fetchAll();
 }
 
+// ── Step 4 setup: auto-create price-table stubs and load fill status ──
+//
+// Each (system × distinct band_code) combination needs a price table.
+// We create empty stubs for any that don't exist yet, so step 4 can
+// show a checklist of "fill in each one" links. The user clicks
+// through to the inline grid editor on /price-table.php and returns
+// here via a "from=wizard" query param trail.
+//
+// Schema notes:
+//   - price_tables has a UNIQUE (product_id, system_id, band_code)
+//     constraint (per tenant via client_id). INSERT IGNORE handles
+//     re-entries safely.
+//   - Fabrics without band_code aren't included (they can't be
+//     priced — the band is the price-band key).
+$priceTables = [];
+if ($product && $step === 4) {
+    // Auto-create stubs for any missing (system, band) combos.
+    $stubStmt = $pdo->prepare(
+        "INSERT IGNORE INTO price_tables
+            (client_id, product_id, system_id, band_code, active)
+         SELECT ?, ?, s.id, o.band_code, 1
+           FROM product_systems s
+           CROSS JOIN (
+             SELECT DISTINCT band_code FROM product_options
+              WHERE product_id = ? AND client_id = ? AND active = 1
+                AND band_code IS NOT NULL AND band_code != ''
+           ) o
+          WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+    );
+    $stubStmt->execute([
+        $clientId, $productId,
+        $productId, $clientId,
+        $productId, $clientId,
+    ]);
+
+    // Now load every (system, band) combo with its fill status.
+    $combosStmt = $pdo->prepare(
+        "SELECT t.id, s.name AS system_name, t.band_code,
+                (SELECT COUNT(*) FROM price_table_rows r
+                  WHERE r.price_table_id = t.id) AS cell_count
+           FROM price_tables t
+           JOIN product_systems s ON s.id = t.system_id
+          WHERE t.product_id = ? AND t.client_id = ? AND t.active = 1
+            AND s.active = 1
+          ORDER BY s.sort_order, s.name, t.band_code"
+    );
+    $combosStmt->execute([$productId, $clientId]);
+    $priceTables = $combosStmt->fetchAll();
+}
+
 // Steps metadata for the stepper UI.
 $STEPS = [
     1 => ['Name',     'What kind of blind is this?'],
@@ -645,46 +695,97 @@ $activeNav = 'wizard';
                 </div>
             <?php endif; ?>
 
-            <!-- ─── STEP 4: Done ─────────────────────────────────────── -->
-            <?php if ($step === 4 && $product): ?>
-                <div class="wiz-done-tile">
-                    <div class="icon">🎉</div>
-                    <h2>Nice work — <?= e((string) $product['name']) ?> is taking shape</h2>
-                    <p>
-                        Product created, <?= (int) $systemCount ?>
-                        system<?= $systemCount === 1 ? '' : 's' ?>,
-                        <?= (int) $fabricCount ?>
-                        <?= strtolower((string) ($product['option_label'] ?? 'fabric')) ?><?= $fabricCount === 1 ? '' : 's' ?>.
-                        One thing left:
-                    </p>
-                </div>
-
-                <div class="wiz-card">
-                    <h2>Add a price table</h2>
-                    <p class="lede">
-                        Price tables turn a width × drop into a quotable price.
-                        Without one, the salesperson can pick the fabric and
-                        system but can't actually generate a number. They live
-                        per-system, so each system you added gets its own.
-                    </p>
-
-                    <div class="wiz-next-step">
-                        <strong>Why not in the wizard?</strong>
-                        Price tables are usually built by importing an XLSX from your
-                        supplier, or by pasting in a grid of widths × drops. That's
-                        easier on the dedicated page than in a wizard step.
+            <!-- ─── STEP 4: Price tables ─────────────────────────────── -->
+            <?php if ($step === 4 && $product):
+                $totalTables  = count($priceTables);
+                $filledTables = 0;
+                foreach ($priceTables as $t) {
+                    if ((int) $t['cell_count'] > 0) $filledTables++;
+                }
+                $allFilled = $totalTables > 0 && $filledTables === $totalTables;
+            ?>
+                <?php if ($allFilled): ?>
+                    <div class="wiz-done-tile">
+                        <div class="icon">🎉</div>
+                        <h2>All set — <?= e((string) $product['name']) ?> is ready to quote</h2>
+                        <p>
+                            Product, <?= (int) $systemCount ?>
+                            system<?= $systemCount === 1 ? '' : 's' ?>,
+                            <?= (int) $fabricCount ?>
+                            <?= strtolower((string) ($product['option_label'] ?? 'fabric')) ?><?= $fabricCount === 1 ? '' : 's' ?>,
+                            and all <?= (int) $totalTables ?>
+                            price table<?= $totalTables === 1 ? '' : 's' ?> filled in.
+                        </p>
                     </div>
-
-                    <div class="wiz-actions" style="border-top:0;margin-top:1.25rem;padding-top:0">
-                        <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=3"
-                           class="wiz-skip" style="text-decoration:none;color:var(--text-faint)">
-                            &larr; Back
-                        </a>
-                        <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
-                           class="btn btn-primary">
-                            Open product edit page &rarr;
-                        </a>
+                <?php else: ?>
+                    <div class="wiz-done-tile" style="background:linear-gradient(135deg,#fef3c7 0%,#fffbeb 100%);border-color:#fcd34d">
+                        <div class="icon">📋</div>
+                        <h2 style="color:#78350f">One thing left — price tables</h2>
+                        <p style="color:#92400e">
+                            <?php if ($totalTables === 0): ?>
+                                Your fabrics don't have band codes yet — go back
+                                to step 3 and add at least one band (A, B, C…).
+                                Price tables are keyed by band, so we need that
+                                first.
+                            <?php else: ?>
+                                <?= $filledTables ?> of <?= $totalTables ?> filled in.
+                                Click <em>Fill in</em> on each to type or paste
+                                prices straight from a supplier sheet.
+                            <?php endif; ?>
+                        </p>
                     </div>
+                <?php endif; ?>
+
+                <?php if ($totalTables > 0): ?>
+                    <div class="wiz-card">
+                        <h2>Price tables</h2>
+                        <p class="lede">
+                            One per <em>(system × band)</em>. Empty tables won't
+                            generate a price at quote time — fill them in now,
+                            or come back via the product edit page later.
+                        </p>
+
+                        <div class="wiz-list" style="max-height:none;padding:0.25rem 0.5rem">
+                            <?php foreach ($priceTables as $t):
+                                $cells   = (int) $t['cell_count'];
+                                $filled  = $cells > 0;
+                                $href    = '/admin/products/price-table.php?id=' . (int) $t['id']
+                                         . '&from=wizard&product_id=' . (int) $productId;
+                            ?>
+                                <div class="wiz-list-item" style="padding:0.5rem 0.25rem">
+                                    <span class="check" style="<?= $filled ? '' : 'color:var(--text-faint)' ?>">
+                                        <?= $filled ? '&check;' : '○' ?>
+                                    </span>
+                                    <div style="flex:1;display:flex;flex-wrap:wrap;gap:0.375rem;align-items:baseline">
+                                        <strong><?= e((string) $t['system_name']) ?></strong>
+                                        <span style="color:var(--text-faint)">— Band <?= e((string) $t['band_code']) ?></span>
+                                        <span style="color:var(--text-faint);font-size:0.8125rem">
+                                            <?= $filled
+                                                ? '· ' . $cells . ' cell' . ($cells === 1 ? '' : 's')
+                                                : '· empty' ?>
+                                        </span>
+                                    </div>
+                                    <a href="<?= e($href) ?>"
+                                       class="btn <?= $filled ? 'btn-secondary' : 'btn-primary' ?> btn-sm">
+                                        <?= $filled ? 'Edit' : 'Fill in' ?>
+                                    </a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <div class="wiz-actions" style="margin-top:0">
+                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=3"
+                       class="wiz-skip" style="text-decoration:none;color:var(--text-faint)">
+                        &larr; Back to fabrics
+                    </a>
+                    <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+                       class="btn <?= $allFilled ? 'btn-primary' : 'btn-secondary' ?>">
+                        <?= $allFilled
+                            ? 'Open product edit page →'
+                            : 'Finish later — open product →' ?>
+                    </a>
                 </div>
             <?php endif; ?>
         </div>

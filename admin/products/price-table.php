@@ -577,6 +577,15 @@ $activeNav = 'products';
     <?php require __DIR__ . '/../../_partials/sidebar.php'; ?>
 
     <main class="app-main">
+        <?php
+            // "from=wizard" indicates the user clicked through here from
+            // the setup wizard's step 4 checklist. Surface a "back to
+            // wizard" link so they can return without rummaging through
+            // the sidebar. product_id is required so we know which
+            // wizard run to resume.
+            $fromWizard = ($_GET['from'] ?? '') === 'wizard';
+            $wizardBackId = $fromWizard ? (int) ($_GET['product_id'] ?? 0) : 0;
+        ?>
         <div class="page-header">
             <div>
                 <h1 class="page-title">
@@ -588,9 +597,15 @@ $activeNav = 'products';
                     <?php endif; ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>">
-                        &larr; All <?= e((string) $table['system_name']) ?> price tables
-                    </a>
+                    <?php if ($wizardBackId > 0): ?>
+                        <a href="/admin/products/wizard.php?id=<?= $wizardBackId ?>&step=4">
+                            &larr; Back to setup wizard
+                        </a>
+                    <?php else: ?>
+                        <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>">
+                            &larr; All <?= e((string) $table['system_name']) ?> price tables
+                        </a>
+                    <?php endif; ?>
                 </p>
             </div>
         </div>
@@ -670,7 +685,7 @@ $activeNav = 'products';
                 }</script>
             <?php endif; ?>
 
-            <form method="post" action="/admin/products/price-table.php"
+            <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
                   id="grid-form"
                   <?= $isEmpty ? 'style="display:none"' : '' ?>>
                 <?= csrf_field() ?>
@@ -773,7 +788,7 @@ $activeNav = 'products';
                         Widths across row 1, drops down column A, prices in the cells.
                         <strong>Replaces every cell</strong> in this table on import.
                     </p>
-                    <form method="post" action="/admin/products/price-table.php"
+                    <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
                           enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="upload">
@@ -793,7 +808,7 @@ $activeNav = 'products';
                         <strong>Band <?= e((string) $table['band_code']) ?></strong>;
                         falls back to the first band found.
                     </p>
-                    <form method="post" action="/admin/products/price-table.php"
+                    <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
                           enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="upload_flex">
