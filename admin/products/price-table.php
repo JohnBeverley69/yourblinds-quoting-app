@@ -570,42 +570,68 @@ $isEmpty = !$matrixWidths && !$matrixDrops;
 // grid if no other populated table exists.
 $DEFAULT_WIDTHS = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
 $DEFAULT_DROPS  = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
-$shapeSource    = null;  // info about which sibling table we copied from
+$shapeSources   = [];  // ordered list of populated siblings
 if ($isEmpty) {
+    // Fetch every populated sibling on this product, ordered by how
+    // likely the user is to want to copy from them:
+    //   1. Same band code, different system  — "I just did 35mm String
+    //      Band D, now doing 35mm Tape Band D, same prices ±5%"
+    //   2. Same system, different band       — "Standard system, going
+    //      from Band A to Band B, same shape"
+    //   3. Anything else
+    // ORDER BY id within each bucket so the user's most-recently-built
+    // table comes earlier when there are ties (rough chronological
+    // ordering — newer rows have higher ids).
     $sibStmt = db()->prepare(
-        'SELECT t.id, t.band_code, s.name AS system_name
+        "SELECT t.id, t.band_code, s.name AS system_name, t.system_id,
+                (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS cell_count
            FROM price_tables t
            JOIN product_systems s ON s.id = t.system_id
           WHERE t.product_id = ? AND t.client_id = ? AND t.id != ?
+            AND t.active = 1
             AND EXISTS (SELECT 1 FROM price_table_rows r WHERE r.price_table_id = t.id)
-       ORDER BY t.id LIMIT 1'
+       ORDER BY
+            CASE WHEN t.band_code = ? THEN 0 ELSE 1 END,
+            CASE WHEN t.system_id = ? THEN 0 ELSE 1 END,
+            t.id DESC"
     );
-    $sibStmt->execute([$table['product_id'], $clientId, $tableId]);
-    $sibling = $sibStmt->fetch();
-    if ($sibling) {
+    $sibStmt->execute([
+        $table['product_id'], $clientId, $tableId,
+        (string) $table['band_code'],
+        (int) $table['system_id'],
+    ]);
+    $shapeSources = $sibStmt->fetchAll();
+
+    // The top-ranked sibling drives the default widths/drops used by
+    // the "Same shape, blank prices" fallback (Quick Start dialog
+    // pre-fill). Only fetch its shape — cells we don't need until
+    // the user picks a "Clone X" button.
+    if ($shapeSources) {
+        $top = $shapeSources[0];
         $wSt = db()->prepare(
             'SELECT DISTINCT width_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm'
         );
-        $wSt->execute([$sibling['id']]);
+        $wSt->execute([$top['id']]);
         $sibWidths = array_map('intval', $wSt->fetchAll(PDO::FETCH_COLUMN));
 
         $dSt = db()->prepare(
             'SELECT DISTINCT drop_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY drop_mm'
         );
-        $dSt->execute([$sibling['id']]);
+        $dSt->execute([$top['id']]);
         $sibDrops = array_map('intval', $dSt->fetchAll(PDO::FETCH_COLUMN));
 
         if ($sibWidths && $sibDrops) {
             $DEFAULT_WIDTHS = $sibWidths;
             $DEFAULT_DROPS  = $sibDrops;
-            $shapeSource    = [
-                'id'          => (int) $sibling['id'],
-                'system_name' => (string) $sibling['system_name'],
-                'band_code'   => (string) $sibling['band_code'],
-            ];
         }
     }
 }
+// Back-compat alias for existing code that reads $shapeSource.
+$shapeSource = !empty($shapeSources) ? [
+    'id'          => (int)    $shapeSources[0]['id'],
+    'system_name' => (string) $shapeSources[0]['system_name'],
+    'band_code'   => (string) $shapeSources[0]['band_code'],
+] : null;
 
 // "Next price table to fill" — the empty (or smallest-cell) sibling
 // of the current table. Shown after a save so the user has a clear
@@ -1052,15 +1078,12 @@ $activeNav = 'products';
                 <div class="qs-tile">
                     <h3>This price table is empty</h3>
                     <p>
-                        <?php if ($shapeSource !== null): ?>
-                            Bands on this product usually share the same
-                            shape (widths × drops). The fastest path:
-                            clone the existing
-                            <strong>
-                                <?= e($shapeSource['system_name']) ?>
-                                — Band <?= e($shapeSource['band_code']) ?>
-                            </strong>
-                            grid and tweak only the prices that differ.
+                        <?php if (!empty($shapeSources)): ?>
+                            Other bands on this product are filled in.
+                            Pick one to clone — same widths, drops and
+                            prices — then tweak the cells that differ.
+                            We've sorted them so the closest match
+                            (same band code) is first.
                         <?php else: ?>
                             Start with a standard UK grid (widths 800&ndash;4000mm,
                             drops 800&ndash;4000mm in 400mm steps), then type
@@ -1068,32 +1091,46 @@ $activeNav = 'products';
                             column by column.
                         <?php endif; ?>
                     </p>
-                    <?php if ($shapeSource !== null): ?>
-                        <!-- Clone entire grid (widths, drops, AND prices)
-                             from the sibling table. Server-side INSERT
-                             ... SELECT keeps it fast. After save, the
-                             user lands on the populated grid and can
-                             edit just the prices that differ. -->
-                        <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
-                              style="display:inline-block;margin:0">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="copy_from">
-                            <input type="hidden" name="id" value="<?= (int) $tableId ?>">
-                            <input type="hidden" name="source_table_id" value="<?= (int) $shapeSource['id'] ?>">
-                            <button type="submit" class="btn btn-primary">
-                                Clone
-                                <?= e($shapeSource['system_name']) ?>
-                                — Band <?= e($shapeSource['band_code']) ?>
-                                (with prices)
+                    <?php if (!empty($shapeSources)): ?>
+                        <!-- One "Clone X" button per populated sibling.
+                             User picks the one with the right shape and
+                             closest prices. Server-side INSERT...SELECT
+                             keeps the copy fast. -->
+                        <div style="display:flex;flex-direction:column;gap:0.4375rem;align-items:center">
+                            <?php foreach ($shapeSources as $i => $src):
+                                $cells = (int) $src['cell_count'];
+                            ?>
+                                <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                                      style="margin:0">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="copy_from">
+                                    <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                                    <input type="hidden" name="source_table_id" value="<?= (int) $src['id'] ?>">
+                                    <button type="submit"
+                                            class="btn <?= $i === 0 ? 'btn-primary' : 'btn-secondary' ?>"
+                                            style="min-width:24rem">
+                                        Clone
+                                        <strong>
+                                            <?= e((string) $src['system_name']) ?>
+                                            — Band <?= e((string) $src['band_code']) ?>
+                                        </strong>
+                                        <span style="opacity:0.7;font-weight:400;font-size:0.8125rem">
+                                            (<?= $cells ?> cells)
+                                        </span>
+                                    </button>
+                                </form>
+                            <?php endforeach; ?>
+                        </div>
+                        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:1px solid var(--border);font-size:0.875rem;color:var(--text-faint)">
+                            Or don't clone —
+                            <button type="button" id="qs-fill"
+                                    style="background:transparent;border:0;color:var(--link);cursor:pointer;font:inherit;text-decoration:underline;padding:0">
+                                start with the same shape but blank prices
                             </button>
-                        </form>
-                        <div style="margin-top:0.625rem">
-                            <button type="button" id="qs-fill" class="btn btn-secondary">
-                                Same shape, blank prices
-                            </button>
-                            <a href="#" id="qs-blank" class="qs-secondary" style="margin-left:0.625rem">
-                                Or build from scratch — start blank
-                            </a>
+                             — or
+                            <a href="#" id="qs-blank" style="color:var(--link)">
+                                build from scratch
+                            </a>.
                         </div>
                     <?php else: ?>
                         <button type="button" id="qs-fill" class="btn btn-primary">
