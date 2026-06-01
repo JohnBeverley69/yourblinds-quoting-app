@@ -682,6 +682,9 @@ $activeNav = 'products';
                     Leave a cell blank to skip that width × drop combo (no price quoted).
                     Use the <strong>×</strong> next to a header to drop a column or row;
                     <strong>+ Width</strong> / <strong>+ Drop</strong> extends the grid.
+                    <strong>Paste from Excel:</strong> click a cell and
+                    paste &mdash; a range copied from a spreadsheet spreads across
+                    rows and columns starting from that cell.
                 </p>
 
                 <div class="grid-wrap">
@@ -1008,6 +1011,103 @@ $activeNav = 'products';
             var rmD = t.getAttribute('data-rm-d');
             if (rmW) { e.preventDefault(); removeWidth(parseInt(rmW, 10)); }
             if (rmD) { e.preventDefault(); removeDrop(parseInt(rmD, 10));  }
+        });
+
+        // ----- Excel-style paste handler ----- //
+        //
+        // When the user copies a range from a spreadsheet, the clipboard
+        // contains TSV (rows separated by \n or \r\n, columns by \t).
+        // We catch the paste at the table level, parse the clipboard
+        // text, and spread the values across cells starting from the
+        // focused cell going right and down. Single-cell pastes (no
+        // tabs or newlines) fall through to the browser's default so
+        // straight typing isn't disrupted.
+        table.addEventListener('paste', function (e) {
+            var target = e.target;
+            if (!target || target.tagName !== 'INPUT'
+                || !target.classList.contains('grid-cell-input')) {
+                return;
+            }
+            var clipboard = (e.clipboardData || window.clipboardData);
+            if (!clipboard) return;
+            var text = clipboard.getData('text/plain') || clipboard.getData('text') || '';
+            if (text === '') return;
+
+            // Single-cell paste? Let the browser handle it normally.
+            // The cheap check is "no tabs, no newlines, no carriage returns".
+            if (text.indexOf('\t') === -1
+             && text.indexOf('\n') === -1
+             && text.indexOf('\r') === -1) {
+                return;
+            }
+            e.preventDefault();
+
+            // Parse the TSV. Strip a single trailing newline (Excel
+            // adds one) then split. Each row gets split by \t.
+            var rows = text.replace(/\r/g, '').replace(/\n$/, '').split('\n');
+            var grid = rows.map(function (r) { return r.split('\t'); });
+
+            // Locate the paste anchor — which (width, drop) is the
+            // focused cell at? Use its name attribute "cells[W_D]".
+            var m = target.name && target.name.match(/^cells\[(\d+)_(\d+)\]$/);
+            if (!m) return;
+            var anchorW = parseInt(m[1], 10);
+            var anchorD = parseInt(m[2], 10);
+
+            var ws = currentWidths();
+            var ds = currentDrops();
+            var startWIdx = ws.indexOf(anchorW);
+            var startDIdx = ds.indexOf(anchorD);
+            if (startWIdx < 0 || startDIdx < 0) return;
+
+            // Walk the parsed grid. Row i corresponds to drop
+            // ds[startDIdx + i]; column j corresponds to width
+            // ws[startWIdx + j]. Cells beyond the existing grid are
+            // ignored — keeps the user in control of grid shape.
+            var filled = 0;
+            var skipped = 0;
+            grid.forEach(function (row, i) {
+                var di = startDIdx + i;
+                if (di >= ds.length) { skipped += row.length; return; }
+                var d  = ds[di];
+                row.forEach(function (raw, j) {
+                    var wi = startWIdx + j;
+                    if (wi >= ws.length) { skipped++; return; }
+                    var w = ws[wi];
+                    var input = form.querySelector(
+                        'input[name="cells[' + w + '_' + d + ']"]'
+                    );
+                    if (!input) { skipped++; return; }
+                    // Clean up: strip currency symbols, commas,
+                    // whitespace. Empty after that = blank cell
+                    // (treated as "no price").
+                    var clean = String(raw)
+                        .replace(/[£$€]/g, '')
+                        .replace(/,/g, '')
+                        .trim();
+                    if (clean === '') {
+                        input.value = '';
+                    } else if (/^-?[0-9.]+$/.test(clean)) {
+                        input.value = clean;
+                    } else {
+                        skipped++;
+                        return;
+                    }
+                    filled++;
+                });
+            });
+
+            // Briefly flash the affected cells so the user can see
+            // what landed. Pure visual feedback — no behaviour change.
+            if (filled > 0) {
+                target.style.transition = 'background-color 800ms';
+                target.style.backgroundColor = '#a7f3d0';
+                setTimeout(function () { target.style.backgroundColor = ''; }, 800);
+            }
+            if (skipped > 0) {
+                console.log('Paste: filled ' + filled + ', skipped ' + skipped
+                    + ' (outside grid or non-numeric).');
+            }
         });
     }
 })();
