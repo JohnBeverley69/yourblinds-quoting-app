@@ -451,14 +451,14 @@ $activeNav = 'products';
                     </button>
                 </form>
 
-                <!-- "Preview as salesperson" launches a drawer that mounts
-                     a mini quote-builder for this product. Lets the admin
-                     verify their setup (cascading selects, conditional
-                     options, computed price) without leaving the page. -->
+                <!-- "Live preview" launches a drawer that mounts a mini
+                     quote-builder for this product. Lets the admin verify
+                     their setup (cascading selects, conditional options,
+                     computed price) without leaving the page. -->
                 <button type="button" id="preview-open-btn" class="btn btn-secondary"
                         style="display:inline-flex;align-items:center;gap:0.4375rem">
                     <span aria-hidden="true">👁</span>
-                    Preview as salesperson
+                    Live preview
                 </button>
             </div>
         </div>
@@ -1587,8 +1587,7 @@ $activeNav = 'products';
 <aside class="preview-drawer" id="preview-drawer"
        role="dialog" aria-modal="true" aria-labelledby="preview-title">
     <div class="preview-drawer-head">
-        <h2 id="preview-title">Preview</h2>
-        <span class="badge">as salesperson</span>
+        <h2 id="preview-title">Live preview</h2>
         <div class="head-btns">
             <button type="button" id="preview-refresh" title="Reload catalogue data — pick up any edits you've just made">
                 ↻ Refresh
@@ -1725,9 +1724,23 @@ $activeNav = 'products';
         // Scales to any catalogue size; nothing wasted if the
         // operator doesn't open the picker.
 
-        // Re-render extras whenever System or any extra select changes.
+        // Re-render extras whenever System changes — and also clear the
+        // fabric selection, because per-system fabrics may have just
+        // dropped in or out of scope. Without this clear, picking
+        // Special then switching to Standard left a Special-only
+        // fabric stuck in the input (no price could be calculated).
         var sysSel = document.getElementById('pv-system');
-        if (sysSel) sysSel.addEventListener('change', renderExtras);
+        if (sysSel) {
+            sysSel.addEventListener('change', function () {
+                var fabHidden = document.getElementById('pv-fabric');
+                var fabText   = document.getElementById('pv-fabric-text');
+                var fabList   = document.getElementById('pv-fabric-list');
+                if (fabHidden) fabHidden.value = '';
+                if (fabText)   fabText.value   = '';
+                if (fabList)   fabList.hidden  = true;
+                renderExtras();
+            });
+        }
 
         renderExtras();
     }
@@ -1782,8 +1795,17 @@ $activeNav = 'products';
             // limit=2000 — server-side filter narrows aggressively by
             // query, so this is just a safety ceiling; typical queries
             // return single/double-digit results.
+            // Honour the system filter so per-system fabrics (e.g.
+            // Special-slat colours on a Venetian) don't show when a
+            // different system is picked. Matches what the real
+            // quote builder does.
+            var sysSel = document.getElementById('pv-system');
+            var sysQ = sysSel && sysSel.value
+                ? '&system_id=' + encodeURIComponent(sysSel.value)
+                : '';
             var url = '/quote-builder/api/fabrics-search.php?product_id=' + PRODUCT_ID
                     + '&q='     + encodeURIComponent(query)
+                    + sysQ
                     + '&limit=2000';
             var r = await fetch(url, { credentials: 'same-origin' });
             var data = await r.json();
