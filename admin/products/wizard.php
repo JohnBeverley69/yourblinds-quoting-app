@@ -201,20 +201,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $band = trim((string) ($_POST['band_code'] ?? ''));
                 $fab  = trim((string) ($_POST['fabric_name'] ?? ''));
                 $band = (string) preg_replace('/^band\s+/i', '', $band);
+                // system_id: blank string or "0" → NULL (universal).
+                $sysIdRaw = (string) ($_POST['system_id'] ?? '');
+                $sysId    = ($sysIdRaw === '' || $sysIdRaw === '0') ? null : (int) $sysIdRaw;
 
                 if ($band === '')          throw new RuntimeException('Band code is required (e.g. A, B, C, or Standard, Special).');
                 if (strlen($band) > 20)    throw new RuntimeException('Band code too long (max 20).');
                 if ($fab === '')           throw new RuntimeException('Fabric name is required.');
                 if (strlen($fab) > 150)    throw new RuntimeException('Fabric name too long (max 150).');
+                if ($sysId !== null) {
+                    // Validate the chosen system belongs to this product / tenant.
+                    $check = $pdo->prepare(
+                        'SELECT 1 FROM product_systems
+                          WHERE id = ? AND product_id = ? AND client_id = ?'
+                    );
+                    $check->execute([$sysId, $productId, $clientId]);
+                    if (!$check->fetchColumn()) {
+                        throw new RuntimeException('Chosen system is not on this product.');
+                    }
+                }
 
                 $ins = $pdo->prepare(
                     'INSERT INTO product_options
-                      (client_id, product_id, band_code, name, sort_order, active)
-                      VALUES (?, ?, ?, ?, 0, 1)'
+                      (client_id, product_id, system_id, band_code, name, sort_order, active)
+                      VALUES (?, ?, ?, ?, ?, 0, 1)'
                 );
-                $ins->execute([$clientId, $productId, strtoupper($band), $fab]);
+                $ins->execute([$clientId, $productId, $sysId, strtoupper($band), $fab]);
 
-                $_SESSION['flash_success'] = 'Added "' . $fab . '" (Band ' . strtoupper($band) . ').';
+                $_SESSION['flash_success'] = 'Added "' . $fab . '" (Band ' . strtoupper($band)
+                    . ($sysId !== null ? ', system #' . $sysId : '') . ').';
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
                 exit;
             }
@@ -222,9 +237,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $band = trim((string) ($_POST['bulk_band'] ?? ''));
                 $band = (string) preg_replace('/^band\s+/i', '', $band);
                 $namesRaw = (string) ($_POST['bulk_names'] ?? '');
+                $sysIdRaw = (string) ($_POST['bulk_system_id'] ?? '');
+                $sysId    = ($sysIdRaw === '' || $sysIdRaw === '0') ? null : (int) $sysIdRaw;
 
                 if ($band === '')         throw new RuntimeException('Band code is required.');
                 if (strlen($band) > 20)   throw new RuntimeException('Band code too long (max 20).');
+                if ($sysId !== null) {
+                    $check = $pdo->prepare(
+                        'SELECT 1 FROM product_systems
+                          WHERE id = ? AND product_id = ? AND client_id = ?'
+                    );
+                    $check->execute([$sysId, $productId, $clientId]);
+                    if (!$check->fetchColumn()) {
+                        throw new RuntimeException('Chosen system is not on this product.');
+                    }
+                }
 
                 // Split on any newline kind. Skip blanks and overlong
                 // lines silently so a stray empty line in a paste
@@ -244,14 +271,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bandUp = strtoupper($band);
                 $ins = $pdo->prepare(
                     'INSERT INTO product_options
-                      (client_id, product_id, band_code, name, sort_order, active)
-                      VALUES (?, ?, ?, ?, 0, 1)'
+                      (client_id, product_id, system_id, band_code, name, sort_order, active)
+                      VALUES (?, ?, ?, ?, ?, 0, 1)'
                 );
                 $added   = 0;
                 $skipped = 0;
                 foreach ($names as $name) {
                     try {
-                        $ins->execute([$clientId, $productId, $bandUp, $name]);
+                        $ins->execute([$clientId, $productId, $sysId, $bandUp, $name]);
                         $added++;
                     } catch (Throwable $e) {
                         // Duplicates (uniq constraint) and any other
@@ -261,7 +288,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $msg = "Added $added to Band $bandUp.";
+                $msg = "Added $added to Band $bandUp"
+                     . ($sysId !== null ? ' (one system only)' : ' (all systems)')
+                     . '.';
                 if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
                 $_SESSION['flash_success'] = $msg;
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
@@ -282,21 +311,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Same INSERT IGNORE as the first-time auto-create — safe to
         // run again.
         if ($postStep === 4 && $product && $action === 'create_missing') {
+            // Same scope-aware logic as the first-time auto-create:
+            // only combos with at least one matching fabric.
             $stubStmt = $pdo->prepare(
                 "INSERT IGNORE INTO price_tables
                     (client_id, product_id, system_id, band_code, active)
-                 SELECT ?, ?, s.id, o.band_code, 1
+                 SELECT DISTINCT ?, ?, s.id, po.band_code, 1
                    FROM product_systems s
-                   CROSS JOIN (
-                     SELECT DISTINCT band_code FROM product_options
-                      WHERE product_id = ? AND client_id = ? AND active = 1
-                        AND band_code IS NOT NULL AND band_code != ''
-                   ) o
+                   JOIN product_options po
+                     ON po.product_id = s.product_id
+                    AND po.client_id  = s.client_id
+                    AND po.active     = 1
+                    AND po.band_code IS NOT NULL
+                    AND po.band_code != ''
+                    AND (po.system_id IS NULL OR po.system_id = s.id)
                   WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
             );
             $stubStmt->execute([
                 $clientId, $productId,
-                $productId, $clientId,
                 $productId, $clientId,
             ]);
             $created = $stubStmt->rowCount();
@@ -324,11 +356,16 @@ if ($product && $step >= 2) {
     $systems = $sysSt->fetchAll();
 }
 if ($product && $step >= 3) {
+    // Pull system_id + system name so we can show "Standard only" /
+    // "Special only" tags next to scoped fabrics, and "All systems"
+    // (i.e. unscoped) for universal ones.
     $fabSt = $pdo->prepare(
-        'SELECT id, band_code, name, colour
-           FROM product_options
-          WHERE product_id = ? AND client_id = ? AND active = 1
-          ORDER BY band_code, name'
+        'SELECT o.id, o.band_code, o.name, o.colour, o.system_id,
+                s.name AS system_name
+           FROM product_options o
+           LEFT JOIN product_systems s ON s.id = o.system_id
+          WHERE o.product_id = ? AND o.client_id = ? AND o.active = 1
+          ORDER BY o.band_code, o.name'
     );
     $fabSt->execute([$productId, $clientId]);
     $fabrics = $fabSt->fetchAll();
@@ -367,23 +404,29 @@ if ($product && $step === 4) {
     $hasAnyTables = (int) $hasAnyStmt->fetchColumn() > 0;
 
     if (!$hasAnyTables) {
-        // First-time setup: auto-create stubs for every combo so
-        // the user lands on a populated checklist.
+        // First-time setup: auto-create stubs only for combos that
+        // have at least one matching fabric (universal OR scoped to
+        // this specific system). Avoids generating stubs for
+        // combinations that don't physically exist — e.g. on a
+        // Venetian where Special-band colours only apply to the
+        // Special system, the (Standard system × Special band)
+        // combo isn't created.
         $stubStmt = $pdo->prepare(
             "INSERT IGNORE INTO price_tables
                 (client_id, product_id, system_id, band_code, active)
-             SELECT ?, ?, s.id, o.band_code, 1
+             SELECT DISTINCT ?, ?, s.id, po.band_code, 1
                FROM product_systems s
-               CROSS JOIN (
-                 SELECT DISTINCT band_code FROM product_options
-                  WHERE product_id = ? AND client_id = ? AND active = 1
-                    AND band_code IS NOT NULL AND band_code != ''
-               ) o
+               JOIN product_options po
+                 ON po.product_id = s.product_id
+                AND po.client_id  = s.client_id
+                AND po.active     = 1
+                AND po.band_code IS NOT NULL
+                AND po.band_code != ''
+                AND (po.system_id IS NULL OR po.system_id = s.id)
               WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
         );
         $stubStmt->execute([
             $clientId, $productId,
-            $productId, $clientId,
             $productId, $clientId,
         ]);
     }
@@ -403,30 +446,31 @@ if ($product && $step === 4) {
     $priceTables = $combosStmt->fetchAll();
 
     // Detect (system × band) combos that don't yet have a table.
-    // Surfaced as a "Create missing" call-to-action so a user who
-    // deleted a stub doesn't get it re-created behind their back —
-    // they explicitly opt in.
+    // System scoping respected: a band only counts as "missing" for
+    // a system if there's at least one fabric of that band that
+    // could be used with that system (universal or scoped to it).
     $missingStmt = $pdo->prepare(
-        "SELECT s.id AS system_id, s.name AS system_name, o.band_code
+        "SELECT DISTINCT s.id AS system_id, s.name AS system_name, po.band_code
            FROM product_systems s
-           CROSS JOIN (
-             SELECT DISTINCT band_code FROM product_options
-              WHERE product_id = ? AND client_id = ? AND active = 1
-                AND band_code IS NOT NULL AND band_code != ''
-           ) o
+           JOIN product_options po
+             ON po.product_id = s.product_id
+            AND po.client_id  = s.client_id
+            AND po.active     = 1
+            AND po.band_code IS NOT NULL
+            AND po.band_code != ''
+            AND (po.system_id IS NULL OR po.system_id = s.id)
           WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
             AND NOT EXISTS (
               SELECT 1 FROM price_tables t
                WHERE t.product_id = s.product_id
                  AND t.system_id  = s.id
-                 AND t.band_code  = o.band_code
+                 AND t.band_code  = po.band_code
                  AND t.client_id  = ?
                  AND t.active     = 1
             )
-          ORDER BY s.sort_order, s.name, o.band_code"
+          ORDER BY s.sort_order, s.name, po.band_code"
     );
     $missingStmt->execute([
-        $productId, $clientId,
         $productId, $clientId,
         $clientId,
     ]);
@@ -774,6 +818,15 @@ $activeNav = 'wizard';
                         from a supplier price list, or words like
                         <code>Standard</code>/<code>Special</code>.
                     </p>
+                    <?php if (count($systems) >= 2): ?>
+                        <p class="lede" style="margin-top:-0.5rem">
+                            By default a <?= e($labelL) ?> is <strong>universal</strong>
+                            — available with every system. If a colour only
+                            applies to a specific system (e.g. Standard slats
+                            and Special slats on a Venetian have different
+                            ranges), pick that system in the dropdown.
+                        </p>
+                    <?php endif; ?>
 
                     <?php if ($fabrics): ?>
                         <div class="wiz-list" style="max-height:18rem;overflow-y:auto">
@@ -785,6 +838,13 @@ $activeNav = 'wizard';
                                         — Band <?= e((string) $f['band_code']) ?>
                                         <?php if (!empty($f['colour'])): ?>
                                             &middot; <?= e((string) $f['colour']) ?>
+                                        <?php endif; ?>
+                                        <?php if (!empty($f['system_name'])): ?>
+                                            &middot; <em style="color:#7c3aed">
+                                                <?= e((string) $f['system_name']) ?> only
+                                            </em>
+                                        <?php elseif (count($systems) >= 2): ?>
+                                            &middot; <em style="color:var(--text-faint)">all systems</em>
                                         <?php endif; ?>
                                     </span>
                                     <form method="post" action="/admin/products/option-delete.php"
@@ -809,6 +869,27 @@ $activeNav = 'wizard';
                         </div>
                     <?php endif; ?>
 
+                    <!-- Reusable system <select> snippet. Only shows when
+                         the product has 2+ systems; with 0 or 1 system
+                         there's nothing meaningful to scope to. -->
+                    <?php
+                        $renderSystemSelect = function (string $id, string $name) use ($systems) {
+                            if (count($systems) < 2) {
+                                return '';
+                            }
+                            $html = '<div><label for="' . e($id) . '">Available on</label>'
+                                  . '<select id="' . e($id) . '" name="' . e($name) . '"'
+                                  . ' style="padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input);color:var(--text-body);width:100%">'
+                                  . '<option value="">All systems (universal)</option>';
+                            foreach ($systems as $s) {
+                                $html .= '<option value="' . (int) $s['id'] . '">'
+                                       . e((string) $s['name']) . ' only</option>';
+                            }
+                            $html .= '</select></div>';
+                            return $html;
+                        };
+                    ?>
+
                     <!-- Single-add row — fast one-off entry. -->
                     <h3 style="margin:1.25rem 0 0.5rem;font-size:0.9375rem;color:var(--text-primary)">
                         Add one
@@ -818,7 +899,7 @@ $activeNav = 'wizard';
                         <input type="hidden" name="_step" value="3">
                         <input type="hidden" name="_action" value="add">
 
-                        <div class="row cols-2">
+                        <div class="row" style="grid-template-columns:6rem 1fr<?= count($systems) >= 2 ? ' 11rem' : '' ?> auto;align-items:end;gap:0.5rem">
                             <div>
                                 <label for="band_code">Band *</label>
                                 <input id="band_code" name="band_code" type="text"
@@ -834,6 +915,7 @@ $activeNav = 'wizard';
                                        placeholder="e.g. Plain White"
                                        value="">
                             </div>
+                            <?= $renderSystemSelect('system_id', 'system_id') ?>
                             <div style="align-self:end">
                                 <button type="submit" class="btn btn-secondary">+ Add</button>
                             </div>
@@ -851,7 +933,7 @@ $activeNav = 'wizard';
                         <input type="hidden" name="_step" value="3">
                         <input type="hidden" name="_action" value="add_bulk">
 
-                        <div class="row" style="grid-template-columns:8rem 1fr;align-items:start">
+                        <div class="row" style="grid-template-columns:8rem<?= count($systems) >= 2 ? ' 12rem' : '' ?> 1fr;align-items:start;gap:0.5rem">
                             <div>
                                 <label for="bulk_band">Band *</label>
                                 <input id="bulk_band" name="bulk_band" type="text"
@@ -860,6 +942,7 @@ $activeNav = 'wizard';
                                        style="text-transform:uppercase"
                                        value="">
                             </div>
+                            <?= $renderSystemSelect('bulk_system_id', 'bulk_system_id') ?>
                             <div>
                                 <label for="bulk_names">Names (one per line)</label>
                                 <textarea id="bulk_names" name="bulk_names"
@@ -872,8 +955,8 @@ $activeNav = 'wizard';
                         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
                             <button type="submit" class="btn btn-secondary">+ Add all</button>
                             <span style="color:var(--text-faint);font-size:0.8125rem">
-                                Every line becomes a <?= e($labelL) ?> in the chosen band.
-                                To add to multiple bands, do one batch per band.
+                                Every line becomes a <?= e($labelL) ?> in the chosen band
+                                <?php if (count($systems) >= 2): ?>and scope<?php endif; ?>.
                                 Paste straight from a column in Excel / a supplier list.
                             </span>
                         </div>

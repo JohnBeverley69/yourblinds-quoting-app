@@ -1771,9 +1771,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     async function searchFabrics(query) {
         if (!productSel.value) return;
         try {
+            // Include the currently-selected system so the API can
+            // filter out fabrics scoped to a different system. The
+            // typical metal-venetian case: Standard slats and Special
+            // slats have separate colour ranges; picking a system
+            // narrows the dropdown to just the matching range.
+            // System-less fabrics always show.
+            var sysQ = systemSel && systemSel.value
+                ? '&system_id=' + encodeURIComponent(systemSel.value)
+                : '';
             var r = await fetch('/quote-builder/api/fabrics-search.php'
                 + '?product_id=' + encodeURIComponent(productSel.value)
-                + '&q='          + encodeURIComponent(query || ''),
+                + '&q='          + encodeURIComponent(query || '')
+                + sysQ,
                 { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
@@ -2322,7 +2332,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
 
     productSel.addEventListener('change', loadProductData);
-    systemSel.addEventListener('change', function () { renderExtras(); schedulePreview(); });
+    systemSel.addEventListener('change', function () {
+        renderExtras();
+        // Picking a different system can change the available fabrics
+        // (system-scoped ones may drop in/out). Clear the current pick
+        // so the salesperson re-confirms a valid one for the new
+        // system rather than carrying a stale invalid id.
+        if (fabricId.value) {
+            clearFabric();
+            closeFabricResults();
+        }
+        schedulePreview();
+    });
     qtyIn.addEventListener('change', schedulePreview);
     [widthIn, dropIn].forEach(function (el) {
         el.addEventListener('input', schedulePreview);

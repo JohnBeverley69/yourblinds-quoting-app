@@ -31,6 +31,12 @@ $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $productId = (int) ($_GET['product_id'] ?? 0);
 $q         = trim((string) ($_GET['q'] ?? ''));
+// Optional system filter — passed by the quote builder once the
+// salesperson picks a system. Fabrics either belong to that system
+// or are universal (system_id IS NULL). When omitted, all fabrics
+// for the product return (used during initial product selection
+// before a system is known).
+$systemId  = (int) ($_GET['system_id'] ?? 0);
 // Cap raised from 500 → 2000 so server-side typeahead can handle
 // large supplier catalogues. Default lowered to 200 — for the
 // empty-query "what's there?" focus case 200 is plenty, and any
@@ -45,6 +51,16 @@ if ($productId <= 0) {
 
 $pdo = db();
 
+// System-scope filter — applied to both query branches. Universal
+// fabrics (system_id IS NULL) always show; system-scoped fabrics
+// only show when the request matches their scope.
+$scopeClause = '';
+$scopeParams = [];
+if ($systemId > 0) {
+    $scopeClause = ' AND (system_id IS NULL OR system_id = ?)';
+    $scopeParams = [$systemId];
+}
+
 if ($q === '') {
     // Empty query — return the alphabetically-first $limit fabrics so the
     // user gets *something* to scroll on the very first focus, before
@@ -58,10 +74,11 @@ if ($q === '') {
         "SELECT id, band_code, supplier_name, name, colour, code
            FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1
+            $scopeClause
        ORDER BY name, colour, band_code, supplier_name
           LIMIT $limit"
     );
-    $st->execute([$productId, $clientId]);
+    $st->execute(array_merge([$productId, $clientId], $scopeParams));
 } else {
     // Multi-word search — each whitespace-separated word in the
     // query must appear in AT LEAST ONE of (name, colour,
@@ -96,10 +113,11 @@ if ($q === '') {
            FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1
             $whereWords
+            $scopeClause
        ORDER BY band_code, supplier_name, name, colour
           LIMIT $limit"
     );
-    $st->execute($params);
+    $st->execute(array_merge($params, $scopeParams));
 }
 
 $fabrics = [];
