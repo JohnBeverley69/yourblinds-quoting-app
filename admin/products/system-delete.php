@@ -53,9 +53,17 @@ if ($id > 0) {
     }
 }
 
-if ($productId > 0) {
-    header('Location: /admin/products/systems.php?product_id=' . $productId);
-} else {
-    header('Location: /admin/products/index.php');
-}
+// Default redirect target.
+$default = $productId > 0
+    ? '/admin/products/systems.php?product_id=' . $productId
+    : '/admin/products/index.php';
+
+// Honour a same-origin return_to from callers (e.g. the setup wizard
+// passes its own URL so the user lands back on the wizard after the
+// delete). Falls back to $default if return_to is missing or unsafe.
+$returnTo = trim((string) ($_POST['return_to'] ?? ''));
+$target   = $returnTo !== ''
+    ? safe_local_redirect($returnTo, $default)
+    : $default;
+header('Location: ' . $target);
 exit;

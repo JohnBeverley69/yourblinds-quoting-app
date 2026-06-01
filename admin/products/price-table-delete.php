@@ -30,9 +30,15 @@ if ($id > 0) {
     }
 }
 
-if ($systemId > 0) {
-    header('Location: /admin/products/price-tables.php?system_id=' . $systemId);
-} else {
-    header('Location: /admin/products/index.php');
-}
+$default = $systemId > 0
+    ? '/admin/products/price-tables.php?system_id=' . $systemId
+    : '/admin/products/index.php';
+
+// Honour a same-origin return_to from callers — used by the setup
+// wizard so deletes from step 4 land back on the wizard.
+$returnTo = trim((string) ($_POST['return_to'] ?? ''));
+$target   = $returnTo !== ''
+    ? safe_local_redirect($returnTo, $default)
+    : $default;
+header('Location: ' . $target);
 exit;

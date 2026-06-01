@@ -275,6 +275,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
         }
+
+        // ── Step 4: create missing price-table stubs ───────────────────
+        //
+        // User explicitly opted in via the "Create missing" button.
+        // Same INSERT IGNORE as the first-time auto-create — safe to
+        // run again.
+        if ($postStep === 4 && $product && $action === 'create_missing') {
+            $stubStmt = $pdo->prepare(
+                "INSERT IGNORE INTO price_tables
+                    (client_id, product_id, system_id, band_code, active)
+                 SELECT ?, ?, s.id, o.band_code, 1
+                   FROM product_systems s
+                   CROSS JOIN (
+                     SELECT DISTINCT band_code FROM product_options
+                      WHERE product_id = ? AND client_id = ? AND active = 1
+                        AND band_code IS NOT NULL AND band_code != ''
+                   ) o
+                  WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+            );
+            $stubStmt->execute([
+                $clientId, $productId,
+                $productId, $clientId,
+                $productId, $clientId,
+            ]);
+            $created = $stubStmt->rowCount();
+            $_SESSION['flash_success'] = $created === 1
+                ? '1 price table created.'
+                : $created . ' price tables created.';
+            header('Location: /admin/products/wizard.php?id=' . $productId . '&step=4');
+            exit;
+        }
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -303,42 +334,61 @@ if ($product && $step >= 3) {
     $fabrics = $fabSt->fetchAll();
 }
 
-// ── Step 4 setup: auto-create price-table stubs and load fill status ──
+// ── Step 4 setup: load price tables + detect missing combos ──────────
 //
-// Each (system × distinct band_code) combination needs a price table.
-// We create empty stubs for any that don't exist yet, so step 4 can
-// show a checklist of "fill in each one" links. The user clicks
-// through to the inline grid editor on /price-table.php and returns
-// here via a "from=wizard" query param trail.
+// Each (system × distinct band_code) combination CAN have a price
+// table. The wizard shows the existing ones with fill status, plus
+// a list of any (system × band) combos that have no table yet —
+// the user can create them all with one click, individually via
+// the edit page, or leave them alone if a combo doesn't apply.
+//
+// Auto-create on FIRST entry to step 4 only (when zero tables
+// exist for the product). After that, the user explicitly
+// chooses what to create via "Create missing" — otherwise a
+// deleted stub would silently come back on next step 4 visit,
+// which would be infuriating.
 //
 // Schema notes:
 //   - price_tables has a UNIQUE (product_id, system_id, band_code)
-//     constraint (per tenant via client_id). INSERT IGNORE handles
-//     re-entries safely.
-//   - Fabrics without band_code aren't included (they can't be
-//     priced — the band is the price-band key).
-$priceTables = [];
+//     constraint (per tenant via client_id). INSERT IGNORE on the
+//     create-missing path handles races safely.
+//   - Fabrics without band_code don't generate combos (the band
+//     is the price-band key — without it, no pricing).
+$priceTables   = [];
+$missingCombos = [];
 if ($product && $step === 4) {
-    // Auto-create stubs for any missing (system, band) combos.
-    $stubStmt = $pdo->prepare(
-        "INSERT IGNORE INTO price_tables
-            (client_id, product_id, system_id, band_code, active)
-         SELECT ?, ?, s.id, o.band_code, 1
-           FROM product_systems s
-           CROSS JOIN (
-             SELECT DISTINCT band_code FROM product_options
-              WHERE product_id = ? AND client_id = ? AND active = 1
-                AND band_code IS NOT NULL AND band_code != ''
-           ) o
-          WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+    // Has the product ever had a price table? Used to decide
+    // whether to auto-create on first visit.
+    $hasAnyStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM price_tables
+          WHERE product_id = ? AND client_id = ?'
     );
-    $stubStmt->execute([
-        $clientId, $productId,
-        $productId, $clientId,
-        $productId, $clientId,
-    ]);
+    $hasAnyStmt->execute([$productId, $clientId]);
+    $hasAnyTables = (int) $hasAnyStmt->fetchColumn() > 0;
 
-    // Now load every (system, band) combo with its fill status.
+    if (!$hasAnyTables) {
+        // First-time setup: auto-create stubs for every combo so
+        // the user lands on a populated checklist.
+        $stubStmt = $pdo->prepare(
+            "INSERT IGNORE INTO price_tables
+                (client_id, product_id, system_id, band_code, active)
+             SELECT ?, ?, s.id, o.band_code, 1
+               FROM product_systems s
+               CROSS JOIN (
+                 SELECT DISTINCT band_code FROM product_options
+                  WHERE product_id = ? AND client_id = ? AND active = 1
+                    AND band_code IS NOT NULL AND band_code != ''
+               ) o
+              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+        );
+        $stubStmt->execute([
+            $clientId, $productId,
+            $productId, $clientId,
+            $productId, $clientId,
+        ]);
+    }
+
+    // Load every existing (system, band) combo with its fill status.
     $combosStmt = $pdo->prepare(
         "SELECT t.id, s.name AS system_name, t.band_code,
                 (SELECT COUNT(*) FROM price_table_rows r
@@ -351,6 +401,36 @@ if ($product && $step === 4) {
     );
     $combosStmt->execute([$productId, $clientId]);
     $priceTables = $combosStmt->fetchAll();
+
+    // Detect (system × band) combos that don't yet have a table.
+    // Surfaced as a "Create missing" call-to-action so a user who
+    // deleted a stub doesn't get it re-created behind their back —
+    // they explicitly opt in.
+    $missingStmt = $pdo->prepare(
+        "SELECT s.id AS system_id, s.name AS system_name, o.band_code
+           FROM product_systems s
+           CROSS JOIN (
+             SELECT DISTINCT band_code FROM product_options
+              WHERE product_id = ? AND client_id = ? AND active = 1
+                AND band_code IS NOT NULL AND band_code != ''
+           ) o
+          WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
+            AND NOT EXISTS (
+              SELECT 1 FROM price_tables t
+               WHERE t.product_id = s.product_id
+                 AND t.system_id  = s.id
+                 AND t.band_code  = o.band_code
+                 AND t.client_id  = ?
+                 AND t.active     = 1
+            )
+          ORDER BY s.sort_order, s.name, o.band_code"
+    );
+    $missingStmt->execute([
+        $productId, $clientId,
+        $productId, $clientId,
+        $clientId,
+    ]);
+    $missingCombos = $missingStmt->fetchAll();
 }
 
 // Steps metadata for the stepper UI.
@@ -615,6 +695,19 @@ $activeNav = 'wizard';
                                 <div class="wiz-list-item">
                                     <span class="check">&check;</span>
                                     <strong><?= e((string) $s['name']) ?></strong>
+                                    <form method="post" action="/admin/products/system-delete.php"
+                                          style="margin:0 0 0 auto;display:inline"
+                                          data-confirm="Remove the &quot;<?= e((string) $s['name']) ?>&quot; system? Any price tables it has go too.">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                                        <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                                        <input type="hidden" name="return_to"
+                                               value="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=2">
+                                        <button type="submit"
+                                                style="background:transparent;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline">
+                                            Remove
+                                        </button>
+                                    </form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -694,6 +787,19 @@ $activeNav = 'wizard';
                                             &middot; <?= e((string) $f['colour']) ?>
                                         <?php endif; ?>
                                     </span>
+                                    <form method="post" action="/admin/products/option-delete.php"
+                                          style="margin:0 0 0 auto;display:inline"
+                                          data-confirm="Remove &quot;<?= e((string) $f['name']) ?>&quot; from your <?= e($labelL) ?>s?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= (int) $f['id'] ?>">
+                                        <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                                        <input type="hidden" name="return_to"
+                                               value="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=3">
+                                        <button type="submit"
+                                                style="background:transparent;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline">
+                                            Remove
+                                        </button>
+                                    </form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -838,6 +944,40 @@ $activeNav = 'wizard';
                     </div>
                 <?php endif; ?>
 
+                <?php if (!empty($missingCombos)): ?>
+                    <div class="wiz-card" style="background:#fffbeb;border-color:#fcd34d">
+                        <h2 style="color:#78350f">
+                            <?= count($missingCombos) ?>
+                            missing (system × band)
+                            combo<?= count($missingCombos) === 1 ? '' : 's' ?>
+                        </h2>
+                        <p class="lede" style="color:#92400e">
+                            These combinations have no price table yet — they
+                            won't generate a price at quote time.
+                        </p>
+                        <div class="wiz-list" style="background:transparent;border:0;padding:0;margin-bottom:0.875rem">
+                            <?php foreach ($missingCombos as $m): ?>
+                                <div class="wiz-list-item" style="border-bottom-color:#fde68a">
+                                    <span class="check" style="color:#b45309">○</span>
+                                    <strong><?= e((string) $m['system_name']) ?></strong>
+                                    <span style="color:#92400e">— Band <?= e((string) $m['band_code']) ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <form method="post" style="margin:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_step" value="4">
+                            <input type="hidden" name="_action" value="create_missing">
+                            <button type="submit" class="btn btn-primary">
+                                Create the missing tables
+                            </button>
+                            <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.625rem">
+                                Or leave them out if a combo doesn't apply to your range.
+                            </span>
+                        </form>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($totalTables > 0): ?>
                     <div class="wiz-card">
                         <h2>Price tables</h2>
@@ -871,6 +1011,18 @@ $activeNav = 'wizard';
                                        class="btn <?= $filled ? 'btn-secondary' : 'btn-primary' ?> btn-sm">
                                         <?= $filled ? 'Edit' : 'Fill in' ?>
                                     </a>
+                                    <form method="post" action="/admin/products/price-table-delete.php"
+                                          style="margin:0;display:inline"
+                                          data-confirm="Delete the <?= e((string) $t['system_name']) ?> &mdash; Band <?= e((string) $t['band_code']) ?> price table? <?= $filled ? 'Its ' . $cells . ' price cells will be wiped too.' : '' ?>">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                                        <input type="hidden" name="return_to"
+                                               value="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4">
+                                        <button type="submit"
+                                                style="background:transparent;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline">
+                                            Remove
+                                        </button>
+                                    </form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -893,5 +1045,6 @@ $activeNav = 'wizard';
         </div>
     </main>
 </div>
+<?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>

@@ -44,9 +44,15 @@ if ($ids) {
     }
 }
 
-if ($productId > 0) {
-    header('Location: /admin/products/options.php?product_id=' . $productId);
-} else {
-    header('Location: /admin/products/index.php');
-}
+$default = $productId > 0
+    ? '/admin/products/options.php?product_id=' . $productId
+    : '/admin/products/index.php';
+
+// Honour a same-origin return_to from callers — used by the setup
+// wizard so deletes from step 3 land back on the wizard.
+$returnTo = trim((string) ($_POST['return_to'] ?? ''));
+$target   = $returnTo !== ''
+    ? safe_local_redirect($returnTo, $default)
+    : $default;
+header('Location: ' . $target);
 exit;
