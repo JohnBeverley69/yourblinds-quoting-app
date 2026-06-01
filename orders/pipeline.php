@@ -275,6 +275,29 @@ $ageOf = static function (?string $ts): string {
         .pl-card .pl-card-place {
             color: #6b7280; font-size: 0.6875rem;
         }
+        /* Payment chip — surfaced on every card, regardless of column.
+           A paid-up-front quote sitting in 'accepted' was previously
+           indistinguishable from one with no money in. The chip
+           floats top-right so it's the first thing the eye lands on. */
+        .pl-card { position: relative; }
+        .pl-card-paid-chip {
+            position: absolute; top: 0.4375rem; right: 0.4375rem;
+            display: inline-block;
+            padding: 0.0625rem 0.375rem;
+            border-radius: 999px;
+            font-size: 0.625rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.04em;
+            line-height: 1.4;
+        }
+        .pl-card-paid-chip.is-full {
+            background: #d1fae5; color: #065f46;
+        }
+        .pl-card-paid-chip.is-part {
+            background: #fef3c7; color: #92400e;
+        }
+        /* Reserve room on the right of the name row so the chip
+           doesn't sit on top of long customer names. */
+        .pl-card.has-paid-chip .pl-card-name { padding-right: 4.5rem; }
         .pl-col-empty {
             color: #9ca3af; font-style: italic; font-size: 0.8125rem;
             text-align: center; padding: 1rem 0.5rem;
@@ -387,9 +410,31 @@ $ageOf = static function (?string $ts): string {
                                     $paid        = (float) ($c['paid_total']  ?? 0);
                                     $outstanding = max(0, $total - $paid);
                                     $age         = $ageOf((string) ($c['updated_at'] ?? $c['created_at'] ?? ''));
+
+                                    // Payment chip — independent of column so an
+                                    // upfront-paid job in 'accepted' is just as
+                                    // obvious as one in 'paid'. £0.005 fudge for
+                                    // floating-point round-off on penny totals.
+                                    $paidChip = '';
+                                    if ($total > 0 && $paid > 0) {
+                                        if ($paid >= $total - 0.005) {
+                                            $paidChip = 'full';
+                                        } else {
+                                            $paidChip = 'part';
+                                        }
+                                    }
                                 ?>
-                                    <a class="pl-card"
+                                    <a class="pl-card<?= $paidChip ? ' has-paid-chip' : '' ?>"
                                        href="/quote-builder/edit.php?id=<?= (int) $c['id'] ?>">
+                                        <?php if ($paidChip === 'full'): ?>
+                                            <span class="pl-card-paid-chip is-full"
+                                                  title="Paid in full">Paid</span>
+                                        <?php elseif ($paidChip === 'part' && $canViewCosts): ?>
+                                            <span class="pl-card-paid-chip is-part"
+                                                  title="&pound;<?= number_format($paid, 2) ?> received of &pound;<?= number_format($total, 2) ?>">
+                                                Part paid
+                                            </span>
+                                        <?php endif; ?>
                                         <div class="pl-card-name">
                                             <?= e((string) ($c['end_customer_name'] ?? 'No name')) ?>
                                         </div>
@@ -417,7 +462,9 @@ $ageOf = static function (?string $ts): string {
                                         <?php
                                             // For 'invoiced' status: surface outstanding balance.
                                             // Catches "we sent the invoice but never got paid" jobs.
-                                            if ($statusKey === 'invoiced' && $outstanding > 0 && $canViewCosts):
+                                            // Hidden when the paid chip is already there — no
+                                            // need to say both "Paid" and "£0 outstanding".
+                                            if ($statusKey === 'invoiced' && $outstanding > 0.005 && $canViewCosts):
                                         ?>
                                             <div class="pl-card-outstanding">
                                                 &pound;<?= number_format($outstanding, 2) ?> outstanding
