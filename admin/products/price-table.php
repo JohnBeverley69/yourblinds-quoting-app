@@ -523,6 +523,52 @@ $activeNav = 'products';
             color: var(--text-faint); font-size: 0.8125rem;
         }
 
+        /* "Add widths / drops" dialog — shown when the user clicks
+           "+ Width" or "+ Drop". A textarea lets them paste a range
+           from Excel (tabs/newlines/commas all accepted) so they
+           can build the grid axes from a supplier sheet in one go. */
+        dialog.axis-dialog {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            background: var(--bg-card);
+            color: var(--text-body);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+            width: min(28rem, 90vw);
+        }
+        dialog.axis-dialog::backdrop {
+            background: rgba(0,0,0,0.4);
+        }
+        .axis-dialog h3 {
+            margin: 0 0 0.375rem;
+            font-size: 1.0625rem;
+            color: var(--text-primary);
+        }
+        .axis-dialog p {
+            margin: 0 0 0.625rem;
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .axis-dialog textarea {
+            width: 100%;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            padding: 0.5rem 0.625rem;
+            font: inherit;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            background: var(--bg-input);
+            color: var(--text-body);
+            resize: vertical;
+            min-height: 6rem;
+        }
+        .axis-dialog .axis-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            margin-top: 0.875rem;
+        }
+
         /* "Quick start" empty-state hero — only shown when the table
            has no cells yet. Big primary button to populate with the
            UK default grid; secondary "build from scratch" link. */
@@ -766,6 +812,26 @@ $activeNav = 'products';
             </form>
         </section>
 
+        <!-- Add-axis dialog (widths or drops). Native <dialog> so we
+             get proper modal behaviour, Esc-to-close, and focus
+             trapping for free. -->
+        <dialog id="axis-dialog" class="axis-dialog">
+            <form method="dialog" id="axis-form">
+                <h3 id="axis-title">Add widths</h3>
+                <p id="axis-help">
+                    Paste from Excel (a row OR a column), or type values
+                    separated by commas, spaces, tabs or newlines.
+                    Duplicates and non-numeric values are ignored.
+                </p>
+                <textarea id="axis-input" rows="6" autofocus
+                          placeholder="800&#10;1200&#10;1600&#10;2000&#10;…"></textarea>
+                <div class="axis-actions">
+                    <button type="button" id="axis-cancel" class="btn btn-secondary">Cancel</button>
+                    <button type="button" id="axis-confirm" class="btn btn-primary">Add</button>
+                </div>
+            </form>
+        </dialog>
+
         <!-- ============== ADVANCED (XLSX template + supplier import) ============== -->
         <details class="advanced">
             <summary>Advanced — XLSX import / export</summary>
@@ -889,20 +955,12 @@ $activeNav = 'products';
         return inp;
     }
 
-    // Add a new width column.
+    // Add a new width column. Returns true if added, false if it
+    // already existed. Called from the bulk dialog (so duplicates
+    // don't show alerts; the dialog summarises at the end).
     function addWidth(w) {
-        if (!w && w !== 0) {
-            var ws = currentWidths();
-            var suggested = ws.length ? Math.max.apply(null, ws) + 400 : 800;
-            var raw = window.prompt('New width (mm):', String(suggested));
-            if (raw === null) return;
-            w = parseInt(raw, 10);
-            if (!w || w <= 0) return;
-        }
-        if (currentWidths().indexOf(w) !== -1) {
-            alert('Width ' + w + 'mm already exists.');
-            return;
-        }
+        if (!w || w <= 0) return false;
+        if (currentWidths().indexOf(w) !== -1) return false;
 
         // Insert the new <th> in the right position (sorted ascending).
         var headerRow = table.querySelector('thead tr');
@@ -926,12 +984,8 @@ $activeNav = 'products';
         // the same column index.
         var newIdx = Array.prototype.indexOf.call(headerRow.children, newTh);
         table.querySelectorAll('tbody tr[data-d]').forEach(function (row) {
-            var d = parseInt(row.getAttribute('data-d'), 10);
             var td = document.createElement('td');
-            td.appendChild(makeCellInput(w, d));
-            // newIdx counts from 0 in the header (corner = 0). In the
-            // body row, the row header is the first child too, so the
-            // same index works.
+            td.appendChild(makeCellInput(w, parseInt(row.getAttribute('data-d'), 10)));
             var ref = row.children[newIdx] || null;
             row.insertBefore(td, ref);
         });
@@ -942,21 +996,12 @@ $activeNav = 'products';
             var ref2  = lastRow.children[newIdx] || null;
             lastRow.insertBefore(blank, ref2);
         }
+        return true;
     }
 
     function addDrop(d) {
-        if (!d && d !== 0) {
-            var ds = currentDrops();
-            var suggested = ds.length ? Math.max.apply(null, ds) + 400 : 800;
-            var raw = window.prompt('New drop (mm):', String(suggested));
-            if (raw === null) return;
-            d = parseInt(raw, 10);
-            if (!d || d <= 0) return;
-        }
-        if (currentDrops().indexOf(d) !== -1) {
-            alert('Drop ' + d + 'mm already exists.');
-            return;
-        }
+        if (!d || d <= 0) return false;
+        if (currentDrops().indexOf(d) !== -1) return false;
 
         var tbody = table.querySelector('tbody');
         var trailingRow = table.querySelector('tbody tr:last-child');
@@ -989,6 +1034,85 @@ $activeNav = 'products';
             // Insert just before the trailing "+ Drop" row.
             tbody.insertBefore(tr, trailingRow);
         }
+        return true;
+    }
+
+    // ----- "Add widths / drops" dialog ----- //
+    //
+    // Parses a textarea full of separators-of-any-kind into a unique
+    // sorted array of positive integers. Then adds them via
+    // addWidth / addDrop. Used by both "+ Width" and "+ Drop"
+    // buttons; the only difference is which adder it calls.
+    function parseAxisValues(raw) {
+        // Split on whitespace, tabs, newlines, commas, semicolons.
+        var parts = String(raw || '').split(/[\s,;]+/).filter(Boolean);
+        var seen  = {};
+        var out   = [];
+        parts.forEach(function (p) {
+            // Tolerate stray "mm" suffixes from supplier sheets.
+            var clean = p.replace(/mm$/i, '').trim();
+            var n = parseInt(clean, 10);
+            if (!n || n <= 0) return;
+            if (seen[n]) return;
+            seen[n] = true;
+            out.push(n);
+        });
+        return out;
+    }
+
+    var dialog       = document.getElementById('axis-dialog');
+    var dialogTitle  = document.getElementById('axis-title');
+    var dialogHelp   = document.getElementById('axis-help');
+    var dialogInput  = document.getElementById('axis-input');
+    var dialogConfirm = document.getElementById('axis-confirm');
+    var dialogCancel = document.getElementById('axis-cancel');
+    var currentKind  = null;   // 'width' or 'drop'
+
+    function openAxisDialog(kind) {
+        currentKind = kind;
+        var label = kind === 'width' ? 'widths' : 'drops';
+        var ws    = currentWidths();
+        var ds    = currentDrops();
+        var existing = kind === 'width' ? ws : ds;
+        var suggested = existing.length
+            ? Math.max.apply(null, existing) + 400
+            : 800;
+        dialogTitle.textContent = 'Add ' + label + ' (mm)';
+        dialogHelp.innerHTML = 'Paste from Excel (a row OR a column), or type values'
+            + ' separated by commas, spaces, tabs or newlines.'
+            + ' Duplicates and non-numeric values are ignored.';
+        dialogInput.value = '';
+        dialogInput.placeholder = String(suggested);
+        if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute('open', '');
+        }
+        setTimeout(function () { dialogInput.focus(); }, 0);
+    }
+
+    function closeDialog() {
+        if (dialog.close) dialog.close(); else dialog.removeAttribute('open');
+    }
+
+    if (dialogConfirm) {
+        dialogConfirm.addEventListener('click', function () {
+            var values = parseAxisValues(dialogInput.value);
+            if (!values.length) { closeDialog(); return; }
+            var added = 0;
+            var dups  = 0;
+            values.forEach(function (v) {
+                if (currentKind === 'width' ? addWidth(v) : addDrop(v)) added++;
+                else dups++;
+            });
+            closeDialog();
+            if (added === 0 && dups > 0) {
+                alert('All ' + dups + ' values already existed in the grid.');
+            }
+        });
+    }
+    if (dialogCancel) {
+        dialogCancel.addEventListener('click', function () { closeDialog(); });
     }
 
     function removeWidth(w) {
@@ -1015,8 +1139,8 @@ $activeNav = 'products';
     // ----- click-delegated event handlers ----- //
     var addW = document.getElementById('add-width');
     var addD = document.getElementById('add-drop');
-    if (addW) addW.addEventListener('click', function () { addWidth(); });
-    if (addD) addD.addEventListener('click', function () { addDrop();  });
+    if (addW) addW.addEventListener('click', function () { openAxisDialog('width'); });
+    if (addD) addD.addEventListener('click', function () { openAxisDialog('drop');  });
 
     if (table) {
         table.addEventListener('click', function (e) {
