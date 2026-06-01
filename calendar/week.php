@@ -139,8 +139,9 @@ $statusColour = static function (string $s): array {
     };
 };
 
-// Quote-status → 5-segment progress indicator. Matches day.php
+// Quote-status → 6-segment progress indicator. Matches day.php
 // exactly so the same job shows the same bars across both views.
+// One bar per stage now that 'fitted' joins the lifecycle.
 $quoteProgress = static function (?string $status): array {
     if ($status === null || $status === '') {
         return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
@@ -150,8 +151,9 @@ $quoteProgress = static function (?string $status): array {
         'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT'],
         'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED'],
         'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED'],
-        'invoiced'  => ['filled' => 5, 'colour' => '#059669', 'label' => 'INVOICED'],
-        'paid'      => ['filled' => 5, 'colour' => '#065f46', 'label' => 'PAID'],
+        'fitted'    => ['filled' => 5, 'colour' => '#0d9488', 'label' => 'FITTED'],
+        'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED'],
+        'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID'],
         'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'DECLINED'],
         default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
     };
@@ -450,7 +452,7 @@ $activeNav = 'calendar';
                                 <?php endif; ?>
                                 <?php if (!empty($appt['quote_status'])): ?>
                                     <div class="wc-progress" title="<?= e($prog['label']) ?>">
-                                        <?php for ($i = 0; $i < 5; $i++): ?>
+                                        <?php for ($i = 0; $i < 6; $i++): ?>
                                             <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
                                         <?php endfor; ?>
                                     </div>

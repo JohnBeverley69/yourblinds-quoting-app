@@ -189,6 +189,15 @@ $statusColour = static function (string $s): array {
 //   colour: progress colour (green normal, grey for "done",
 //           red for declined/cancelled)
 //   label: short word for the title attribute hover tooltip
+// 6 segments now — one per lifecycle stage. Each status fills one
+// more bar than the last, so a glance at the bar count tells you
+// exactly where the job sits without reading the tooltip:
+//   1 bar  → DRAFT
+//   2 bars → SENT
+//   3 bars → ACCEPTED
+//   4 bars → ORDERED  (materials on the way)
+//   5 bars → FITTED   (installed, awaiting invoice)
+//   6 bars → INVOICED / PAID
 $quoteProgress = static function (?string $status): array {
     if ($status === null || $status === '') {
         return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
@@ -198,8 +207,9 @@ $quoteProgress = static function (?string $status): array {
         'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT to customer'],
         'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED · ready to fit'],
         'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED · materials inbound'],
-        'invoiced'  => ['filled' => 5, 'colour' => '#059669', 'label' => 'INVOICED · awaiting payment'],
-        'paid'      => ['filled' => 5, 'colour' => '#065f46', 'label' => 'PAID · job closed'],
+        'fitted'    => ['filled' => 5, 'colour' => '#0d9488', 'label' => 'FITTED · awaiting invoice'],
+        'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED · awaiting payment'],
+        'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID · job closed'],
         'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'Quote DECLINED'],
         default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
     };
@@ -633,10 +643,11 @@ $activeNav = 'calendar';
                                     <?php endif; ?>
 
                                     <?php if (!empty($appt['quote_status'])): ?>
-                                        <!-- Status-progress bars — 5 thin lines bottom-right.
-                                             Hover the card to see the verbal label via title=. -->
+                                        <!-- Status-progress bars — 6 thin lines bottom-right,
+                                             one per lifecycle stage. Hover the card to see
+                                             the verbal label via title=. -->
                                         <div class="ac-progress" title="<?= e($prog['label']) ?>">
-                                            <?php for ($i = 0; $i < 5; $i++): ?>
+                                            <?php for ($i = 0; $i < 6; $i++): ?>
                                                 <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
                                             <?php endfor; ?>
                                         </div>

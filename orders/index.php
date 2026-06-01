@@ -53,7 +53,7 @@ try {
     // Column missing — feature disabled.
 }
 
-$orderStatuses = ['accepted', 'ordered', 'invoiced', 'paid'];
+$orderStatuses = ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'];
 
 $status = trim((string) ($_GET['status'] ?? ''));
 $q      = trim((string) ($_GET['q'] ?? ''));

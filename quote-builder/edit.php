@@ -60,7 +60,7 @@ try {
 // Quote is in a state that could carry an outstanding balance.
 $quoteIsOrder = in_array(
     (string) $quote['status'],
-    ['accepted', 'ordered', 'invoiced', 'paid'],
+    ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'],
     true
 );
 

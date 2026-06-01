@@ -71,6 +71,11 @@ $columns = [
     'sent'     => ['Sent',      '#fed7aa', '#9a3412'],
     'accepted' => ['Accepted',  '#bbf7d0', '#166534'],
     'ordered'  => ['Ordered',   '#bfdbfe', '#1e3a8a'],
+    // 'fitted' = materials installed, awaiting invoice. Critical
+    // stage that was missing — without it, "ordered" jobs that
+    // had been installed but not yet invoiced were
+    // indistinguishable from ones still awaiting materials.
+    'fitted'   => ['Fitted',    '#a7f3d0', '#065f46'],
     'invoiced' => ['Invoiced',  '#ddd6fe', '#5b21b6'],
     'paid'     => ['Paid',      '#d1fae5', '#065f46'],
 ];

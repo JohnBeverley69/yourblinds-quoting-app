@@ -118,7 +118,7 @@ $fmtDate = static function (?string $dt): string {
 
 $status      = (string) $quote['status'];
 $canAccept   = in_array($status, ['sent'], true);
-$alreadyDone = in_array($status, ['accepted', 'declined', 'ordered', 'invoiced', 'paid'], true);
+$alreadyDone = in_array($status, ['accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'], true);
 
 $tradeLines = array_values(array_filter([
     (string) ($quote['trade_addr1']    ?? ''),

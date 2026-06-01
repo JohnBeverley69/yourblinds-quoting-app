@@ -148,9 +148,10 @@ function qb_allowed_transitions(string $current): array
         // accepted/declined so the lifecycle timeline stays consistent.
         case 'draft':     return ['sent', 'accepted', 'declined'];
         case 'sent':      return ['accepted', 'declined', 'draft'];
-        case 'accepted':  return ['ordered', 'draft'];
+        case 'accepted':  return ['ordered', 'fitted', 'draft'];
         case 'declined':  return ['draft'];
-        case 'ordered':   return ['invoiced', 'draft'];
+        case 'ordered':   return ['fitted', 'invoiced', 'draft'];
+        case 'fitted':    return ['invoiced', 'ordered', 'draft'];
         case 'invoiced':  return ['paid', 'draft'];
         case 'paid':      return [];
     }
@@ -178,6 +179,7 @@ function qb_target_permission(string $target): string
         case 'declined':
             return 'can_create_quotes';
         case 'ordered':
+        case 'fitted':
         case 'invoiced':
         case 'paid':
             return 'can_create_orders';

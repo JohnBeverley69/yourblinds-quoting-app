@@ -40,7 +40,7 @@ if ($restrictToMine) {
     $params[] = (int) $user['user_id'];
 }
 
-if ($status !== '' && in_array($status, ['draft','sent','accepted','declined','ordered','invoiced','paid'], true)) {
+if ($status !== '' && in_array($status, ['draft','sent','accepted','declined','ordered','fitted','invoiced','paid'], true)) {
     $where[]  = 'status = ?';
     $params[] = $status;
 }
@@ -153,7 +153,7 @@ $activeNav = 'quote-history';
                 <a href="/quote-history/index.php" class="<?= $status === '' ? 'active' : '' ?>">
                     All (<?= $total ?>)
                 </a>
-                <?php foreach (['draft','sent','accepted','declined','ordered','invoiced','paid'] as $s): ?>
+                <?php foreach (['draft','sent','accepted','declined','ordered','fitted','invoiced','paid'] as $s): ?>
                     <?php if (empty($counts[$s])) continue; ?>
                     <a href="/quote-history/index.php?status=<?= e($s) ?>"
                        class="<?= $status === $s ? 'active' : '' ?>">
