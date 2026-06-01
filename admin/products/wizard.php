@@ -226,9 +226,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       (client_id, product_id, system_id, band_code, name, sort_order, active)
                       VALUES (?, ?, ?, ?, ?, 0, 1)'
                 );
-                $ins->execute([$clientId, $productId, $sysId, strtoupper($band), $fab]);
+                $ins->execute([$clientId, $productId, $sysId, $band, $fab]);
 
-                $_SESSION['flash_success'] = 'Added "' . $fab . '" (Band ' . strtoupper($band)
+                $_SESSION['flash_success'] = 'Added "' . $fab . '" (Band ' . $band
                     . ($sysId !== null ? ', system #' . $sysId : '') . ').';
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
                 exit;
@@ -268,7 +268,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('No names to add — paste at least one name into the box.');
                 }
 
-                $bandUp = strtoupper($band);
                 $ins = $pdo->prepare(
                     'INSERT INTO product_options
                       (client_id, product_id, system_id, band_code, name, sort_order, active)
@@ -278,7 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $skipped = 0;
                 foreach ($names as $name) {
                     try {
-                        $ins->execute([$clientId, $productId, $sysId, $bandUp, $name]);
+                        $ins->execute([$clientId, $productId, $sysId, $band, $name]);
                         $added++;
                     } catch (Throwable $e) {
                         // Duplicates (uniq constraint) and any other
@@ -288,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $msg = "Added $added to Band $bandUp"
+                $msg = "Added $added to Band $band"
                      . ($sysId !== null ? ' (one system only)' : ' (all systems)')
                      . '.';
                 if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
@@ -882,7 +881,6 @@ $activeNav = 'wizard';
                                 <input id="bulk_band" name="bulk_band" type="text"
                                        required maxlength="20"
                                        placeholder="A"
-                                       style="text-transform:uppercase"
                                        value="">
                             </div>
                             <?php if (count($systems) >= 2): ?>
