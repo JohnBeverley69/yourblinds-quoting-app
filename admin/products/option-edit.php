@@ -161,11 +161,11 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            margin-bottom: 1rem; font-size: 0.9375rem; color: #111827; cursor: pointer;
+            margin-bottom: 1rem; font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
         }
         .checkbox-row input { width: 18px; height: 18px; }
     </style>

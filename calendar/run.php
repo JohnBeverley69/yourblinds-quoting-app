@@ -198,7 +198,7 @@ $activeNav = 'calendar';
         .run-date-label {
             font-weight: 700;
             font-size: 1.125rem;
-            color: #111827;
+            color: var(--text-primary);
             margin-left: 0.25rem;
         }
         .run-map {
@@ -207,9 +207,9 @@ $activeNav = 'calendar';
             height: 480px;
             border-radius: 10px;
             overflow: hidden;
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
             margin-bottom: 1.25rem;
-            background: #f3f4f6;
+            background: var(--bg-subtle-2);
         }
         .run-map iframe {
             position: absolute;
@@ -228,7 +228,7 @@ $activeNav = 'calendar';
             gap: 0.875rem;
             align-items: start;
             padding: 0.875rem 0;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid var(--border);
         }
         .run-stops li:last-child { border-bottom: 0; }
         .run-stops .stop-num {
@@ -246,21 +246,21 @@ $activeNav = 'calendar';
         }
         .run-stops .stop-num::before { content: counter(stop); }
         .run-stops li.is-cancelled .stop-num,
-        .run-stops li.is-no_show   .stop-num { background: #6b7280; }
+        .run-stops li.is-no_show   .stop-num { background: var(--text-faint); }
         .run-stops .stop-time {
             font-size: 0.8125rem;
-            color: #6b7280;
+            color: var(--text-faint);
             margin-top: 0.125rem;
         }
         .run-stops .stop-title {
             font-weight: 600;
-            color: #111827;
+            color: var(--text-primary);
             text-decoration: none;
         }
         .run-stops .stop-title:hover { text-decoration: underline; }
         .run-stops .stop-addr {
             margin-top: 0.125rem;
-            color: #4b5563;
+            color: var(--text-muted);
             font-size: 0.9375rem;
         }
         .run-stops .stop-status {
@@ -276,7 +276,7 @@ $activeNav = 'calendar';
         .stop-status.status-booked    { background: #2563eb; }
         .stop-status.status-completed { background: #16a34a; }
         .stop-status.status-cancelled { background: #dc2626; }
-        .stop-status.status-no_show   { background: #6b7280; }
+        .stop-status.status-no_show   { background: var(--text-faint); }
         .run-noaddr {
             color: #b45309;
             background: #fffbeb;
@@ -293,10 +293,10 @@ $activeNav = 'calendar';
             flex-wrap: wrap;
             margin-bottom: 0.625rem;
             font-size: 0.875rem;
-            color: #4b5563;
+            color: var(--text-muted);
         }
         .gps-toolbar .gps-status { white-space: nowrap; }
-        .gps-toolbar .gps-status strong { color: #111827; }
+        .gps-toolbar .gps-status strong { color: var(--text-primary); }
     </style>
 </head>
 <body>

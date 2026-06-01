@@ -300,11 +300,11 @@ $activeNav = 'subscriptions';
         .sub-search {
             width: 100%; max-width: 28rem;
             padding: 0.5rem 0.75rem; font: inherit; font-size: 0.9375rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
             margin-bottom: 0.875rem;
         }
         details.tenant-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; border: 1px solid var(--border); border-radius: 10px;
             margin-bottom: 0.5rem; overflow: hidden;
         }
         details.tenant-card > summary {
@@ -313,15 +313,15 @@ $activeNav = 'subscriptions';
             display: flex; align-items: center; gap: 0.625rem;
             flex-wrap: wrap;
         }
-        details.tenant-card[open] > summary { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        details.tenant-card[open] > summary { background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
         details.tenant-card > summary::-webkit-details-marker { display: none; }
         details.tenant-card > summary::before {
-            content: '▸'; color: #6b7280; font-size: 0.75rem;
+            content: '▸'; color: var(--text-faint); font-size: 0.75rem;
             transition: transform 150ms;
         }
         details.tenant-card[open] > summary::before { transform: rotate(90deg); }
         details.tenant-card .t-name {
-            font-weight: 600; color: #111827; font-size: 1rem;
+            font-weight: 600; color: var(--text-primary); font-size: 1rem;
         }
         details.tenant-card .t-self {
             background: #1f3b5b; color: #fff; padding: 0.0625rem 0.5rem;
@@ -329,34 +329,34 @@ $activeNav = 'subscriptions';
             text-transform: uppercase; letter-spacing: 0.05em;
         }
         details.tenant-card .t-inactive {
-            background: #e5e7eb; color: #374151; padding: 0.0625rem 0.5rem;
+            background: var(--border); color: var(--text-secondary); padding: 0.0625rem 0.5rem;
             border-radius: 999px; font-size: 0.6875rem; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
         details.tenant-card .sub-summary {
             display: inline-flex; align-items: center; gap: 0.3125rem;
             font-size: 0.8125rem; padding: 0.125rem 0.5rem;
-            border-radius: 999px; background: #f3f4f6; color: #374151;
+            border-radius: 999px; background: var(--bg-subtle-2); color: var(--text-secondary);
         }
         details.tenant-card .sub-summary.has-active    { background: #d1fae5; color: #065f46; }
         details.tenant-card .sub-summary.has-trial     { background: #fef3c7; color: #92400e; }
         details.tenant-card .sub-summary.has-past_due  { background: #fed7aa; color: #9a3412; }
         details.tenant-card .sub-summary.has-cancelled { background: #fee2e2; color: #991b1b; }
-        details.tenant-card .sub-summary.has-expired   { background: #e5e7eb; color: #374151; }
+        details.tenant-card .sub-summary.has-expired   { background: var(--border); color: var(--text-secondary); }
         details.tenant-card .sub-summary.has-comp      { background: #ede9fe; color: #5b21b6; }
         details.tenant-card .sub-summary.has-comp strong::before {
             content: '🎁 '; font-size: 0.875rem;
         }
         details.tenant-card .none-yet {
-            color: #9ca3af; font-style: italic; font-size: 0.875rem;
+            color: var(--text-faint); font-style: italic; font-size: 0.875rem;
         }
         details.tenant-card .t-meta {
-            color: #6b7280; font-size: 0.8125rem; margin-left: auto;
+            color: var(--text-faint); font-size: 0.8125rem; margin-left: auto;
         }
 
         details.tenant-card > .body { padding: 0.5rem 1rem 1rem; }
         .sub-row {
-            border-top: 1px solid #f3f4f6;
+            border-top: 1px solid var(--bg-subtle-2);
             padding: 0.625rem 0;
         }
         .sub-row:first-child { border-top: 0; padding-top: 0.25rem; }
@@ -368,11 +368,11 @@ $activeNav = 'subscriptions';
         .sub-row .sub-field { display: flex; flex-direction: column; gap: 0.1875rem; }
         .sub-row .sub-field label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .sub-row .sub-field input,
         .sub-row .sub-field select {
-            padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+            padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; background: #fff;
         }
         .sub-row .sub-delete button {
@@ -381,10 +381,10 @@ $activeNav = 'subscriptions';
         }
         .sub-row .sub-delete button:hover { text-decoration: underline; }
         .sub-row .sub-ext-id {
-            margin-top: 0.25rem; color: #6b7280; font-size: 0.75rem;
+            margin-top: 0.25rem; color: var(--text-faint); font-size: 0.75rem;
         }
         .sub-row.add-new {
-            background: #f9fafb; border-radius: 8px;
+            background: var(--bg-subtle); border-radius: 8px;
             padding: 0.625rem 0.75rem;
             margin-top: 0.5rem; border-top: 0;
         }
@@ -394,18 +394,18 @@ $activeNav = 'subscriptions';
            Delete button + a "show editor" toggle. Stays editable for
            the rare case of moving the tenant back to paid. */
         details.sub-superseded {
-            background: #fafafa; border: 1px dashed #e5e7eb;
+            background: #fafafa; border: 1px dashed var(--border);
             border-radius: 8px; margin-top: 0.5rem; padding: 0;
         }
         details.sub-superseded > summary {
             list-style: none; cursor: pointer;
             padding: 0.375rem 0.625rem;
             display: flex; align-items: center; gap: 0.5rem;
-            font-size: 0.8125rem; color: #6b7280;
+            font-size: 0.8125rem; color: var(--text-faint);
         }
         details.sub-superseded > summary::-webkit-details-marker { display: none; }
         details.sub-superseded > summary::before {
-            content: '▸'; color: #9ca3af; font-size: 0.6875rem;
+            content: '▸'; color: var(--text-faint); font-size: 0.6875rem;
             transition: transform 150ms;
         }
         details.sub-superseded[open] > summary::before { transform: rotate(90deg); }
@@ -415,7 +415,7 @@ $activeNav = 'subscriptions';
             font-size: 0.6875rem; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
-        details.sub-superseded .ss-plan { color: #374151; font-weight: 600; }
+        details.sub-superseded .ss-plan { color: var(--text-secondary); font-weight: 600; }
         details.sub-superseded .ss-spacer { flex: 1; }
         details.sub-superseded .ss-quick-delete {
             background: transparent; color: #b91c1c; border: 0;
@@ -434,12 +434,12 @@ $activeNav = 'subscriptions';
         .plan-picker label {
             display: inline-flex; align-items: center; gap: 0.375rem;
             padding: 0.375rem 0.625rem;
-            background: #fff; border: 1px solid #d1d5db;
+            background: #fff; border: 1px solid var(--border-strong);
             border-radius: 999px; font-size: 0.8125rem;
             cursor: pointer; user-select: none;
             transition: background 100ms, border-color 100ms;
         }
-        .plan-picker label:hover { background: #f3f4f6; border-color: #9ca3af; }
+        .plan-picker label:hover { background: var(--bg-subtle-2); border-color: var(--text-faint); }
         .plan-picker input[type="checkbox"] { margin: 0; }
         .plan-picker input[type="checkbox"]:checked + span {
             font-weight: 600;
@@ -451,7 +451,7 @@ $activeNav = 'subscriptions';
             background: #ede9fe; border-color: #a78bfa; color: #5b21b6;
         }
         .plan-picker .pp-price {
-            color: #6b7280; font-weight: 400;
+            color: var(--text-faint); font-weight: 400;
         }
         .add-row-shared {
             display: grid;
@@ -462,10 +462,10 @@ $activeNav = 'subscriptions';
         .add-row-shared > .sub-field { display: flex; flex-direction: column; gap: 0.1875rem; }
         .add-row-shared label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .add-row-shared input, .add-row-shared select {
-            padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+            padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; background: #fff;
         }
         @media (max-width: 1000px) {
@@ -493,7 +493,7 @@ $activeNav = 'subscriptions';
             margin-bottom: 0.375rem; font-size: 0.8125rem;
         }
         .comp-existing strong { color: #5b21b6; }
-        .comp-existing .c-notes { color: #6b7280; flex: 1 1 8rem; }
+        .comp-existing .c-notes { color: var(--text-faint); flex: 1 1 8rem; }
         .comp-existing form { margin: 0; }
         .comp-existing button {
             background: transparent; color: #b91c1c; border: 0;
@@ -509,10 +509,10 @@ $activeNav = 'subscriptions';
         }
         .comp-add label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .comp-add select, .comp-add input {
-            padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+            padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; background: #fff;
         }
         .comp-add button {
@@ -650,7 +650,7 @@ $activeNav = 'subscriptions';
                             <?= $rowCount ?>
                             <?= $rowCount === 1 ? 'row' : 'rows' ?>
                             <?php if ($supersededSubs): ?>
-                                <span style="color:#9ca3af">
+                                <span style="color:var(--text-faint)">
                                     (+<?= count($supersededSubs) ?> superseded)
                                 </span>
                             <?php endif; ?>
@@ -861,7 +861,7 @@ $activeNav = 'subscriptions';
                                     <input type="hidden" name="action" value="save">
                                     <input type="hidden" name="client_id" value="<?= $cid ?>">
 
-                                    <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;font-weight:600;margin-bottom:0.25rem">
+                                    <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:600;margin-bottom:0.25rem">
                                         Add plans (tick one or more)
                                     </div>
                                     <div class="plan-picker">
@@ -942,7 +942,7 @@ $activeNav = 'subscriptions';
                                     <span class="c-notes">
                                         <?= !empty($cr['notes'])
                                             ? e((string) $cr['notes'])
-                                            : '<span style="color:#9ca3af">no notes</span>' ?>
+                                            : '<span style="color:var(--text-faint)">no notes</span>' ?>
                                     </span>
                                     <form method="post" action="/master-admin/subscriptions.php"
                                           data-confirm="Remove the free <?= e($planName) ?> comp for <?= e((string) $c['company_name']) ?>? Paid features turn off unless they have a separate active subscription.">
@@ -974,7 +974,7 @@ $activeNav = 'subscriptions';
                                         <input type="hidden" name="action" value="add_comp">
                                         <input type="hidden" name="client_id" value="<?= $cid ?>">
 
-                                        <div style="grid-column:1/-1;font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;font-weight:600">
+                                        <div style="grid-column:1/-1;font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:600">
                                             Comp this client (tick one or more)
                                         </div>
                                         <div class="plan-picker" style="grid-column:1/-1">
@@ -1000,7 +1000,7 @@ $activeNav = 'subscriptions';
                                     </form>
                                 </div>
                             <?php else: ?>
-                                <p style="margin:0.375rem 0 0;font-size:0.8125rem;color:#9ca3af;font-style:italic">
+                                <p style="margin:0.375rem 0 0;font-size:0.8125rem;color:var(--text-faint);font-style:italic">
                                     Every paid add-on is already comp'd for this client.
                                 </p>
                             <?php endif; ?>

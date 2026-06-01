@@ -360,7 +360,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
         .toggle-stack {
             display: flex; flex-direction: column; gap: 0.625rem;
@@ -368,12 +368,12 @@ $activeNav = 'products';
         }
         .toggle-stack label {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
             margin: 0; padding: 0;
         }
         .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
         .toggle-stack small {
-            color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+            color: var(--text-faint); font-size: 0.8125rem; margin-left: 0.375rem;
         }
     </style>
 </head>
@@ -412,7 +412,7 @@ $activeNav = 'products';
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
-        <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+        <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 1rem">
             Label, prices, system, default and active toggles are all editable inline on the
             <a href="/admin/products/extra.php?id=<?= (int) $choice['product_extra_id'] ?>">choices list</a>.
             This page is for the deeper edits — <strong>width-table pricing</strong> and
@@ -473,7 +473,7 @@ $activeNav = 'products';
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
                             "All systems" = appears on every system on this product.
                             Pick a single system to limit it. To price the same choice
                             differently per system, use the <em>Duplicate</em> link
@@ -483,21 +483,21 @@ $activeNav = 'products';
                 </div>
                 <?php endif; ?>
 
-                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
                         Thumbnail image (optional)
                     </legend>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                         Shown to the customer in the quote builder when they pick this choice.
                         Useful for things like wand-control orientation where the words alone
                         ("Left", "Right", "Centre Left") aren't enough to communicate. JPG, PNG,
                         or GIF, up to 2&nbsp;MB.
                     </p>
                     <?php if (!empty($choice['image_path'])): ?>
-                        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem">
+                        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem">
                             <img src="<?= e((string) $choice['image_path']) ?>" alt="Current thumbnail"
-                                 style="max-height:80px;max-width:160px;background:#fff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
-                            <small style="color:#6b7280;font-size:0.8125rem">
+                                 style="max-height:80px;max-width:160px;background:#fff;padding:0.25rem;border:1px solid var(--border);border-radius:6px">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Current thumbnail. Upload a new file below to replace, or use the Remove button.
                             </small>
                         </div>
@@ -517,33 +517,33 @@ $activeNav = 'products';
                     </form>
                 <?php endif; ?>
 
-                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
                         Width-based price table (optional)
                     </legend>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.5rem">
                         A fourth pricing mode for cases where the surcharge varies by width.
                         Pricing engine looks up the smallest entry &ge; the customer's width (round-up).
                         <strong>Combined</strong> with the flat / percent / per-metre fields above.
                     </p>
 
-                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:var(--text-secondary);font-weight:600">
                         Option A — paste rows
                     </p>
-                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.375rem">
                         One row per line: <strong>width then price</strong>, separated by space, comma, or tab.
                         Width in mm (<code>800</code>) or metres (<code>0.800</code>) — auto-detected.
                         Empty textarea + no file = clear the table.
                     </p>
                     <textarea name="width_price_table" id="width_price_table"
                               rows="6"
-                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;resize:vertical"
+                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;resize:vertical"
                               placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
 
-                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:#374151;font-weight:600">
+                    <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:var(--text-secondary);font-weight:600">
                         Option B — upload Excel
                     </p>
-                    <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.375rem">
+                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.375rem">
                         Either layout works (auto-detected): <strong>vertical</strong> — two columns,
                         width in column A and price in column B, one row per width;
                         <strong>or horizontal</strong> — widths across row 1, prices across row 2

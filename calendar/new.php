@@ -229,7 +229,7 @@ $activeNav = 'calendar';
             width: 100%;
             font: inherit;
             padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
             background: #fff;
             color: inherit;
@@ -248,7 +248,7 @@ $activeNav = 'calendar';
             .form-row.cols-4 { grid-template-columns: 1fr; }
         }
         .form-fieldset {
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
             border-radius: 10px;
             padding: 1rem 1.125rem 0.25rem;
             margin-bottom: 1rem;
@@ -267,7 +267,7 @@ $activeNav = 'calendar';
             gap: 0.5rem;
             margin-bottom: 1rem;
             font-size: 0.9375rem;
-            color: #111827;
+            color: var(--text-primary);
             cursor: pointer;
         }
         .checkbox-row input { width: 18px; height: 18px; }
@@ -320,7 +320,7 @@ $activeNav = 'calendar';
                             <input id="phone" name="phone" type="tel" maxlength="50"
                                    autocomplete="tel"
                                    value="<?= e((string) $f['phone']) ?>">
-                            <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:var(--text-muted);cursor:pointer">
                                 <input type="checkbox" id="has_whatsapp" name="has_whatsapp" value="1"
                                        <?= (int) $f['has_whatsapp'] === 1 ? 'checked' : '' ?>>
                                 Customer has WhatsApp on this number

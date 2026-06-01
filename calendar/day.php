@@ -174,7 +174,7 @@ $gridHeight = $totalHours * $pxPerHour;
 $statusColour = static function (string $s): array {
     return match ($s) {
         'confirmed'    => ['bg' => '#bbf7d0', 'fg' => '#166534', 'border' => '#86efac'],
-        'completed'    => ['bg' => '#e5e7eb', 'fg' => '#374151', 'border' => '#d1d5db'],
+        'completed'    => ['bg' => 'var(--border)', 'fg' => 'var(--text-secondary)', 'border' => 'var(--border-strong)'],
         'cancelled'    => ['bg' => '#fecaca', 'fg' => '#991b1b', 'border' => '#fca5a5'],
         'rescheduled'  => ['bg' => '#fed7aa', 'fg' => '#9a3412', 'border' => '#fdba74'],
         default        => ['bg' => '#fef3c7', 'fg' => '#78350f', 'border' => '#fde68a'],
@@ -200,7 +200,7 @@ $statusColour = static function (string $s): array {
 //   6 bars → INVOICED / PAID
 $quoteProgress = static function (?string $status): array {
     if ($status === null || $status === '') {
-        return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
+        return ['filled' => 0, 'colour' => 'var(--border-strong)', 'label' => 'No quote linked'];
     }
     return match ($status) {
         'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
@@ -211,7 +211,7 @@ $quoteProgress = static function (?string $status): array {
         'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED · awaiting payment'],
         'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID · job closed'],
         'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'Quote DECLINED'],
-        default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
+        default     => ['filled' => 0, 'colour' => 'var(--text-faint)', 'label' => (string) $status],
     };
 };
 
@@ -339,7 +339,7 @@ $activeNav = 'calendar';
             position: absolute; pointer-events: none;
             left: 0.25rem; right: 0.25rem;
             opacity: 0; transition: opacity 100ms;
-            font-size: 0.75rem; color: #6b7280;
+            font-size: 0.75rem; color: var(--text-faint);
             font-style: italic; text-align: center;
             padding: 0.25rem 0.5rem;
             background: #eff6ff; border: 1px dashed #93c5fd;
@@ -396,7 +396,7 @@ $activeNav = 'calendar';
             display: inline-block;
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 0.6875rem;
-            color: #4b5563;
+            color: var(--text-muted);
             background: rgba(255,255,255,0.6);
             border-radius: 3px;
             padding: 0 0.25rem;
@@ -445,7 +445,7 @@ $activeNav = 'calendar';
         .appt-card .ac-actions a:hover { background: #fff; }
 
         .day-empty {
-            padding: 2rem; text-align: center; color: #6b7280;
+            padding: 2rem; text-align: center; color: var(--text-faint);
             font-style: italic;
         }
         @media (max-width: 700px) {
@@ -512,7 +512,7 @@ $activeNav = 'calendar';
                                 $count = count($byUser[(int) $col['id']] ?? []);
                                 if ($count > 0):
                             ?>
-                                <span style="color:#6b7280;font-size:0.75rem;font-weight:500">
+                                <span style="color:var(--text-faint);font-size:0.75rem;font-weight:500">
                                     &middot; <?= $count ?> job<?= $count === 1 ? '' : 's' ?>
                                 </span>
                             <?php endif; ?>

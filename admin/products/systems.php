@@ -204,12 +204,12 @@ $activeNav = 'products';
             border: 0; cursor: pointer; padding: 0; margin-left: 0.5rem;
         }
         .row-actions button:hover { text-decoration: underline; }
-        .system-name { font-weight: 600; color: #111827; }
+        .system-name { font-weight: 600; color: var(--text-primary); }
         a.system-name { text-decoration: none; }
         a.system-name:hover { color: #1f3b5b; text-decoration: underline; }
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-            font-weight: 600; color: #6b7280; background: #f3f4f6;
+            font-weight: 600; color: var(--text-faint); background: var(--bg-subtle-2);
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
@@ -307,7 +307,7 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.5rem">
                     Drag the <strong>⋮⋮</strong> handle to reorder.
                     <span class="reorder-status">Saving…</span>
                 </p>
@@ -344,7 +344,7 @@ $activeNav = 'products';
                                         </a>
                                     </td>
                                     <?php require_once __DIR__ . '/../../_partials/time_ago.php'; ?>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap"
+                                    <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap"
                                         title="<?= e((string) $s['updated_at']) ?>">
                                         <?= e(time_ago((string) $s['updated_at'])) ?>
                                     </td>

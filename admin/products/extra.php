@@ -336,7 +336,7 @@ $activeNav = 'products';
                     <span id="save-indicator" class="save-indicator">All changes saved</span>
                 </h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.75rem">
                 Click any cell to edit. Tab or Enter saves; Escape cancels.
                 Type a label in the last row to add a new choice.
                 Drag <strong>⋮⋮</strong> to reorder.
@@ -355,10 +355,10 @@ $activeNav = 'products';
         <section class="section" id="sub-options">
             <div class="section-header">
                 <h2 class="section-title">
-                    Sub-options <span style="color:#6b7280;font-weight:400">(<?= count($subOptions) ?>)</span>
+                    Sub-options <span style="color:var(--text-faint);font-weight:400">(<?= count($subOptions) ?>)</span>
                 </h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.75rem">
                 Follow-up options that only show in the quote builder when specific choices above
                 are selected — e.g. <em>Colour</em> appears only when <em>Bottom Weight = Chained
                 OR Chainless</em>. One sub-option can be gated by multiple parent choices, so you
@@ -366,7 +366,7 @@ $activeNav = 'products';
             </p>
 
             <?php if (!$subOptions): ?>
-                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;font-style:italic">
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 1rem;font-style:italic">
                     None yet. Tick parent choices in the form below to add one.
                 </p>
             <?php else: ?>
@@ -446,7 +446,7 @@ $activeNav = 'products';
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
-                                <small style="color:#6b7280;font-size:0.8125rem">
+                                <small style="color:var(--text-faint);font-size:0.8125rem">
                                     Tick one or more. The sub-option shows in the quote builder when <strong>any</strong> ticked choice is selected.
                                 </small>
                             </div>
@@ -488,7 +488,7 @@ $activeNav = 'products';
                    class="btn btn-primary">
                     Done &mdash; back to options
                 </a>
-                <span style="color:#6b7280;font-size:0.875rem">
+                <span style="color:var(--text-faint);font-size:0.875rem">
                     Every change is saved automatically as you make it &mdash; you don't have to click anything to save.
                     The badge at the top of the page tells you when something's still in flight.
                 </span>

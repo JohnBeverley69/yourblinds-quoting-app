@@ -197,7 +197,7 @@ $activeNav = 'master-admin';
         .form-group input[type="email"],
         .form-group input[type="password"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
             box-sizing: border-box;
         }
         .toggle-stack {
@@ -206,19 +206,19 @@ $activeNav = 'master-admin';
         }
         .toggle-stack label {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
             margin: 0; padding: 0;
         }
         .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
         .toggle-stack small {
-            color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+            color: var(--text-faint); font-size: 0.8125rem; margin-left: 0.375rem;
         }
         .seed-summary {
-            background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+            background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px;
             padding: 0.75rem 1rem; margin: 0.5rem 0 1.25rem;
-            font-size: 0.875rem; color: #4b5563;
+            font-size: 0.875rem; color: var(--text-muted);
         }
-        .seed-summary strong { color: #111827; }
+        .seed-summary strong { color: var(--text-primary); }
     </style>
 </head>
 <body>
@@ -240,7 +240,7 @@ $activeNav = 'master-admin';
         <?php endif; ?>
 
         <section class="section">
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 1rem">
                 Creates a new tenant (company) plus its first admin user, and
                 optionally clones your master-admin catalogue across so the new
                 client launches with sensible defaults they can then edit.
@@ -266,7 +266,7 @@ $activeNav = 'master-admin';
                 </div>
 
                 <h3 style="margin:1.5rem 0 0.5rem;font-size:1rem">Initial admin user</h3>
-                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                     The first login for this client. They can add more users via Users once they're in.
                 </p>
                 <div class="form-row cols-2">
@@ -288,7 +288,7 @@ $activeNav = 'master-admin';
                         <label for="password">Initial password (8+ chars) <span class="required">*</span></label>
                         <input id="password" name="password" type="password"
                                required minlength="8" autocomplete="new-password">
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
                             Tell them in person, or send via your usual channel. They can change it via Settings once logged in.
                         </small>
                     </div>

@@ -262,7 +262,7 @@ $activeNav = 'products';
         @media (max-width: 700px) { .form-row.cols-2-narrow { grid-template-columns: 1fr; } }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
             padding: 0.5625rem 0; margin: 0;
         }
         .checkbox-row input { width: 18px; height: 18px; }
@@ -274,7 +274,7 @@ $activeNav = 'products';
             border: 0; cursor: pointer; padding: 0; margin-left: 0.5rem;
         }
         .row-actions button:hover { text-decoration: underline; }
-        .extra-name { font-weight: 600; color: #111827; }
+        .extra-name { font-weight: 600; color: var(--text-primary); }
         a.extra-name { text-decoration: none; }
         a.extra-name:hover { color: #1f3b5b; text-decoration: underline; }
         .req-pill {
@@ -285,20 +285,20 @@ $activeNav = 'products';
         }
         .opt-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-            font-weight: 600; color: #6b7280; background: #f3f4f6;
+            font-weight: 600; color: var(--text-faint); background: var(--bg-subtle-2);
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
         .conditional-row td:first-child { padding-left: 2rem; position: relative; }
         .conditional-row td:first-child::before {
-            content: '↳'; position: absolute; left: 0.625rem; color: #9ca3af;
+            content: '↳'; position: absolute; left: 0.625rem; color: var(--text-faint);
             font-size: 1.125rem; line-height: 1;
         }
         .parent-cond {
-            display: block; color: #6b7280; font-size: 0.8125rem;
+            display: block; color: var(--text-faint); font-size: 0.8125rem;
             margin-top: 0.125rem; font-weight: 400;
         }
-        .parent-cond strong { color: #4b5563; font-weight: 600; }
+        .parent-cond strong { color: var(--text-muted); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -374,7 +374,7 @@ $activeNav = 'products';
                     Chainless).
                 </div>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+                <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 1rem">
                     Examples: Control side, Control type, Draw side, Lining, Motor type, Headrail colour.
                 </p>
             <?php endif; ?>
@@ -401,7 +401,7 @@ $activeNav = 'products';
                             <input type="checkbox" id="allow_multi" name="allow_multi" value="1"
                                    <?= $f['allow_multi'] === 1 ? 'checked' : '' ?>>
                             Allow multiple choices
-                            <small style="color:#6b7280;font-size:0.8125rem">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
                                 renders as tick-boxes &mdash; salesperson can pick any combination
                             </small>
                         </label>
@@ -412,7 +412,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label>Appears when (optional)</label>
                         <?php if (!$availableChoices): ?>
-                            <p style="color:#6b7280;font-size:0.8125rem;margin:0">
+                            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0">
                                 No other choices on this product yet. Add some options + choices first
                                 if you want this option to be gated.
                             </p>
@@ -427,7 +427,7 @@ $activeNav = 'products';
                                     </label>
                                 <?php endforeach; ?>
                             </div>
-                            <small style="color:#6b7280;font-size:0.8125rem">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Tick one or more choices and this option will show in the quote builder
                                 when <strong>any</strong> of them is selected. Tick none to make the
                                 option always visible.
@@ -451,7 +451,7 @@ $activeNav = 'products';
                                    style="margin-top:0.25rem">
                             <span>
                                 Also show a number input next to this option
-                                <small style="display:block;color:#6b7280;font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
+                                <small style="display:block;color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
                                     For things like wand length, cable length, etc. &mdash;
                                     the salesperson types a value alongside picking a choice.
                                     Recorded on the quote line for supplier docs.
@@ -460,14 +460,14 @@ $activeNav = 'products';
                         </label>
                         <div id="add_length_label_wrap"
                              style="<?= $hasLen ? '' : 'display:none' ?>;margin:0.375rem 0 0 1.625rem">
-                            <label for="add_length_input_label" style="font-size:0.8125rem;font-weight:600;color:#374151">
+                            <label for="add_length_input_label" style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary)">
                                 What to call this field
                             </label>
                             <input id="add_length_input_label" name="length_input_label" type="text"
                                    maxlength="60"
                                    value="<?= e((string) $f['length_input_label']) ?>"
                                    placeholder="e.g. Wand length (mm)"
-                                   style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
+                                   style="width:100%;font:inherit;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
                         </div>
                     </div>
                 </div>
@@ -510,7 +510,7 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.5rem">
                     Drag the <strong>⋮⋮</strong> handle to reorder.
                     <span class="reorder-status">Saving…</span>
                 </p>
@@ -553,7 +553,7 @@ $activeNav = 'products';
                                             <?= (int) $x['choice_count'] ?>
                                         </a>
                                     </td>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                                    <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">
                                         <?= e((string) $x['updated_at']) ?>
                                     </td>
                                     <td class="row-actions">

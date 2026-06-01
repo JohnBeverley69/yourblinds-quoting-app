@@ -14,14 +14,14 @@
 // Toggles 'Saving…' / 'Saved' (green) / 'Save failed' (red).
 ?>
 <style>
-    .drag-col { width: 2rem; text-align: center; cursor: grab; color: #9ca3af; user-select: none; }
+    .drag-col { width: 2rem; text-align: center; cursor: grab; color: var(--text-faint); user-select: none; }
     .drag-col:hover { color: #1f3b5b; }
     .drag-col:active { cursor: grabbing; }
     .sortable-ghost { opacity: 0.4; }
     .sortable-chosen { background: #eff6ff; }
     .reorder-status {
         display: inline-block; margin-left: 0.5rem; font-size: 0.8125rem;
-        color: #6b7280; opacity: 0; transition: opacity 0.2s;
+        color: var(--text-faint); opacity: 0; transition: opacity 0.2s;
     }
     .reorder-status.show { opacity: 1; }
     .reorder-status.ok { color: #16a34a; }

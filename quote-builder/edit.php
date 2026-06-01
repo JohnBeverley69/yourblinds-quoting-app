@@ -228,23 +228,23 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
             border-radius: 999px; vertical-align: middle; margin-left: 0.5rem;
         }
-        .status-draft     { background: #e5e7eb; color: #374151; }
+        .status-draft     { background: var(--border); color: var(--text-secondary); }
         .status-sent      { background: #dbeafe; color: #1e40af; }
         .status-accepted  { background: #d1fae5; color: #065f46; }
         .status-declined  { background: #fee2e2; color: #991b1b; }
         .status-ordered   { background: #ede9fe; color: #5b21b6; }
         .status-invoiced  { background: #fef3c7; color: #92400e; }
         .status-paid      { background: #14532d; color: #ffffff; }
-        .item-desc { font-size: 0.875rem; color: #374151; line-height: 1.45; }
-        .item-desc strong { color: #111827; font-weight: 600; }
-        .item-extras { color: #6b7280; font-size: 0.8125rem; margin-top: 0.25rem; }
+        .item-desc { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.45; }
+        .item-desc strong { color: var(--text-primary); font-weight: 600; }
+        .item-extras { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.25rem; }
         .totals-row td { font-weight: 600; }
-        .totals-row.grand td { font-size: 1.0625rem; color: #111827; }
+        .totals-row.grand td { font-size: 1.0625rem; color: var(--text-primary); }
         #item-preview {
             padding: 0.75rem 1rem; border-radius: 8px;
             font-size: 0.9375rem; margin: 0.75rem 0;
         }
-        #item-preview.idle    { background: #f3f4f6; color: #4b5563; }
+        #item-preview.idle    { background: var(--bg-subtle-2); color: var(--text-muted); }
         #item-preview.error   { background: #fee2e2; color: #991b1b; }
         #item-preview.success { background: #d1fae5; color: #065f46; }
         .extras-grid {
@@ -253,13 +253,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             margin: 0.5rem 0;
         }
         .extras-grid label {
-            display: block; font-size: 0.8125rem; color: #4b5563;
+            display: block; font-size: 0.8125rem; color: var(--text-muted);
             font-weight: 600; margin-bottom: 0.25rem;
         }
         .extras-grid .choice-thumb {
             display: block; max-width: 160px; max-height: 90px;
             margin-top: 0.5rem; padding: 0.25rem;
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+            background: #fff; border: 1px solid var(--border); border-radius: 6px;
         }
         /* ============================================================
            Page-slimming pass. The quote edit page used to be tall enough
@@ -276,7 +276,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             font-size: 0.8125rem !important;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            color: #6b7280;
+            color: var(--text-faint);
             font-weight: 600;
         }
 
@@ -313,7 +313,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             background: #fff;
             margin-top: 0.5rem;
             padding: 0.625rem 0;
-            border-top: 1px solid #e5e7eb;
+            border-top: 1px solid var(--border);
             z-index: 5;
         }
 
@@ -337,7 +337,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .extras-grid .extra-cell {
             display: flex; flex-direction: column; gap: 0.5rem;
             background: rgba(243, 244, 246, 0.5);   /* light gray @ 50% */
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
             border-radius: 10px;
             padding: 0.75rem 0.875rem;
         }
@@ -346,7 +346,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             padding: 0.4375rem 0.625rem;
             font: inherit;
             background: #fff;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
             box-sizing: border-box;
         }
@@ -357,35 +357,35 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         .extras-grid .extra-cell .extra-child label {
             font-size: 0.75rem;
-            color: #6b7280;
+            color: var(--text-faint);
         }
         .extras-grid .extra-cell .extra-child label::before {
             content: '↳ ';
-            color: #9ca3af;
+            color: var(--text-faint);
         }
         .form-group input[type="number"], .form-group input[type="text"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
             box-sizing: border-box;
         }
         .fabric-picker { position: relative; }
         .fabric-results {
             position: absolute; top: 100%; left: 0; right: 0;
             max-height: 360px; overflow-y: auto;
-            background: #fff; border: 1px solid #d1d5db;
+            background: #fff; border: 1px solid var(--border-strong);
             border-radius: 8px;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
             z-index: 20; margin-top: 4px;
         }
         .fabric-results .frow {
             padding: 0.5rem 0.75rem; cursor: pointer;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid var(--bg-subtle-2);
         }
         .fabric-results .frow:last-child { border-bottom: 0; }
         .fabric-results .frow:hover,
         .fabric-results .frow.active { background: #eff6ff; }
-        .fabric-results .fname { font-weight: 600; color: #111827; font-size: 0.9375rem; }
-        .fabric-results .fmeta { color: #6b7280; font-size: 0.8125rem; margin-top: 0.125rem; }
+        .fabric-results .fname { font-weight: 600; color: var(--text-primary); font-size: 0.9375rem; }
+        .fabric-results .fmeta { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.125rem; }
         .fabric-results .fband {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 700; color: #fff; background: #1f3b5b;
@@ -394,7 +394,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         .fabric-results .empty {
             padding: 1rem; text-align: center;
-            color: #6b7280; font-size: 0.875rem;
+            color: var(--text-faint); font-size: 0.875rem;
         }
         .read-only-banner {
             background: #fef3c7; color: #92400e; padding: 0.75rem 1rem;
@@ -473,7 +473,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             font-size: 1.0625rem; font-weight: 700; color: #1f3b5b;
         }
         .record-payment-card__hint {
-            margin: 0 0 0.875rem; color: #4b5563; font-size: 0.875rem;
+            margin: 0 0 0.875rem; color: var(--text-muted); font-size: 0.875rem;
         }
         .record-payment-card__form {
             display: flex; flex-wrap: wrap; gap: 0.625rem; align-items: end;
@@ -528,7 +528,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             text-decoration: none;
         }
         .quote-sticky-bar #qsb-take-payment:hover {
-            background: #f3f4f6;
+            background: var(--bg-subtle-2);
         }
 
         /* ===========================================================
@@ -540,20 +540,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
            =========================================================== */
         .customer-collapse > summary {
             list-style: none; cursor: pointer; padding: 0.25rem 0;
-            font-size: 1.125rem; font-weight: 600; color: #111827;
+            font-size: 1.125rem; font-weight: 600; color: var(--text-primary);
             display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
         }
         .customer-collapse > summary::-webkit-details-marker { display: none; }
         .customer-collapse > summary::before {
-            content: '▸'; display: inline-block; color: #6b7280;
+            content: '▸'; display: inline-block; color: var(--text-faint);
             transition: transform 150ms; flex-shrink: 0;
         }
         .customer-collapse[open] > summary::before { transform: rotate(90deg); }
         .customer-collapse > summary .cs-meta {
-            font-size: 0.875rem; font-weight: 400; color: #6b7280;
+            font-size: 0.875rem; font-weight: 400; color: var(--text-faint);
         }
         .customer-collapse > summary .cs-hint {
-            font-size: 0.8125rem; font-weight: 400; color: #9ca3af;
+            font-size: 0.8125rem; font-weight: 400; color: var(--text-faint);
             font-style: italic;
         }
         .customer-collapse > .form { margin-top: 0.75rem; }
@@ -852,7 +852,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <?php endforeach; ?>
                         </datalist>
                         <?php if ($editable): ?>
-                            <small style="color:#6b7280;font-size:0.8125rem">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Type to filter — leave blank to unlink.
                             </small>
                         <?php endif; ?>
@@ -880,7 +880,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
                                <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
-                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;<?= !$editable ? 'cursor:default' : 'cursor:pointer' ?>">
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:var(--text-muted);<?= !$editable ? 'cursor:default' : 'cursor:pointer' ?>">
                             <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
                                    <?= !empty($quote['has_whatsapp']) ? 'checked' : '' ?>
                                    <?= !$editable ? 'disabled' : '' ?>>
@@ -1052,11 +1052,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <button type="button" id="item-room-chevron"
                                     aria-label="Show room name suggestions"
                                     style="position:absolute;right:0.375rem;top:50%;transform:translateY(-50%);
-                                           background:transparent;border:0;color:#6b7280;cursor:pointer;
+                                           background:transparent;border:0;color:var(--text-faint);cursor:pointer;
                                            padding:0.25rem 0.375rem;font-size:0.75rem;line-height:1">▾</button>
                             <div id="item-room-popup" hidden
                                  style="position:absolute;top:100%;left:0;right:0;
-                                        margin-top:4px;background:#fff;border:1px solid #d1d5db;
+                                        margin-top:4px;background:#fff;border:1px solid var(--border-strong);
                                         border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,0.08);
                                         z-index:20;max-height:240px;overflow-y:auto;padding:0.25rem">
                                 <?php
@@ -1070,7 +1070,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 foreach ($rooms as $r): ?>
                                     <div class="room-opt" data-room="<?= e($r) ?>"
                                          style="padding:0.4375rem 0.5625rem;cursor:pointer;
-                                                border-radius:6px;font-size:0.9375rem;color:#111827"
+                                                border-radius:6px;font-size:0.9375rem;color:var(--text-primary)"
                                          onmouseover="this.style.background='#eef2f7'"
                                          onmouseout="this.style.background='transparent'">
                                         <?= e($r) ?>
@@ -1355,11 +1355,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <?= csrf_field() ?>
                         <input type="hidden" name="_action" value="save_amount">
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                        <label style="font-size:0.8125rem;color:#6b7280;margin:0">Amount £</label>
+                        <label style="font-size:0.8125rem;color:var(--text-faint);margin:0">Amount £</label>
                         <input type="number" name="deposit_amount" step="0.01" min="0"
                                value="<?= e(number_format((float) $depositAmount, 2, '.', '')) ?>"
                                style="width:7rem;padding:0.375rem 0.5rem;
-                                      border:1px solid #d1d5db;border-radius:6px;font:inherit">
+                                      border:1px solid var(--border-strong);border-radius:6px;font:inherit">
                         <button type="submit" class="btn btn-secondary"
                                 style="padding:0.3125rem 0.75rem;font-size:0.8125rem">
                             Save amount
@@ -1594,7 +1594,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <div class="section-header">
                 <h2 class="section-title">Send to customer</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 1rem">
                 Email the PDF and a link the customer can click to accept the quote online.
                 <?php if ($waEnabled): ?>
                     Or share the same link via WhatsApp.
@@ -1644,7 +1644,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         🔗 Copy public link
                     </a>
                 </div>
-                <small style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.625rem">
+                <small style="display:block;color:var(--text-faint);font-size:0.8125rem;margin-top:0.625rem">
                     Public link: <code style="font-size:0.8125rem"><?= e($publicUrl) ?></code>
                 </small>
             </form>
@@ -2014,7 +2014,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 out += '<div class="multi-choice-list"'
                      + ' style="display:flex;flex-direction:column;gap:0.3125rem;'
                      + 'padding:0.4375rem 0.5rem;background:#fff;'
-                     + 'border:1px solid #d1d5db;border-radius:8px">';
+                     + 'border:1px solid var(--border-strong);border-radius:8px">';
                 visibleChoices.forEach(function (c) {
                     var ticked = preselectIds.indexOf(c.id) !== -1;
                     if (ticked && c.image_url) selectedThumb = c.image_url;
@@ -2077,7 +2077,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     ? String(presetUv) : '';
                 out += '<div class="extra-user-value" style="margin-top:0.375rem">'
                      + '<label style="display:block;font-size:0.75rem;font-weight:600;'
-                     + 'color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;'
+                     + 'color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;'
                      + 'margin-bottom:0.1875rem">'
                      + escapeHtml(extra.length_input_label) + '</label>'
                      + '<input type="number" min="0" step="1"'
@@ -2085,7 +2085,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                      + ' value="' + escapeAttr(uvValue) + '"'
                      + ' data-uv-for="' + extra.id + '"'
                      + ' style="width:100%;padding:0.375rem 0.5rem;'
-                     + 'border:1px solid #d1d5db;border-radius:6px;font:inherit">'
+                     + 'border:1px solid var(--border-strong);border-radius:6px;font:inherit">'
                      + '</div>';
             }
 

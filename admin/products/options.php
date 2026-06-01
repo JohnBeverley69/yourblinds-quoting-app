@@ -175,11 +175,11 @@ $activeNav = 'products';
         }
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer; margin-right: 0.75rem;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer; margin-right: 0.75rem;
         }
         .checkbox-row input { width: 18px; height: 18px; }
         .band-pill {
@@ -198,7 +198,7 @@ $activeNav = 'products';
         .row-actions button:hover { text-decoration: underline; }
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-            font-weight: 600; color: #6b7280; background: #f3f4f6;
+            font-weight: 600; color: var(--text-faint); background: var(--bg-subtle-2);
             border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
@@ -206,7 +206,7 @@ $activeNav = 'products';
             display: flex; align-items: center; gap: 0.75rem;
             margin-bottom: 0.75rem; flex-wrap: wrap;
         }
-        .bulk-bar .selected-count { font-size: 0.875rem; color: #6b7280; }
+        .bulk-bar .selected-count { font-size: 0.875rem; color: var(--text-faint); }
         .row-check { width: 1%; text-align: center; }
         .row-check input { width: 18px; height: 18px; cursor: pointer; }
         /* Filter search above the table — finds fabrics by any field
@@ -219,15 +219,15 @@ $activeNav = 'products';
         .fabric-search-bar input {
             flex: 1 1 18rem; max-width: 28rem;
             padding: 0.4375rem 0.6875rem;
-            border: 1px solid #d1d5db; border-radius: 8px;
+            border: 1px solid var(--border-strong); border-radius: 8px;
             font: inherit; font-size: 0.9375rem;
         }
         .fabric-search-bar .clear-btn {
             background: transparent; border: 0; cursor: pointer;
-            color: #6b7280; font-size: 0.8125rem; text-decoration: underline;
+            color: var(--text-faint); font-size: 0.8125rem; text-decoration: underline;
         }
         .fabric-search-bar .clear-btn:hover { color: #1f3b5b; }
-        .fabric-count { font-size: 0.875rem; color: #6b7280; }
+        .fabric-count { font-size: 0.875rem; color: var(--text-faint); }
         tr.is-hidden { display: none; }
     </style>
 </head>

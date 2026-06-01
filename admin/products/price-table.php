@@ -333,28 +333,28 @@ $activeNav = 'products';
     <link rel="stylesheet" href="/app.css">
     <style>
         .tip-box {
-            background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
-            padding: 0.75rem 1rem; font-size: 0.9375rem; color: #4b5563;
+            background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px;
+            padding: 0.75rem 1rem; font-size: 0.9375rem; color: var(--text-muted);
             margin-bottom: 1rem;
         }
         .tip-box code {
             background: #fff; padding: 0.0625rem 0.375rem; border-radius: 4px;
-            border: 1px solid #e5e7eb; font-size: 0.8125rem;
+            border: 1px solid var(--border); font-size: 0.8125rem;
         }
         .matrix-table {
             border-collapse: collapse; font-size: 0.8125rem; width: auto;
             font-variant-numeric: tabular-nums;
         }
         .matrix-table th, .matrix-table td {
-            border: 1px solid #e5e7eb; padding: 0.375rem 0.625rem; text-align: right;
+            border: 1px solid var(--border); padding: 0.375rem 0.625rem; text-align: right;
             white-space: nowrap;
         }
         .matrix-table thead th, .matrix-table tbody th {
             background: #1f3b5b; color: #fff; font-weight: 700; text-align: center;
         }
-        .matrix-table tbody td.empty { color: #d1d5db; }
+        .matrix-table tbody td.empty { color: var(--border-strong); }
         .summary-list { margin: 0; padding-left: 1.25rem; }
-        .summary-list li { font-size: 0.9375rem; color: #4b5563; }
+        .summary-list li { font-size: 0.9375rem; color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -369,7 +369,7 @@ $activeNav = 'products';
                     / <?= e((string) $table['system_name']) ?>
                     &mdash; Band <?= e((string) $table['band_code']) ?>
                     <?php if (!empty($table['name'])): ?>
-                        <span style="color:#6b7280;font-weight:400;font-size:1rem">&mdash; <?= e((string) $table['name']) ?></span>
+                        <span style="color:var(--text-faint);font-weight:400;font-size:1rem">&mdash; <?= e((string) $table['name']) ?></span>
                     <?php endif; ?>
                 </h1>
                 <p class="page-subtitle">

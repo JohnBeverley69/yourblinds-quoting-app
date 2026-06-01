@@ -125,14 +125,14 @@ $gridHeight = ($endHour - $startHour) * $pxPerHour;
 // fixed palette so the same fitter is always the same colour.
 $userPalette = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#db2777','#0891b2','#65a30d','#ea580c','#4f46e5'];
 $colorForUser = static function (?int $uid) use ($userPalette): string {
-    if (!$uid) return '#6b7280';
+    if (!$uid) return 'var(--text-faint)';
     return $userPalette[$uid % count($userPalette)];
 };
 
 $statusColour = static function (string $s): array {
     return match ($s) {
         'confirmed'    => ['bg' => '#bbf7d0', 'fg' => '#166534'],
-        'completed'    => ['bg' => '#e5e7eb', 'fg' => '#374151'],
+        'completed'    => ['bg' => 'var(--border)', 'fg' => 'var(--text-secondary)'],
         'cancelled'    => ['bg' => '#fecaca', 'fg' => '#991b1b'],
         'rescheduled'  => ['bg' => '#fed7aa', 'fg' => '#9a3412'],
         default        => ['bg' => '#fef3c7', 'fg' => '#78350f'],
@@ -144,7 +144,7 @@ $statusColour = static function (string $s): array {
 // One bar per stage now that 'fitted' joins the lifecycle.
 $quoteProgress = static function (?string $status): array {
     if ($status === null || $status === '') {
-        return ['filled' => 0, 'colour' => '#d1d5db', 'label' => 'No quote linked'];
+        return ['filled' => 0, 'colour' => 'var(--border-strong)', 'label' => 'No quote linked'];
     }
     return match ($status) {
         'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
@@ -155,7 +155,7 @@ $quoteProgress = static function (?string $status): array {
         'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED'],
         'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID'],
         'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'DECLINED'],
-        default     => ['filled' => 0, 'colour' => '#9ca3af', 'label' => (string) $status],
+        default     => ['filled' => 0, 'colour' => 'var(--text-faint)', 'label' => (string) $status],
     };
 };
 
@@ -185,7 +185,7 @@ $activeNav = 'calendar';
         }
         .wk-nav {
             display: inline-flex; align-items: center; gap: 0.25rem;
-            background: #fff; border: 1px solid #d1d5db;
+            background: #fff; border: 1px solid var(--border-strong);
             border-radius: 8px; padding: 0.1875rem;
         }
         .wk-nav a, .wk-nav span {
@@ -195,25 +195,25 @@ $activeNav = 'calendar';
             font-weight: 600; font-size: 0.875rem;
             border-radius: 5px;
         }
-        .wk-nav a:hover { background: #f3f4f6; }
+        .wk-nav a:hover { background: var(--bg-subtle-2); }
         .wk-nav .today-pill { background: #1f3b5b; color: #fff; }
         .wk-range {
             font-size: 1.0625rem; font-weight: 700; color: #1f3b5b;
         }
         .view-switch {
-            display: inline-flex; background: #f3f4f6; border-radius: 8px;
+            display: inline-flex; background: var(--bg-subtle-2); border-radius: 8px;
             padding: 0.125rem; margin-left: auto;
         }
         .view-switch a {
             padding: 0.3125rem 0.75rem; border-radius: 6px;
-            text-decoration: none; color: #6b7280;
+            text-decoration: none; color: var(--text-faint);
             font-size: 0.875rem; font-weight: 600;
         }
         .view-switch a.is-active { background: #fff; color: #1f3b5b;
                                     box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
         .wk-board {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 10px; overflow: hidden;
         }
         .wk-board-head, .wk-board-body {
@@ -275,7 +275,7 @@ $activeNav = 'calendar';
             position: absolute; pointer-events: none;
             left: 0.25rem; right: 0.25rem;
             opacity: 0; transition: opacity 100ms;
-            font-size: 0.75rem; color: #6b7280;
+            font-size: 0.75rem; color: var(--text-faint);
             font-style: italic; text-align: center;
             padding: 0.125rem 0.375rem;
             background: #eff6ff; border: 1px dashed #93c5fd;
@@ -315,7 +315,7 @@ $activeNav = 'calendar';
             display: inline-block;
             font-family: ui-monospace, Menlo, Consolas, monospace;
             font-size: 0.625rem;
-            color: #4b5563;
+            color: var(--text-muted);
             background: rgba(255,255,255,0.6);
             border-radius: 3px;
             padding: 0 0.1875rem;
@@ -368,7 +368,7 @@ $activeNav = 'calendar';
             <form method="get" action="/calendar/week.php">
                 <input type="date" name="date" value="<?= e($weekStart->format('Y-m-d')) ?>"
                        onchange="this.form.submit()"
-                       style="padding:0.375rem 0.5rem;border:1px solid #d1d5db;border-radius:6px;font:inherit;font-size:0.875rem">
+                       style="padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;font-size:0.875rem">
             </form>
             <div class="view-switch">
                 <a href="/calendar/index.php?month=<?= e($weekStart->format('Y-m')) ?>">Month</a>

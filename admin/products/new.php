@@ -97,7 +97,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
     </style>
 </head>
@@ -140,7 +140,7 @@ $activeNav = 'products';
                                maxlength="40"
                                value="<?= e((string) $f['option_label']) ?>"
                                placeholder="Fabric">
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
                             What the per-blind option axis is called for this product.
                             Use <em>Fabric</em> for rollers/romans, <em>Colour</em> for
                             metal venetians, <em>Finish</em> for wood, etc. You can change
@@ -149,7 +149,7 @@ $activeNav = 'products';
                     </div>
                 </div>
 
-                <p style="color:#6b7280;font-size:0.875rem;margin:0.5rem 0 1rem">
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0.5rem 0 1rem">
                     Once the product's saved, the Edit page lets you add
                     systems (Standard / Premium / Motorised / …), set a margin and
                     discount per system, upload options, and configure extras.

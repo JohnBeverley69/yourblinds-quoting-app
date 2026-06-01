@@ -49,7 +49,7 @@ define('CFM_MODAL_INCLUDED', true);
         box-shadow: 0 20px 50px rgba(0,0,0,0.3);
     }
     .cfm-msg {
-        font-size: 1rem; color: #111827; line-height: 1.45;
+        font-size: 1rem; color: var(--text-primary); line-height: 1.45;
         white-space: pre-line;
         margin: 0 0 1.125rem;
     }
@@ -63,8 +63,8 @@ define('CFM_MODAL_INCLUDED', true);
         font: inherit; font-weight: 600;
         cursor: pointer;
     }
-    .cfm-btn-cancel  { background: #e5e7eb; color: #374151; }
-    .cfm-btn-cancel:hover { background: #d1d5db; }
+    .cfm-btn-cancel  { background: var(--border); color: var(--text-secondary); }
+    .cfm-btn-cancel:hover { background: var(--border-strong); }
     .cfm-btn-confirm { background: #dc2626; color: #fff; }
     .cfm-btn-confirm:hover { background: #b91c1c; }
 </style>

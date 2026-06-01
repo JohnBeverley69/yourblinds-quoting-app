@@ -587,7 +587,7 @@ $tenants = $pdo->query(
         }
         .snapshot-list th {
             font-size: 0.75rem; text-transform: uppercase;
-            letter-spacing: 0.04em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.04em; color: var(--text-faint); font-weight: 600;
         }
         .snapshot-list code { font-size: 0.8125rem; color: #1f3b5b; }
     </style>
@@ -617,7 +617,7 @@ $tenants = $pdo->query(
             <div class="section-header">
                 <h2 class="section-title">Download backup</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.75rem">
                 Streams a full SQL dump of the database
                 (<strong><?= $tableCount ?></strong> tables,
                 ~<strong><?= number_format($rowApprox) ?></strong> rows)
@@ -625,7 +625,7 @@ $tenants = $pdo->query(
                 re-uploading below, or by piping it into
                 <code>mysql &lt;db&gt;</code> from the command line.
             </p>
-            <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.75rem">
                 Backs up <strong>data only</strong> — file uploads
                 (logos, fabric / option images) live in
                 <code>/uploads</code> and aren't included. Keep a
@@ -643,14 +643,14 @@ $tenants = $pdo->query(
             <div class="section-header">
                 <h2 class="section-title">Per-tenant export</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.75rem">
                 Exports <strong>one tenant's data only</strong> — their users,
                 customers, quotes, calendar appointments, products, fabrics,
                 price tables, markups. Useful for handing a tenant their own
                 data takeout, migrating one tenant to a new instance, or
                 investigating one tenant's records in isolation.
             </p>
-            <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.75rem">
                 Loads cleanly into a <strong>fresh empty database</strong>.
                 Loading it into a DB that already has these tables would
                 wipe other tenants — strip the DROP/CREATE block first if
@@ -664,7 +664,7 @@ $tenants = $pdo->query(
                 <label for="tenant-select" class="visually-hidden">Tenant</label>
                 <select id="tenant-select" name="client_id" required
                         style="flex:1;min-width:240px;padding:0.5rem 0.625rem;
-                               border:1px solid #d1d5db;border-radius:8px;
+                               border:1px solid var(--border-strong);border-radius:8px;
                                font:inherit;background:#fff">
                     <option value="">— Choose a tenant —</option>
                     <?php foreach ($tenants as $t): ?>
@@ -689,7 +689,7 @@ $tenants = $pdo->query(
                     them from the file</strong>. Any data added since
                     the backup will be lost.
                 </p>
-                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                     For safety, an automatic snapshot is taken just
                     before the restore runs — listed under "Auto-snapshots"
                     below. If a restore goes wrong, download that
@@ -718,14 +718,14 @@ $tenants = $pdo->query(
             <div class="section-header">
                 <h2 class="section-title">Auto-snapshots</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.5rem">
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.5rem">
                 Snapshots taken automatically just before each restore.
                 Stored in <code>/_backups/</code> on the server (blocked
                 from direct download). Delete them once you're sure the
                 restore worked.
             </p>
             <?php if (!$snapshots): ?>
-                <p style="color:#9ca3af;font-style:italic">
+                <p style="color:var(--text-faint);font-style:italic">
                     No auto-snapshots yet. One will be created the
                     first time you run a restore.
                 </p>

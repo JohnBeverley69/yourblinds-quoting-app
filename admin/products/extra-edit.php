@@ -229,7 +229,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
         .toggle-stack {
             display: flex; flex-direction: column; gap: 0.625rem;
@@ -237,12 +237,12 @@ $activeNav = 'products';
         }
         .toggle-stack label {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
             margin: 0; padding: 0;
         }
         .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
         .toggle-stack small {
-            color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+            color: var(--text-faint); font-size: 0.8125rem; margin-left: 0.375rem;
         }
     </style>
 </head>
@@ -304,7 +304,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label>Appears when (optional)</label>
                         <?php if (!$availableChoices): ?>
-                            <p style="color:#6b7280;font-size:0.8125rem;margin:0">
+                            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0">
                                 No other choices on this product yet.
                             </p>
                         <?php else: ?>
@@ -318,7 +318,7 @@ $activeNav = 'products';
                                     </label>
                                 <?php endforeach; ?>
                             </div>
-                            <small style="color:#6b7280;font-size:0.8125rem">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Tick one or more choices and this option will show in the quote builder
                                 when <strong>any</strong> of them is selected. Leave all unticked to
                                 make it always visible.
@@ -345,7 +345,7 @@ $activeNav = 'products';
                     The underlying column is the same string — empty =
                     off, non-empty = on with that label.
                 -->
-                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
                         Capture a number from the salesperson
                     </legend>
@@ -356,7 +356,7 @@ $activeNav = 'products';
                                style="margin-top:0.25rem">
                         <span>
                             Also show a number input next to this option
-                            <small style="display:block;color:#6b7280;font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
+                            <small style="display:block;color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
                                 Useful for things like wand length, cable length, motor count &mdash;
                                 anything where the salesperson needs to type a value alongside
                                 picking from the choices. The typed value goes on the quote line
@@ -366,15 +366,15 @@ $activeNav = 'products';
                     </label>
 
                     <div id="length_label_wrap" style="<?= $hasLengthInput ? '' : 'display:none' ?>;margin-left:1.625rem">
-                        <label for="length_input_label" style="font-size:0.8125rem;font-weight:600;color:#374151">
+                        <label for="length_input_label" style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary)">
                             What to call this field
                         </label>
                         <input id="length_input_label" name="length_input_label" type="text"
                                maxlength="60"
                                value="<?= e((string) $f['length_input_label']) ?>"
                                placeholder="e.g. Wand length (mm)"
-                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
-                        <small style="color:#6b7280;font-size:0.8125rem;display:block;margin-top:0.25rem">
+                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.25rem">
                             The label shown above the number box in the quote builder.
                             Include the unit (e.g. <em>mm</em>) so the salesperson knows what to type.
                         </small>

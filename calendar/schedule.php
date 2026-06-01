@@ -139,7 +139,7 @@ $activeNav = 'my-schedule';
         .schedule-summary {
             display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
             margin: 0.25rem 0 1.25rem;
-            font-size: 0.9375rem; color: #4b5563;
+            font-size: 0.9375rem; color: var(--text-muted);
         }
         .schedule-summary strong { color: #1f3b5b; }
         .schedule-summary .pending-link {
@@ -156,18 +156,18 @@ $activeNav = 'my-schedule';
             margin: 0 0 0.5rem;
         }
         .sched-section h2 .sub {
-            font-weight: 500; color: #9ca3af; text-transform: none;
+            font-weight: 500; color: var(--text-faint); text-transform: none;
             letter-spacing: 0; margin-left: 0.375rem;
         }
         .sched-empty {
-            background: #f9fafb; color: #9ca3af;
-            border: 1px dashed #e5e7eb; border-radius: 10px;
+            background: var(--bg-subtle); color: var(--text-faint);
+            border: 1px dashed var(--border); border-radius: 10px;
             padding: 0.875rem 1rem; font-size: 0.9375rem; font-style: italic;
         }
 
         .sched-card {
             background: #fff;
-            border: 1px solid #e5e7eb; border-radius: 12px;
+            border: 1px solid var(--border); border-radius: 12px;
             padding: 0.875rem 1rem;
             display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem;
             margin: 0 0 0.625rem;
@@ -178,14 +178,14 @@ $activeNav = 'my-schedule';
             min-width: 4.5rem; text-align: right; padding-top: 0.0625rem;
             font-variant-numeric: tabular-nums;
         }
-        .sched-card .time small { display: block; font-weight: 400; color: #9ca3af; font-size: 0.75rem; }
+        .sched-card .time small { display: block; font-weight: 400; color: var(--text-faint); font-size: 0.75rem; }
         .sched-card .body { min-width: 0; }
         .sched-card .title {
-            font-weight: 600; color: #111827;
+            font-weight: 600; color: var(--text-primary);
             display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
             margin: 0;
         }
-        .sched-card .customer { color: #4b5563; font-weight: 500; }
+        .sched-card .customer { color: var(--text-muted); font-weight: 500; }
         .sched-card .address, .sched-card .phone {
             display: block; margin-top: 0.1875rem;
             font-size: 0.9375rem;
@@ -200,8 +200,8 @@ $activeNav = 'my-schedule';
         }
         .sched-card .actions a {
             font-size: 0.8125rem; padding: 0.25rem 0.625rem;
-            border: 1px solid #e5e7eb; border-radius: 999px;
-            text-decoration: none; color: #1f3b5b; background: #f9fafb;
+            border: 1px solid var(--border); border-radius: 999px;
+            text-decoration: none; color: #1f3b5b; background: var(--bg-subtle);
         }
         .sched-card .actions a:hover { background: #eef2f7; }
         .sched-card .status {
@@ -224,7 +224,7 @@ $activeNav = 'my-schedule';
 
         .day-anchor {
             font-size: 0.75rem; font-weight: 600;
-            color: #6b7280; text-transform: uppercase;
+            color: var(--text-faint); text-transform: uppercase;
             letter-spacing: 0.04em;
             margin: 0.5rem 0 0.25rem 0;
         }
@@ -273,7 +273,7 @@ $activeNav = 'my-schedule';
                             <small><?= (int) $r['duration_minutes'] ?>m</small>
                         <?php endif; ?>
                     <?php else: ?>
-                        <span style="color:#9ca3af;font-weight:500">TBC</span>
+                        <span style="color:var(--text-faint);font-weight:500">TBC</span>
                     <?php endif; ?>
                 </div>
                 <div class="body">

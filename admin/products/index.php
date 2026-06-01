@@ -62,7 +62,7 @@ $activeNav = 'products';
     <title>Products &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
-        .meta-cell { font-size: 0.8125rem; color: #6b7280; white-space: nowrap; }
+        .meta-cell { font-size: 0.8125rem; color: var(--text-faint); white-space: nowrap; }
         .row-actions { white-space: nowrap; }
         .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
         .row-actions form { display: inline; margin: 0; }
@@ -71,12 +71,12 @@ $activeNav = 'products';
             border: 0; cursor: pointer; padding: 0; margin-left: 0.5rem;
         }
         .row-actions button:hover { text-decoration: underline; }
-        .product-name { font-weight: 600; color: #111827; }
+        .product-name { font-weight: 600; color: var(--text-primary); }
         a.product-name:hover { color: #1f3b5b; text-decoration: underline; }
         .inactive-pill {
             display: inline-block; padding: 0.0625rem 0.5rem;
-            font-size: 0.6875rem; font-weight: 600; color: #6b7280;
-            background: #f3f4f6; border-radius: 999px; margin-left: 0.5rem;
+            font-size: 0.6875rem; font-weight: 600; color: var(--text-faint);
+            background: var(--bg-subtle-2); border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
     </style>
@@ -128,13 +128,13 @@ $activeNav = 'products';
                     glance + a single big CTA to start.
                 -->
                 <div style="text-align:center;padding:2rem 1rem;
-                            background:#f8fafc;border:1px solid #e5e7eb;
+                            background:#f8fafc;border:1px solid var(--border);
                             border-radius:12px">
                     <div style="font-size:2.5rem;margin-bottom:0.5rem">🪟</div>
                     <h2 style="margin:0 0 0.375rem;color:#1f3b5b;font-size:1.25rem">
                         Set up your first product
                     </h2>
-                    <p style="margin:0 0 1.25rem;color:#4b5563;font-size:0.9375rem;max-width:34rem;margin-left:auto;margin-right:auto;line-height:1.55">
+                    <p style="margin:0 0 1.25rem;color:var(--text-muted);font-size:0.9375rem;max-width:34rem;margin-left:auto;margin-right:auto;line-height:1.55">
                         Products are the types of blind you sell &mdash; e.g. Roller,
                         Vertical, Roman, Metal Venetian. Each product gets its own
                         fabrics, systems, options and price tables.
@@ -154,13 +154,13 @@ $activeNav = 'products';
                             Start the setup wizard
                         </a>
                         <a href="/admin/products/new.php"
-                           style="color:#6b7280;font-size:0.8125rem;text-decoration:underline">
+                           style="color:var(--text-faint);font-size:0.8125rem;text-decoration:underline">
                             Skip the wizard &mdash; just add a product
                         </a>
                     </div>
                 </div>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 0.5rem">
+                <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.5rem">
                     Drag the <strong>⋮⋮</strong> handle on the left of any row to reorder.
                     The <strong>Status</strong> column tells you if a product is ready to quote yet.
                     <span class="reorder-status" id="reorder-status">Saving…</span>
@@ -184,7 +184,7 @@ $activeNav = 'products';
                             <?php foreach ($products as $p):
                                 $ready = $isQuoteReady($p);
                                 if ((int) $p['active'] !== 1) {
-                                    $statusBg    = '#e5e7eb'; $statusFg = '#374151';
+                                    $statusBg    = 'var(--border)'; $statusFg = 'var(--text-secondary)';
                                     $statusLabel = 'Inactive';
                                 } elseif ($ready) {
                                     $statusBg    = '#d1fae5'; $statusFg = '#065f46';

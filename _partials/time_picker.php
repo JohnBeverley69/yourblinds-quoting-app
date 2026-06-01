@@ -46,7 +46,7 @@ if ($tpFirst) define('TP_PARTIAL_INCLUDED', true);
         position: absolute; top: 100%; left: 0; right: 0;
         margin-top: 4px;
         background: #fff;
-        border: 1px solid #d1d5db; border-radius: 8px;
+        border: 1px solid var(--border-strong); border-radius: 8px;
         box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         z-index: 30;
         max-height: 240px; overflow-y: auto;
@@ -55,13 +55,13 @@ if ($tpFirst) define('TP_PARTIAL_INCLUDED', true);
     .tp-wrap.is-open .tp-options { display: block; }
     .tp-opt {
         padding: 0.4375rem 0.75rem; cursor: pointer;
-        font-size: 0.9375rem; color: #111827;
+        font-size: 0.9375rem; color: var(--text-primary);
         font-variant-numeric: tabular-nums;
     }
     .tp-opt:hover, .tp-opt.is-active { background: #eff6ff; }
     .tp-opt.is-hidden { display: none; }
     .tp-empty {
-        padding: 0.5rem 0.75rem; color: #6b7280;
+        padding: 0.5rem 0.75rem; color: var(--text-faint);
         font-size: 0.8125rem; font-style: italic;
     }
 </style>

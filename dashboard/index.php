@@ -875,7 +875,7 @@ $activeNav = 'dashboard';
                         <?php if ($canViewAllJobs && !empty($j['fitter_name'])): ?>
                             <?= e((string) $j['fitter_name']) ?>
                         <?php elseif ($canViewAllJobs): ?>
-                            <em style="color:#9ca3af">Unassigned</em>
+                            <em style="color:var(--text-faint)">Unassigned</em>
                         <?php else: ?>
                             &nbsp;
                         <?php endif; ?>

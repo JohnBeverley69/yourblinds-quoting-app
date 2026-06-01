@@ -111,7 +111,7 @@ $activeNav = 'calendar';
     <link rel="stylesheet" href="/app.css">
     <style>
         .sync-card {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 12px; padding: 1.125rem 1.25rem;
             margin-bottom: 1rem;
         }
@@ -120,13 +120,13 @@ $activeNav = 'calendar';
         }
         .url-box {
             display: flex; gap: 0.5rem; align-items: stretch;
-            background: #f9fafb; border: 1px solid #e5e7eb;
+            background: var(--bg-subtle); border: 1px solid var(--border);
             border-radius: 8px; padding: 0.375rem;
             margin: 0.625rem 0;
         }
         .url-box input {
             flex: 1; padding: 0.4375rem 0.5625rem;
-            border: 1px solid #d1d5db; border-radius: 6px;
+            border: 1px solid var(--border-strong); border-radius: 6px;
             font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace;
             background: #fff; min-width: 0;
         }
@@ -136,18 +136,18 @@ $activeNav = 'calendar';
             border-radius: 6px; cursor: pointer; font-size: 0.875rem;
         }
         .url-box button.copied { background: #065f46; }
-        .meta-row { font-size: 0.8125rem; color: #6b7280; margin-top: 0.375rem; }
+        .meta-row { font-size: 0.8125rem; color: var(--text-faint); margin-top: 0.375rem; }
         .step-list {
             margin: 0.5rem 0 0; padding-left: 1.25rem;
-            line-height: 1.6; color: #374151;
+            line-height: 1.6; color: var(--text-secondary);
         }
         .step-list li { margin-bottom: 0.375rem; }
         .step-list code {
-            background: #f3f4f6; padding: 0.0625rem 0.375rem;
+            background: var(--bg-subtle-2); padding: 0.0625rem 0.375rem;
             border-radius: 4px; font-size: 0.8125rem;
         }
         details.app-instructions {
-            border-top: 1px solid #f3f4f6; padding-top: 0.625rem;
+            border-top: 1px solid var(--bg-subtle-2); padding-top: 0.625rem;
             margin-top: 0.625rem;
         }
         details.app-instructions summary {
@@ -195,7 +195,7 @@ $activeNav = 'calendar';
 
             <div class="sync-card">
                 <h2>How it works</h2>
-                <p style="margin:0;color:#4b5563;font-size:0.9375rem;line-height:1.55">
+                <p style="margin:0;color:var(--text-muted);font-size:0.9375rem;line-height:1.55">
                     Generate your personal subscription link below, then paste
                     it into Google Calendar, Apple Calendar, Outlook, or any
                     other calendar app. Your YourBlinds appointments will show
@@ -211,7 +211,7 @@ $activeNav = 'calendar';
                 <h2>Your subscription URL</h2>
 
                 <?php if ($tokenRow): ?>
-                    <p style="margin:0;color:#4b5563;font-size:0.875rem">
+                    <p style="margin:0;color:var(--text-muted);font-size:0.875rem">
                         Copy this URL and paste it into your calendar app
                         as a "subscribed" / "from URL" calendar.
                         <strong>Keep it private</strong> — anyone with the
@@ -249,7 +249,7 @@ $activeNav = 'calendar';
                         </form>
                     </div>
                 <?php else: ?>
-                    <p style="margin:0 0 0.875rem;color:#4b5563;font-size:0.9375rem">
+                    <p style="margin:0 0 0.875rem;color:var(--text-muted);font-size:0.9375rem">
                         You don't have a subscription URL yet. Generate one to
                         get started.
                     </p>
@@ -286,7 +286,7 @@ $activeNav = 'calendar';
                             <li>Paste the URL above and click <strong>Add calendar</strong>.</li>
                             <li>The calendar appears in your sidebar. Open the Google Calendar app on your phone — it'll show up there too within a few minutes.</li>
                         </ol>
-                        <p style="margin:0.5rem 0 0;color:#6b7280;font-size:0.8125rem">
+                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem">
                             Google polls subscribed URLs every few hours. Don't expect instant updates — usually within 12 hours of a change in YourBlinds.
                         </p>
                     </details>

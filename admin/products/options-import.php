@@ -227,23 +227,23 @@ $activeNav = 'products';
     <link rel="stylesheet" href="/app.css">
     <style>
         .tip-box {
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 0.75rem 1rem;
             font-size: 0.9375rem;
-            color: #4b5563;
+            color: var(--text-muted);
             margin-bottom: 1rem;
         }
         .tip-box code {
             background: #fff;
             padding: 0.0625rem 0.375rem;
             border-radius: 4px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
             font-size: 0.8125rem;
         }
         .summary-list { margin: 0; padding-left: 1.25rem; }
-        .summary-list li { font-size: 0.9375rem; color: #4b5563; }
+        .summary-list li { font-size: 0.9375rem; color: var(--text-muted); }
     </style>
 </head>
 <body>

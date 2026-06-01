@@ -139,18 +139,18 @@ $activeNav = 'push-updates';
         table.audit { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         table.audit th, table.audit td {
             padding: 0.4375rem 0.625rem; text-align: left;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid var(--bg-subtle-2);
         }
         table.audit th {
-            background: #f9fafb; font-size: 0.6875rem;
+            background: var(--bg-subtle); font-size: 0.6875rem;
             text-transform: uppercase; letter-spacing: 0.05em;
-            color: #6b7280; font-weight: 600;
+            color: var(--text-faint); font-weight: 600;
         }
         table.audit td.master { color: #065f46; font-weight: 600; }
         table.audit td.client { color: #991b1b; font-weight: 600; }
-        table.audit td.null   { color: #9ca3af; font-style: italic; }
+        table.audit td.null   { color: var(--text-faint); font-style: italic; }
         .tenant-card {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 10px; padding: 0.875rem 1.125rem;
             margin-bottom: 0.875rem;
         }
@@ -213,7 +213,7 @@ $activeNav = 'push-updates';
         </section>
 
         <section class="section">
-            <p style="font-size:1rem;color:#374151">
+            <p style="font-size:1rem;color:var(--text-secondary)">
                 <strong>Total mismatches across <?= count($tenantResults) ?> active tenant<?= count($tenantResults) === 1 ? '' : 's' ?>:</strong>
                 <span class="summary-pill <?= $totalMismatches === 0 ? 'zero' : '' ?>">
                     <?= (int) $totalMismatches ?>

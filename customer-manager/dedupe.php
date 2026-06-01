@@ -169,7 +169,7 @@ $activeNav = 'customers';
     <link rel="stylesheet" href="/app.css">
     <style>
         .group-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; border: 1px solid var(--border); border-radius: 10px;
             padding: 0.875rem 1rem; margin-bottom: 0.875rem;
         }
         .group-card h3 {
@@ -180,11 +180,11 @@ $activeNav = 'customers';
         }
         .group-card th, .group-card td {
             text-align: left; padding: 0.375rem 0.5rem;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid var(--bg-subtle-2);
         }
         .group-card th {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280;
+            letter-spacing: 0.05em; color: var(--text-faint);
         }
         .group-card tr.is-keeper td { background: #ecfdf5; }
         .group-card .keeper-pill {
@@ -249,7 +249,7 @@ $activeNav = 'customers';
                 </div>
             </section>
         <?php else: ?>
-            <p style="color:#374151;font-size:0.9375rem;margin:0 0 0.75rem">
+            <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.75rem">
                 Found <strong><?= count($groups) ?></strong> duplicate name group<?= count($groups) === 1 ? '' : 's' ?>
                 with <strong><?= (int) $totalDupes ?></strong> redundant row<?= $totalDupes === 1 ? '' : 's' ?> in total.
             </p>
@@ -257,7 +257,7 @@ $activeNav = 'customers';
             <?php foreach ($groups as $g): ?>
                 <div class="group-card">
                     <h3><?= e((string) $g['name']) ?>
-                        <span style="color:#6b7280;font-weight:400;font-size:0.875rem">
+                        <span style="color:var(--text-faint);font-weight:400;font-size:0.875rem">
                             (<?= count($g['rows']) ?> rows)
                         </span>
                     </h3>
@@ -291,7 +291,7 @@ $activeNav = 'customers';
                                     <td><?= e((string) ($r['postcode'] ?? '')) ?></td>
                                     <td><?= (int) $r['quote_count'] ?></td>
                                     <td><?= (int) $r['appt_count'] ?></td>
-                                    <td style="color:#6b7280;font-size:0.8125rem">
+                                    <td style="color:var(--text-faint);font-size:0.8125rem">
                                         <?= e((string) ($r['created_at'] ?? '')) ?>
                                     </td>
                                 </tr>

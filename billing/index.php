@@ -112,7 +112,7 @@ $activeNav = 'billing';
     <link rel="stylesheet" href="/app.css">
     <style>
         .bill-summary {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            background: #fff; border: 1px solid var(--border); border-radius: 12px;
             padding: 1rem 1.25rem; margin-bottom: 1.25rem;
             display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem;
             align-items: center;
@@ -121,7 +121,7 @@ $activeNav = 'billing';
             font-size: 1.125rem; font-weight: 700; color: #1f3b5b;
         }
         .bill-summary .bs-total {
-            font-size: 1rem; color: #374151;
+            font-size: 1rem; color: var(--text-secondary);
         }
         .bill-summary .bs-total strong { color: #065f46; }
         .bill-summary .bs-trial {
@@ -140,7 +140,7 @@ $activeNav = 'billing';
         .b-status.b-active    { background: #d1fae5; color: #065f46; }
         .b-status.b-past_due  { background: #fed7aa; color: #9a3412; }
         .b-status.b-cancelled { background: #fee2e2; color: #991b1b; }
-        .b-status.b-expired   { background: #e5e7eb; color: #374151; }
+        .b-status.b-expired   { background: var(--border); color: var(--text-secondary); }
         .b-status.b-comp      { background: #ddd6fe; color: #5b21b6; }
 
         .plan-grid {
@@ -148,7 +148,7 @@ $activeNav = 'billing';
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
         .plan-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            background: #fff; border: 1px solid var(--border); border-radius: 12px;
             padding: 1.125rem 1.25rem;
             display: flex; flex-direction: column; gap: 0.5rem;
         }
@@ -173,15 +173,15 @@ $activeNav = 'billing';
             flex: 1 1 auto;
         }
         .plan-card .p-price {
-            font-size: 1.375rem; font-weight: 800; color: #111827;
+            font-size: 1.375rem; font-weight: 800; color: var(--text-primary);
         }
-        .plan-card .p-price small { font-size: 0.8125rem; color: #6b7280; font-weight: 500; }
+        .plan-card .p-price small { font-size: 0.8125rem; color: var(--text-faint); font-weight: 500; }
         .plan-card .p-desc {
-            color: #4b5563; font-size: 0.9375rem; line-height: 1.45;
+            color: var(--text-muted); font-size: 0.9375rem; line-height: 1.45;
             flex: 1 1 auto;
         }
         .plan-card .p-meta {
-            color: #6b7280; font-size: 0.8125rem;
+            color: var(--text-faint); font-size: 0.8125rem;
         }
         .plan-card .p-action { margin-top: 0.375rem; }
         .plan-card .p-action .btn-pp {
@@ -249,7 +249,7 @@ $activeNav = 'billing';
                         — <?= $daysToSoonest > 0 ? $daysToSoonest . ' day' . ($daysToSoonest === 1 ? '' : 's') . ' until next expires' : 'expiring today' ?>
                     </span>
                 <?php endif; ?>
-                <span style="color:#6b7280;font-size:0.875rem;flex:1 1 100%">
+                <span style="color:var(--text-faint);font-size:0.875rem;flex:1 1 100%">
                     Billed monthly in GBP through PayPal. Cancellations turn off
                     paid features immediately — no future charges.
                 </span>
@@ -347,7 +347,7 @@ $activeNav = 'billing';
 
                             <?php elseif ($cta === 'trial'): ?>
                                 <?php if (!$paypalReady || ($p['paypal_plan_id'] ?? '') === ''): ?>
-                                    <span style="color:#9ca3af;font-size:0.875rem">
+                                    <span style="color:var(--text-faint);font-size:0.875rem">
                                         Subscribe option coming soon — your trial is live, enjoy!
                                     </span>
                                 <?php else: ?>
@@ -358,7 +358,7 @@ $activeNav = 'billing';
                                             <?= $trialUrgent ? 'Subscribe to keep this' : 'Subscribe via PayPal' ?>
                                         </button>
                                     </form>
-                                    <div style="margin-top:0.375rem;color:#6b7280;font-size:0.75rem">
+                                    <div style="margin-top:0.375rem;color:var(--text-faint);font-size:0.75rem">
                                         Trial keeps running until you subscribe — no overlap, no double-charging.
                                     </div>
                                 <?php endif; ?>
@@ -370,12 +370,12 @@ $activeNav = 'billing';
                                 </span>
 
                             <?php elseif (!$paypalReady): ?>
-                                <span style="color:#9ca3af;font-size:0.875rem">
+                                <span style="color:var(--text-faint);font-size:0.875rem">
                                     Online subscription not yet configured — contact your account manager.
                                 </span>
 
                             <?php elseif (($p['paypal_plan_id'] ?? '') === ''): ?>
-                                <span style="color:#9ca3af;font-size:0.875rem">
+                                <span style="color:var(--text-faint);font-size:0.875rem">
                                     Not yet available — contact your account manager.
                                 </span>
 

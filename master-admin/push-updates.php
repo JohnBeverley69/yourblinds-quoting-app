@@ -275,14 +275,14 @@ $activeNav = 'push-updates';
             grid-template-columns: 1fr;
         }
         .src-row {
-            background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+            background:#fff; border:1px solid var(--border); border-radius:10px;
             padding:0.625rem 0.875rem;
             display:flex; align-items:center; gap:0.875rem; flex-wrap:wrap;
         }
-        .src-row .src-name { font-weight:600; color:#111827; flex:0 0 auto; min-width:14rem; }
-        .src-row .src-bits { color:#6b7280; font-size:0.875rem; }
+        .src-row .src-name { font-weight:600; color:var(--text-primary); flex:0 0 auto; min-width:14rem; }
+        .src-row .src-bits { color:var(--text-faint); font-size:0.875rem; }
         .tenant-row {
-            background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+            background:#fff; border:1px solid var(--border); border-radius:10px;
             padding:0.5rem 0.875rem; margin-bottom:0.375rem;
             display:flex; align-items:center; gap:0.625rem;
         }
@@ -292,18 +292,18 @@ $activeNav = 'push-updates';
         }
         .tenant-row input[type="checkbox"] { width:18px; height:18px; }
         .tenant-row .inactive {
-            font-size:0.6875rem; color:#6b7280; background:#f3f4f6;
+            font-size:0.6875rem; color:var(--text-faint); background:var(--bg-subtle-2);
             padding:0.0625rem 0.4375rem; border-radius:999px;
             text-transform:uppercase; letter-spacing:0.05em;
         }
         .summary-block {
-            background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+            background:#fff; border:1px solid var(--border); border-radius:10px;
             padding:0.75rem 1rem; margin-bottom:0.625rem;
         }
         .summary-block .sb-name { font-weight:700; color:#1f3b5b; font-size:1.0625rem; }
         .summary-block .sb-stats {
             display:flex; flex-wrap:wrap; gap:0.5rem 1rem;
-            margin-top:0.5rem; font-size:0.875rem; color:#374151;
+            margin-top:0.5rem; font-size:0.875rem; color:var(--text-secondary);
         }
         .summary-block .sb-stats span strong { color:#065f46; }
         .summary-block.failed { border-color:#fecaca; background:#fef2f2; }
@@ -408,12 +408,12 @@ $activeNav = 'push-updates';
                 </h2>
             </div>
             <?php if (!$srcProducts): ?>
-                <p style="color:#9ca3af;font-style:italic">
+                <p style="color:var(--text-faint);font-style:italic">
                     None yet. Create a product with a name starting with <code><?= e($prefix) ?></code>
                     in your own catalogue, then come back here to push it to your tenants.
                 </p>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.625rem">
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.625rem">
                     These are what will be pushed. Tenants either get them added or get matched
                     items updated.
                 </p>
@@ -428,7 +428,7 @@ $activeNav = 'push-updates';
                                 <?= (int) $p['pt_count']  ?> price table<?= (int) $p['pt_count']  === 1 ? '' : 's' ?>
                             </span>
                             <?php if ((int) $p['active'] !== 1): ?>
-                                <span style="font-size:0.6875rem;color:#6b7280;background:#f3f4f6;padding:0.0625rem 0.4375rem;border-radius:999px;text-transform:uppercase;letter-spacing:0.05em">Inactive</span>
+                                <span style="font-size:0.6875rem;color:var(--text-faint);background:var(--bg-subtle-2);padding:0.0625rem 0.4375rem;border-radius:999px;text-transform:uppercase;letter-spacing:0.05em">Inactive</span>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
@@ -451,7 +451,7 @@ $activeNav = 'push-updates';
                 <form method="post" action="/master-admin/push-updates.php"
                       id="push-form">
                     <?= csrf_field() ?>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.625rem">
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.625rem">
                         Tick the tenants who should receive these products.
                     </p>
                     <div style="margin-bottom:0.625rem">
@@ -486,14 +486,14 @@ $activeNav = 'push-updates';
                     its fetch() resolves.
                 -->
                 <div id="push-progress" style="display:none;margin-top:1rem">
-                    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:0.875rem 1.125rem">
+                    <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:0.875rem 1.125rem">
                         <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.625rem">
                             <strong style="color:#1f3b5b;font-size:1rem">
                                 Pushing… <span id="pp-current">0</span> of <span id="pp-total">0</span>
                             </strong>
-                            <span id="pp-current-name" style="color:#6b7280;font-size:0.875rem;flex:1"></span>
+                            <span id="pp-current-name" style="color:var(--text-faint);font-size:0.875rem;flex:1"></span>
                         </div>
-                        <div style="background:#f3f4f6;border-radius:999px;height:0.5rem;overflow:hidden">
+                        <div style="background:var(--bg-subtle-2);border-radius:999px;height:0.5rem;overflow:hidden">
                             <div id="pp-bar" style="background:#1f3b5b;height:100%;width:0%;transition:width 200ms"></div>
                         </div>
                         <div id="pp-results" style="margin-top:0.875rem"></div>
@@ -548,7 +548,7 @@ $activeNav = 'push-updates';
                         // same visual style as the post-redirect summary.
                         var failed = !r.ok;
                         var bg = failed ? '#fef2f2' : '#fff';
-                        var border = failed ? '#fecaca' : '#e5e7eb';
+                        var border = failed ? '#fecaca' : 'var(--border)';
                         var nameClr = failed ? '#991b1b' : '#1f3b5b';
 
                         var stats = '';
@@ -568,7 +568,7 @@ $activeNav = 'push-updates';
                                 [s.price_table_cells,  'price cells synced'],
                                 [s.width_table_cells,  'width-table cells synced']
                             ];
-                            stats = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.5rem;font-size:0.875rem;color:#374151">';
+                            stats = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.5rem;font-size:0.875rem;color:var(--text-secondary)">';
                             bits.forEach(function (b) {
                                 stats += '<span><strong style="color:#065f46">' + (b[0] | 0) + '</strong> ' + b[1] + '</span>';
                             });

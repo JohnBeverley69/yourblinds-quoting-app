@@ -285,16 +285,16 @@ $activeNav = 'wizard';
             content: ''; position: absolute;
             top: 1.5rem; right: -50%;
             width: 100%; height: 2px;
-            background: #e5e7eb; z-index: 0;
+            background: var(--border); z-index: 0;
         }
         .wiz-stepper li:last-child::after { display: none; }
         .wiz-stepper li.done::after    { background: #10b981; }
-        .wiz-stepper li.current::after { background: #e5e7eb; }
+        .wiz-stepper li.current::after { background: var(--border); }
         .wiz-stepper .num {
             position: relative; z-index: 1;
             display: inline-flex; align-items: center; justify-content: center;
             width: 2rem; height: 2rem; border-radius: 999px;
-            background: #e5e7eb; color: #6b7280;
+            background: var(--border); color: var(--text-faint);
             font-weight: 700; font-size: 0.875rem;
         }
         .wiz-stepper li.done    .num { background: #10b981; color: #fff; }
@@ -302,7 +302,7 @@ $activeNav = 'wizard';
                                        box-shadow: 0 0 0 4px #dbeafe; }
         .wiz-stepper .lbl {
             display: block; margin-top: 0.375rem;
-            font-size: 0.75rem; color: #6b7280;
+            font-size: 0.75rem; color: var(--text-faint);
             text-transform: uppercase; letter-spacing: 0.04em;
             font-weight: 600;
         }
@@ -311,14 +311,14 @@ $activeNav = 'wizard';
         .wiz-stepper a { color: inherit; text-decoration: none; }
 
         .wiz-card {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 12px; padding: 1.5rem 1.625rem;
         }
         .wiz-card h2 {
             margin: 0 0 0.25rem; font-size: 1.25rem; color: #1f3b5b;
         }
         .wiz-card .lede {
-            color: #4b5563; font-size: 0.9375rem;
+            color: var(--text-muted); font-size: 0.9375rem;
             margin: 0 0 1.25rem; line-height: 1.55;
         }
         .wiz-card .helper {
@@ -328,7 +328,7 @@ $activeNav = 'wizard';
             margin-bottom: 1rem; line-height: 1.5;
         }
         .wiz-list {
-            background: #f9fafb; border: 1px solid #e5e7eb;
+            background: var(--bg-subtle); border: 1px solid var(--border);
             border-radius: 8px; padding: 0.5rem 0.75rem;
             margin-bottom: 0.875rem;
         }
@@ -336,14 +336,14 @@ $activeNav = 'wizard';
             padding: 0.3125rem 0;
             display: flex; align-items: center; gap: 0.5rem;
             font-size: 0.875rem;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid var(--bg-subtle-2);
         }
         .wiz-list-item:last-child { border-bottom: 0; }
         .wiz-list-item .check {
             color: #10b981; font-weight: 700; font-size: 1rem;
         }
         .wiz-list-empty {
-            color: #9ca3af; font-style: italic; font-size: 0.875rem;
+            color: var(--text-faint); font-style: italic; font-size: 0.875rem;
             padding: 0.5rem 0;
         }
         .wiz-form .row {
@@ -353,21 +353,21 @@ $activeNav = 'wizard';
         .wiz-form .row.cols-2 { grid-template-columns: 8rem 1fr auto; }
         .wiz-form label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .wiz-form input {
-            padding: 0.5rem 0.625rem; border: 1px solid #d1d5db;
+            padding: 0.5rem 0.625rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit;
         }
         .wiz-actions {
             display: flex; gap: 0.5rem; align-items: center;
             justify-content: space-between;
             margin-top: 1rem; padding-top: 1rem;
-            border-top: 1px solid #f3f4f6;
+            border-top: 1px solid var(--bg-subtle-2);
         }
         .wiz-actions .left { display: flex; gap: 0.5rem; align-items: center; }
         .wiz-skip {
-            color: #6b7280; font-size: 0.8125rem; text-decoration: underline;
+            color: var(--text-faint); font-size: 0.8125rem; text-decoration: underline;
         }
         .wiz-done-tile {
             background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
@@ -548,7 +548,7 @@ $activeNav = 'wizard';
                         <input type="hidden" name="_step" value="2">
                         <input type="hidden" name="_action" value="continue">
                         <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=1"
-                           class="wiz-skip" style="text-decoration:none;color:#6b7280">
+                           class="wiz-skip" style="text-decoration:none;color:var(--text-faint)">
                             &larr; Back
                         </a>
                         <button type="submit" class="btn btn-primary"
@@ -580,7 +580,7 @@ $activeNav = 'wizard';
                                 <div class="wiz-list-item">
                                     <span class="check">&check;</span>
                                     <strong><?= e((string) $f['name']) ?></strong>
-                                    <span style="color:#6b7280;font-size:0.8125rem">
+                                    <span style="color:var(--text-faint);font-size:0.8125rem">
                                         — Band <?= e((string) $f['band_code']) ?>
                                         <?php if (!empty($f['colour'])): ?>
                                             &middot; <?= e((string) $f['colour']) ?>
@@ -634,7 +634,7 @@ $activeNav = 'wizard';
                         <input type="hidden" name="_step" value="3">
                         <input type="hidden" name="_action" value="continue">
                         <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=2"
-                           class="wiz-skip" style="text-decoration:none;color:#6b7280">
+                           class="wiz-skip" style="text-decoration:none;color:var(--text-faint)">
                             &larr; Back
                         </a>
                         <button type="submit" class="btn btn-primary"
@@ -677,7 +677,7 @@ $activeNav = 'wizard';
 
                     <div class="wiz-actions" style="border-top:0;margin-top:1.25rem;padding-top:0">
                         <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=3"
-                           class="wiz-skip" style="text-decoration:none;color:#6b7280">
+                           class="wiz-skip" style="text-decoration:none;color:var(--text-faint)">
                             &larr; Back
                         </a>
                         <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"

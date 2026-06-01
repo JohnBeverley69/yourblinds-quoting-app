@@ -172,7 +172,7 @@ $activeNav = 'order-history';
             font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
             border-radius: 999px;
         }
-        .status-draft     { background: #e5e7eb; color: #374151; }
+        .status-draft     { background: var(--border); color: var(--text-secondary); }
         .status-sent      { background: #dbeafe; color: #1e40af; }
         .status-accepted  { background: #d1fae5; color: #065f46; }
         .status-declined  { background: #fee2e2; color: #991b1b; }
@@ -290,7 +290,7 @@ $activeNav = 'order-history';
                                 disabled>
                             Delete selected
                         </button>
-                        <span id="bulk-count" style="color:#6b7280;font-size:0.8125rem">
+                        <span id="bulk-count" style="color:var(--text-faint);font-size:0.8125rem">
                             (none selected)
                         </span>
                     </div>
@@ -347,13 +347,13 @@ $activeNav = 'order-history';
                                                 <?= e((string) $r['status']) ?>
                                             </span>
                                         </td>
-                                        <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                                        <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">
                                             <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
                                         </td>
                                         <td class="num"><?= e($money($r['total'])) ?></td>
                                         <td>
                                             <?php if (!$isOrderRow || $dep === null): ?>
-                                                <span style="color:#9ca3af;font-size:0.8125rem">—</span>
+                                                <span style="color:var(--text-faint);font-size:0.8125rem">—</span>
                                             <?php elseif ($depAt): ?>
                                                 <span style="color:#065f46;font-weight:600;font-size:0.8125rem">
                                                     &check; <?= e($money($dep)) ?> paid
@@ -367,7 +367,7 @@ $activeNav = 'order-history';
                                         <?php if ($accountsEnabled): ?>
                                             <td class="num">
                                                 <?php if (!$isOrderRow): ?>
-                                                    <span style="color:#9ca3af;font-size:0.8125rem">—</span>
+                                                    <span style="color:var(--text-faint);font-size:0.8125rem">—</span>
                                                 <?php elseif ($outstanding > 0.0049): ?>
                                                     <a href="/accounts/index.php?prefill_quote=<?= (int) $r['id'] ?>"
                                                        title="Click to take a payment against this order"

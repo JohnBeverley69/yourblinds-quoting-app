@@ -121,16 +121,16 @@ $activeNav = 'products';
     <link rel="stylesheet" href="/app.css">
     <style>
         .tip-box {
-            background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
-            padding: 0.75rem 1rem; font-size: 0.9375rem; color: #4b5563;
+            background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px;
+            padding: 0.75rem 1rem; font-size: 0.9375rem; color: var(--text-muted);
             margin-bottom: 1rem;
         }
         .tip-box code {
             background: #fff; padding: 0.0625rem 0.375rem; border-radius: 4px;
-            border: 1px solid #e5e7eb; font-size: 0.8125rem;
+            border: 1px solid var(--border); font-size: 0.8125rem;
         }
         .summary-list { margin: 0; padding-left: 1.25rem; }
-        .summary-list li { font-size: 0.9375rem; color: #4b5563; }
+        .summary-list li { font-size: 0.9375rem; color: var(--text-muted); }
         .band-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-weight: 700;
             font-size: 0.75rem; color: #fff; background: #1f3b5b; border-radius: 6px;

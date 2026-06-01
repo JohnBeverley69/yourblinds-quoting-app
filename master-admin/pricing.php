@@ -329,13 +329,13 @@ $activeNav = 'pricing';
     <link rel="stylesheet" href="/app.css">
     <style>
         .price-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+            background: #fff; border: 1px solid var(--border); border-radius: 12px;
             padding: 1.125rem 1.25rem; margin-bottom: 1rem;
         }
         .price-card h3 {
             margin: 0 0 0.25rem; color: #1f3b5b; font-size: 1.125rem;
         }
-        .price-card .pc-desc { color: #4b5563; font-size: 0.875rem; margin: 0 0 0.875rem; }
+        .price-card .pc-desc { color: var(--text-muted); font-size: 0.875rem; margin: 0 0 0.875rem; }
         .price-card form {
             display: grid;
             grid-template-columns: 8rem 1fr 2fr auto;
@@ -344,20 +344,20 @@ $activeNav = 'pricing';
         .price-card .pc-field { display: flex; flex-direction: column; gap: 0.1875rem; }
         .price-card .pc-field label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .price-card .pc-field input {
-            padding: 0.4375rem 0.5625rem; border: 1px solid #d1d5db;
+            padding: 0.4375rem 0.5625rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; background: #fff;
         }
         .price-card .pc-field code {
             display: block; padding: 0.4375rem 0.5625rem;
-            background: #f3f4f6; border-radius: 6px;
-            font-size: 0.8125rem; color: #374151;
-            border: 1px solid #e5e7eb;
+            background: var(--bg-subtle-2); border-radius: 6px;
+            font-size: 0.8125rem; color: var(--text-secondary);
+            border: 1px solid var(--border);
         }
         .price-card .pc-meta {
-            color: #6b7280; font-size: 0.75rem; margin-top: 0.625rem;
+            color: var(--text-faint); font-size: 0.75rem; margin-top: 0.625rem;
         }
         .price-card .pc-create {
             margin-top: 0.5rem; padding: 0.625rem 0.875rem;
@@ -376,11 +376,11 @@ $activeNav = 'pricing';
             .price-card form > .pc-submit { grid-column: 1 / -1; justify-self: end; }
         }
         .comp-row {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+            background: #fff; border: 1px solid var(--border); border-radius: 8px;
             padding: 0.5rem 0.875rem; margin-bottom: 0.375rem;
             display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
         }
-        .comp-row .c-name { font-weight: 600; color: #111827; }
+        .comp-row .c-name { font-weight: 600; color: var(--text-primary); }
         .comp-row .c-plan {
             background: #d1fae5; color: #065f46; padding: 0.125rem 0.5rem;
             border-radius: 999px; font-size: 0.75rem; font-weight: 700;
@@ -389,7 +389,7 @@ $activeNav = 'pricing';
         .comp-row .c-plan-trial {
             background: #fef3c7; color: #78350f;
         }
-        .comp-row .c-notes { color: #6b7280; font-size: 0.8125rem; flex: 1 1 12rem; }
+        .comp-row .c-notes { color: var(--text-faint); font-size: 0.8125rem; flex: 1 1 12rem; }
         .comp-row form { margin: 0; }
         .comp-row button {
             background: transparent; color: #b91c1c; border: 0; cursor: pointer;
@@ -397,7 +397,7 @@ $activeNav = 'pricing';
         }
         .comp-row button:hover { text-decoration: underline; }
         .add-comp {
-            background: #f9fafb; border: 1px dashed #d1d5db;
+            background: var(--bg-subtle); border: 1px dashed var(--border-strong);
             border-radius: 8px; padding: 0.875rem 1rem; margin-top: 0.75rem;
         }
         .add-comp form {
@@ -408,10 +408,10 @@ $activeNav = 'pricing';
         .add-comp .pc-field { display: flex; flex-direction: column; gap: 0.1875rem; }
         .add-comp label {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .add-comp select, .add-comp input {
-            padding: 0.4375rem 0.5625rem; border: 1px solid #d1d5db;
+            padding: 0.4375rem 0.5625rem; border: 1px solid var(--border-strong);
             border-radius: 6px; font: inherit; background: #fff;
         }
         @media (max-width: 800px) {
@@ -446,7 +446,7 @@ $activeNav = 'pricing';
             <div class="section-header">
                 <h2 class="section-title">Default plan prices</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
                 Edit the monthly fee for each plan. When you change a price on a
                 plan that's wired to PayPal, existing subscribers automatically
                 get the new rate from their <strong>next billing cycle</strong> —
@@ -537,7 +537,7 @@ $activeNav = 'pricing';
             <div class="section-header">
                 <h2 class="section-title">Comps &amp; trials</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
                 Give a specific tenant free access to a paid plan — no PayPal
                 billing, just the plan's feature flags turned on. Two flavours:
                 <strong>trials</strong> have an expiry date (tenant sees a
@@ -580,7 +580,7 @@ $activeNav = 'pricing';
                         <?php endif; ?>
 
                         <span class="c-notes">
-                            <?= $c['notes'] ? e((string) $c['notes']) : '<span style="color:#9ca3af">no notes</span>' ?>
+                            <?= $c['notes'] ? e((string) $c['notes']) : '<span style="color:var(--text-faint)">no notes</span>' ?>
                         </span>
 
                         <?php if ($type === 'trial' && $hasTrialsCol): ?>
@@ -594,7 +594,7 @@ $activeNav = 'pricing';
                                 <input type="hidden" name="notes" value="<?= e((string) ($c['notes'] ?? '')) ?>">
                                 <input type="date" name="expires_at"
                                        value="<?= e($expires ?: $defaultTrialExpiry) ?>"
-                                       style="padding:0.25rem 0.375rem;border:1px solid #d1d5db;
+                                       style="padding:0.25rem 0.375rem;border:1px solid var(--border-strong);
                                               border-radius:4px;font-size:0.8125rem">
                                 <button type="submit" style="color:#1f3b5b">Save</button>
                             </form>
@@ -620,7 +620,7 @@ $activeNav = 'pricing';
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <p style="color:#9ca3af;font-style:italic;margin:0 0 0.875rem">
+                <p style="color:var(--text-faint);font-style:italic;margin:0 0 0.875rem">
                     No overrides in place yet. Add one below.
                 </p>
             <?php endif; ?>

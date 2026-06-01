@@ -274,7 +274,7 @@ $activeNav = 'products';
                                         <?= (int) $t['row_count'] ?>
                                     </td>
                                     <?php require_once __DIR__ . '/../../_partials/time_ago.php'; ?>
-                                    <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap"
+                                    <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap"
                                         title="<?= e((string) $t['updated_at']) ?>">
                                         <?= e(time_ago((string) $t['updated_at'])) ?>
                                     </td>

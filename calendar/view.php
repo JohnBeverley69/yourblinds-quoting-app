@@ -361,17 +361,17 @@ $activeNav = 'calendar';
             font-size: 0.9375rem;
         }
         .detail-list dt {
-            color: #6b7280;
+            color: var(--text-faint);
             font-weight: 500;
         }
         .detail-list dd {
             margin: 0;
-            color: #111827;
+            color: var(--text-primary);
         }
         .address-block {
             font-size: 0.9375rem;
             line-height: 1.45;
-            color: #111827;
+            color: var(--text-primary);
         }
         .status-pill {
             display: inline-block;
@@ -386,7 +386,7 @@ $activeNav = 'calendar';
         .status-pill.status-booked    { background: #2563eb; }
         .status-pill.status-completed { background: #16a34a; }
         .status-pill.status-cancelled { background: #dc2626; }
-        .status-pill.status-no_show   { background: #6b7280; }
+        .status-pill.status-no_show   { background: var(--text-faint); }
         .status-form {
             display: flex;
             gap: 0.5rem;
@@ -396,7 +396,7 @@ $activeNav = 'calendar';
         .status-form select {
             font: inherit;
             padding: 0.5rem 0.75rem;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
             background: #fff;
             color: inherit;
@@ -409,8 +409,8 @@ $activeNav = 'calendar';
         }
         .notes-block {
             white-space: pre-wrap;
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 0.875rem 1rem;
             font-size: 0.9375rem;
@@ -528,7 +528,7 @@ $activeNav = 'calendar';
                     <?php if ($endTimeLabel !== ''): ?>
                         &ndash; <?= e($endTimeLabel) ?>
                     <?php endif; ?>
-                    <span style="color:#6b7280">(<?= (int) $appt['duration_minutes'] ?> mins)</span>
+                    <span style="color:var(--text-faint)">(<?= (int) $appt['duration_minutes'] ?> mins)</span>
                 </dd>
                 <dt>Assigned to</dt>
                 <dd>
@@ -539,7 +539,7 @@ $activeNav = 'calendar';
                             <?= csrf_field() ?>
                             <input type="hidden" name="_action" value="update_assignee">
                             <select name="assignee_id"
-                                    style="padding:0.3125rem 0.5rem;border:1px solid #d1d5db;
+                                    style="padding:0.3125rem 0.5rem;border:1px solid var(--border-strong);
                                            border-radius:6px;font:inherit;min-width:10rem">
                                 <option value="">— Unassigned —</option>
                                 <?php foreach ($tenantUsers as $u): ?>
@@ -562,19 +562,19 @@ $activeNav = 'calendar';
                         <?php if (!empty($appt['assignee_name'])): ?>
                             <?= e((string) $appt['assignee_name']) ?>
                         <?php else: ?>
-                            <span style="color:#6b7280">Unassigned</span>
+                            <span style="color:var(--text-faint)">Unassigned</span>
                         <?php endif; ?>
                     <?php endif; ?>
                 </dd>
             </dl>
 
-            <hr style="border:0;border-top:1px solid #e5e7eb;margin:1.25rem 0">
+            <hr style="border:0;border-top:1px solid var(--border);margin:1.25rem 0">
 
             <form method="post" action="/calendar/view.php?id=<?= (int) $appt['id'] ?>"
                   class="status-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="update_status">
-                <label for="status" style="font-size:0.9375rem;color:#374151;font-weight:500">
+                <label for="status" style="font-size:0.9375rem;color:var(--text-secondary);font-weight:500">
                     Update status:
                 </label>
                 <select id="status" name="status">
@@ -615,7 +615,7 @@ $activeNav = 'calendar';
                             <?php endif; ?>
                         </dl>
                     <?php else: ?>
-                        <p style="color:#6b7280;margin:0">
+                        <p style="color:var(--text-faint);margin:0">
                             Customer record no longer exists.
                         </p>
                     <?php endif; ?>
@@ -628,7 +628,7 @@ $activeNav = 'calendar';
                             <?= nl2br(e(implode("\n", $instParts))) ?>
                         </div>
                     <?php else: ?>
-                        <p style="color:#6b7280;margin:0">No address recorded.</p>
+                        <p style="color:var(--text-faint);margin:0">No address recorded.</p>
                     <?php endif; ?>
                 </div>
 
@@ -639,7 +639,7 @@ $activeNav = 'calendar';
                             <?= nl2br(e(implode("\n", $billParts))) ?>
                         </div>
                     <?php else: ?>
-                        <p style="color:#6b7280;margin:0">
+                        <p style="color:var(--text-faint);margin:0">
                             Same as installation address.
                         </p>
                     <?php endif; ?>
@@ -660,7 +660,7 @@ $activeNav = 'calendar';
             <div class="section-header">
                 <h2 class="section-title">Danger zone</h2>
             </div>
-            <p style="margin:0 0 0.875rem;color:#6b7280;font-size:0.9375rem">
+            <p style="margin:0 0 0.875rem;color:var(--text-faint);font-size:0.9375rem">
                 Deleting this appointment is permanent. The customer record and any
                 linked quotes will be kept; only the calendar entry is removed. If you
                 just want to record that the booking didn't happen, set the status to

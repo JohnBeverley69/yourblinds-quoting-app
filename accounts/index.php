@@ -203,16 +203,16 @@ $activeNav = 'accounts';
             margin: 0 0 1.25rem;
         }
         .summary-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; border: 1px solid var(--border); border-radius: 10px;
             padding: 0.875rem 1rem;
         }
         .summary-card .lbl {
-            font-size: 0.75rem; color: #6b7280;
+            font-size: 0.75rem; color: var(--text-faint);
             text-transform: uppercase; letter-spacing: 0.05em;
             font-weight: 600;
         }
         .summary-card .val {
-            font-size: 1.375rem; color: #111827; font-weight: 700;
+            font-size: 1.375rem; color: var(--text-primary); font-weight: 700;
             margin-top: 0.25rem;
         }
         .summary-card.outstanding .val { color: #b45309; }
@@ -220,13 +220,13 @@ $activeNav = 'accounts';
         .summary-card.alltime     .val { color: #065f46; }
 
         .filter-fieldset {
-            border: 1px dashed #d1d5db; border-radius: 10px;
+            border: 1px dashed var(--border-strong); border-radius: 10px;
             padding: 0.5rem 0.875rem 0.625rem;
             margin: 0 0 1rem; background: #fafafa;
         }
         .filter-fieldset legend {
             padding: 0 0.4375rem; font-size: 0.75rem;
-            color: #6b7280; text-transform: uppercase;
+            color: var(--text-faint); text-transform: uppercase;
             letter-spacing: 0.05em; font-weight: 600;
         }
         .filter-bar {
@@ -234,20 +234,20 @@ $activeNav = 'accounts';
         }
         .filter-bar input, .filter-bar select {
             padding: 0.4375rem 0.625rem;
-            border: 1px solid #d1d5db; border-radius: 6px; font: inherit;
+            border: 1px solid var(--border-strong); border-radius: 6px; font: inherit;
             background: #fff;
         }
         .filter-bar input[type="search"] { flex: 1 1 200px; }
         .filter-bar select               { flex: 0 0 9rem; }
         .filter-bar .filter-date {
             display: flex; flex-direction: column; gap: 0.125rem;
-            font-size: 0.75rem; color: #6b7280;
+            font-size: 0.75rem; color: var(--text-faint);
         }
         .filter-bar .filter-date input { width: 9rem; }
 
         /* Record-new-payment panel */
         .np-panel {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; border: 1px solid var(--border); border-radius: 10px;
             padding: 0 0.875rem; margin: 0 0 1rem;
         }
         .np-panel summary {
@@ -257,10 +257,10 @@ $activeNav = 'accounts';
         }
         .np-panel summary::-webkit-details-marker { display: none; }
         .np-panel[open] summary {
-            border-bottom: 1px solid #e5e7eb; margin-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border); margin-bottom: 0.75rem;
         }
         .np-panel summary::before {
-            content: '▸ '; color: #9ca3af; margin-right: 0.25rem;
+            content: '▸ '; color: var(--text-faint); margin-right: 0.25rem;
         }
         .np-panel[open] summary::before { content: '▾ '; }
         .np-form { padding-bottom: 0.875rem; }
@@ -270,12 +270,12 @@ $activeNav = 'accounts';
         }
         .np-field { display: flex; flex-direction: column; gap: 0.1875rem; }
         .np-field label {
-            font-size: 0.75rem; color: #6b7280; font-weight: 600;
+            font-size: 0.75rem; color: var(--text-faint); font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.04em;
         }
         .np-field input, .np-field select {
             padding: 0.4375rem 0.625rem;
-            border: 1px solid #d1d5db; border-radius: 6px;
+            border: 1px solid var(--border-strong); border-radius: 6px;
             font: inherit; background: #fff;
         }
         .np-actions {
@@ -291,7 +291,7 @@ $activeNav = 'accounts';
         }
         .empty-state {
             padding: 2rem 1rem; text-align: center;
-            color: #6b7280; font-size: 0.9375rem;
+            color: var(--text-faint); font-size: 0.9375rem;
         }
 
         /* Payment history: grouped by order (or by customer for
@@ -303,7 +303,7 @@ $activeNav = 'accounts';
             display: flex; flex-direction: column; gap: 0.375rem;
         }
         .pg-card {
-            border: 1px solid #e5e7eb; border-radius: 8px;
+            border: 1px solid var(--border); border-radius: 8px;
             background: #fff; overflow: hidden;
         }
         .pg-card[open]    { border-color: #1f3b5b; }
@@ -320,7 +320,7 @@ $activeNav = 'accounts';
         }
         .pg-summary::-webkit-details-marker { display: none; }
         .pg-summary .pg-caret {
-            color: #9ca3af; font-weight: 700;
+            color: var(--text-faint); font-weight: 700;
             width: 0.75rem; flex: 0 0 auto;
             font-size: 0.875rem; line-height: 1;
         }
@@ -329,7 +329,7 @@ $activeNav = 'accounts';
         .pg-card[open] .pg-summary .pg-caret::before { content: '▾'; }
 
         .pg-summary .pg-customer {
-            font-weight: 600; color: #111827;
+            font-weight: 600; color: var(--text-primary);
             flex: 0 0 auto;
         }
         .pg-summary .pg-quote-link {
@@ -341,7 +341,7 @@ $activeNav = 'accounts';
         }
         .pg-summary .pg-quote-link:hover { background: #dbe4f0; }
         .pg-summary .pg-standalone {
-            color: #9ca3af; font-size: 0.8125rem; font-style: italic;
+            color: var(--text-faint); font-size: 0.8125rem; font-style: italic;
         }
 
         /* Money group — pushed to the right of the row by margin-left:
@@ -350,11 +350,11 @@ $activeNav = 'accounts';
         .pg-summary .pg-money {
             margin-left: auto;
             display: flex; gap: 0.75rem 1rem; flex-wrap: wrap;
-            font-size: 0.875rem; color: #4b5563;
+            font-size: 0.875rem; color: var(--text-muted);
             align-items: baseline;
         }
         .pg-summary .pg-money-bit strong {
-            font-variant-numeric: tabular-nums; color: #111827;
+            font-variant-numeric: tabular-nums; color: var(--text-primary);
         }
         .pg-summary .pg-money-bit.is-owed     { color: #92400e; }
         .pg-summary .pg-money-bit.is-owed strong     { color: #92400e; }
@@ -362,11 +362,11 @@ $activeNav = 'accounts';
         .pg-summary .pg-money-bit.is-overpaid { color: #1e40af; }
         .pg-summary .pg-money-bit.is-overpaid strong { color: #1e40af; }
         .pg-summary .pg-money-sub {
-            color: #9ca3af; font-size: 0.75rem;
+            color: var(--text-faint); font-size: 0.75rem;
         }
 
         .pg-detail {
-            border-top: 1px solid #e5e7eb; background: #fafafa;
+            border-top: 1px solid var(--border); background: #fafafa;
             padding: 0.375rem 0.875rem 0.625rem;
         }
         .pg-detail .table { font-size: 0.875rem; }

@@ -183,19 +183,19 @@ $activeNav = 'paypal-health';
             margin-bottom: 1rem;
         }
         .ph-tile {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 10px; padding: 0.75rem 0.875rem;
         }
         .ph-tile .lbl {
             font-size: 0.6875rem; text-transform: uppercase;
-            letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
         }
         .ph-tile .val {
-            font-size: 1.5rem; font-weight: 700; color: #111827;
+            font-size: 1.5rem; font-weight: 700; color: var(--text-primary);
             margin-top: 0.25rem; line-height: 1.1;
         }
         .ph-tile .sub {
-            font-size: 0.75rem; color: #6b7280; margin-top: 0.1875rem;
+            font-size: 0.75rem; color: var(--text-faint); margin-top: 0.1875rem;
         }
         .ph-tile.ok      { background: #ecfdf5; border-color: #a7f3d0; }
         .ph-tile.ok .val { color: #065f46; }
@@ -205,7 +205,7 @@ $activeNav = 'paypal-health';
         .ph-tile.bad .val { color: #991b1b; }
 
         .ph-card {
-            background: #fff; border: 1px solid #e5e7eb;
+            background: #fff; border: 1px solid var(--border);
             border-radius: 10px; padding: 1rem 1.125rem;
             margin-bottom: 1rem;
         }
@@ -217,9 +217,9 @@ $activeNav = 'paypal-health';
             display: grid; grid-template-columns: 12rem 1fr;
             gap: 0.375rem 0.875rem; font-size: 0.875rem;
         }
-        .ph-grid .k { color: #6b7280; }
+        .ph-grid .k { color: var(--text-faint); }
         .ph-grid .v code {
-            background: #f3f4f6; padding: 0.0625rem 0.375rem;
+            background: var(--bg-subtle-2); padding: 0.0625rem 0.375rem;
             border-radius: 4px; font-size: 0.8125rem;
         }
         .ph-pill {
@@ -232,26 +232,26 @@ $activeNav = 'paypal-health';
         .ph-pill.sandbox   { background: #fef3c7; color: #92400e; }
         .ph-pill.ok        { background: #d1fae5; color: #065f46; }
         .ph-pill.fail      { background: #fee2e2; color: #991b1b; }
-        .ph-pill.unknown   { background: #e5e7eb; color: #374151; }
+        .ph-pill.unknown   { background: var(--border); color: var(--text-secondary); }
 
         table.ph-events { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
         table.ph-events th, table.ph-events td {
             padding: 0.4375rem 0.5625rem; text-align: left;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid var(--bg-subtle-2);
         }
         table.ph-events th {
-            background: #f9fafb; font-size: 0.6875rem;
+            background: var(--bg-subtle); font-size: 0.6875rem;
             text-transform: uppercase; letter-spacing: 0.05em;
-            color: #6b7280; font-weight: 600;
+            color: var(--text-faint); font-weight: 600;
         }
         table.ph-events tr.row-processed         td { background: #fff; }
         table.ph-events tr.row-no_matching_tenant td { background: #fffbeb; }
-        table.ph-events tr.row-unhandled_event_type td { background: #f9fafb; color: #6b7280; }
+        table.ph-events tr.row-unhandled_event_type td { background: var(--bg-subtle); color: var(--text-faint); }
         table.ph-events tr.row-verification_failed td { background: #fef2f2; color: #991b1b; }
         table.ph-events tr.row-bad_json          td { background: #fef2f2; color: #991b1b; }
         table.ph-events tr.row-no_subscription_id td { background: #fffbeb; }
         table.ph-events code {
-            background: #f3f4f6; padding: 0.0625rem 0.375rem;
+            background: var(--bg-subtle-2); padding: 0.0625rem 0.375rem;
             border-radius: 4px; font-size: 0.75rem;
         }
         .outcome-tag {
@@ -261,7 +261,7 @@ $activeNav = 'paypal-health';
         }
         .outcome-processed         { background: #d1fae5; color: #065f46; }
         .outcome-no_matching_tenant { background: #fef3c7; color: #92400e; }
-        .outcome-unhandled_event_type { background: #e5e7eb; color: #374151; }
+        .outcome-unhandled_event_type { background: var(--border); color: var(--text-secondary); }
         .outcome-verification_failed { background: #fee2e2; color: #991b1b; }
         .outcome-bad_json          { background: #fee2e2; color: #991b1b; }
         .outcome-no_subscription_id { background: #fef3c7; color: #92400e; }
@@ -406,8 +406,8 @@ $activeNav = 'paypal-health';
                         <?= e($cfg['env']) ?>
                     </span>
                     <?= $envIsLive
-                        ? '<span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">Real charges.</span>'
-                        : '<span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">No real money moves.</span>' ?>
+                        ? '<span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.5rem">Real charges.</span>'
+                        : '<span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.5rem">No real money moves.</span>' ?>
                 </div>
 
                 <div class="k">API base URL</div>
@@ -430,7 +430,7 @@ $activeNav = 'paypal-health';
                 <div class="v">
                     <?php if ($cfg['secret'] !== ''): ?>
                         <span class="ph-pill ok">Set</span>
-                        <span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">
+                        <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.5rem">
                             (never displayed)
                         </span>
                     <?php else: ?>
@@ -459,7 +459,7 @@ $activeNav = 'paypal-health';
                 <div class="v">
                     <?php if ($apiPingOk === true): ?>
                         <span class="ph-pill ok">Pass</span>
-                        <span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">
+                        <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.5rem">
                             (<?= $apiPingMs ?>ms)
                         </span>
                     <?php elseif ($apiPingOk === false): ?>
@@ -469,14 +469,14 @@ $activeNav = 'paypal-health';
                         </div>
                     <?php else: ?>
                         <span class="ph-pill unknown">Not attempted</span>
-                        <span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">
+                        <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.5rem">
                             Credentials missing.
                         </span>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <p style="margin:0.875rem 0 0;padding-top:0.75rem;border-top:1px solid #f3f4f6;color:#6b7280;font-size:0.8125rem;line-height:1.5">
+            <p style="margin:0.875rem 0 0;padding-top:0.75rem;border-top:1px solid var(--bg-subtle-2);color:var(--text-faint);font-size:0.8125rem;line-height:1.5">
                 <strong style="color:#1f3b5b">Send a test event:</strong>
                 PayPal's
                 <a href="<?= $envIsLive
@@ -517,7 +517,7 @@ $activeNav = 'paypal-health';
             <div class="ph-card">
                 <h2>Recent webhook events (last 50)</h2>
                 <?php if (!$recentEvents): ?>
-                    <p style="margin:0;color:#9ca3af;font-style:italic">
+                    <p style="margin:0;color:var(--text-faint);font-style:italic">
                         No events recorded yet. Once PayPal sends one, it'll show up here.
                     </p>
                 <?php else: ?>
@@ -548,23 +548,23 @@ $activeNav = 'paypal-health';
                                             <?php if (!empty($ev['company_name'])): ?>
                                                 <?= e((string) $ev['company_name']) ?>
                                             <?php elseif (!empty($ev['client_id'])): ?>
-                                                <em style="color:#9ca3af">client #<?= (int) $ev['client_id'] ?></em>
+                                                <em style="color:var(--text-faint)">client #<?= (int) $ev['client_id'] ?></em>
                                             <?php else: ?>
-                                                <em style="color:#9ca3af">—</em>
+                                                <em style="color:var(--text-faint)">—</em>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if (!empty($ev['plan_code'])): ?>
                                                 <code><?= e((string) $ev['plan_code']) ?></code>
                                             <?php else: ?>
-                                                <em style="color:#9ca3af">—</em>
+                                                <em style="color:var(--text-faint)">—</em>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if (!empty($ev['subscription_id'])): ?>
                                                 <code><?= e((string) $ev['subscription_id']) ?></code>
                                             <?php else: ?>
-                                                <em style="color:#9ca3af">—</em>
+                                                <em style="color:var(--text-faint)">—</em>
                                             <?php endif; ?>
                                         </td>
                                         <td>
@@ -584,7 +584,7 @@ $activeNav = 'paypal-health';
                         </table>
                     </div>
 
-                    <p style="margin:0.625rem 0 0;color:#6b7280;font-size:0.75rem">
+                    <p style="margin:0.625rem 0 0;color:var(--text-faint);font-size:0.75rem">
                         <strong>Outcomes:</strong>
                         <em>processed</em> = applied to tenant state ·
                         <em>no_matching_tenant</em> = event arrived for a sub we don't have (often a test or stale row) ·

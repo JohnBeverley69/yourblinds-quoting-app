@@ -260,7 +260,7 @@ $activeNav = 'calendar';
             width: 100%;
             font: inherit;
             padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db;
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
             background: #fff;
             color: inherit;
@@ -279,7 +279,7 @@ $activeNav = 'calendar';
             .form-row.cols-4 { grid-template-columns: 1fr; }
         }
         .form-fieldset {
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
             border-radius: 10px;
             padding: 1rem 1.125rem 0.25rem;
             margin-bottom: 1rem;
@@ -298,14 +298,14 @@ $activeNav = 'calendar';
             gap: 0.5rem;
             margin-bottom: 1rem;
             font-size: 0.9375rem;
-            color: #111827;
+            color: var(--text-primary);
             cursor: pointer;
         }
         .checkbox-row input { width: 18px; height: 18px; }
         #billing-block { display: <?= $f['different_billing_address'] === 1 ? 'block' : 'none' ?>; }
         .customer-readonly {
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 0.75rem 1rem;
             font-size: 0.9375rem;
@@ -347,12 +347,12 @@ $activeNav = 'calendar';
                             <?php if (!empty($appt['cust_email'])): ?>
                                 &middot; <a href="mailto:<?= e((string) $appt['cust_email']) ?>"><?= e((string) $appt['cust_email']) ?></a>
                             <?php endif; ?>
-                            <div style="margin-top:0.375rem;font-size:0.875rem;color:#6b7280">
+                            <div style="margin-top:0.375rem;font-size:0.875rem;color:var(--text-faint)">
                                 Customer details aren't editable from here.
                                 <a href="/customer-manager/edit.php?id=<?= (int) $appt['cust_id'] ?>">Edit customer &rarr;</a>
                             </div>
                         <?php else: ?>
-                            <span style="color:#6b7280">Customer record no longer exists.</span>
+                            <span style="color:var(--text-faint)">Customer record no longer exists.</span>
                         <?php endif; ?>
                     </div>
                 </fieldset>
@@ -411,7 +411,7 @@ $activeNav = 'calendar';
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                                <small style="color:var(--text-faint);font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
                                     Shows the 200 most recent quotes for this tenant.
                                     Linking surfaces the Q-number + status bars on calendar
                                     cards. Set to <em>"— No quote —"</em> to unlink.

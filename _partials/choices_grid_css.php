@@ -21,12 +21,12 @@
     .grid-table { width: 100%; border-collapse: collapse; }
     .grid-table thead th {
         text-align: left; font-size: 0.75rem; font-weight: 700;
-        color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;
-        padding: 0.5rem 0.5rem; border-bottom: 2px solid #e5e7eb;
-        background: #f9fafb;
+        color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em;
+        padding: 0.5rem 0.5rem; border-bottom: 2px solid var(--border);
+        background: var(--bg-subtle);
     }
     .grid-table tbody td {
-        padding: 0.25rem 0.25rem; border-bottom: 1px solid #f3f4f6;
+        padding: 0.25rem 0.25rem; border-bottom: 1px solid var(--bg-subtle-2);
         vertical-align: middle;
     }
     .grid-table tbody tr:hover td { background: #fafbfd; }
@@ -45,7 +45,7 @@
         font: inherit; width: 100%; box-sizing: border-box;
         padding: 0.4375rem 0.5rem; background: transparent;
         border: 1px solid transparent; border-radius: 6px;
-        color: #111827;
+        color: var(--text-primary);
     }
     .cell-input.num { text-align: right; font-variant-numeric: tabular-nums; }
     /* Suppress the browser's number-input spinners — the right-aligned
@@ -56,14 +56,14 @@
     }
     .cell-input.num { -moz-appearance: textfield; }
     .cell-input:hover, .cell-select:hover {
-        border-color: #d1d5db; background: #fff;
+        border-color: var(--border-strong); background: #fff;
     }
     .cell-input:focus, .cell-select:focus {
         outline: none; border-color: #1f3b5b; background: #fff;
         box-shadow: 0 0 0 3px rgba(31, 59, 91, 0.12);
     }
 
-    .grid-table th.col-drag,    .grid-table td.col-drag    { width: 28px; padding-left: 0.25rem; padding-right: 0; color: #9ca3af; cursor: grab; text-align: center; }
+    .grid-table th.col-drag,    .grid-table td.col-drag    { width: 28px; padding-left: 0.25rem; padding-right: 0; color: var(--text-faint); cursor: grab; text-align: center; }
     .grid-table th.col-label,   .grid-table td.col-label   { min-width: 180px; }
     .grid-table th.col-system,  .grid-table td.col-system  { width: 200px; }
     .grid-table th.col-price,   .grid-table td.col-price   { width: 96px; }
@@ -82,7 +82,7 @@
     .row-actions a:hover, .row-actions button:hover {
         background: #eef2f7;
     }
-    .row-actions .btn-more { color: #4b5563; }
+    .row-actions .btn-more { color: var(--text-muted); }
     .row-actions .btn-sub  { color: #15803d; }
     .row-actions .btn-sub:hover { background: #dcfce7; }
     .row-actions .btn-delete { color: #b91c1c; }
@@ -90,9 +90,9 @@
 
     /* Bottom blank row gets a softer background so it reads as a
        "type to add" affordance rather than a real row. */
-    .grid-table tr.new-row td { background: #f9fafb; }
-    .grid-table tr.new-row td:first-child { color: #d1d5db; }
-    .grid-table tr.new-row .cell-input::placeholder { color: #9ca3af; font-style: italic; }
+    .grid-table tr.new-row td { background: var(--bg-subtle); }
+    .grid-table tr.new-row td:first-child { color: var(--border-strong); }
+    .grid-table tr.new-row .cell-input::placeholder { color: var(--text-faint); font-style: italic; }
 
     /* Multi-system selector on the new-row. Built on <details> so
        we get show/hide for free; the styling makes the closed
@@ -103,16 +103,16 @@
         list-style: none; cursor: pointer;
         font: inherit; padding: 0.4375rem 1.75rem 0.4375rem 0.5rem;
         border: 1px solid transparent; border-radius: 6px;
-        background: transparent; color: #111827;
+        background: transparent; color: var(--text-primary);
         position: relative;
     }
     .multi-select > summary::-webkit-details-marker { display: none; }
     .multi-select > summary::after {
         content: '▾'; position: absolute; right: 0.5rem; top: 50%;
-        transform: translateY(-50%); color: #6b7280; font-size: 0.75rem;
+        transform: translateY(-50%); color: var(--text-faint); font-size: 0.75rem;
     }
     .multi-select > summary:hover {
-        border-color: #d1d5db; background: #fff;
+        border-color: var(--border-strong); background: #fff;
     }
     .multi-select[open] > summary {
         border-color: #1f3b5b; background: #fff;
@@ -121,7 +121,7 @@
     .multi-opts {
         position: absolute; top: 100%; left: 0; right: 0;
         margin-top: 4px; padding: 0.375rem;
-        background: #fff; border: 1px solid #d1d5db;
+        background: #fff; border: 1px solid var(--border-strong);
         border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         z-index: 30; min-width: 200px;
     }
@@ -144,14 +144,14 @@
     .multi-opts label {
         display: flex; align-items: center; gap: 0.5rem;
         padding: 0.375rem 0.5rem; cursor: pointer; border-radius: 6px;
-        font-size: 0.9375rem; color: #111827;
+        font-size: 0.9375rem; color: var(--text-primary);
     }
     .multi-opts label:hover { background: #eef2f7; }
     .multi-opts input[type="checkbox"] {
         width: 16px; height: 16px; margin: 0;
     }
     .multi-opts hr {
-        margin: 0.25rem 0; border: 0; border-top: 1px solid #f3f4f6;
+        margin: 0.25rem 0; border: 0; border-top: 1px solid var(--bg-subtle-2);
     }
 
     .row-error {
@@ -198,7 +198,7 @@
        Option page.
        =========================================================== */
     .sub-card {
-        background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
+        background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
         padding: 0.75rem 0.875rem;
         margin-bottom: 0.875rem;
     }
@@ -207,9 +207,9 @@
         display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
         margin-bottom: 0.625rem;
     }
-    .sub-card-name { font-size: 1rem; color: #111827; }
+    .sub-card-name { font-size: 1rem; color: var(--text-primary); }
     .sub-card-gates {
-        font-size: 0.8125rem; color: #6b7280;
+        font-size: 0.8125rem; color: var(--text-faint);
         display: inline-flex; align-items: center; gap: 0.3125rem; flex-wrap: wrap;
     }
     .gate-pill {
@@ -227,13 +227,13 @@
         font: inherit; text-decoration: none;
     }
     .sub-card-actions .btn-primary-link   { color: #1f3b5b; font-weight: 600; }
-    .sub-card-actions .btn-secondary-link { color: #4b5563; }
+    .sub-card-actions .btn-secondary-link { color: var(--text-muted); }
     .sub-card-actions .btn-danger-link    { color: #b91c1c; }
     .sub-card-actions a:hover, .sub-card-actions button:hover { text-decoration: underline; }
     /* Sub-option's inline grid keeps the same look but a subtle
        background so it's visually grouped with its card header. */
     .sub-card > .choices-grid-wrap {
-        background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+        background: #fff; border: 1px solid var(--border); border-radius: 8px;
     }
 
     details.add-sub-form > summary {
@@ -248,7 +248,7 @@
     details.add-sub-form[open] > summary { background: #dbeafe; }
     details.add-sub-form > .form {
         margin-top: 0.75rem;
-        background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+        background: #fff; border: 1px solid var(--border); border-radius: 10px;
         padding: 1rem;
     }
     .req-pill {
@@ -258,7 +258,7 @@
     }
     .opt-pill {
         display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
-        font-weight: 700; color: #6b7280; background: #f3f4f6;
+        font-weight: 700; color: var(--text-faint); background: var(--bg-subtle-2);
         border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em;
     }
 </style>

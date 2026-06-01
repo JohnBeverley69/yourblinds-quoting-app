@@ -405,7 +405,7 @@ $activeNav = 'calendar';
         .cal-appt.status-booked    { background: #2563eb; }
         .cal-appt.status-completed { background: #16a34a; }
         .cal-appt.status-cancelled { background: #dc2626; }
-        .cal-appt.status-no_show   { background: #6b7280; }
+        .cal-appt.status-no_show   { background: var(--text-faint); }
 
         /* Cards born from an accepted-quote (quote_id is set) — a more
            specific signal: "this is work the customer has signed off,
@@ -438,7 +438,7 @@ $activeNav = 'calendar';
             .cal-day-num::after {
                 content: attr(data-weekday);
                 font-weight: 400;
-                color: #9ca3af;
+                color: var(--text-faint);
                 margin-left: 0.5rem;
             }
         }
@@ -485,7 +485,7 @@ $activeNav = 'calendar';
             background: #fff;
             border: 1px solid #fde68a; border-radius: 8px;
             cursor: grab; user-select: none;
-            font-size: 0.8125rem; color: #111827;
+            font-size: 0.8125rem; color: var(--text-primary);
             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .pending-card:active { cursor: grabbing; }
@@ -494,7 +494,7 @@ $activeNav = 'calendar';
             overflow: hidden; text-overflow: ellipsis;
         }
         .pending-card .pc-meta {
-            color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;
+            color: var(--text-faint); font-size: 0.75rem; margin-top: 0.25rem;
         }
         .pending-card.dragging,
         .cal-appt.dragging { opacity: 0.4; }
@@ -650,7 +650,7 @@ $activeNav = 'calendar';
                     <span><i style="background:#7c3aed"></i> From quote</span>
                     <span><i style="background:#16a34a"></i> Completed</span>
                     <span><i style="background:#dc2626"></i> Cancelled</span>
-                    <span><i style="background:#6b7280"></i> No-show</span>
+                    <span><i style="background:var(--text-faint)"></i> No-show</span>
                 </div>
             </div>
 

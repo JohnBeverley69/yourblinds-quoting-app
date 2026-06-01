@@ -372,7 +372,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
         }
         /* Kill the browser's up/down spinner on the markup/discount
            inputs — pricing % is typed by hand, the spinner just adds
@@ -388,12 +388,12 @@ $activeNav = 'products';
         }
         .toggle-stack label {
             display: inline-flex; align-items: center; gap: 0.5rem;
-            font-size: 0.9375rem; color: #111827; cursor: pointer;
+            font-size: 0.9375rem; color: var(--text-primary); cursor: pointer;
             margin: 0; padding: 0;
         }
         .toggle-stack input[type="checkbox"] { width: 18px; height: 18px; }
         .toggle-stack small {
-            color: #6b7280; font-size: 0.8125rem; margin-left: 0.375rem;
+            color: var(--text-faint); font-size: 0.8125rem; margin-left: 0.375rem;
         }
         .pricing-table {
             width: 100%; border-collapse: collapse;
@@ -405,13 +405,13 @@ $activeNav = 'products';
         }
         .pricing-table th {
             font-size: 0.75rem; text-transform: uppercase;
-            letter-spacing: 0.04em; color: #6b7280; font-weight: 600;
+            letter-spacing: 0.04em; color: var(--text-faint); font-weight: 600;
         }
-        .pricing-table td.system-name { font-weight: 500; color: #111827; }
+        .pricing-table td.system-name { font-weight: 500; color: var(--text-primary); }
         .pricing-table td.num { width: 7rem; }
         .pricing-table td.num input {
             width: 100%; padding: 0.4375rem 0.625rem;
-            border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 6px; background: #fff;
             font: inherit; box-sizing: border-box;
         }
     </style>
@@ -497,7 +497,7 @@ $activeNav = 'products';
             if ($catalogueIssues):
                 $worst = catalogue_worst_severity($catalogueIssues);
         ?>
-            <details id="catalogue-health" open style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;
+            <details id="catalogue-health" open style="background:#fff;border:1px solid var(--border);border-radius:10px;
                                   padding:0.625rem 0.875rem;margin-bottom:0.875rem">
                 <summary style="cursor:pointer;list-style:none;display:flex;
                                 align-items:center;gap:0.5rem;font-weight:600;
@@ -506,7 +506,7 @@ $activeNav = 'products';
                         <?= $worst === 'critical' ? '🚨' : ($worst === 'warning' ? '⚠️' : 'ℹ️') ?>
                     </span>
                     Catalogue health
-                    <span style="font-weight:400;color:#6b7280;font-size:0.8125rem">
+                    <span style="font-weight:400;color:var(--text-faint);font-size:0.8125rem">
                         — <?= count($catalogueIssues) ?> issue<?= count($catalogueIssues) === 1 ? '' : 's' ?> to look at
                     </span>
                 </summary>
@@ -589,14 +589,14 @@ $activeNav = 'products';
                      . 'border:1px solid ' . $border . ';border-radius:10px;'
                      . 'text-decoration:none;color:inherit">'
                      . '<div style="display:flex;align-items:center;gap:0.5rem;'
-                     . 'font-weight:700;color:#111827">'
+                     . 'font-weight:700;color:var(--text-primary)">'
                      . '<span style="display:inline-flex;align-items:center;'
                      . 'justify-content:center;width:1.25rem;height:1.25rem;'
                      . 'background:' . $badgeBg . ';color:#fff;border-radius:999px;'
                      . 'font-size:0.75rem">' . $icon . '</span>'
                      . e($label)
                      . '</div>'
-                     . '<div style="font-size:0.8125rem;color:#374151">'
+                     . '<div style="font-size:0.8125rem;color:var(--text-secondary)">'
                      . ($isDone ? e($countTxt) . ' &mdash; ' : '')
                      . e($hint)
                      . '</div></a>';
@@ -664,7 +664,7 @@ $activeNav = 'products';
                                maxlength="40"
                                value="<?= e((string) $f['option_label']) ?>"
                                placeholder="Fabric">
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
                             What this product's "option" axis is called &mdash; used as the
                             label on the quote builder and the options/list pages.
                             Common values: <em>Fabric</em> (rollers, romans),
@@ -683,7 +683,7 @@ $activeNav = 'products';
                          schema so we can resurrect this later if a tenant
                          wants per-product overhead, but no UI for now. */ ?>
 
-                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
                         Pricing per system
                     </legend>
@@ -702,7 +702,7 @@ $activeNav = 'products';
                             $_tenantDefaultMarkup = (float) ($_dmSt->fetchColumn() ?: 0);
                         } catch (Throwable $e) { /* migration not yet run */ }
                     ?>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                         Margin and discount can be tuned per system (premium / motorised /
                         standard are usually priced differently). Markup is applied on top
                         of the price-table base; discount comes off after that.
@@ -751,7 +751,7 @@ $activeNav = 'products';
                                                        ? 'Inheriting tenant default — leave empty / 0 to keep using it.'
                                                        : 'Override of the tenant default. Clear or set 0 to revert.' ?>">
                                             <?php if ($isMarkupDefault): ?>
-                                                <div style="font-size:0.6875rem;color:#6b7280;margin-top:0.125rem;line-height:1.2">
+                                                <div style="font-size:0.6875rem;color:var(--text-faint);margin-top:0.125rem;line-height:1.2">
                                                     using default
                                                     (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
                                                 </div>
@@ -786,7 +786,7 @@ $activeNav = 'products';
                                        value="<?= e($nsMarkupDisplay) ?>"
                                        placeholder="<?= e(number_format($_tenantDefaultMarkup, 2)) ?>">
                                 <?php if ($nsIsDefault): ?>
-                                    <small style="color:#6b7280;font-size:0.75rem;display:block;margin-top:0.1875rem">
+                                    <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.1875rem">
                                         Using default (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
                                     </small>
                                 <?php else: ?>
@@ -834,14 +834,14 @@ $activeNav = 'products';
         -->
         <style>
             details.cat-section {
-                background: #fff; border: 1px solid #e5e7eb;
+                background: #fff; border: 1px solid var(--border);
                 border-radius: 12px; padding: 0; margin-bottom: 1rem;
                 overflow: hidden;
             }
             details.cat-section > summary {
                 list-style: none; cursor: pointer;
                 padding: 0.875rem 1.125rem;
-                background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+                background: #f8fafc; border-bottom: 1px solid var(--border);
                 display: flex; align-items: center; gap: 0.625rem;
                 font-size: 1.0625rem; font-weight: 600; color: #1f3b5b;
             }
@@ -850,11 +850,11 @@ $activeNav = 'products';
             details.cat-section > summary::before {
                 content: '▸'; display: inline-block;
                 transition: transform 150ms;
-                color: #6b7280; font-size: 0.875rem;
+                color: var(--text-faint); font-size: 0.875rem;
             }
             details.cat-section[open] > summary::before { transform: rotate(90deg); }
             details.cat-section > summary .count {
-                color: #6b7280; font-weight: 500; font-size: 0.9375rem;
+                color: var(--text-faint); font-weight: 500; font-size: 0.9375rem;
             }
             details.cat-section > summary .actions {
                 margin-left: auto; display: flex; gap: 0.375rem;
@@ -863,13 +863,13 @@ $activeNav = 'products';
             details.cat-section > summary .actions form button {
                 font-size: 0.8125rem; padding: 0.3125rem 0.625rem;
                 background: #fff; color: #1f3b5b;
-                border: 1px solid #d1d5db; border-radius: 6px;
+                border: 1px solid var(--border-strong); border-radius: 6px;
                 text-decoration: none; font-weight: 500;
                 cursor: pointer;
             }
             details.cat-section > summary .actions a:hover,
             details.cat-section > summary .actions form button:hover {
-                border-color: #1f3b5b; background: #f3f4f6;
+                border-color: #1f3b5b; background: var(--bg-subtle-2);
             }
             details.cat-section > .body { padding: 0.875rem 1.125rem 1rem; }
             details.cat-section .item-row {
@@ -877,16 +877,16 @@ $activeNav = 'products';
                 grid-template-columns: 1.5rem 1fr auto auto auto;
                 align-items: center;
                 padding: 0.5rem 0.5rem;
-                border-bottom: 1px solid #f3f4f6;
+                border-bottom: 1px solid var(--bg-subtle-2);
             }
             details.cat-section .item-row:last-of-type { border-bottom: 0; }
             details.cat-section .item-row .drag {
-                color: #9ca3af; cursor: grab; user-select: none;
+                color: var(--text-faint); cursor: grab; user-select: none;
                 text-align: center;
             }
             details.cat-section .item-row .drag:active { cursor: grabbing; }
             details.cat-section .item-row .name {
-                font-weight: 500; color: #111827;
+                font-weight: 500; color: var(--text-primary);
             }
             details.cat-section .item-row .pill {
                 display: inline-block; padding: 0.0625rem 0.5rem;
@@ -915,21 +915,21 @@ $activeNav = 'products';
                 color: #b91c1c;
             }
             details.cat-section .empty-note {
-                color: #9ca3af; font-style: italic; padding: 0.5rem 0.25rem;
+                color: var(--text-faint); font-style: italic; padding: 0.5rem 0.25rem;
             }
             details.cat-section .quick-add {
-                background: #f9fafb; border: 1px dashed #d1d5db;
+                background: var(--bg-subtle); border: 1px dashed var(--border-strong);
                 border-radius: 8px; padding: 0.75rem 0.875rem;
                 margin-top: 0.625rem;
                 display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end;
             }
             details.cat-section .quick-add label {
                 font-size: 0.6875rem; text-transform: uppercase;
-                letter-spacing: 0.05em; color: #6b7280; font-weight: 600;
+                letter-spacing: 0.05em; color: var(--text-faint); font-weight: 600;
                 display: block; margin-bottom: 0.1875rem;
             }
             details.cat-section .quick-add input[type="text"] {
-                padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+                padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
                 border-radius: 6px; font: inherit;
             }
             details.cat-section .quick-add button {
@@ -1025,15 +1025,15 @@ $activeNav = 'products';
                     $shown = array_slice($items, 0, 6);
                     $more  = count($items) - count($shown);
                 ?>
-                    <div style="padding:0.5rem 0.25rem;border-bottom:1px solid #f3f4f6">
+                    <div style="padding:0.5rem 0.25rem;border-bottom:1px solid var(--bg-subtle-2)">
                         <div style="display:flex;align-items:baseline;gap:0.625rem;flex-wrap:wrap">
                             <span class="pill pill-tables">Band <?= e((string) $band) ?></span>
-                            <span style="color:#6b7280;font-size:0.875rem">
+                            <span style="color:var(--text-faint);font-size:0.875rem">
                                 <?= count($items) ?>
                                 <?= count($items) === 1 ? (strtolower((string) ($product['option_label'] ?? 'fabric'))) : (strtolower((string) ($product['option_label'] ?? 'fabric')) . 's') ?>
                             </span>
                         </div>
-                        <div style="margin-top:0.375rem;color:#374151;font-size:0.875rem;line-height:1.5">
+                        <div style="margin-top:0.375rem;color:var(--text-secondary);font-size:0.875rem;line-height:1.5">
                             <?php
                                 $names = array_map(static function ($f) {
                                     $bits = array_filter([
@@ -1045,7 +1045,7 @@ $activeNav = 'products';
                                 }, $shown);
                                 echo e(implode(' · ', $names));
                                 if ($more > 0) {
-                                    echo ' <span style="color:#9ca3af">… +' . $more . ' more</span>';
+                                    echo ' <span style="color:var(--text-faint)">… +' . $more . ' more</span>';
                                 }
                             ?>
                         </div>
@@ -1126,18 +1126,18 @@ $activeNav = 'products';
                         powered by the shared choices_grid partial +
                         the shared JS at the bottom of this page.
                     -->
-                    <details class="option-inline" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:0.5rem;background:#fff">
+                    <details class="option-inline" style="border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;background:#fff">
                         <summary style="list-style:none;cursor:pointer;padding:0.5625rem 0.75rem;display:flex;align-items:center;gap:0.625rem;font-weight:500">
-                            <span style="color:#6b7280;font-size:0.75rem">▸</span>
-                            <span style="color:#111827"><?= e((string) $opt['name']) ?></span>
+                            <span style="color:var(--text-faint);font-size:0.75rem">▸</span>
+                            <span style="color:var(--text-primary)"><?= e((string) $opt['name']) ?></span>
                             <?php if ((int) $opt['is_required'] === 1): ?>
                                 <span class="pill pill-default" style="background:#dbeafe;color:#1e40af">Required</span>
                             <?php endif; ?>
-                            <span style="color:#6b7280;font-size:0.8125rem;font-weight:400">
+                            <span style="color:var(--text-faint);font-size:0.8125rem;font-weight:400">
                                 <?= count($choices) ?> choice<?= count($choices) === 1 ? '' : 's' ?>
                             </span>
                             <?php if ($uniqueLabels): ?>
-                                <span style="color:#9ca3af;font-size:0.8125rem;font-weight:400;
+                                <span style="color:var(--text-faint);font-size:0.8125rem;font-weight:400;
                                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
                                              flex:1 1 auto;min-width:0">
                                     <?= e(implode(' · ', array_slice($uniqueLabels, 0, 6))) ?>
@@ -1150,7 +1150,7 @@ $activeNav = 'products';
                                    style="color:#1f3b5b;text-decoration:none">Sub-options &amp; full edit &raquo;</a>
                             </span>
                         </summary>
-                        <div style="padding:0.5rem 0.75rem 0.875rem;border-top:1px solid #f3f4f6">
+                        <div style="padding:0.5rem 0.75rem 0.875rem;border-top:1px solid var(--bg-subtle-2)">
                             <?php
                                 // Render the shared choices grid for
                                 // this option. $renderSystemMultiSelect
@@ -1212,7 +1212,7 @@ $activeNav = 'products';
                     // price-tables list page for bulk + single import.
                     $firstSystemId = (int) ($tables[0]['system_id'] ?? 0);
                 ?>
-                    <div style="padding:0.625rem 0.25rem;border-bottom:1px solid #f3f4f6">
+                    <div style="padding:0.625rem 0.25rem;border-bottom:1px solid var(--bg-subtle-2)">
                         <div style="display:flex;align-items:baseline;gap:0.625rem;flex-wrap:wrap;margin-bottom:0.375rem">
                             <strong style="color:#1f3b5b">
                                 <?php if ($firstSystemId > 0): ?>
@@ -1224,7 +1224,7 @@ $activeNav = 'products';
                                     <?= e((string) $sysName) ?>
                                 <?php endif; ?>
                             </strong>
-                            <span style="color:#6b7280;font-size:0.875rem">
+                            <span style="color:var(--text-faint);font-size:0.875rem">
                                 <?= count($tables) ?>
                                 table<?= count($tables) === 1 ? '' : 's' ?>
                             </span>
@@ -1245,7 +1245,7 @@ $activeNav = 'products';
                                 <div>
                                     <span class="pill pill-tables">Band <?= e((string) $t['band_code']) ?></span>
                                 </div>
-                                <div class="name" style="font-weight:400;color:#374151">
+                                <div class="name" style="font-weight:400;color:var(--text-secondary)">
                                     <?= e((string) ($t['name'] ?? '')) ?>
                                 </div>
                                 <div>
@@ -1262,7 +1262,7 @@ $activeNav = 'products';
                 <?php endforeach; endif; ?>
 
                 <?php if ($systems): ?>
-                <p style="color:#6b7280;font-size:0.8125rem;margin:0.625rem 0 0;line-height:1.45">
+                <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.625rem 0 0;line-height:1.45">
                     To add a new band for an existing system, open the system above and use its
                     <em>Add price table</em> form. To bulk-import all bands at once from a single
                     spreadsheet, use the <em>Bulk import</em> link next to each system.
@@ -1299,7 +1299,7 @@ $activeNav = 'products';
             </summary>
             <div class="cat-section-body">
                 <?= catalogue_audit_render_feed($auditRows) ?>
-                <p style="margin:0.625rem 0 0;color:#9ca3af;font-size:0.75rem;line-height:1.45">
+                <p style="margin:0.625rem 0 0;color:var(--text-faint);font-size:0.75rem;line-height:1.45">
                     Shows the 25 most recent changes affecting this product.
                     Click any row to see the field-by-field diff. The log is
                     append-only — events can't be edited or deleted.
@@ -1354,7 +1354,7 @@ $activeNav = 'products';
     .preview-drawer.is-open { transform: translateX(0); }
     .preview-drawer-head {
         display: flex; align-items: center; gap: 0.5rem;
-        padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb;
+        padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
         background: #f8fafc;
         flex-shrink: 0;
     }
@@ -1362,8 +1362,8 @@ $activeNav = 'products';
         margin: 0; font-size: 0.9375rem; color: #1f3b5b;
     }
     .preview-drawer-head .badge {
-        font-size: 0.625rem; font-weight: 600; color: #6b7280;
-        background: #e5e7eb; padding: 0.0625rem 0.4375rem;
+        font-size: 0.625rem; font-weight: 600; color: var(--text-faint);
+        background: var(--border); padding: 0.0625rem 0.4375rem;
         border-radius: 999px; text-transform: uppercase;
         letter-spacing: 0.05em;
     }
@@ -1375,7 +1375,7 @@ $activeNav = 'products';
         padding: 0.25rem 0.5rem; border-radius: 6px;
         font-size: 0.8125rem; color: #1f3b5b;
     }
-    .preview-drawer-head .head-btns button:hover { background: #e5e7eb; }
+    .preview-drawer-head .head-btns button:hover { background: var(--border); }
     /* Sticky result panel: pinned to the top of the scroll area so
        the price stays visible as the user changes fields below it.
        Replaces the foot-button + result-below pattern, which forced
@@ -1384,7 +1384,7 @@ $activeNav = 'products';
         position: sticky; top: 0; z-index: 2;
         padding: 0.5rem 0.75rem;
         background: #fff;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--border);
         flex-shrink: 0;
     }
     .preview-drawer-body {
@@ -1395,18 +1395,18 @@ $activeNav = 'products';
         margin-bottom: 0.5rem;
     }
     .preview-drawer-body .pv-row label {
-        font-size: 0.6875rem; font-weight: 600; color: #6b7280;
+        font-size: 0.6875rem; font-weight: 600; color: var(--text-faint);
         text-transform: uppercase; letter-spacing: 0.05em;
     }
     .preview-drawer-body .pv-row input,
     .preview-drawer-body .pv-row select {
-        padding: 0.375rem 0.5rem; border: 1px solid #d1d5db;
+        padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
         border-radius: 6px; font: inherit; background: #fff;
         font-size: 0.875rem;
     }
     .preview-drawer-body .pv-row .req-mark { color: #b91c1c; }
     .preview-drawer-body .pv-extras {
-        background: #f9fafb; border: 1px solid #e5e7eb;
+        background: var(--bg-subtle); border: 1px solid var(--border);
         border-radius: 8px; padding: 0.4375rem 0.625rem;
         margin-bottom: 0.5rem;
     }
@@ -1430,27 +1430,27 @@ $activeNav = 'products';
         position: absolute; top: 100%; left: 0; right: 0;
         z-index: 10;
         max-height: 16rem; overflow-y: auto;
-        background: #fff; border: 1px solid #d1d5db; border-top: 0;
+        background: #fff; border: 1px solid var(--border-strong); border-top: 0;
         border-radius: 0 0 6px 6px;
         box-shadow: 0 8px 16px rgba(0,0,0,0.12);
         font-size: 0.8125rem;
     }
     .pv-typeahead-item {
         padding: 0.375rem 0.625rem; cursor: pointer;
-        border-top: 1px solid #f3f4f6;
+        border-top: 1px solid var(--bg-subtle-2);
     }
     .pv-typeahead-item:first-child { border-top: 0; }
     .pv-typeahead-item:hover,
     .pv-typeahead-item.is-active { background: #eff6ff; color: #1e40af; }
     .pv-typeahead-item.is-empty {
-        color: #9ca3af; cursor: default; font-style: italic;
+        color: var(--text-faint); cursor: default; font-style: italic;
     }
-    .pv-typeahead-item.is-empty:hover { background: #fff; color: #9ca3af; }
+    .pv-typeahead-item.is-empty:hover { background: #fff; color: var(--text-faint); }
     .pv-typeahead-pinned {
-        font-size: 0.6875rem; color: #6b7280;
+        font-size: 0.6875rem; color: var(--text-faint);
         text-transform: uppercase; letter-spacing: 0.04em;
-        background: #f9fafb; padding: 0.25rem 0.625rem;
-        border-top: 1px solid #e5e7eb;
+        background: var(--bg-subtle); padding: 0.25rem 0.625rem;
+        border-top: 1px solid var(--border);
     }
     /* Live-recalc spinner — fades the result while a fetch is in
        flight so the price doesn't look stuck when the user makes
@@ -1463,10 +1463,10 @@ $activeNav = 'products';
     }
     .preview-result.is-ok { background: #d1fae5; color: #065f46; }
     .preview-result.is-err { background: #fee2e2; color: #991b1b; }
-    .preview-result.is-idle { background: #f3f4f6; color: #6b7280; font-style: italic; }
+    .preview-result.is-idle { background: var(--bg-subtle-2); color: var(--text-faint); font-style: italic; }
     .preview-result strong { font-size: 1.0625rem; }
     .preview-empty {
-        color: #9ca3af; font-style: italic; padding: 1rem 0.5rem;
+        color: var(--text-faint); font-style: italic; padding: 1rem 0.5rem;
         text-align: center;
     }
 </style>
@@ -1887,7 +1887,7 @@ $activeNav = 'products';
                 var preIds = Array.isArray(presetMulti)
                     ? presetMulti.slice()
                     : visible.filter(function (c) { return c.is_default; }).map(function (c) { return c.id; });
-                out += '<div style="display:flex;flex-direction:column;gap:0.25rem;background:#fff;padding:0.4375rem 0.5rem;border:1px solid #d1d5db;border-radius:6px">';
+                out += '<div style="display:flex;flex-direction:column;gap:0.25rem;background:#fff;padding:0.4375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px">';
                 visible.forEach(function (c) {
                     var ticked = preIds.indexOf(c.id) !== -1;
                     out += '<label style="display:inline-flex;align-items:center;gap:0.4375rem;cursor:pointer;font-weight:400">'
@@ -1913,11 +1913,11 @@ $activeNav = 'products';
             }
 
             if (extra.length_input_label) {
-                out += '<label style="font-size:0.6875rem;font-weight:600;color:#6b7280;'
+                out += '<label style="font-size:0.6875rem;font-weight:600;color:var(--text-faint);'
                      + 'text-transform:uppercase;letter-spacing:0.05em;margin-top:0.375rem">'
                      + esc(extra.length_input_label) + '</label>'
                      + '<input type="number" data-pv-uv="' + extra.id + '" min="0" step="1"'
-                     + ' style="padding:0.375rem 0.5rem;border:1px solid #d1d5db;border-radius:6px">';
+                     + ' style="padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px">';
             }
             out += '</div>';
             return out;
@@ -2061,7 +2061,7 @@ $activeNav = 'products';
             if (data.quantity > 1) {
                 html += ' &middot; £' + Number(line).toFixed(2) + ' for ' + data.quantity + ' blinds';
             }
-            html += '<div style="margin-top:0.1875rem;color:#374151;font-size:0.75rem">'
+            html += '<div style="margin-top:0.1875rem;color:var(--text-secondary);font-size:0.75rem">'
                   + 'Base £' + Number(data.base_price).toFixed(2)
                   + (data.extras_total ? ' + extras £' + Number(data.extras_total).toFixed(2) : '')
                   + (Number(data.markup_percent) ? ' · markup ' + data.markup_percent + '%' : '')

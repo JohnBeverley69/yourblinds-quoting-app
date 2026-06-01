@@ -80,20 +80,20 @@ $activeNav = 'master-admin';
             letter-spacing: 0;
         }
         .feature-table .feature-price .unit {
-            color: #6b7280; font-weight: 500;
+            color: var(--text-faint); font-weight: 500;
         }
         .feature-table .feature-price .manual {
-            color: #9ca3af; font-weight: 500; font-style: italic;
+            color: var(--text-faint); font-weight: 500; font-style: italic;
         }
-        .feature-table tr.is-inactive td:first-child { color: #6b7280; }
+        .feature-table tr.is-inactive td:first-child { color: var(--text-faint); }
         .feature-table tr.is-inactive .inactive-tag {
             display: inline-block;
             margin-left: 0.5rem;
             padding: 0.0625rem 0.5rem;
             font-size: 0.6875rem;
             font-weight: 600;
-            color: #6b7280;
-            background: #f3f4f6;
+            color: var(--text-faint);
+            background: var(--bg-subtle-2);
             border-radius: 999px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -110,7 +110,7 @@ $activeNav = 'master-admin';
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-        .row-meta { color: #6b7280; font-size: 0.8125rem; margin-top: 0.125rem; }
+        .row-meta { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.125rem; }
         .row-actions { white-space: nowrap; text-align: right; }
         .row-actions form { margin: 0; display: inline; }
         .row-actions button {
@@ -119,7 +119,7 @@ $activeNav = 'master-admin';
         }
         .row-actions button:hover { text-decoration: underline; }
         .row-actions .muted {
-            font-size: 0.8125rem; color: #9ca3af;
+            font-size: 0.8125rem; color: var(--text-faint);
         }
     </style>
 </head>
@@ -151,7 +151,7 @@ $activeNav = 'master-admin';
         <?php endif; ?>
 
         <section class="section">
-            <p style="color:#4b5563;font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
                 Each column is a paid feature. The
                 <strong>£/mo</strong> figure under the heading is the
                 advertised price — edit it on the
