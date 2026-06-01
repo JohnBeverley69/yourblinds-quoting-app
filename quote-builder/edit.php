@@ -2304,6 +2304,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // user gets something to browse before typing.
         if (productSel.value) searchFabrics(fabricSearch.value.trim());
     });
+    fabricSearch.addEventListener('click', function () {
+        // Clicking the input always reopens the dropdown — even when focus
+        // was already inside (in which case the 'focus' event won't re-fire).
+        // Without this, after picking a fabric the user has to delete the
+        // text to browse again, which is exactly what Tyler reported.
+        if (productSel.value) searchFabrics(fabricSearch.value.trim());
+    });
     fabricSearch.addEventListener('input', function () {
         // Typing invalidates the previous picked id — they're searching anew.
         fabricId.value = '';
