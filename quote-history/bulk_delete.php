@@ -49,7 +49,10 @@ $q      = trim((string) ($_POST['return_q'] ?? ''));
 $qs     = [];
 if ($status !== '') $qs[] = 'status=' . urlencode($status);
 if ($q      !== '') $qs[] = 'q='      . urlencode($q);
-$back   = '/quote-history/index.php' . ($qs ? '?' . implode('&', $qs) : '');
+// Redirects to the unified Order history page (the old quote-history
+// URL is now just a 301 to /orders/). Preserves the filter the user
+// was on so they land back on the same view.
+$back   = '/orders/index.php' . ($qs ? '?' . implode('&', $qs) : '');
 
 if (!$ids) {
     $_SESSION['flash_error'] = 'No quotes selected.';

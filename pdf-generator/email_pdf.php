@@ -12,7 +12,7 @@ requireLogin();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     header('Allow: POST');
-    header('Location: /quote-history/index.php');
+    header('Location: /orders/index.php');
     exit;
 }
 

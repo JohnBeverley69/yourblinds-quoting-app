@@ -210,7 +210,10 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$activeNav = 'new-quote';
+// Sidebar lights up "Order history" — the quote-editing pages live
+// under that menu entry now that the old "New Quote" / "Quote
+// History" / "Orders" trio has been merged (Tyler review #3).
+$activeNav = 'order-history';
 $transitions = qb_allowed_transitions((string) $quote['status']);
 ?><!doctype html>
 <html lang="en">
@@ -764,7 +767,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <div class="page-header">
             <div>
                 <p class="page-subtitle" style="margin:0">
-                    <a href="/quote-history/index.php">&larr; Quote history</a>
+                    <a href="/orders/index.php">&larr; Order history</a>
                 </p>
             </div>
         </div>

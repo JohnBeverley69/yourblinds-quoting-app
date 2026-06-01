@@ -559,6 +559,20 @@ $activeNav = 'calendar';
                 <?php if ($mapsEnabled): ?>
                     <a href="/calendar/run.php" class="btn btn-success">Today's run &rarr;</a>
                 <?php endif; ?>
+                <?php
+                    // "+ New quote" button alongside the existing
+                    // "+ Book Appointment". Per Tyler's review: the
+                    // new-quote action shouldn't be hidden behind a
+                    // sidebar entry — it lives on every landing.
+                    $calPerms = function_exists('current_user_permissions')
+                        ? current_user_permissions()
+                        : [];
+                    $canCreateQuotesHere = $isAdmin
+                        || !empty($calPerms['can_create_quotes']);
+                ?>
+                <?php if ($canCreateQuotesHere): ?>
+                    <a href="/quote-builder/new.php" class="btn btn-secondary">+ New quote</a>
+                <?php endif; ?>
                 <a href="/calendar/new.php" class="btn btn-primary">+ Book Appointment</a>
             </div>
         </div>

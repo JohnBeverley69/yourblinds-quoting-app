@@ -12,7 +12,7 @@ requireLogin();
 
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
-    header('Location: /quote-history/index.php');
+    header('Location: /orders/index.php');
     exit;
 }
 header('Location: /quote-builder/edit.php?id=' . $id);

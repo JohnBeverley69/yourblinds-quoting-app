@@ -26,5 +26,5 @@ db()->prepare('DELETE FROM quotes WHERE id = ? AND client_id = ?')
     ->execute([$quoteId, $clientId]);
 
 $_SESSION['flash_success'] = 'Quote ' . $quote['quote_number'] . ' deleted.';
-header('Location: /quote-history/index.php');
+header('Location: /orders/index.php');
 exit;

@@ -279,7 +279,7 @@ foreach ($customers as $c) {
 }
 $selectedCustomerLabel = $customerLabels[(int) $f['customer_id']] ?? '';
 
-$activeNav = 'new-quote';
+$activeNav = 'order-history';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -297,7 +297,7 @@ $activeNav = 'new-quote';
             <div>
                 <h1 class="page-title">New quote</h1>
                 <p class="page-subtitle">
-                    <a href="/quote-history/index.php">&larr; Quote history</a>
+                    <a href="/orders/index.php">&larr; Order history</a>
                 </p>
             </div>
         </div>
@@ -425,7 +425,7 @@ $activeNav = 'new-quote';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Create quote</button>
-                    <a href="/quote-history/index.php" class="btn btn-secondary">Cancel</a>
+                    <a href="/orders/index.php" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </section>

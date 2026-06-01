@@ -13,8 +13,11 @@ declare(strict_types=1);
  * Optional scope (sensible defaults applied if missing):
  *   $isAdmin    bool   defaults to ($user['role'] === 'admin')
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
- *   $activeNav  string one of: calendar, new-quote, quote-history,
- *                      customers, products, users, settings, master-admin.
+ *   $activeNav  string one of: calendar, my-schedule, dashboard,
+ *                      order-history, pipeline, accounts, customers,
+ *                      products, wizard, users, settings, billing,
+ *                      master-admin, pricing, subscriptions,
+ *                      paypal-health, push-updates, backup.
  *                      Empty = no highlight.
  */
 
@@ -100,9 +103,12 @@ $navLinks = [
     // Dashboard is sales-analytics; hidden until the admin grants at
     // least one panel on /admin/users_edit.php for non-admins.
     'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
-    'new-quote'     => ['/quote-builder/new.php',      'New Quote',     $hasQuotes && $canCreateQuotes],
-    'quote-history' => ['/quote-history/index.php',    'Quote History', $hasQuotes && $canSeeQuoteHistory],
-    'orders'        => ['/orders/index.php',           'Orders',        $hasQuotes && $canSeeOrders],
+    // Per Tyler's review (Quotes #3): the old separate "New Quote",
+    // "Quote History" and "Orders" sidebar links have been merged
+    // into one "Order history" entry that covers every status from
+    // draft to paid. New quotes start via the "+ New quote" button
+    // on the page itself (and on the dashboard / calendar headers).
+    'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
     // Pipeline — Kanban view of every quote/order in the funnel.
     // Same audience as Orders (it's the same data, different shape)
     // and reuses the orders' permission gate. Sits next to Orders so

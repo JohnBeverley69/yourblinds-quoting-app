@@ -717,6 +717,15 @@ $activeNav = 'dashboard';
                         if ($filterUser): ?> for <strong><?= e((string) $filterUser['full_name']) ?></strong><?php endif; ?>.
                 </p>
             </div>
+            <?php
+                // Per Tyler's review (Quotes #3): "+ New quote" button
+                // surfaced on the dashboard so the new-quote action is
+                // never more than one click away from any landing page.
+                $canCreateQuotesHere = $isAdmin || !empty($perms['can_create_quotes']);
+            ?>
+            <?php if ($canCreateQuotesHere): ?>
+                <a href="/quote-builder/new.php" class="btn btn-primary">+ New quote</a>
+            <?php endif; ?>
         </div>
 
         <?php if (!empty($_SESSION['flash_error'])): ?>

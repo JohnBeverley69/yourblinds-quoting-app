@@ -2,22 +2,26 @@
 declare(strict_types=1);
 
 /**
- * Orders view — quotes that have been won.
+ * Order history — unified quotes + orders list view.
  *
- * Lifecycle: draft → sent → accepted → ordered → invoiced → paid.
- * Anything in 'accepted' and beyond is, conceptually, an order: the
- * customer's said yes and the job is in motion. This page filters
- * the quotes table down to those four statuses so they stop getting
- * lost in Quote History alongside drafts and declines.
+ * Per Tyler's review (Quotes #3): the separate "New Quote" / "Quote
+ * History" / "Orders" sidebar links were confusing. They all looked
+ * at the same `quotes` table from slightly different angles. This
+ * page is the merged result: every quote in the funnel, with status
+ * chips that pivot the view between "all" / "draft" / "sent" /
+ * "accepted+" etc.
  *
- * Reuses the quote schema rather than promoting orders into their
- * own table — the snapshot fields and totals are exactly the data
- * an order needs anyway. If the schema ever evolves a real "orders"
- * table, this page becomes the natural reading layer for it.
+ * Capabilities (replaces both old pages):
+ *   - All 8 lifecycle statuses surfaced as filter chips
+ *   - Search by quote # / customer name / postcode
+ *   - Bulk delete (from old quote-history) with the payments-attached
+ *     guard intact
+ *   - Order-specific deposit + outstanding columns (from old orders),
+ *     shown when the row is in 'accepted+' (pre-order rows just dash)
+ *   - "+ New quote" prominent button in the page header
  *
- * Same shape as quote-history/index.php: search box, status chips
- * pre-filtered to the order subset, and a table of records linking
- * back to /quote-builder/edit.php for the underlying quote.
+ * Backward compat: /quote-history/index.php redirects to this URL,
+ * preserving status and q querystring.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -30,17 +34,14 @@ $clientId = (int) $user['client_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 
-// No access-403 here: fitters need to open the orders they're
-// installing to verify blind details and take balance payments at
-// the door. Row-filter below restricts non-view-all users to just
-// the orders linked to appointments assigned to them — they don't
-// see other people's customers.
+// Row filter: non-admin users without view-all see only quotes
+// linked to appointments they're assigned to. Same shape as the
+// old orders page — fitters can still see their installs.
 $canViewAll     = $isAdmin || $_perms['can_view_all_customer_jobs'];
 $restrictToMine = !$canViewAll;
+$canCreateQuotes = $isAdmin || $_perms['can_create_quotes'];
 
-// Paid Accounts add-on toggles the Outstanding column on/off. The
-// column uses payments-table data, which only exists / has data when
-// the tenant has the feature. Defensive against missing column.
+// Paid Accounts add-on toggles the Outstanding column on/off.
 $accountsEnabled = false;
 try {
     $accSt = db()->prepare(
@@ -49,83 +50,81 @@ try {
     );
     $accSt->execute([$clientId]);
     $accountsEnabled = ((int) $accSt->fetchColumn()) === 1;
-} catch (Throwable $e) {
-    // Column missing — feature disabled.
-}
+} catch (Throwable $e) { /* feature off */ }
 
+// Full lifecycle. The chip rendering hides rows whose count is zero
+// so a tenant who's never had a declined quote doesn't see a
+// 'declined (0)' chip clogging the bar.
+$allStatuses   = ['draft', 'sent', 'accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'];
 $orderStatuses = ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'];
 
 $status = trim((string) ($_GET['status'] ?? ''));
 $q      = trim((string) ($_GET['q'] ?? ''));
 
-$where  = ['client_id = ?'];
+$where  = ['q.client_id = ?'];
 $params = [$clientId];
 
-if ($status !== '' && in_array($status, $orderStatuses, true)) {
-    $where[]  = 'status = ?';
+if ($status !== '' && in_array($status, $allStatuses, true)) {
+    $where[]  = 'q.status = ?';
     $params[] = $status;
-} else {
-    // Default: all order statuses, in one IN-clause.
-    $ph        = implode(',', array_fill(0, count($orderStatuses), '?'));
-    $where[]   = "status IN ($ph)";
-    $params    = array_merge($params, $orderStatuses);
 }
-
 if ($q !== '') {
-    $where[]  = '(quote_number LIKE ? OR end_customer_name LIKE ? OR end_customer_postcode LIKE ?)';
+    $where[]  = '(q.quote_number LIKE ? OR q.end_customer_name LIKE ? OR q.end_customer_postcode LIKE ?)';
     $like     = '%' . $q . '%';
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
-
 if ($restrictToMine) {
-    $where[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $where[]  = 'q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
     $params[] = (int) $user['user_id'];
 }
 
+// Single SELECT covers both old views — pulls the order-side columns
+// (deposit, payments) too. NULL-safe for draft rows that won't have
+// accepted_at yet.
 $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
                q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
                q.deposit_amount, q.deposit_paid_at,
                IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
                  AS payments_total
           FROM quotes q
-         WHERE " . str_replace('client_id', 'q.client_id', implode(' AND ', $where)) . "
-         ORDER BY COALESCE(q.accepted_at, q.created_at) DESC
+         WHERE " . implode(' AND ', $where) . "
+         ORDER BY COALESCE(q.accepted_at, q.created_at) DESC, q.id DESC
          LIMIT 200";
 try {
     $st = db()->prepare($sql);
     $st->execute($params);
-    $orders = $st->fetchAll();
+    $rows = $st->fetchAll();
 } catch (Throwable $e) {
-    // payments table missing — re-run without the subquery.
-    $sql = 'SELECT id, quote_number, end_customer_name, end_customer_postcode,
-                   status, total, accepted_at, created_at, updated_at,
-                   deposit_amount, deposit_paid_at,
+    // payments table absent on very old schemas — re-run without it.
+    $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
+                   q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
+                   q.deposit_amount, q.deposit_paid_at,
                    0 AS payments_total
-              FROM quotes
-             WHERE ' . implode(' AND ', $where) . '
-             ORDER BY COALESCE(accepted_at, created_at) DESC
-             LIMIT 200';
+              FROM quotes q
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY COALESCE(q.accepted_at, q.created_at) DESC, q.id DESC
+             LIMIT 200";
     $st = db()->prepare($sql);
     $st->execute($params);
-    $orders = $st->fetchAll();
+    $rows = $st->fetchAll();
 }
 
-// Per-status counts for the filter chips — scoped to the order
-// subset (so "ordered (3)" etc. always refers to the orders pool,
-// not the full quotes pool). Applies the same per-user restriction
-// as the list query so the chip totals match.
-$statusPlaceholders = implode(',', array_fill(0, count($orderStatuses), '?'));
-$countWhere   = "client_id = ? AND status IN ($statusPlaceholders)";
-$countParams  = array_merge([$clientId], $orderStatuses);
+// Per-status counts for the chip bar. Mirrors the row filter so
+// counts and the visible rows agree.
+$countWhere   = ['client_id = ?'];
+$countParams  = [$clientId];
 if ($restrictToMine) {
-    $countWhere   .= ' AND id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
-    $countParams[] = (int) $user['user_id'];
+    $countWhere[]   = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $countParams[]  = (int) $user['user_id'];
 }
 $countSt = db()->prepare(
-    "SELECT status, COUNT(*) AS n FROM quotes WHERE $countWhere GROUP BY status"
+    'SELECT status, COUNT(*) AS n
+       FROM quotes
+      WHERE ' . implode(' AND ', $countWhere) . '
+   GROUP BY status'
 );
 $countSt->execute($countParams);
-$counts = [];
+$counts     = [];
 $grandTotal = 0;
 foreach ($countSt->fetchAll() as $r) {
     $counts[$r['status']] = (int) $r['n'];
@@ -143,13 +142,18 @@ $fmtDate = static function (?string $dt): string {
     return $ts ? date('j M Y', $ts) : '—';
 };
 
-$activeNav = 'orders';
+// Convenience flag — when filtered to an order-side status, the
+// Deposit/Outstanding columns are meaningful for every visible row.
+// In "All" view they still render but dash out for pre-acceptance.
+$isOrderView = in_array($status, $orderStatuses, true);
+
+$activeNav = 'order-history';
 ?><!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Orders &middot; YourBlinds</title>
+    <title>Order history &middot; YourBlinds</title>
     <link rel="stylesheet" href="/app.css">
     <style>
         .filter-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
@@ -165,18 +169,37 @@ $activeNav = 'orders';
             font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
             border-radius: 999px;
         }
+        .status-draft     { background: #e5e7eb; color: #374151; }
+        .status-sent      { background: #dbeafe; color: #1e40af; }
         .status-accepted  { background: #d1fae5; color: #065f46; }
+        .status-declined  { background: #fee2e2; color: #991b1b; }
         .status-ordered   { background: #ede9fe; color: #5b21b6; }
+        .status-fitted    { background: #a7f3d0; color: #065f46; }
         .status-invoiced  { background: #fef3c7; color: #92400e; }
         .status-paid      { background: #14532d; color: #fff; }
         a.q-link { font-weight: 600; color: #111827; text-decoration: none; }
         a.q-link:hover { color: #1f3b5b; text-decoration: underline; }
         .search-form { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
-        .search-form input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+        .search-form input {
+            flex: 1; padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db; border-radius: 8px; font: inherit;
+        }
         .empty-state {
             padding: 2rem 1rem; text-align: center;
             color: #6b7280; font-size: 0.9375rem;
         }
+        /* Pipeline shortcut — same row as the filter chips so it
+           doesn't take extra vertical space. */
+        .view-toggle {
+            display: inline-flex; gap: 0.375rem;
+            margin-left: auto;
+        }
+        .view-toggle a {
+            font-size: 0.8125rem; padding: 0.25rem 0.625rem;
+            background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+            color: #1f3b5b; text-decoration: none;
+        }
+        .view-toggle a:hover { border-color: #1f3b5b; }
     </style>
 </head>
 <body>
@@ -186,12 +209,16 @@ $activeNav = 'orders';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Orders</h1>
+                <h1 class="page-title">Order history</h1>
                 <p class="page-subtitle">
-                    Quotes the customer's accepted — accepted, ordered, invoiced and paid.
+                    Every quote in the funnel — drafts, sent quotes, orders, invoices, paid jobs.
                 </p>
             </div>
-            <a href="/quote-history/index.php" class="btn btn-secondary">Quote history &rarr;</a>
+            <?php if ($canCreateQuotes): ?>
+                <a href="/quote-builder/new.php" class="btn btn-primary">
+                    + New quote
+                </a>
+            <?php endif; ?>
         </div>
 
         <?php if ($flashMsg !== null): ?>
@@ -206,13 +233,18 @@ $activeNav = 'orders';
                 <a href="/orders/index.php" class="<?= $status === '' ? 'active' : '' ?>">
                     All (<?= $grandTotal ?>)
                 </a>
-                <?php foreach ($orderStatuses as $s): ?>
+                <?php foreach ($allStatuses as $s): ?>
                     <?php if (empty($counts[$s])) continue; ?>
                     <a href="/orders/index.php?status=<?= e($s) ?>"
                        class="<?= $status === $s ? 'active' : '' ?>">
                         <?= ucfirst($s) ?> (<?= (int) $counts[$s] ?>)
                     </a>
                 <?php endforeach; ?>
+                <span class="view-toggle">
+                    <a href="/orders/pipeline.php" title="Kanban view of the funnel">
+                        Pipeline view &rarr;
+                    </a>
+                </span>
             </div>
 
             <form method="get" action="/orders/index.php" class="search-form">
@@ -228,97 +260,171 @@ $activeNav = 'orders';
                 <?php endif; ?>
             </form>
 
-            <?php if (!$orders): ?>
+            <?php if (!$rows): ?>
                 <div class="empty-state">
                     <?php if ($q !== '' || $status !== ''): ?>
                         Nothing matches your filter. <a href="/orders/index.php">Clear filters</a>.
+                    <?php elseif ($canCreateQuotes): ?>
+                        No quotes yet.
+                        <a href="/quote-builder/new.php">Start a new quote &rarr;</a>
                     <?php else: ?>
-                        No orders yet. Once a quote is marked accepted it'll appear here.
+                        Quotes you're assigned to fit will appear here.
                     <?php endif; ?>
                 </div>
             <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Quote #</th>
-                                <th>Customer</th>
-                                <th>Postcode</th>
-                                <th>Status</th>
-                                <th>Accepted</th>
-                                <th class="num">Total</th>
-                                <th>Deposit</th>
-                                <?php if ($accountsEnabled): ?>
-                                    <th class="num">Outstanding</th>
-                                <?php endif; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($orders as $o):
-                                $dep    = $o['deposit_amount'];
-                                $depAt  = $o['deposit_paid_at'];
-                                // Outstanding = total − payments −
-                                // (deposit if marked paid).
-                                $depCounted = $depAt ? (float) ($dep ?? 0) : 0.0;
-                                $outstanding = round(
-                                    (float) $o['total']
-                                    - (float) ($o['payments_total'] ?? 0)
-                                    - $depCounted, 2
-                                );
-                            ?>
+                <form method="post" action="/quote-history/bulk_delete.php"
+                      id="bulk-delete-form"
+                      data-confirm-submit="Delete the selected quotes? This is permanent — all blinds, items and appointments go too.">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="return_status" value="<?= e($status) ?>">
+                    <input type="hidden" name="return_q"      value="<?= e($q) ?>">
+
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.625rem;">
+                        <button type="submit" class="btn btn-danger"
+                                id="bulk-delete-btn"
+                                style="padding:0.3125rem 0.875rem;font-size:0.875rem"
+                                disabled>
+                            Delete selected
+                        </button>
+                        <span id="bulk-count" style="color:#6b7280;font-size:0.8125rem">
+                            (none selected)
+                        </span>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <a class="q-link"
-                                           href="/quote-builder/edit.php?id=<?= (int) $o['id'] ?>">
-                                            <?= e((string) $o['quote_number']) ?>
-                                        </a>
-                                    </td>
-                                    <td><?= e((string) ($o['end_customer_name'] ?? '')) ?></td>
-                                    <td><?= e((string) ($o['end_customer_postcode'] ?? '')) ?></td>
-                                    <td>
-                                        <span class="status-pill status-<?= e((string) $o['status']) ?>">
-                                            <?= e((string) $o['status']) ?>
-                                        </span>
-                                    </td>
-                                    <td><?= e($fmtDate((string) ($o['accepted_at'] ?? null))) ?></td>
-                                    <td class="num"><?= e($money($o['total'])) ?></td>
-                                    <td>
-                                        <?php if ($dep === null): ?>
-                                            <span style="color:#9ca3af;font-size:0.8125rem">—</span>
-                                        <?php elseif ($depAt): ?>
-                                            <span style="color:#065f46;font-weight:600;font-size:0.8125rem">
-                                                ✓ <?= e($money($dep)) ?> paid
-                                            </span>
-                                        <?php else: ?>
-                                            <span style="color:#92400e;font-weight:600;font-size:0.8125rem">
-                                                <?= e($money($dep)) ?> due
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
+                                    <th style="width:1.75rem;text-align:center">
+                                        <input type="checkbox" id="bulk-all"
+                                               aria-label="Select all visible quotes">
+                                    </th>
+                                    <th>Quote #</th>
+                                    <th>Customer</th>
+                                    <th>Postcode</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th class="num">Total</th>
+                                    <th>Deposit</th>
                                     <?php if ($accountsEnabled): ?>
-                                        <td class="num">
-                                            <?php if ($outstanding > 0.0049): ?>
-                                                <a href="/accounts/index.php?prefill_quote=<?= (int) $o['id'] ?>"
-                                                   title="Click to take a payment against this order"
-                                                   style="color:#92400e;font-weight:700;text-decoration:none;
-                                                          border-bottom:1px dashed #92400e">
-                                                    <?= e($money($outstanding)) ?>
-                                                </a>
-                                            <?php elseif ($outstanding < -0.0049): ?>
-                                                <span style="color:#1e40af;font-weight:700"
-                                                      title="Overpaid">
-                                                    +<?= e($money(-$outstanding)) ?>
-                                                </span>
-                                            <?php else: ?>
-                                                <span style="color:#065f46;font-weight:700">✓ paid</span>
-                                            <?php endif; ?>
-                                        </td>
+                                        <th class="num">Outstanding</th>
                                     <?php endif; ?>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($rows as $r):
+                                    $isOrderRow = in_array((string) $r['status'], $orderStatuses, true);
+                                    $dep    = $r['deposit_amount'];
+                                    $depAt  = $r['deposit_paid_at'];
+                                    $depCounted = $depAt ? (float) ($dep ?? 0) : 0.0;
+                                    $outstanding = round(
+                                        (float) $r['total']
+                                        - (float) ($r['payments_total'] ?? 0)
+                                        - $depCounted, 2
+                                    );
+                                ?>
+                                    <tr>
+                                        <td style="text-align:center">
+                                            <input type="checkbox"
+                                                   class="bulk-row"
+                                                   name="quote_ids[]"
+                                                   value="<?= (int) $r['id'] ?>"
+                                                   aria-label="Select quote <?= e((string) $r['quote_number']) ?>">
+                                        </td>
+                                        <td>
+                                            <a href="/quote-builder/edit.php?id=<?= (int) $r['id'] ?>" class="q-link">
+                                                <?= e((string) $r['quote_number']) ?>
+                                            </a>
+                                        </td>
+                                        <td><?= e((string) ($r['end_customer_name'] ?? '')) ?></td>
+                                        <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
+                                        <td>
+                                            <span class="status-pill status-<?= e((string) $r['status']) ?>">
+                                                <?= e((string) $r['status']) ?>
+                                            </span>
+                                        </td>
+                                        <td style="font-size:0.8125rem;color:#6b7280;white-space:nowrap">
+                                            <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
+                                        </td>
+                                        <td class="num"><?= e($money($r['total'])) ?></td>
+                                        <td>
+                                            <?php if (!$isOrderRow || $dep === null): ?>
+                                                <span style="color:#9ca3af;font-size:0.8125rem">—</span>
+                                            <?php elseif ($depAt): ?>
+                                                <span style="color:#065f46;font-weight:600;font-size:0.8125rem">
+                                                    &check; <?= e($money($dep)) ?> paid
+                                                </span>
+                                            <?php else: ?>
+                                                <span style="color:#92400e;font-weight:600;font-size:0.8125rem">
+                                                    <?= e($money($dep)) ?> due
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <?php if ($accountsEnabled): ?>
+                                            <td class="num">
+                                                <?php if (!$isOrderRow): ?>
+                                                    <span style="color:#9ca3af;font-size:0.8125rem">—</span>
+                                                <?php elseif ($outstanding > 0.0049): ?>
+                                                    <a href="/accounts/index.php?prefill_quote=<?= (int) $r['id'] ?>"
+                                                       title="Click to take a payment against this order"
+                                                       style="color:#92400e;font-weight:700;text-decoration:none;
+                                                              border-bottom:1px dashed #92400e">
+                                                        <?= e($money($outstanding)) ?>
+                                                    </a>
+                                                <?php elseif ($outstanding < -0.0049): ?>
+                                                    <span style="color:#1e40af;font-weight:700"
+                                                          title="Overpaid">
+                                                        +<?= e($money(-$outstanding)) ?>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span style="color:#065f46;font-weight:700">&check; paid</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        <?php endif; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+
+                <script>
+                (function () {
+                    var form    = document.getElementById('bulk-delete-form');
+                    var allBox  = document.getElementById('bulk-all');
+                    var btn     = document.getElementById('bulk-delete-btn');
+                    var counter = document.getElementById('bulk-count');
+                    if (!form || !allBox || !btn || !counter) return;
+
+                    function rows() {
+                        return form.querySelectorAll('input.bulk-row');
+                    }
+                    function refresh() {
+                        var checked = form.querySelectorAll('input.bulk-row:checked').length;
+                        var total   = rows().length;
+                        btn.disabled = checked === 0;
+                        counter.textContent = checked === 0
+                            ? '(none selected)'
+                            : '(' + checked + ' of ' + total + ' selected)';
+                        allBox.checked       = checked > 0 && checked === total;
+                        allBox.indeterminate = checked > 0 && checked < total;
+                    }
+                    allBox.addEventListener('change', function () {
+                        rows().forEach(function (cb) { cb.checked = allBox.checked; });
+                        refresh();
+                    });
+                    form.addEventListener('change', function (e) {
+                        if (e.target && e.target.classList.contains('bulk-row')) refresh();
+                    });
+                    form.addEventListener('submit', function (e) {
+                        var msg = form.getAttribute('data-confirm-submit');
+                        if (msg && !window.confirm(msg)) {
+                            e.preventDefault();
+                        }
+                    });
+                    refresh();
+                })();
+                </script>
             <?php endif; ?>
         </section>
     </main>
