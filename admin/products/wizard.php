@@ -370,6 +370,31 @@ if ($product && $step >= 3) {
     $fabrics = $fabSt->fetchAll();
 }
 
+// Distinct band codes already in use on this product — used to
+// populate the <datalist> autocomplete on the band input so the
+// user can pick from existing bands rather than retyping. Pulls
+// from BOTH product_options and price_tables so a band created in
+// step 4 is still pickable from step 3 and vice versa.
+$knownBands = [];
+if ($product) {
+    $bandSt = $pdo->prepare(
+        "SELECT DISTINCT band_code FROM (
+            SELECT band_code FROM product_options
+             WHERE product_id = ? AND client_id = ? AND active = 1
+            UNION
+            SELECT band_code FROM price_tables
+             WHERE product_id = ? AND client_id = ? AND active = 1
+         ) x
+         WHERE band_code IS NOT NULL AND band_code != ''
+         ORDER BY band_code"
+    );
+    $bandSt->execute([$productId, $clientId, $productId, $clientId]);
+    $knownBands = array_map(
+        static fn ($r) => (string) $r,
+        $bandSt->fetchAll(PDO::FETCH_COLUMN)
+    );
+}
+
 // ── Step 4 setup: load price tables + detect missing combos ──────────
 //
 // Each (system × distinct band_code) combination CAN have a price
@@ -881,8 +906,21 @@ $activeNav = 'wizard';
                                 <input id="bulk_band" name="bulk_band" type="text"
                                        required maxlength="20"
                                        placeholder="A"
+                                       list="known-bands"
                                        value="">
                             </div>
+                            <!-- Autocomplete options from bands already
+                                 defined on this product (in either
+                                 fabrics or price tables). Typing a new
+                                 value still works for the very first
+                                 band on a fresh product. -->
+                            <?php if ($knownBands): ?>
+                                <datalist id="known-bands">
+                                    <?php foreach ($knownBands as $b): ?>
+                                        <option value="<?= e($b) ?>">
+                                    <?php endforeach; ?>
+                                </datalist>
+                            <?php endif; ?>
                             <?php if (count($systems) >= 2): ?>
                                 <div>
                                     <label for="bulk_system_id">Available on</label>

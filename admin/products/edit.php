@@ -81,6 +81,28 @@ foreach ($fabStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
 ksort($fabricsByBand);
 $fabricsTotal = array_sum(array_map('count', $fabricsByBand));
 
+// Distinct band codes already in use on this product — used to
+// populate <datalist> autocomplete on every band input in the
+// Fabrics section. Pulled from BOTH product_options and
+// price_tables so a band created on the price-tables page is
+// still pickable here without retyping.
+$knownBandsStmt = db()->prepare(
+    "SELECT DISTINCT band_code FROM (
+        SELECT band_code FROM product_options
+         WHERE product_id = ? AND client_id = ? AND active = 1
+        UNION
+        SELECT band_code FROM price_tables
+         WHERE product_id = ? AND client_id = ? AND active = 1
+     ) x
+     WHERE band_code IS NOT NULL AND band_code != ''
+     ORDER BY band_code"
+);
+$knownBandsStmt->execute([$id, $clientId, $id, $clientId]);
+$knownBands = array_map(
+    static fn ($v) => (string) $v,
+    $knownBandsStmt->fetchAll(PDO::FETCH_COLUMN)
+);
+
 // Options + their choices for the inline Options section.
 // Two queries (options + choices) then a fold by extra_id — cheaper
 // than one big JOIN that duplicates option rows per choice.
@@ -1012,6 +1034,19 @@ $activeNav = 'products';
                 </span>
             </summary>
             <div class="body">
+                <?php if ($knownBands): ?>
+                    <!-- Autocomplete for every band input in this section.
+                         Suggestions come from bands already in use on
+                         this product (fabrics OR price tables). The
+                         inputs still accept typed-new values so the
+                         first band on a brand-new product still works. -->
+                    <datalist id="known-bands">
+                        <?php foreach ($knownBands as $b): ?>
+                            <option value="<?= e($b) ?>">
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php endif; ?>
+
                 <?php if (!$fabricsByBand): ?>
                     <div class="empty-note">
                         No <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s yet.
@@ -1075,6 +1110,7 @@ $activeNav = 'products';
                                 <label for="qa-bulk-band" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:600;margin-bottom:0.1875rem">Band *</label>
                                 <input id="qa-bulk-band" name="bulk_band" type="text"
                                        required maxlength="20" placeholder="A"
+                                       list="known-bands"
                                        style="width:100%;padding:0.4375rem 0.5625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
                             </div>
                             <?php if (count($systems) >= 2): ?>
@@ -1119,7 +1155,7 @@ $activeNav = 'products';
                     <div style="flex:0 0 4rem">
                         <label for="qa-fab-band">Band *</label>
                         <input id="qa-fab-band" name="band_code" type="text" required maxlength="20"
-                               placeholder="A" style="width:100%">
+                               placeholder="A" list="known-bands" style="width:100%">
                     </div>
                     <div style="flex:1 1 12rem">
                         <label for="qa-fab-name">Name *</label>
