@@ -57,6 +57,87 @@ if (!$table) {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Copy an entire grid (widths × drops × prices) from a sibling table on
+// the same product. Useful when bands have the same shape but different
+// price levels — e.g. "35mm String" and "35mm Tape" both have the
+// supplier's standard grid, just at different £ figures. Clone the
+// String grid into the Tape table, tweak the few cells that differ.
+//
+// Always REPLACES the target's cells — only meaningful on an empty
+// table anyway since the UI only offers it from the empty-state hero.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'copy_from') {
+    csrf_check();
+
+    $sourceTableId = (int) ($_POST['source_table_id'] ?? 0);
+    if ($sourceTableId <= 0 || $sourceTableId === $tableId) {
+        $_SESSION['flash_error'] = 'Bad source table.';
+    } else {
+        // Validate the source belongs to the SAME product on the SAME
+        // tenant. Cross-product / cross-tenant copies aren't supported
+        // here — pricing structures differ enough that letting users
+        // copy them by accident would create silent quoting bugs.
+        $check = db()->prepare(
+            'SELECT 1 FROM price_tables
+              WHERE id = ? AND client_id = ? AND product_id = ?'
+        );
+        $check->execute([$sourceTableId, $clientId, $table['product_id']]);
+        if (!$check->fetchColumn()) {
+            $_SESSION['flash_error'] = 'Source table not found on this product.';
+        } else {
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                // Wipe the target first so we don't end up with a
+                // mix of old and new cells if the user clicked
+                // copy with some rows already in.
+                $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')
+                    ->execute([$tableId]);
+
+                // INSERT...SELECT keeps the data movement on the
+                // DB side — fast even for 200+ cell grids.
+                $pdo->prepare(
+                    'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price)
+                     SELECT ?, width_mm, drop_mm, price
+                       FROM price_table_rows
+                      WHERE price_table_id = ?'
+                )->execute([$tableId, $sourceTableId]);
+
+                // Bump updated_at on the parent so the product list
+                // reflects the change.
+                $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+                    ->execute([$tableId]);
+                $pdo->commit();
+
+                $copiedStmt = $pdo->prepare(
+                    'SELECT COUNT(*) FROM price_table_rows WHERE price_table_id = ?'
+                );
+                $copiedStmt->execute([$tableId]);
+                $copied = (int) $copiedStmt->fetchColumn();
+                $_SESSION['flash_success'] = "Copied $copied cell" . ($copied === 1 ? '' : 's')
+                    . " — tweak the prices that differ, then Save.";
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                $_SESSION['flash_error'] = 'Copy failed: ' . $e->getMessage();
+            }
+        }
+    }
+
+    // PRG so the user sees the populated grid on a clean reload.
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if ($fromWizard ?? false) {
+        // Note: $fromWizard is only set later during page render —
+        // re-derive here from the GET param for safety in this
+        // handler block.
+    }
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Rename / edit the table's metadata. Band code, name, notes. Used when
 // a tenant realises the band they typed at create time (e.g. "FW35ML
 // String") wasn't quite right and needs tweaking — without this, they'd
@@ -518,6 +599,7 @@ if ($isEmpty) {
             $DEFAULT_WIDTHS = $sibWidths;
             $DEFAULT_DROPS  = $sibDrops;
             $shapeSource    = [
+                'id'          => (int) $sibling['id'],
                 'system_name' => (string) $sibling['system_name'],
                 'band_code'   => (string) $sibling['band_code'],
             ];
@@ -971,13 +1053,14 @@ $activeNav = 'products';
                     <h3>This price table is empty</h3>
                     <p>
                         <?php if ($shapeSource !== null): ?>
-                            Start with the same widths and drops as
+                            Bands on this product usually share the same
+                            shape (widths × drops). The fastest path:
+                            clone the existing
                             <strong>
                                 <?= e($shapeSource['system_name']) ?>
                                 — Band <?= e($shapeSource['band_code']) ?>
                             </strong>
-                            (already filled in on this product), then paste
-                            your prices straight into the cells.
+                            grid and tweak only the prices that differ.
                         <?php else: ?>
                             Start with a standard UK grid (widths 800&ndash;4000mm,
                             drops 800&ndash;4000mm in 400mm steps), then type
@@ -985,12 +1068,41 @@ $activeNav = 'products';
                             column by column.
                         <?php endif; ?>
                     </p>
-                    <button type="button" id="qs-fill" class="btn btn-primary">
-                        Quick start &mdash; default grid
-                    </button>
-                    <a href="#" id="qs-blank" class="qs-secondary">
-                        Or build from scratch — start blank
-                    </a>
+                    <?php if ($shapeSource !== null): ?>
+                        <!-- Clone entire grid (widths, drops, AND prices)
+                             from the sibling table. Server-side INSERT
+                             ... SELECT keeps it fast. After save, the
+                             user lands on the populated grid and can
+                             edit just the prices that differ. -->
+                        <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                              style="display:inline-block;margin:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="copy_from">
+                            <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                            <input type="hidden" name="source_table_id" value="<?= (int) $shapeSource['id'] ?>">
+                            <button type="submit" class="btn btn-primary">
+                                Clone
+                                <?= e($shapeSource['system_name']) ?>
+                                — Band <?= e($shapeSource['band_code']) ?>
+                                (with prices)
+                            </button>
+                        </form>
+                        <div style="margin-top:0.625rem">
+                            <button type="button" id="qs-fill" class="btn btn-secondary">
+                                Same shape, blank prices
+                            </button>
+                            <a href="#" id="qs-blank" class="qs-secondary" style="margin-left:0.625rem">
+                                Or build from scratch — start blank
+                            </a>
+                        </div>
+                    <?php else: ?>
+                        <button type="button" id="qs-fill" class="btn btn-primary">
+                            Quick start &mdash; default grid
+                        </button>
+                        <a href="#" id="qs-blank" class="qs-secondary">
+                            Or build from scratch — start blank
+                        </a>
+                    <?php endif; ?>
                 </div>
                 <!-- Hidden defaults so the JS knows what to expand. -->
                 <script id="qs-defaults" type="application/json">{
