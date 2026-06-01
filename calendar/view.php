@@ -99,6 +99,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'rewind_quote') {
+        // Rewind the linked quote from 'fitted' → 'ordered'. Surfaced
+        // by the inconsistency banner below when the appointment is
+        // cancelled/no-show but the quote still says fitted (because
+        // the appointment was previously marked complete, which
+        // auto-advanced the quote).
+        require_once __DIR__ . '/../quote-builder/_helpers.php';
+        $qSt = db()->prepare(
+            'SELECT quote_id FROM appointments
+              WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $qSt->execute([$id, $clientId]);
+        $quoteId = (int) ($qSt->fetchColumn() ?: 0);
+        if ($quoteId > 0) {
+            $rewoundRef = qb_rewind_quote_from_fitted(db(), $quoteId, $clientId);
+            if ($rewoundRef !== null) {
+                $_SESSION['flash_success'] = 'Quote ' . $rewoundRef
+                    . ' rewound from "fitted" back to "ordered".';
+            } else {
+                $_SESSION['flash_error'] = 'Could not rewind — quote may already '
+                    . 'have moved past "fitted" (invoiced / paid).';
+            }
+        } else {
+            $_SESSION['flash_error'] = 'No linked quote to rewind.';
+        }
+        header('Location: /calendar/view.php?id=' . $id);
+        exit;
+    }
+
     if ($action === 'update_assignee') {
         // Permission re-check on the server — the form's hidden in the
         // UI for users without it but we can't trust that alone.
@@ -153,7 +182,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load appointment, joined to customer and assigned user.
 // Tenant-scoped via a.client_id = ?
 // ---------------------------------------------------------------------------
-$stmt = db()->prepare(
+// LEFT JOIN quotes too so the "rewind banner" can spot the
+// appointment-cancelled-but-quote-still-fitted inconsistency
+// without a second round-trip. Phase-2-safe via try/catch — if
+// the JOIN fails (quotes table missing), fall back to the
+// no-quote shape.
+$baseSql =
     'SELECT a.*,
             c.id    AS cust_id,
             c.name  AS cust_name,
@@ -162,15 +196,34 @@ $stmt = db()->prepare(
             u.id        AS assignee_id,
             u.full_name AS assignee_name,
             u.email     AS assignee_email,
-            COALESCE(s.feature_maps, 0) AS feature_maps
+            COALESCE(s.feature_maps, 0) AS feature_maps,
+            q.quote_number AS linked_quote_number,
+            q.status       AS linked_quote_status
        FROM appointments a
   LEFT JOIN customers       c ON c.id = a.customer_id
   LEFT JOIN client_users    u ON u.id = a.client_user_id
   LEFT JOIN client_settings s ON s.client_id = a.client_id
-      WHERE a.id = ? AND a.client_id = ?'
-);
-$stmt->execute([$id, $clientId]);
-$appt = $stmt->fetch();
+  LEFT JOIN quotes          q ON q.id = a.quote_id
+      WHERE a.id = ? AND a.client_id = ?';
+
+try {
+    $stmt = db()->prepare($baseSql);
+    $stmt->execute([$id, $clientId]);
+    $appt = $stmt->fetch();
+} catch (Throwable $e) {
+    // Quotes table missing — drop the JOIN and the two NULL columns.
+    error_log('view.php: quotes JOIN failed, falling back: ' . $e->getMessage());
+    $fallbackSql = str_replace(
+        ['LEFT JOIN quotes          q ON q.id = a.quote_id',
+         'q.quote_number AS linked_quote_number,',
+         'q.status       AS linked_quote_status'],
+        ['', 'NULL AS linked_quote_number,', 'NULL AS linked_quote_status'],
+        $baseSql
+    );
+    $stmt = db()->prepare($fallbackSql);
+    $stmt->execute([$id, $clientId]);
+    $appt = $stmt->fetch();
+}
 
 if (!$appt) {
     http_response_code(404);
@@ -408,6 +461,55 @@ $activeNav = 'calendar';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
+        <?php
+            // Inconsistency hint — appointment is cancelled / no-show
+            // but its linked quote is still at 'fitted' (because the
+            // appointment was previously marked complete, which
+            // auto-advanced the quote). Surfaces a one-click rewind
+            // for when the cancellation MEANS the install didn't
+            // actually happen. We don't auto-rewind because plenty
+            // of cancellations are just paperwork after a real fit.
+            $apptStatus  = (string) ($appt['status']              ?? '');
+            $quoteStatus = (string) ($appt['linked_quote_status'] ?? '');
+            $quoteRef    = (string) ($appt['linked_quote_number'] ?? '');
+            $showRewindHint = in_array($apptStatus, ['cancelled', 'no_show'], true)
+                           && $quoteStatus === 'fitted'
+                           && !empty($appt['quote_id']);
+        ?>
+        <?php if ($showRewindHint): ?>
+            <div class="alert" role="alert"
+                 style="background:#fef3c7;border:1px solid #fde68a;
+                        color:#78350f;padding:0.75rem 1rem;
+                        border-radius:8px;margin-bottom:1rem;
+                        display:flex;align-items:center;gap:0.875rem;
+                        flex-wrap:wrap;line-height:1.5;font-size:0.9375rem">
+                <div style="flex:1;min-width:18rem">
+                    <strong>Status mismatch:</strong>
+                    this appointment is <em><?= e($apptStatus) ?></em>
+                    but its linked quote
+                    <strong><?= e($quoteRef) ?></strong>
+                    is still marked as <em>fitted</em>.
+                    <br>
+                    <span style="font-size:0.8125rem">
+                        If the install didn't actually happen, rewind the
+                        quote back to <em>ordered</em>. If the install
+                        DID happen and this is just a paperwork cancel,
+                        leave it alone.
+                    </span>
+                </div>
+                <form method="post" action="/calendar/view.php?id=<?= (int) $id ?>"
+                      style="margin:0"
+                      data-confirm="Rewind quote <?= e($quoteRef) ?> from 'fitted' back to 'ordered'? Use only if the install didn't really happen.">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="rewind_quote">
+                    <button type="submit" class="btn btn-secondary"
+                            style="background:#78350f;color:#fff;border-color:#78350f">
+                        Rewind quote &raquo;
+                    </button>
+                </form>
+            </div>
         <?php endif; ?>
 
         <section class="section">

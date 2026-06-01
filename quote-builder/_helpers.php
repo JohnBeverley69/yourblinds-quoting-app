@@ -198,6 +198,51 @@ function qb_advance_quote_to_fitted(PDO $pdo, int $quoteId, int $clientId): ?str
     }
 }
 
+/**
+ * Companion to qb_advance_quote_to_fitted() — moves a quote back
+ * OUT of 'fitted' when the install gets cancelled/no-showed after
+ * the auto-advance had already fired. Doesn't trigger
+ * automatically; the user has to click the banner on the
+ * appointment view page, because most cancellations are just
+ * paperwork after a real install (the rewind would be wrong).
+ *
+ * Default rewind target is 'ordered' (the most common pre-fit
+ * state). If the user actually wants to go further back, they
+ * adjust via the quote edit page.
+ *
+ * Guarded just like the advance helper — only rewinds if current
+ * status is 'fitted'. 'invoiced' / 'paid' don't rewind because
+ * money's already moved; user should void the invoice/payment
+ * separately if needed.
+ */
+function qb_rewind_quote_from_fitted(PDO $pdo, int $quoteId, int $clientId): ?string
+{
+    if ($quoteId <= 0 || $clientId <= 0) return null;
+
+    try {
+        $st = $pdo->prepare(
+            'SELECT status, quote_number FROM quotes
+              WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $st->execute([$quoteId, $clientId]);
+        $q = $st->fetch();
+        if (!$q) return null;
+        if ((string) ($q['status'] ?? '') !== 'fitted') return null;
+
+        $upd = $pdo->prepare(
+            "UPDATE quotes
+                SET status = 'ordered'
+              WHERE id = ? AND client_id = ? AND status = 'fitted'"
+        );
+        $upd->execute([$quoteId, $clientId]);
+        if ($upd->rowCount() < 1) return null;
+        return (string) ($q['quote_number'] ?? ('#' . $quoteId));
+    } catch (Throwable $e) {
+        error_log('qb_rewind_quote_from_fitted failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
 function qb_allowed_transitions(string $current): array
 {
     switch ($current) {
