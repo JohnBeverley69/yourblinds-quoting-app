@@ -800,6 +800,30 @@ $activeNav = 'wizard';
                     <?php endif; ?>
 
                     <?php if ($fabrics): ?>
+                        <!-- "Delete all" bulk-clear. Posts every fabric id
+                             on the product as ids[]; option-delete.php
+                             already handles the array case. Behind a
+                             data-confirm with the count so a misclick
+                             can't wipe a 140-colour range. -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;
+                                    margin:0 0 0.375rem;font-size:0.8125rem;color:var(--text-faint)">
+                            <span><?= count($fabrics) ?> <?= e($labelL) ?><?= count($fabrics) === 1 ? '' : 's' ?> added</span>
+                            <form method="post" action="/admin/products/option-delete.php"
+                                  style="margin:0"
+                                  data-confirm="Delete ALL <?= count($fabrics) ?> <?= e($labelL) ?>s on this product? Cannot be undone.">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                                <input type="hidden" name="return_to"
+                                       value="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=3">
+                                <?php foreach ($fabrics as $f): ?>
+                                    <input type="hidden" name="ids[]" value="<?= (int) $f['id'] ?>">
+                                <?php endforeach; ?>
+                                <button type="submit"
+                                        style="background:transparent;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline">
+                                    Delete all
+                                </button>
+                            </form>
+                        </div>
                         <div class="wiz-list" style="max-height:18rem;overflow-y:auto">
                             <?php foreach ($fabrics as $f): ?>
                                 <div class="wiz-list-item">
