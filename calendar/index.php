@@ -38,6 +38,15 @@ $daysInMonth   = (int) $firstOfMonth->format('t');
 $totalCells    = $leadingBlanks + $daysInMonth;
 $trailingBlanks = (7 - ($totalCells % 7)) % 7;
 
+// Tyler's review: show the first week of the next month too. If your
+// month ends mid-week you need to see the rest of that week without
+// flipping over to next month. We render the trailing partial week
+// (which used to be empty grey cells) AS REAL days from next month,
+// then one additional full Mon-Sun week beyond.
+$nextMonthFirst   = $firstOfMonth->modify('+1 month');
+$overhangDays     = $trailingBlanks + 7;
+$overhangLastDate = $nextMonthFirst->modify('+' . ($overhangDays - 1) . ' days');
+
 // ---------------------------------------------------------------------------
 // Fetch appointments visible to this client, falling within the month window.
 // Grouped by date for fast per-cell rendering.
@@ -82,7 +91,7 @@ if ($mineOnly) {
         $clientId,
         (int) $user['user_id'],
         $firstOfMonth->format('Y-m-d'),
-        $lastOfMonth->format('Y-m-d'),
+        $overhangLastDate->format('Y-m-d'),
     ]);
 } else {
     $stmt = db()->prepare(
@@ -99,7 +108,7 @@ if ($mineOnly) {
     $stmt->execute([
         $clientId,
         $firstOfMonth->format('Y-m-d'),
-        $lastOfMonth->format('Y-m-d'),
+        $overhangLastDate->format('Y-m-d'),
     ]);
 }
 
@@ -281,6 +290,15 @@ $activeNav = 'calendar';
             position: relative;
         }
         .cal-cell.is-other-month { background: var(--bg-subtle); }
+        /* Next-month overhang — subtly muted background (lighter than
+           is-other-month, which is for non-functional fill cells) so
+           the eye distinguishes "this is next month" without it
+           reading as disabled. Add affordance and appointments still
+           work as on current-month cells. */
+        .cal-cell.is-overhang { background: var(--bg-subtle); }
+        .cal-cell.is-overhang .cal-day-num {
+            opacity: 0.7;
+        }
         /* Today: darker blue tint + navy inset stripe down the left
            edge. Tyler reported #eff6ff was too washed out on his
            monitor to spot at a glance. The stripe gives a strong
@@ -731,8 +749,50 @@ $activeNav = 'calendar';
                     </div>
                 <?php endfor; ?>
 
-                <?php for ($i = 0; $i < $trailingBlanks; $i++): ?>
-                    <div class="cal-cell is-other-month" aria-hidden="true"></div>
+                <?php
+                    // Next-month overhang. Same markup as current-month
+                    // cells (so appointments, add-affordance, drag &
+                    // drop, hover all behave identically) but tagged
+                    // with .is-overhang for a subtly muted background.
+                    for ($i = 0; $i < $overhangDays; $i++):
+                        $cellDate  = $nextMonthFirst->modify('+' . $i . ' days');
+                        $iso       = $cellDate->format('Y-m-d');
+                        $isToday   = $iso === $todayStr;
+                        $weekday3  = $cellDate->format('D');
+                        $appts     = $byDate[$iso] ?? [];
+                        $dayLabel  = (int) $cellDate->format('j');
+                ?>
+                    <div class="cal-cell is-overhang<?= $isToday ? ' is-today' : '' ?>"
+                         role="gridcell" data-date="<?= e($iso) ?>">
+                        <a class="cal-cell-add"
+                           href="/calendar/new.php?date=<?= e($iso) ?>"
+                           aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
+                        <span class="cal-day-num" data-weekday="<?= e($weekday3) ?>"><?= $dayLabel ?></span>
+                        <?php if ($appts): ?>
+                            <div class="cal-appts">
+                                <?php foreach ($appts as $a): ?>
+                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?>"
+                                       href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
+                                       draggable="true"
+                                       data-id="<?= (int) $a['id'] ?>"
+                                       <?php if (!empty($a['quote_id'])): ?>
+                                           data-quote-id="<?= (int) $a['quote_id'] ?>"
+                                       <?php endif; ?>
+                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
+                                        <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
+                                        <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
+                                        <?php if (!empty($a['quote_id'])): ?>
+                                            <span class="cal-appt-open-order"
+                                                  role="link" tabindex="0"
+                                                  data-quote-id="<?= (int) $a['quote_id'] ?>"
+                                                  title="Open order"
+                                                  aria-label="Open order">→</span>
+                                        <?php endif; ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 <?php endfor; ?>
             </div>
         </section>
