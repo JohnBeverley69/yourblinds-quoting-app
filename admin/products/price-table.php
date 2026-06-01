@@ -112,17 +112,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
         $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
             ->execute([$tableId]);
         $pdo->commit();
-        $summary = [
-            'inserted' => count($bulk),
-            'blank'    => 0,
-            'errors'   => $rowErrs,
-            'mode'     => 'inline',
-        ];
+        // POST-Redirect-GET. A bare re-render leaves the browser
+        // scrolled to where the user clicked "Save" — at the bottom
+        // — so they never see the success banner at the top. A
+        // proper 303 redirect scrolls to the top of the fresh page
+        // and the flash message lands somewhere they can see it.
+        $_SESSION['flash_success'] = 'Saved ' . count($bulk) . ' price cell'
+            . (count($bulk) === 1 ? '' : 's') . '.'
+            . ($rowErrs ? ' ' . count($rowErrs) . ' had problems (see below).' : '');
+        if ($rowErrs) {
+            $_SESSION['flash_errors_detail'] = array_slice($rowErrs, 0, 25);
+        }
+        $rt = $_SERVER['REQUEST_URI'] ?? ('/admin/products/price-table.php?id=' . $tableId);
+        // Strip any &saved=… we may have appended previously, then
+        // add it so the page knows to show the "next table" prompt.
+        $rt = preg_replace('/[&?]saved=[01]/', '', (string) $rt);
+        $sep = strpos($rt, '?') === false ? '?' : '&';
+        header('Location: ' . $rt . $sep . 'saved=1', true, 303);
+        exit;
     } catch (Throwable $e) {
         $pdo->rollBack();
         $error = 'Database error: ' . $e->getMessage();
     }
 }
+
+// Read & clear flash messages set by the save handler above (after
+// the 303 redirect). $summary is reconstituted from the flash so the
+// existing render logic below still works.
+$flashMsg = $_SESSION['flash_success'] ?? null;
+unset($_SESSION['flash_success']);
+$flashErrsDetail = $_SESSION['flash_errors_detail'] ?? [];
+unset($_SESSION['flash_errors_detail']);
+$justSaved = !empty($_GET['saved']);
 
 // ---------------------------------------------------------------------------
 // Template download — generate a pre-populated XLSX matrix.
@@ -401,8 +422,70 @@ $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 $isEmpty = !$matrixWidths && !$matrixDrops;
 
 // "Quick start" grid for empty tables.
+// If there's already a populated price table elsewhere on this same
+// product, we use ITS widths and drops as the default — most tenants
+// use the same dimensions across every band of a product, so this
+// removes the need to re-enter them. Falls back to the UK standard
+// grid if no other populated table exists.
 $DEFAULT_WIDTHS = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
 $DEFAULT_DROPS  = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
+$shapeSource    = null;  // info about which sibling table we copied from
+if ($isEmpty) {
+    $sibStmt = db()->prepare(
+        'SELECT t.id, t.band_code, s.name AS system_name
+           FROM price_tables t
+           JOIN product_systems s ON s.id = t.system_id
+          WHERE t.product_id = ? AND t.client_id = ? AND t.id != ?
+            AND EXISTS (SELECT 1 FROM price_table_rows r WHERE r.price_table_id = t.id)
+       ORDER BY t.id LIMIT 1'
+    );
+    $sibStmt->execute([$table['product_id'], $clientId, $tableId]);
+    $sibling = $sibStmt->fetch();
+    if ($sibling) {
+        $wSt = db()->prepare(
+            'SELECT DISTINCT width_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm'
+        );
+        $wSt->execute([$sibling['id']]);
+        $sibWidths = array_map('intval', $wSt->fetchAll(PDO::FETCH_COLUMN));
+
+        $dSt = db()->prepare(
+            'SELECT DISTINCT drop_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY drop_mm'
+        );
+        $dSt->execute([$sibling['id']]);
+        $sibDrops = array_map('intval', $dSt->fetchAll(PDO::FETCH_COLUMN));
+
+        if ($sibWidths && $sibDrops) {
+            $DEFAULT_WIDTHS = $sibWidths;
+            $DEFAULT_DROPS  = $sibDrops;
+            $shapeSource    = [
+                'system_name' => (string) $sibling['system_name'],
+                'band_code'   => (string) $sibling['band_code'],
+            ];
+        }
+    }
+}
+
+// "Next price table to fill" — the empty (or smallest-cell) sibling
+// of the current table. Shown after a save so the user has a clear
+// next step. NULL when there's nothing else to do on this product.
+$nextTableHint = null;
+$nextStmt = db()->prepare(
+    "SELECT t.id, t.band_code, s.name AS system_name,
+            (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS cells
+       FROM price_tables t
+       JOIN product_systems s ON s.id = t.system_id
+      WHERE t.product_id = ? AND t.client_id = ? AND t.id != ?
+        AND t.active = 1
+   ORDER BY cells ASC, t.id ASC
+      LIMIT 1"
+);
+$nextStmt->execute([$table['product_id'], $clientId, $tableId]);
+$nextRow = $nextStmt->fetch();
+// Only suggest it if the candidate is genuinely emptier than this
+// table — otherwise "next" would point sideways.
+if ($nextRow && (int) $nextRow['cells'] === 0) {
+    $nextTableHint = $nextRow;
+}
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -660,7 +743,38 @@ $activeNav = 'products';
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
-        <?php if ($summary !== null): ?>
+        <?php if ($justSaved || $flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"
+                 style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                <span style="flex:1">
+                    &check; <?= e((string) ($flashMsg ?? 'Saved.')) ?>
+                </span>
+                <?php if ($nextTableHint): ?>
+                    <a href="/admin/products/price-table.php?id=<?= (int) $nextTableHint['id'] ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
+                       class="btn btn-primary btn-sm">
+                        Next: <?= e((string) $nextTableHint['system_name']) ?>
+                        — Band <?= e((string) $nextTableHint['band_code']) ?> &rarr;
+                    </a>
+                <?php elseif ($wizardBackId > 0): ?>
+                    <a href="/admin/products/wizard.php?id=<?= $wizardBackId ?>&step=4"
+                       class="btn btn-primary btn-sm">
+                        &larr; Back to setup wizard
+                    </a>
+                <?php endif; ?>
+            </div>
+            <?php if (!empty($flashErrsDetail)): ?>
+                <div class="alert alert-error" role="alert">
+                    <strong>Some cells had problems:</strong>
+                    <ul class="summary-list">
+                        <?php foreach ($flashErrsDetail as $err): ?>
+                            <li><?= e((string) $err) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($summary !== null): /* upload flows still re-render with $summary */ ?>
             <div class="alert alert-success" role="status">
                 Saved <strong><?= (int) $summary['inserted'] ?></strong> price cells.
                 <?php if (!empty($summary['blank']) && $summary['blank'] > 0): ?>
@@ -712,10 +826,20 @@ $activeNav = 'products';
                 <div class="qs-tile">
                     <h3>This price table is empty</h3>
                     <p>
-                        Start with a standard UK grid (widths 800&ndash;4000mm,
-                        drops 800&ndash;4000mm in 400mm steps), then type
-                        prices straight into the cells. Or build the grid
-                        column by column.
+                        <?php if ($shapeSource !== null): ?>
+                            Start with the same widths and drops as
+                            <strong>
+                                <?= e($shapeSource['system_name']) ?>
+                                — Band <?= e($shapeSource['band_code']) ?>
+                            </strong>
+                            (already filled in on this product), then paste
+                            your prices straight into the cells.
+                        <?php else: ?>
+                            Start with a standard UK grid (widths 800&ndash;4000mm,
+                            drops 800&ndash;4000mm in 400mm steps), then type
+                            prices straight into the cells. Or build the grid
+                            column by column.
+                        <?php endif; ?>
                     </p>
                     <button type="button" id="qs-fill" class="btn btn-primary">
                         Quick start &mdash; default grid
