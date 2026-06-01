@@ -401,6 +401,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .status-actions button, .status-actions form {
             margin: 0;
         }
+        /* Top-of-page Quote actions panel — slimmer than a standard
+           section so it doesn't push the customer/items content too
+           far below the fold on a tall list of transitions. */
+        .qb-top-actions {
+            margin-top: 0;
+            padding: 0.625rem 0.875rem;
+        }
+        .qb-top-actions .section-header { margin-bottom: 0.25rem; }
+        .qb-top-actions .section-title { font-size: 0.9375rem; margin: 0; }
+        .qb-top-actions .status-actions { margin-top: 0.5rem; }
 
         /* ===========================================================
            Sticky quote bar — always-visible quote-number + status +
@@ -717,6 +727,39 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 Total <?= e(qb_fmt_money($quote['total'])) ?>
             </span>
         </div>
+
+        <!-- Quote actions panel — moved to the top of the page per
+             Tyler's review. Operators who pop in to do a quick status
+             change (mark ordered, mark fitted, download PDF) no longer
+             have to scroll to the bottom to find the controls. Delete
+             stays in its own "Danger zone" at the very bottom so it
+             can't be a top-of-page misclick. -->
+        <section class="section qb-top-actions">
+            <div class="section-header">
+                <h2 class="section-title">Quote actions</h2>
+            </div>
+            <div class="status-actions">
+                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>"
+                   class="btn btn-secondary" target="_blank" rel="noopener">
+                    View PDF
+                </a>
+                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>&download=1"
+                   class="btn btn-secondary">
+                    Download PDF
+                </a>
+                <?php foreach ($transitions as $t): ?>
+                    <?php if (!qb_user_can_change_to($isAdmin, $_perms, $t)) continue; ?>
+                    <form method="post" action="/quote-builder/change_status.php">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <input type="hidden" name="target_status" value="<?= e($t) ?>">
+                        <button type="submit" class="btn btn-secondary">
+                            <?= $t === 'draft' ? 'Reopen as draft' : 'Mark as ' . e($t) ?>
+                        </button>
+                    </form>
+                <?php endforeach; ?>
+            </div>
+        </section>
 
         <div class="page-header">
             <div>
@@ -1604,34 +1647,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </form>
         </section>
 
-        <!-- ============== STATUS + DANGER ZONE ============== -->
+        <!-- ============== DANGER ZONE ==============
+             Status transitions / PDF buttons now live at the TOP of
+             the page (see .qb-top-actions). Only the Delete button
+             remains down here — deliberately separated so it can't
+             be a top-of-page misclick on a quick visit. -->
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Quote actions</h2>
+                <h2 class="section-title" style="color:#b91c1c">Danger zone</h2>
             </div>
             <div class="status-actions">
-                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>"
-                   class="btn btn-secondary" target="_blank" rel="noopener">
-                    View PDF
-                </a>
-                <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>&download=1"
-                   class="btn btn-secondary">
-                    Download PDF
-                </a>
-                <?php foreach ($transitions as $t): ?>
-                    <?php if (!qb_user_can_change_to($isAdmin, $_perms, $t)) continue; ?>
-                    <form method="post" action="/quote-builder/change_status.php">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                        <input type="hidden" name="target_status" value="<?= e($t) ?>">
-                        <button type="submit" class="btn btn-secondary">
-                            <?= $t === 'draft' ? 'Reopen as draft' : 'Mark as ' . e($t) ?>
-                        </button>
-                    </form>
-                <?php endforeach; ?>
                 <form method="post" action="/quote-builder/delete.php"
-                      data-confirm="Delete quote <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too."
-                      style="margin-left:auto">
+                      data-confirm="Delete quote <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too.">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                     <button type="submit" class="btn btn-danger">Delete quote</button>
