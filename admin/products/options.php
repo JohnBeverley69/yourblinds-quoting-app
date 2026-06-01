@@ -59,6 +59,105 @@ $f = [
 ];
 $error = null;
 
+// ── Bulk-add: same pattern as the wizard's step 3. Pick a band code
+//    (and optional system scope) once, paste a list of names, one per
+//    line. Each line becomes a fabric in that band. Duplicates against
+//    the uniq_option_per_product constraint are counted as skips so
+//    one bad row doesn't fail the whole batch.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'add_bulk') {
+    csrf_check();
+
+    $band = trim((string) ($_POST['bulk_band'] ?? ''));
+    $band = (string) preg_replace('/^band\s+/i', '', $band);
+    $namesRaw = (string) ($_POST['bulk_names'] ?? '');
+    $sysIdRaw = (string) ($_POST['bulk_system_id'] ?? '');
+    $sysId    = ($sysIdRaw === '' || $sysIdRaw === '0') ? null : (int) $sysIdRaw;
+
+    // Schema-aware: skip system_id write if the column doesn't exist
+    // (tenant hasn't run migrate_option_system_scope.php yet).
+    $hasSystemIdCol = false;
+    try {
+        $hasSystemIdCol = (bool) db()->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME   = 'product_options'
+                AND COLUMN_NAME  = 'system_id'"
+        )->fetchColumn();
+    } catch (Throwable $e) { /* keep false */ }
+
+    if ($band === '') {
+        $error = 'Band code is required.';
+    } elseif (strlen($band) > 20) {
+        $error = 'Band code too long (max 20).';
+    } else {
+        if ($sysId !== null && $hasSystemIdCol) {
+            $check = db()->prepare(
+                'SELECT 1 FROM product_systems
+                  WHERE id = ? AND product_id = ? AND client_id = ?'
+            );
+            $check->execute([$sysId, $productId, $clientId]);
+            if (!$check->fetchColumn()) {
+                $error = 'Chosen system is not on this product.';
+            }
+        }
+
+        if ($error === null) {
+            $lines = preg_split('/\r\n|\r|\n/', $namesRaw) ?: [];
+            $names = [];
+            foreach ($lines as $line) {
+                $name = trim($line);
+                if ($name === '' || strlen($name) > 150) continue;
+                $names[] = $name;
+            }
+            if (!$names) {
+                $error = 'No names — paste at least one name into the box.';
+            } else {
+                $ins = $hasSystemIdCol
+                    ? db()->prepare(
+                        'INSERT INTO product_options
+                          (client_id, product_id, system_id, band_code, name, sort_order, active)
+                          VALUES (?, ?, ?, ?, ?, 0, 1)'
+                    )
+                    : db()->prepare(
+                        'INSERT INTO product_options
+                          (client_id, product_id, band_code, name, sort_order, active)
+                          VALUES (?, ?, ?, ?, 0, 1)'
+                    );
+                $added   = 0;
+                $skipped = 0;
+                foreach ($names as $name) {
+                    try {
+                        if ($hasSystemIdCol) {
+                            $ins->execute([$clientId, $productId, $sysId, $band, $name]);
+                        } else {
+                            $ins->execute([$clientId, $productId, $band, $name]);
+                        }
+                        $added++;
+                    } catch (Throwable $e) {
+                        $skipped++;
+                    }
+                }
+                $msg = "Added $added to Band $band"
+                     . ($sysId !== null ? ' (one system only)' : '')
+                     . '.';
+                if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
+                $_SESSION['flash_success'] = $msg;
+
+                $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+                if ($returnTo !== ''
+                    && $returnTo[0] === '/'
+                    && !str_starts_with($returnTo, '//')
+                    && !preg_match('#^/?\w+://#', $returnTo)) {
+                    header('Location: ' . $returnTo);
+                } else {
+                    header('Location: /admin/products/options.php?product_id=' . $productId);
+                }
+                exit;
+            }
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 

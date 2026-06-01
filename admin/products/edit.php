@@ -1052,10 +1052,65 @@ $activeNav = 'products';
                     </div>
                 <?php endforeach; endif; ?>
 
+                <!-- Bulk-add — pick a band ONCE, paste a list of names,
+                     each line becomes a fabric. Same handler the wizard
+                     uses. The right tool for the 50-200 colour ranges
+                     common on venetians / verticals / faux woods. -->
+                <details style="margin-top:0.875rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px">
+                    <summary style="cursor:pointer;padding:0.5625rem 0.75rem;font-weight:600;font-size:0.875rem;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:0.4375rem">
+                        <span style="color:var(--text-faint);font-size:0.75rem">▸</span>
+                        Add many at once
+                        <span style="color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-left:0.25rem">
+                            Paste a colour list from Excel
+                        </span>
+                    </summary>
+                    <form method="post" action="/admin/products/options.php?product_id=<?= (int) $id ?>"
+                          style="padding:0.75rem 0.875rem;border-top:1px solid var(--border)">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="add_bulk">
+                        <input type="hidden" name="return_to" value="/admin/products/edit.php?id=<?= (int) $id ?>">
+
+                        <div style="display:grid;grid-template-columns:6rem<?= count($systems) >= 2 ? ' 11rem' : '' ?> 1fr;gap:0.5rem;align-items:start">
+                            <div>
+                                <label for="qa-bulk-band" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:600;margin-bottom:0.1875rem">Band *</label>
+                                <input id="qa-bulk-band" name="bulk_band" type="text"
+                                       required maxlength="20" placeholder="A"
+                                       style="width:100%;padding:0.4375rem 0.5625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                            </div>
+                            <?php if (count($systems) >= 2): ?>
+                                <div>
+                                    <label for="qa-bulk-system" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:600;margin-bottom:0.1875rem">Available on</label>
+                                    <select id="qa-bulk-system" name="bulk_system_id"
+                                            style="width:100%;padding:0.4375rem 0.5625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                                        <option value="">All systems</option>
+                                        <?php foreach ($systems as $sys): ?>
+                                            <option value="<?= (int) $sys['id'] ?>"><?= e((string) $sys['name']) ?> only</option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
+                            <div>
+                                <label for="qa-bulk-names" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:600;margin-bottom:0.1875rem">Names (one per line)</label>
+                                <textarea id="qa-bulk-names" name="bulk_names" rows="6" required
+                                          placeholder="Plain White&#10;Plain Cream&#10;Plain Black&#10;…"
+                                          style="width:100%;padding:0.4375rem 0.5625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit;resize:vertical"></textarea>
+                            </div>
+                        </div>
+                        <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem">
+                            <button type="submit" class="btn btn-secondary">+ Add all</button>
+                            <span style="color:var(--text-faint);font-size:0.8125rem">
+                                One line = one <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>.
+                                Paste straight from an Excel column.
+                            </span>
+                        </div>
+                    </form>
+                </details>
+
                 <!-- Quick-add a single fabric inline. Same handler as
                      options.php; we pass return_to so the bounce comes
                      back here rather than dropping the user on the
-                     fabrics list. -->
+                     fabrics list. Kept for when you want to add ONE
+                     with the full set of supplier/colour/code fields. -->
                 <form method="post" action="/admin/products/options.php?product_id=<?= (int) $id ?>"
                       class="quick-add" style="margin-top:0.875rem">
                     <?= csrf_field() ?>
@@ -1081,7 +1136,7 @@ $activeNav = 'products';
                         <input id="qa-fab-supplier" name="supplier_name" type="text" maxlength="150"
                                style="width:100%">
                     </div>
-                    <button type="submit">+ Add</button>
+                    <button type="submit">+ Add one</button>
                 </form>
             </div>
         </details>
