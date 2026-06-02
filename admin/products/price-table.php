@@ -1459,29 +1459,46 @@ $activeNav = 'products';
                 <input type="hidden" name="action" value="bulk_axis_edit">
                 <h3>Bulk-edit widths and drops</h3>
                 <p>
-                    Each line / cell is one value (mm). Sorted ascending,
-                    then matched against the existing list by position —
-                    where a value differs, the column or row is
-                    <strong>renamed and its prices kept</strong>.
-                    Removing a line deletes that column/row (with its
-                    prices). Adding a line gives you a new empty
-                    column/row.
+                    The current values are pre-filled. <strong>Click
+                    Clear</strong> on either box to wipe and paste a fresh
+                    list, or just edit in place. Each line / cell is one
+                    value (mm). On save:
                 </p>
+                <ul style="margin:0 0 0.625rem 1.25rem;padding:0;color:var(--text-muted);font-size:0.8125rem;line-height:1.55">
+                    <li><strong>Changed values</strong> → that column/row is
+                        renamed, <em>prices kept</em>.</li>
+                    <li><strong>Deleted lines</strong> → that column/row goes
+                        (prices too).</li>
+                    <li><strong>Added lines</strong> → new empty column/row
+                        appears.</li>
+                </ul>
 
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
-                    <label for="bulk-widths" style="font-weight:600;font-size:0.8125rem">Widths (mm)</label>
-                    <span style="color:var(--text-faint);font-size:0.75rem">
-                        Currently <?= count($matrixWidths) ?>
-                    </span>
+                    <label for="bulk-widths" style="font-weight:600;font-size:0.8125rem">
+                        Widths (mm)
+                        <span style="color:var(--text-faint);font-weight:400;font-size:0.75rem;margin-left:0.375rem">
+                            currently <?= count($matrixWidths) ?>
+                        </span>
+                    </label>
+                    <button type="button" id="bulk-widths-clear"
+                            style="background:transparent;border:0;color:var(--link);cursor:pointer;font:inherit;font-size:0.75rem;text-decoration:underline">
+                        Clear
+                    </button>
                 </div>
                 <textarea id="bulk-widths" name="widths_new" rows="4"
                           style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"><?= e(implode("\n", $matrixWidths)) ?></textarea>
 
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
-                    <label for="bulk-drops" style="font-weight:600;font-size:0.8125rem">Drops (mm)</label>
-                    <span style="color:var(--text-faint);font-size:0.75rem">
-                        Currently <?= count($matrixDrops) ?>
-                    </span>
+                    <label for="bulk-drops" style="font-weight:600;font-size:0.8125rem">
+                        Drops (mm)
+                        <span style="color:var(--text-faint);font-weight:400;font-size:0.75rem;margin-left:0.375rem">
+                            currently <?= count($matrixDrops) ?>
+                        </span>
+                    </label>
+                    <button type="button" id="bulk-drops-clear"
+                            style="background:transparent;border:0;color:var(--link);cursor:pointer;font:inherit;font-size:0.75rem;text-decoration:underline">
+                        Clear
+                    </button>
                 </div>
                 <textarea id="bulk-drops" name="drops_new" rows="6"
                           style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"><?= e(implode("\n", $matrixDrops)) ?></textarea>
@@ -1933,6 +1950,18 @@ $activeNav = 'products';
             else beDialog.removeAttribute('open');
         });
     }
+    // Clear buttons inside the dialog — wipe one textarea so the
+    // user can paste a fresh list without having to select-all first.
+    var bwClear = document.getElementById('bulk-widths-clear');
+    var bdClear = document.getElementById('bulk-drops-clear');
+    if (bwClear) bwClear.addEventListener('click', function () {
+        var ta = document.getElementById('bulk-widths');
+        if (ta) { ta.value = ''; ta.focus(); }
+    });
+    if (bdClear) bdClear.addEventListener('click', function () {
+        var ta = document.getElementById('bulk-drops');
+        if (ta) { ta.value = ''; ta.focus(); }
+    });
 
     if (table) {
         table.addEventListener('click', function (e) {
