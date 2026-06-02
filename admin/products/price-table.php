@@ -149,16 +149,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
     try {
         $wStats = $applyAxis($pdo, $tableId, 'width_mm', $oldWidths, $newWidths);
         $dStats = $applyAxis($pdo, $tableId, 'drop_mm',  $oldDrops,  $newDrops);
+
+        // After rename + delete passes, insert placeholder rows for
+        // any axis values that are in the NEW lists but not yet in
+        // the DB. Without this, "added" widths/drops wouldn't appear
+        // in the grid at all — the data model only persists widths/
+        // drops that have at least one row in price_table_rows.
+        //
+        // Anchor: new widths get one placeholder row at the first
+        // existing drop; new drops get one placeholder row at the
+        // first existing width. Price = 0 (user edits it to the
+        // real value via the inline editor).
+        //
+        // Re-fetch current state because rename + delete may have
+        // shifted what counts as "existing".
+        $curWStmt = $pdo->prepare('SELECT DISTINCT width_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm');
+        $curWStmt->execute([$tableId]);
+        $currentWidths = array_map('intval', $curWStmt->fetchAll(PDO::FETCH_COLUMN));
+
+        $curDStmt = $pdo->prepare('SELECT DISTINCT drop_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY drop_mm');
+        $curDStmt->execute([$tableId]);
+        $currentDrops = array_map('intval', $curDStmt->fetchAll(PDO::FETCH_COLUMN));
+
+        $widthsToAdd = array_values(array_diff($newWidths, $currentWidths));
+        $dropsToAdd  = array_values(array_diff($newDrops,  $currentDrops));
+
+        $insIgn = $pdo->prepare(
+            'INSERT IGNORE INTO price_table_rows
+               (price_table_id, width_mm, drop_mm, price)
+             VALUES (?, ?, ?, 0)'
+        );
+        $addedW = 0;
+        $addedD = 0;
+
+        // Pick an anchor drop for new widths. Prefer existing drops;
+        // fall back to the smallest new drop if the table has no
+        // drops at all yet.
+        $anchorDrop = $currentDrops[0] ?? ($dropsToAdd ? min($dropsToAdd) : null);
+        if ($anchorDrop !== null) {
+            foreach ($widthsToAdd as $w) {
+                $insIgn->execute([$tableId, $w, $anchorDrop]);
+                $addedW++;
+            }
+        }
+
+        // Anchor for new drops: first existing width, or first new
+        // width if there are none. Need to re-include any widths
+        // we just inserted above as "existing" for this purpose.
+        $anchorWidth = $currentWidths[0] ?? ($widthsToAdd ? min($widthsToAdd) : null);
+        if ($anchorWidth !== null) {
+            foreach ($dropsToAdd as $d) {
+                $insIgn->execute([$tableId, $anchorWidth, $d]);
+                $addedD++;
+            }
+        }
+
         $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
         $pdo->commit();
 
         $parts = [];
         $totalRen = $wStats['renamed'] + $dStats['renamed'];
         $totalRem = $wStats['removed'] + $dStats['removed'];
-        $totalAdd = $wStats['added']   + $dStats['added'];
+        $totalAdd = $addedW + $addedD;
         if ($totalRen > 0) $parts[] = $totalRen . ' renamed';
         if ($totalRem > 0) $parts[] = $totalRem . ' removed (with their prices)';
-        if ($totalAdd > 0) $parts[] = $totalAdd . ' new (empty)';
+        if ($totalAdd > 0) $parts[] = $totalAdd . ' new (placeholder price 0 — edit on the grid)';
         $_SESSION['flash_success'] = $parts
             ? 'Sizes updated: ' . implode(', ', $parts) . '.'
             : 'No changes.';
