@@ -151,6 +151,7 @@ $navSections = [
             'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
             'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
             'push-updates'  => ['/master-admin/push-updates.php',  'Push updates',  $isSuperAdmin],
+            'wipe-products' => ['/master-admin/wipe-products.php', 'Wipe products', $isSuperAdmin],
             'backup'        => ['/master-admin/backup.php',        'Backup',        $isSuperAdmin],
         ],
     ],
