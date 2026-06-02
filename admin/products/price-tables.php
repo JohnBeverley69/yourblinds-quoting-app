@@ -18,7 +18,7 @@ if ($systemId <= 0) {
 // Tenant-scoped lookup of the system + its parent product.
 $sysStmt = db()->prepare(
     'SELECT s.id, s.name AS system_name, s.product_id,
-            p.name AS product_name
+            p.name AS product_name, p.option_label AS product_option_label
        FROM product_systems s
        JOIN products p ON p.id = s.product_id
       WHERE s.id = ? AND s.client_id = ?'
@@ -164,7 +164,11 @@ $activeNav = 'products';
                     &mdash; <?= e((string) $system['system_name']) ?>
                 </h1>
                 <p class="page-subtitle">
-                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
+                    <?php
+                        $optLabel = trim((string) ($system['product_option_label'] ?? ''));
+                        if ($optLabel === '') $optLabel = 'Fabric';
+                    ?>
+                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>"><?= e($optLabel) ?>s</a>
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">

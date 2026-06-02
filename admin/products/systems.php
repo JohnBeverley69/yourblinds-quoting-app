@@ -16,7 +16,7 @@ if ($productId <= 0) {
 }
 
 $pStmt = db()->prepare(
-    'SELECT id, name FROM products WHERE id = ? AND client_id = ?'
+    'SELECT id, name, option_label FROM products WHERE id = ? AND client_id = ?'
 );
 $pStmt->execute([$productId, $clientId]);
 $product = $pStmt->fetch();
@@ -242,7 +242,11 @@ $activeNav = 'products';
                 <p class="page-subtitle">
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                     &middot;
-                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>">Fabrics</a>
+                    <?php
+                        $optLabel = trim((string) ($product['option_label'] ?? ''));
+                        if ($optLabel === '') $optLabel = 'Fabric';
+                    ?>
+                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>"><?= e($optLabel) ?>s</a>
                 </p>
             </div>
         </div>
