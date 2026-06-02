@@ -41,6 +41,64 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 $f = ['band_code' => '', 'name' => '', 'notes' => ''];
 $error = null;
 
+// Bulk-add: paste a list of band codes, each line becomes an empty
+// price table on this system. Same pattern as the wizard / fabric
+// bulk-add. Skips duplicates against the unique constraint silently
+// so one collision doesn't fail the whole batch.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'add_bulk') {
+    csrf_check();
+
+    $raw   = (string) ($_POST['bulk_bands'] ?? '');
+    $lines = preg_split('/\r\n|\r|\n/', $raw) ?: [];
+    $bands = [];
+    foreach ($lines as $line) {
+        // Allow comma-separated on a single line too — saves users
+        // having to reformat their paste if they have "A, B, C, D".
+        foreach (preg_split('/,/', $line) ?: [] as $piece) {
+            $b = trim((string) preg_replace('/^band\s+/i', '', $piece));
+            if ($b === '' || strlen($b) > 20) continue;
+            $bands[] = $b;
+        }
+    }
+
+    if (!$bands) {
+        $error = 'Paste at least one band code (one per line, or comma-separated).';
+    } else {
+        require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+        $ins = db()->prepare(
+            'INSERT INTO price_tables
+               (client_id, product_id, system_id, band_code, name, notes, active)
+             VALUES (?, ?, ?, ?, NULL, NULL, 1)'
+        );
+        $added   = 0;
+        $skipped = 0;
+        foreach ($bands as $b) {
+            try {
+                $ins->execute([$clientId, $productId, $systemId, $b]);
+                $newId = (int) db()->lastInsertId();
+                catalogue_audit_log(
+                    'price_table', $newId, 'create',
+                    'Band ' . $b,
+                    null,
+                    ['system_id' => $systemId, 'band_code' => $b, 'name' => null],
+                    $productId
+                );
+                $added++;
+            } catch (Throwable $e) {
+                // Most likely a duplicate against the unique
+                // constraint — count as a silent skip.
+                $skipped++;
+            }
+        }
+
+        $msg = "Created $added empty price table" . ($added === 1 ? '' : 's') . '.';
+        if ($skipped > 0) $msg .= " Skipped $skipped (likely already existed).";
+        $_SESSION['flash_success'] = $msg;
+        header('Location: /admin/products/price-tables.php?system_id=' . $systemId);
+        exit;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'create') {
     csrf_check();
 
@@ -207,39 +265,68 @@ $activeNav = 'products';
 
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Add price table</h2>
+                <h2 class="section-title">Add price tables</h2>
             </div>
+            <p style="margin:0 0 0.875rem;color:var(--text-faint);font-size:0.8125rem">
+                Paste a list of band codes — one per line, or
+                comma-separated. Empty tables get created on this
+                system; fill in the actual prices via the
+                <em>Open</em> link on each row afterwards. Names
+                and notes can be set later via the table's
+                <em>Edit band / name / notes</em> link.
+            </p>
             <form method="post"
                   action="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
-                  class="form" novalidate>
+                  novalidate>
                 <?= csrf_field() ?>
-                <input type="hidden" name="_action" value="create">
+                <input type="hidden" name="_action" value="add_bulk">
 
-                <div class="form-row cols-3-narrow">
-                    <div class="form-group">
-                        <label for="band_code">Band <span class="required">*</span></label>
-                        <input id="band_code" name="band_code" type="text"
-                               required maxlength="20" autofocus
-                               value="<?= e((string) $f['band_code']) ?>" placeholder="A">
+                <div style="display:flex;gap:0.625rem;align-items:start;flex-wrap:wrap">
+                    <div style="flex:1 1 18rem;min-width:14rem">
+                        <textarea name="bulk_bands" rows="5" required autofocus
+                                  placeholder="A&#10;B&#10;C&#10;D"
+                                  style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label for="name">Name</label>
-                        <input id="name" name="name" type="text" maxlength="150"
-                               value="<?= e((string) $f['name']) ?>"
-                               placeholder="e.g. 2026 Slim Line Band A">
-                    </div>
-                    <div class="form-group">
-                        <label for="notes">Notes</label>
-                        <input id="notes" name="notes" type="text" maxlength="255"
-                               value="<?= e((string) $f['notes']) ?>"
-                               placeholder="Anything to remember about this sheet">
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Create price table</button>
+                    <button type="submit" class="btn btn-primary">+ Add</button>
                 </div>
             </form>
+
+            <details style="margin-top:0.875rem">
+                <summary style="cursor:pointer;color:var(--text-faint);font-size:0.8125rem">
+                    Need a name or notes on the new table? Use the single-add form instead.
+                </summary>
+                <form method="post"
+                      action="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
+                      class="form" novalidate style="margin-top:0.625rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="create">
+
+                    <div class="form-row cols-3-narrow">
+                        <div class="form-group">
+                            <label for="band_code">Band <span class="required">*</span></label>
+                            <input id="band_code" name="band_code" type="text"
+                                   required maxlength="20"
+                                   value="<?= e((string) $f['band_code']) ?>" placeholder="A">
+                        </div>
+                        <div class="form-group">
+                            <label for="name">Name</label>
+                            <input id="name" name="name" type="text" maxlength="150"
+                                   value="<?= e((string) $f['name']) ?>"
+                                   placeholder="e.g. 2026 Slim Line Band A">
+                        </div>
+                        <div class="form-group">
+                            <label for="notes">Notes</label>
+                            <input id="notes" name="notes" type="text" maxlength="255"
+                                   value="<?= e((string) $f['notes']) ?>"
+                                   placeholder="Anything to remember about this sheet">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-secondary">Create one</button>
+                    </div>
+                </form>
+            </details>
         </section>
 
         <section class="section">
