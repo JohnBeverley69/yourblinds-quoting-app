@@ -57,6 +57,125 @@ if (!$table) {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Bulk-edit ALL widths or drops at once via a paste-friendly dialog.
+//
+// Semantics: positional rename. Sort both old and new lists ascending,
+// pair them up by position. Where the value differs, UPDATE the rows
+// for that axis to the new value. Prices stay intact — only the
+// labels change.
+//
+// Length mismatch:
+//   - new shorter than old → trailing old positions get DELETEd
+//     (their prices go too)
+//   - new longer than old   → extra new positions are accepted but
+//     have no DB rows yet (they appear as empty columns / rows on
+//     next render until prices are entered)
+//
+// Conflict-safe: a "sentinel" intermediate value (9999000 + i) is
+// used so a chain of renames like 800→1000, 1000→1200 doesn't trip
+// the unique constraint mid-flight. Wrapped in a transaction.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
+    csrf_check();
+
+    // Parser identical to the Quick Start dialog — accepts tabs,
+    // newlines, commas, spaces, "mm" suffixes.
+    $parse = static function (string $raw): array {
+        $parts = preg_split('/[\s,;]+/', $raw) ?: [];
+        $seen  = [];
+        $out   = [];
+        foreach ($parts as $p) {
+            $clean = trim((string) preg_replace('/mm$/i', '', $p));
+            $n = (int) $clean;
+            if ($n <= 0 || isset($seen[$n])) continue;
+            $seen[$n] = true;
+            $out[] = $n;
+        }
+        sort($out, SORT_NUMERIC);
+        return $out;
+    };
+
+    $newWidths = $parse((string) ($_POST['widths_new'] ?? ''));
+    $newDrops  = $parse((string) ($_POST['drops_new']  ?? ''));
+
+    // Re-fetch current axis values directly — we can't trust
+    // $matrixWidths/$matrixDrops yet, they're loaded later in the
+    // page render pipeline.
+    $oldWStmt = db()->prepare('SELECT DISTINCT width_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm');
+    $oldWStmt->execute([$tableId]);
+    $oldWidths = array_map('intval', $oldWStmt->fetchAll(PDO::FETCH_COLUMN));
+
+    $oldDStmt = db()->prepare('SELECT DISTINCT drop_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY drop_mm');
+    $oldDStmt->execute([$tableId]);
+    $oldDrops = array_map('intval', $oldDStmt->fetchAll(PDO::FETCH_COLUMN));
+
+    // Apply one axis at a time. Sentinel pass first (rename old → big
+    // number) so the second pass (sentinel → new) can't collide.
+    $applyAxis = static function (PDO $pdo, int $tableId, string $col, array $oldList, array $newList): array {
+        $minLen   = min(count($oldList), count($newList));
+        $renames  = [];   // [i => [oldVal, newVal]]
+        $removed  = 0;
+        for ($i = 0; $i < $minLen; $i++) {
+            if ($oldList[$i] !== $newList[$i]) {
+                $renames[$i] = [$oldList[$i], $newList[$i]];
+            }
+        }
+
+        // Pass 1: old → sentinel
+        $sentinelBase = 9999000;
+        $sUpd = $pdo->prepare("UPDATE price_table_rows SET $col = ? WHERE price_table_id = ? AND $col = ?");
+        foreach ($renames as $i => [$old, $new]) {
+            $sUpd->execute([$sentinelBase + $i, $tableId, $old]);
+        }
+        // Pass 2: sentinel → new
+        foreach ($renames as $i => [$old, $new]) {
+            $sUpd->execute([$new, $tableId, $sentinelBase + $i]);
+        }
+
+        // Delete trailing old positions if new list is shorter.
+        if (count($oldList) > count($newList)) {
+            $del = $pdo->prepare("DELETE FROM price_table_rows WHERE price_table_id = ? AND $col = ?");
+            for ($i = count($newList); $i < count($oldList); $i++) {
+                $del->execute([$tableId, $oldList[$i]]);
+                $removed++;
+            }
+        }
+
+        return ['renamed' => count($renames), 'removed' => $removed, 'added' => max(0, count($newList) - count($oldList))];
+    };
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $wStats = $applyAxis($pdo, $tableId, 'width_mm', $oldWidths, $newWidths);
+        $dStats = $applyAxis($pdo, $tableId, 'drop_mm',  $oldDrops,  $newDrops);
+        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
+        $pdo->commit();
+
+        $parts = [];
+        $totalRen = $wStats['renamed'] + $dStats['renamed'];
+        $totalRem = $wStats['removed'] + $dStats['removed'];
+        $totalAdd = $wStats['added']   + $dStats['added'];
+        if ($totalRen > 0) $parts[] = $totalRen . ' renamed';
+        if ($totalRem > 0) $parts[] = $totalRem . ' removed (with their prices)';
+        if ($totalAdd > 0) $parts[] = $totalAdd . ' new (empty)';
+        $_SESSION['flash_success'] = $parts
+            ? 'Sizes updated: ' . implode(', ', $parts) . '.'
+            : 'No changes.';
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        $_SESSION['flash_error'] = 'Bulk edit failed: ' . $e->getMessage();
+    }
+
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Rename a single width or drop value across the table. Used when a
 // cloned grid has the right shape mostly but one or two sizes are
 // off (e.g. cloned Band B → Band C, all sizes the same except one
@@ -1298,6 +1417,10 @@ $activeNav = 'products';
 
                 <div class="grid-toolbar">
                     <button type="submit" class="btn btn-primary">Save grid</button>
+                    <button type="button" id="bulk-edit-open" class="btn btn-secondary"
+                            title="Paste / edit the whole widths and drops list — saves you clicking each header to rename one at a time">
+                        Edit sizes
+                    </button>
                     <a href="/admin/products/price-tables.php?system_id=<?= (int) $table['system_id'] ?>"
                        class="btn btn-secondary">Cancel</a>
                     <span class="muted">
@@ -1320,6 +1443,55 @@ $activeNav = 'products';
             <input type="hidden" name="old_value" value="">
             <input type="hidden" name="new_value" value="">
         </form>
+
+        <!-- "Bulk edit sizes" dialog — two textareas pre-filled with
+             the current widths and drops. User can paste a new list,
+             rearrange, or surgically edit a few values. On submit:
+             positional rename for differences (prices preserved),
+             delete trailing positions if the new list is shorter,
+             accept new trailing positions as empty columns/rows
+             when longer. Conflict-safe via the sentinel-pass trick
+             in the server handler. -->
+        <dialog id="bulk-edit-dialog" class="axis-dialog" style="width:min(36rem,94vw)">
+            <form method="post"
+                  action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="bulk_axis_edit">
+                <h3>Bulk-edit widths and drops</h3>
+                <p>
+                    Each line / cell is one value (mm). Sorted ascending,
+                    then matched against the existing list by position —
+                    where a value differs, the column or row is
+                    <strong>renamed and its prices kept</strong>.
+                    Removing a line deletes that column/row (with its
+                    prices). Adding a line gives you a new empty
+                    column/row.
+                </p>
+
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
+                    <label for="bulk-widths" style="font-weight:600;font-size:0.8125rem">Widths (mm)</label>
+                    <span style="color:var(--text-faint);font-size:0.75rem">
+                        Currently <?= count($matrixWidths) ?>
+                    </span>
+                </div>
+                <textarea id="bulk-widths" name="widths_new" rows="4"
+                          style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"><?= e(implode("\n", $matrixWidths)) ?></textarea>
+
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
+                    <label for="bulk-drops" style="font-weight:600;font-size:0.8125rem">Drops (mm)</label>
+                    <span style="color:var(--text-faint);font-size:0.75rem">
+                        Currently <?= count($matrixDrops) ?>
+                    </span>
+                </div>
+                <textarea id="bulk-drops" name="drops_new" rows="6"
+                          style="width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:0.5rem 0.625rem;font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg-input);color:var(--text-body);resize:vertical"><?= e(implode("\n", $matrixDrops)) ?></textarea>
+
+                <div class="axis-actions">
+                    <button type="button" id="bulk-edit-cancel" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </dialog>
 
         <!-- Add-axis dialog (widths or drops). Native <dialog> so we
              get proper modal behaviour, Esc-to-close, and focus
@@ -1736,6 +1908,31 @@ $activeNav = 'products';
     var addD = document.getElementById('add-drop');
     if (addW) addW.addEventListener('click', function () { openAxisDialog('width'); });
     if (addD) addD.addEventListener('click', function () { openAxisDialog('drop');  });
+
+    // Bulk edit dialog — pre-filled with current sizes, posts to
+    // the bulk_axis_edit handler. No JS validation here; the server
+    // handles parsing, sorting and conflict-safe renames.
+    var beOpen   = document.getElementById('bulk-edit-open');
+    var beDialog = document.getElementById('bulk-edit-dialog');
+    var beCancel = document.getElementById('bulk-edit-cancel');
+    if (beOpen && beDialog) {
+        beOpen.addEventListener('click', function () {
+            if (typeof beDialog.showModal === 'function') beDialog.showModal();
+            else beDialog.setAttribute('open', '');
+            // Focus the widths textarea so the user can start typing
+            // straight away.
+            setTimeout(function () {
+                var bw = document.getElementById('bulk-widths');
+                if (bw) bw.focus();
+            }, 0);
+        });
+    }
+    if (beCancel && beDialog) {
+        beCancel.addEventListener('click', function () {
+            if (beDialog.close) beDialog.close();
+            else beDialog.removeAttribute('open');
+        });
+    }
 
     if (table) {
         table.addEventListener('click', function (e) {
