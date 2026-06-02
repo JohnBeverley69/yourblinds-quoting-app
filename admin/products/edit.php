@@ -456,6 +456,18 @@ $activeNav = 'products';
                 <h1 class="page-title">Edit <?= e((string) $product['name']) ?></h1>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                <!-- Jump back into the setup wizard for this product —
+                     useful when partway through setup, or when you've
+                     navigated away and want to resume on whichever
+                     step the wizard infers from current state. No
+                     URL fiddling required. -->
+                <a href="/admin/products/wizard.php?id=<?= (int) $id ?>"
+                   class="btn btn-secondary"
+                   style="display:inline-flex;align-items:center;gap:0.4375rem">
+                    <span aria-hidden="true">✨</span>
+                    Resume setup wizard
+                </a>
+
                 <!-- Duplicate clones this product (systems, fabrics, options,
                      choices, price tables, markups, discounts) and drops the
                      user on the new product's edit page. Saves a lot of
