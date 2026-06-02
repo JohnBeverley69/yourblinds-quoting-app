@@ -57,6 +57,67 @@ if (!$table) {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Rename a single width or drop value across the table. Used when a
+// cloned grid has the right shape mostly but one or two sizes are
+// off (e.g. cloned Band B → Band C, all sizes the same except one
+// width that needs to change from 1800 → 1900). Without this, the
+// user would delete the column and re-add — losing all the prices
+// in it.
+//
+// Atomic: server-side UPDATE on price_table_rows. The (price_table_id,
+// width_mm, drop_mm) unique constraint prevents a collision with an
+// existing value (e.g. trying to rename 1800 → 1200 when 1200 already
+// exists on the grid).
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'rename_axis') {
+    csrf_check();
+
+    $kind     = (string) ($_POST['kind']      ?? '');     // 'width' or 'drop'
+    $oldValue = (int)    ($_POST['old_value'] ?? 0);
+    $newValue = (int)    ($_POST['new_value'] ?? 0);
+
+    if (!in_array($kind, ['width', 'drop'], true)) {
+        $_SESSION['flash_error'] = 'Bad rename target.';
+    } elseif ($oldValue <= 0 || $newValue <= 0) {
+        $_SESSION['flash_error'] = 'Both old and new values must be positive integers (mm).';
+    } elseif ($oldValue === $newValue) {
+        $_SESSION['flash_error'] = 'New value is the same as the old one — nothing to do.';
+    } else {
+        $col = $kind === 'width' ? 'width_mm' : 'drop_mm';
+        try {
+            $upd = db()->prepare(
+                "UPDATE price_table_rows
+                    SET $col = ?
+                  WHERE price_table_id = ? AND $col = ?"
+            );
+            $upd->execute([$newValue, $tableId, $oldValue]);
+            $n = $upd->rowCount();
+            if ($n > 0) {
+                db()->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+                    ->execute([$tableId]);
+                $_SESSION['flash_success'] = ucfirst($kind) . " {$oldValue}mm renamed to {$newValue}mm "
+                    . "($n cell" . ($n === 1 ? '' : 's') . ' affected).';
+            } else {
+                $_SESSION['flash_error'] = ucfirst($kind) . " {$oldValue}mm not found on this table.";
+            }
+        } catch (Throwable $e) {
+            if (stripos($e->getMessage(), 'duplicate') !== false || stripos($e->getMessage(), 'uniq') !== false) {
+                $_SESSION['flash_error'] = "Can't rename to {$newValue}mm — that value already exists on this table. Remove it first or pick a different number.";
+            } else {
+                $_SESSION['flash_error'] = 'Rename failed: ' . $e->getMessage();
+            }
+        }
+    }
+
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Copy an entire grid (widths × drops × prices) from a sibling table on
 // the same product. Useful when bands have the same shape but different
 // price levels — e.g. "35mm String" and "35mm Tape" both have the
@@ -756,6 +817,19 @@ $activeNav = 'products';
             line-height: 1;
         }
         .grid-axis-rm:hover { color: #fff; }
+        /* Rename affordance — the number itself is a button.
+           Reads as plain text but cursor:pointer + underline-on-hover
+           tells the user it's clickable. */
+        .grid-axis-rename {
+            background: transparent; border: 0;
+            color: inherit; font: inherit; cursor: pointer;
+            padding: 0; margin: 0;
+        }
+        .grid-axis-rename:hover {
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 3px;
+        }
         .grid-add-btn {
             background: transparent; border: 0;
             color: var(--text-secondary);
@@ -1172,7 +1246,9 @@ $activeNav = 'products';
                                 <th class="corner">Drop \ Width (mm)</th>
                                 <?php foreach ($matrixWidths as $w): ?>
                                     <th data-w="<?= (int) $w ?>">
-                                        <?= (int) $w ?>
+                                        <button type="button" class="grid-axis-rename"
+                                                data-rename-w="<?= (int) $w ?>"
+                                                title="Click to rename — prices in this column keep their values"><?= (int) $w ?></button>
                                         <button type="button" class="grid-axis-rm"
                                                 data-rm-w="<?= (int) $w ?>" title="Remove this width">×</button>
                                     </th>
@@ -1186,7 +1262,9 @@ $activeNav = 'products';
                             <?php foreach ($matrixDrops as $d): ?>
                                 <tr data-d="<?= (int) $d ?>">
                                     <th>
-                                        <?= (int) $d ?>
+                                        <button type="button" class="grid-axis-rename"
+                                                data-rename-d="<?= (int) $d ?>"
+                                                title="Click to rename — prices in this row keep their values"><?= (int) $d ?></button>
                                         <button type="button" class="grid-axis-rm"
                                                 data-rm-d="<?= (int) $d ?>" title="Remove this drop">×</button>
                                     </th>
@@ -1228,6 +1306,20 @@ $activeNav = 'products';
                 </div>
             </form>
         </section>
+
+        <!-- Hidden form for atomic axis-rename POSTs. Populated by
+             the renameAxis() JS handler when the user clicks a
+             width/drop header. Routes through the same page so the
+             flash message + 303 redirect flow show the result. -->
+        <form id="rename-axis-form" method="post"
+              action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
+              style="display:none">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="rename_axis">
+            <input type="hidden" name="kind" value="">
+            <input type="hidden" name="old_value" value="">
+            <input type="hidden" name="new_value" value="">
+        </form>
 
         <!-- Add-axis dialog (widths or drops). Native <dialog> so we
              get proper modal behaviour, Esc-to-close, and focus
@@ -1651,9 +1743,34 @@ $activeNav = 'products';
             if (!t || !t.getAttribute) return;
             var rmW = t.getAttribute('data-rm-w');
             var rmD = t.getAttribute('data-rm-d');
-            if (rmW) { e.preventDefault(); removeWidth(parseInt(rmW, 10)); }
-            if (rmD) { e.preventDefault(); removeDrop(parseInt(rmD, 10));  }
+            if (rmW) { e.preventDefault(); removeWidth(parseInt(rmW, 10)); return; }
+            if (rmD) { e.preventDefault(); removeDrop(parseInt(rmD, 10));  return; }
+            // Rename handlers — prompt for the new value, POST to
+            // server (atomic UPDATE on price_table_rows), page reloads
+            // with the new label and original prices preserved.
+            var rnW = t.getAttribute('data-rename-w');
+            var rnD = t.getAttribute('data-rename-d');
+            if (rnW) { e.preventDefault(); renameAxis('width', parseInt(rnW, 10)); }
+            if (rnD) { e.preventDefault(); renameAxis('drop',  parseInt(rnD, 10)); }
         });
+
+        function renameAxis(kind, oldValue) {
+            var label = kind === 'width' ? 'width' : 'drop';
+            var raw = window.prompt(
+                'Rename ' + label + ' ' + oldValue + 'mm to (new mm value):',
+                String(oldValue)
+            );
+            if (raw === null) return;   // cancelled
+            var n = parseInt(String(raw).replace(/mm$/i, '').trim(), 10);
+            if (!n || n <= 0) { alert('Need a positive number (mm).'); return; }
+            if (n === oldValue) return; // no-op
+
+            var form = document.getElementById('rename-axis-form');
+            form.querySelector('input[name="kind"]').value      = kind;
+            form.querySelector('input[name="old_value"]').value = String(oldValue);
+            form.querySelector('input[name="new_value"]').value = String(n);
+            form.submit();
+        }
 
         // ----- Excel-style paste handler ----- //
         //
