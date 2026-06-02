@@ -53,11 +53,11 @@ if ($filter !== '') {
     $like = '%' . $filter . '%';
     $stmt = $pdo->prepare(
         "SELECT p.id, p.name, p.client_id,
-                c.name      AS company_name
+                c.company_name
            FROM products p
            JOIN clients c ON c.id = p.client_id
           WHERE p.name LIKE ?
-       ORDER BY c.name, p.name"
+       ORDER BY c.company_name, p.name"
     );
     $stmt->execute([$like]);
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
