@@ -924,7 +924,7 @@ $activeNav = 'products';
                     Band code, name, notes
                 </span>
             </summary>
-            <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+            <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
                   style="border-top:1px solid var(--border);padding:1rem 1.125rem">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update_meta">
@@ -1100,7 +1100,7 @@ $activeNav = 'products';
                             <?php foreach ($shapeSources as $i => $src):
                                 $cells = (int) $src['cell_count'];
                             ?>
-                                <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                                <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
                                       style="margin:0">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="copy_from">
@@ -1148,7 +1148,7 @@ $activeNav = 'products';
                 }</script>
             <?php endif; ?>
 
-            <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+            <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
                   id="grid-form"
                   <?= $isEmpty ? 'style="display:none"' : '' ?>>
                 <?= csrf_field() ?>
@@ -1312,7 +1312,7 @@ $activeNav = 'products';
                         Widths across row 1, drops down column A, prices in the cells.
                         <strong>Replaces every cell</strong> in this table on import.
                     </p>
-                    <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                    <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
                           enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="upload">
@@ -1332,7 +1332,7 @@ $activeNav = 'products';
                         <strong>Band <?= e((string) $table['band_code']) ?></strong>;
                         falls back to the first band found.
                     </p>
-                    <form method="post" action="/admin/products/price-table.php<?= $fromWizard ? '?from=wizard&product_id=' . $wizardBackId : '' ?>"
+                    <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
                           enctype="multipart/form-data" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="upload_flex">
