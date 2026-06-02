@@ -28,7 +28,15 @@ requireSuperAdmin();
 
 $user           = current_user();
 $masterClientId = (int) $user['client_id'];
-$prefix         = 'Beverley';   // currently fixed; could be a setting later
+
+// Product-name prefix used to decide which master-tenant products
+// are eligible to push out. Default = "Bev" (was "Beverley" originally;
+// renamed during the testing phase). Overridable per-request via
+// ?prefix=X so a future rename doesn't require a code edit. The page
+// has a small input that GETs back with the new prefix.
+$DEFAULT_PREFIX = 'Bev';
+$prefix         = trim((string) ($_GET['prefix'] ?? $DEFAULT_PREFIX));
+if ($prefix === '') $prefix = $DEFAULT_PREFIX;
 
 // Push can be a long, memory-heavy operation when the master tenant
 // has many products with large price grids (10k+ cells). Default PHP
@@ -335,6 +343,20 @@ $activeNav = 'push-updates';
         <?php endif; ?>
 
         <section class="info-panel">
+            <form method="get" action="/master-admin/push-updates.php"
+                  style="float:right;margin:0 0 0.5rem 0.75rem;display:inline-flex;gap:0.375rem;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:0.3125rem 0.5rem">
+                <label for="prefix-input" style="font-size:0.75rem;color:var(--text-faint);font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
+                    Prefix
+                </label>
+                <input id="prefix-input" name="prefix" type="text"
+                       value="<?= e($prefix) ?>"
+                       maxlength="40"
+                       style="padding:0.25rem 0.4375rem;border:1px solid var(--border-strong);border-radius:4px;font:inherit;font-size:0.8125rem;background:var(--bg-input);color:var(--text-body);width:7rem">
+                <button type="submit" class="btn btn-sm btn-secondary"
+                        style="padding:0.25rem 0.5rem;font-size:0.75rem">
+                    Apply
+                </button>
+            </form>
             <p style="margin:0 0 0.5rem">
                 Pushes <strong>your prefixed products</strong> (any product whose name starts
                 with <code><?= e($prefix) ?></code>) into the selected tenants. Each tenant's
