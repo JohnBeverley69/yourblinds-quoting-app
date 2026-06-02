@@ -1162,13 +1162,16 @@ $activeNav = 'wizard';
                     <div class="wiz-card" style="background:#fffbeb;border-color:#fcd34d">
                         <h2 style="color:#78350f">
                             <?= count($missingCombos) === 1
-                                ? '1 price table not created yet'
-                                : count($missingCombos) . ' price tables not created yet' ?>
+                                ? '1 price table needs setting up'
+                                : count($missingCombos) . ' price tables need setting up' ?>
                         </h2>
                         <p class="lede" style="color:#92400e">
-                            You have <?= e($labelL) ?>s that need a price grid but don't
-                            have one yet. Without a grid, the salesperson can't get a
-                            price when these combinations come up.
+                            Each <?= e($labelL) ?> band on each system needs its own
+                            price grid. We've spotted these
+                            <strong>(system + band) combination<?= count($missingCombos) === 1 ? '' : 's' ?></strong>
+                            without one. Clicking <em>Create</em> below makes an empty
+                            price table for each — you'll fill in the actual width × drop
+                            prices afterwards.
                         </p>
                         <div class="wiz-list" style="background:transparent;border:0;padding:0;margin-bottom:0.875rem">
                             <?php foreach ($missingCombos as $m): ?>
@@ -1183,10 +1186,15 @@ $activeNav = 'wizard';
                             <input type="hidden" name="_step" value="4">
                             <input type="hidden" name="_action" value="create_missing">
                             <button type="submit" class="btn btn-primary">
-                                Create <?= count($missingCombos) === 1 ? 'it' : 'them all' ?>
+                                <?php if (count($missingCombos) === 1): ?>
+                                    Create the empty price table
+                                <?php else: ?>
+                                    Create all <?= count($missingCombos) ?> empty price tables
+                                <?php endif; ?>
                             </button>
-                            <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.625rem">
-                                Or leave them — if a pairing doesn't apply to what you sell.
+                            <span style="color:var(--text-faint);font-size:0.8125rem;margin-left:0.625rem;line-height:1.4;display:inline-block">
+                                One click — the empty grids appear instantly. Leave any
+                                out that don't apply to what you sell.
                             </span>
                         </form>
                     </div>
