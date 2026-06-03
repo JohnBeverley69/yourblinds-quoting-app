@@ -332,6 +332,25 @@ $activeNav = 'products';
             color: #fff; background: #1f3b5b; border-radius: 6px;
             white-space: nowrap;
         }
+        .band-chips {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 0.375rem; margin-bottom: 0.875rem;
+            padding: 0.5rem 0.75rem; background: var(--bg-subtle, #f6f8fb);
+            border: 1px dashed var(--border-strong, #cbd5e1); border-radius: 8px;
+        }
+        .band-chips__label {
+            font-size: 0.8125rem; font-weight: 600; color: var(--text-faint, #475569);
+            margin-right: 0.25rem;
+        }
+        .band-chip {
+            font: inherit; font-size: 0.8125rem; font-weight: 600;
+            padding: 0.1875rem 0.625rem;
+            color: #1f3b5b; background: #fff;
+            border: 1px solid #cbd5e1; border-radius: 999px;
+            cursor: pointer; transition: background 0.1s, border-color 0.1s;
+        }
+        .band-chip:hover { background: #1f3b5b; color: #fff; border-color: #1f3b5b; }
+        .band-chip.is-active { background: #1f3b5b; color: #fff; border-color: #1f3b5b; }
         .row-actions { white-space: nowrap; }
         .row-actions a { font-size: 0.875rem; margin-left: 0.5rem; }
         .row-actions form { display: inline; margin: 0; }
@@ -448,6 +467,21 @@ $activeNav = 'products';
                             <option value="<?= e($b) ?>">
                         <?php endforeach; ?>
                     </datalist>
+
+                    <!-- Visible chip row, click-to-fill. The datalist
+                         above filters its options by what's already
+                         typed in the input, which means a sticky
+                         value (e.g. last band used) hides the rest.
+                         This row stays visible regardless and gives
+                         the admin a clear at-a-glance view of every
+                         band defined for this product. -->
+                    <div class="band-chips" aria-label="Known bands for this product">
+                        <span class="band-chips__label">Bands:</span>
+                        <?php foreach ($knownBands as $b): ?>
+                            <button type="button" class="band-chip"
+                                    data-fill="<?= e($b) ?>"><?= e($b) ?></button>
+                        <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
                 <div class="form-row <?= $labelIsColour ? 'cols-4' : 'cols-5' ?>">
                     <div class="form-group">
@@ -736,6 +770,41 @@ $activeNav = 'products';
     });
 
     refresh();
+})();
+
+// ── Known-band chips: click to fill the band input ────────────
+// The native <datalist> filters its options by the current input
+// value, so a sticky pre-fill (e.g. "URBAN" from the previous
+// fabric) hides all the other bands the tenant has defined. The
+// chip row stays visible regardless and lets the user one-click
+// to swap bands. The active chip mirrors whatever's currently in
+// the input so they can see at a glance which band they're on.
+(function () {
+    var input = document.getElementById('band_code');
+    var chips = document.querySelectorAll('.band-chip');
+    if (!input || !chips.length) return;
+
+    function syncActive() {
+        var v = (input.value || '').trim().toLowerCase();
+        chips.forEach(function (c) {
+            var match = (c.getAttribute('data-fill') || '').toLowerCase() === v;
+            c.classList.toggle('is-active', match);
+        });
+    }
+
+    chips.forEach(function (c) {
+        c.addEventListener('click', function () {
+            input.value = c.getAttribute('data-fill') || '';
+            syncActive();
+            // Drop focus to the next field — most users fill band
+            // once then start typing the fabric name.
+            var nameInput = document.getElementById('name');
+            if (nameInput) nameInput.focus();
+        });
+    });
+
+    input.addEventListener('input', syncActive);
+    syncActive();
 })();
 </script>
 </body>
