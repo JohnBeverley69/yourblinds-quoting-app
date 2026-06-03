@@ -39,6 +39,15 @@ $label  = (string) ($product['option_label'] ?? 'Fabric');
 if ($label === '') $label = 'Fabric';
 $labelL = strtolower($label);
 
+// If the per-product label already means "colour" (e.g. "Slat
+// Colour", "Colour", "Colour way"), the dedicated `colour`
+// sub-field on each row is redundant — you'd end up with two
+// "Colour" labels next to each other on the form and a
+// "Slat Colour / Colour" duplication in the table header.
+// In that case we hide the colour input + column entirely;
+// the name field IS the colour for these products.
+$labelIsColour = (bool) preg_match('/colou?r/i', $label);
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -429,7 +438,7 @@ $activeNav = 'products';
                         <?php endforeach; ?>
                     </datalist>
                 <?php endif; ?>
-                <div class="form-row cols-5">
+                <div class="form-row <?= $labelIsColour ? 'cols-4' : 'cols-5' ?>">
                     <div class="form-group">
                         <label for="band_code">Band <span class="required">*</span></label>
                         <input id="band_code" name="band_code" type="text"
@@ -443,11 +452,13 @@ $activeNav = 'products';
                                value="<?= e((string) $f['name']) ?>"
                                placeholder="<?= $label === 'Slat type' ? 'e.g. 25mm Faux Wood' : 'e.g. Cream Slats' ?>">
                     </div>
-                    <div class="form-group">
-                        <label for="colour">Colour</label>
-                        <input id="colour" name="colour" type="text" maxlength="150"
-                               value="<?= e((string) $f['colour']) ?>">
-                    </div>
+                    <?php if (!$labelIsColour): ?>
+                        <div class="form-group">
+                            <label for="colour">Colour</label>
+                            <input id="colour" name="colour" type="text" maxlength="150"
+                                   value="<?= e((string) $f['colour']) ?>">
+                        </div>
+                    <?php endif; ?>
                     <div class="form-group">
                         <label for="supplier_name">Supplier</label>
                         <input id="supplier_name" name="supplier_name" type="text" maxlength="150"
@@ -525,7 +536,9 @@ $activeNav = 'products';
                                     </th>
                                     <th>Band</th>
                                     <th><?= e($label) ?></th>
-                                    <th>Colour</th>
+                                    <?php if (!$labelIsColour): ?>
+                                        <th>Colour</th>
+                                    <?php endif; ?>
                                     <th>Supplier</th>
                                     <th>Code</th>
                                     <th></th>
@@ -558,7 +571,9 @@ $activeNav = 'products';
                                                 <span class="inactive-pill">Inactive</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?= e((string) ($o['colour'] ?? '')) ?></td>
+                                        <?php if (!$labelIsColour): ?>
+                                            <td><?= e((string) ($o['colour'] ?? '')) ?></td>
+                                        <?php endif; ?>
                                         <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
                                         <td><?= e((string) ($o['code'] ?? '')) ?></td>
                                         <td class="row-actions">

@@ -1175,11 +1175,23 @@ $activeNav = 'products';
                         <input id="qa-fab-name" name="name" type="text" required maxlength="150"
                                placeholder="e.g. Cream Slats" style="width:100%">
                     </div>
-                    <div style="flex:1 1 8rem">
-                        <label for="qa-fab-colour">Colour</label>
-                        <input id="qa-fab-colour" name="colour" type="text" maxlength="150"
-                               style="width:100%">
-                    </div>
+                    <?php
+                        // Hide dedicated Colour field when the product's
+                        // option_label already means colour — avoids a
+                        // "Slat Colour name + Colour" duplication on the
+                        // single-add row.
+                        $editLabelIsColour = (bool) preg_match(
+                            '/colou?r/i',
+                            (string) ($product['option_label'] ?? '')
+                        );
+                    ?>
+                    <?php if (!$editLabelIsColour): ?>
+                        <div style="flex:1 1 8rem">
+                            <label for="qa-fab-colour">Colour</label>
+                            <input id="qa-fab-colour" name="colour" type="text" maxlength="150"
+                                   style="width:100%">
+                        </div>
+                    <?php endif; ?>
                     <div style="flex:1 1 8rem">
                         <label for="qa-fab-supplier">Supplier</label>
                         <input id="qa-fab-supplier" name="supplier_name" type="text" maxlength="150"

@@ -59,6 +59,10 @@ $label  = (string) ($option['option_label'] ?? 'Fabric');
 if ($label === '') $label = 'Fabric';
 $labelL = strtolower($label);
 
+// Hide the dedicated `colour` field when the option_label already
+// means "colour" (e.g. "Slat Colour") — same rule as options.php.
+$labelIsColour = (bool) preg_match('/colou?r/i', $label);
+
 $f = [
     'band_code'     => (string) $option['band_code'],
     'supplier_name' => (string) ($option['supplier_name'] ?? ''),
@@ -220,12 +224,14 @@ $activeNav = 'products';
                     </div>
                 </div>
 
-                <div class="form-row cols-3">
-                    <div class="form-group">
-                        <label for="colour">Colour</label>
-                        <input id="colour" name="colour" type="text" maxlength="150"
-                               value="<?= e((string) $f['colour']) ?>">
-                    </div>
+                <div class="form-row <?= $labelIsColour ? 'cols-2' : 'cols-3' ?>">
+                    <?php if (!$labelIsColour): ?>
+                        <div class="form-group">
+                            <label for="colour">Colour</label>
+                            <input id="colour" name="colour" type="text" maxlength="150"
+                                   value="<?= e((string) $f['colour']) ?>">
+                        </div>
+                    <?php endif; ?>
                     <div class="form-group">
                         <label for="code">Code</label>
                         <input id="code" name="code" type="text" maxlength="50"
