@@ -332,6 +332,29 @@ $knownBands = array_map(
     $knownBandsStmt->fetchAll(PDO::FETCH_COLUMN)
 );
 
+// Systems on this product — used by the bulk-add form so the admin
+// can optionally scope a paste to one system (e.g. all 12 Polaris
+// colours go on rollers only, not on verticals). Returns [] when
+// the product has no systems defined yet, in which case the form
+// hides the system dropdown.
+$systemsStmt = db()->prepare(
+    'SELECT id, name FROM product_systems
+      WHERE product_id = ? AND client_id = ?
+      ORDER BY sort_order, name'
+);
+try {
+    $systemsStmt->execute([$productId, $clientId]);
+    $systems = $systemsStmt->fetchAll();
+} catch (Throwable $e) {
+    // sort_order column may not exist on older schemas; fall back.
+    $systemsStmt = db()->prepare(
+        'SELECT id, name FROM product_systems
+          WHERE product_id = ? AND client_id = ? ORDER BY name'
+    );
+    $systemsStmt->execute([$productId, $clientId]);
+    $systems = $systemsStmt->fetchAll();
+}
+
 $activeNav = 'products';
 ?><!doctype html>
 <html lang="en">
@@ -475,9 +498,73 @@ $activeNav = 'products';
             </p>
         </section>
 
+        <!-- Bulk-add — paste a list of names, all go in under one band.
+             Same pattern as the wizard step 3. Open by default so the
+             admin sees it without having to discover a collapsed
+             control. The single-add form below stays available for
+             one-off entries. -->
+        <section class="section">
+            <details open>
+                <summary style="cursor:pointer;font-weight:600;font-size:1rem;color:var(--text-primary);padding:0.25rem 0;">
+                    Bulk add <?= e($labelL) ?>s &mdash; paste a list
+                </summary>
+                <p style="margin:0.5rem 0 0.875rem;font-size:0.875rem;color:var(--text-faint)">
+                    One name per line. They all go in under the same band
+                    <?= $systems ? '(and optionally one system)' : '' ?>.
+                    Duplicates are skipped silently.
+                </p>
+                <form method="post" action="/admin/products/options.php?product_id=<?= (int) $productId ?>"
+                      class="form" novalidate>
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="add_bulk">
+
+                    <?php if ($knownBands): ?>
+                        <div class="band-chips" aria-label="Known bands">
+                            <span class="band-chips__label">Bands:</span>
+                            <?php foreach ($knownBands as $b): ?>
+                                <button type="button" class="band-chip" data-fill-bulk="<?= e($b) ?>"><?= e($b) ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="form-row <?= $systems ? 'cols-2' : '' ?>">
+                        <div class="form-group">
+                            <label for="bulk_band">Band <span class="required">*</span></label>
+                            <input id="bulk_band" name="bulk_band" type="text"
+                                   required maxlength="20"
+                                   list="known-bands"
+                                   value="<?= e((string) $lastBand) ?>" placeholder="A">
+                        </div>
+                        <?php if ($systems): ?>
+                            <div class="form-group">
+                                <label for="bulk_system_id">System (optional)</label>
+                                <select id="bulk_system_id" name="bulk_system_id">
+                                    <option value="">All systems on this product</option>
+                                    <?php foreach ($systems as $s): ?>
+                                        <option value="<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bulk_names"><?= e(ucfirst($labelL)) ?> names &mdash; one per line <span class="required">*</span></label>
+                        <textarea id="bulk_names" name="bulk_names" rows="10"
+                                  style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.9375rem"
+                                  placeholder="<?= e($labelL === 'slat' ? "Cream\nWalnut\nOak\nWhite Gloss" : "Cream\nStone\nBlack\nPolaris White") ?>"></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add all</button>
+                    </div>
+                </form>
+            </details>
+        </section>
+
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Add <?= e($labelL) ?></h2>
+                <h2 class="section-title">Add <?= e($labelL) ?> (one at a time)</h2>
             </div>
             <form method="post" action="/admin/products/options.php?product_id=<?= (int) $productId ?>"
                   class="form" novalidate>
@@ -800,39 +887,41 @@ $activeNav = 'products';
     refresh();
 })();
 
-// ── Known-band chips: click to fill the band input ────────────
-// The native <datalist> filters its options by the current input
-// value, so a sticky pre-fill (e.g. "URBAN" from the previous
-// fabric) hides all the other bands the tenant has defined. The
-// chip row stays visible regardless and lets the user one-click
-// to swap bands. The active chip mirrors whatever's currently in
-// the input so they can see at a glance which band they're on.
+// ── Known-band chips: click to fill the matching band input ─────
+// Two chip rows on this page: one above the single-add form
+// (data-fill → #band_code) and one above the bulk-add form
+// (data-fill-bulk → #bulk_band). Same datalist filter quirk
+// applies to both — sticky pre-fills can hide options — so each
+// row is independently click-to-fill with active-chip mirroring.
 (function () {
-    var input = document.getElementById('band_code');
-    var chips = document.querySelectorAll('.band-chip');
-    if (!input || !chips.length) return;
+    function wire(chipAttr, inputId, nextId) {
+        var input = document.getElementById(inputId);
+        var chips = document.querySelectorAll('[' + chipAttr + ']');
+        if (!input || !chips.length) return;
 
-    function syncActive() {
-        var v = (input.value || '').trim().toLowerCase();
+        function syncActive() {
+            var v = (input.value || '').trim().toLowerCase();
+            chips.forEach(function (c) {
+                var match = (c.getAttribute(chipAttr) || '').toLowerCase() === v;
+                c.classList.toggle('is-active', match);
+            });
+        }
+
         chips.forEach(function (c) {
-            var match = (c.getAttribute('data-fill') || '').toLowerCase() === v;
-            c.classList.toggle('is-active', match);
+            c.addEventListener('click', function () {
+                input.value = c.getAttribute(chipAttr) || '';
+                syncActive();
+                var next = nextId ? document.getElementById(nextId) : null;
+                if (next) next.focus();
+            });
         });
+
+        input.addEventListener('input', syncActive);
+        syncActive();
     }
 
-    chips.forEach(function (c) {
-        c.addEventListener('click', function () {
-            input.value = c.getAttribute('data-fill') || '';
-            syncActive();
-            // Drop focus to the next field — most users fill band
-            // once then start typing the fabric name.
-            var nameInput = document.getElementById('name');
-            if (nameInput) nameInput.focus();
-        });
-    });
-
-    input.addEventListener('input', syncActive);
-    syncActive();
+    wire('data-fill',      'band_code', 'name');
+    wire('data-fill-bulk', 'bulk_band', 'bulk_names');
 })();
 </script>
 </body>
