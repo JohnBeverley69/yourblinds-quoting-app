@@ -118,7 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE id = ? AND client_id = ?'
                 );
                 $u->execute([
-                    strtoupper($f['band_code']),
+                    // Preserve user-typed case — see options.php
+                    // for rationale (no strtoupper).
+                    $f['band_code'],
                     $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
                     $f['name'],
                     $f['colour'] !== '' ? $f['colour'] : null,
@@ -137,7 +139,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE id = ? AND client_id = ?'
                 );
                 $u->execute([
-                    strtoupper($f['band_code']),
+                    // Preserve user-typed case — see options.php
+                    // for rationale (no strtoupper).
+                    $f['band_code'],
                     $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
                     $f['name'],
                     $f['colour'] !== '' ? $f['colour'] : null,

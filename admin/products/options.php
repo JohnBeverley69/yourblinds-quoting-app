@@ -68,6 +68,30 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 $lastBand     = (string) ($_SESSION['_options_last_band']     ?? '');
 $lastSupplier = (string) ($_SESSION['_options_last_supplier'] ?? '');
 
+// Normalize the sticky band against canonical bands defined on this
+// product. The old behaviour uppercased band codes on save (so the
+// session held "URBAN") while the price-tables rename / bulk-add path
+// kept user-typed case ("Urban"). Result was the sticky pre-fill
+// not matching any chip exactly. Look up the typed value
+// case-insensitively against the union of product_options + price_tables
+// and adopt the canonical case if there's a match.
+if ($lastBand !== '') {
+    $normStmt = db()->prepare(
+        "SELECT band_code FROM (
+            SELECT band_code FROM product_options
+             WHERE product_id = ? AND client_id = ?
+            UNION
+            SELECT band_code FROM price_tables
+             WHERE product_id = ? AND client_id = ?
+         ) x
+         WHERE LOWER(band_code) = LOWER(?)
+         LIMIT 1"
+    );
+    $normStmt->execute([$productId, $clientId, $productId, $clientId, $lastBand]);
+    $canon = $normStmt->fetchColumn();
+    if ($canon !== false) $lastBand = (string) $canon;
+}
+
 $f = [
     'band_code'     => $lastBand,
     'supplier_name' => $lastSupplier,
@@ -206,10 +230,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     name, colour, code, sort_order, active)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
+            // No strtoupper — let the typed case stick. MySQL's
+            // case-insensitive collation handles lookups, and the
+            // price-tables UI keeps user case too, so this avoids
+            // the "URBAN vs Urban" mismatch in the band chips.
             $stmt->execute([
                 $clientId,
                 $productId,
-                strtoupper($f['band_code']),
+                $f['band_code'],
                 $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
                 $f['name'],
                 $f['colour'] !== '' ? $f['colour'] : null,
@@ -218,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['active'],
             ]);
             $newFabricId = (int) db()->lastInsertId();
-            $_SESSION['_options_last_band']     = strtoupper($f['band_code']);
+            $_SESSION['_options_last_band']     = $f['band_code'];
             $_SESSION['_options_last_supplier'] = $f['supplier_name'];
 
             // Audit
@@ -228,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $f['name'],
                 null,
                 [
-                    'band_code'     => strtoupper($f['band_code']),
+                    'band_code'     => $f['band_code'],
                     'supplier_name' => $f['supplier_name'],
                     'name'          => $f['name'],
                     'colour'        => $f['colour'],

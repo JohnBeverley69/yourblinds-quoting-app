@@ -118,11 +118,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                    (client_id, product_id, system_id, band_code, name, notes, active)
                  VALUES (?, ?, ?, ?, ?, ?, 1)'
             );
+            // No strtoupper — keep the case the user typed. Matches
+            // the bulk-add path (which never uppercased) and the
+            // rename / update_meta path, so all three ways of
+            // creating/editing a band agree on case.
             $stmt->execute([
                 $clientId,
                 $productId,
                 $systemId,
-                strtoupper($f['band_code']),
+                $f['band_code'],
                 $f['name']  !== '' ? $f['name']  : null,
                 $f['notes'] !== '' ? $f['notes'] : null,
             ]);
@@ -133,17 +137,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             require_once __DIR__ . '/../../_partials/catalogue_audit.php';
             catalogue_audit_log(
                 'price_table', $newId, 'create',
-                'Band ' . strtoupper($f['band_code']) . ($f['name'] !== '' ? ' (' . $f['name'] . ')' : ''),
+                'Band ' . $f['band_code'] . ($f['name'] !== '' ? ' (' . $f['name'] . ')' : ''),
                 null,
                 [
                     'system_id' => $systemId,
-                    'band_code' => strtoupper($f['band_code']),
+                    'band_code' => $f['band_code'],
                     'name'      => $f['name']  !== '' ? $f['name']  : null,
                 ],
                 $productId
             );
 
-            $_SESSION['flash_success'] = 'Price table for band "' . strtoupper($f['band_code']) . '" created.';
+            $_SESSION['flash_success'] = 'Price table for band "' . $f['band_code'] . '" created.';
             header('Location: /admin/products/price-table.php?id=' . $newId);
             exit;
         } catch (Throwable $e) {
