@@ -16,12 +16,23 @@ if ($productId <= 0) {
 }
 
 // Tenant-scoped product lookup. The label drives whether we say
-// "Fabric" or "Slat type" throughout the page.
-$pStmt = db()->prepare(
-    'SELECT id, name, option_label FROM products WHERE id = ? AND client_id = ?'
-);
-$pStmt->execute([$productId, $clientId]);
-$product = $pStmt->fetch();
+// "Fabric" or "Slat type" throughout the page; show_colour_field
+// drives whether the dedicated Colour sub-field renders next to
+// the name. Defensive fallback for schemas where the
+// migrate_show_colour_field.php hasn't run yet.
+try {
+    $pStmt = db()->prepare(
+        'SELECT id, name, option_label, show_colour_field FROM products WHERE id = ? AND client_id = ?'
+    );
+    $pStmt->execute([$productId, $clientId]);
+    $product = $pStmt->fetch();
+} catch (Throwable $e) {
+    $pStmt = db()->prepare(
+        'SELECT id, name, option_label FROM products WHERE id = ? AND client_id = ?'
+    );
+    $pStmt->execute([$productId, $clientId]);
+    $product = $pStmt->fetch();
+}
 
 if (!$product) {
     http_response_code(404);
@@ -39,14 +50,14 @@ $label  = (string) ($product['option_label'] ?? 'Fabric');
 if ($label === '') $label = 'Fabric';
 $labelL = strtolower($label);
 
-// If the per-product label already means "colour" (e.g. "Slat
-// Colour", "Colour", "Colour way"), the dedicated `colour`
-// sub-field on each row is redundant — you'd end up with two
-// "Colour" labels next to each other on the form and a
-// "Slat Colour / Colour" duplication in the table header.
-// In that case we hide the colour input + column entirely;
-// the name field IS the colour for these products.
-$labelIsColour = (bool) preg_match('/colou?r/i', $label);
+// Per-product show_colour_field toggle drives whether the dedicated
+// `colour` sub-field appears next to the name on this page. When 0,
+// hide form input + table column; the name field IS the colour for
+// those products. Defaults to 1 (show) on schemas where the
+// migrate_show_colour_field.php migration hasn't been run yet.
+$showColourField = !array_key_exists('show_colour_field', $product)
+    || (int) $product['show_colour_field'] === 1;
+$labelIsColour   = !$showColourField;
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;

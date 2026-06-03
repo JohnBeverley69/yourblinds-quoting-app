@@ -16,32 +16,37 @@ if ($id <= 0) {
 }
 
 // Tenant-scoped lookup of the option + its parent product.
-// cost_price is added by migrate_product_costs.php — try-fallback so
-// the page still works pre-migration.
-try {
-    $loadStmt = db()->prepare(
-        'SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
-                o.colour, o.code, o.sort_order, o.active, o.cost_price,
-                p.name AS product_name, p.option_label
-           FROM product_options o
-           JOIN products p ON p.id = o.product_id
-          WHERE o.id = ? AND o.client_id = ?'
-    );
-    $loadStmt->execute([$id, $clientId]);
-    $option = $loadStmt->fetch();
-    $hasCostColumn = true;
-} catch (Throwable $e) {
-    $loadStmt = db()->prepare(
-        'SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
-                o.colour, o.code, o.sort_order, o.active,
-                p.name AS product_name, p.option_label
-           FROM product_options o
-           JOIN products p ON p.id = o.product_id
-          WHERE o.id = ? AND o.client_id = ?'
-    );
-    $loadStmt->execute([$id, $clientId]);
-    $option = $loadStmt->fetch();
-    $hasCostColumn = false;
+// cost_price and show_colour_field are both optional schema additions
+// (migrate_product_costs.php / migrate_show_colour_field.php). Each
+// might or might not have run; try the widest column set first and
+// peel off optional columns on failure.
+$option         = false;
+$hasCostColumn  = false;
+$hasShowColField = false;
+foreach ([
+    ['o.cost_price,', 'p.show_colour_field', true,  true],
+    ['o.cost_price,', '',                    true,  false],
+    ['',              'p.show_colour_field', false, true],
+    ['',              '',                    false, false],
+] as [$costCol, $scfCol, $cost, $scf]) {
+    $extraSelect = $scfCol ? ', ' . $scfCol : '';
+    try {
+        $loadStmt = db()->prepare(
+            "SELECT o.id, o.product_id, o.band_code, o.supplier_name, o.name,
+                    o.colour, o.code, o.sort_order, o.active, $costCol
+                    p.name AS product_name, p.option_label{$extraSelect}
+               FROM product_options o
+               JOIN products p ON p.id = o.product_id
+              WHERE o.id = ? AND o.client_id = ?"
+        );
+        $loadStmt->execute([$id, $clientId]);
+        $option = $loadStmt->fetch();
+        $hasCostColumn   = $cost;
+        $hasShowColField = $scf;
+        break;
+    } catch (Throwable $e) {
+        $option = false;
+    }
 }
 
 if (!$option) {
@@ -59,9 +64,11 @@ $label  = (string) ($option['option_label'] ?? 'Fabric');
 if ($label === '') $label = 'Fabric';
 $labelL = strtolower($label);
 
-// Hide the dedicated `colour` field when the option_label already
-// means "colour" (e.g. "Slat Colour") — same rule as options.php.
-$labelIsColour = (bool) preg_match('/colou?r/i', $label);
+// Hide the dedicated `colour` field when the product's
+// show_colour_field flag is 0. Defaults to 1 (show) when the
+// migration hasn't run.
+$labelIsColour = $hasShowColField
+    && (int) ($option['show_colour_field'] ?? 1) === 0;
 
 $f = [
     'band_code'     => (string) $option['band_code'],

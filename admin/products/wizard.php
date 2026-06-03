@@ -135,11 +135,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sortStmt->execute([$clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
-            $ins = $pdo->prepare(
-                'INSERT INTO products (client_id, name, option_label, sort_order, active)
-                  VALUES (?, ?, ?, ?, 1)'
-            );
-            $ins->execute([$clientId, $name, $optionLabel, $nextSort]);
+            // Smart default for show_colour_field: hide the Colour
+            // sub-field if the typed option_label already means
+            // "colour" (e.g. "Slat Colour"). Try the INSERT with the
+            // column first; if the schema doesn't have it yet
+            // (migration not run), fall back to the column-less form.
+            $scfDefault = preg_match('/colou?r/i', $optionLabel) ? 0 : 1;
+            try {
+                $ins = $pdo->prepare(
+                    'INSERT INTO products
+                        (client_id, name, option_label, show_colour_field, sort_order, active)
+                      VALUES (?, ?, ?, ?, ?, 1)'
+                );
+                $ins->execute([$clientId, $name, $optionLabel, $scfDefault, $nextSort]);
+            } catch (Throwable $e) {
+                $ins = $pdo->prepare(
+                    'INSERT INTO products (client_id, name, option_label, sort_order, active)
+                      VALUES (?, ?, ?, ?, 1)'
+                );
+                $ins->execute([$clientId, $name, $optionLabel, $nextSort]);
+            }
             $newId = (int) $pdo->lastInsertId();
 
             header('Location: /admin/products/wizard.php?id=' . $newId . '&step=2');

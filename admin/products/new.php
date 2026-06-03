@@ -46,16 +46,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sortStmt->execute([$clientId]);
             $nextSort = (int) $sortStmt->fetchColumn();
 
-            $stmt = $pdo->prepare(
-                'INSERT INTO products (client_id, name, option_label, sort_order, active)
-                 VALUES (?, ?, ?, ?, 1)'
-            );
-            $stmt->execute([
-                $clientId,
-                $f['name'],
-                $f['option_label'],
-                $nextSort,
-            ]);
+            // Smart default for show_colour_field — see wizard.php
+            // step 1 for the same heuristic.
+            $scfDefault = preg_match('/colou?r/i', $f['option_label']) ? 0 : 1;
+            try {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO products
+                        (client_id, name, option_label, show_colour_field, sort_order, active)
+                     VALUES (?, ?, ?, ?, ?, 1)'
+                );
+                $stmt->execute([$clientId, $f['name'], $f['option_label'], $scfDefault, $nextSort]);
+            } catch (Throwable $e) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO products (client_id, name, option_label, sort_order, active)
+                     VALUES (?, ?, ?, ?, 1)'
+                );
+                $stmt->execute([$clientId, $f['name'], $f['option_label'], $nextSort]);
+            }
             $newProductId = (int) $pdo->lastInsertId();
 
             // Audit

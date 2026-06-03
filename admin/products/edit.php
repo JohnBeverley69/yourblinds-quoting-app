@@ -15,24 +15,30 @@ if ($id <= 0) {
     exit;
 }
 
-// cost_price is optional (migrate_product_costs.php). Gracefully fall
-// back to no column if the migration hasn't run on this server.
-try {
-    $loadStmt = db()->prepare(
-        'SELECT id, name, option_label, sort_order, active, cost_price
-           FROM products WHERE id = ? AND client_id = ?'
-    );
-    $loadStmt->execute([$id, $clientId]);
-    $product = $loadStmt->fetch();
-    $hasCostColumn = true;
-} catch (Throwable $e) {
-    $loadStmt = db()->prepare(
-        'SELECT id, name, option_label, sort_order, active
-           FROM products WHERE id = ? AND client_id = ?'
-    );
-    $loadStmt->execute([$id, $clientId]);
-    $product = $loadStmt->fetch();
-    $hasCostColumn = false;
+// cost_price is optional (migrate_product_costs.php). Same fallback
+// pattern for show_colour_field (migrate_show_colour_field.php) — if
+// neither migration has run, the page still loads.
+$hasCostColumn   = false;
+$hasShowColField = false;
+foreach ([
+    ['id, name, option_label, show_colour_field, sort_order, active, cost_price', true,  true],
+    ['id, name, option_label, show_colour_field, sort_order, active',             false, true],
+    ['id, name, option_label, sort_order, active, cost_price',                    true,  false],
+    ['id, name, option_label, sort_order, active',                                false, false],
+] as [$cols, $cost, $scf]) {
+    try {
+        $loadStmt = db()->prepare(
+            "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
+        );
+        $loadStmt->execute([$id, $clientId]);
+        $product = $loadStmt->fetch();
+        $hasCostColumn   = $cost;
+        $hasShowColField = $scf;
+        break;
+    } catch (Throwable $e) {
+        // Try the next narrower column set.
+        $product = false;
+    }
 }
 
 if (!$product) {
@@ -187,17 +193,23 @@ foreach ($dStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
 // $f['markup'] and $f['discount'] are keyed by system_id (or '' for
 // products without systems). Default missing entries to '0.00'.
 $f = [
-    'name'         => (string) $product['name'],
-    'active'       => (int)    $product['active'],
+    'name'              => (string) $product['name'],
+    'active'            => (int)    $product['active'],
     // option_label is the per-product wording for whatever the "fabric"
     // axis is called in this product's world. "Fabric" for rollers,
     // "Colour" for metal venetians, "Finish" for wood, etc.
-    'option_label' => (string) ($product['option_label'] ?? 'Fabric'),
-    'cost_price'   => isset($product['cost_price']) && $product['cost_price'] !== null
+    'option_label'      => (string) ($product['option_label'] ?? 'Fabric'),
+    // Controls whether the dedicated "Colour" sub-field appears on
+    // the fabric forms. Default 1 (show) for backward compat when
+    // migrate_show_colour_field.php hasn't run yet.
+    'show_colour_field' => isset($product['show_colour_field'])
+        ? (int) $product['show_colour_field']
+        : 1,
+    'cost_price'        => isset($product['cost_price']) && $product['cost_price'] !== null
                           ? (string) $product['cost_price']
                           : '',
-    'markup'       => [],
-    'discount'     => [],
+    'markup'            => [],
+    'discount'          => [],
 ];
 if ($systems) {
     foreach ($systems as $s) {
@@ -214,10 +226,11 @@ $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $f['name']         = trim((string) ($_POST['name']         ?? ''));
-    $f['active']       = !empty($_POST['active']) ? 1 : 0;
-    $f['option_label'] = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
-    $f['cost_price']   = trim((string) ($_POST['cost_price']   ?? ''));
+    $f['name']              = trim((string) ($_POST['name']         ?? ''));
+    $f['active']            = !empty($_POST['active']) ? 1 : 0;
+    $f['option_label']      = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
+    $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
+    $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
     // Two posting shapes depending on whether the product has systems:
     //   With systems:    markup[<sysid>] / discount[<sysid>]  (arrays)
@@ -287,22 +300,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? null
                 : (float) $f['cost_price'];
 
-            if ($hasCostColumn) {
-                $u = $pdo->prepare(
-                    "UPDATE products
-                        SET name = ?, active = ?, option_label = ?,
-                            cost_price = ?
-                      WHERE id = ? AND client_id = ?"
-                );
-                $u->execute([$f['name'], $f['active'], $f['option_label'], $costValue, $id, $clientId]);
-            } else {
-                $u = $pdo->prepare(
-                    "UPDATE products
-                        SET name = ?, active = ?, option_label = ?
-                      WHERE id = ? AND client_id = ?"
-                );
-                $u->execute([$f['name'], $f['active'], $f['option_label'], $id, $clientId]);
+            // Build the UPDATE column list dynamically based on which
+            // optional columns the schema actually has. Avoids four
+            // copies of the same statement and keeps the migration
+            // chain backward-compatible.
+            $cols = ['name = ?', 'active = ?', 'option_label = ?'];
+            $vals = [$f['name'], $f['active'], $f['option_label']];
+            if ($hasShowColField) {
+                $cols[] = 'show_colour_field = ?';
+                $vals[] = $f['show_colour_field'];
             }
+            if ($hasCostColumn) {
+                $cols[] = 'cost_price = ?';
+                $vals[] = $costValue;
+            }
+            $vals[] = $id;
+            $vals[] = $clientId;
+
+            $u = $pdo->prepare(
+                "UPDATE products SET " . implode(', ', $cols)
+                . " WHERE id = ? AND client_id = ?"
+            );
+            $u->execute($vals);
 
             // Markup: 0 (or empty) DELETES the row so the engine falls
             // back to the tenant default (client_settings
@@ -709,6 +728,37 @@ $activeNav = 'products';
                         </small>
                     </div>
                 </div>
+
+                <?php if ($hasShowColField): ?>
+                    <!-- Toggle whether the inline fabric forms render
+                         the dedicated "Colour" sub-field next to the
+                         name. Off for products where the name IS the
+                         colour (Venetians: "Cream", "Walnut", "Brass");
+                         on for products where one fabric has multiple
+                         colour variants (Roller "Polaris" in "Cream",
+                         "Stone", "Black"). -->
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                                <input type="checkbox" name="show_colour_field" value="1"
+                                       <?= (int) $f['show_colour_field'] === 1 ? 'checked' : '' ?>
+                                       style="margin-top:0.1875rem">
+                                <span>
+                                    <strong>Show separate "Colour" column on fabric forms.</strong>
+                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                        Tick this when one <?= e($f['option_label']) ?>
+                                        comes in multiple colour variants (e.g. a roller
+                                        fabric like <em>Polaris</em> in Cream, Stone, Black).
+                                        Untick when the
+                                        <?= e(strtolower($f['option_label'])) ?> name itself
+                                        IS the colour (e.g. <em>Cream</em>, <em>Walnut</em>
+                                        on a Venetian).
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php /* Per-product wholesale cost field removed — cost is
                          taken directly from your price tables (the price-
@@ -1176,16 +1226,15 @@ $activeNav = 'products';
                                placeholder="e.g. Cream Slats" style="width:100%">
                     </div>
                     <?php
-                        // Hide dedicated Colour field when the product's
-                        // option_label already means colour — avoids a
-                        // "Slat Colour name + Colour" duplication on the
-                        // single-add row.
-                        $editLabelIsColour = (bool) preg_match(
-                            '/colou?r/i',
-                            (string) ($product['option_label'] ?? '')
-                        );
+                        // Per-product toggle from products.show_colour_field.
+                        // When OFF, the dedicated Colour sub-field is
+                        // hidden — the option_label name IS the colour.
+                        // Defaults to ON for products on schemas that
+                        // pre-date migrate_show_colour_field.php.
+                        $showColourField = !$hasShowColField
+                            || (int) ($product['show_colour_field'] ?? 1) === 1;
                     ?>
-                    <?php if (!$editLabelIsColour): ?>
+                    <?php if ($showColourField): ?>
                         <div style="flex:1 1 8rem">
                             <label for="qa-fab-colour">Colour</label>
                             <input id="qa-fab-colour" name="colour" type="text" maxlength="150"
