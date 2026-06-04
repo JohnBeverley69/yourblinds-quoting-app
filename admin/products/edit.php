@@ -2065,20 +2065,33 @@ $activeNav = 'products';
     // the body which we replace wholesale on a Refresh.
     document.addEventListener('focusin', function (e) {
         if (e.target && e.target.id === 'pv-fabric-text') {
-            // Focus → fetch immediately (no debounce) so the dropdown
-            // shows up the moment the user clicks the input.
-            searchAndRenderFabrics(e.target.value);
+            var hidden = document.getElementById('pv-fabric');
+            // If a fabric is already selected, focusing the input
+            // means "I want to change it" — show the full list
+            // (empty query, no filter) instead of searching by
+            // the rendered label, which never matches anything.
+            // Select-all the visible text so the next keystroke
+            // instantly replaces the locked-in label.
+            if (hidden && hidden.value) {
+                searchAndRenderFabrics('');
+                try { e.target.select(); } catch (_) { /* old browser */ }
+            } else {
+                // No selection yet → fetch with current text so the
+                // dropdown shows the moment the input gets focus.
+                searchAndRenderFabrics(e.target.value);
+            }
         }
     });
     document.addEventListener('input', function (e) {
         if (e.target && e.target.id === 'pv-fabric-text') {
-            // Typing — server-side fetch, debounced. Clearing the
-            // input also clears the hidden id so the price panel
-            // reverts to "Pick a fabric…".
-            if (e.target.value === '') {
-                var hidden = document.getElementById('pv-fabric');
-                if (hidden) hidden.value = '';
-            }
+            // Any keystroke invalidates the prior selection — the
+            // visible text no longer matches the selected fabric's
+            // label, so clear the hidden id. Forces the user to
+            // commit a new pick from the dropdown; meanwhile the
+            // price panel reverts to "Pick a fabric…" so nothing
+            // misleading hangs around mid-edit.
+            var hidden = document.getElementById('pv-fabric');
+            if (hidden) hidden.value = '';
             scheduleFabricSearch(e.target.value);
         }
     });
