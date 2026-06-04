@@ -397,8 +397,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
     } elseif (strlen($newNotes) > 255) {
         $_SESSION['flash_error'] = 'Notes too long (max 255 chars).';
     } else {
+        // Cascade the band-code rename through to any fabrics that
+        // reference the old code. band_code is a free-text join key,
+        // not a real FK, so without the cascade fabrics on the old
+        // code get orphaned (pricing engine can't find a matching
+        // table) AND the Fabrics chip row shows BOTH old + new as
+        // separate bands. Wrap both UPDATEs in a transaction so a
+        // mid-cascade failure rolls the price_tables change back too.
+        $pdo              = db();
+        $oldBand          = (string) $table['band_code'];
+        $productIdOfTable = (int) $table['product_id'];
+        $systemIdOfTable  = (int) $table['system_id'];
+
+        // Schema-aware: cascade respects product_options.system_id
+        // when that column exists, so a band on system X doesn't drag
+        // a same-named band on system Y along with it. Fabrics with
+        // system_id IS NULL apply across all systems on the product
+        // and so always cascade.
+        $hasOptSystemIdCol = false;
         try {
-            db()->prepare(
+            $hasOptSystemIdCol = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME   = 'product_options'
+                    AND COLUMN_NAME  = 'system_id'"
+            )->fetchColumn();
+        } catch (Throwable $e) { /* keep false */ }
+
+        try {
+            $pdo->beginTransaction();
+
+            $pdo->prepare(
                 'UPDATE price_tables
                     SET band_code = ?, name = ?, notes = ?, updated_at = NOW()
                   WHERE id = ? AND client_id = ?'
@@ -409,8 +438,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
                 $tableId,
                 $clientId,
             ]);
-            $_SESSION['flash_success'] = 'Saved.';
+
+            // Only cascade when the band actually changed (any
+            // difference, including case-only — "URBAN" → "Urban"
+            // should still rename the matching fabric rows so the
+            // chip row doesn't show both).
+            $cascaded = 0;
+            if ($oldBand !== $newBand) {
+                if ($hasOptSystemIdCol) {
+                    $u = $pdo->prepare(
+                        'UPDATE product_options
+                            SET band_code = ?
+                          WHERE product_id = ? AND client_id = ?
+                            AND band_code = ?
+                            AND (system_id IS NULL OR system_id = ?)'
+                    );
+                    $u->execute([$newBand, $productIdOfTable, $clientId, $oldBand, $systemIdOfTable]);
+                } else {
+                    $u = $pdo->prepare(
+                        'UPDATE product_options
+                            SET band_code = ?
+                          WHERE product_id = ? AND client_id = ?
+                            AND band_code = ?'
+                    );
+                    $u->execute([$newBand, $productIdOfTable, $clientId, $oldBand]);
+                }
+                $cascaded = $u->rowCount();
+            }
+
+            $pdo->commit();
+
+            // Audit. Note both states so a reviewer can see the
+            // rename trail; cascaded_fabrics on the new-state side
+            // tells the story of "this rename also touched N fabric
+            // rows" without needing to diff the product_options
+            // table separately.
+            require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+            if ($oldBand !== $newBand || (string) ($table['name']  ?? '') !== $newName
+                                      || (string) ($table['notes'] ?? '') !== $newNotes) {
+                catalogue_audit_log(
+                    'price_table', $tableId, 'update',
+                    'Band ' . $newBand . ($newName !== '' ? ' (' . $newName . ')' : ''),
+                    [
+                        'band_code' => $oldBand,
+                        'name'      => $table['name']  ?? null,
+                        'notes'     => $table['notes'] ?? null,
+                    ],
+                    [
+                        'band_code'        => $newBand,
+                        'name'             => $newName  !== '' ? $newName  : null,
+                        'notes'            => $newNotes !== '' ? $newNotes : null,
+                        'cascaded_fabrics' => $cascaded,
+                    ],
+                    $productIdOfTable
+                );
+            }
+
+            if ($cascaded > 0) {
+                $_SESSION['flash_success'] = 'Saved. Renamed band on '
+                    . $cascaded . ' fabric' . ($cascaded === 1 ? '' : 's')
+                    . " (\"$oldBand\" → \"$newBand\").";
+            } else {
+                $_SESSION['flash_success'] = 'Saved.';
+            }
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             // UNIQUE(product_id, system_id, band_code) — the only
             // realistic constraint trip. Surface it clearly so the
             // user knows the band code collides with a sibling table
