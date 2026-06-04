@@ -1903,6 +1903,7 @@ $activeNav = 'products';
                 if (fabHidden) fabHidden.value = '';
                 if (fabText)   fabText.value   = '';
                 if (fabList)   fabList.hidden  = true;
+                currentFabricBand = '';
                 renderExtras();
             });
         }
@@ -2001,7 +2002,11 @@ $activeNav = 'products';
         }
 
         var html = matches.map(function (f) {
-            return '<div class="pv-typeahead-item" data-id="' + f.id + '">'
+            // data-band carries the band code so the click handler
+            // can stash it for downstream choice filtering (per-band
+            // tape colours, etc.). Quote the value attribute-safe.
+            var b = (f.band || '').replace(/"/g, '&quot;');
+            return '<div class="pv-typeahead-item" data-id="' + f.id + '" data-band="' + b + '">'
                  + esc(fabricLabel(f))
                  + '</div>';
         }).join('');
@@ -2021,7 +2026,14 @@ $activeNav = 'products';
         }, 150);
     }
 
-    function selectFabric(id, label) {
+    // Tracked separately from the hidden id so the choice filter
+    // (per-band tape colours, etc.) doesn't have to re-fetch the
+    // fabric every time it needs the band. Lower-cased for a
+    // case-insensitive compare; selection lookups elsewhere stay
+    // user-cased. Cleared whenever the user invalidates their pick.
+    var currentFabricBand = '';
+
+    function selectFabric(id, label, band) {
         var hidden = document.getElementById('pv-fabric');
         var text   = document.getElementById('pv-fabric-text');
         var list   = document.getElementById('pv-fabric-list');
@@ -2029,6 +2041,11 @@ $activeNav = 'products';
         hidden.value = String(id);
         text.value   = label;
         list.hidden  = true;
+        currentFabricBand = (band || '').toLowerCase();
+        // Re-render extras so band-scoped choices appear / disappear
+        // for this fabric's band. Cheap — same DOM swap as on a
+        // system change.
+        renderExtras();
         // Trigger calc — the hidden field's change doesn't fire
         // automatically because we set .value programmatically.
         scheduleCalc();
@@ -2056,7 +2073,7 @@ $activeNav = 'products';
         var items = listEl.querySelectorAll('.pv-typeahead-item:not(.is-empty)');
         var pick = items[fabricHighlightIdx] || items[0];
         if (!pick) return false;
-        selectFabric(parseInt(pick.dataset.id, 10), pick.textContent.trim());
+        selectFabric(parseInt(pick.dataset.id, 10), pick.textContent.trim(), pick.dataset.band || '');
         return true;
     }
 
@@ -2089,9 +2106,12 @@ $activeNav = 'products';
             // label, so clear the hidden id. Forces the user to
             // commit a new pick from the dropdown; meanwhile the
             // price panel reverts to "Pick a fabric…" so nothing
-            // misleading hangs around mid-edit.
+            // misleading hangs around mid-edit. Also nukes the
+            // tracked band so choice filtering doesn't stick to
+            // the abandoned selection.
             var hidden = document.getElementById('pv-fabric');
             if (hidden) hidden.value = '';
+            currentFabricBand = '';
             scheduleFabricSearch(e.target.value);
         }
     });
@@ -2100,7 +2120,7 @@ $activeNav = 'products';
         // close (but not if click is on the input itself).
         var item = e.target.closest && e.target.closest('.pv-typeahead-item');
         if (item && !item.classList.contains('is-empty')) {
-            selectFabric(parseInt(item.dataset.id, 10), item.textContent.trim());
+            selectFabric(parseInt(item.dataset.id, 10), item.textContent.trim(), item.dataset.band || '');
             return;
         }
         var input = document.getElementById('pv-fabric-text');
@@ -2155,16 +2175,37 @@ $activeNav = 'products';
                 var m = preset[extra.id + '__m'];
                 if (m) return m.slice();
                 return (extra.choices || []).filter(function (c) {
-                    return c.is_default;
+                    return choiceAvailable(c) && c.is_default;
                 }).map(function (c) { return c.id; });
             }
             var v = preset[extra.id];
             if (v !== undefined) return v ? [parseInt(v, 10)] : [];
+            // Pick the first AVAILABLE default — a default tagged to
+            // a band the customer hasn't picked shouldn't auto-select.
             var def = (extra.choices || []).find(function (c) {
-                if (c.system_id !== null && c.system_id !== systemId) return false;
-                return c.is_default;
+                return choiceAvailable(c) && c.is_default;
             });
             return def ? [def.id] : [];
+        }
+
+        // Single source of truth for choice visibility. Two filters:
+        //   - system_id: null = "all systems", else exact match
+        //   - bands:     [] = "all bands",     else case-insensitive
+        //                membership against the currently-picked
+        //                fabric's band. With no fabric picked, a
+        //                band-scoped choice stays hidden; if we
+        //                showed it, the salesperson might commit a
+        //                pick that becomes invalid the moment they
+        //                pick a fabric on the wrong band.
+        function choiceAvailable(c) {
+            if (c.system_id !== null && c.system_id !== systemId) return false;
+            var bands = c.bands || [];
+            if (bands.length === 0) return true;
+            if (!currentFabricBand) return false;
+            for (var i = 0; i < bands.length; i++) {
+                if (String(bands[i]).toLowerCase() === currentFabricBand) return true;
+            }
+            return false;
         }
 
         function isVisible(extra) {
@@ -2179,16 +2220,11 @@ $activeNav = 'products';
                 });
                 if (!match) return false;
             }
-            var visible = (extra.choices || []).filter(function (c) {
-                return c.system_id === null || c.system_id === systemId;
-            });
-            return visible.length > 0;
+            return (extra.choices || []).some(choiceAvailable);
         }
 
         function renderOne(extra) {
-            var visible = (extra.choices || []).filter(function (c) {
-                return c.system_id === null || c.system_id === systemId;
-            });
+            var visible = (extra.choices || []).filter(choiceAvailable);
             var out = '<div class="pv-row" data-pv-extra="' + extra.id + '">';
             out += '<label>' + esc(extra.name)
                  + (extra.is_required ? ' <span class="req-mark">*</span>' : '')

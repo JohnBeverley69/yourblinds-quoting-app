@@ -58,6 +58,55 @@ if (!$choice) {
     exit;
 }
 
+// Per-choice band scoping (migrate_choice_band_scoping.php). The
+// junction table is optional — older installs won't have it, in
+// which case the band-picker UI is hidden and the choice applies
+// to every band by default.
+$hasBandScopingTbl = false;
+try {
+    $hasBandScopingTbl = (bool) db()->query(
+        "SELECT 1 FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_extra_choice_bands'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$existingBands = [];
+if ($hasBandScopingTbl) {
+    $bSt = db()->prepare(
+        'SELECT band_code FROM product_extra_choice_bands WHERE choice_id = ?'
+    );
+    $bSt->execute([$id]);
+    $existingBands = array_map(
+        static fn ($v) => (string) $v,
+        $bSt->fetchAll(PDO::FETCH_COLUMN)
+    );
+}
+
+// Known bands across this product — same union as options.php, so
+// the picker offers exactly the bands the tenant has actually
+// defined (no free-text). Empty list → no bands defined yet,
+// scoping section just shows a hint.
+$kbSt = db()->prepare(
+    "SELECT DISTINCT band_code FROM (
+        SELECT band_code FROM product_options
+         WHERE product_id = ? AND client_id = ?
+        UNION
+        SELECT band_code FROM price_tables
+         WHERE product_id = ? AND client_id = ?
+     ) x
+     WHERE band_code IS NOT NULL AND band_code != ''
+     ORDER BY band_code"
+);
+$kbSt->execute([
+    (int) $choice['product_id'], $clientId,
+    (int) $choice['product_id'], $clientId,
+]);
+$knownBands = array_map(
+    static fn ($v) => (string) $v,
+    $kbSt->fetchAll(PDO::FETCH_COLUMN)
+);
+
 $f = [
     'label'           => (string) $choice['label'],
     'price_delta'     => (string) $choice['price_delta'],
@@ -69,6 +118,7 @@ $f = [
     'is_default'      => (int)    $choice['is_default'],
     'active'          => (int)    $choice['active'],
     'system_id'       => $choice['system_id'] !== null ? (int) $choice['system_id'] : 0,
+    'bands'           => $existingBands,
 ];
 $error = null;
 
@@ -101,6 +151,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
     $f['system_id']       = (int) ($_POST['system_id'] ?? 0);
     $widthTablePasted     = (string) ($_POST['width_price_table'] ?? '');
+
+    // band_filter[] — checkbox group. Only bands that appear in the
+    // current product's known list are accepted; an unticked-everything
+    // submit means "applies to all bands" and we clear the junction.
+    // Cross-check against $knownBands so a tampered form can't insert
+    // garbage band codes.
+    $submittedBands  = is_array($_POST['band_filter'] ?? null) ? $_POST['band_filter'] : [];
+    $knownBandsLower = array_map('strtolower', $knownBands);
+    $f['bands'] = [];
+    foreach ($submittedBands as $b) {
+        $bs = trim((string) $b);
+        if ($bs === '') continue;
+        // Snap to canonical case from $knownBands if a CI match exists,
+        // so the junction never holds a band that no longer exists in
+        // any canonical form (band rename via price-table.php updates
+        // the canonical case; this keeps the scope tracking it).
+        $idx = array_search(strtolower($bs), $knownBandsLower, true);
+        if ($idx !== false) $f['bands'][] = $knownBands[$idx];
+    }
+    $f['bands'] = array_values(array_unique($f['bands']));
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -227,6 +297,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $f['active'],
                         $id,
                     ]);
+                }
+
+                // Replace the per-choice band scope. Empty $f['bands']
+                // = "applies to all bands" (clear all rows). At least
+                // one band = "only when fabric's band matches one of
+                // these". Skipped on installs where the migration
+                // hasn't been run.
+                if ($hasBandScopingTbl) {
+                    $pdo->prepare(
+                        'DELETE FROM product_extra_choice_bands WHERE choice_id = ?'
+                    )->execute([$id]);
+                    if ($f['bands']) {
+                        $insB = $pdo->prepare(
+                            'INSERT INTO product_extra_choice_bands
+                                (choice_id, band_code) VALUES (?, ?)'
+                        );
+                        foreach ($f['bands'] as $b) {
+                            $insB->execute([$id, $b]);
+                        }
+                    }
                 }
 
                 // Replace the width table.
@@ -479,6 +569,37 @@ $activeNav = 'products';
                             differently per system, use the <em>Duplicate</em> link
                             on the choices list.
                         </small>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($hasBandScopingTbl): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Available for bands</label>
+                        <?php if (!$knownBands): ?>
+                            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0">
+                                No bands defined on this product yet — add price tables first,
+                                then this choice can be restricted to specific bands.
+                            </p>
+                        <?php else: ?>
+                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;padding:0.5rem 0">
+                                <?php foreach ($knownBands as $b): ?>
+                                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer">
+                                        <input type="checkbox" name="band_filter[]"
+                                               value="<?= e($b) ?>"
+                                               <?= in_array($b, $f['bands'], true) ? 'checked' : '' ?>>
+                                        <?= e($b) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                                Tick the bands this choice should appear for. Leave them all
+                                unticked = "appears for every band" (the default). Useful when
+                                a tape colour, bracket size, or similar isn't available across
+                                every fabric tier.
+                            </small>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endif; ?>

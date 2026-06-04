@@ -1806,7 +1806,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var meta = [];
             if (f.supplier) meta.push(escapeHtml(f.supplier));
             if (f.code)     meta.push('Code ' + escapeHtml(f.code));
-            html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(f.label) + '">'
+            // data-band carries the band code so the click handler
+            // can stash it for downstream band-scoped choice filtering
+            // (e.g. tape colour availability per fabric tier).
+            html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(f.label) + '"'
+                  +    ' data-band="' + escapeAttr(f.band || '') + '">'
                   +    '<div class="fname">'
                   +      '<span class="fband">Band ' + escapeHtml(f.band) + '</span>'
                   +      escapeHtml(f.name) + (f.colour ? ' / ' + escapeHtml(f.colour) : '')
@@ -1822,21 +1826,32 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             row.addEventListener('mousedown', function (e) {
                 // Use mousedown so it fires before the input's blur event.
                 e.preventDefault();
-                pickFabric(row.dataset.id, row.dataset.label);
+                pickFabric(row.dataset.id, row.dataset.label, row.dataset.band || '');
             });
         });
     }
 
-    function pickFabric(id, label) {
+    // Tracked separately from the hidden id so band-scoped choice
+    // filtering (e.g. tape colour available only on FW 50mm) doesn't
+    // need to re-fetch the fabric every time. Lower-cased here so
+    // the compare against choice.bands[] is case-insensitive.
+    var currentFabricBand = '';
+
+    function pickFabric(id, label, band) {
         fabricId.value = String(id);
         fabricSearch.value = label;
+        currentFabricBand = (band || '').toLowerCase();
         closeFabricResults();
+        // Re-render extras: band-scoped choices appear / disappear
+        // for this fabric. Same as a system change.
+        renderExtras();
         schedulePreview();
     }
 
     function clearFabric() {
         fabricId.value = '';
         fabricSearch.value = '';
+        currentFabricBand = '';
     }
 
     function closeFabricResults() {
@@ -1922,29 +1937,46 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Falls back to the extra's defaults for the current system if
         // nothing's been picked yet — covers the first-paint case where
         // the DOM hasn't been written and preset is empty.
+        // Single source of truth for choice visibility. Two filters:
+        //   - system_id: null/undefined = "all systems", else exact match
+        //   - bands:     []    = "all bands",            else case-
+        //                insensitive membership against the currently-
+        //                picked fabric's band. With no fabric picked
+        //                yet, band-scoped choices stay hidden — showing
+        //                them risks the salesperson committing a pick
+        //                that becomes invalid the moment they pick a
+        //                fabric on the wrong band.
+        function choiceAvailable(c) {
+            if (c.system_id !== null && c.system_id !== undefined && c.system_id !== systemId) return false;
+            var bands = c.bands || [];
+            if (bands.length === 0) return true;
+            if (!currentFabricBand) return false;
+            for (var i = 0; i < bands.length; i++) {
+                if (String(bands[i]).toLowerCase() === currentFabricBand) return true;
+            }
+            return false;
+        }
+
         function effectiveChoiceIds(extra) {
             // Multi-pick: the multi preset is an array of ids.
             if (extra.allow_multi) {
                 var multi = preset[extra.id + '__multi'];
                 if (multi !== undefined) return multi.slice();
-                // First paint — pick all defaults.
-                var visibleChoices = extra.choices.filter(function (c) {
-                    if (c.system_id === null || c.system_id === undefined) return true;
-                    return c.system_id === systemId;
-                });
-                return visibleChoices.filter(function (c) { return c.is_default; })
-                                     .map(function (c) { return c.id; });
+                // First paint — pick all available defaults. Defaults
+                // tagged to a band the customer hasn't picked don't
+                // auto-select.
+                return extra.choices.filter(function (c) {
+                    return choiceAvailable(c) && c.is_default;
+                }).map(function (c) { return c.id; });
             }
             // Single-pick — single preset value (string).
             if (preset[extra.id] !== undefined) {
                 var v = preset[extra.id];
                 return v ? [parseInt(v, 10)] : [];
             }
-            var visibleChoices = extra.choices.filter(function (c) {
-                if (c.system_id === null || c.system_id === undefined) return true;
-                return c.system_id === systemId;
+            var def = extra.choices.find(function (c) {
+                return choiceAvailable(c) && c.is_default;
             });
-            var def = visibleChoices.find(function (c) { return c.is_default; });
             return def ? [def.id] : [];
         }
 
@@ -1971,11 +2003,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 });
                 if (!ok) return false;
             }
-            var visibleChoices = extra.choices.filter(function (c) {
-                if (c.system_id === null || c.system_id === undefined) return true;
-                return c.system_id === systemId;
-            });
-            return visibleChoices.length > 0;
+            return extra.choices.some(choiceAvailable);
         }
 
         // Render a single extra's inner HTML (label + picker + optional
@@ -1986,10 +2014,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         //   - multi-pick (allow_multi=1): a list of tick-boxes
         function renderOne(extra, isChild) {
             var idx = productData.extras.indexOf(extra);
-            var visibleChoices = extra.choices.filter(function (c) {
-                if (c.system_id === null || c.system_id === undefined) return true;
-                return c.system_id === systemId;
-            });
+            var visibleChoices = extra.choices.filter(choiceAvailable);
             var selectedThumb = null;
 
             var out = '<div data-extra-id="' + extra.id + '"'
@@ -2159,6 +2184,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (initial.option_id && initial.fabric_label) {
             fabricSearch.value = initial.fabric_label;
             fabricId.value = String(initial.option_id);
+            // Restore the band too — drives band-scoped choice
+            // visibility on edit of an existing item. Without this,
+            // re-opening a saved quote that picked a band-scoped tape
+            // colour would hide the option, losing the selection.
+            currentFabricBand = (initial.fabric_band || '').toLowerCase();
         }
         // Three-pass set-then-render: covers single-level conditional nesting
         // (which is all the schema currently supports). Each pass sets values
@@ -2431,6 +2461,7 @@ window.__editingBlind__ = <?= json_encode([
     'system_id'     => $editingItem['system_id'] !== null ? (int) $editingItem['system_id'] : null,
     'option_id'     => (int) ($editingItem['option_id']      ?? 0),
     'fabric_label'  => $editFabricLabel,
+    'fabric_band'   => (string) ($editingItem['fabric_band_snapshot'] ?? ''),
     'extras'        => $editingExtras,
 ], JSON_THROW_ON_ERROR) ?>;
 </script>

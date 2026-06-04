@@ -155,6 +155,7 @@ if ($extraIds) {
 }
 
 $choicesByExtra = [];
+$bandsByChoice  = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
     $st = $pdo->prepare(
@@ -166,15 +167,50 @@ if ($extraIds) {
        ORDER BY product_extra_id, sort_order, label"
     );
     $st->execute($extraIds);
-    foreach ($st->fetchAll() as $r) {
+    $choiceRows = $st->fetchAll();
+
+    // Pull the per-choice band scoping in one query so each choice
+    // arrives in JS with the list it's restricted to. Empty list
+    // (= no rows in the junction) means "applies to every band",
+    // matching the pre-migration default. Wrapped in try-catch so
+    // tenants who haven't run migrate_choice_band_scoping.php still
+    // get a working page (just no band filtering applied client-side).
+    if ($choiceRows) {
+        $choiceIds = array_map(static fn ($r) => (int) $r['id'], $choiceRows);
+        try {
+            $cph = implode(',', array_fill(0, count($choiceIds), '?'));
+            $bSt = $pdo->prepare(
+                "SELECT choice_id, band_code
+                   FROM product_extra_choice_bands
+                  WHERE choice_id IN ($cph)"
+            );
+            $bSt->execute($choiceIds);
+            foreach ($bSt->fetchAll() as $br) {
+                $bandsByChoice[(int) $br['choice_id']][] = (string) $br['band_code'];
+            }
+        } catch (Throwable $e) {
+            // Table missing — leave $bandsByChoice empty. Every
+            // choice will report 'bands' => [] meaning "all bands".
+        }
+    }
+
+    foreach ($choiceRows as $r) {
+        $cid = (int) $r['id'];
         $choicesByExtra[(int) $r['product_extra_id']][] = [
-            'id'         => (int) $r['id'],
+            'id'         => $cid,
             // null = "available on every system". Otherwise the choice
             // is only available when the picked system matches.
             'system_id'  => $r['system_id'] !== null ? (int) $r['system_id'] : null,
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
             'image_url'  => !empty($r['image_path']) ? (string) $r['image_path'] : null,
+            // bands = list of band_codes this choice applies to.
+            // Empty list = "applies to every band on the product".
+            // Non-empty = "only when the picked fabric is on one of
+            // these bands". Compared case-insensitively client-side
+            // so a tape band rename without an immediate scope edit
+            // still resolves.
+            'bands'      => $bandsByChoice[$cid] ?? [],
         ];
     }
 }
