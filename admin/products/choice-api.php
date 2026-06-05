@@ -24,6 +24,11 @@ declare(strict_types=1);
  *
  *   - delete     remove a choice. Required: extra_id, choice_id.
  *
+ *   - set_bands_all  apply one band scope to EVERY choice on the extra
+ *                in a single transaction. Required: extra_id. Optional:
+ *                bands[] (empty = "all bands" for every choice). Powers
+ *                the "Set all" control in the grid's Bands header.
+ *
  * CSRF: takes the token via X-CSRF-Token header (sent by the JS) or
  * a csrf_token form field (fallback for non-XHR clients). Same token
  * format as csrf_field() so the rest of the admin keeps working.
@@ -440,6 +445,90 @@ try {
                 'ok'    => true,
                 'bands' => $clean,
                 'count' => count($clean),
+            ]);
+            break;
+
+        // -----------------------------------------------------------------
+        // set_bands_all — apply ONE band scope to every choice on this
+        // extra at once. Same validation + canonicalisation as set_bands,
+        // but the DELETE/INSERT spans all of the extra's choices in a
+        // single transaction. Empty bands[] = "all bands" everywhere.
+        // -----------------------------------------------------------------
+        case 'set_bands_all':
+            // Junction-table existence check — same defensive pattern as
+            // set_bands so pre-migration tenants get a clear error.
+            $hasTbl = false;
+            try {
+                $hasTbl = (bool) $pdo->query(
+                    "SELECT 1 FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME   = 'product_extra_choice_bands'"
+                )->fetchColumn();
+            } catch (Throwable $e) { /* keep false */ }
+            if (!$hasTbl) {
+                throw new RuntimeException(
+                    'Band scoping is not enabled — run migrate_choice_band_scoping.php first.'
+                );
+            }
+
+            // Canonical band list for this product (same query as set_bands)
+            // so a tampered DOM can't inject arbitrary band codes.
+            $kbSt = $pdo->prepare(
+                "SELECT DISTINCT band_code FROM (
+                    SELECT band_code FROM product_options
+                     WHERE product_id = ? AND client_id = ?
+                    UNION
+                    SELECT band_code FROM price_tables
+                     WHERE product_id = ? AND client_id = ?
+                 ) x
+                 WHERE band_code IS NOT NULL AND band_code != ''"
+            );
+            $kbSt->execute([$productId, $clientId, $productId, $clientId]);
+            $knownBands      = array_map('strval', $kbSt->fetchAll(PDO::FETCH_COLUMN));
+            $knownBandsLower = array_map('strtolower', $knownBands);
+
+            $submitted = is_array($_POST['bands'] ?? null) ? $_POST['bands'] : [];
+            $clean     = [];
+            foreach ($submitted as $b) {
+                $bs = trim((string) $b);
+                if ($bs === '') continue;
+                $idx = array_search(strtolower($bs), $knownBandsLower, true);
+                if ($idx !== false) $clean[] = $knownBands[$idx];
+            }
+            $clean = array_values(array_unique($clean));
+
+            $pdo->beginTransaction();
+            // Clear every band row for choices under this extra...
+            $pdo->prepare(
+                'DELETE FROM product_extra_choice_bands
+                  WHERE choice_id IN (
+                        SELECT id FROM product_extra_choices
+                         WHERE product_extra_id = ?
+                  )'
+            )->execute([$extraId]);
+            // ...then, per chosen band, insert a row for every choice.
+            if ($clean) {
+                $ib = $pdo->prepare(
+                    'INSERT INTO product_extra_choice_bands (choice_id, band_code)
+                     SELECT id, ? FROM product_extra_choices
+                      WHERE product_extra_id = ?'
+                );
+                foreach ($clean as $b) {
+                    $ib->execute([$b, $extraId]);
+                }
+            }
+            // Count choices affected for the response.
+            $cntSt = $pdo->prepare(
+                'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
+            );
+            $cntSt->execute([$extraId]);
+            $affected = (int) $cntSt->fetchColumn();
+            $pdo->commit();
+
+            echo json_encode([
+                'ok'       => true,
+                'bands'    => $clean,
+                'affected' => $affected,
             ]);
             break;
 

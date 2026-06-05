@@ -732,6 +732,86 @@
         });
     });
 
+    // ============================================================
+    // "Set all" — header control that applies one band scope to
+    // every choice in this grid in a single request (set_bands_all),
+    // so the admin doesn't have to change rows one by one. Lives in
+    // the Bands <th>; only present when the band column is shown and
+    // the product has known bands.
+    // ============================================================
+    var setAll = rootEl.querySelector('.bands-set-all');
+    if (setAll) {
+        var setAllAll   = setAll.querySelector('.setall-band-tick[data-band=""]');
+        var setAllSpecs = setAll.querySelectorAll('.setall-band-tick[data-band]:not([data-band=""])');
+        var setAllApply = setAll.querySelector('.setall-apply');
+
+        // Mutually-exclusive logic mirrors the per-row widget:
+        // ticking "All bands" clears specifics; ticking a specific
+        // clears "All bands"; un-ticking the last specific re-checks
+        // "All bands" so the picker is never in an empty state.
+        setAll.addEventListener('change', function (e) {
+            var t = e.target;
+            if (!t.classList.contains('setall-band-tick')) return;
+            if (t === setAllAll) {
+                if (t.checked) {
+                    setAllSpecs.forEach(function (cb) { cb.checked = false; });
+                } else {
+                    t.checked = true;   // can't untick "All" directly
+                }
+            } else {
+                setAllAll.checked = false;
+                var any = false;
+                setAllSpecs.forEach(function (cb) { if (cb.checked) any = true; });
+                if (!any) setAllAll.checked = true;
+            }
+        });
+
+        if (setAllApply) {
+            setAllApply.addEventListener('click', function () {
+                var picked = [];
+                setAllSpecs.forEach(function (cb) { if (cb.checked) picked.push(cb.dataset.band); });
+
+                var rowCount = body.querySelectorAll('tr[data-id]').length;
+                if (rowCount === 0) { setAll.open = false; return; }
+
+                var scopeText = picked.length === 0
+                    ? '“All bands”'
+                    : (picked.length === 1 ? picked[0] : picked.length + ' bands');
+                if (!confirm('Set all ' + rowCount + ' choice' + (rowCount === 1 ? '' : 's')
+                           + ' to ' + scopeText + '? This replaces their current band scope.')) {
+                    return;
+                }
+
+                setAll.open = false;
+                setIndicatorState('saving');
+
+                var fd = new FormData();
+                fd.append('action',   'set_bands_all');
+                fd.append('extra_id', String(extraId));
+                picked.forEach(function (b) { fd.append('bands[]', b); });
+
+                fetch(endpoint, {
+                    method: 'POST', body: fd,
+                    headers: { 'X-CSRF-Token': csrfToken },
+                    credentials: 'same-origin'
+                }).then(function (r) {
+                    return r.json().catch(function () {
+                        throw new Error('Server returned a non-JSON response.');
+                    });
+                }).then(function (data) {
+                    if (!data.ok) throw new Error(data.error || 'Save failed');
+                    setIndicatorState('saved');
+                    // Reload so every row's widget reflects the new scope —
+                    // simpler than surgically re-rendering each one, and
+                    // matches how bulk-add refreshes the grid.
+                    window.location.reload();
+                }).catch(function (err) {
+                    setIndicatorState('error', err.message || 'Save failed');
+                });
+            });
+        }
+    }
+
     }  // end initGrid
 
     document.querySelectorAll('.choices-grid-wrap').forEach(initGrid);

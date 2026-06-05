@@ -35,7 +35,39 @@ $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null
                     <th class="col-label">Label</th>
                     <th class="col-system">Available on</th>
                     <?php if ($showBandsCol): ?>
-                        <th class="col-bands" title="Restrict to specific bands. Empty = applies to every band.">Bands</th>
+                        <th class="col-bands" title="Restrict to specific bands. Empty = applies to every band.">
+                            Bands
+                            <?php if (!empty($knownBands)): ?>
+                                <!-- "Set all" — applies one band scope to every
+                                     choice in this grid at once, so the admin
+                                     doesn't have to change rows one by one.
+                                     Wired in choices_grid_js.php (set_bands_all). -->
+                                <details class="multi-select bands-set-all"
+                                         style="display:inline-block;margin-left:0.375rem;font-weight:400;position:relative">
+                                    <summary style="font-size:0.75rem;color:#2563eb">Set all</summary>
+                                    <div class="multi-opts">
+                                        <label>
+                                            <input type="checkbox" class="setall-band-tick" data-band="" checked>
+                                            <strong>All bands</strong>
+                                        </label>
+                                        <hr>
+                                        <?php foreach ($knownBands as $b): ?>
+                                            <label>
+                                                <input type="checkbox" class="setall-band-tick"
+                                                       data-band="<?= e((string) $b) ?>">
+                                                <?= e((string) $b) ?>
+                                            </label>
+                                        <?php endforeach; ?>
+                                        <div style="margin-top:0.5rem;text-align:right">
+                                            <button type="button" class="btn btn-primary setall-apply"
+                                                    style="font-size:0.75rem;padding:0.25rem 0.625rem">
+                                                Apply to all
+                                            </button>
+                                        </div>
+                                    </div>
+                                </details>
+                            <?php endif; ?>
+                        </th>
                     <?php endif; ?>
                     <th class="col-price">Flat £</th>
                     <th class="col-price">%</th>
