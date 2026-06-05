@@ -38,6 +38,21 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
+// Schema-aware: is the sort_order column present?
+// (migrate_price_tables_sort_order.php). Used by both POST handlers
+// to set sort_order on new bands and by the list query to render in
+// drag-order. Cached once at the top so the inserts and the render
+// both see the same answer.
+$hasPtSortOrder = false;
+try {
+    $hasPtSortOrder = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'price_tables'
+            AND COLUMN_NAME  = 'sort_order'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
 $f = ['band_code' => '', 'name' => '', 'notes' => ''];
 $error = null;
 
@@ -65,16 +80,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $error = 'Paste at least one band code (one per line, or comma-separated).';
     } else {
         require_once __DIR__ . '/../../_partials/catalogue_audit.php';
-        $ins = db()->prepare(
-            'INSERT INTO price_tables
-               (client_id, product_id, system_id, band_code, name, notes, active)
-             VALUES (?, ?, ?, ?, NULL, NULL, 1)'
-        );
+
+        // Append new bands at the end of the system's existing list
+        // when sort_order is available. Without this, INSERT with
+        // DEFAULT 0 would make every new band jump to the top of the
+        // drag-ordered list.
+        $nextSort = 0;
+        if ($hasPtSortOrder) {
+            $ns = db()->prepare(
+                'SELECT COALESCE(MAX(sort_order), 0) + 1
+                   FROM price_tables WHERE system_id = ? AND client_id = ?'
+            );
+            $ns->execute([$systemId, $clientId]);
+            $nextSort = (int) $ns->fetchColumn();
+        }
+
+        $ins = $hasPtSortOrder
+            ? db()->prepare(
+                'INSERT INTO price_tables
+                   (client_id, product_id, system_id, band_code, name, notes, active, sort_order)
+                 VALUES (?, ?, ?, ?, NULL, NULL, 1, ?)'
+            )
+            : db()->prepare(
+                'INSERT INTO price_tables
+                   (client_id, product_id, system_id, band_code, name, notes, active)
+                 VALUES (?, ?, ?, ?, NULL, NULL, 1)'
+            );
         $added   = 0;
         $skipped = 0;
         foreach ($bands as $b) {
             try {
-                $ins->execute([$clientId, $productId, $systemId, $b]);
+                if ($hasPtSortOrder) {
+                    $ins->execute([$clientId, $productId, $systemId, $b, $nextSort++]);
+                } else {
+                    $ins->execute([$clientId, $productId, $systemId, $b]);
+                }
                 $newId = (int) db()->lastInsertId();
                 catalogue_audit_log(
                     'price_table', $newId, 'create',
@@ -122,14 +162,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             // the bulk-add path (which never uppercased) and the
             // rename / update_meta path, so all three ways of
             // creating/editing a band agree on case.
-            $stmt->execute([
-                $clientId,
-                $productId,
-                $systemId,
-                $f['band_code'],
-                $f['name']  !== '' ? $f['name']  : null,
-                $f['notes'] !== '' ? $f['notes'] : null,
-            ]);
+            // Append after the last existing band when sort_order is
+            // available; otherwise fall back to the legacy 7-column
+            // INSERT (the prepare above doesn't include sort_order).
+            if ($hasPtSortOrder) {
+                $ns = db()->prepare(
+                    'SELECT COALESCE(MAX(sort_order), 0) + 1
+                       FROM price_tables WHERE system_id = ? AND client_id = ?'
+                );
+                $ns->execute([$systemId, $clientId]);
+                $appendPos = (int) $ns->fetchColumn();
+                $stmt = db()->prepare(
+                    'INSERT INTO price_tables
+                       (client_id, product_id, system_id, band_code, name, notes, active, sort_order)
+                     VALUES (?, ?, ?, ?, ?, ?, 1, ?)'
+                );
+                $stmt->execute([
+                    $clientId,
+                    $productId,
+                    $systemId,
+                    $f['band_code'],
+                    $f['name']  !== '' ? $f['name']  : null,
+                    $f['notes'] !== '' ? $f['notes'] : null,
+                    $appendPos,
+                ]);
+            } else {
+                $stmt->execute([
+                    $clientId,
+                    $productId,
+                    $systemId,
+                    $f['band_code'],
+                    $f['name']  !== '' ? $f['name']  : null,
+                    $f['notes'] !== '' ? $f['notes'] : null,
+                ]);
+            }
             $newId = (int) db()->lastInsertId();
 
             // Audit. system_id, band, and name are all useful diff
@@ -160,20 +226,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
-$rows = db()->prepare(
-    "SELECT t.id, t.band_code, t.name, t.notes, t.active, t.updated_at,
-            (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
-       FROM price_tables t
-      WHERE t.system_id = ? AND t.client_id = ?
-   ORDER BY
-        CASE
-            WHEN t.band_code = 'AAA' THEN 1
-            WHEN t.band_code = 'AA'  THEN 2
-            WHEN t.band_code = 'A'   THEN 3
-            ELSE 100
-        END,
-        t.band_code"
-);
+// Schema-aware ORDER BY: prefer the explicit sort_order from
+// migrate_price_tables_sort_order.php (with band_code as a tie-break),
+// fall back to the historical alphabetical-with-AAA-bias ordering on
+// installs where the column isn't yet present. $hasPtSortOrder is
+// resolved once at the top of this file (above the POST handlers).
+if ($hasPtSortOrder) {
+    $rows = db()->prepare(
+        "SELECT t.id, t.band_code, t.name, t.notes, t.active, t.updated_at,
+                t.sort_order,
+                (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
+           FROM price_tables t
+          WHERE t.system_id = ? AND t.client_id = ?
+       ORDER BY t.sort_order, t.band_code"
+    );
+} else {
+    $rows = db()->prepare(
+        "SELECT t.id, t.band_code, t.name, t.notes, t.active, t.updated_at,
+                (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
+           FROM price_tables t
+          WHERE t.system_id = ? AND t.client_id = ?
+       ORDER BY
+            CASE
+                WHEN t.band_code = 'AAA' THEN 1
+                WHEN t.band_code = 'AA'  THEN 2
+                WHEN t.band_code = 'A'   THEN 3
+                ELSE 100
+            END,
+            t.band_code"
+    );
+}
 $rows->execute([$systemId, $clientId]);
 $tables = $rows->fetchAll();
 
@@ -347,10 +429,18 @@ $activeNav = 'products';
                     </p>
                 </div>
             <?php else: ?>
+                <?php if ($hasPtSortOrder): ?>
+                    <p style="font-size:0.8125rem;color:var(--text-faint);margin:0 0 0.5rem">
+                        Drag the <strong>⋮⋮</strong> handle to reorder bands.
+                        <span class="reorder-status" data-for="price_tables"></span>
+                    </p>
+                <?php endif; ?>
                 <div class="table-wrap">
-                    <table class="table">
+                    <table class="table <?= $hasPtSortOrder ? 'sortable-list' : '' ?>"
+                           <?= $hasPtSortOrder ? 'data-reorder-type="price_tables"' : '' ?>>
                         <thead>
                             <tr>
+                                <?php if ($hasPtSortOrder): ?><th class="col-drag"></th><?php endif; ?>
                                 <th>Band</th>
                                 <th>Name</th>
                                 <th>Notes</th>
@@ -361,7 +451,10 @@ $activeNav = 'products';
                         </thead>
                         <tbody>
                             <?php foreach ($tables as $t): ?>
-                                <tr>
+                                <tr data-id="<?= (int) $t['id'] ?>">
+                                    <?php if ($hasPtSortOrder): ?>
+                                        <td class="drag-col" title="Drag to reorder">⋮⋮</td>
+                                    <?php endif; ?>
                                     <td><span class="band-pill">Band <?= e((string) $t['band_code']) ?></span></td>
                                     <td><?= e((string) ($t['name'] ?? '')) ?></td>
                                     <td><?= e((string) ($t['notes'] ?? '')) ?></td>
@@ -393,5 +486,8 @@ $activeNav = 'products';
     </main>
 </div>
 <?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
+<?php if ($hasPtSortOrder): ?>
+    <?php require __DIR__ . '/../../_partials/sortable_init.php'; ?>
+<?php endif; ?>
 </body>
 </html>

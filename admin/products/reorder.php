@@ -59,6 +59,11 @@ $updates = [
            JOIN product_extras e ON e.id = c.product_extra_id
             SET c.sort_order = ?
           WHERE c.id = ? AND e.client_id = ?',
+    // price_tables = bands within a system. sort_order added by
+    // migrate_price_tables_sort_order.php; tenant-scoped directly.
+    'price_tables' =>
+        'UPDATE price_tables SET sort_order = ?
+          WHERE id = ? AND client_id = ?',
 ];
 
 if (!isset($updates[$type])) {
