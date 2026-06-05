@@ -221,12 +221,15 @@ $activeNav = 'accounts';
 
         .filter-fieldset {
             border: 1px dashed var(--border-strong); border-radius: 10px;
-            padding: 0.5rem 0.875rem 0.625rem;
-            margin: 0 0 1rem; background: #fafafa;
+            padding: 0.625rem 0.875rem 0.75rem;
+            margin: 0 0 1rem; background: transparent;
         }
-        .filter-fieldset legend {
-            padding: 0 0.4375rem; font-size: 0.75rem;
-            color: var(--text-faint); text-transform: uppercase;
+        /* Plain heading INSIDE the box. Was a <legend>, which floats on
+           the fieldset border and read as stray text — and went nearly
+           invisible in dark mode (faint colour over a dark gap). */
+        .filter-fieldset-title {
+            margin: 0 0 0.5rem; font-size: 0.75rem;
+            color: var(--text-muted); text-transform: uppercase;
             letter-spacing: 0.05em; font-weight: 600;
         }
         .filter-bar {
@@ -545,8 +548,8 @@ $activeNav = 'accounts';
                 <h2 class="section-title">Payment history</h2>
             </div>
 
-            <fieldset class="filter-fieldset">
-                <legend>Filter the list</legend>
+            <div class="filter-fieldset">
+                <div class="filter-fieldset-title">Filter the list</div>
                 <form method="get" action="/accounts/index.php" class="filter-bar">
                     <input type="search" name="q" value="<?= e($q) ?>"
                            placeholder="Customer, quote #, reference...">
@@ -571,7 +574,7 @@ $activeNav = 'accounts';
                         <a href="/accounts/index.php" class="btn btn-secondary">Clear</a>
                     <?php endif; ?>
                 </form>
-            </fieldset>
+            </div>
 
             <?php if (!$payments): ?>
                 <div class="empty-state">
