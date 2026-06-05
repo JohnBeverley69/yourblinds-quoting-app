@@ -205,7 +205,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
                 $error = 'A ' . $labelL . ' with that name + colour already exists for this product.';
             } else {
-                $error = 'Could not save: ' . $e->getMessage();
+                // Log the raw driver detail server-side; show the user a
+                // generic message so SQL/schema internals don't surface.
+                error_log('option-edit save failed (client ' . $clientId
+                          . ', option ' . $id . '): ' . $e->getMessage());
+                $error = 'Could not save — please try again.';
             }
         }
     }

@@ -287,7 +287,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
                 $error = 'A ' . $labelL . ' with that name + colour already exists for this product.';
             } else {
-                $error = 'Could not add: ' . $e->getMessage();
+                // Log the raw driver detail server-side; show the user a
+                // generic message so SQL/schema internals don't surface.
+                error_log('options add failed (client ' . $clientId
+                          . ', product ' . $productId . '): ' . $e->getMessage());
+                $error = 'Could not add — please try again.';
             }
         }
     }

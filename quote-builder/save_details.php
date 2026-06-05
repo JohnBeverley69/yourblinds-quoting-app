@@ -37,6 +37,16 @@ if (strlen($name) > 150) {
 }
 
 $customerId = (int) ($_POST['customer_id'] ?? 0);
+// Only link a customer that belongs to THIS tenant — don't trust the
+// posted id. Keeps quotes.customer_id referentially sound within the
+// tenant (mirrors the check in new.php). Unknown id → leave unlinked.
+if ($customerId > 0) {
+    $cs = db()->prepare('SELECT 1 FROM customers WHERE id = ? AND client_id = ? LIMIT 1');
+    $cs->execute([$customerId, $clientId]);
+    if (!$cs->fetchColumn()) {
+        $customerId = 0;
+    }
+}
 $emptyToNull = static function (string $k): ?string {
     $v = trim((string) ($_POST[$k] ?? ''));
     return $v === '' ? null : $v;

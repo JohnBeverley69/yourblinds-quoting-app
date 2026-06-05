@@ -681,6 +681,21 @@
         var allBox    = details.querySelector('.row-band-tick[data-band=""]');
         var specBoxes = details.querySelectorAll('.row-band-tick[data-band]:not([data-band=""])');
 
+        // Snapshot the widget state BEFORE the optimistic mutation so a
+        // rejected save can roll the UI back (mirrors saveCell()). Without
+        // this, a failed save left the new ticks/summary showing while the
+        // status pill auto-reverted to "All changes saved" — the admin
+        // would think a band scope persisted when it hadn't.
+        var allTicks   = details.querySelectorAll('.row-band-tick');
+        var priorChecked = [];
+        allTicks.forEach(function (cb) { priorChecked.push(cb.checked); });
+        var summaryForRestore = details.querySelector('summary');
+        var priorSummaryText  = summaryForRestore ? summaryForRestore.textContent : '';
+        function restoreBandWidget() {
+            allTicks.forEach(function (cb, i) { cb.checked = priorChecked[i]; });
+            if (summaryForRestore) summaryForRestore.textContent = priorSummaryText;
+        }
+
         if (t === allBox) {
             if (t.checked) {
                 specBoxes.forEach(function (cb) { cb.checked = false; });
@@ -728,6 +743,7 @@
             if (data.ok) setIndicatorState('saved');
             else throw new Error(data.error || 'Save failed');
         }).catch(function (err) {
+            restoreBandWidget();
             setIndicatorState('error', err.message || 'Save failed');
         });
     });
