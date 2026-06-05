@@ -505,6 +505,10 @@ $activeNav = 'products';
     // so the partial can build the "+ Sub-option" link.
     $gridProductId = (int) $extra['product_id'];
     require __DIR__ . '/../../_partials/choices_grid_js.php';
+    // "+ Bulk add" dialog + handler — same partial edit.php uses, so
+    // the bulk-add button on the choices grid actually does something
+    // on this standalone page too.
+    require __DIR__ . '/../../_partials/choices_bulk_add.php';
 ?>
 
 <?php
