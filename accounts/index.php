@@ -203,7 +203,7 @@ $activeNav = 'accounts';
             margin: 0 0 1.25rem;
         }
         .summary-card {
-            background: #fff; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
             padding: 0.875rem 1rem;
         }
         .summary-card .lbl {
@@ -238,7 +238,7 @@ $activeNav = 'accounts';
         .filter-bar input, .filter-bar select {
             padding: 0.4375rem 0.625rem;
             border: 1px solid var(--border-strong); border-radius: 6px; font: inherit;
-            background: #fff;
+            background: var(--bg-input); color: var(--text-body);
         }
         .filter-bar input[type="search"] { flex: 1 1 200px; }
         .filter-bar select               { flex: 0 0 9rem; }
@@ -250,12 +250,12 @@ $activeNav = 'accounts';
 
         /* Record-new-payment panel */
         .np-panel {
-            background: #fff; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
             padding: 0 0.875rem; margin: 0 0 1rem;
         }
         .np-panel summary {
             list-style: none; cursor: pointer;
-            padding: 0.75rem 0; font-weight: 600; color: #1f3b5b;
+            padding: 0.75rem 0; font-weight: 600; color: var(--link);
             font-size: 0.9375rem;
         }
         .np-panel summary::-webkit-details-marker { display: none; }
@@ -279,7 +279,7 @@ $activeNav = 'accounts';
         .np-field input, .np-field select {
             padding: 0.4375rem 0.625rem;
             border: 1px solid var(--border-strong); border-radius: 6px;
-            font: inherit; background: #fff;
+            font: inherit; background: var(--bg-input); color: var(--text-body);
         }
         .np-actions {
             display: flex; gap: 0.5rem; margin-top: 0.75rem;
@@ -290,7 +290,7 @@ $activeNav = 'accounts';
             font-size: 0.6875rem; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.04em;
             border-radius: 999px;
-            background: #e0e7ff; color: #3730a3;
+            background: var(--alert-info-bg); color: var(--alert-info-text);
         }
         .empty-state {
             padding: 2rem 1rem; text-align: center;
@@ -307,10 +307,10 @@ $activeNav = 'accounts';
         }
         .pg-card {
             border: 1px solid var(--border); border-radius: 8px;
-            background: #fff; overflow: hidden;
+            background: var(--bg-card); overflow: hidden;
         }
-        .pg-card[open]    { border-color: #1f3b5b; }
-        .pg-card.is-paid  { background: #f0fdf4; border-color: #bbf7d0; }
+        .pg-card[open]    { border-color: var(--link); }
+        .pg-card.is-paid  { background: var(--alert-success-bg); border-color: var(--alert-success-border); }
 
         .pg-summary {
             list-style: none;
@@ -328,7 +328,7 @@ $activeNav = 'accounts';
             font-size: 0.875rem; line-height: 1;
         }
         .pg-summary .pg-caret::before { content: '▸'; }
-        .pg-card[open] .pg-summary .pg-caret         { color: #1f3b5b; }
+        .pg-card[open] .pg-summary .pg-caret         { color: var(--link); }
         .pg-card[open] .pg-summary .pg-caret::before { content: '▾'; }
 
         .pg-summary .pg-customer {
@@ -336,13 +336,13 @@ $activeNav = 'accounts';
             flex: 0 0 auto;
         }
         .pg-summary .pg-quote-link {
-            font-weight: 600; color: #1f3b5b; text-decoration: none;
+            font-weight: 600; color: var(--link); text-decoration: none;
             font-size: 0.8125rem;
             padding: 0.125rem 0.5rem;
-            background: #eef2f7; border-radius: 4px;
+            background: var(--bg-subtle-2); border-radius: 4px;
             flex: 0 0 auto;
         }
-        .pg-summary .pg-quote-link:hover { background: #dbe4f0; }
+        .pg-summary .pg-quote-link:hover { background: var(--border); }
         .pg-summary .pg-standalone {
             color: var(--text-faint); font-size: 0.8125rem; font-style: italic;
         }
@@ -369,10 +369,23 @@ $activeNav = 'accounts';
         }
 
         .pg-detail {
-            border-top: 1px solid var(--border); background: #fafafa;
+            border-top: 1px solid var(--border); background: var(--bg-subtle);
             padding: 0.375rem 0.875rem 0.625rem;
         }
         .pg-detail .table { font-size: 0.875rem; }
+
+        /* Dark-mode status text. The amber / navy / green figures above
+           are tuned for light cards; on dark cards they'd be near-black
+           on near-black. Lighter shades keep them legible. (is-paid money
+           uses the theme success colour so it reads on the green card.) */
+        [data-theme="dark"] .summary-card.outstanding .val { color: #fbbf24; }
+        [data-theme="dark"] .summary-card.month       .val { color: #93c5fd; }
+        [data-theme="dark"] .summary-card.alltime     .val { color: #86efac; }
+        [data-theme="dark"] .pg-summary .pg-money-bit.is-owed,
+        [data-theme="dark"] .pg-summary .pg-money-bit.is-owed strong     { color: #fbbf24; }
+        [data-theme="dark"] .pg-summary .pg-money-bit.is-paid            { color: var(--alert-success-text); }
+        [data-theme="dark"] .pg-summary .pg-money-bit.is-overpaid,
+        [data-theme="dark"] .pg-summary .pg-money-bit.is-overpaid strong { color: #93c5fd; }
 
         /* Narrow screens — money group breaks to a second line under
            the customer/quote, but each card stays one summary line tall
