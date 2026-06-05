@@ -38,14 +38,28 @@ if ($productId <= 0) {
 
 $pdo = db();
 
-// 1. Product (tenant scope).
-$st = $pdo->prepare(
-    'SELECT id, name FROM products
-      WHERE id = ? AND client_id = ? AND active = 1
-      LIMIT 1'
-);
-$st->execute([$productId, $clientId]);
-$product = $st->fetch();
+// 1. Product (tenant scope). option_label drives the per-product
+//    wording for the "fabric" axis ("Slat" for wood venetians, "Colour"
+//    for metal, etc.) so the builder + preview can label the picker
+//    correctly instead of always saying "Fabric". Try-fallback in case
+//    the column is absent on an older schema.
+try {
+    $st = $pdo->prepare(
+        'SELECT id, name, option_label FROM products
+          WHERE id = ? AND client_id = ? AND active = 1
+          LIMIT 1'
+    );
+    $st->execute([$productId, $clientId]);
+    $product = $st->fetch();
+} catch (Throwable $e) {
+    $st = $pdo->prepare(
+        'SELECT id, name FROM products
+          WHERE id = ? AND client_id = ? AND active = 1
+          LIMIT 1'
+    );
+    $st->execute([$productId, $clientId]);
+    $product = $st->fetch();
+}
 if (!$product) {
     http_response_code(404);
     echo json_encode(['error' => 'Product not found']);
@@ -330,8 +344,10 @@ $extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra) 
 
 echo json_encode([
     'product' => [
-        'id'   => (int)    $product['id'],
-        'name' => (string) $product['name'],
+        'id'           => (int)    $product['id'],
+        'name'         => (string) $product['name'],
+        // Empty string when unset — the front-ends fall back to "Fabric".
+        'option_label' => (string) ($product['option_label'] ?? ''),
     ],
     'systems'       => $systems,
     'bands'         => $bands,

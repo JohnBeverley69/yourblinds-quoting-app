@@ -1037,7 +1037,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label for="item-fabric-search">Fabric <span class="required">*</span></label>
+                        <label for="item-fabric-search"><span id="item-fabric-label">Fabric</span> <span class="required">*</span></label>
                         <div class="fabric-picker">
                             <input type="text" id="item-fabric-search"
                                    placeholder="Choose product first"
@@ -1697,6 +1697,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
     var bandSel       = document.getElementById('item-band');
+    var fabricLabelEl = document.getElementById('item-fabric-label');
     var fabricSearch  = document.getElementById('item-fabric-search');
     var fabricId      = document.getElementById('item-fabric');
     var fabricResults = document.getElementById('item-fabric-results');
@@ -1733,6 +1734,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         resetBand();
         if (!productSel.value) {
             setIdle(systemSel, 'Choose product first');
+            if (fabricLabelEl) fabricLabelEl.textContent = 'Fabric';
             fabricSearch.disabled = true;
             fabricSearch.placeholder = 'Choose product first';
             extrasWrap.style.display = 'none';
@@ -1775,10 +1777,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // fabric typeahead via the search API's &band= param.
             populateBands(bandsForCurrentSystem());
 
+            // Per-product wording for the "fabric" axis — "Slat" for
+            // wood venetians, "Colour" for metal, etc. Falls back to
+            // "Fabric". Drives the field label + the search placeholder.
+            var optLabel = (productData.product && productData.product.option_label) || 'Fabric';
+            if (fabricLabelEl) fabricLabelEl.textContent = optLabel;
+
             // Fabric typeahead — enable input. Picking happens via the
             // floating results panel populated from /api/fabrics-search.
             fabricSearch.disabled    = false;
-            fabricSearch.placeholder = 'Type to search fabrics (or click for recent)';
+            fabricSearch.placeholder = 'Type to search ' + optLabel.toLowerCase() + 's (or click for recent)';
 
             renderExtras();
         } catch (err) {
