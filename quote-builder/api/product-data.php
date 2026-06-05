@@ -101,66 +101,42 @@ $systems = array_map(static fn ($r) => [
 $bandSort = "CASE band_code WHEN 'AAA' THEN 1 WHEN 'AA' THEN 2 "
           . "WHEN 'A' THEN 3 ELSE 100 END, band_code";
 
-// product_options.system_id is an optional column
-// (migrate_option_system_scope.php). Detect it so the per-system query
-// can scope fabrics correctly without fatalling on older schemas.
-$hasOptSystemId = false;
-try {
-    $hasOptSystemId = (bool) $pdo->query(
-        "SELECT 1 FROM information_schema.COLUMNS
-          WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME   = 'product_options'
-            AND COLUMN_NAME  = 'system_id'"
-    )->fetchColumn();
-} catch (Throwable $e) { /* keep false */ }
-
+// Bands are sourced from price_tables — the authoritative
+// (product, system, band) mapping. A band is only quotable for a
+// system if a price table exists for it there, so price_tables is
+// exactly the set the salesperson can pick from.
+//
+// IMPORTANT: do NOT union in product_options here. A fabric scoped to
+// "all systems" (system_id NULL) would otherwise drag its band into
+// every system's list — e.g. a universal "50mm Gloss" fabric showing
+// up under the 35mm system, which has no gloss price table.
 $bands         = [];
 $bandsBySystem = [];
 try {
-    // Flat list — every band on the product, from both sources.
+    // Flat list — every band defined on the product across all systems.
+    // Used only when no system is picked or the product has no systems.
     $flatSt = $pdo->prepare(
-        "SELECT DISTINCT band_code FROM (
-            SELECT band_code FROM price_tables
-             WHERE product_id = ? AND client_id = ? AND active = 1
-            UNION
-            SELECT band_code FROM product_options
-             WHERE product_id = ? AND client_id = ? AND active = 1
-         ) x
-         WHERE band_code IS NOT NULL AND band_code != ''
-         ORDER BY $bandSort"
+        "SELECT DISTINCT band_code FROM price_tables
+          WHERE product_id = ? AND client_id = ? AND active = 1
+            AND band_code IS NOT NULL AND band_code != ''
+       ORDER BY $bandSort"
     );
-    $flatSt->execute([$productId, $clientId, $productId, $clientId]);
+    $flatSt->execute([$productId, $clientId]);
     $bands = array_map('strval', $flatSt->fetchAll(PDO::FETCH_COLUMN));
 
-    // Per-system lists. A band belongs to a system if it has a price
-    // table for that system, OR a fabric scoped to that system (or a
-    // universal fabric — system_id NULL — which applies everywhere).
+    // Per-system lists — the bands that have a price table for that
+    // system, and only that system.
     if ($systems) {
-        // Fabric sub-query differs by whether system scoping exists.
-        $optSub = $hasOptSystemId
-            ? "SELECT band_code FROM product_options
-                WHERE product_id = ? AND client_id = ? AND active = 1
-                  AND (system_id = ? OR system_id IS NULL)"
-            : "SELECT band_code FROM product_options
-                WHERE product_id = ? AND client_id = ? AND active = 1";
-
         $bsSt = $pdo->prepare(
-            "SELECT DISTINCT band_code FROM (
-                SELECT band_code FROM price_tables
-                 WHERE product_id = ? AND client_id = ? AND active = 1
-                   AND system_id = ?
-                UNION
-                $optSub
-             ) x
-             WHERE band_code IS NOT NULL AND band_code != ''
-             ORDER BY $bandSort"
+            "SELECT DISTINCT band_code FROM price_tables
+              WHERE product_id = ? AND client_id = ? AND active = 1
+                AND system_id = ?
+                AND band_code IS NOT NULL AND band_code != ''
+           ORDER BY $bandSort"
         );
         foreach ($systems as $s) {
-            $sid    = (int) $s['id'];
-            $params = $hasOptSystemId
-                ? [$productId, $clientId, $sid, $productId, $clientId, $sid]
-                : [$productId, $clientId, $sid, $productId, $clientId];
-            $bsSt->execute($params);
+            $sid = (int) $s['id'];
+            $bsSt->execute([$productId, $clientId, $sid]);
             $bandsBySystem[(string) $sid] =
                 array_map('strval', $bsSt->fetchAll(PDO::FETCH_COLUMN));
         }
