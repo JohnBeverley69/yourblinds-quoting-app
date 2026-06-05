@@ -217,8 +217,8 @@ $activeNav = 'users';
                     <div class="form-group">
                         <label>Roles</label>
                         <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1rem;
-                                    padding:0.5rem 0.625rem; border:1px solid #d1d5db;
-                                    border-radius:8px; background:#fff;
+                                    padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
+                                    border-radius:8px; background:var(--bg-input); color:var(--text-body);
                                     font-size:0.9375rem;">
                             <?php foreach ($validRoles as $r): ?>
                                 <label style="display:inline-flex; align-items:center;
