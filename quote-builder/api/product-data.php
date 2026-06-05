@@ -66,6 +66,27 @@ $systems = array_map(static fn ($r) => [
     'is_default' => (bool)   $r['is_default'],
 ], $st->fetchAll());
 
+// 2b. Distinct fabric bands on this product (active fabrics only) —
+//     powers the "Band" filter dropdown in the quote builder + live
+//     preview, which narrows the fabric typeahead to one price band.
+//     Custom sort surfaces premium AAA → AA → A first, then the rest
+//     alphabetically, matching the admin Fabrics list ordering.
+$bSt = $pdo->prepare(
+    "SELECT DISTINCT band_code FROM product_options
+      WHERE product_id = ? AND client_id = ? AND active = 1
+        AND band_code IS NOT NULL AND band_code != ''
+   ORDER BY
+        CASE band_code
+            WHEN 'AAA' THEN 1
+            WHEN 'AA'  THEN 2
+            WHEN 'A'   THEN 3
+            ELSE 100
+        END,
+        band_code"
+);
+$bSt->execute([$productId, $clientId]);
+$bands = array_map('strval', $bSt->fetchAll(PDO::FETCH_COLUMN));
+
 // 3. Extras + their choices. The new model puts system scope on the
 //    choice itself (system_id, NULL = "all systems"). Option-level
 //    scope is gone — an option appears whenever any of its choices
@@ -243,5 +264,6 @@ echo json_encode([
         'name' => (string) $product['name'],
     ],
     'systems' => $systems,
+    'bands'   => $bands,
     'extras'  => $extras,
 ]);

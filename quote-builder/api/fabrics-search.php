@@ -37,6 +37,11 @@ $q         = trim((string) ($_GET['q'] ?? ''));
 // for the product return (used during initial product selection
 // before a system is known).
 $systemId  = (int) ($_GET['system_id'] ?? 0);
+// Optional band filter — passed by the quote builder's "Band" dropdown
+// so the salesperson can narrow a large fabric list to a single price
+// band (e.g. "show only Band B fabrics"). Exact match, case-insensitive
+// via the column collation. Empty = all bands.
+$band      = trim((string) ($_GET['band'] ?? ''));
 // Cap raised from 500 → 2000 so server-side typeahead can handle
 // large supplier catalogues. Default lowered to 200 — for the
 // empty-query "what's there?" focus case 200 is plenty, and any
@@ -61,6 +66,14 @@ if ($systemId > 0) {
     $scopeParams = [$systemId];
 }
 
+// Band filter — applied to both query branches alongside the scope.
+$bandClause = '';
+$bandParams = [];
+if ($band !== '') {
+    $bandClause = ' AND band_code = ?';
+    $bandParams = [$band];
+}
+
 if ($q === '') {
     // Empty query — return the alphabetically-first $limit fabrics so the
     // user gets *something* to scroll on the very first focus, before
@@ -75,10 +88,11 @@ if ($q === '') {
            FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1
             $scopeClause
+            $bandClause
        ORDER BY name, colour, band_code, supplier_name
           LIMIT $limit"
     );
-    $st->execute(array_merge([$productId, $clientId], $scopeParams));
+    $st->execute(array_merge([$productId, $clientId], $scopeParams, $bandParams));
 } else {
     // Multi-word search — each whitespace-separated word in the
     // query must appear in AT LEAST ONE of (name, colour,
@@ -114,10 +128,11 @@ if ($q === '') {
           WHERE product_id = ? AND client_id = ? AND active = 1
             $whereWords
             $scopeClause
+            $bandClause
        ORDER BY band_code, supplier_name, name, colour
           LIMIT $limit"
     );
-    $st->execute(array_merge($params, $scopeParams));
+    $st->execute(array_merge($params, $scopeParams, $bandParams));
 }
 
 $fabrics = [];

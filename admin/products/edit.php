@@ -1797,6 +1797,20 @@ $activeNav = 'products';
             html += '</select></div>';
         }
 
+        // Band filter — narrows the fabric typeahead below to one price
+        // band so a large catalogue isn't a long scroll. "All bands"
+        // keeps the unfiltered behaviour.
+        var bands = productData.bands || [];
+        if (bands.length) {
+            html += '<div class="pv-row">'
+                  + '<label for="pv-band">Band</label>'
+                  + '<select id="pv-band"><option value="">All bands</option>';
+            bands.forEach(function (b) {
+                html += '<option value="' + esc(b) + '">' + esc(b) + '</option>';
+            });
+            html += '</select></div>';
+        }
+
         // Fabric — type-to-search combo. A plain <select> with 500+
         // fabrics is impossible to navigate. The visible input is
         // pv-fabric-text (the user types into it to filter); the
@@ -1850,6 +1864,23 @@ $activeNav = 'products';
                 if (fabList)   fabList.hidden  = true;
                 currentFabricBand = '';
                 renderExtras();
+            });
+        }
+
+        // Band change — clear any fabric pick (it may be on another
+        // band) and reopen the typeahead narrowed to the chosen band.
+        var bandSel = document.getElementById('pv-band');
+        if (bandSel) {
+            bandSel.addEventListener('change', function () {
+                var fabHidden = document.getElementById('pv-fabric');
+                var fabText   = document.getElementById('pv-fabric-text');
+                if (fabHidden) fabHidden.value = '';
+                if (fabText)   fabText.value   = '';
+                currentFabricBand = '';
+                renderExtras();
+                scheduleCalc();
+                if (fabText) fabText.focus();
+                searchAndRenderFabrics('');
             });
         }
 
@@ -1914,9 +1945,15 @@ $activeNav = 'products';
             var sysQ = sysSel && sysSel.value
                 ? '&system_id=' + encodeURIComponent(sysSel.value)
                 : '';
+            // Band filter — narrows to one price band when picked.
+            var bandSel = document.getElementById('pv-band');
+            var bandQ = bandSel && bandSel.value
+                ? '&band=' + encodeURIComponent(bandSel.value)
+                : '';
             var url = '/quote-builder/api/fabrics-search.php?product_id=' + PRODUCT_ID
                     + '&q='     + encodeURIComponent(query)
                     + sysQ
+                    + bandQ
                     + '&limit=2000';
             var r = await fetch(url, { credentials: 'same-origin' });
             var data = await r.json();

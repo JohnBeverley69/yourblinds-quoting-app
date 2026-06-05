@@ -1019,6 +1019,22 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
 
+                <!--
+                    Band filter — narrows the Fabric typeahead below to a
+                    single price band so the salesperson isn't scrolling a
+                    huge list. UI-only (no name attr): the picked fabric
+                    still carries the band; this just filters the search.
+                -->
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label for="item-band">Band</label>
+                        <select id="item-band" disabled>
+                            <option value="">All bands</option>
+                        </select>
+                    </div>
+                    <div class="form-group"></div>
+                </div>
+
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="item-fabric-search">Fabric <span class="required">*</span></label>
@@ -1680,6 +1696,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     if (!form) return;
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
+    var bandSel       = document.getElementById('item-band');
     var fabricSearch  = document.getElementById('item-fabric-search');
     var fabricId      = document.getElementById('item-fabric');
     var fabricResults = document.getElementById('item-fabric-results');
@@ -1713,6 +1730,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         productData = null;
         clearFabric();
         closeFabricResults();
+        resetBand();
         if (!productSel.value) {
             setIdle(systemSel, 'Choose product first');
             fabricSearch.disabled = true;
@@ -1751,6 +1769,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 systemSel.disabled  = false;
             }
 
+            // Band filter dropdown — populated from the product's
+            // distinct fabric bands. "All bands" keeps the old
+            // unfiltered behaviour; picking a band narrows the fabric
+            // typeahead via the search API's &band= param.
+            populateBands(productData.bands || []);
+
             // Fabric typeahead — enable input. Picking happens via the
             // floating results panel populated from /api/fabrics-search.
             fabricSearch.disabled    = false;
@@ -1780,10 +1804,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var sysQ = systemSel && systemSel.value
                 ? '&system_id=' + encodeURIComponent(systemSel.value)
                 : '';
+            // Band filter — narrows results to one price band when the
+            // salesperson has picked one from the Band dropdown.
+            var bandQ = bandSel && bandSel.value
+                ? '&band=' + encodeURIComponent(bandSel.value)
+                : '';
             var r = await fetch('/quote-builder/api/fabrics-search.php'
                 + '?product_id=' + encodeURIComponent(productSel.value)
                 + '&q='          + encodeURIComponent(query || '')
-                + sysQ,
+                + sysQ
+                + bandQ,
                 { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
@@ -1852,6 +1882,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         fabricId.value = '';
         fabricSearch.value = '';
         currentFabricBand = '';
+    }
+
+    // Band filter helpers — the dropdown is UI-only (it just constrains
+    // the fabric search), so resetting/populating it never touches the
+    // submitted form values.
+    function resetBand() {
+        if (!bandSel) return;
+        bandSel.innerHTML = '<option value="">All bands</option>';
+        bandSel.disabled  = true;
+    }
+    function populateBands(bands) {
+        if (!bandSel) return;
+        var opts = '<option value="">All bands</option>';
+        bands.forEach(function (b) {
+            opts += '<option value="' + escapeAttr(b) + '">' + escapeHtml(b) + '</option>';
+        });
+        bandSel.innerHTML = opts;
+        bandSel.disabled  = bands.length === 0;
     }
 
     function closeFabricResults() {
@@ -2189,6 +2237,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // re-opening a saved quote that picked a band-scoped tape
             // colour would hide the option, losing the selection.
             currentFabricBand = (initial.fabric_band || '').toLowerCase();
+            // Mirror the saved band into the filter dropdown so a
+            // re-search starts narrowed to it (falls back to "All
+            // bands" if the code no longer matches an option).
+            if (bandSel && initial.fabric_band) bandSel.value = initial.fabric_band;
         }
         // Three-pass set-then-render: covers single-level conditional nesting
         // (which is all the schema currently supports). Each pass sets values
@@ -2374,6 +2426,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         schedulePreview();
     });
+    if (bandSel) {
+        bandSel.addEventListener('change', function () {
+            // Changing the band invalidates the current fabric pick (it
+            // may belong to a different band). Clear it, then reopen the
+            // typeahead narrowed to the chosen band so the matching
+            // fabrics show straight away.
+            if (fabricId.value) clearFabric();
+            renderExtras();
+            schedulePreview();
+            if (productSel.value) {
+                fabricSearch.focus();
+                searchFabrics('');
+            }
+        });
+    }
     qtyIn.addEventListener('change', schedulePreview);
     [widthIn, dropIn].forEach(function (el) {
         el.addEventListener('input', schedulePreview);
