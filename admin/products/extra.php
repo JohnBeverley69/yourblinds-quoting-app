@@ -268,6 +268,71 @@ $systems = $sysStmt->fetchAll();
 require_once __DIR__ . '/../../_partials/choices_grid_helpers.php';
 $renderSystemMultiSelect = make_render_system_multi_select($systems);
 
+// Per-choice band scoping — render the "Available for bands" column
+// in the grid so the tenant doesn't have to leave the page to tick
+// boxes on each choice. Schema-aware: silently hides the column if
+// migrate_choice_band_scoping.php hasn't run, and shows it empty if
+// the product has no bands defined yet.
+$hasBandScopingTbl = false;
+try {
+    $hasBandScopingTbl = (bool) db()->query(
+        "SELECT 1 FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_extra_choice_bands'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$knownBands     = [];
+$bandsByChoice  = [];
+$renderBandMultiSelect = null;
+if ($hasBandScopingTbl) {
+    // Same union as the Fabrics page so the band picker offers
+    // exactly the bands the tenant has actually defined.
+    $kbSt = db()->prepare(
+        "SELECT DISTINCT band_code FROM (
+            SELECT band_code FROM product_options
+             WHERE product_id = ? AND client_id = ?
+            UNION
+            SELECT band_code FROM price_tables
+             WHERE product_id = ? AND client_id = ?
+         ) x
+         WHERE band_code IS NOT NULL AND band_code != ''
+         ORDER BY band_code"
+    );
+    $kbSt->execute([
+        (int) $extra['product_id'], $clientId,
+        (int) $extra['product_id'], $clientId,
+    ]);
+    $knownBands = array_map(
+        static fn ($v) => (string) $v,
+        $kbSt->fetchAll(PDO::FETCH_COLUMN)
+    );
+
+    // Bands per choice for THIS extra's choices (and sub-extras, so
+    // their nested grids render correctly too).
+    $choiceIds = array_merge(
+        array_map(static fn ($c) => (int) $c['id'], $choices),
+        array_merge(...array_values(array_map(
+            static fn ($rows) => array_map(static fn ($r) => (int) $r['id'], $rows),
+            $choicesBySub
+        )) ?: [[]])
+    );
+    if ($choiceIds) {
+        $ph = implode(',', array_fill(0, count($choiceIds), '?'));
+        $bSt = db()->prepare(
+            "SELECT choice_id, band_code
+               FROM product_extra_choice_bands
+              WHERE choice_id IN ($ph)"
+        );
+        $bSt->execute($choiceIds);
+        foreach ($bSt->fetchAll() as $r) {
+            $bandsByChoice[(int) $r['choice_id']][] = (string) $r['band_code'];
+        }
+    }
+
+    $renderBandMultiSelect = make_render_band_multi_select($knownBands, $bandsByChoice);
+}
+
 $activeNav = 'products';
 ?><!doctype html>
 <html lang="en">

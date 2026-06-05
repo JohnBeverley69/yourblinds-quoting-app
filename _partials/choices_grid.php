@@ -9,6 +9,12 @@
  *   $systems       (array)    — product's systems (for new-row dropdown)
  *   $renderSystemMultiSelect  (Closure) — emits existing-row system widget
  *
+ * Optional (band-scoping feature — migrate_choice_band_scoping.php):
+ *   $renderBandMultiSelect (Closure|null) — emits the per-row "Available
+ *     for bands" multi-select widget. Null skips the column entirely.
+ *   $knownBands (array) — band codes defined on the parent product;
+ *     used by the new-row band picker.
+ *
  * The page-level JS initialises every .choices-grid-wrap it finds, so
  * this partial can be required multiple times on one page (once for the
  * main option, once for each sub-option). All selectors inside use
@@ -18,6 +24,7 @@
  * — only one grid is being interacted with at a time, so a single
  * indicator covers all of them.
  */
+$showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null;
 ?>
 <div class="choices-grid-wrap" data-extra-id="<?= (int) $gridExtraId ?>">
     <div class="table-wrap">
@@ -27,6 +34,9 @@
                     <th class="col-drag"></th>
                     <th class="col-label">Label</th>
                     <th class="col-system">Available on</th>
+                    <?php if ($showBandsCol): ?>
+                        <th class="col-bands" title="Restrict to specific bands. Empty = applies to every band.">Bands</th>
+                    <?php endif; ?>
                     <th class="col-price">Flat £</th>
                     <th class="col-price">%</th>
                     <th class="col-price">£/m</th>
@@ -56,6 +66,11 @@
                         <td class="col-system">
                             <?= $renderSystemMultiSelect($sysId) ?>
                         </td>
+                        <?php if ($showBandsCol): ?>
+                            <td class="col-bands">
+                                <?= $renderBandMultiSelect($cid) ?>
+                            </td>
+                        <?php endif; ?>
                         <td class="col-price">
                             <input class="cell-input num" data-field="price_delta"
                                    type="number" step="0.01"
@@ -136,6 +151,17 @@
                             </div>
                         </details>
                     </td>
+                    <?php if ($showBandsCol): ?>
+                        <td class="col-bands">
+                            <!-- New rows always start with no band scope =
+                                 "applies to every band". The widget is
+                                 disabled until the row exists; once the
+                                 user types a label, the JS replaces this
+                                 placeholder with a fully-wired widget on
+                                 the new row it creates. -->
+                            <span style="color:var(--text-faint);font-size:0.8125rem">All bands</span>
+                        </td>
+                    <?php endif; ?>
                     <td class="col-price"></td>
                     <td class="col-price"></td>
                     <td class="col-price"></td>

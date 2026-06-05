@@ -355,6 +355,95 @@ try {
             break;
 
         // -----------------------------------------------------------------
+        // set_bands — replace the per-choice band scoping in one go.
+        // Inputs: choice_id (int), bands[] (array of band_code strings).
+        // Empty bands[] = "applies to every band" (clears the junction).
+        // Cross-checked against the parent product's known bands so a
+        // tampered request can't slip in arbitrary band codes; submitted
+        // values are snapped to canonical case from the known list.
+        // -----------------------------------------------------------------
+        case 'set_bands':
+            $choiceId = (int) ($_POST['choice_id'] ?? 0);
+
+            // Confirm the choice belongs to this extra (already tenant-
+            // scoped by the extra ownership check above).
+            $cSt = $pdo->prepare(
+                'SELECT c.id, e.product_id
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE c.id = ? AND c.product_extra_id = ? LIMIT 1'
+            );
+            $cSt->execute([$choiceId, $extraId]);
+            $cRow = $cSt->fetch();
+            if (!$cRow) throw new RuntimeException('Choice not found.');
+            $cProductId = (int) $cRow['product_id'];
+
+            // Junction-table existence check — same defensive pattern
+            // as the rest of the band-scoping feature so pre-migration
+            // tenants get a clear error rather than a fatal SQL.
+            $hasTbl = false;
+            try {
+                $hasTbl = (bool) $pdo->query(
+                    "SELECT 1 FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME   = 'product_extra_choice_bands'"
+                )->fetchColumn();
+            } catch (Throwable $e) { /* keep false */ }
+            if (!$hasTbl) {
+                throw new RuntimeException(
+                    'Band scoping is not enabled — run migrate_choice_band_scoping.php first.'
+                );
+            }
+
+            // Build the canonical-band list for this product so the
+            // user can't submit garbage band codes via a tampered DOM.
+            $kbSt = $pdo->prepare(
+                "SELECT DISTINCT band_code FROM (
+                    SELECT band_code FROM product_options
+                     WHERE product_id = ? AND client_id = ?
+                    UNION
+                    SELECT band_code FROM price_tables
+                     WHERE product_id = ? AND client_id = ?
+                 ) x
+                 WHERE band_code IS NOT NULL AND band_code != ''"
+            );
+            $kbSt->execute([$cProductId, $clientId, $cProductId, $clientId]);
+            $knownBands      = array_map('strval', $kbSt->fetchAll(PDO::FETCH_COLUMN));
+            $knownBandsLower = array_map('strtolower', $knownBands);
+
+            $submitted = is_array($_POST['bands'] ?? null) ? $_POST['bands'] : [];
+            $clean     = [];
+            foreach ($submitted as $b) {
+                $bs = trim((string) $b);
+                if ($bs === '') continue;
+                $idx = array_search(strtolower($bs), $knownBandsLower, true);
+                if ($idx !== false) $clean[] = $knownBands[$idx];
+            }
+            $clean = array_values(array_unique($clean));
+
+            $pdo->beginTransaction();
+            $pdo->prepare(
+                'DELETE FROM product_extra_choice_bands WHERE choice_id = ?'
+            )->execute([$choiceId]);
+            if ($clean) {
+                $ib = $pdo->prepare(
+                    'INSERT INTO product_extra_choice_bands
+                       (choice_id, band_code) VALUES (?, ?)'
+                );
+                foreach ($clean as $b) {
+                    $ib->execute([$choiceId, $b]);
+                }
+            }
+            $pdo->commit();
+
+            echo json_encode([
+                'ok'    => true,
+                'bands' => $clean,
+                'count' => count($clean),
+            ]);
+            break;
+
+        // -----------------------------------------------------------------
         case 'delete':
             $choiceId = (int) ($_POST['choice_id'] ?? 0);
             $cSt = $pdo->prepare(

@@ -17,6 +17,64 @@ declare(strict_types=1);
  *                          specific — ticking converts to All systems
  *                          in place.
  */
+/**
+ * make_render_band_multi_select($knownBands, $bandsByChoice) returns
+ * the closure the choices_grid partial expects in
+ * `$renderBandMultiSelect`. The closure emits the "Available for
+ * bands" multi-select widget for one existing choice row.
+ *
+ * Model differs from systems:
+ *   - A choice can apply to MULTIPLE bands (no row-spawning).
+ *   - Empty band list = "applies to every band" (the migration's
+ *     default). Ticking "All bands" clears the junction rows.
+ *
+ * Summary shows:
+ *   - "All bands"             when the choice has no band scope
+ *   - "<band name>"           when exactly one
+ *   - "N bands"               when more (full list inside the
+ *                             dropdown anyway).
+ */
+function make_render_band_multi_select(array $knownBands, array $bandsByChoice): Closure
+{
+    return static function (int $choiceId) use ($knownBands, $bandsByChoice): string {
+        $picked = $bandsByChoice[$choiceId] ?? [];
+        $isAll  = empty($picked);
+
+        if ($isAll) {
+            $summaryText = 'All bands';
+        } elseif (count($picked) === 1) {
+            $summaryText = $picked[0];
+        } else {
+            $summaryText = count($picked) . ' bands';
+        }
+
+        $html  = '<details class="multi-select row-multi row-bands">';
+        $html .= '<summary>' . htmlspecialchars($summaryText, ENT_QUOTES) . '</summary>';
+        $html .= '<div class="multi-opts">';
+
+        $html .= '<label>'
+               . '<input type="checkbox" class="row-band-tick" data-band=""'
+               . ($isAll ? ' checked' : '')
+               . '> <strong>All bands</strong>'
+               . '</label>';
+
+        if ($knownBands) {
+            $html .= '<hr>';
+            foreach ($knownBands as $b) {
+                $checked = in_array($b, $picked, true);
+                $html .= '<label>'
+                       . '<input type="checkbox" class="row-band-tick" data-band="'
+                       . htmlspecialchars($b, ENT_QUOTES) . '"'
+                       . ($checked ? ' checked' : '')
+                       . '> ' . htmlspecialchars($b, ENT_QUOTES)
+                       . '</label>';
+            }
+        }
+        $html .= '</div></details>';
+        return $html;
+    };
+}
+
 function make_render_system_multi_select(array $systems): Closure
 {
     return static function (?int $currentSystemId) use ($systems): string {

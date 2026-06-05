@@ -574,6 +574,88 @@
     if (newLabel)  newLabel.addEventListener('blur', maybeCommitNewRow);
     if (newSystem) newSystem.addEventListener('focusout', maybeCommitNewRow);
 
+    // ============================================================
+    // Per-row band-scoping checkboxes (.row-band-tick)
+    //
+    // Each tick / untick replaces the per-choice band scope in one
+    // POST. Delegated on tbody so it works for rows the grid
+    // spawned dynamically (sibling-system row, post-commit new row).
+    //
+    // Behaviour:
+    //   - "All bands" checkbox carries data-band="" (the empty
+    //     string). When ticked, untick every specific band — that's
+    //     the "applies to every band" semantic backend-side.
+    //   - Ticking a specific band unticks "All bands". If after a
+    //     change no specifics are ticked, "All bands" auto-rechecks
+    //     so the user can't be in a "selected nothing" state.
+    //   - Summary text updates live to "All bands" / "<one band>" /
+    //     "N bands" so the closed widget tells the truth at a glance.
+    // ============================================================
+    body.addEventListener('change', function (e) {
+        var t = e.target;
+        if (!t.classList.contains('row-band-tick')) return;
+
+        var tr = t.closest('tr[data-id]');
+        if (!tr) return;
+        var choiceId = parseInt(tr.dataset.id, 10);
+        if (!choiceId) return;
+
+        var details   = t.closest('details');
+        if (!details) return;
+        var allBox    = details.querySelector('.row-band-tick[data-band=""]');
+        var specBoxes = details.querySelectorAll('.row-band-tick[data-band]:not([data-band=""])');
+
+        if (t === allBox) {
+            if (t.checked) {
+                specBoxes.forEach(function (cb) { cb.checked = false; });
+            } else {
+                // Don't let the user untick "All bands" without
+                // ticking at least one specific — re-check and bail.
+                t.checked = true;
+                return;
+            }
+        } else {
+            allBox.checked = false;
+            var anyChecked = false;
+            specBoxes.forEach(function (cb) { if (cb.checked) anyChecked = true; });
+            if (!anyChecked) allBox.checked = true;
+        }
+
+        var picked = [];
+        specBoxes.forEach(function (cb) {
+            if (cb.checked) picked.push(cb.dataset.band);
+        });
+
+        var summary = details.querySelector('summary');
+        if (summary) {
+            if (picked.length === 0)        summary.textContent = 'All bands';
+            else if (picked.length === 1)   summary.textContent = picked[0];
+            else                            summary.textContent = picked.length + ' bands';
+        }
+
+        setIndicatorState('saving');
+        var fd = new FormData();
+        fd.append('action',    'set_bands');
+        fd.append('extra_id',  String(extraId));
+        fd.append('choice_id', String(choiceId));
+        picked.forEach(function (b) { fd.append('bands[]', b); });
+
+        fetch(endpoint, {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().catch(function () {
+                throw new Error('Server returned a non-JSON response.');
+            });
+        }).then(function (data) {
+            if (data.ok) setIndicatorState('saved');
+            else throw new Error(data.error || 'Save failed');
+        }).catch(function (err) {
+            setIndicatorState('error', err.message || 'Save failed');
+        });
+    });
+
     }  // end initGrid
 
     document.querySelectorAll('.choices-grid-wrap').forEach(initGrid);

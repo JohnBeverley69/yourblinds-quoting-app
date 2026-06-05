@@ -148,6 +148,61 @@ if ($options) {
 require_once __DIR__ . '/../../_partials/choices_grid_helpers.php';
 $renderSystemMultiSelect = make_render_system_multi_select($systems);
 
+// Per-choice band scoping — same pattern as extra.php so the inline
+// grids on this product edit page also render the "Bands" column.
+// Schema-aware: stays null on pre-migration installs and the grid
+// quietly drops the column.
+$hasBandScopingTbl = false;
+try {
+    $hasBandScopingTbl = (bool) db()->query(
+        "SELECT 1 FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_extra_choice_bands'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$knownBands     = [];
+$bandsByChoice  = [];
+$renderBandMultiSelect = null;
+if ($hasBandScopingTbl) {
+    $kbSt = db()->prepare(
+        "SELECT DISTINCT band_code FROM (
+            SELECT band_code FROM product_options
+             WHERE product_id = ? AND client_id = ?
+            UNION
+            SELECT band_code FROM price_tables
+             WHERE product_id = ? AND client_id = ?
+         ) x
+         WHERE band_code IS NOT NULL AND band_code != ''
+         ORDER BY band_code"
+    );
+    $kbSt->execute([(int) $id, $clientId, (int) $id, $clientId]);
+    $knownBands = array_map(
+        static fn ($v) => (string) $v,
+        $kbSt->fetchAll(PDO::FETCH_COLUMN)
+    );
+
+    // Bands per choice for every choice on every inline grid.
+    $allChoiceIds = [];
+    foreach ($choicesByOption as $rows) {
+        foreach ($rows as $r) $allChoiceIds[] = (int) $r['id'];
+    }
+    if ($allChoiceIds) {
+        $ph = implode(',', array_fill(0, count($allChoiceIds), '?'));
+        $bSt = db()->prepare(
+            "SELECT choice_id, band_code
+               FROM product_extra_choice_bands
+              WHERE choice_id IN ($ph)"
+        );
+        $bSt->execute($allChoiceIds);
+        foreach ($bSt->fetchAll() as $r) {
+            $bandsByChoice[(int) $r['choice_id']][] = (string) $r['band_code'];
+        }
+    }
+
+    $renderBandMultiSelect = make_render_band_multi_select($knownBands, $bandsByChoice);
+}
+
 // Price tables, grouped by system, with cell count per table for the
 // "at a glance" row count. Tables with 0 cells get a "needs filling"
 // warning pill in the render.
