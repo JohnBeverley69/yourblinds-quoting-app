@@ -73,8 +73,13 @@ $lastSupplier = (string) ($_SESSION['_options_last_supplier'] ?? '');
 // session held "URBAN") while the price-tables rename / bulk-add path
 // kept user-typed case ("Urban"). Result was the sticky pre-fill
 // not matching any chip exactly. Look up the typed value
-// case-insensitively against the union of product_options + price_tables
-// and adopt the canonical case if there's a match.
+// case-insensitively against the union of product_options + price_tables.
+//
+// The sticky value (_options_last_band) is NOT product-scoped, so it can
+// carry over from a DIFFERENT product. If it doesn't match a band on
+// THIS product, clear it — otherwise you'd pre-fill (and risk adding)
+// slats under a band that doesn't belong here (e.g. "50mm Gloss Tape"
+// from a wood venetian showing on a product whose bands are A/B/C/D).
 if ($lastBand !== '') {
     $normStmt = db()->prepare(
         "SELECT band_code FROM (
@@ -89,7 +94,7 @@ if ($lastBand !== '') {
     );
     $normStmt->execute([$productId, $clientId, $productId, $clientId, $lastBand]);
     $canon = $normStmt->fetchColumn();
-    if ($canon !== false) $lastBand = (string) $canon;
+    $lastBand = ($canon !== false) ? (string) $canon : '';
 }
 
 $f = [
