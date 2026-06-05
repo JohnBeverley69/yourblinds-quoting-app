@@ -57,6 +57,50 @@ if (!$option) {
     exit;
 }
 
+// System scoping — product_options.system_id is an optional column
+// (migrate_option_system_scope.php). When present, this fabric can be
+// pinned to one system (NULL = available on every system). Detect the
+// column, load the current scope, and pull the product's systems for
+// the dropdown.
+$hasSystemIdCol = false;
+try {
+    $hasSystemIdCol = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_options'
+            AND COLUMN_NAME  = 'system_id'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$currentSystemId = null;
+if ($hasSystemIdCol) {
+    $sidStmt = db()->prepare(
+        'SELECT system_id FROM product_options WHERE id = ? AND client_id = ?'
+    );
+    $sidStmt->execute([$id, $clientId]);
+    $sidVal = $sidStmt->fetchColumn();
+    $currentSystemId = ($sidVal === null || $sidVal === false) ? null : (int) $sidVal;
+}
+
+// Product's systems for the scope dropdown (sort_order optional).
+$systems = [];
+try {
+    $sysStmt = db()->prepare(
+        'SELECT id, name FROM product_systems
+          WHERE product_id = ? AND client_id = ? ORDER BY sort_order, name'
+    );
+    $sysStmt->execute([(int) $option['product_id'], $clientId]);
+    $systems = $sysStmt->fetchAll();
+} catch (Throwable $e) {
+    $sysStmt = db()->prepare(
+        'SELECT id, name FROM product_systems
+          WHERE product_id = ? AND client_id = ? ORDER BY name'
+    );
+    $sysStmt->execute([(int) $option['product_id'], $clientId]);
+    $systems = $sysStmt->fetchAll();
+}
+$systemIds = array_map(static fn ($s) => (int) $s['id'], $systems);
+
 // The product carries its own per-product option label
 // ("Fabric" / "Colour" / "Finish" / etc.). Fall back to "Fabric" for
 // any legacy product that hasn't had a label set.
@@ -81,6 +125,7 @@ $f = [
     'cost_price'    => isset($option['cost_price']) && $option['cost_price'] !== null
                           ? (string) $option['cost_price']
                           : '',
+    'system_id'     => $currentSystemId,
 ];
 $error = null;
 
@@ -93,6 +138,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
     $f['active']     = !empty($_POST['active']) ? 1 : 0;
     $f['cost_price'] = trim((string) ($_POST['cost_price'] ?? ''));
+    // System scope — '' / '0' = "all systems" (stored NULL).
+    if ($hasSystemIdCol) {
+        $sysRaw = (string) ($_POST['system_id'] ?? '');
+        $f['system_id'] = ($sysRaw === '' || $sysRaw === '0') ? null : (int) $sysRaw;
+    }
 
     if ($f['band_code'] === '') {
         $error = 'Band code is required.';
@@ -102,6 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = ucfirst($labelL) . ' name is required.';
     } elseif (strlen($f['name']) > 150) {
         $error = ucfirst($labelL) . ' name is too long (max 150 chars).';
+    } elseif ($hasSystemIdCol && $f['system_id'] !== null
+              && !in_array($f['system_id'], $systemIds, true)) {
+        $error = 'Chosen system is not on this product.';
     } else {
         try {
             // cost_price: empty = NULL (= not entered yet, treat as 0
@@ -110,48 +163,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? null
                 : (float) $f['cost_price'];
 
+            // Build the UPDATE dynamically so optional columns
+            // (cost_price, system_id) only appear when the schema has
+            // them — avoids a combinatorial explosion of hardcoded SQL.
+            // No strtoupper on band — preserve user-typed case (see
+            // options.php for rationale).
+            $set    = [
+                'band_code = ?', 'supplier_name = ?', 'name = ?',
+                'colour = ?', 'code = ?', 'sort_order = ?', 'active = ?',
+            ];
+            $params = [
+                $f['band_code'],
+                $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
+                $f['name'],
+                $f['colour'] !== '' ? $f['colour'] : null,
+                $f['code']   !== '' ? $f['code']   : null,
+                $f['sort_order'],
+                $f['active'],
+            ];
             if ($hasCostColumn) {
-                $u = db()->prepare(
-                    'UPDATE product_options
-                        SET band_code = ?, supplier_name = ?, name = ?, colour = ?,
-                            code = ?, sort_order = ?, active = ?, cost_price = ?
-                      WHERE id = ? AND client_id = ?'
-                );
-                $u->execute([
-                    // Preserve user-typed case — see options.php
-                    // for rationale (no strtoupper).
-                    $f['band_code'],
-                    $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
-                    $f['name'],
-                    $f['colour'] !== '' ? $f['colour'] : null,
-                    $f['code']   !== '' ? $f['code']   : null,
-                    $f['sort_order'],
-                    $f['active'],
-                    $costValue,
-                    $id,
-                    $clientId,
-                ]);
-            } else {
-                $u = db()->prepare(
-                    'UPDATE product_options
-                        SET band_code = ?, supplier_name = ?, name = ?, colour = ?,
-                            code = ?, sort_order = ?, active = ?
-                      WHERE id = ? AND client_id = ?'
-                );
-                $u->execute([
-                    // Preserve user-typed case — see options.php
-                    // for rationale (no strtoupper).
-                    $f['band_code'],
-                    $f['supplier_name'] !== '' ? $f['supplier_name'] : null,
-                    $f['name'],
-                    $f['colour'] !== '' ? $f['colour'] : null,
-                    $f['code']   !== '' ? $f['code']   : null,
-                    $f['sort_order'],
-                    $f['active'],
-                    $id,
-                    $clientId,
-                ]);
+                $set[]    = 'cost_price = ?';
+                $params[] = $costValue;
             }
+            if ($hasSystemIdCol) {
+                $set[]    = 'system_id = ?';
+                $params[] = $f['system_id'];
+            }
+            $params[] = $id;
+            $params[] = $clientId;
+
+            $u = db()->prepare(
+                'UPDATE product_options SET ' . implode(', ', $set)
+                . ' WHERE id = ? AND client_id = ?'
+            );
+            $u->execute($params);
+
             $_SESSION['flash_success'] = ucfirst($labelL) . ' updated.';
             header('Location: /admin/products/options.php?product_id=' . (int) $option['product_id']);
             exit;
@@ -226,6 +272,29 @@ $activeNav = 'products';
                                value="<?= e((string) $f['supplier_name']) ?>">
                     </div>
                 </div>
+
+                <?php if ($hasSystemIdCol && $systems): ?>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="system_id">System</label>
+                            <select id="system_id" name="system_id">
+                                <option value="">All systems</option>
+                                <?php foreach ($systems as $s): ?>
+                                    <option value="<?= (int) $s['id'] ?>"
+                                        <?= ((int) ($f['system_id'] ?? 0) === (int) $s['id']) ? 'selected' : '' ?>>
+                                        <?= e((string) $s['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small style="display:block;margin-top:0.35rem;color:#6b7280;font-size:0.8125rem">
+                                Which system this <?= e($labelL) ?> belongs to.
+                                <strong>All systems</strong> = shows on every system; scope it
+                                (e.g. to <em><?= e((string) $systems[0]['name']) ?></em>) so it
+                                only appears when that system is picked in the quote builder.
+                            </small>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">
