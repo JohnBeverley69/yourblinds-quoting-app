@@ -158,6 +158,19 @@ a { color: var(--link); }
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    /* Pin to the viewport so the footer (theme toggle / change password
+       / sign out) stays on screen on long, scrollable pages instead of
+       sitting at the bottom of the whole page. sticky (not fixed) keeps
+       the sidebar in the normal flex flow, so the main content still
+       sits beside it. align-self stops the flex container stretching it
+       past 100vh. The nav between header and footer already scrolls
+       internally (flex:1; overflow-y:auto), so a long menu won't push
+       the footer out of view. The mobile media query below overrides
+       this with a fixed slide-in drawer. */
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    align-self: flex-start;
 }
 
 .app-sidebar-brand {
@@ -198,6 +211,10 @@ a { color: var(--link); }
 
 .app-sidebar-nav {
     flex: 1;
+    /* min-height:0 lets this flex item shrink below its content height
+       so overflow-y:auto actually engages — the nav scrolls internally
+       and the footer below stays pinned, even on short viewports. */
+    min-height: 0;
     padding: 0.5rem 0 0.75rem;
     overflow-y: auto;
 }
