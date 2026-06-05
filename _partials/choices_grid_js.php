@@ -43,6 +43,18 @@
         JSON_THROW_ON_ERROR
     ) ?>;
 
+    // Band-scoping, mirrored from PHP. bandsColShown gates whether
+    // JS-built rows (new-row commit, duplicate, sibling-system spawn)
+    // get a "Bands" cell — it must match the server-rendered grid,
+    // which only shows the column when $renderBandMultiSelect is set
+    // (i.e. the migrate_choice_band_scoping.php migration has run).
+    // Without this, freshly-added rows were missing the Bands widget
+    // entirely (and every column to its right shifted left by one),
+    // so you couldn't scope a new option's bands without reloading or
+    // going through the Edit link.
+    var bandsColShown  = <?= (isset($renderBandMultiSelect) && $renderBandMultiSelect !== null) ? 'true' : 'false' ?>;
+    var knownBandsList = <?= json_encode(array_values($knownBands ?? []), JSON_THROW_ON_ERROR) ?>;
+
     // Save-status pill is PERSISTENT — it always shows one of:
     //   "All changes saved" (green, default at rest)
     //   "Saving…"           (amber, during a fetch)
@@ -234,6 +246,17 @@
         tdSys.appendChild(buildSystemMultiSelect(choice.system_id == null ? null : choice.system_id));
         tr.appendChild(tdSys);
 
+        // Bands cell — only when the server-rendered grid shows the
+        // column. New/duplicated choices carry no band scope, so the
+        // widget opens on "All bands"; choice.bands is honoured if a
+        // future API response ever returns a pre-scoped list.
+        if (bandsColShown) {
+            var tdBands = document.createElement('td');
+            tdBands.className = 'col-bands';
+            tdBands.appendChild(buildBandMultiSelect(choice.bands || []));
+            tr.appendChild(tdBands);
+        }
+
         tr.appendChild(cellInput('price_delta',     choice.price_delta,     { type: 'number', step: '0.01', num: true }));
         tr.appendChild(cellInput('price_percent',   choice.price_percent,   { type: 'number', step: '0.01', num: true }));
         tr.appendChild(cellInput('price_per_metre', choice.price_per_metre, { type: 'number', step: '0.01', num: true }));
@@ -256,6 +279,59 @@
     }
 
     function updateCount() {}
+
+    // Mirrors make_render_band_multi_select() in choices_grid_helpers.php
+    // so a JS-built row's Bands widget is byte-for-byte equivalent to a
+    // server-rendered one: same classes (.row-band-tick / data-band),
+    // same "All bands" empty-string checkbox, same summary semantics.
+    // The per-row change handler (delegated on tbody) then drives saves
+    // for these rows with no extra wiring.
+    function buildBandMultiSelect(pickedBands) {
+        var picked = pickedBands || [];
+
+        var details = document.createElement('details');
+        details.className = 'multi-select row-multi row-bands';
+
+        var summary = document.createElement('summary');
+        if (picked.length === 0)      summary.textContent = 'All bands';
+        else if (picked.length === 1) summary.textContent = picked[0];
+        else                          summary.textContent = picked.length + ' bands';
+        details.appendChild(summary);
+
+        var opts = document.createElement('div');
+        opts.className = 'multi-opts';
+
+        var allLabel = document.createElement('label');
+        var allCb    = document.createElement('input');
+        allCb.type      = 'checkbox';
+        allCb.className  = 'row-band-tick';
+        allCb.dataset.band = '';
+        if (picked.length === 0) allCb.checked = true;
+        var allStrong = document.createElement('strong');
+        allStrong.textContent = 'All bands';
+        allLabel.appendChild(allCb);
+        allLabel.appendChild(document.createTextNode(' '));
+        allLabel.appendChild(allStrong);
+        opts.appendChild(allLabel);
+
+        if (knownBandsList.length) {
+            opts.appendChild(document.createElement('hr'));
+            knownBandsList.forEach(function (b) {
+                var lbl = document.createElement('label');
+                var cb  = document.createElement('input');
+                cb.type     = 'checkbox';
+                cb.className = 'row-band-tick';
+                cb.dataset.band = String(b);
+                if (picked.indexOf(b) !== -1) cb.checked = true;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(' ' + b));
+                opts.appendChild(lbl);
+            });
+        }
+
+        details.appendChild(opts);
+        return details;
+    }
 
     function buildSystemMultiSelect(currentSystemId) {
         var isAll = currentSystemId == null;
