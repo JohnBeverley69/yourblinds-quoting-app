@@ -66,26 +66,96 @@ $systems = array_map(static fn ($r) => [
     'is_default' => (bool)   $r['is_default'],
 ], $st->fetchAll());
 
-// 2b. Distinct fabric bands on this product (active fabrics only) —
-//     powers the "Band" filter dropdown in the quote builder + live
-//     preview, which narrows the fabric typeahead to one price band.
+// 2b. Bands for the quote builder's "Band" filter, which narrows the
+//     fabric typeahead to one price band. The authoritative band set is
+//     the UNION of price_tables (a band defined per system — e.g. a
+//     gloss-headrail tier that has a price table but no fabric yet) and
+//     product_options (a fabric carrying that band). Reading fabrics
+//     alone would miss bands like "50mm Gloss String" that exist only
+//     as a price table.
+//
+//     Bands are returned two ways:
+//       - bands          flat list across the whole product — used when
+//                        no system is picked, or the product has no
+//                        systems at all.
+//       - bandsBySystem  { "<systemId>": [band, …] } — the dropdown uses
+//                        this once a system is chosen so it shows exactly
+//                        that system's bands (and not another system's).
+//
 //     Custom sort surfaces premium AAA → AA → A first, then the rest
 //     alphabetically, matching the admin Fabrics list ordering.
-$bSt = $pdo->prepare(
-    "SELECT DISTINCT band_code FROM product_options
-      WHERE product_id = ? AND client_id = ? AND active = 1
-        AND band_code IS NOT NULL AND band_code != ''
-   ORDER BY
-        CASE band_code
-            WHEN 'AAA' THEN 1
-            WHEN 'AA'  THEN 2
-            WHEN 'A'   THEN 3
-            ELSE 100
-        END,
-        band_code"
-);
-$bSt->execute([$productId, $clientId]);
-$bands = array_map('strval', $bSt->fetchAll(PDO::FETCH_COLUMN));
+$bandSort = "CASE band_code WHEN 'AAA' THEN 1 WHEN 'AA' THEN 2 "
+          . "WHEN 'A' THEN 3 ELSE 100 END, band_code";
+
+// product_options.system_id is an optional column
+// (migrate_option_system_scope.php). Detect it so the per-system query
+// can scope fabrics correctly without fatalling on older schemas.
+$hasOptSystemId = false;
+try {
+    $hasOptSystemId = (bool) $pdo->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_options'
+            AND COLUMN_NAME  = 'system_id'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$bands         = [];
+$bandsBySystem = [];
+try {
+    // Flat list — every band on the product, from both sources.
+    $flatSt = $pdo->prepare(
+        "SELECT DISTINCT band_code FROM (
+            SELECT band_code FROM price_tables
+             WHERE product_id = ? AND client_id = ? AND active = 1
+            UNION
+            SELECT band_code FROM product_options
+             WHERE product_id = ? AND client_id = ? AND active = 1
+         ) x
+         WHERE band_code IS NOT NULL AND band_code != ''
+         ORDER BY $bandSort"
+    );
+    $flatSt->execute([$productId, $clientId, $productId, $clientId]);
+    $bands = array_map('strval', $flatSt->fetchAll(PDO::FETCH_COLUMN));
+
+    // Per-system lists. A band belongs to a system if it has a price
+    // table for that system, OR a fabric scoped to that system (or a
+    // universal fabric — system_id NULL — which applies everywhere).
+    if ($systems) {
+        // Fabric sub-query differs by whether system scoping exists.
+        $optSub = $hasOptSystemId
+            ? "SELECT band_code FROM product_options
+                WHERE product_id = ? AND client_id = ? AND active = 1
+                  AND (system_id = ? OR system_id IS NULL)"
+            : "SELECT band_code FROM product_options
+                WHERE product_id = ? AND client_id = ? AND active = 1";
+
+        $bsSt = $pdo->prepare(
+            "SELECT DISTINCT band_code FROM (
+                SELECT band_code FROM price_tables
+                 WHERE product_id = ? AND client_id = ? AND active = 1
+                   AND system_id = ?
+                UNION
+                $optSub
+             ) x
+             WHERE band_code IS NOT NULL AND band_code != ''
+             ORDER BY $bandSort"
+        );
+        foreach ($systems as $s) {
+            $sid    = (int) $s['id'];
+            $params = $hasOptSystemId
+                ? [$productId, $clientId, $sid, $productId, $clientId, $sid]
+                : [$productId, $clientId, $sid, $productId, $clientId];
+            $bsSt->execute($params);
+            $bandsBySystem[(string) $sid] =
+                array_map('strval', $bsSt->fetchAll(PDO::FETCH_COLUMN));
+        }
+    }
+} catch (Throwable $e) {
+    // Degrade gracefully — no band filter rather than a broken page.
+    $bands         = [];
+    $bandsBySystem = [];
+}
 
 // 3. Extras + their choices. The new model puts system scope on the
 //    choice itself (system_id, NULL = "all systems"). Option-level
@@ -263,7 +333,8 @@ echo json_encode([
         'id'   => (int)    $product['id'],
         'name' => (string) $product['name'],
     ],
-    'systems' => $systems,
-    'bands'   => $bands,
-    'extras'  => $extras,
+    'systems'       => $systems,
+    'bands'         => $bands,
+    'bandsBySystem' => $bandsBySystem,
+    'extras'        => $extras,
 ]);

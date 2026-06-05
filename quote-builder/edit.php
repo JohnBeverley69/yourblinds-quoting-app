@@ -1769,11 +1769,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 systemSel.disabled  = false;
             }
 
-            // Band filter dropdown — populated from the product's
-            // distinct fabric bands. "All bands" keeps the old
-            // unfiltered behaviour; picking a band narrows the fabric
-            // typeahead via the search API's &band= param.
-            populateBands(productData.bands || []);
+            // Band filter dropdown — scoped to the (default) selected
+            // system so it shows that system's bands only. "All bands"
+            // keeps the unfiltered behaviour; picking a band narrows the
+            // fabric typeahead via the search API's &band= param.
+            populateBands(bandsForCurrentSystem());
 
             // Fabric typeahead — enable input. Picking happens via the
             // floating results panel populated from /api/fabrics-search.
@@ -1892,14 +1892,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         bandSel.innerHTML = '<option value="">All bands</option>';
         bandSel.disabled  = true;
     }
+    // Bands for the currently-selected system — falls back to the flat
+    // product-wide list when no system is picked or the product has no
+    // per-system breakdown. This is what makes the dropdown show, say,
+    // the 50mm system's bands (incl. gloss) and not the 35mm system's.
+    function bandsForCurrentSystem() {
+        var sid = (systemSel && systemSel.value) ? String(systemSel.value) : '';
+        var bbs = productData && productData.bandsBySystem;
+        if (sid && bbs && bbs[sid]) return bbs[sid];
+        return (productData && productData.bands) || [];
+    }
+
     function populateBands(bands) {
         if (!bandSel) return;
+        var prev = bandSel.value;
         var opts = '<option value="">All bands</option>';
         bands.forEach(function (b) {
             opts += '<option value="' + escapeAttr(b) + '">' + escapeHtml(b) + '</option>';
         });
         bandSel.innerHTML = opts;
         bandSel.disabled  = bands.length === 0;
+        // Keep the prior pick if it's still valid for the new system,
+        // otherwise drop back to "All bands".
+        bandSel.value = (prev && bands.indexOf(prev) !== -1) ? prev : '';
     }
 
     function closeFabricResults() {
@@ -2228,6 +2243,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (!initial) return;
         if (initial.system_id) {
             systemSel.value = String(initial.system_id);
+            // Re-scope the band dropdown to the saved system so the
+            // saved band below resolves to a real option.
+            if (bandSel) populateBands(bandsForCurrentSystem());
         }
         if (initial.option_id && initial.fabric_label) {
             fabricSearch.value = initial.fabric_label;
@@ -2415,6 +2433,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
     productSel.addEventListener('change', loadProductData);
     systemSel.addEventListener('change', function () {
+        // Re-scope the band filter to the new system (its band set may
+        // differ — e.g. 50mm has gloss tiers the 35mm system doesn't).
+        if (bandSel) populateBands(bandsForCurrentSystem());
         renderExtras();
         // Picking a different system can change the available fabrics
         // (system-scoped ones may drop in/out). Clear the current pick

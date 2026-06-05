@@ -1781,6 +1781,23 @@ $activeNav = 'products';
     // Mirrors the cascade in /quote-builder/edit.php but compressed:
     //   System select → Fabric search (typeahead) → Options.
     // Options apply the same parent-choice gating as the real builder.
+    // Bands for a given system id — falls back to the flat product-wide
+    // list. Sourced from product-data's bandsBySystem so the dropdown
+    // shows the chosen system's bands (incl. gloss tiers that exist only
+    // as price tables), not another system's.
+    function pvBandsForSystem(sid) {
+        var bbs = productData && productData.bandsBySystem;
+        if (sid && bbs && bbs[sid]) return bbs[sid];
+        return (productData && productData.bands) || [];
+    }
+    function pvBandOptionsHtml(bands) {
+        var h = '<option value="">All bands</option>';
+        (bands || []).forEach(function (b) {
+            h += '<option value="' + esc(b) + '">' + esc(b) + '</option>';
+        });
+        return h;
+    }
+
     function renderForm() {
         var html = '';
 
@@ -1798,17 +1815,21 @@ $activeNav = 'products';
         }
 
         // Band filter — narrows the fabric typeahead below to one price
-        // band so a large catalogue isn't a long scroll. "All bands"
-        // keeps the unfiltered behaviour.
-        var bands = productData.bands || [];
-        if (bands.length) {
+        // band so a large catalogue isn't a long scroll. Scoped to the
+        // (default) selected system. "All bands" keeps the unfiltered
+        // behaviour.
+        if ((productData.bands || []).length) {
+            var pvDefaultSys = '';
+            if (systems.length) {
+                var pvDef = systems.filter(function (s) { return s.is_default; })[0]
+                          || systems[0];
+                pvDefaultSys = pvDef ? String(pvDef.id) : '';
+            }
             html += '<div class="pv-row">'
                   + '<label for="pv-band">Band</label>'
-                  + '<select id="pv-band"><option value="">All bands</option>';
-            bands.forEach(function (b) {
-                html += '<option value="' + esc(b) + '">' + esc(b) + '</option>';
-            });
-            html += '</select></div>';
+                  + '<select id="pv-band">'
+                  +   pvBandOptionsHtml(pvBandsForSystem(pvDefaultSys))
+                  + '</select></div>';
         }
 
         // Fabric — type-to-search combo. A plain <select> with 500+
@@ -1863,6 +1884,12 @@ $activeNav = 'products';
                 if (fabText)   fabText.value   = '';
                 if (fabList)   fabList.hidden  = true;
                 currentFabricBand = '';
+                // Re-scope the band filter to the new system.
+                var pvBand = document.getElementById('pv-band');
+                if (pvBand) {
+                    pvBand.innerHTML = pvBandOptionsHtml(pvBandsForSystem(sysSel.value));
+                    pvBand.value = '';
+                }
                 renderExtras();
             });
         }
