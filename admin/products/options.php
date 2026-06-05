@@ -288,10 +288,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
+// product_options.system_id is optional (migrate_option_system_scope.php).
+// When present, each fabric can be pinned to a system — surfaced as a
+// "System" column so the admin can see at a glance which fabrics are
+// universal vs scoped.
+$hasSystemIdCol = false;
+try {
+    $hasSystemIdCol = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_options'
+            AND COLUMN_NAME  = 'system_id'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
 // List existing options. Custom band sort: AAA → AA → A → B → C → ...
 // (premium "A" tiers in descending length, then alphabetical for the rest).
 $rows = db()->prepare(
-    "SELECT id, band_code, supplier_name, name, colour, code, sort_order, active
+    "SELECT id, band_code, supplier_name, name, colour, code, sort_order, active"
+    . ($hasSystemIdCol ? ', system_id' : '') . "
        FROM product_options
       WHERE product_id = ? AND client_id = ?
    ORDER BY
@@ -354,6 +369,15 @@ try {
     $systemsStmt->execute([$productId, $clientId]);
     $systems = $systemsStmt->fetchAll();
 }
+
+// Map system_id → name for the list's System column, plus a flag for
+// whether to show the column at all (only when scoping exists and the
+// product actually has systems).
+$systemNameById = [];
+foreach ($systems as $s) {
+    $systemNameById[(int) $s['id']] = (string) $s['name'];
+}
+$showSystemCol = $hasSystemIdCol && !empty($systems);
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -695,6 +719,9 @@ $activeNav = 'products';
                                                aria-label="Select all">
                                     </th>
                                     <th>Band</th>
+                                    <?php if ($showSystemCol): ?>
+                                        <th>System</th>
+                                    <?php endif; ?>
                                     <th><?= e($label) ?></th>
                                     <?php if (!$labelIsColour): ?>
                                         <th>Colour</th>
@@ -710,12 +737,21 @@ $activeNav = 'products';
                                     // filter doesn't have to walk td.textContent
                                     // every keystroke. Includes every field the
                                     // user might type to find a row.
+                                    // Resolve this fabric's system scope for the
+                                    // System column + the search blob (so typing a
+                                    // system name filters too). NULL = all systems.
+                                    $rowSysId   = ($showSystemCol && isset($o['system_id']) && $o['system_id'] !== null)
+                                                ? (int) $o['system_id'] : null;
+                                    $rowSysName = $rowSysId === null
+                                                ? 'All systems'
+                                                : ($systemNameById[$rowSysId] ?? ('#' . $rowSysId));
                                     $searchBlob = strtolower(implode(' ', array_filter([
                                         (string) ($o['band_code']     ?? ''),
                                         (string) ($o['name']          ?? ''),
                                         (string) ($o['colour']        ?? ''),
                                         (string) ($o['supplier_name'] ?? ''),
                                         (string) ($o['code']          ?? ''),
+                                        $showSystemCol ? $rowSysName : '',
                                     ])));
                                 ?>
                                     <tr data-search="<?= e($searchBlob) ?>">
@@ -725,6 +761,15 @@ $activeNav = 'products';
                                                    aria-label="Select <?= e((string) $o['name']) ?>">
                                         </td>
                                         <td><span class="band-pill">Band <?= e((string) $o['band_code']) ?></span></td>
+                                        <?php if ($showSystemCol): ?>
+                                            <td>
+                                                <?php if ($rowSysId === null): ?>
+                                                    <span style="color:#6b7280;font-size:0.8125rem">All systems</span>
+                                                <?php else: ?>
+                                                    <?= e($rowSysName) ?>
+                                                <?php endif; ?>
+                                            </td>
+                                        <?php endif; ?>
                                         <td>
                                             <?= e((string) $o['name']) ?>
                                             <?php if ((int) $o['active'] !== 1): ?>
