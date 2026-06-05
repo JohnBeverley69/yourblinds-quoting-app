@@ -69,9 +69,12 @@ $hasTblStmt = $pdo->query(
 $hasTbl = (bool) $hasTblStmt->fetchColumn();
 
 if (!$hasTbl) {
+    // choice_id is INT UNSIGNED to match product_extra_choices.id
+    // (MySQL strict FK refuses signed/unsigned mismatch). band_code
+    // mirrors VARCHAR(20) used elsewhere on the band_code text.
     $pdo->exec(
         "CREATE TABLE product_extra_choice_bands (
-            choice_id INT          NOT NULL,
+            choice_id INT UNSIGNED NOT NULL,
             band_code VARCHAR(20)  NOT NULL,
             PRIMARY KEY (choice_id, band_code),
             KEY ix_pecb_band (band_code),
