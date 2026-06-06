@@ -1156,12 +1156,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="item-width">Width <span class="required">*</span></label>
                         <input id="item-width" name="width" type="text" required
+                               autocomplete="off" autocorrect="off" autocapitalize="off"
+                               data-lpignore="true" data-1p-ignore="true"
                                value="<?= $editingItem ? (int) $editingItem['width_mm'] : '' ?>"
                                placeholder="e.g. 1500, 150cm, 1.5m, 60in">
                     </div>
                     <div class="form-group">
                         <label for="item-drop">Drop <span class="required">*</span></label>
                         <input id="item-drop" name="drop" type="text" required
+                               autocomplete="off" autocorrect="off" autocapitalize="off"
+                               data-lpignore="true" data-1p-ignore="true"
                                value="<?= $editingItem ? (int) $editingItem['drop_mm'] : '' ?>"
                                placeholder="e.g. 1800, 180cm, 1.8m, 72in">
                     </div>

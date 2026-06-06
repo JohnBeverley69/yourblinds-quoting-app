@@ -152,9 +152,13 @@ $activeNav = 'instaprice';
                 <div class="ip-field" style="margin-top:1rem">
                     <label>Dimensions (mm) &amp; quantity</label>
                     <div class="ip-dims">
-                        <input id="ip-width" type="text" inputmode="numeric" placeholder="Width">
-                        <input id="ip-drop"  type="text" inputmode="numeric" placeholder="Drop">
-                        <input id="ip-qty"   type="number" min="1" value="1">
+                        <input id="ip-width" type="text" inputmode="numeric"
+                               autocomplete="off" autocorrect="off" autocapitalize="off"
+                               data-lpignore="true" data-1p-ignore="true" placeholder="Width">
+                        <input id="ip-drop"  type="text" inputmode="numeric"
+                               autocomplete="off" autocorrect="off" autocapitalize="off"
+                               data-lpignore="true" data-1p-ignore="true" placeholder="Drop">
+                        <input id="ip-qty"   type="number" min="1" value="1" autocomplete="off">
                     </div>
                 </div>
 
