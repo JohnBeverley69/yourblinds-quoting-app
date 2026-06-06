@@ -394,6 +394,13 @@ $activeNav = 'instaprice';
             }
             return false;
         }
+        // Measurement-only option: a length/spec input with a single
+        // carrier choice (e.g. "Fit height" in mm). Pure spec — no price
+        // impact — so it's irrelevant on a quick-price screen. Skipped.
+        function isMeasurementOnly(extra) {
+            return !!extra.length_input_label
+                && extra.choices.filter(choiceAvailable).length === 1;
+        }
         function effectiveChoiceIds(extra) {
             if (extra.allow_multi) {
                 var m = preset[extra.id + '__multi'];
@@ -436,28 +443,16 @@ $activeNav = 'instaprice';
             } else {
                 var pv = preset[extra.id];
                 var hasDef = visible.some(function (c) { return c.is_default; });
-                // Input-only option: single carrier choice + measurement
-                // input (e.g. "Fit height") → hide the pointless dropdown.
-                var hideSelect = !!extra.length_input_label && visible.length === 1;
-                out += '<select' + (hideSelect ? ' style="display:none" aria-hidden="true"' : '') + '>';
-                if (!hasDef && !hideSelect) out += '<option value=""' + (pv === '' ? ' selected' : '') + '>— Select —</option>';
+                out += '<select>';
+                if (!hasDef) out += '<option value=""' + (pv === '' ? ' selected' : '') + '>— Select —</option>';
                 visible.forEach(function (c) {
                     var sel;
-                    if (hideSelect) sel = true;
-                    else if (pv !== undefined && pv !== '') sel = String(c.id) === pv;
+                    if (pv !== undefined && pv !== '') sel = String(c.id) === pv;
                     else if (pv === '') sel = false;
                     else sel = c.is_default;
                     out += '<option value="' + c.id + '"' + (sel ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
                 });
                 out += '</select>';
-            }
-            // Measurement / length input (e.g. "Fit height mm"). Spec only —
-            // doesn't affect the price, so it isn't collected for the calc.
-            if (extra.length_input_label) {
-                out += '<label style="margin-top:0.375rem">' + escapeHtml(extra.length_input_label) + '</label>'
-                     + '<input type="number" min="0" step="1" '
-                     + 'style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);'
-                     + 'border-radius:8px;background:var(--bg-input);color:var(--text-body);font:inherit">';
             }
             out += '</div>';
             return out;
@@ -467,7 +462,7 @@ $activeNav = 'instaprice';
             var out = renderOne(extra, depth > 0);
             (childrenOf[extra.id] || []).forEach(function (cid) {
                 var child = productData.extras.find(function (e) { return e.id === cid; });
-                if (!child || !isVisible(child)) return;
+                if (!child || !isVisible(child) || isMeasurementOnly(child)) return;
                 out += renderTree(child, depth + 1);
             });
             return out;
@@ -475,6 +470,7 @@ $activeNav = 'instaprice';
         var html = '';
         productData.extras.forEach(function (extra) {
             if ((extra.parent_choice_ids || []).length) return;
+            if (isMeasurementOnly(extra)) return;   // spec-only — not relevant to a quick price
             if (!isVisible(extra)) return;
             html += '<div>' + renderTree(extra, 0) + '</div>';
         });
