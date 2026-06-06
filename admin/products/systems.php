@@ -172,6 +172,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     }
 }
 
+// Rename a system. Fixes typos without having to delete + rebuild (which
+// would wipe the price tables). Tenant-scoped; unique-name guarded.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'rename') {
+    csrf_check();
+    $targetId = (int) ($_POST['id'] ?? 0);
+    $newName  = trim((string) ($_POST['name'] ?? ''));
+
+    if ($targetId <= 0) {
+        $_SESSION['flash_error'] = 'Bad system.';
+    } elseif ($newName === '') {
+        $_SESSION['flash_error'] = 'System name is required.';
+    } elseif (strlen($newName) > 150) {
+        $_SESSION['flash_error'] = 'System name is too long (max 150 chars).';
+    } else {
+        $pdo = db();
+        try {
+            $cur = $pdo->prepare(
+                'SELECT name FROM product_systems
+                  WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1'
+            );
+            $cur->execute([$targetId, $productId, $clientId]);
+            $oldName = $cur->fetchColumn();
+
+            if ($oldName === false) {
+                $_SESSION['flash_error'] = 'System not found.';
+            } elseif ((string) $oldName === $newName) {
+                $_SESSION['flash_success'] = 'No change — name is the same.';
+            } else {
+                $upd = $pdo->prepare(
+                    'UPDATE product_systems SET name = ?
+                      WHERE id = ? AND product_id = ? AND client_id = ?'
+                );
+                $upd->execute([$newName, $targetId, $productId, $clientId]);
+
+                require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+                catalogue_audit_log(
+                    'system', $targetId, 'update', $newName,
+                    ['name' => (string) $oldName], ['name' => $newName], $productId
+                );
+                $_SESSION['flash_success'] = 'System renamed to "' . $newName . '".';
+            }
+        } catch (Throwable $e) {
+            if (str_contains($e->getMessage(), 'uniq_system_per_product')) {
+                $_SESSION['flash_error'] = 'A system with that name already exists for this product.';
+            } else {
+                $_SESSION['flash_error'] = 'Could not rename: ' . $e->getMessage();
+            }
+        }
+    }
+    header('Location: /admin/products/systems.php?product_id=' . $productId);
+    exit;
+}
+
 // List systems for this product, with price-table counts.
 // Sort by sort_order alone — drag-and-drop controls position. The 'default'
 // flag is shown as a pill but doesn't dictate order anymore.
@@ -353,6 +406,12 @@ $activeNav = 'products';
                                         <?= e(time_ago((string) $s['updated_at'])) ?>
                                     </td>
                                     <td class="row-actions">
+                                        <button type="button" class="sys-rename-btn"
+                                                data-id="<?= (int) $s['id'] ?>"
+                                                data-name="<?= e((string) $s['name']) ?>"
+                                                style="font-size:0.875rem;color:#1f3b5b;background:transparent;border:0;cursor:pointer;padding:0;margin-left:0.5rem;">
+                                            Rename
+                                        </button>
                                         <?php if ((int) $s['is_default'] !== 1): ?>
                                             <form method="post"
                                                   action="/admin/products/systems.php?product_id=<?= (int) $productId ?>"
@@ -381,6 +440,35 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </section>
+
+        <!-- Shared hidden form for the per-row "Rename" buttons. The JS
+             prompts for a new name and submits this. -->
+        <form id="sys-rename-form" method="post"
+              action="/admin/products/systems.php?product_id=<?= (int) $productId ?>"
+              style="display:none">
+            <?= csrf_field() ?>
+            <input type="hidden" name="_action" value="rename">
+            <input type="hidden" name="id"   id="sys-rename-id">
+            <input type="hidden" name="name" id="sys-rename-name">
+        </form>
+        <script>
+        (function () {
+            var form = document.getElementById('sys-rename-form');
+            if (!form) return;
+            document.querySelectorAll('.sys-rename-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var cur  = btn.getAttribute('data-name') || '';
+                    var next = window.prompt('Rename system:', cur);
+                    if (next === null) return;            // cancelled
+                    next = next.trim();
+                    if (next === '' || next === cur) return;
+                    document.getElementById('sys-rename-id').value   = btn.getAttribute('data-id');
+                    document.getElementById('sys-rename-name').value = next;
+                    form.submit();
+                });
+            });
+        })();
+        </script>
     </main>
 </div>
 <?php if ($systems): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
