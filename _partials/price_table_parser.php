@@ -48,10 +48,10 @@ if (!function_exists('ptp_parse_dimension')) {
         // Inches — quote characters (' or ") or "in"/"ins" suffix.
         if (preg_match('/[\'"]|\bins?\b/i', $str))       return (int) round($num * 25.4);
 
-        // No unit suffix — magnitude heuristic.
-        // Anything below 100 is implausibly small for a blind in mm
-        // (no real-world product is < 100mm wide), so treat as metres.
-        if ($num < 100) return (int) round($num * 1000);
+        // No unit suffix — treat as millimetres. That's what people type
+        // for blind sizes. Metres must be written explicitly ("1.5m",
+        // handled above); without this rule a bare "10" used to balloon
+        // to 10,000mm via an over-eager "small number = metres" heuristic.
         return (int) round($num);
     }
 }

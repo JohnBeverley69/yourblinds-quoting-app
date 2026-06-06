@@ -627,8 +627,7 @@ $activeNav = 'instaprice';
         if (low.indexOf('cm') !== -1) return Math.round(n * 10);
         if (/\d\s*m\b/i.test(s))      return Math.round(n * 1000);
         if (/['"]|\bins?\b/i.test(s)) return Math.round(n * 25.4);
-        if (n < 100)                  return Math.round(n * 1000);
-        return Math.round(n);
+        return Math.round(n);   // bare number = mm (metres need an explicit "m")
     }
     function updateDimEcho() {
         var el = document.getElementById('ip-dim-echo');
