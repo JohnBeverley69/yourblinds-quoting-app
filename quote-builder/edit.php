@@ -1844,27 +1844,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             fabricResults.hidden = false;
             return;
         }
-        // When a specific band is already chosen above, the band is a
-        // given — drop the redundant "Band X" pill (and the "Band X —"
-        // prefix in the picked value) and just show the colour. Under
-        // "All bands" keep the pill so the tier stays visible.
-        var bandActive = !!(bandSel && bandSel.value);
+        // Show just the colour — the band is already chosen in the
+        // Tape/String step above, so repeating "Band X" on every row is
+        // noise. (data-band is still kept for downstream choice filtering.)
         var html = '';
         items.forEach(function (f) {
             var meta = [];
             if (f.supplier) meta.push(escapeHtml(f.supplier));
             if (f.code)     meta.push('Code ' + escapeHtml(f.code));
-            // data-label is what lands in the input on pick.
-            var pickLabel = bandActive
-                ? (f.name + (f.colour ? ' / ' + f.colour : ''))
-                : f.label;
-            // data-band carries the band code so the click handler
-            // can stash it for downstream band-scoped choice filtering
-            // (e.g. tape colour availability per fabric tier).
+            // data-label = what lands in the input on pick (colour only).
+            var pickLabel = f.name + (f.colour ? ' / ' + f.colour : '');
             html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(pickLabel) + '"'
                   +    ' data-band="' + escapeAttr(f.band || '') + '">'
                   +    '<div class="fname">'
-                  +      (bandActive ? '' : '<span class="fband">Band ' + escapeHtml(f.band) + '</span>')
                   +      escapeHtml(f.name) + (f.colour ? ' / ' + escapeHtml(f.colour) : '')
                   +    '</div>'
                   + (meta.length ? '<div class="fmeta">' + meta.join(' · ') + '</div>' : '')
@@ -2581,8 +2573,9 @@ if ($editingItemId > 0 && $editingItem):
         (string) ($editingItem['fabric_name_snapshot']     ?? ''),
         (string) ($editingItem['fabric_colour_snapshot']   ?? ''),
     ], static fn ($s) => $s !== '');
-    $editFabricLabel = 'Band ' . (string) ($editingItem['fabric_band_snapshot'] ?? '?')
-                     . ' — ' . implode(' / ', $editFabricBits);
+    // Colour only (no "Band X —" prefix) — consistent with the live
+    // fabric picker, which drops the band since it's chosen above.
+    $editFabricLabel = implode(' / ', $editFabricBits);
 ?>
 <script>
 window.__editingBlind__ = <?= json_encode([
