@@ -1840,9 +1840,14 @@ $activeNav = 'products';
         return (productData && productData.bands) || [];
     }
     function pvBandOptionsHtml(bands) {
-        var h = '<option value="">All bands</option>';
-        (bands || []).forEach(function (b) {
-            h += '<option value="' + esc(b) + '">' + esc(b) + '</option>';
+        bands = bands || [];
+        // When a system maps to a single band, pre-select it (a system
+        // with one price list shouldn't need a manual pick); otherwise
+        // default to "All bands".
+        var single = bands.length === 1;
+        var h = '<option value=""' + (single ? '' : ' selected') + '>All bands</option>';
+        bands.forEach(function (b) {
+            h += '<option value="' + esc(b) + '"' + (single ? ' selected' : '') + '>' + esc(b) + '</option>';
         });
         return h;
     }
@@ -1937,8 +1942,9 @@ $activeNav = 'products';
                 // Re-scope the band filter to the new system.
                 var pvBand = document.getElementById('pv-band');
                 if (pvBand) {
+                    // Repopulate for the new system; pvBandOptionsHtml
+                    // pre-selects the band when the system has just one.
                     pvBand.innerHTML = pvBandOptionsHtml(pvBandsForSystem(sysSel.value));
-                    pvBand.value = '';
                 }
                 renderExtras();
             });

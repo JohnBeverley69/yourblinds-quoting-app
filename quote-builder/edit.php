@@ -1926,9 +1926,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
         bandSel.innerHTML = opts;
         bandSel.disabled  = bands.length === 0;
-        // Keep the prior pick if it's still valid for the new system,
-        // otherwise drop back to "All bands".
-        bandSel.value = (prev && bands.indexOf(prev) !== -1) ? prev : '';
+        // Selection: keep the prior pick if it's still valid; else if the
+        // system maps to exactly ONE band, auto-select it (a system with a
+        // single price list shouldn't need a manual pick); otherwise
+        // default to "All bands".
+        if (prev && bands.indexOf(prev) !== -1) {
+            bandSel.value = prev;
+        } else if (bands.length === 1) {
+            bandSel.value = bands[0];
+        } else {
+            bandSel.value = '';
+        }
     }
 
     function closeFabricResults() {
