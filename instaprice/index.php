@@ -160,6 +160,8 @@ $activeNav = 'instaprice';
                                data-lpignore="true" data-1p-ignore="true" placeholder="Drop">
                         <input id="ip-qty"   type="number" min="1" value="1" autocomplete="off">
                     </div>
+                    <div id="ip-dim-echo" hidden
+                         style="margin-top:0.4rem;font-size:0.8125rem;color:var(--text-faint)"></div>
                 </div>
 
                 <div style="margin-top:1.25rem">
@@ -610,11 +612,40 @@ $activeNav = 'instaprice';
     fabricSearch.addEventListener('input', function () { fabricId.value = ''; scheduleFabricSearch(); schedulePreview(); });
     fabricSearch.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeFabricResults(); });
     fabricSearch.addEventListener('blur', function () { setTimeout(closeFabricResults, 150); });
-    [widthIn, dropIn].forEach(function (el) { el.addEventListener('input', schedulePreview); });
+    // Mirror of ptp_parse_dimension (server) so we can show the user the
+    // exact mm the engine will use — makes a stray digit / wrong unit
+    // obvious before they even read an error.
+    function parseDim(raw) {
+        var s = String(raw == null ? '' : raw).trim();
+        if (s === '') return null;
+        var c = s.replace(/[^\d.\-]/g, '');
+        if (c === '' || isNaN(parseFloat(c))) return null;
+        var n = parseFloat(c);
+        if (n <= 0) return null;
+        var low = s.toLowerCase();
+        if (low.indexOf('mm') !== -1) return Math.round(n);
+        if (low.indexOf('cm') !== -1) return Math.round(n * 10);
+        if (/\d\s*m\b/i.test(s))      return Math.round(n * 1000);
+        if (/['"]|\bins?\b/i.test(s)) return Math.round(n * 25.4);
+        if (n < 100)                  return Math.round(n * 1000);
+        return Math.round(n);
+    }
+    function updateDimEcho() {
+        var el = document.getElementById('ip-dim-echo');
+        if (!el) return;
+        var w = parseDim(widthIn.value), d = parseDim(dropIn.value);
+        if (w && d) { el.textContent = 'Using ' + w + ' × ' + d + ' mm'; el.hidden = false; }
+        else        { el.hidden = true; }
+    }
+
+    [widthIn, dropIn].forEach(function (el) {
+        el.addEventListener('input', function () { updateDimEcho(); schedulePreview(); });
+    });
     qtyIn.addEventListener('input', recompute);
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
         productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';
+        updateDimEcho();
         loadProductData();
         setPriceIdle('Choose a product and enter a size to see the price.', false);
     });
