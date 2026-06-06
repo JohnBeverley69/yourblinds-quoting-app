@@ -373,6 +373,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'copy_from') {
 }
 
 // ---------------------------------------------------------------------------
+// Bump every price in this table by a percentage (per-table uplift).
+// Handy at price-review time — "+5% across the board". Operates on the
+// SAVED cells (not unsaved grid edits) and rounds to 2dp. Negative values
+// reduce. Tenant-scoped via $tableId (already verified above).
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bump_prices') {
+    csrf_check();
+
+    $pctRaw = trim((string) ($_POST['bump_percent'] ?? ''));
+    if (!is_numeric($pctRaw)) {
+        $_SESSION['flash_error'] = 'Enter a percentage, e.g. 5 or -2.5.';
+    } elseif ((float) $pctRaw <= -100) {
+        $_SESSION['flash_error'] = 'Percentage must be greater than -100.';
+    } elseif (abs((float) $pctRaw) < 0.0001) {
+        $_SESSION['flash_error'] = 'Enter a non-zero percentage.';
+    } else {
+        $pct = (float) $pctRaw;
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare(
+                'UPDATE price_table_rows
+                    SET price = ROUND(price * ?, 2)
+                  WHERE price_table_id = ?'
+            )->execute([1 + $pct / 100, $tableId]);
+
+            $cntSt = $pdo->prepare(
+                'SELECT COUNT(*) FROM price_table_rows WHERE price_table_id = ?'
+            );
+            $cntSt->execute([$tableId]);
+            $n = (int) $cntSt->fetchColumn();
+
+            $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
+                ->execute([$tableId]);
+            $pdo->commit();
+
+            $shown = rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.');
+            $_SESSION['flash_success'] = 'Adjusted ' . $n . ' price'
+                . ($n === 1 ? '' : 's') . ' by ' . ($pct > 0 ? '+' : '') . $shown . '%.';
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not adjust prices: ' . $e->getMessage();
+        }
+    }
+
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Rename / edit the table's metadata. Band code, name, notes. Used when
 // a tenant realises the band they typed at create time (e.g. "FW35ML
 // String") wasn't quite right and needs tweaking — without this, they'd
@@ -611,6 +665,11 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 unset($_SESSION['flash_success']);
 $flashErrsDetail = $_SESSION['flash_errors_detail'] ?? [];
 unset($_SESSION['flash_errors_detail']);
+// Error flashes set by the redirecting POST handlers (copy_from,
+// rename_axis, bulk_axis_edit, update_meta, bump_prices) — surface via
+// $error so the render below shows them.
+$error = $_SESSION['flash_error'] ?? null;
+unset($_SESSION['flash_error']);
 $justSaved = !empty($_GET['saved']);
 
 // ---------------------------------------------------------------------------
@@ -1486,6 +1545,30 @@ $activeNav = 'products';
                     "widths": <?= json_encode($DEFAULT_WIDTHS) ?>,
                     "drops":  <?= json_encode($DEFAULT_DROPS) ?>
                 }</script>
+            <?php endif; ?>
+
+            <?php if (!$isEmpty): ?>
+                <!-- Per-table % adjust. Operates on the SAVED cells, so we
+                     warn to save any unsaved edits first. -->
+                <form method="post"
+                      action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
+                      style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0 0 0.875rem;padding:0.625rem 0.75rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px"
+                      onsubmit="return confirm('Adjust every saved price in this table by the entered %? Save any unsaved cell edits first.');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="bump_prices">
+                    <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                    <label for="bump_percent" style="font-size:0.875rem;font-weight:600;color:var(--text-secondary)">
+                        Adjust all prices by
+                    </label>
+                    <input id="bump_percent" name="bump_percent" type="number" step="0.01" required
+                           placeholder="e.g. 5"
+                           style="width:6rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                    <span style="color:var(--text-faint)">%</span>
+                    <button type="submit" class="btn btn-secondary btn-sm">Apply</button>
+                    <span style="font-size:0.8125rem;color:var(--text-faint)">
+                        Multiplies every cell (use a negative number to reduce). Rounded to 2 dp.
+                    </span>
+                </form>
             <?php endif; ?>
 
             <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
