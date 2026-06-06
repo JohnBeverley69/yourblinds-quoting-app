@@ -596,9 +596,17 @@ $activeNav = 'products';
         </section>
 
         <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">Add <?= e($labelL) ?> (one at a time)</h2>
-            </div>
+            <details>
+                <summary style="cursor:pointer;font-weight:600;font-size:1rem;color:var(--text-primary);padding:0.25rem 0">
+                    Add one at a time
+                    <span style="font-weight:400;color:var(--text-faint);font-size:0.875rem">
+                        &mdash; for setting supplier / colour / code on a single <?= e($labelL) ?>
+                    </span>
+                </summary>
+                <p style="margin:0.5rem 0 0.875rem;font-size:0.875rem;color:var(--text-faint)">
+                    <strong>Bulk add</strong> above is quicker for most cases. Use this only when you
+                    need to set a supplier, colour, or code on an individual <?= e($labelL) ?>.
+                </p>
             <form method="post" action="/admin/products/options.php?product_id=<?= (int) $productId ?>"
                   class="form" novalidate>
                 <?= csrf_field() ?>
@@ -635,7 +643,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label for="band_code">Band <span class="required">*</span></label>
                         <input id="band_code" name="band_code" type="text"
-                               required maxlength="20" autofocus
+                               required maxlength="20"
                                list="known-bands"
                                value="<?= e((string) $f['band_code']) ?>" placeholder="A">
                     </div>
@@ -673,6 +681,7 @@ $activeNav = 'products';
                     <button type="submit" class="btn btn-primary">Add <?= e($labelL) ?></button>
                 </div>
             </form>
+            </details>
         </section>
 
         <section class="section">
