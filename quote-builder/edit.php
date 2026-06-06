@@ -1027,7 +1027,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 -->
                 <div class="form-row cols-2">
                     <div class="form-group">
-                        <label for="item-band">Band</label>
+                        <label for="item-band"><span id="item-band-label">Band</span></label>
                         <select id="item-band" disabled>
                             <option value="">All bands</option>
                         </select>
@@ -1697,6 +1697,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
     var bandSel       = document.getElementById('item-band');
+    var bandLabelEl   = document.getElementById('item-band-label');
     var fabricLabelEl = document.getElementById('item-fabric-label');
     var fabricSearch  = document.getElementById('item-fabric-search');
     var fabricId      = document.getElementById('item-fabric');
@@ -1735,6 +1736,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (!productSel.value) {
             setIdle(systemSel, 'Choose product first');
             if (fabricLabelEl) fabricLabelEl.textContent = 'Fabric';
+            if (bandLabelEl)   bandLabelEl.textContent = 'Band';
             fabricSearch.disabled = true;
             fabricSearch.placeholder = 'Choose product first';
             extrasWrap.style.display = 'none';
@@ -1782,6 +1784,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // "Fabric". Drives the field label + the search placeholder.
             var optLabel = (productData.product && productData.product.option_label) || 'Fabric';
             if (fabricLabelEl) fabricLabelEl.textContent = optLabel;
+            // Per-product label for the band step (e.g. "Tape / String").
+            var bandLabel = (productData.product && productData.product.band_label) || 'Band';
+            if (bandLabelEl) bandLabelEl.textContent = bandLabel;
 
             // Fabric typeahead — enable input. Picking happens via the
             // floating results panel populated from /api/fabrics-search.

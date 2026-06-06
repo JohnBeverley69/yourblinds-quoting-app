@@ -49,6 +49,30 @@ if (!$product) {
     exit;
 }
 
+// band_label is an optional column (migrate_band_label.php) — the
+// per-product wording for the "band" step in the quote builder (e.g.
+// "Tape / String"). Detect + load separately so the column cascade above
+// stays manageable.
+$hasBandLabel = false;
+try {
+    $hasBandLabel = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'band_label'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$bandLabelValue = '';
+if ($hasBandLabel) {
+    try {
+        $blStmt = db()->prepare('SELECT band_label FROM products WHERE id = ? AND client_id = ?');
+        $blStmt->execute([$id, $clientId]);
+        $blVal = $blStmt->fetchColumn();
+        $bandLabelValue = ($blVal === null || $blVal === false) ? '' : (string) $blVal;
+    } catch (Throwable $e) { /* keep '' */ }
+}
+
 // Markup / discount are now per (product, system). A product with
 // systems carries one row per system; one without systems carries a
 // single row keyed by system_id IS NULL.
@@ -254,6 +278,8 @@ $f = [
     // axis is called in this product's world. "Fabric" for rollers,
     // "Colour" for metal venetians, "Finish" for wood, etc.
     'option_label'      => (string) ($product['option_label'] ?? 'Fabric'),
+    // Per-product label for the band step ('' = "Band"). Optional column.
+    'band_label'        => $bandLabelValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -284,6 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['name']              = trim((string) ($_POST['name']         ?? ''));
     $f['active']            = !empty($_POST['active']) ? 1 : 0;
     $f['option_label']      = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
+    $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -361,6 +388,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // chain backward-compatible.
             $cols = ['name = ?', 'active = ?', 'option_label = ?'];
             $vals = [$f['name'], $f['active'], $f['option_label']];
+            if ($hasBandLabel) {
+                $cols[] = 'band_label = ?';
+                $vals[] = $f['band_label'] !== '' ? $f['band_label'] : null;
+            }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
                 $vals[] = $f['show_colour_field'];
@@ -783,6 +814,24 @@ $activeNav = 'products';
                         </small>
                     </div>
                 </div>
+
+                <?php if ($hasBandLabel): ?>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="band_label">Band label</label>
+                            <input id="band_label" name="band_label" type="text"
+                                   maxlength="60"
+                                   value="<?= e((string) $f['band_label']) ?>"
+                                   placeholder="Band">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                                What the <strong>band</strong> step is called in the quote
+                                builder &mdash; the price-table tier picked after System.
+                                Leave blank for the default <em>Band</em>. For a wood
+                                venetian, e.g. <em>Tape / String</em>.
+                            </small>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php if ($hasShowColField): ?>
                     <!-- Toggle whether the inline fabric forms render
@@ -1825,8 +1874,9 @@ $activeNav = 'products';
                           || systems[0];
                 pvDefaultSys = pvDef ? String(pvDef.id) : '';
             }
+            var bandLbl = (productData.product && productData.product.band_label) || 'Band';
             html += '<div class="pv-row">'
-                  + '<label for="pv-band">Band</label>'
+                  + '<label for="pv-band">' + esc(bandLbl) + '</label>'
                   + '<select id="pv-band">'
                   +   pvBandOptionsHtml(pvBandsForSystem(pvDefaultSys))
                   + '</select></div>';

@@ -43,22 +43,26 @@ $pdo = db();
 //    for metal, etc.) so the builder + preview can label the picker
 //    correctly instead of always saying "Fabric". Try-fallback in case
 //    the column is absent on an older schema.
-try {
-    $st = $pdo->prepare(
-        'SELECT id, name, option_label FROM products
-          WHERE id = ? AND client_id = ? AND active = 1
-          LIMIT 1'
-    );
-    $st->execute([$productId, $clientId]);
-    $product = $st->fetch();
-} catch (Throwable $e) {
-    $st = $pdo->prepare(
-        'SELECT id, name FROM products
-          WHERE id = ? AND client_id = ? AND active = 1
-          LIMIT 1'
-    );
-    $st->execute([$productId, $clientId]);
-    $product = $st->fetch();
+// option_label + band_label are optional columns; cascade down so the
+// endpoint works on schemas where either migration hasn't run.
+$product = false;
+foreach ([
+    'id, name, option_label, band_label',
+    'id, name, option_label',
+    'id, name',
+] as $cols) {
+    try {
+        $st = $pdo->prepare(
+            "SELECT $cols FROM products
+              WHERE id = ? AND client_id = ? AND active = 1
+              LIMIT 1"
+        );
+        $st->execute([$productId, $clientId]);
+        $product = $st->fetch();
+        break;
+    } catch (Throwable $e) {
+        $product = false;
+    }
 }
 if (!$product) {
     http_response_code(404);
@@ -324,6 +328,8 @@ echo json_encode([
         'name'         => (string) $product['name'],
         // Empty string when unset — the front-ends fall back to "Fabric".
         'option_label' => (string) ($product['option_label'] ?? ''),
+        // Per-product label for the band step; '' = front-ends use "Band".
+        'band_label'   => (string) ($product['band_label'] ?? ''),
     ],
     'systems'       => $systems,
     'bands'         => $bands,
