@@ -125,6 +125,7 @@ $navSections = [
         'items' => [
             'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
             'calendar'      => ['/calendar/index.php',         'Calendar',      true],
+            'instaprice'    => ['/instaprice/index.php',       'InstaPrice',    true],
             'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
             'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
