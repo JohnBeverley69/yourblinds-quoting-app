@@ -220,8 +220,10 @@ $activeNav = 'instaprice';
     var productData = null;
     var previewTimer = null, fabricSearchTimer = null;
     var currentFabricBand = '';
-    var lastBase = null, lastExtras = 0, ratesPrefilled = false;
-    var previewSeq = 0;   // guards against out-of-order preview responses
+    var lastBase = null, lastExtras = 0;
+    var ratesDirty = true;            // reset disc/markup to the system's defaults on next price
+    var curDisc = null, curMarkup = null;   // remember overrides across panel rebuilds
+    var previewSeq = 0;               // guards against out-of-order preview responses
 
     function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -237,7 +239,7 @@ $activeNav = 'instaprice';
     async function loadProductData() {
         productData = null;
         clearFabric(); closeFabricResults(); resetBand();
-        ratesPrefilled = false;
+        ratesDirty = true; curDisc = null; curMarkup = null;
         extrasBox.innerHTML = '';
         if (!productSel.value) {
             setIdle(systemSel, 'Choose product first');
@@ -545,9 +547,18 @@ $activeNav = 'instaprice';
             if (data.error) { setPriceIdle(data.error, true); return; }
             lastBase   = Number(data.base_price);
             lastExtras = Number(data.extras_total || 0);
-            if (!ratesPrefilled) {
-                ratesPrefilled = true;
-                renderPricePanel(Number(data.discount_percent || 0), Number(data.markup_percent || 0));
+            var engineDisc   = Number(data.discount_percent || 0);
+            var engineMarkup = Number(data.markup_percent || 0);
+            var panelExists  = !!document.getElementById('ip-disc');
+            if (ratesDirty) {
+                // First price for this product/system → use its default rates.
+                ratesDirty = false;
+                renderPricePanel(engineDisc, engineMarkup);
+            } else if (!panelExists) {
+                // A previous error tore the panel down — rebuild it, keeping any
+                // discount/markup the user had overridden.
+                renderPricePanel(curDisc != null ? curDisc : engineDisc,
+                                 curMarkup != null ? curMarkup : engineMarkup);
             } else {
                 recompute();
             }
@@ -570,8 +581,13 @@ $activeNav = 'instaprice';
           +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row ip-sell"><span class="lbl">Sell price</span><span class="val" id="ip-sell">—</span></div>'
           + '<div class="ip-total" id="ip-total"></div>';
-        document.getElementById('ip-disc').addEventListener('input', recompute);
-        document.getElementById('ip-markup').addEventListener('input', recompute);
+        curDisc = discDefault; curMarkup = markupDefault;
+        document.getElementById('ip-disc').addEventListener('input', function () {
+            var v = parseFloat(this.value); curDisc = isNaN(v) ? 0 : v; recompute();
+        });
+        document.getElementById('ip-markup').addEventListener('input', function () {
+            var v = parseFloat(this.value); curMarkup = isNaN(v) ? 0 : v; recompute();
+        });
         recompute();
     }
 
@@ -600,7 +616,7 @@ $activeNav = 'instaprice';
     // ----- Events -------------------------------------------------------
     productSel.addEventListener('change', loadProductData);
     systemSel.addEventListener('change', function () {
-        ratesPrefilled = false;             // rates are per system
+        ratesDirty = true; curDisc = null; curMarkup = null;   // rates are per system
         populateBands(bandsForCurrentSystem());
         renderExtras();
         if (fabricId.value) { clearFabric(); closeFabricResults(); }
