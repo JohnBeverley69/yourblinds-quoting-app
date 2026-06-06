@@ -2312,7 +2312,21 @@ $activeNav = 'products';
             anyVisible = true;
             html += '<div class="pv-extras">' + renderTree(extra, 0) + '</div>';
         });
-        wrap.innerHTML = anyVisible ? html : '<div class="preview-empty">No options visible for the current selection</div>';
+        if (anyVisible) {
+            wrap.innerHTML = html;
+        } else {
+            // Distinguish "you haven't picked a fabric yet" (the common
+            // case — options are band-scoped and only resolve once a
+            // fabric/band is chosen) from a genuine no-match, so the
+            // empty state guides instead of alarming.
+            var hasBandScoped = extras.some(function (e) {
+                return (e.choices || []).some(function (c) { return (c.bands || []).length > 0; });
+            });
+            var optLbl = ((productData.product && productData.product.option_label) || 'fabric').toLowerCase();
+            wrap.innerHTML = (!currentFabricBand && hasBandScoped)
+                ? '<div class="preview-empty">Pick a ' + esc(optLbl) + ' above to see its options.</div>'
+                : '<div class="preview-empty">No options visible for the current selection</div>';
+        }
 
         // Re-render when any extra's selection changes (so conditional
         // children appear/disappear in real time).

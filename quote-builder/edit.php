@@ -2222,8 +2222,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             html += '<div class="extra-cell">' + renderTreeInto(extra, 0) + '</div>';
         });
 
-        extrasBox.innerHTML  = html;
-        extrasWrap.style.display = anyVisible ? '' : 'none';
+        if (anyVisible) {
+            extrasBox.innerHTML = html;
+            extrasWrap.style.display = '';
+        } else {
+            // Options are band-scoped, so they only appear once a fabric
+            // is picked. Rather than silently hiding the whole section
+            // (which reads as "this product has no options"), show a
+            // short hint when that's the reason.
+            var hasBandScoped = productData.extras.some(function (e) {
+                return (e.choices || []).some(function (c) { return (c.bands || []).length > 0; });
+            });
+            var optLbl = ((productData.product && productData.product.option_label) || 'fabric').toLowerCase();
+            if (!currentFabricBand && hasBandScoped) {
+                extrasBox.innerHTML = '<div class="item-extras">Pick a ' + escapeHtml(optLbl)
+                                    + ' above to see its options.</div>';
+                extrasWrap.style.display = '';
+            } else {
+                extrasBox.innerHTML = '';
+                extrasWrap.style.display = 'none';
+            }
+        }
 
         // Re-bind change listeners on the choice pickers so conditional
         // extras can re-render when their parent's value changes. Both
