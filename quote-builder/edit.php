@@ -1844,18 +1844,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             fabricResults.hidden = false;
             return;
         }
+        // When a specific band is already chosen above, the band is a
+        // given — drop the redundant "Band X" pill (and the "Band X —"
+        // prefix in the picked value) and just show the colour. Under
+        // "All bands" keep the pill so the tier stays visible.
+        var bandActive = !!(bandSel && bandSel.value);
         var html = '';
         items.forEach(function (f) {
             var meta = [];
             if (f.supplier) meta.push(escapeHtml(f.supplier));
             if (f.code)     meta.push('Code ' + escapeHtml(f.code));
+            // data-label is what lands in the input on pick.
+            var pickLabel = bandActive
+                ? (f.name + (f.colour ? ' / ' + f.colour : ''))
+                : f.label;
             // data-band carries the band code so the click handler
             // can stash it for downstream band-scoped choice filtering
             // (e.g. tape colour availability per fabric tier).
-            html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(f.label) + '"'
+            html += '<div class="frow" data-id="' + f.id + '" data-label="' + escapeAttr(pickLabel) + '"'
                   +    ' data-band="' + escapeAttr(f.band || '') + '">'
                   +    '<div class="fname">'
-                  +      '<span class="fband">Band ' + escapeHtml(f.band) + '</span>'
+                  +      (bandActive ? '' : '<span class="fband">Band ' + escapeHtml(f.band) + '</span>')
                   +      escapeHtml(f.name) + (f.colour ? ' / ' + escapeHtml(f.colour) : '')
                   +    '</div>'
                   + (meta.length ? '<div class="fmeta">' + meta.join(' · ') + '</div>' : '')

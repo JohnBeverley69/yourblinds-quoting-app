@@ -1978,8 +1978,14 @@ $activeNav = 'products';
         // label}. NOTE the field names — earlier JS read band_code /
         // supplier_name which silently came back undefined, which is
         // why labels rendered as "Band ?" and the band was missing.
+        //
+        // When a specific band is already chosen above, drop the "Band X"
+        // prefix — it's a given at that point, so the row just shows the
+        // colour. Under "All bands" keep it so the tier is visible.
+        var bandSel = document.getElementById('pv-band');
+        var bandActive = !!(bandSel && bandSel.value);
         var bits = [];
-        if (f.band)     bits.push('Band ' + f.band);
+        if (f.band && !bandActive) bits.push('Band ' + f.band);
         if (f.supplier) bits.push(f.supplier);
         if (f.name)     bits.push(f.name);
         if (f.colour)   bits.push(f.colour);
