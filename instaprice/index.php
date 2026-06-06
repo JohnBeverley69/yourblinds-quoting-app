@@ -436,16 +436,28 @@ $activeNav = 'instaprice';
             } else {
                 var pv = preset[extra.id];
                 var hasDef = visible.some(function (c) { return c.is_default; });
-                out += '<select>';
-                if (!hasDef) out += '<option value=""' + (pv === '' ? ' selected' : '') + '>— Select —</option>';
+                // Input-only option: single carrier choice + measurement
+                // input (e.g. "Fit height") → hide the pointless dropdown.
+                var hideSelect = !!extra.length_input_label && visible.length === 1;
+                out += '<select' + (hideSelect ? ' style="display:none" aria-hidden="true"' : '') + '>';
+                if (!hasDef && !hideSelect) out += '<option value=""' + (pv === '' ? ' selected' : '') + '>— Select —</option>';
                 visible.forEach(function (c) {
                     var sel;
-                    if (pv !== undefined && pv !== '') sel = String(c.id) === pv;
+                    if (hideSelect) sel = true;
+                    else if (pv !== undefined && pv !== '') sel = String(c.id) === pv;
                     else if (pv === '') sel = false;
                     else sel = c.is_default;
                     out += '<option value="' + c.id + '"' + (sel ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
                 });
                 out += '</select>';
+            }
+            // Measurement / length input (e.g. "Fit height mm"). Spec only —
+            // doesn't affect the price, so it isn't collected for the calc.
+            if (extra.length_input_label) {
+                out += '<label style="margin-top:0.375rem">' + escapeHtml(extra.length_input_label) + '</label>'
+                     + '<input type="number" min="0" step="1" '
+                     + 'style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);'
+                     + 'border-radius:8px;background:var(--bg-input);color:var(--text-body);font:inherit">';
             }
             out += '</div>';
             return out;

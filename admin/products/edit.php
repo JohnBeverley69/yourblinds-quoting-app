@@ -2313,13 +2313,17 @@ $activeNav = 'products';
             } else {
                 var presetVal = preset[extra.id];
                 var hasDef = visible.some(function (c) { return c.is_default; });
-                out += '<select>';
-                if (!hasDef) {
+                // Input-only option: single carrier choice + a measurement
+                // input (e.g. "Fit height") → hide the pointless dropdown.
+                var hideSelect = !!extra.length_input_label && visible.length === 1;
+                out += '<select' + (hideSelect ? ' style="display:none" aria-hidden="true"' : '') + '>';
+                if (!hasDef && !hideSelect) {
                     out += '<option value=""' + (presetVal === '' ? ' selected' : '') + '>— Select —</option>';
                 }
                 visible.forEach(function (c) {
                     var isSel;
-                    if (presetVal !== undefined && presetVal !== '') isSel = String(c.id) === presetVal;
+                    if (hideSelect)                                  isSel = true;
+                    else if (presetVal !== undefined && presetVal !== '') isSel = String(c.id) === presetVal;
                     else if (presetVal === '')                       isSel = false;
                     else                                             isSel = c.is_default;
                     out += '<option value="' + c.id + '"' + (isSel ? ' selected' : '') + '>' + esc(c.label) + '</option>';

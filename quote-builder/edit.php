@@ -2154,28 +2154,36 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 var presetVal = preset[extra.id];
                 var hasDefault = visibleChoices.some(function (c) { return c.is_default; });
 
+                // Input-only option: a single (carrier) choice paired with a
+                // measurement input (e.g. "Fit height" in mm) needs no visible
+                // dropdown — hide the auto-selected select, show just the input.
+                var hideSelect = !!extra.length_input_label && visibleChoices.length === 1;
+
                 out += '<select name="extras[' + idx + '][choice_id]"'
-                     + (extra.is_required ? ' required' : '') + '>';
+                     + (extra.is_required ? ' required' : '')
+                     + (hideSelect ? ' style="display:none" aria-hidden="true"' : '') + '>';
                 // Placeholder "Select" option — only useful when there's no
                 // default to fall back to. If a default exists, it IS the
                 // natural pick and an extra escape-hatch just adds noise
                 // (and lets them ship a Bottom Weight with no Colour, which
                 // is silly).
-                if (!hasDefault) {
+                if (!hasDefault && !hideSelect) {
                     out += '<option value=""'
                          + (presetVal === '' ? ' selected' : '')
                          + '>— Select —</option>';
                 }
                 visibleChoices.forEach(function (c) {
                     var isSelected;
-                    if (presetVal !== undefined && presetVal !== '') {
+                    if (hideSelect) {
+                        isSelected = true;   // only choice — force-select so it's applied
+                    } else if (presetVal !== undefined && presetVal !== '') {
                         isSelected = String(c.id) === presetVal;
                     } else if (presetVal === '') {
                         isSelected = false;
                     } else {
                         isSelected = c.is_default;
                     }
-                    if (isSelected && c.image_url) selectedThumb = c.image_url;
+                    if (isSelected && !hideSelect && c.image_url) selectedThumb = c.image_url;
                     out += '<option value="' + c.id + '"'
                          + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
                 });
