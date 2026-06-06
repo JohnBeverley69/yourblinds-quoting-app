@@ -221,6 +221,7 @@ $activeNav = 'instaprice';
     var previewTimer = null, fabricSearchTimer = null;
     var currentFabricBand = '';
     var lastBase = null, lastExtras = 0, ratesPrefilled = false;
+    var previewSeq = 0;   // guards against out-of-order preview responses
 
     function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -536,9 +537,11 @@ $activeNav = 'instaprice';
             params.append('extras[' + i + '][extra_id]', ex.extra_id);
             params.append('extras[' + i + '][choice_id]', ex.choice_id);
         });
+        var myseq = ++previewSeq;   // only the latest request may update the panel
         try {
             var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
             var data = await r.json();
+            if (myseq !== previewSeq) return;   // a newer size change superseded this one
             if (data.error) { setPriceIdle(data.error, true); return; }
             lastBase   = Number(data.base_price);
             lastExtras = Number(data.extras_total || 0);
@@ -550,6 +553,7 @@ $activeNav = 'instaprice';
             }
             if (toQuoteBtn) toQuoteBtn.disabled = false;
         } catch (e) {
+            if (myseq !== previewSeq) return;
             setPriceIdle('Could not get a price — try again.', true);
         }
     }
