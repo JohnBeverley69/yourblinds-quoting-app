@@ -565,6 +565,17 @@ $activeNav = 'products';
                                     </td>
                                     <td class="row-actions">
                                         <a href="/admin/products/extra-edit.php?id=<?= (int) $x['id'] ?>">Edit</a>
+                                        <form method="post" action="/admin/products/extra-duplicate.php"
+                                              style="display:inline;margin:0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="id" value="<?= (int) $x['id'] ?>">
+                                            <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+                                            <button type="submit"
+                                                    title="Clone this option with all its choices, pricing and gating"
+                                                    style="font-size:0.875rem;color:var(--link);background:transparent;border:0;cursor:pointer;padding:0;margin-left:0.5rem">
+                                                Duplicate
+                                            </button>
+                                        </form>
                                         <form method="post" action="/admin/products/extra-delete.php"
                                               data-confirm="Delete option <?= e((string) $x['name']) ?>? Removes its <?= (int) $x['choice_count'] ?> choices too.">
                                             <?= csrf_field() ?>
