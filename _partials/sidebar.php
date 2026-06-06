@@ -81,10 +81,18 @@ $canSeeCustomers    = $isStaff;
 $canSeeAccountsLink = $isStaff;   // separately AND-ed with the feature flag below
 
 // Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
-// missing, hide the entries that would 500 on click. The check is a single
-// metadata lookup — cheap enough to do per page render, and self-heals
-// the moment Phase 3 lands the table.
-$hasQuotes = $hasQuotes ?? (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
+// missing, hide the entries that would 500 on click.
+//
+// Cache the result in the session so we don't run a SHOW TABLES metadata
+// query on EVERY authenticated page — meaningful when the DB is remote
+// (per-query latency). Table existence is effectively static for the life
+// of a session; a re-login refreshes it if the schema ever changes.
+if (!isset($hasQuotes)) {
+    if (!isset($_SESSION['_has_quotes'])) {
+        $_SESSION['_has_quotes'] = (bool) db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn();
+    }
+    $hasQuotes = $_SESSION['_has_quotes'];
+}
 
 // Paid Accounts add-on flag (per tenant). Defensive: the column might
 // not exist yet on tenants who haven't run migrate_feature_accounts.php —
