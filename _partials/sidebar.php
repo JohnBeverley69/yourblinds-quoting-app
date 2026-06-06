@@ -125,7 +125,6 @@ $navSections = [
         'items' => [
             'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
             'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-            'instaprice'    => ['/instaprice/index.php',       'InstaPrice',    true],
             'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
             'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
@@ -216,6 +215,17 @@ $navSections = [
                 </a>
             </div>
         <?php endif; ?>
+
+        <!-- InstaPrice CTA — pinned right under New quote, in a distinct
+             coloured box so the "quick price" tool is easy to find.
+             Shown to everyone (it's just a price tool). -->
+        <div class="sidebar-cta"<?= ($hasQuotes && $canCreateQuotes) ? ' style="padding-top:0.375rem"' : '' ?>>
+            <a href="/instaprice/index.php"
+               class="sidebar-cta-btn is-instaprice<?= $activeNav === 'instaprice' ? ' is-active' : '' ?>">
+                <span aria-hidden="true">&#9889;</span>
+                InstaPrice
+            </a>
+        </div>
 
         <nav class="app-sidebar-nav">
 <?php foreach ($navSections as $section):

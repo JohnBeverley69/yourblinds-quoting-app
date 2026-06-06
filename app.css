@@ -299,6 +299,19 @@ a { color: var(--link); }
     color: var(--brand-hover);
 }
 .sidebar-cta-btn:active { transform: translateY(1px); }
+/* InstaPrice CTA — distinct colour so it stands out from the white
+   "New quote" button directly above it. */
+.sidebar-cta-btn.is-instaprice {
+    background: #10b981;   /* emerald */
+    color: #fff;
+}
+.sidebar-cta-btn.is-instaprice:hover {
+    background: #059669;
+    color: #fff;
+}
+.sidebar-cta-btn.is-instaprice.is-active {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.55), 0 1px 2px rgba(0,0,0,0.15);
+}
 .sidebar-cta-btn > span[aria-hidden="true"] {
     font-size: 1.125rem;
     line-height: 1;
