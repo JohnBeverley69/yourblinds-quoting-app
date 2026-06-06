@@ -177,22 +177,24 @@ $activeNav = 'instaprice';
                     <button type="button" id="ip-reset" class="btn btn-secondary">Reset</button>
                 </div>
 
-                <?php if ($canCreateQuotes): ?>
-                    <!-- Submits the current spec to the convert handler, which
-                         creates a draft quote with this line and lands you in
-                         the quote builder to add the customer. -->
-                    <form id="ip-quote-form" method="post" action="/instaprice/to-quote.php" style="display:none">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="product_id" id="q-product">
-                        <input type="hidden" name="system_id"  id="q-system">
-                        <input type="hidden" name="option_id"  id="q-option">
-                        <input type="hidden" name="width"      id="q-width">
-                        <input type="hidden" name="drop"       id="q-drop">
-                        <input type="hidden" name="quantity"   id="q-qty">
-                        <input type="hidden" name="extras_json" id="q-extras">
-                    </form>
-                <?php endif; ?>
             </form>
+
+            <?php if ($canCreateQuotes): ?>
+                <!-- Convert form — kept OUTSIDE #ip-form. Nested forms are
+                     invalid HTML; the browser drops the inner one, so
+                     .submit() silently did nothing. The button's JS fills
+                     these hidden fields and submits this form. -->
+                <form id="ip-quote-form" method="post" action="/instaprice/to-quote.php" style="display:none">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="product_id"  id="q-product">
+                    <input type="hidden" name="system_id"   id="q-system">
+                    <input type="hidden" name="option_id"   id="q-option">
+                    <input type="hidden" name="width"       id="q-width">
+                    <input type="hidden" name="drop"        id="q-drop">
+                    <input type="hidden" name="quantity"    id="q-qty">
+                    <input type="hidden" name="extras_json" id="q-extras">
+                </form>
+            <?php endif; ?>
         </section>
     </main>
 </div>
