@@ -882,6 +882,61 @@
         }
     }
 
+    // ============================================================
+    // "Set all" — header controls on the price columns (Flat £ / % /
+    // £ per metre). Type a value, apply it to every choice at once
+    // (set_price_all). One control per price column, keyed by data-field.
+    // ============================================================
+    rootEl.querySelectorAll('.price-set-all').forEach(function (wrap) {
+        var field = wrap.dataset.field;
+        var input = wrap.querySelector('.setall-price-input');
+        var apply = wrap.querySelector('.setall-price-apply');
+        if (!field || !input || !apply) return;
+        apply.addEventListener('click', function () {
+            var raw = (input.value || '').trim();
+            if (raw === '' || isNaN(parseFloat(raw))) {
+                input.focus();
+                return;
+            }
+            var num = parseFloat(raw);
+            var rowCount = body.querySelectorAll('tr[data-id]').length;
+            if (rowCount === 0) { wrap.open = false; return; }
+
+            var colName = field === 'price_percent' ? '%'
+                        : (field === 'price_per_metre' ? '£/m' : 'flat £');
+            if (!confirm('Set ' + colName + ' to ' + num.toFixed(2) + ' for all '
+                       + rowCount + ' choice' + (rowCount === 1 ? '' : 's') + '?')) {
+                return;
+            }
+
+            wrap.open = false;
+            setIndicatorState('saving');
+
+            var fd = new FormData();
+            fd.append('action',   'set_price_all');
+            fd.append('extra_id', String(extraId));
+            fd.append('field',    field);
+            fd.append('value',    String(num));
+
+            fetch(endpoint, {
+                method: 'POST', body: fd,
+                headers: { 'X-CSRF-Token': csrfToken },
+                credentials: 'same-origin'
+            }).then(function (r) {
+                return r.json().catch(function () {
+                    throw new Error('Server returned a non-JSON response.');
+                });
+            }).then(function (data) {
+                if (!data.ok) throw new Error(data.error || 'Save failed');
+                setIndicatorState('saved');
+                // Reload so every row's cell shows the new value.
+                window.location.reload();
+            }).catch(function (err) {
+                setIndicatorState('error', err.message || 'Save failed');
+            });
+        });
+    });
+
     }  // end initGrid
 
     document.querySelectorAll('.choices-grid-wrap').forEach(initGrid);

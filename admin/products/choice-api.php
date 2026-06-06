@@ -34,6 +34,11 @@ declare(strict_types=1);
  *                ('' / '0' = all systems). Powers the "Set all" control
  *                in the grid's "Available on" header.
  *
+ *   - set_price_all  set one price field (price_delta / price_percent /
+ *                price_per_metre) on EVERY choice on the extra. Required:
+ *                extra_id, field, value. Powers the "Set all" controls in
+ *                the grid's price column headers.
+ *
  * CSRF: takes the token via X-CSRF-Token header (sent by the JS) or
  * a csrf_token form field (fallback for non-XHR clients). Same token
  * format as csrf_field() so the rest of the admin keeps working.
@@ -568,6 +573,37 @@ try {
                 'ok'        => true,
                 'system_id' => $systemId,
                 'affected'  => (int) $cntSt->fetchColumn(),
+            ]);
+            break;
+
+        // -----------------------------------------------------------------
+        // set_price_all — set one price field (flat £ / % / £ per metre)
+        // on EVERY choice of the extra. Required: extra_id, field, value.
+        // Powers the "Set all" controls in the price column headers.
+        // -----------------------------------------------------------------
+        case 'set_price_all':
+            $field = (string) ($_POST['field'] ?? '');
+            $allowed = ['price_delta', 'price_percent', 'price_per_metre'];
+            if (!in_array($field, $allowed, true)) {
+                throw new RuntimeException('Invalid price field.');
+            }
+            $value = $_POST['value'] ?? '';
+            if (!is_numeric($value)) {
+                throw new RuntimeException('Value must be a number.');
+            }
+            // $field is whitelisted above, so safe to interpolate.
+            $pdo->prepare(
+                "UPDATE product_extra_choices SET $field = ? WHERE product_extra_id = ?"
+            )->execute([(float) $value, $extraId]);
+            $cntSt = $pdo->prepare(
+                'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
+            );
+            $cntSt->execute([$extraId]);
+            echo json_encode([
+                'ok'       => true,
+                'field'    => $field,
+                'value'    => (float) $value,
+                'affected' => (int) $cntSt->fetchColumn(),
             ]);
             break;
 

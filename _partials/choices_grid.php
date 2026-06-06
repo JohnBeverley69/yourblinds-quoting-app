@@ -104,9 +104,36 @@ $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null
                             <?php endif; ?>
                         </th>
                     <?php endif; ?>
-                    <th class="col-price">Flat £</th>
-                    <th class="col-price">%</th>
-                    <th class="col-price">£/m</th>
+                    <?php
+                        // "Set all" for the three price columns — type a
+                        // value and apply it to every choice at once
+                        // (wired in choices_grid_js.php, set_price_all).
+                        $priceCols = [
+                            'price_delta'     => 'Flat £',
+                            'price_percent'   => '%',
+                            'price_per_metre' => '£/m',
+                        ];
+                        foreach ($priceCols as $pcField => $pcLabel):
+                    ?>
+                        <th class="col-price">
+                            <?= e($pcLabel) ?>
+                            <details class="multi-select price-set-all" data-field="<?= e($pcField) ?>"
+                                     style="display:inline-block;margin-left:0.25rem;font-weight:400;position:relative">
+                                <summary style="font-size:0.7rem;color:#2563eb">Set all</summary>
+                                <div class="multi-opts" style="min-width:150px;left:auto;right:0">
+                                    <input type="number" step="0.01" class="setall-price-input"
+                                           placeholder="0.00"
+                                           style="width:100%;padding:0.3rem 0.45rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                                    <div style="margin-top:0.5rem;text-align:right">
+                                        <button type="button" class="btn btn-primary setall-price-apply"
+                                                style="font-size:0.75rem;padding:0.25rem 0.625rem">
+                                            Apply to all
+                                        </button>
+                                    </div>
+                                </div>
+                            </details>
+                        </th>
+                    <?php endforeach; ?>
                     <th class="col-toggle" title="Default = pre-selected for the customer">Default</th>
                     <th class="col-toggle" title="Inactive = hidden from quote builder">Active</th>
                     <th class="col-actions"></th>
