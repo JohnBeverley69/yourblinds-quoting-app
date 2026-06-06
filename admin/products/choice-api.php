@@ -29,6 +29,11 @@ declare(strict_types=1);
  *                bands[] (empty = "all bands" for every choice). Powers
  *                the "Set all" control in the grid's Bands header.
  *
+ *   - set_system_all set the "Available on" system for EVERY choice on
+ *                the extra. Required: extra_id. Optional: system_id
+ *                ('' / '0' = all systems). Powers the "Set all" control
+ *                in the grid's "Available on" header.
+ *
  * CSRF: takes the token via X-CSRF-Token header (sent by the JS) or
  * a csrf_token form field (fallback for non-XHR clients). Same token
  * format as csrf_field() so the rest of the admin keeps working.
@@ -529,6 +534,40 @@ try {
                 'ok'       => true,
                 'bands'    => $clean,
                 'affected' => $affected,
+            ]);
+            break;
+
+        // -----------------------------------------------------------------
+        // set_system_all — set the "Available on" system for EVERY choice
+        // on the extra in one go. Input: extra_id, system_id ('' / '0' =
+        // "all systems" = NULL, else a system that must belong to this
+        // product). Powers the "Set all" control in the grid's
+        // "Available on" header.
+        // -----------------------------------------------------------------
+        case 'set_system_all':
+            $sysRaw   = (string) ($_POST['system_id'] ?? '');
+            $systemId = ($sysRaw === '' || $sysRaw === '0') ? null : (int) $sysRaw;
+            if ($systemId !== null) {
+                $sChk = $pdo->prepare(
+                    'SELECT 1 FROM product_systems
+                      WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1'
+                );
+                $sChk->execute([$systemId, $productId, $clientId]);
+                if (!$sChk->fetchColumn()) {
+                    throw new RuntimeException('That system does not belong to this product.');
+                }
+            }
+            $pdo->prepare(
+                'UPDATE product_extra_choices SET system_id = ? WHERE product_extra_id = ?'
+            )->execute([$systemId, $extraId]);
+            $cntSt = $pdo->prepare(
+                'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
+            );
+            $cntSt->execute([$extraId]);
+            echo json_encode([
+                'ok'        => true,
+                'system_id' => $systemId,
+                'affected'  => (int) $cntSt->fetchColumn(),
             ]);
             break;
 

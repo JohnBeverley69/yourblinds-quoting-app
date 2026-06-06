@@ -828,6 +828,60 @@
         }
     }
 
+    // ============================================================
+    // "Set all" — header control that sets the "Available on" system
+    // for every choice in this grid at once (set_system_all). Single
+    // target (All systems, or one system), unlike the multi-band one.
+    // ============================================================
+    var sysSetAll = rootEl.querySelector('.system-set-all');
+    if (sysSetAll) {
+        var sysSetAllApply = sysSetAll.querySelector('.setall-system-apply');
+        if (sysSetAllApply) {
+            sysSetAllApply.addEventListener('click', function () {
+                var picked = sysSetAll.querySelector('.setall-system-pick:checked');
+                var sysVal = picked ? picked.value : '';
+                var sysLabel = picked
+                    ? (picked.parentNode.textContent || '').trim()
+                    : 'All systems';
+
+                var rowCount = body.querySelectorAll('tr[data-id]').length;
+                if (rowCount === 0) { sysSetAll.open = false; return; }
+
+                if (!confirm('Set "Available on" for all ' + rowCount + ' choice'
+                           + (rowCount === 1 ? '' : 's') + ' to ' + sysLabel
+                           + '? This replaces their current system.')) {
+                    return;
+                }
+
+                sysSetAll.open = false;
+                setIndicatorState('saving');
+
+                var fd = new FormData();
+                fd.append('action',    'set_system_all');
+                fd.append('extra_id',  String(extraId));
+                fd.append('system_id', sysVal);
+
+                fetch(endpoint, {
+                    method: 'POST', body: fd,
+                    headers: { 'X-CSRF-Token': csrfToken },
+                    credentials: 'same-origin'
+                }).then(function (r) {
+                    return r.json().catch(function () {
+                        throw new Error('Server returned a non-JSON response.');
+                    });
+                }).then(function (data) {
+                    if (!data.ok) throw new Error(data.error || 'Save failed');
+                    setIndicatorState('saved');
+                    // Reload so each row's "Available on" widget reflects
+                    // the new system (matches the bands "Set all").
+                    window.location.reload();
+                }).catch(function (err) {
+                    setIndicatorState('error', err.message || 'Save failed');
+                });
+            });
+        }
+    }
+
     }  // end initGrid
 
     document.querySelectorAll('.choices-grid-wrap').forEach(initGrid);

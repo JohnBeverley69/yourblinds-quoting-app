@@ -33,7 +33,42 @@ $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null
                 <tr>
                     <th class="col-drag"></th>
                     <th class="col-label">Label</th>
-                    <th class="col-system">Available on</th>
+                    <th class="col-system">
+                        Available on
+                        <?php if (!empty($systems)): ?>
+                            <!-- "Set all" — sets the system for every choice in
+                                 this grid at once (mirrors the Bands one), so the
+                                 admin doesn't change each row by hand. Wired in
+                                 choices_grid_js.php (set_system_all). -->
+                            <details class="multi-select system-set-all"
+                                     style="display:inline-block;margin-left:0.375rem;font-weight:400;position:relative">
+                                <summary style="font-size:0.75rem;color:#2563eb">Set all</summary>
+                                <div class="multi-opts">
+                                    <label>
+                                        <input type="radio" class="setall-system-pick"
+                                               name="setall-system-<?= (int) $gridExtraId ?>"
+                                               value="" checked>
+                                        <strong>All systems</strong>
+                                    </label>
+                                    <hr>
+                                    <?php foreach ($systems as $s): ?>
+                                        <label>
+                                            <input type="radio" class="setall-system-pick"
+                                                   name="setall-system-<?= (int) $gridExtraId ?>"
+                                                   value="<?= (int) $s['id'] ?>">
+                                            <?= e((string) $s['name']) ?>
+                                        </label>
+                                    <?php endforeach; ?>
+                                    <div style="margin-top:0.5rem;text-align:right">
+                                        <button type="button" class="btn btn-primary setall-system-apply"
+                                                style="font-size:0.75rem;padding:0.25rem 0.625rem">
+                                            Apply to all
+                                        </button>
+                                    </div>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+                    </th>
                     <?php if ($showBandsCol): ?>
                         <th class="col-bands" title="Restrict to specific bands. Empty = applies to every band.">
                             Bands
