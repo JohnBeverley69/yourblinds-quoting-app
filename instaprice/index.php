@@ -307,7 +307,8 @@ $activeNav = 'instaprice';
         try {
             setIdle(systemSel, 'Loading…');
             fabricSearch.disabled = true; fabricSearch.placeholder = 'Loading…';
-            var r = await fetch('/quote-builder/api/product-data.php?product_id=' + encodeURIComponent(productSel.value),
+            var r = await fetch('/quote-builder/api/product-data.php?product_id=' + encodeURIComponent(productSel.value)
+                                + '&_=' + Date.now(),   // cache-buster: defeat any edge page-cache
                                 { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             productData = await r.json();
@@ -376,7 +377,7 @@ $activeNav = 'instaprice';
             var sysQ = systemSel.value ? '&system_id=' + encodeURIComponent(systemSel.value) : '';
             var bandQ = bandSel.value ? '&band=' + encodeURIComponent(bandSel.value) : '';
             var r = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(productSel.value)
-                + '&q=' + encodeURIComponent(query || '') + sysQ + bandQ, { credentials: 'same-origin' });
+                + '&q=' + encodeURIComponent(query || '') + sysQ + bandQ + '&_=' + Date.now(), { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
             renderFabricResults(data.fabrics || []);
@@ -605,6 +606,7 @@ $activeNav = 'instaprice';
         });
         var myseq = ++previewSeq;   // only the latest request may update the panel
         try {
+            params.append('_', Date.now());   // cache-buster
             var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
             var data = await r.json();
             if (myseq !== previewSeq) return;   // a newer size change superseded this one

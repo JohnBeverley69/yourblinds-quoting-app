@@ -2001,7 +2001,8 @@ $activeNav = 'products';
     async function loadData() {
         body.innerHTML = '<div class="preview-empty">Loading…</div>';
         try {
-            var r    = await fetch('/quote-builder/api/product-data.php?product_id=' + PRODUCT_ID,
+            var r    = await fetch('/quote-builder/api/product-data.php?product_id=' + PRODUCT_ID
+                                   + '&_=' + Date.now(),   // cache-buster: defeat any edge page-cache
                                    { credentials: 'same-origin' });
             var data = await r.json();
             if (data.error) throw new Error(data.error);
@@ -2247,7 +2248,8 @@ $activeNav = 'products';
                     + '&q='     + encodeURIComponent(query)
                     + sysQ
                     + bandQ
-                    + '&limit=2000';
+                    + '&limit=2000'
+                    + '&_=' + Date.now();
             var r = await fetch(url, { credentials: 'same-origin' });
             var data = await r.json();
             clearTimeout(loadingTimer);
@@ -2699,6 +2701,7 @@ $activeNav = 'products';
         });
 
         try {
+            params.append('_', Date.now());   // cache-buster
             var r = await fetch('/quote-builder/api/preview.php?' + params,
                                 { credentials: 'same-origin' });
             var data = await r.json();
