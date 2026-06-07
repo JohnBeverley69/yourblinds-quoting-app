@@ -69,8 +69,9 @@ $hasShowColField   = $colExists('show_colour_field');
 $product = null;
 if ($productId > 0) {
     $cols = 'id, name, option_label'
-          . ($hasRequiresOption ? ', requires_option' : '')
-          . ($hasWidthOnly      ? ', width_only'      : '');
+          . ($hasRequiresOption ? ', requires_option'      : '')
+          . ($hasWidthOnly      ? ', width_only'           : '')
+          . ($hasPricePerDrop   ? ', price_per_drop_metre' : '');
     $st = $pdo->prepare(
         "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
     );
@@ -93,6 +94,11 @@ $requiresOption = !isset($product['requires_option'])
 // width_only = priced on width alone (headrail/track). Drives the step-4
 // width-price importer CTA. Absent column ⇒ false.
 $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
+
+// price_per_drop_metre = price table is a width→rate list (× drop). Drives
+// the step-4 rate importer CTA. Absent column ⇒ false.
+$pricePerDrop = isset($product['price_per_drop_metre'])
+    && (int) $product['price_per_drop_metre'] === 1;
 
 // ── State counts (drives both step inference and the "you're done with
 //    step X" indicators in the UI) ─────────────────────────────────────
@@ -1373,11 +1379,17 @@ $activeNav = 'wizard';
                                 This is a no-fabric product, so it needs one price
                                 grid per system. Create them below, then fill in the
                                 width × drop prices.
-                            <?php elseif ($totalTables === 0): ?>
+                            <?php elseif ($totalTables === 0 && empty($missingCombos)): ?>
                                 Your fabrics don't have band codes yet — go back
                                 to step 3 and add at least one band (A, B, C…).
                                 Price tables are keyed by band, so we need that
                                 first.
+                            <?php elseif ($totalTables === 0 && $pricePerDrop): ?>
+                                Import your rate sheet below (quickest), or create the
+                                empty tables and enter the rates by hand.
+                            <?php elseif ($totalTables === 0): ?>
+                                Create the price tables below — one per band × system —
+                                then fill in the prices.
                             <?php else: ?>
                                 <?= $filledTables ?> of <?= $totalTables ?> filled in.
                                 Click <em>Fill in</em> on each to type or paste
@@ -1400,6 +1412,23 @@ $activeNav = 'wizard';
                         </p>
                         <a href="/admin/products/price-import-width.php?product_id=<?= (int) $productId ?>"
                            class="btn btn-primary">Import width prices &rarr;</a>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($pricePerDrop): ?>
+                    <!-- Per-metre-of-drop products: import the rate workbook
+                         (width → rate per system + band) rather than hand-
+                         entering 14 tables. The importer creates the tables. -->
+                    <div class="wiz-card" style="background:#eff6ff;border-color:#bfdbfe">
+                        <h2 style="color:#1e40af">Priced per metre of drop — import the rates</h2>
+                        <p class="lede" style="color:#1e40af">
+                            Upload your rate spreadsheet (a width &rarr; rate grid per band,
+                            with Chains / Chainless sub-tables) and we'll create and fill
+                            every system + band table in one go — no need to create the
+                            empty tables first.
+                        </p>
+                        <a href="/admin/products/price-import-rates.php?product_id=<?= (int) $productId ?>"
+                           class="btn btn-primary">Import rates &rarr;</a>
                     </div>
                 <?php endif; ?>
 
