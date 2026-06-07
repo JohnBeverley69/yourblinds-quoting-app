@@ -48,9 +48,16 @@ if ($widthMm === null) {
     echo json_encode(['error' => 'Could not read width "' . $widthRaw . '".', 'stage' => 'input']);
     exit;
 }
+// A blank drop is allowed through as 0 — width-only products (headrail/
+// track) have no drop, and the engine decides whether a drop is needed.
+// Only a non-blank, unparseable drop is a hard input error here.
 if ($dropMm === null) {
-    echo json_encode(['error' => 'Could not read drop "' . $dropRaw . '".', 'stage' => 'input']);
-    exit;
+    if (trim($dropRaw) === '') {
+        $dropMm = 0;
+    } else {
+        echo json_encode(['error' => 'Could not read drop "' . $dropRaw . '".', 'stage' => 'input']);
+        exit;
+    }
 }
 
 // Each entry has extra_id + either choice_id (single-pick) or

@@ -59,12 +59,18 @@ if ($widthMm === null) {
         'Could not read width "' . $widthRaw . '".'
     );
 }
+// Blank drop → 0 (width-only products have none); engine decides if it's
+// required. A non-blank unparseable drop is still an error.
 if ($dropMm === null) {
-    qb_flash_redirect(
-        '/quote-builder/edit.php?id=' . $quoteId . '&edit_item=' . $itemId . '#add-line',
-        'error',
-        'Could not read drop "' . $dropRaw . '".'
-    );
+    if (trim($dropRaw) === '') {
+        $dropMm = 0;
+    } else {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId . '&edit_item=' . $itemId . '#add-line',
+            'error',
+            'Could not read drop "' . $dropRaw . '".'
+        );
+    }
 }
 
 // Same parsing as add_item.php — handles both single-pick

@@ -224,6 +224,7 @@ $activeNav = 'instaprice';
     var previewTimer = null, fabricSearchTimer = null;
     var currentFabricBand = '';
     var requiresOption = true;   // false for no-fabric products (headrail/track/spares)
+    var widthOnly = false;       // true for width-only products (headrail/track) — no drop
     var lastBase = null, lastExtras = 0;
     var ratesDirty = true;            // reset disc/markup to the system's defaults on next price
     var curDisc = null, curMarkup = null;   // remember overrides across panel rebuilds
@@ -239,10 +240,15 @@ $activeNav = 'instaprice';
     function money(n) { return '£' + Number(n).toFixed(2); }
     function setIdle(el, msg) { el.innerHTML = '<option value="">' + msg + '</option>'; el.disabled = true; }
 
-    // Show / hide the whole Band + Fabric grid for no-fabric products.
+    // Show / hide the Band + Fabric grid (no-fabric) and the Drop input
+    // (width-only).
     function applyFabricVisibility() {
         if (fabricGrid) fabricGrid.style.display = requiresOption ? '' : 'none';
         if (!requiresOption) { clearFabric(); closeFabricResults(); }
+        if (dropIn) {
+            dropIn.style.display = widthOnly ? 'none' : '';
+            if (widthOnly) dropIn.value = '';
+        }
     }
 
     // ----- Product load -------------------------------------------------
@@ -256,7 +262,7 @@ $activeNav = 'instaprice';
             fabricSearch.disabled = true; fabricSearch.placeholder = 'Choose product first';
             if (fabricLabelEl) fabricLabelEl.textContent = 'Fabric';
             if (bandLabelEl) bandLabelEl.textContent = 'Band';
-            requiresOption = true; applyFabricVisibility();
+            requiresOption = true; widthOnly = false; applyFabricVisibility();
             schedulePreview();
             return;
         }
@@ -289,6 +295,7 @@ $activeNav = 'instaprice';
             // system × size alone.
             requiresOption = !productData.product
                           || productData.product.requires_option !== false;
+            widthOnly = !!(productData.product && productData.product.width_only === true);
             applyFabricVisibility();
 
             populateBands(bandsForCurrentSystem());
@@ -537,10 +544,10 @@ $activeNav = 'instaprice';
 
     async function runPreview() {
         var missing = [];
-        if (!productSel.value)                 missing.push('product');
-        if (requiresOption && !fabricId.value) missing.push('fabric');
-        if (!widthIn.value.trim())             missing.push('width');
-        if (!dropIn.value.trim())              missing.push('drop');
+        if (!productSel.value)                  missing.push('product');
+        if (requiresOption && !fabricId.value)  missing.push('fabric');
+        if (!widthIn.value.trim())              missing.push('width');
+        if (!widthOnly && !dropIn.value.trim()) missing.push('drop');
         if (missing.length) { setPriceIdle('Still need: ' + missing.join(', ') + '.', false); return; }
 
         var params = new URLSearchParams({
@@ -670,8 +677,14 @@ $activeNav = 'instaprice';
         var el = document.getElementById('ip-dim-echo');
         if (!el) return;
         var w = parseDim(widthIn.value), d = parseDim(dropIn.value);
-        if (w && d) { el.textContent = 'Using ' + w + ' × ' + d + ' mm'; el.hidden = false; }
-        else        { el.hidden = true; }
+        if (widthOnly) {
+            if (w) { el.textContent = 'Using ' + w + ' mm wide'; el.hidden = false; }
+            else   { el.hidden = true; }
+        } else if (w && d) {
+            el.textContent = 'Using ' + w + ' × ' + d + ' mm'; el.hidden = false;
+        } else {
+            el.hidden = true;
+        }
     }
 
     [widthIn, dropIn].forEach(function (el) {

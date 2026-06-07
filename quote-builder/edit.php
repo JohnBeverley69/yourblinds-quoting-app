@@ -1161,7 +1161,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                value="<?= $editingItem ? (int) $editingItem['width_mm'] : '' ?>"
                                placeholder="e.g. 1500, 150cm, 1.5m, 60in">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="item-drop-group">
                         <label for="item-drop">Drop <span class="required">*</span></label>
                         <input id="item-drop" name="drop" type="text" required
                                autocomplete="off" autocorrect="off" autocapitalize="off"
@@ -1712,8 +1712,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // No-fabric products (headrail/track/spares) hide the Band + Fabric
     // pickers and price on system × size alone. Set per product load.
     var requiresOption = true;
+    // Width-only products (headrail/track) hide the Drop field and price
+    // on width alone.
+    var widthOnly = false;
     var widthIn       = document.getElementById('item-width');
     var dropIn        = document.getElementById('item-drop');
+    var dropGroup     = document.getElementById('item-drop-group');
     var qtyIn         = document.getElementById('item-qty');
     var extrasWrap    = document.getElementById('item-extras-wrap');
     var extrasBox     = document.getElementById('item-extras');
@@ -1738,7 +1742,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
     }
 
-    // Show / hide the Band + Fabric pickers based on requiresOption.
+    // Show / hide the Band + Fabric pickers based on requiresOption,
+    // and the Drop field based on widthOnly.
     function applyFabricVisibility() {
         if (bandRow)     bandRow.style.display     = requiresOption ? '' : 'none';
         if (fabricGroup) fabricGroup.style.display = requiresOption ? '' : 'none';
@@ -1747,6 +1752,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (!requiresOption) fabricId.value = '';
         }
         if (!requiresOption) clearFabric();
+
+        if (dropGroup) dropGroup.style.display = widthOnly ? 'none' : '';
+        if (dropIn) {
+            dropIn.required = !widthOnly;
+            if (widthOnly) dropIn.value = '';   // priced on width alone
+        }
     }
 
     async function loadProductData() {
@@ -1763,6 +1774,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
             requiresOption = true;   // restore default pickers
+            widthOnly = false;       // restore drop field
             applyFabricVisibility();
             schedulePreview();
             return;
@@ -1816,6 +1828,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // the line prices on system × size alone.
             requiresOption = !productData.product
                           || productData.product.requires_option !== false;
+            widthOnly = !!(productData.product && productData.product.width_only === true);
             applyFabricVisibility();
 
             // Fabric typeahead — enable input. Picking happens via the
@@ -2440,10 +2453,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // "pick a product, fabric and dimensions" was too easy to miss
         // when you'd already filled three of the four.
         var missing = [];
-        if (!productSel.value)               missing.push('product');
-        if (requiresOption && !fabricId.value) missing.push('fabric');
-        if (!widthIn.value.trim())           missing.push('width');
-        if (!dropIn.value.trim())            missing.push('drop');
+        if (!productSel.value)                  missing.push('product');
+        if (requiresOption && !fabricId.value)  missing.push('fabric');
+        if (!widthIn.value.trim())              missing.push('width');
+        if (!widthOnly && !dropIn.value.trim()) missing.push('drop');
         if (missing.length > 0) {
             previewBox.className   = 'idle';
             previewBox.textContent = 'Still need: ' + missing.join(', ') + '.';

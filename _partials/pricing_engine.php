@@ -179,6 +179,42 @@ function pe_find_matrix_row(
 }
 
 /**
+ * Width-only matrix lookup (products.width_only = 1). Matches on width
+ * alone — drop is ignored (the rows are stored with drop_mm 0). Round-up
+ * picks the smallest width_mm >= request; exact wants width_mm = request.
+ * Returns drop_mm in the row (0) so callers can treat it uniformly.
+ */
+function pe_find_matrix_row_width_only(
+    PDO  $pdo,
+    int  $priceTableId,
+    int  $widthMm,
+    bool $roundUp
+): ?array {
+    if ($roundUp) {
+        $st = $pdo->prepare(
+            'SELECT id, width_mm, drop_mm, price
+               FROM price_table_rows
+              WHERE price_table_id = ?
+                AND width_mm      >= ?
+              ORDER BY width_mm ASC
+              LIMIT 1'
+        );
+    } else {
+        $st = $pdo->prepare(
+            'SELECT id, width_mm, drop_mm, price
+               FROM price_table_rows
+              WHERE price_table_id = ?
+                AND width_mm       = ?
+              ORDER BY drop_mm ASC
+              LIMIT 1'
+        );
+    }
+    $st->execute([$priceTableId, $widthMm]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
  * Compute the £ contribution of one (extra, choice) selection to a single
  * blind, applying all four surcharge modes that have non-zero data.
  *
@@ -535,12 +571,12 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $extras    = is_array($input['extras'] ?? null) ? $input['extras'] : [];
 
     if ($productId <= 0) return ['error' => 'Product is required.'];
-    // NOTE: the "Fabric is required" check is deferred until after the
-    // product is loaded — a product flagged requires_option = 0 (e.g. a
-    // headrail-only line) is priced on system × size alone, with no
-    // fabric to pick. See the requires_option branch below.
+    // NOTE: the "Fabric is required" and "Drop is required" checks are
+    // deferred until after the product is loaded — a product flagged
+    // requires_option = 0 (headrail-only) is priced on system × size with
+    // no fabric, and one flagged width_only = 1 has no drop at all. See the
+    // branches below.
     if ($widthMm   <= 0) return ['error' => 'Width must be greater than zero.'];
-    if ($dropMm    <= 0) return ['error' => 'Drop must be greater than zero.'];
 
     // 1. Product (tenant scope). cost_price = default wholesale cost
     //    per blind for this product (set on /admin/products/edit.php).
@@ -551,6 +587,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
     $product = false;
     foreach ([
+        'id, name, cost_price, requires_option, width_only',
         'id, name, cost_price, requires_option',
         'id, name, cost_price',
     ] as $cols) {
@@ -571,6 +608,16 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
 
     $requiresOption = !isset($product['requires_option'])
         || (int) $product['requires_option'] === 1;
+
+    // width_only = priced on width alone (e.g. a headrail). No drop axis:
+    // the matrix lookup ignores drop and saved lines store drop 0. Absent
+    // column ⇒ false (normal width × drop pricing).
+    $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
+    if ($widthOnly) {
+        $dropMm = 0;                       // ignore any supplied drop
+    } elseif ($dropMm <= 0) {
+        return ['error' => 'Drop must be greater than zero.'];
+    }
 
     // 2. System (optional).
     $system = null;
@@ -626,14 +673,26 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         }
     }
 
-    // 5. Matrix cell.
-    $row = pe_find_matrix_row(
-        $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
-    );
-    if ($row === null) {
-        return ['error' => $roundUp
-            ? "Size $widthMm × $dropMm mm exceeds the largest cell in this price table."
-            : "No exact price for $widthMm × $dropMm mm. Try the next available size."];
+    // 5. Matrix cell. Width-only products match on width alone; the rest
+    //    on the full width × drop grid.
+    if ($widthOnly) {
+        $row = pe_find_matrix_row_width_only(
+            $pdo, (int) $priceTable['id'], $widthMm, $roundUp
+        );
+        if ($row === null) {
+            return ['error' => $roundUp
+                ? "Width $widthMm mm exceeds the largest entry in this price list."
+                : "No exact price for width $widthMm mm. Try the next available width."];
+        }
+    } else {
+        $row = pe_find_matrix_row(
+            $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
+        );
+        if ($row === null) {
+            return ['error' => $roundUp
+                ? "Size $widthMm × $dropMm mm exceeds the largest cell in this price table."
+                : "No exact price for $widthMm × $dropMm mm. Try the next available size."];
+        }
     }
     $basePrice = (float) $row['price'];
 

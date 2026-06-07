@@ -39,7 +39,13 @@ if (!($isAdmin || !empty($perms['can_create_quotes']))) {
 
 // --- Parse the spec --------------------------------------------------------
 $widthMm = ptp_parse_dimension((string) ($_POST['width'] ?? ''));
-$dropMm  = ptp_parse_dimension((string) ($_POST['drop']  ?? ''));
+$dropRaw = (string) ($_POST['drop'] ?? '');
+$dropMm  = ptp_parse_dimension($dropRaw);
+// Blank drop → 0 (width-only products have none); the engine decides if a
+// drop is required.
+if ($dropMm === null && trim($dropRaw) === '') {
+    $dropMm = 0;
+}
 if ($widthMm === null || $dropMm === null) {
     $_SESSION['flash_error'] = 'Could not read the size — go back and try again.';
     header('Location: /instaprice/index.php');

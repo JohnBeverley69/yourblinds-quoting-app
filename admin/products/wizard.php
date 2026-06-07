@@ -61,12 +61,15 @@ $colExists = static function (string $col) use ($pdo): bool {
     }
 };
 $hasRequiresOption = $colExists('requires_option');
+$hasWidthOnly      = $colExists('width_only');
 $hasShowColField   = $colExists('show_colour_field');
 
 // ── Load product if id supplied ────────────────────────────────────────
 $product = null;
 if ($productId > 0) {
-    $cols = 'id, name, option_label' . ($hasRequiresOption ? ', requires_option' : '');
+    $cols = 'id, name, option_label'
+          . ($hasRequiresOption ? ', requires_option' : '')
+          . ($hasWidthOnly      ? ', width_only'      : '');
     $st = $pdo->prepare(
         "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
     );
@@ -85,6 +88,10 @@ if ($productId > 0) {
 // fabric).
 $requiresOption = !isset($product['requires_option'])
     || (int) $product['requires_option'] === 1;
+
+// width_only = priced on width alone (headrail/track). Drives the step-4
+// width-price importer CTA. Absent column ⇒ false.
+$widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
 
 // ── State counts (drives both step inference and the "you're done with
 //    step X" indicators in the UI) ─────────────────────────────────────
@@ -185,6 +192,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasRequiresOption) {
                 $insCols[] = 'requires_option';
                 $insVals[] = $requiresOptVal;
+            }
+            if ($hasWidthOnly) {
+                $insCols[] = 'width_only';
+                $insVals[] = empty($_POST['width_only']) ? 0 : 1;
             }
             $insPh = implode(', ', array_fill(0, count($insCols), '?'));
             $ins = $pdo->prepare(
@@ -964,6 +975,27 @@ $activeNav = 'wizard';
                             </div>
                         <?php endif; ?>
 
+                        <?php if ($hasWidthOnly): ?>
+                            <div class="row" style="grid-template-columns:1fr">
+                                <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;
+                                              text-transform:none;letter-spacing:normal;font-weight:500;
+                                              color:var(--text-body)">
+                                    <input type="checkbox" name="width_only" value="1"
+                                           <?= !empty($_POST['width_only']) ? 'checked' : '' ?>
+                                           style="margin-top:0.2rem">
+                                    <span>
+                                        Priced by <strong>width only</strong> (no drop) —
+                                        e.g. a headrail or track.
+                                        <small style="display:block;color:var(--text-faint);font-size:0.8125rem;
+                                                      font-weight:400;margin-top:0.2rem;line-height:1.5">
+                                            The Drop field is hidden at quote time and each
+                                            price table is a single width &rarr; price list.
+                                        </small>
+                                    </span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="wiz-actions">
                             <div class="left"></div>
                             <button type="submit" class="btn btn-primary">
@@ -1312,6 +1344,22 @@ $activeNav = 'wizard';
                                 prices straight from a supplier sheet.
                             <?php endif; ?>
                         </p>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($widthOnly): ?>
+                    <!-- Width-only products are easiest to fill via the
+                         width-price importer (one width → price list per
+                         system) rather than the 2-D grid editor. -->
+                    <div class="wiz-card" style="background:#eff6ff;border-color:#bfdbfe">
+                        <h2 style="color:#1e40af">Priced by width — import the price lists</h2>
+                        <p class="lede" style="color:#1e40af">
+                            This product is priced on width alone. Upload your width &rarr;
+                            price spreadsheet (one block per system) and we'll fill every
+                            system's price list in one go.
+                        </p>
+                        <a href="/admin/products/price-import-width.php?product_id=<?= (int) $productId ?>"
+                           class="btn btn-primary">Import width prices &rarr;</a>
                     </div>
                 <?php endif; ?>
 

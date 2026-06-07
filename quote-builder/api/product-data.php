@@ -47,6 +47,7 @@ $pdo = db();
 // endpoint works on schemas where either migration hasn't run.
 $product = false;
 foreach ([
+    'id, name, option_label, band_label, requires_option, width_only',
     'id, name, option_label, band_label, requires_option',
     'id, name, option_label, band_label',
     'id, name, option_label',
@@ -337,6 +338,10 @@ echo json_encode([
         // historical default — every product needs a fabric).
         'requires_option' => !isset($product['requires_option'])
             || (int) $product['requires_option'] === 1,
+        // width_only = priced on width alone (headrail/track). Front-ends
+        // hide the Drop field. Absent column ⇒ false.
+        'width_only' => isset($product['width_only'])
+            && (int) $product['width_only'] === 1,
     ],
     'systems'       => $systems,
     'bands'         => $bands,

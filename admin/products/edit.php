@@ -97,6 +97,28 @@ if ($hasRequiresOption) {
     } catch (Throwable $e) { /* keep 1 */ }
 }
 
+// width_only is an optional column (migrate_width_only.php). 1 = priced
+// on width alone (headrail/track): no drop axis. Detect + load. Default 0.
+$hasWidthOnly = false;
+try {
+    $hasWidthOnly = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'width_only'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$widthOnlyValue = 0;
+if ($hasWidthOnly) {
+    try {
+        $woStmt = db()->prepare('SELECT width_only FROM products WHERE id = ? AND client_id = ?');
+        $woStmt->execute([$id, $clientId]);
+        $woVal = $woStmt->fetchColumn();
+        $widthOnlyValue = ($woVal === null || $woVal === false) ? 0 : (int) $woVal;
+    } catch (Throwable $e) { /* keep 0 */ }
+}
+
 // Markup / discount are now per (product, system). A product with
 // systems carries one row per system; one without systems carries a
 // single row keyed by system_id IS NULL.
@@ -306,6 +328,8 @@ $f = [
     'band_label'        => $bandLabelValue,
     // 1 = needs a fabric (normal); 0 = no-fabric product. Optional column.
     'requires_option'   => $requiresOptionValue,
+    // 1 = priced on width alone (no drop). Optional column.
+    'width_only'        => $widthOnlyValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -339,6 +363,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
     // Checkbox is "this product has no fabrics" → requires_option = 0.
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
+    // Checkbox is "priced by width only" → width_only = 1.
+    $f['width_only']        = !empty($_POST['width_only']) ? 1 : 0;
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -423,6 +449,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasRequiresOption) {
                 $cols[] = 'requires_option = ?';
                 $vals[] = $f['requires_option'];
+            }
+            if ($hasWidthOnly) {
+                $cols[] = 'width_only = ?';
+                $vals[] = $f['width_only'];
             }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
@@ -891,6 +921,32 @@ $activeNav = 'products';
                     </div>
                 <?php endif; ?>
 
+                <?php if ($hasWidthOnly): ?>
+                    <!-- Width-only pricing (headrail / track): no drop axis.
+                         Engine does a 1-D width lookup; the quote builder +
+                         InstaPrice hide the Drop field. Price tables are a
+                         single width → price list (use the width-only
+                         importer). -->
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                                <input type="checkbox" name="width_only" value="1"
+                                       <?= (int) $f['width_only'] === 1 ? 'checked' : '' ?>
+                                       style="margin-top:0.1875rem">
+                                <span>
+                                    <strong>Priced by width only (no drop) — e.g. a headrail or track.</strong>
+                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                        The price depends on width alone. The quote builder and
+                                        InstaPrice hide the Drop field, and each price table is a
+                                        single width &rarr; price list. Load one with the
+                                        <strong>width-only importer</strong> on the price-tables page.
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($hasShowColField): ?>
                     <!-- Toggle whether the inline fabric forms render
                          the dedicated "Colour" sub-field next to the
@@ -1192,6 +1248,9 @@ $activeNav = 'products';
                 Systems
                 <span class="count">(<?= count($systems) ?>)</span>
                 <span class="actions">
+                    <?php if ($hasWidthOnly && (int) $f['width_only'] === 1): ?>
+                        <a href="/admin/products/price-import-width.php?product_id=<?= (int) $id ?>">Import width prices &raquo;</a>
+                    <?php endif; ?>
                     <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>">Full manage &raquo;</a>
                 </span>
             </summary>

@@ -39,8 +39,14 @@ $dropMm   = ptp_parse_dimension($dropRaw);
 if ($widthMm === null) {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read width "' . $widthRaw . '".');
 }
+// Blank drop → 0 (width-only products have none); the engine decides if a
+// drop is actually required. A non-blank unparseable drop is still an error.
 if ($dropMm === null) {
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read drop "' . $dropRaw . '".');
+    if (trim($dropRaw) === '') {
+        $dropMm = 0;
+    } else {
+        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read drop "' . $dropRaw . '".');
+    }
 }
 
 // Selected extras: each entry has extra_id plus either:
