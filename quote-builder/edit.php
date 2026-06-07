@@ -1025,7 +1025,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     huge list. UI-only (no name attr): the picked fabric
                     still carries the band; this just filters the search.
                 -->
-                <div class="form-row cols-2">
+                <div class="form-row cols-2" id="item-band-row">
                     <div class="form-group">
                         <label for="item-band"><span id="item-band-label">Band</span></label>
                         <select id="item-band" disabled>
@@ -1036,7 +1036,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div class="form-row cols-2">
-                    <div class="form-group">
+                    <div class="form-group" id="item-fabric-group">
                         <label for="item-fabric-search"><span id="item-fabric-label">Fabric</span> <span class="required">*</span></label>
                         <div class="fabric-picker">
                             <input type="text" id="item-fabric-search"
@@ -1701,11 +1701,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
     var bandSel       = document.getElementById('item-band');
+    var bandRow       = document.getElementById('item-band-row');
+    var fabricGroup   = document.getElementById('item-fabric-group');
     var bandLabelEl   = document.getElementById('item-band-label');
     var fabricLabelEl = document.getElementById('item-fabric-label');
     var fabricSearch  = document.getElementById('item-fabric-search');
     var fabricId      = document.getElementById('item-fabric');
     var fabricResults = document.getElementById('item-fabric-results');
+
+    // No-fabric products (headrail/track/spares) hide the Band + Fabric
+    // pickers and price on system × size alone. Set per product load.
+    var requiresOption = true;
     var widthIn       = document.getElementById('item-width');
     var dropIn        = document.getElementById('item-drop');
     var qtyIn         = document.getElementById('item-qty');
@@ -1732,6 +1738,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
     }
 
+    // Show / hide the Band + Fabric pickers based on requiresOption.
+    function applyFabricVisibility() {
+        if (bandRow)     bandRow.style.display     = requiresOption ? '' : 'none';
+        if (fabricGroup) fabricGroup.style.display = requiresOption ? '' : 'none';
+        if (fabricId) {
+            fabricId.required = requiresOption;
+            if (!requiresOption) fabricId.value = '';
+        }
+        if (!requiresOption) clearFabric();
+    }
+
     async function loadProductData() {
         productData = null;
         clearFabric();
@@ -1745,6 +1762,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             fabricSearch.placeholder = 'Choose product first';
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
+            requiresOption = true;   // restore default pickers
+            applyFabricVisibility();
             schedulePreview();
             return;
         }
@@ -1791,6 +1810,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // Per-product label for the band step (e.g. "Tape / String").
             var bandLabel = (productData.product && productData.product.band_label) || 'Band';
             if (bandLabelEl) bandLabelEl.textContent = bandLabel;
+
+            // No-fabric product? Hide the Band + Fabric pickers entirely
+            // and drop the "required" guard on the hidden option_id, so
+            // the line prices on system × size alone.
+            requiresOption = !productData.product
+                          || productData.product.requires_option !== false;
+            applyFabricVisibility();
 
             // Fabric typeahead — enable input. Picking happens via the
             // floating results panel populated from /api/fabrics-search.
@@ -2414,10 +2440,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // "pick a product, fabric and dimensions" was too easy to miss
         // when you'd already filled three of the four.
         var missing = [];
-        if (!productSel.value)     missing.push('product');
-        if (!fabricId.value)       missing.push('fabric');
-        if (!widthIn.value.trim()) missing.push('width');
-        if (!dropIn.value.trim())  missing.push('drop');
+        if (!productSel.value)               missing.push('product');
+        if (requiresOption && !fabricId.value) missing.push('fabric');
+        if (!widthIn.value.trim())           missing.push('width');
+        if (!dropIn.value.trim())            missing.push('drop');
         if (missing.length > 0) {
             previewBox.className   = 'idle';
             previewBox.textContent = 'Still need: ' + missing.join(', ') + '.';

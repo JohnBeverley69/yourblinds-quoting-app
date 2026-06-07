@@ -46,13 +46,29 @@ $pdo      = db();
 $productId = (int) ($_GET['id'] ?? 0);
 $forcedStep = isset($_GET['step']) ? (int) $_GET['step'] : 0;
 
+// Optional columns (migrations may or may not have run). Detected once so
+// the INSERT/UPDATE/SELECT below can include them only when present.
+$colExists = static function (string $col) use ($pdo): bool {
+    try {
+        return (bool) $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME   = 'products'
+                AND COLUMN_NAME  = " . $pdo->quote($col)
+        )->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+};
+$hasRequiresOption = $colExists('requires_option');
+$hasShowColField   = $colExists('show_colour_field');
+
 // ── Load product if id supplied ────────────────────────────────────────
 $product = null;
 if ($productId > 0) {
+    $cols = 'id, name, option_label' . ($hasRequiresOption ? ', requires_option' : '');
     $st = $pdo->prepare(
-        'SELECT id, name, option_label
-           FROM products
-          WHERE id = ? AND client_id = ?'
+        "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
     );
     $st->execute([$productId, $clientId]);
     $product = $st->fetch() ?: null;
@@ -62,6 +78,13 @@ if ($productId > 0) {
         exit;
     }
 }
+
+// requires_option = 0 marks a "no-fabric" product (headrail/track/spares):
+// the fabric step (3) is skipped and pricing is system × size alone.
+// Absent column ⇒ true (the historical default — every product needs a
+// fabric).
+$requiresOption = !isset($product['requires_option'])
+    || (int) $product['requires_option'] === 1;
 
 // ── State counts (drives both step inference and the "you're done with
 //    step X" indicators in the UI) ─────────────────────────────────────
@@ -93,11 +116,17 @@ if ($product) {
 // step 4 (done).
 if ($forcedStep >= 1 && $forcedStep <= 4) {
     $step = $forcedStep;
+    // A no-fabric product has no step 3 — bounce a forced step-3 link
+    // (e.g. the stepper back-link) on to price tables.
+    if ($step === 3 && $product && !$requiresOption) {
+        header('Location: /admin/products/wizard.php?id=' . $productId . '&step=4');
+        exit;
+    }
 } elseif (!$product) {
     $step = 1;
 } elseif ($systemCount === 0) {
     $step = 2;
-} elseif ($fabricCount === 0) {
+} elseif ($requiresOption && $fabricCount === 0) {
     $step = 3;
 } else {
     $step = 4;
@@ -137,24 +166,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Smart default for show_colour_field: hide the Colour
             // sub-field if the typed option_label already means
-            // "colour" (e.g. "Slat Colour"). Try the INSERT with the
-            // column first; if the schema doesn't have it yet
-            // (migration not run), fall back to the column-less form.
-            $scfDefault = preg_match('/colou?r/i', $optionLabel) ? 0 : 1;
-            try {
-                $ins = $pdo->prepare(
-                    'INSERT INTO products
-                        (client_id, name, option_label, show_colour_field, sort_order, active)
-                      VALUES (?, ?, ?, ?, ?, 1)'
-                );
-                $ins->execute([$clientId, $name, $optionLabel, $scfDefault, $nextSort]);
-            } catch (Throwable $e) {
-                $ins = $pdo->prepare(
-                    'INSERT INTO products (client_id, name, option_label, sort_order, active)
-                      VALUES (?, ?, ?, ?, 1)'
-                );
-                $ins->execute([$clientId, $name, $optionLabel, $nextSort]);
+            // "colour" (e.g. "Slat Colour"). Both this and
+            // requires_option are appended only when the schema has the
+            // column (migrations may not have run yet).
+            //
+            // no_fabric checkbox → requires_option = 0: a headrail/track/
+            // spares product with no fabric axis. Skips step 3 and prices
+            // on system × size alone.
+            $scfDefault     = preg_match('/colou?r/i', $optionLabel) ? 0 : 1;
+            $requiresOptVal = empty($_POST['no_fabric']) ? 1 : 0;
+
+            $insCols = ['client_id', 'name', 'option_label', 'sort_order', 'active'];
+            $insVals = [$clientId, $name, $optionLabel, $nextSort, 1];
+            if ($hasShowColField) {
+                $insCols[] = 'show_colour_field';
+                $insVals[] = $scfDefault;
             }
+            if ($hasRequiresOption) {
+                $insCols[] = 'requires_option';
+                $insVals[] = $requiresOptVal;
+            }
+            $insPh = implode(', ', array_fill(0, count($insCols), '?'));
+            $ins = $pdo->prepare(
+                'INSERT INTO products (' . implode(', ', $insCols) . ") VALUES ($insPh)"
+            );
+            $ins->execute($insVals);
             $newId = (int) $pdo->lastInsertId();
 
             header('Location: /admin/products/wizard.php?id=' . $newId . '&step=2');
@@ -241,7 +277,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($systemCount === 0) {
                     throw new RuntimeException('Add at least one system before continuing.');
                 }
-                header('Location: /admin/products/wizard.php?id=' . $productId . '&step=3');
+                // No-fabric products skip the fabric step entirely.
+                $next = $requiresOption ? 3 : 4;
+                header('Location: /admin/products/wizard.php?id=' . $productId . '&step=' . $next);
                 exit;
             }
         }
@@ -260,6 +298,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // tenant has 50-200 colours per band, and one-at-a-time was
         // unusable for that scale.
         if ($postStep === 3 && $product) {
+            // "This product has no fabrics" — flip it to a no-fabric
+            // product and jump to price tables. Lets a user who picked
+            // the wrong path (or a product created before this feature)
+            // convert without starting over.
+            if ($action === 'skip_no_fabric') {
+                if (!$hasRequiresOption) {
+                    throw new RuntimeException('No-fabric products need the requires_option column — run migrate_requires_option.php first.');
+                }
+                $pdo->prepare(
+                    'UPDATE products SET requires_option = 0 WHERE id = ? AND client_id = ?'
+                )->execute([$productId, $clientId]);
+                $_SESSION['flash_success'] = 'Marked as a no-fabric product — fabric step skipped.';
+                header('Location: /admin/products/wizard.php?id=' . $productId . '&step=4');
+                exit;
+            }
             if ($action === 'add') {
                 $band = trim((string) ($_POST['band_code'] ?? ''));
                 $fab  = trim((string) ($_POST['fabric_name'] ?? ''));
@@ -446,26 +499,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Same INSERT IGNORE as the first-time auto-create — safe to
         // run again.
         if ($postStep === 4 && $product && $action === 'create_missing') {
-            // Same scope-aware logic as the first-time auto-create:
-            // only combos with at least one matching fabric.
-            $stubStmt = $pdo->prepare(
-                "INSERT IGNORE INTO price_tables
-                    (client_id, product_id, system_id, band_code, active)
-                 SELECT DISTINCT ?, ?, s.id, po.band_code, 1
-                   FROM product_systems s
-                   JOIN product_options po
-                     ON po.product_id = s.product_id
-                    AND po.client_id  = s.client_id
-                    AND po.active     = 1
-                    AND po.band_code IS NOT NULL
-                    AND po.band_code != ''
-                    AND (po.system_id IS NULL OR po.system_id = s.id)
-                  WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
-            );
-            $stubStmt->execute([
-                $clientId, $productId,
-                $productId, $clientId,
-            ]);
+            if (!$requiresOption) {
+                // No-fabric product: one price table per system, with an
+                // empty band_code (there's no band axis). The engine's
+                // no-fabric lookup picks the system's table regardless of
+                // band, so '' is just a placeholder key.
+                $stubStmt = $pdo->prepare(
+                    "INSERT IGNORE INTO price_tables
+                        (client_id, product_id, system_id, band_code, active)
+                     SELECT ?, ?, s.id, '', 1
+                       FROM product_systems s
+                      WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+                );
+                $stubStmt->execute([
+                    $clientId, $productId,
+                    $productId, $clientId,
+                ]);
+            } else {
+                // Same scope-aware logic as the first-time auto-create:
+                // only combos with at least one matching fabric.
+                $stubStmt = $pdo->prepare(
+                    "INSERT IGNORE INTO price_tables
+                        (client_id, product_id, system_id, band_code, active)
+                     SELECT DISTINCT ?, ?, s.id, po.band_code, 1
+                       FROM product_systems s
+                       JOIN product_options po
+                         ON po.product_id = s.product_id
+                        AND po.client_id  = s.client_id
+                        AND po.active     = 1
+                        AND po.band_code IS NOT NULL
+                        AND po.band_code != ''
+                        AND (po.system_id IS NULL OR po.system_id = s.id)
+                      WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1"
+                );
+                $stubStmt->execute([
+                    $clientId, $productId,
+                    $productId, $clientId,
+                ]);
+            }
             $created = $stubStmt->rowCount();
             $_SESSION['flash_success'] = $created === 1
                 ? '1 price table created.'
@@ -582,43 +653,66 @@ if ($product && $step === 4) {
     $combosStmt->execute([$productId, $clientId]);
     $priceTables = $combosStmt->fetchAll();
 
-    // Detect (system × band) combos that don't yet have a table.
-    // System scoping respected: a band only counts as "missing" for
-    // a system if there's at least one fabric of that band that
-    // could be used with that system (universal or scoped to it).
-    $missingStmt = $pdo->prepare(
-        "SELECT DISTINCT s.id AS system_id, s.name AS system_name, po.band_code
-           FROM product_systems s
-           JOIN product_options po
-             ON po.product_id = s.product_id
-            AND po.client_id  = s.client_id
-            AND po.active     = 1
-            AND po.band_code IS NOT NULL
-            AND po.band_code != ''
-            AND (po.system_id IS NULL OR po.system_id = s.id)
-          WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
-            AND NOT EXISTS (
-              SELECT 1 FROM price_tables t
-               WHERE t.product_id = s.product_id
-                 AND t.system_id  = s.id
-                 AND t.band_code  = po.band_code
-                 AND t.client_id  = ?
-                 AND t.active     = 1
-            )
-          ORDER BY s.sort_order, s.name, po.band_code"
-    );
-    $missingStmt->execute([
-        $productId, $clientId,
-        $clientId,
-    ]);
-    $missingCombos = $missingStmt->fetchAll();
+    if (!$requiresOption) {
+        // No-fabric product: a "missing" combo is simply any active
+        // system with no price table yet (one table per system, no band
+        // axis).
+        $missingStmt = $pdo->prepare(
+            "SELECT s.id AS system_id, s.name AS system_name, '' AS band_code
+               FROM product_systems s
+              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
+                AND NOT EXISTS (
+                  SELECT 1 FROM price_tables t
+                   WHERE t.product_id = s.product_id
+                     AND t.system_id  = s.id
+                     AND t.client_id  = ?
+                     AND t.active     = 1
+                )
+              ORDER BY s.sort_order, s.name"
+        );
+        $missingStmt->execute([$productId, $clientId, $clientId]);
+        $missingCombos = $missingStmt->fetchAll();
+    } else {
+        // Detect (system × band) combos that don't yet have a table.
+        // System scoping respected: a band only counts as "missing" for
+        // a system if there's at least one fabric of that band that
+        // could be used with that system (universal or scoped to it).
+        $missingStmt = $pdo->prepare(
+            "SELECT DISTINCT s.id AS system_id, s.name AS system_name, po.band_code
+               FROM product_systems s
+               JOIN product_options po
+                 ON po.product_id = s.product_id
+                AND po.client_id  = s.client_id
+                AND po.active     = 1
+                AND po.band_code IS NOT NULL
+                AND po.band_code != ''
+                AND (po.system_id IS NULL OR po.system_id = s.id)
+              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
+                AND NOT EXISTS (
+                  SELECT 1 FROM price_tables t
+                   WHERE t.product_id = s.product_id
+                     AND t.system_id  = s.id
+                     AND t.band_code  = po.band_code
+                     AND t.client_id  = ?
+                     AND t.active     = 1
+                )
+              ORDER BY s.sort_order, s.name, po.band_code"
+        );
+        $missingStmt->execute([
+            $productId, $clientId,
+            $clientId,
+        ]);
+        $missingCombos = $missingStmt->fetchAll();
+    }
 }
 
 // Steps metadata for the stepper UI.
 $STEPS = [
     1 => ['Name',         'What kind of blind is this?'],
     2 => ['Systems',      'Standard / Motorised / etc.'],
-    3 => ['Fabrics',      'The materials you actually sell'],
+    3 => $requiresOption
+        ? ['Fabrics',  'The materials you actually sell']
+        : ['Fabrics',  'Not needed — no-fabric product'],
     4 => ['Price tables', 'Width × drop grids per band / system'],
 ];
 
@@ -849,6 +943,27 @@ $activeNav = 'wizard';
                             (You can change this later.)
                         </div>
 
+                        <?php if ($hasRequiresOption): ?>
+                            <div class="row" style="grid-template-columns:1fr">
+                                <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;
+                                              text-transform:none;letter-spacing:normal;font-weight:500;
+                                              color:var(--text-body)">
+                                    <input type="checkbox" name="no_fabric" value="1"
+                                           <?= !empty($_POST['no_fabric']) ? 'checked' : '' ?>
+                                           style="margin-top:0.2rem">
+                                    <span>
+                                        This product has <strong>no fabrics</strong>
+                                        (e.g. headrail only, track, spares).
+                                        <small style="display:block;color:var(--text-faint);font-size:0.8125rem;
+                                                      font-weight:400;margin-top:0.2rem;line-height:1.5">
+                                            We'll skip the fabric step and price it on
+                                            system &times; size alone.
+                                        </small>
+                                    </span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="wiz-actions">
                             <div class="left"></div>
                             <button type="submit" class="btn btn-primary">
@@ -971,6 +1086,29 @@ $activeNav = 'wizard';
                             and Special slats on a Venetian have different
                             ranges), pick that system in the dropdown.
                         </p>
+                    <?php endif; ?>
+
+                    <?php if ($hasRequiresOption): ?>
+                        <!-- Escape hatch for headrail-only / track / spares
+                             products that have no fabric axis at all. Flips
+                             requires_option = 0 and jumps to price tables. -->
+                        <div class="helper" style="display:flex;align-items:center;
+                                    justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                            <span>
+                                <strong>No <?= e($labelL) ?>s for this product?</strong>
+                                For a headrail-only line, track, or spares you can
+                                skip this step and price on system &times; size alone.
+                            </span>
+                            <form method="post" style="margin:0">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="_step" value="3">
+                                <input type="hidden" name="_action" value="skip_no_fabric">
+                                <button type="submit" class="btn btn-secondary"
+                                        data-confirm="Mark this as a no-fabric product and skip straight to price tables?">
+                                    No <?= e($labelL) ?>s — skip &rarr;
+                                </button>
+                            </form>
+                        </div>
                     <?php endif; ?>
 
                     <?php if ($fabrics): ?>
@@ -1159,7 +1297,11 @@ $activeNav = 'wizard';
                         <div class="icon">📋</div>
                         <h2 style="color:#78350f">One thing left — price tables</h2>
                         <p style="color:#92400e">
-                            <?php if ($totalTables === 0): ?>
+                            <?php if ($totalTables === 0 && !$requiresOption): ?>
+                                This is a no-fabric product, so it needs one price
+                                grid per system. Create them below, then fill in the
+                                width × drop prices.
+                            <?php elseif ($totalTables === 0): ?>
                                 Your fabrics don't have band codes yet — go back
                                 to step 3 and add at least one band (A, B, C…).
                                 Price tables are keyed by band, so we need that
@@ -1181,18 +1323,28 @@ $activeNav = 'wizard';
                                 : count($missingCombos) . ' price tables need setting up' ?>
                         </h2>
                         <p class="lede" style="color:#92400e">
-                            Each <?= e($labelL) ?> band on each system needs its own
-                            price grid. We've spotted these
-                            <strong>(system + band) combination<?= count($missingCombos) === 1 ? '' : 's' ?></strong>
-                            without one. Clicking <em>Create</em> below makes an empty
-                            price table for each — you'll fill in the actual width × drop
-                            prices afterwards.
+                            <?php if (!$requiresOption): ?>
+                                Each system needs its own price grid. We've spotted
+                                <?= count($missingCombos) === 1 ? 'this system' : 'these systems' ?>
+                                without one. Clicking <em>Create</em> below makes an empty
+                                price table for each — you'll fill in the actual width × drop
+                                prices afterwards.
+                            <?php else: ?>
+                                Each <?= e($labelL) ?> band on each system needs its own
+                                price grid. We've spotted these
+                                <strong>(system + band) combination<?= count($missingCombos) === 1 ? '' : 's' ?></strong>
+                                without one. Clicking <em>Create</em> below makes an empty
+                                price table for each — you'll fill in the actual width × drop
+                                prices afterwards.
+                            <?php endif; ?>
                         </p>
                         <div class="wiz-list" style="background:transparent;border:0;padding:0;margin-bottom:0.875rem">
                             <?php foreach ($missingCombos as $m): ?>
                                 <div class="wiz-list-item" style="border-bottom-color:#fde68a">
                                     <strong><?= e((string) $m['system_name']) ?></strong>
-                                    <span style="color:#92400e">+ Band <?= e((string) $m['band_code']) ?></span>
+                                    <?php if ($requiresOption): ?>
+                                        <span style="color:#92400e">+ Band <?= e((string) $m['band_code']) ?></span>
+                                    <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1241,7 +1393,9 @@ $activeNav = 'wizard';
                                     <?php endif; ?>
                                     <div style="flex:1;display:flex;flex-wrap:wrap;gap:0.375rem;align-items:baseline">
                                         <strong><?= e((string) $t['system_name']) ?></strong>
-                                        <span style="color:var(--text-faint)">— Band <?= e((string) $t['band_code']) ?></span>
+                                        <?php if ($requiresOption || (string) $t['band_code'] !== ''): ?>
+                                            <span style="color:var(--text-faint)">— Band <?= e((string) $t['band_code']) ?></span>
+                                        <?php endif; ?>
                                         <?php if ($filled): ?>
                                             <span style="color:var(--text-faint);font-size:0.8125rem">
                                                 · <?= $cells ?> cell<?= $cells === 1 ? '' : 's' ?>

@@ -133,12 +133,12 @@ $activeNav = 'instaprice';
                     </div>
                 </div>
 
-                <div class="ip-grid" style="margin-top:1rem">
-                    <div class="ip-field">
+                <div class="ip-grid" style="margin-top:1rem" id="ip-fabric-grid">
+                    <div class="ip-field" id="ip-band-field">
                         <label for="ip-band"><span id="ip-band-label">Band</span></label>
                         <select id="ip-band" disabled><option value="">All bands</option></select>
                     </div>
-                    <div class="ip-field ip-fab">
+                    <div class="ip-field ip-fab" id="ip-fabric-field">
                         <label for="ip-fabric-search"><span id="ip-fabric-label">Fabric</span></label>
                         <input type="text" id="ip-fabric-search" autocomplete="off" disabled
                                placeholder="Choose product first">
@@ -206,6 +206,7 @@ $activeNav = 'instaprice';
     var productSel = document.getElementById('ip-product');
     var systemSel  = document.getElementById('ip-system');
     var bandSel    = document.getElementById('ip-band');
+    var fabricGrid = document.getElementById('ip-fabric-grid');
     var bandLabelEl   = document.getElementById('ip-band-label');
     var fabricLabelEl = document.getElementById('ip-fabric-label');
     var fabricSearch  = document.getElementById('ip-fabric-search');
@@ -222,6 +223,7 @@ $activeNav = 'instaprice';
     var productData = null;
     var previewTimer = null, fabricSearchTimer = null;
     var currentFabricBand = '';
+    var requiresOption = true;   // false for no-fabric products (headrail/track/spares)
     var lastBase = null, lastExtras = 0;
     var ratesDirty = true;            // reset disc/markup to the system's defaults on next price
     var curDisc = null, curMarkup = null;   // remember overrides across panel rebuilds
@@ -237,6 +239,12 @@ $activeNav = 'instaprice';
     function money(n) { return '£' + Number(n).toFixed(2); }
     function setIdle(el, msg) { el.innerHTML = '<option value="">' + msg + '</option>'; el.disabled = true; }
 
+    // Show / hide the whole Band + Fabric grid for no-fabric products.
+    function applyFabricVisibility() {
+        if (fabricGrid) fabricGrid.style.display = requiresOption ? '' : 'none';
+        if (!requiresOption) { clearFabric(); closeFabricResults(); }
+    }
+
     // ----- Product load -------------------------------------------------
     async function loadProductData() {
         productData = null;
@@ -248,6 +256,7 @@ $activeNav = 'instaprice';
             fabricSearch.disabled = true; fabricSearch.placeholder = 'Choose product first';
             if (fabricLabelEl) fabricLabelEl.textContent = 'Fabric';
             if (bandLabelEl) bandLabelEl.textContent = 'Band';
+            requiresOption = true; applyFabricVisibility();
             schedulePreview();
             return;
         }
@@ -275,6 +284,12 @@ $activeNav = 'instaprice';
             if (fabricLabelEl) fabricLabelEl.textContent = optLabel;
             var bandLabel = (productData.product && productData.product.band_label) || 'Band';
             if (bandLabelEl) bandLabelEl.textContent = bandLabel;
+
+            // No-fabric product? Hide the Band + Fabric grid; price on
+            // system × size alone.
+            requiresOption = !productData.product
+                          || productData.product.requires_option !== false;
+            applyFabricVisibility();
 
             populateBands(bandsForCurrentSystem());
             fabricSearch.disabled = false;
@@ -522,10 +537,10 @@ $activeNav = 'instaprice';
 
     async function runPreview() {
         var missing = [];
-        if (!productSel.value)     missing.push('product');
-        if (!fabricId.value)       missing.push('fabric');
-        if (!widthIn.value.trim()) missing.push('width');
-        if (!dropIn.value.trim())  missing.push('drop');
+        if (!productSel.value)                 missing.push('product');
+        if (requiresOption && !fabricId.value) missing.push('fabric');
+        if (!widthIn.value.trim())             missing.push('width');
+        if (!dropIn.value.trim())              missing.push('drop');
         if (missing.length) { setPriceIdle('Still need: ' + missing.join(', ') + '.', false); return; }
 
         var params = new URLSearchParams({

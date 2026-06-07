@@ -47,6 +47,7 @@ $pdo = db();
 // endpoint works on schemas where either migration hasn't run.
 $product = false;
 foreach ([
+    'id, name, option_label, band_label, requires_option',
     'id, name, option_label, band_label',
     'id, name, option_label',
     'id, name',
@@ -330,6 +331,12 @@ echo json_encode([
         'option_label' => (string) ($product['option_label'] ?? ''),
         // Per-product label for the band step; '' = front-ends use "Band".
         'band_label'   => (string) ($product['band_label'] ?? ''),
+        // requires_option = false marks a no-fabric product (headrail/
+        // track/spares): the front-ends hide the Band + Fabric pickers
+        // and price on system × size alone. Absent column ⇒ true (the
+        // historical default — every product needs a fabric).
+        'requires_option' => !isset($product['requires_option'])
+            || (int) $product['requires_option'] === 1,
     ],
     'systems'       => $systems,
     'bands'         => $bands,

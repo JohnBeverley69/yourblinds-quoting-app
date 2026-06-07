@@ -73,6 +73,30 @@ if ($hasBandLabel) {
     } catch (Throwable $e) { /* keep '' */ }
 }
 
+// requires_option is an optional column (migrate_requires_option.php).
+// 0 = a "no-fabric" product (headrail/track/spares): no fabric axis,
+// priced on system × size. Detect + load separately. Default 1 (needs a
+// fabric) when the column / migration is absent.
+$hasRequiresOption = false;
+try {
+    $hasRequiresOption = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'requires_option'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$requiresOptionValue = 1;
+if ($hasRequiresOption) {
+    try {
+        $roStmt = db()->prepare('SELECT requires_option FROM products WHERE id = ? AND client_id = ?');
+        $roStmt->execute([$id, $clientId]);
+        $roVal = $roStmt->fetchColumn();
+        $requiresOptionValue = ($roVal === null || $roVal === false) ? 1 : (int) $roVal;
+    } catch (Throwable $e) { /* keep 1 */ }
+}
+
 // Markup / discount are now per (product, system). A product with
 // systems carries one row per system; one without systems carries a
 // single row keyed by system_id IS NULL.
@@ -280,6 +304,8 @@ $f = [
     'option_label'      => (string) ($product['option_label'] ?? 'Fabric'),
     // Per-product label for the band step ('' = "Band"). Optional column.
     'band_label'        => $bandLabelValue,
+    // 1 = needs a fabric (normal); 0 = no-fabric product. Optional column.
+    'requires_option'   => $requiresOptionValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -311,6 +337,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['active']            = !empty($_POST['active']) ? 1 : 0;
     $f['option_label']      = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
     $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
+    // Checkbox is "this product has no fabrics" → requires_option = 0.
+    $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -391,6 +419,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasBandLabel) {
                 $cols[] = 'band_label = ?';
                 $vals[] = $f['band_label'] !== '' ? $f['band_label'] : null;
+            }
+            if ($hasRequiresOption) {
+                $cols[] = 'requires_option = ?';
+                $vals[] = $f['requires_option'];
             }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
@@ -833,6 +865,32 @@ $activeNav = 'products';
                     </div>
                 <?php endif; ?>
 
+                <?php if ($hasRequiresOption): ?>
+                    <!-- No-fabric product (headrail-only / track / spares):
+                         no fabric axis, priced on system × size alone. The
+                         quote builder + InstaPrice hide the Band + Fabric
+                         pickers; the setup wizard skips the fabric step. -->
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                                <input type="checkbox" name="no_fabric" value="1"
+                                       <?= (int) $f['requires_option'] === 0 ? 'checked' : '' ?>
+                                       style="margin-top:0.1875rem">
+                                <span>
+                                    <strong>This product has no <?= e(strtolower((string) $f['option_label'])) ?>s (e.g. headrail only, track, spares).</strong>
+                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                        Tick this for a product with nothing to pick on the
+                                        <?= e(strtolower((string) $f['option_label'])) ?> axis — it's priced on
+                                        system &times; size alone. The quote builder and InstaPrice
+                                        hide the band/<?= e(strtolower((string) $f['option_label'])) ?> pickers, and
+                                        you just need one price table per system (no bands).
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($hasShowColField): ?>
                     <!-- Toggle whether the inline fabric forms render
                          the dedicated "Colour" sub-field next to the
@@ -1214,7 +1272,15 @@ $activeNav = 'products';
                     </datalist>
                 <?php endif; ?>
 
-                <?php if (!$fabricsByBand): ?>
+                <?php if (!$fabricsByBand && (int) $f['requires_option'] === 0): ?>
+                    <div class="empty-note">
+                        This is a <strong>no-fabric product</strong> — it's priced on
+                        system &times; size alone, so it doesn't need any
+                        <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s.
+                        (Untick "no <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s" in
+                        Settings above if that's not right.)
+                    </div>
+                <?php elseif (!$fabricsByBand): ?>
                     <div class="empty-note">
                         No <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s yet.
                         Add at least one before this product can be quoted &mdash; or use the

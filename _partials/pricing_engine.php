@@ -98,6 +98,51 @@ function pe_find_price_table(
 }
 
 /**
+ * Find the price table for a NO-FABRIC product (products.requires_option
+ * = 0), where there's no band axis. Such a product has one price table
+ * per system (or a single one when it has no systems). We pick the
+ * matching active table for (product, system) regardless of band_code —
+ * the wizard creates these with an empty band, but ignoring band here
+ * keeps us robust if it was set to anything else.
+ *
+ * Deterministic when more than one somehow exists: lowest id wins.
+ */
+function pe_find_price_table_no_fabric(
+    PDO  $pdo,
+    int  $clientId,
+    int  $productId,
+    ?int $systemId
+): ?array {
+    if ($systemId === null) {
+        $st = $pdo->prepare(
+            'SELECT id, client_id, product_id, system_id, band_code, name
+               FROM price_tables
+              WHERE client_id  = ?
+                AND product_id = ?
+                AND system_id IS NULL
+                AND active     = 1
+              ORDER BY id ASC
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId]);
+    } else {
+        $st = $pdo->prepare(
+            'SELECT id, client_id, product_id, system_id, band_code, name
+               FROM price_tables
+              WHERE client_id  = ?
+                AND product_id = ?
+                AND system_id  = ?
+                AND active     = 1
+              ORDER BY id ASC
+              LIMIT 1'
+        );
+        $st->execute([$clientId, $productId, $systemId]);
+    }
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
  * Find the price_table_rows cell. Either exact match (width = AND drop =)
  * or round-up (smallest cell where width_mm >= AND drop_mm >=).
  */
@@ -490,20 +535,42 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $extras    = is_array($input['extras'] ?? null) ? $input['extras'] : [];
 
     if ($productId <= 0) return ['error' => 'Product is required.'];
-    if ($optionId  <= 0) return ['error' => 'Fabric is required.'];
+    // NOTE: the "Fabric is required" check is deferred until after the
+    // product is loaded — a product flagged requires_option = 0 (e.g. a
+    // headrail-only line) is priced on system × size alone, with no
+    // fabric to pick. See the requires_option branch below.
     if ($widthMm   <= 0) return ['error' => 'Width must be greater than zero.'];
     if ($dropMm    <= 0) return ['error' => 'Drop must be greater than zero.'];
 
     // 1. Product (tenant scope). cost_price = default wholesale cost
     //    per blind for this product (set on /admin/products/edit.php).
-    $st = $pdo->prepare(
-        'SELECT id, name, cost_price FROM products
-          WHERE id = ? AND client_id = ? AND active = 1
-          LIMIT 1'
-    );
-    $st->execute([$productId, $clientId]);
-    $product = $st->fetch();
+    //    requires_option = 0 marks a "no-fabric" product (headrail/track/
+    //    spares): no fabric axis, price resolved straight off the
+    //    (product, system) price table. Try-fallback so the engine still
+    //    runs on schemas where migrate_requires_option.php hasn't run yet
+    //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
+    $product = false;
+    foreach ([
+        'id, name, cost_price, requires_option',
+        'id, name, cost_price',
+    ] as $cols) {
+        try {
+            $st = $pdo->prepare(
+                "SELECT $cols FROM products
+                  WHERE id = ? AND client_id = ? AND active = 1
+                  LIMIT 1"
+            );
+            $st->execute([$productId, $clientId]);
+            $product = $st->fetch();
+            break;
+        } catch (Throwable $e) {
+            $product = false;
+        }
+    }
     if (!$product) return ['error' => 'Product not found or inactive.'];
+
+    $requiresOption = !isset($product['requires_option'])
+        || (int) $product['requires_option'] === 1;
 
     // 2. System (optional).
     $system = null;
@@ -518,24 +585,45 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         if (!$system) return ['error' => 'System not found for this product.'];
     }
 
-    // 3. Fabric.
-    $fabric = pe_resolve_fabric($pdo, $clientId, $optionId);
-    if ($fabric === null) {
-        return ['error' => 'Fabric not found or inactive.'];
-    }
-    if ((int) $fabric['product_id'] !== $productId) {
-        return ['error' => 'Fabric belongs to a different product.'];
-    }
+    // 3. Fabric + 4. Price table.
+    //
+    // Normal products: resolve the picked fabric, take its band_code,
+    // then find the (product, system, band) price table.
+    //
+    // No-fabric products (requires_option = 0): there is nothing to pick
+    // on the fabric axis, so we go straight to the single price table for
+    // (product, system) — band is irrelevant. All the fabric_* snapshot
+    // fields are blanked.
+    if ($requiresOption) {
+        if ($optionId <= 0) return ['error' => 'Fabric is required.'];
 
-    // 4. Price table.
-    $priceTable = pe_find_price_table(
-        $pdo, $clientId, $productId, $systemId, (string) $fabric['band_code']
-    );
-    if ($priceTable === null) {
-        $sysHint = $system ? " on system '" . $system['name'] . "'" : '';
-        return ['error' => "No price table for "
-                          . $product['name'] . " band " . $fabric['band_code']
-                          . $sysHint . '.'];
+        $fabric = pe_resolve_fabric($pdo, $clientId, $optionId);
+        if ($fabric === null) {
+            return ['error' => 'Fabric not found or inactive.'];
+        }
+        if ((int) $fabric['product_id'] !== $productId) {
+            return ['error' => 'Fabric belongs to a different product.'];
+        }
+
+        $priceTable = pe_find_price_table(
+            $pdo, $clientId, $productId, $systemId, (string) $fabric['band_code']
+        );
+        if ($priceTable === null) {
+            $sysHint = $system ? " on system '" . $system['name'] . "'" : '';
+            return ['error' => "No price table for "
+                              . $product['name'] . " band " . $fabric['band_code']
+                              . $sysHint . '.'];
+        }
+    } else {
+        $fabric = null;   // no fabric axis on this product
+        $priceTable = pe_find_price_table_no_fabric(
+            $pdo, $clientId, $productId, $systemId
+        );
+        if ($priceTable === null) {
+            $sysHint = $system ? " for system '" . $system['name'] . "'" : '';
+            return ['error' => "No price table set up for "
+                              . $product['name'] . $sysHint . '.'];
+        }
     }
 
     // 5. Matrix cell.
@@ -621,21 +709,24 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $extrasCostTotal = round($extrasCostTotal, 2);
 
     return [
-        // Resolved FKs (for quote_items)
+        // Resolved FKs (for quote_items). option_id is NULL for a
+        // no-fabric product — quote_items.option_id is nullable
+        // (migrate_requires_option.php).
         'product_id'         => $productId,
         'system_id'          => $systemId,
-        'option_id'          => (int) $fabric['id'],
+        'option_id'          => $fabric ? (int) $fabric['id'] : null,
         'price_table_id'     => (int) $priceTable['id'],
         'price_table_row_id' => (int) $row['id'],
 
-        // Snapshot fields (for quote_items)
+        // Snapshot fields (for quote_items). All fabric_* blank when the
+        // product has no fabric axis.
         'product_name'       => (string) $product['name'],
         'system_name'        => $system ? (string) $system['name'] : null,
-        'fabric_band'        => (string) $fabric['band_code'],
-        'fabric_supplier'    => (string) ($fabric['supplier_name'] ?? ''),
-        'fabric_name'        => (string) $fabric['name'],
-        'fabric_colour'      => (string) ($fabric['colour'] ?? ''),
-        'fabric_code'        => (string) ($fabric['code']   ?? ''),
+        'fabric_band'        => $fabric ? (string) $fabric['band_code']            : '',
+        'fabric_supplier'    => $fabric ? (string) ($fabric['supplier_name'] ?? '') : '',
+        'fabric_name'        => $fabric ? (string) $fabric['name']                 : '',
+        'fabric_colour'      => $fabric ? (string) ($fabric['colour'] ?? '')        : '',
+        'fabric_code'        => $fabric ? (string) ($fabric['code']   ?? '')        : '',
 
         // Dimensions: what was requested, what cell was actually used
         'width_mm'           => $widthMm,
