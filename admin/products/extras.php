@@ -334,8 +334,12 @@ $activeNav = 'products';
                     <a href="/admin/products/systems.php?product_id=<?= (int) $productId ?>">Systems</a>
                 </p>
             </div>
-            <a href="/admin/products/extras-copy.php?product_id=<?= (int) $productId ?>"
-               class="btn btn-secondary">Copy from another product</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">&larr; Back to setup wizard</a>
+                <a href="/admin/products/extras-copy.php?product_id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">Copy from another product</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>

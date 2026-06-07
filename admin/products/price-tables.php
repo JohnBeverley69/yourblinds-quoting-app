@@ -316,6 +316,8 @@ $activeNav = 'products';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">&larr; Back to setup wizard</a>
                 <a href="/admin/products/price-tables-single-import.php?system_id=<?= (int) $systemId ?>"
                    class="btn btn-secondary">Single-band import</a>
                 <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"

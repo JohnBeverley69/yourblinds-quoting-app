@@ -302,6 +302,8 @@ $activeNav = 'products';
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>"><?= e($optLabel) ?>s</a>
                 </p>
             </div>
+            <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>"
+               class="btn btn-secondary">&larr; Back to setup wizard</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>
