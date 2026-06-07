@@ -595,11 +595,6 @@ $activeNav = 'calendar';
                        style="color:#1f3b5b;font-weight:600">
                         📅 Day
                     </a>
-                    &middot;
-                    <a href="/calendar/sync-setup.php"
-                       style="color:#1f3b5b;font-weight:600">
-                        📲 Sync phone
-                    </a>
                 </p>
             </div>
             <div class="actions-bar">
