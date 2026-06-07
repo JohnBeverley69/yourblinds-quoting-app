@@ -245,6 +245,7 @@ $activeNav = 'instaprice';
     var currentFabricBand = '';
     var requiresOption = true;   // false for no-fabric products (headrail/track/spares)
     var widthOnly = false;       // true for width-only products (headrail/track) — no drop
+    var perSlat = false;         // true for per-slat products (vertical fabric only) — no width
 
     // Active measurement unit (starts on the company default; the switcher
     // changes it). Bare numbers are read in this unit; explicit suffixes
@@ -282,6 +283,10 @@ $activeNav = 'instaprice';
             dropIn.style.display = widthOnly ? 'none' : '';
             if (widthOnly) dropIn.value = '';
         }
+        if (widthIn) {
+            widthIn.style.display = perSlat ? 'none' : '';
+            if (perSlat) widthIn.value = '';   // priced per slat by drop
+        }
     }
 
     // ----- Product load -------------------------------------------------
@@ -295,7 +300,7 @@ $activeNav = 'instaprice';
             fabricSearch.disabled = true; fabricSearch.placeholder = 'Choose product first';
             if (fabricLabelEl) fabricLabelEl.textContent = 'Fabric';
             if (bandLabelEl) bandLabelEl.textContent = 'Band';
-            requiresOption = true; widthOnly = false; applyFabricVisibility();
+            requiresOption = true; widthOnly = false; perSlat = false; applyFabricVisibility();
             schedulePreview();
             return;
         }
@@ -329,6 +334,7 @@ $activeNav = 'instaprice';
             requiresOption = !productData.product
                           || productData.product.requires_option !== false;
             widthOnly = !!(productData.product && productData.product.width_only === true);
+            perSlat   = !!(productData.product && productData.product.price_per_slat === true);
             applyFabricVisibility();
 
             populateBands(bandsForCurrentSystem());
@@ -579,7 +585,7 @@ $activeNav = 'instaprice';
         var missing = [];
         if (!productSel.value)                  missing.push('product');
         if (requiresOption && !fabricId.value)  missing.push('fabric');
-        if (!widthIn.value.trim())              missing.push('width');
+        if (!perSlat && !widthIn.value.trim())  missing.push('width');
         if (!widthOnly && !dropIn.value.trim()) missing.push('drop');
         if (missing.length) { setPriceIdle('Still need: ' + missing.join(', ') + '.', false); return; }
 
@@ -714,7 +720,10 @@ $activeNav = 'instaprice';
         var w = parseDim(widthIn.value), d = parseDim(dropIn.value);
         // Echo back in mm so the operator can sanity-check the conversion
         // (e.g. 60" really is 1524 mm).
-        if (widthOnly) {
+        if (perSlat) {
+            if (d) { el.textContent = 'Using ' + d + ' mm drop (per slat)'; el.hidden = false; }
+            else   { el.hidden = true; }
+        } else if (widthOnly) {
             if (w) { el.textContent = 'Using ' + w + ' mm wide'; el.hidden = false; }
             else   { el.hidden = true; }
         } else if (w && d) {

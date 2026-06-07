@@ -2,18 +2,19 @@
 declare(strict_types=1);
 
 /**
- * Per-metre-of-drop RATE importer (products.price_per_drop_metre = 1).
+ * Per-slat RATE importer (products.price_per_slat = 1).
  *
- * For products like "Vertical Fabric Only", the price list is a width ->
- * rate grid per (system, band): rows = widths (metres), columns = bands
- * (Band AAA … Band E), and the cell is the £/metre-of-drop rate. The sheet
- * usually carries TWO sub-tables — "With Chains" and "Chainless" — which map
- * to the product's two systems.
+ * For products like "Vertical Fabric Only", the price list is a drop ->
+ * price-per-slat grid per (system, band): rows = drops (metres), columns =
+ * bands (Band AAA … Band E), and the cell is the price per slat at that drop.
+ * The sheet usually carries TWO sub-tables — "With Chains" and "Chainless" —
+ * which map to the product's two systems.
  *
  * This reads such a workbook, matches each sub-table to one of the product's
- * systems (chains/chainless), and writes a width -> rate price table per
- * (system, band) — rows stored at drop_mm 0, the rate in the price column,
- * which is exactly what the price_per_drop_metre engine path expects.
+ * systems (chains/chainless), and writes a drop -> price-per-slat price table
+ * per (system, band) — the drop in drop_mm, width_mm 0, the per-slat price in
+ * the price column, which is exactly what the price_per_slat engine path
+ * (pe_find_matrix_row_by_drop) expects.
  *
  * Workbooks here have several sheets (Summary / Costs / Base / final), so
  * the upload step parses every sheet and lets the user pick which one to
@@ -208,11 +209,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $ins->execute([$clientId, $productId, $systemId, $band, 'Rates ' . date('Y-m-d')]);
                             $tableId = (int) $pdo->lastInsertId();
                         }
-                        // Replace rows (width -> rate, drop_mm 0).
+                        // Replace rows. Per-slat tables are keyed by DROP, so
+                        // the axis value goes in drop_mm (width_mm 0); price is
+                        // the per-slat rate. Matches pe_find_matrix_row_by_drop.
                         $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
                         $rowIns = $pdo->prepare(
                             'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price)
-                             VALUES (?, ?, 0, ?)'
+                             VALUES (?, 0, ?, ?)'
                         );
                         foreach ($widthRates as $mm => $rate) {
                             $mm = (int) $mm;
@@ -295,7 +298,8 @@ $activeNav = 'products';
                 <p style="color:var(--text-muted);margin:0 0 1rem">
                     This workbook has more than one usable sheet (e.g. cost / base /
                     final). Pick the one with your <strong>final trade rates</strong>.
-                    Each rate is £ per metre of drop; the price will be rate &times; drop.
+                    Each cell is the price per slat at that drop; the line price will be
+                    that rate &times; the number of slats.
                 </p>
                 <form method="post">
                     <?= csrf_field() ?>
@@ -326,7 +330,7 @@ $activeNav = 'products';
                                         <?php else: ?>
                                             &rarr; <span style="color:#b91c1c">no matching system — skipped</span>
                                         <?php endif; ?>
-                                        &middot; bands <?= e($bandList) ?> &middot; <?= (int) $wCount ?> widths
+                                        &middot; bands <?= e($bandList) ?> &middot; <?= (int) $wCount ?> drops
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -355,11 +359,11 @@ $activeNav = 'products';
         <?php else: ?>
             <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
                 <p style="margin:0;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
-                    Upload a per-metre-of-drop rate workbook. Each sub-table
+                    Upload a per-slat rate workbook. Each sub-table
                     ("With Chains" / "Chainless") has a <strong>Band AAA … Band E</strong>
-                    header and width rows; the cells are £/metre-of-drop rates. We'll match
-                    each sub-table to this product's systems and write a width &rarr; rate
-                    table per band.
+                    header and drop rows; the cells are the price per slat at that drop.
+                    We'll match each sub-table to this product's systems and write a
+                    drop &rarr; price-per-slat table per band.
                 </p>
             </section>
             <?php if ($systems): ?>

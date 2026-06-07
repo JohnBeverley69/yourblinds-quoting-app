@@ -45,11 +45,15 @@ if (!($isAdmin || !empty($perms['can_create_quotes']))) {
 $quoteUnit = unit_is_valid($_POST['unit'] ?? null)
     ? (string) $_POST['unit']
     : client_default_unit(db(), $clientId);
-$widthMm = ptp_parse_dimension((string) ($_POST['width'] ?? ''), $quoteUnit);
+$widthRaw = (string) ($_POST['width'] ?? '');
+$widthMm  = ptp_parse_dimension($widthRaw, $quoteUnit);
 $dropRaw = (string) ($_POST['drop'] ?? '');
 $dropMm  = ptp_parse_dimension($dropRaw, $quoteUnit);
-// Blank drop → 0 (width-only products have none); the engine decides if a
-// drop is required.
+// Blank width → 0 (per-slat products) / blank drop → 0 (width-only); the
+// engine decides which are required.
+if ($widthMm === null && trim($widthRaw) === '') {
+    $widthMm = 0;
+}
 if ($dropMm === null && trim($dropRaw) === '') {
     $dropMm = 0;
 }

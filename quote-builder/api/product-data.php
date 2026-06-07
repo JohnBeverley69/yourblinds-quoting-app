@@ -47,6 +47,7 @@ $pdo = db();
 // endpoint works on schemas where either migration hasn't run.
 $product = false;
 foreach ([
+    'id, name, option_label, band_label, requires_option, width_only, price_per_slat',
     'id, name, option_label, band_label, requires_option, width_only',
     'id, name, option_label, band_label, requires_option',
     'id, name, option_label, band_label',
@@ -342,6 +343,10 @@ echo json_encode([
         // hide the Drop field. Absent column ⇒ false.
         'width_only' => isset($product['width_only'])
             && (int) $product['width_only'] === 1,
+        // price_per_slat = priced per slat, looked up by drop. Front-ends
+        // hide the WIDTH field and treat quantity as the slat count.
+        'price_per_slat' => isset($product['price_per_slat'])
+            && (int) $product['price_per_slat'] === 1,
     ],
     'systems'       => $systems,
     'bands'         => $bands,

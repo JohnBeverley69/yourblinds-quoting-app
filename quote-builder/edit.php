@@ -1178,7 +1178,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
 
                 <div class="form-row cols-3 cols-3-plus-notes">
-                    <div class="form-group">
+                    <div class="form-group" id="item-width-group">
                         <label for="item-width">Width (<?= e($unitSuffix) ?>) <span class="required">*</span></label>
                         <input id="item-width" name="width" type="text" required
                                autocomplete="off" autocorrect="off" autocapitalize="off"
@@ -1195,7 +1195,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                placeholder="Drop in <?= e($unitSuffix) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="item-qty">Quantity</label>
+                        <label for="item-qty" id="item-qty-label">Quantity</label>
                         <input id="item-qty" name="quantity" type="number" step="1" min="1"
                                value="<?= $editingItem ? (int) $editingItem['quantity'] : 1 ?>">
                     </div>
@@ -1306,8 +1306,22 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?= e(unit_format((int) $it['width_mm'], $measureUnit)) ?> ×
-                                        <?= e(unit_format((int) $it['drop_mm'], $measureUnit)) ?>
+                                        <?php
+                                            // A 0 on either axis means that axis doesn't apply
+                                            // (width-only → no drop; per-slat → no width).
+                                            $itW = (int) $it['width_mm'];
+                                            $itD = (int) $it['drop_mm'];
+                                            if ($itW > 0 && $itD > 0) {
+                                                echo e(unit_format($itW, $measureUnit)) . ' × '
+                                                   . e(unit_format($itD, $measureUnit));
+                                            } elseif ($itD > 0) {
+                                                echo e(unit_format($itD, $measureUnit)) . ' drop';
+                                            } elseif ($itW > 0) {
+                                                echo e(unit_format($itW, $measureUnit)) . ' wide';
+                                            } else {
+                                                echo '—';
+                                            }
+                                        ?>
                                     </td>
                                     <td class="num"><?= (int) $it['quantity'] ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
@@ -1740,10 +1754,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // Width-only products (headrail/track) hide the Drop field and price
     // on width alone.
     var widthOnly = false;
+    // Per-slat products (vertical fabric only) hide the WIDTH field; the
+    // price is per-slat (looked up by drop) × the quantity (= slat count).
+    var perSlat = false;
     var widthIn       = document.getElementById('item-width');
     var dropIn        = document.getElementById('item-drop');
+    var widthGroup    = document.getElementById('item-width-group');
     var dropGroup     = document.getElementById('item-drop-group');
     var qtyIn         = document.getElementById('item-qty');
+    var qtyLabel      = document.getElementById('item-qty-label');
     var unitSel       = document.getElementById('item-unit');
 
     // The quote's measurement unit. Sent to the preview API so a bare
@@ -1804,6 +1823,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             dropIn.required = !widthOnly;
             if (widthOnly) dropIn.value = '';   // priced on width alone
         }
+
+        // Per-slat: hide width; quantity is the slat count.
+        if (widthGroup) widthGroup.style.display = perSlat ? 'none' : '';
+        if (widthIn) {
+            widthIn.required = !perSlat;
+            if (perSlat) widthIn.value = '';
+        }
+        if (qtyLabel) qtyLabel.textContent = perSlat ? 'Number of slats' : 'Quantity';
     }
 
     async function loadProductData() {
@@ -1821,6 +1848,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             extrasBox.innerHTML = '';
             requiresOption = true;   // restore default pickers
             widthOnly = false;       // restore drop field
+            perSlat = false;         // restore width field
             applyFabricVisibility();
             schedulePreview();
             return;
@@ -1875,6 +1903,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             requiresOption = !productData.product
                           || productData.product.requires_option !== false;
             widthOnly = !!(productData.product && productData.product.width_only === true);
+            perSlat   = !!(productData.product && productData.product.price_per_slat === true);
             applyFabricVisibility();
 
             // Fabric typeahead — enable input. Picking happens via the
@@ -2499,10 +2528,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // "pick a product, fabric and dimensions" was too easy to miss
         // when you'd already filled three of the four.
         var missing = [];
-        if (!productSel.value)                  missing.push('product');
-        if (requiresOption && !fabricId.value)  missing.push('fabric');
-        if (!widthIn.value.trim())              missing.push('width');
-        if (!widthOnly && !dropIn.value.trim()) missing.push('drop');
+        if (!productSel.value)                   missing.push('product');
+        if (requiresOption && !fabricId.value)   missing.push('fabric');
+        if (!perSlat && !widthIn.value.trim())   missing.push('width');
+        if (!widthOnly && !dropIn.value.trim())  missing.push('drop');
         if (missing.length > 0) {
             previewBox.className   = 'idle';
             previewBox.textContent = 'Still need: ' + missing.join(', ') + '.';

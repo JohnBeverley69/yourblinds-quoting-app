@@ -71,11 +71,11 @@ try {
     $widthOnly = (int) $woStmt->fetchColumn() === 1;
 } catch (Throwable $e) { /* column absent — keep false */ }
 
-// price_per_drop_metre products store a width → RATE list (price = rate ×
+// price_per_slat products store a width → RATE list (price = rate ×
 // drop). Same 1-D editor as width-only, just labelled "rate". Optional col.
 $pricePerDrop = false;
 try {
-    $ppStmt = db()->prepare('SELECT price_per_drop_metre FROM products WHERE id = ? AND client_id = ?');
+    $ppStmt = db()->prepare('SELECT price_per_slat FROM products WHERE id = ? AND client_id = ?');
     $ppStmt->execute([(int) $table['product_id'], $clientId]);
     $pricePerDrop = (int) $ppStmt->fetchColumn() === 1;
 } catch (Throwable $e) { /* column absent — keep false */ }
@@ -722,9 +722,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
         $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
         if ($byWidth) {
             ksort($byWidth);
-            $ins = $pdo->prepare(
-                'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price)
-                 VALUES (?, ?, 0, ?)'
+            // Per-slat tables key the axis on DROP (drop_mm); width-only on
+            // width (width_mm). Same bound values either way.
+            $ins = $pdo->prepare($pricePerDrop
+                ? 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, 0, ?, ?)'
+                : 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, 0, ?)'
             );
             foreach ($byWidth as $w => $p) { $ins->execute([$tableId, $w, $p]); }
         }
@@ -762,26 +764,30 @@ $justSaved = !empty($_GET['saved']);
 // none of the grid machinery below runs.
 // ---------------------------------------------------------------------------
 if ($oneDimEditor) {
+    // Per-slat tables key the axis on drop_mm; width-only on width_mm. Alias
+    // to width_mm so the render below stays the same.
+    $woAxisCol = $pricePerDrop ? 'drop_mm' : 'width_mm';
     $woRowsStmt = db()->prepare(
-        'SELECT width_mm, price FROM price_table_rows
-          WHERE price_table_id = ? ORDER BY width_mm'
+        "SELECT $woAxisCol AS width_mm, price FROM price_table_rows
+          WHERE price_table_id = ? ORDER BY $woAxisCol"
     );
     $woRowsStmt->execute([$tableId]);
     $woRows = $woRowsStmt->fetchAll(PDO::FETCH_ASSOC);
     $flashErrsDetailWO = $flashErrsDetail ?? [];
 
-    // Mode-specific wording: width-only = a flat price per width; per-metre-
-    // of-drop = a £/metre-of-drop rate per width.
-    $valLabel    = $pricePerDrop ? 'Rate (£/m drop)' : 'Price (£)';
+    // Mode-specific wording. width-only = a flat price per width; per-slat =
+    // a per-slat price looked up by DROP (× the slat count at quote time).
+    $axisLabel   = $pricePerDrop ? 'Drop'            : 'Width';
+    $valLabel    = $pricePerDrop ? 'Price per slat (£)' : 'Price (£)';
     $pricePh     = $pricePerDrop ? 'e.g. 0.71'       : 'e.g. 7.94';
-    $pageWord    = $pricePerDrop ? 'rates'           : 'prices';
+    $pageWord    = $pricePerDrop ? 'per-slat rates'  : 'prices';
     $introTxt    = $pricePerDrop
-        ? 'Priced per metre of drop. Each row is a width and its £/metre rate; the price is rate × the drop (a quoted width rounds up to the next listed width).'
+        ? 'Priced per slat. Each row is a drop and its price per slat; at quote time the line price is that rate × the number of slats (a quoted drop rounds up to the next listed drop).'
         : 'Priced by width only. Each row is a width and its price; a quoted width rounds up to the next listed width.';
     $importHref  = $pricePerDrop
         ? '/admin/products/price-import-rates.php?product_id=' . (int) $table['product_id']
         : '/admin/products/price-import-width.php?product_id=' . (int) $table['product_id'];
-    $importLabel = $pricePerDrop ? 'Import rates' : 'Import width prices';
+    $importLabel = $pricePerDrop ? 'Import per-slat rates' : 'Import width prices';
 
     $activeNav = 'products';
     ?><!doctype html>
@@ -815,14 +821,14 @@ if ($oneDimEditor) {
                             [(string) $table['product_name'],     '/admin/products/edit.php?id=' . (int) $table['product_id']],
                             ['Systems',                           '/admin/products/systems.php?product_id=' . (int) $table['product_id']],
                             [(string) $table['system_name'],      null],
-                            ['Width ' . $pageWord,                null],
+                            [ucfirst($pageWord),                  null],
                         ]);
                     ?>
                     <h1 class="page-title">
                         <?= e((string) $table['product_name']) ?>
                         &mdash; <?= e((string) $table['system_name']) ?>
                         <?php if ($pricePerDrop): ?> &middot; Band <?= e((string) $table['band_code']) ?><?php endif; ?>
-                        width <?= e($pageWord) ?>
+                        <?= e($pageWord) ?>
                     </h1>
                     <p class="page-subtitle"><?= e($introTxt) ?></p>
                 </div>
@@ -857,7 +863,7 @@ if ($oneDimEditor) {
                     ?>
                     <table class="wo-table" id="wo-table">
                         <thead>
-                            <tr><th>Width (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><th></th></tr>
+                            <tr><th><?= e($axisLabel) ?> (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><th></th></tr>
                         </thead>
                         <tbody>
                             <?php

@@ -48,13 +48,17 @@ $dropRaw  = (string) ($_GET['drop']  ?? '');
 $widthMm  = ptp_parse_dimension($widthRaw, $unit);
 $dropMm   = ptp_parse_dimension($dropRaw, $unit);
 
+// A blank width or drop is allowed through as 0 — some products have no
+// width (per-slat) or no drop (width-only). The engine decides which are
+// actually required. Only a non-blank, unparseable value is a hard error.
 if ($widthMm === null) {
-    echo json_encode(['error' => 'Could not read width "' . $widthRaw . '".', 'stage' => 'input']);
-    exit;
+    if (trim($widthRaw) === '') {
+        $widthMm = 0;
+    } else {
+        echo json_encode(['error' => 'Could not read width "' . $widthRaw . '".', 'stage' => 'input']);
+        exit;
+    }
 }
-// A blank drop is allowed through as 0 — width-only products (headrail/
-// track) have no drop, and the engine decides whether a drop is needed.
-// Only a non-blank, unparseable drop is a hard input error here.
 if ($dropMm === null) {
     if (trim($dropRaw) === '') {
         $dropMm = 0;

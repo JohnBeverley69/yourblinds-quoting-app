@@ -62,7 +62,7 @@ $colExists = static function (string $col) use ($pdo): bool {
 };
 $hasRequiresOption = $colExists('requires_option');
 $hasWidthOnly      = $colExists('width_only');
-$hasPricePerDrop   = $colExists('price_per_drop_metre');
+$hasPricePerDrop   = $colExists('price_per_slat');
 $hasShowColField   = $colExists('show_colour_field');
 
 // ── Load product if id supplied ────────────────────────────────────────
@@ -71,7 +71,7 @@ if ($productId > 0) {
     $cols = 'id, name, option_label'
           . ($hasRequiresOption ? ', requires_option'      : '')
           . ($hasWidthOnly      ? ', width_only'           : '')
-          . ($hasPricePerDrop   ? ', price_per_drop_metre' : '');
+          . ($hasPricePerDrop   ? ', price_per_slat' : '');
     $st = $pdo->prepare(
         "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
     );
@@ -95,10 +95,10 @@ $requiresOption = !isset($product['requires_option'])
 // width-price importer CTA. Absent column ⇒ false.
 $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
 
-// price_per_drop_metre = price table is a width→rate list (× drop). Drives
+// price_per_slat = price table is a width→rate list (× drop). Drives
 // the step-4 rate importer CTA. Absent column ⇒ false.
-$pricePerDrop = isset($product['price_per_drop_metre'])
-    && (int) $product['price_per_drop_metre'] === 1;
+$pricePerDrop = isset($product['price_per_slat'])
+    && (int) $product['price_per_slat'] === 1;
 
 // ── State counts (drives both step inference and the "you're done with
 //    step X" indicators in the UI) ─────────────────────────────────────
@@ -205,8 +205,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $insVals[] = empty($_POST['width_only']) ? 0 : 1;
             }
             if ($hasPricePerDrop) {
-                $insCols[] = 'price_per_drop_metre';
-                $insVals[] = empty($_POST['price_per_drop_metre']) ? 0 : 1;
+                $insCols[] = 'price_per_slat';
+                $insVals[] = empty($_POST['price_per_slat']) ? 0 : 1;
             }
             $insPh = implode(', ', array_fill(0, count($insCols), '?'));
             $ins = $pdo->prepare(
@@ -1012,16 +1012,17 @@ $activeNav = 'wizard';
                                 <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;
                                               text-transform:none;letter-spacing:normal;font-weight:500;
                                               color:var(--text-body)">
-                                    <input type="checkbox" name="price_per_drop_metre" value="1"
-                                           <?= !empty($_POST['price_per_drop_metre']) ? 'checked' : '' ?>
+                                    <input type="checkbox" name="price_per_slat" value="1"
+                                           <?= !empty($_POST['price_per_slat']) ? 'checked' : '' ?>
                                            style="margin-top:0.2rem">
                                     <span>
-                                        Priced <strong>per metre of drop</strong> —
+                                        Priced <strong>per slat</strong> (by drop) —
                                         e.g. vertical fabric only.
                                         <small style="display:block;color:var(--text-faint);font-size:0.8125rem;
                                                       font-weight:400;margin-top:0.2rem;line-height:1.5">
-                                            Each price table is a width &rarr; rate list; the price is
-                                            that rate &times; the drop. Leave the boxes above unticked.
+                                            Price table is a drop &rarr; price-per-slat list; the line
+                                            price is that rate &times; number of slats. Leave the boxes
+                                            above unticked.
                                         </small>
                                     </span>
                                 </label>
@@ -1416,15 +1417,15 @@ $activeNav = 'wizard';
                 <?php endif; ?>
 
                 <?php if ($pricePerDrop): ?>
-                    <!-- Per-metre-of-drop products: import the rate workbook
-                         (width → rate per system + band) rather than hand-
-                         entering 14 tables. The importer creates the tables. -->
+                    <!-- Per-slat products: import the rate workbook (drop →
+                         price-per-slat per system + band) rather than hand-
+                         entering the tables. The importer creates them. -->
                     <div class="wiz-card" style="background:#eff6ff;border-color:#bfdbfe">
-                        <h2 style="color:#1e40af">Priced per metre of drop — import the rates</h2>
+                        <h2 style="color:#1e40af">Priced per slat — import the rates</h2>
                         <p class="lede" style="color:#1e40af">
-                            Upload your rate spreadsheet (a width &rarr; rate grid per band,
-                            with Chains / Chainless sub-tables) and we'll create and fill
-                            every system + band table in one go — no need to create the
+                            Upload your rate spreadsheet (a drop &rarr; price-per-slat grid
+                            per band, with Chains / Chainless sub-tables) and we'll create and
+                            fill every system + band table in one go — no need to create the
                             empty tables first.
                         </p>
                         <a href="/admin/products/price-import-rates.php?product_id=<?= (int) $productId ?>"

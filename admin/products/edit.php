@@ -123,7 +123,7 @@ if ($hasWidthOnly) {
     } catch (Throwable $e) { /* keep 0 */ }
 }
 
-// price_per_drop_metre (migrate_price_per_drop_metre.php). 1 = price table
+// price_per_slat (migrate_price_per_slat.php). 1 = price table
 // is a width→rate list; price = rate × drop. Detect + load. Default 0.
 $hasPricePerDrop = false;
 try {
@@ -131,14 +131,14 @@ try {
         "SELECT 1 FROM information_schema.COLUMNS
           WHERE TABLE_SCHEMA = DATABASE()
             AND TABLE_NAME   = 'products'
-            AND COLUMN_NAME  = 'price_per_drop_metre'"
+            AND COLUMN_NAME  = 'price_per_slat'"
     )->fetchColumn();
 } catch (Throwable $e) { /* keep false */ }
 
 $pricePerDropValue = 0;
 if ($hasPricePerDrop) {
     try {
-        $ppStmt = db()->prepare('SELECT price_per_drop_metre FROM products WHERE id = ? AND client_id = ?');
+        $ppStmt = db()->prepare('SELECT price_per_slat FROM products WHERE id = ? AND client_id = ?');
         $ppStmt->execute([$id, $clientId]);
         $ppVal = $ppStmt->fetchColumn();
         $pricePerDropValue = ($ppVal === null || $ppVal === false) ? 0 : (int) $ppVal;
@@ -357,7 +357,7 @@ $f = [
     // 1 = priced on width alone (no drop). Optional column.
     'width_only'        => $widthOnlyValue,
     // 1 = price table is width→rate; price = rate × drop. Optional column.
-    'price_per_drop_metre' => $pricePerDropValue,
+    'price_per_slat' => $pricePerDropValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -393,8 +393,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
     // Checkbox is "priced by width only" → width_only = 1.
     $f['width_only']        = !empty($_POST['width_only']) ? 1 : 0;
-    // Checkbox is "priced per metre of drop" → price_per_drop_metre = 1.
-    $f['price_per_drop_metre'] = !empty($_POST['price_per_drop_metre']) ? 1 : 0;
+    // Checkbox is "priced per metre of drop" → price_per_slat = 1.
+    $f['price_per_slat'] = !empty($_POST['price_per_slat']) ? 1 : 0;
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -485,8 +485,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vals[] = $f['width_only'];
             }
             if ($hasPricePerDrop) {
-                $cols[] = 'price_per_drop_metre = ?';
-                $vals[] = $f['price_per_drop_metre'];
+                $cols[] = 'price_per_slat = ?';
+                $vals[] = $f['price_per_slat'];
             }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
@@ -984,23 +984,24 @@ $activeNav = 'products';
                 <?php endif; ?>
 
                 <?php if ($hasPricePerDrop): ?>
-                    <!-- Per-metre-of-drop pricing (e.g. Vertical Fabric Only):
-                         the price table is a width → rate list and the price is
-                         rate × drop. It's a normal fabric product otherwise
-                         (fabric → band, width AND drop entered). -->
+                    <!-- Per-slat pricing (e.g. Vertical Fabric Only): the price
+                         table is a drop → price-per-slat list; the line price is
+                         that rate × the number of slats (the line quantity).
+                         No width. Normal fabric product otherwise. -->
                     <div class="form-row full">
                         <div class="form-group">
                             <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
-                                <input type="checkbox" name="price_per_drop_metre" value="1"
-                                       <?= (int) $f['price_per_drop_metre'] === 1 ? 'checked' : '' ?>
+                                <input type="checkbox" name="price_per_slat" value="1"
+                                       <?= (int) $f['price_per_slat'] === 1 ? 'checked' : '' ?>
                                        style="margin-top:0.1875rem">
                                 <span>
-                                    <strong>Priced per metre of drop — e.g. vertical fabric only.</strong>
+                                    <strong>Priced per slat (by drop) — e.g. vertical fabric only.</strong>
                                     <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
-                                        Each price table is a width &rarr; <em>rate</em> list, and the
-                                        price is that rate &times; the drop. Still a normal fabric
-                                        product (pick a <?= e(strtolower((string) $f['option_label'])) ?> /
-                                        band, enter width &amp; drop). Don't combine with "width only".
+                                        Each price table is a <em>drop &rarr; price-per-slat</em> list.
+                                        At quote time you pick a <?= e(strtolower((string) $f['option_label'])) ?> /
+                                        band and enter the <strong>drop</strong> + <strong>number of
+                                        slats</strong> (the quantity) — no width. Don't combine with
+                                        "width only".
                                     </small>
                                 </span>
                             </label>
@@ -1312,7 +1313,7 @@ $activeNav = 'products';
                     <?php if ($hasWidthOnly && (int) $f['width_only'] === 1): ?>
                         <a href="/admin/products/price-import-width.php?product_id=<?= (int) $id ?>">Import width prices &raquo;</a>
                     <?php endif; ?>
-                    <?php if ($hasPricePerDrop && (int) $f['price_per_drop_metre'] === 1): ?>
+                    <?php if ($hasPricePerDrop && (int) $f['price_per_slat'] === 1): ?>
                         <a href="/admin/products/price-import-rates.php?product_id=<?= (int) $id ?>">Import rates &raquo;</a>
                     <?php endif; ?>
                     <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>">Full manage &raquo;</a>
@@ -2053,6 +2054,7 @@ $activeNav = 'products';
         // drop. Mirrors the quote builder / InstaPrice.
         var requiresOption = !(productData.product && productData.product.requires_option === false);
         var widthOnly      = !!(productData.product && productData.product.width_only === true);
+        var perSlat        = !!(productData.product && productData.product.price_per_slat === true);
 
         // System
         var systems = productData.systems || [];
@@ -2110,10 +2112,14 @@ $activeNav = 'products';
 
         // Dimensions + quantity. Width-only products price on width alone
         // — no drop field.
+        var dimLabel = perSlat
+            ? ('Drop (' + PREVIEW_UNIT_SFX + ') &amp; number of slats')
+            : (widthOnly ? ('Width (' + PREVIEW_UNIT_SFX + ') &amp; quantity')
+                         : ('Dimensions (' + PREVIEW_UNIT_SFX + ') &amp; quantity'));
         html += '<div class="pv-row">'
-              + '<label>' + (widthOnly ? ('Width (' + PREVIEW_UNIT_SFX + ') &amp; quantity') : ('Dimensions (' + PREVIEW_UNIT_SFX + ') &amp; quantity')) + '</label>'
+              + '<label>' + dimLabel + '</label>'
               + '<div class="pv-dim-row">'
-              +   '<input id="pv-width" type="number" placeholder="Width" min="1">'
+              +   (perSlat ? '' : '<input id="pv-width" type="number" placeholder="Width" min="1">')
               +   (widthOnly ? '' : '<input id="pv-drop" type="number" placeholder="Drop" min="1">')
               +   '<input id="pv-qty" type="number" value="1" min="1">'
               + '</div>'
@@ -2624,9 +2630,10 @@ $activeNav = 'products';
         var qtyIn   = document.getElementById('pv-qty');
 
         // Flags again (productData is loaded). No-fabric → no fabric pick
-        // required; width-only → no drop required.
+        // required; width-only → no drop; per-slat → no width.
         var requiresOption = !(productData.product && productData.product.requires_option === false);
         var widthOnly      = !!(productData.product && productData.product.width_only === true);
+        var perSlat        = !!(productData.product && productData.product.price_per_slat === true);
 
         // Soft validation — show a guidance message in the panel
         // rather than a red error. The user just hasn't filled in
@@ -2635,12 +2642,12 @@ $activeNav = 'products';
             setResult('is-idle', 'Pick a fabric to see the price.');
             return;
         }
-        if (!widthIn || !widthIn.value) {
+        if (!perSlat && (!widthIn || !widthIn.value)) {
             setResult('is-idle', widthOnly ? 'Enter a width to see the price.' : 'Enter a width and drop to see the price.');
             return;
         }
         if (!widthOnly && (!dropIn || !dropIn.value)) {
-            setResult('is-idle', 'Enter a width and drop to see the price.');
+            setResult('is-idle', perSlat ? 'Enter a drop to see the price.' : 'Enter a width and drop to see the price.');
             return;
         }
 
@@ -2653,7 +2660,7 @@ $activeNav = 'products';
             product_id: String(PRODUCT_ID),
             system_id:  sysSel ? sysSel.value : '0',
             option_id:  (fabSel && fabSel.value) ? fabSel.value : '0',
-            width:      widthIn.value,
+            width:      (widthIn && widthIn.value) ? widthIn.value : '',
             drop:       (dropIn && dropIn.value) ? dropIn.value : '',
             quantity:   qtyIn.value || '1',
             round_up:   '1',

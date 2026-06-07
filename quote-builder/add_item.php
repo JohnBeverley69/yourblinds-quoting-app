@@ -38,11 +38,16 @@ $dropRaw  = (string) ($_POST['drop']  ?? '');
 $widthMm  = ptp_parse_dimension($widthRaw, $unit);
 $dropMm   = ptp_parse_dimension($dropRaw, $unit);
 
+// Blank width → 0 (per-slat products have none); blank drop → 0 (width-only
+// products have none). The engine decides which are required. A non-blank
+// unparseable value is still an error.
 if ($widthMm === null) {
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read width "' . $widthRaw . '".');
+    if (trim($widthRaw) === '') {
+        $widthMm = 0;
+    } else {
+        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read width "' . $widthRaw . '".');
+    }
 }
-// Blank drop → 0 (width-only products have none); the engine decides if a
-// drop is actually required. A non-blank unparseable drop is still an error.
 if ($dropMm === null) {
     if (trim($dropRaw) === '') {
         $dropMm = 0;

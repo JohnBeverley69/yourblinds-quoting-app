@@ -215,6 +215,42 @@ function pe_find_matrix_row_width_only(
 }
 
 /**
+ * Per-slat (drop-banded) lookup (products.price_per_slat = 1). The price
+ * table is a drop → price-per-slat list (rows stored with width_mm 0, the
+ * drop in drop_mm, the per-slat price in `price`). Round-up picks the
+ * smallest drop_mm >= request; exact wants drop_mm = request.
+ */
+function pe_find_matrix_row_by_drop(
+    PDO  $pdo,
+    int  $priceTableId,
+    int  $dropMm,
+    bool $roundUp
+): ?array {
+    if ($roundUp) {
+        $st = $pdo->prepare(
+            'SELECT id, width_mm, drop_mm, price
+               FROM price_table_rows
+              WHERE price_table_id = ?
+                AND drop_mm       >= ?
+              ORDER BY drop_mm ASC
+              LIMIT 1'
+        );
+    } else {
+        $st = $pdo->prepare(
+            'SELECT id, width_mm, drop_mm, price
+               FROM price_table_rows
+              WHERE price_table_id = ?
+                AND drop_mm        = ?
+              ORDER BY width_mm ASC
+              LIMIT 1'
+        );
+    }
+    $st->execute([$priceTableId, $dropMm]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
  * Compute the £ contribution of one (extra, choice) selection to a single
  * blind, applying all four surcharge modes that have non-zero data.
  *
@@ -571,12 +607,12 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $extras    = is_array($input['extras'] ?? null) ? $input['extras'] : [];
 
     if ($productId <= 0) return ['error' => 'Product is required.'];
-    // NOTE: the "Fabric is required" and "Drop is required" checks are
-    // deferred until after the product is loaded — a product flagged
-    // requires_option = 0 (headrail-only) is priced on system × size with
-    // no fabric, and one flagged width_only = 1 has no drop at all. See the
-    // branches below.
-    if ($widthMm   <= 0) return ['error' => 'Width must be greater than zero.'];
+    // NOTE: the width / drop / fabric "required" checks are deferred until
+    // after the product is loaded, because the flags change which apply:
+    //   requires_option = 0  → no fabric (headrail/track/spares)
+    //   width_only      = 1  → no drop (priced on width alone)
+    //   price_per_slat  = 1  → no width (priced per slat, looked up by drop)
+    // See the validation block just below the product load.
 
     // 1. Product (tenant scope). cost_price = default wholesale cost
     //    per blind for this product (set on /admin/products/edit.php).
@@ -587,7 +623,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
     $product = false;
     foreach ([
-        'id, name, cost_price, requires_option, width_only, price_per_drop_metre',
+        'id, name, cost_price, requires_option, width_only, price_per_slat',
         'id, name, cost_price, requires_option, width_only',
         'id, name, cost_price, requires_option',
         'id, name, cost_price',
@@ -615,18 +651,24 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     // column ⇒ false (normal width × drop pricing).
     $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
 
-    // price_per_drop_metre = the price table holds a RATE per width band, and
-    // the price is rate × (drop in metres). It's a normal fabric product
-    // otherwise (fabric → band → table; width AND drop entered). Absent
-    // column ⇒ false. width_only takes precedence (a product can't be both).
-    $pricePerDropMetre = !$widthOnly
-        && isset($product['price_per_drop_metre'])
-        && (int) $product['price_per_drop_metre'] === 1;
+    // price_per_slat = priced per slat, looked up by DROP. The price table is
+    // a drop → price-per-slat list; the line price is that rate × the slat
+    // count (the line quantity). No width. It's a normal fabric product
+    // otherwise (fabric → band → table). width_only takes precedence.
+    $perSlat = !$widthOnly
+        && isset($product['price_per_slat'])
+        && (int) $product['price_per_slat'] === 1;
 
-    if ($widthOnly) {
-        $dropMm = 0;                       // ignore any supplied drop
-    } elseif ($dropMm <= 0) {
-        return ['error' => 'Drop must be greater than zero.'];
+    // Deferred dimension validation — depends on the mode.
+    if ($perSlat) {
+        $widthMm = 0;                                  // width isn't used
+        if ($dropMm <= 0) return ['error' => 'Drop must be greater than zero.'];
+    } elseif ($widthOnly) {
+        $dropMm = 0;                                   // drop isn't used
+        if ($widthMm <= 0) return ['error' => 'Width must be greater than zero.'];
+    } else {
+        if ($widthMm <= 0) return ['error' => 'Width must be greater than zero.'];
+        if ($dropMm  <= 0) return ['error' => 'Drop must be greater than zero.'];
     }
 
     // 2. System (optional).
@@ -684,10 +726,11 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     }
 
     // 5. Matrix cell / rate.
-    //    - width_only         → match on width alone; base = that price.
-    //    - price_per_drop_metre → the table holds a width → RATE list; match
-    //      the rate by width, then base = rate × (drop in metres).
-    //    - normal             → full width × drop grid.
+    //    - width_only  → match on width alone; base = that price.
+    //    - per_slat    → the table is a drop → price-per-slat list; match by
+    //      drop; base = that per-slat price (× slat count happens via the
+    //      line quantity at step 8).
+    //    - normal      → full width × drop grid.
     if ($widthOnly) {
         $row = pe_find_matrix_row_width_only(
             $pdo, (int) $priceTable['id'], $widthMm, $roundUp
@@ -698,17 +741,16 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
                 : "No exact price for width $widthMm mm. Try the next available width."];
         }
         $basePrice = (float) $row['price'];
-    } elseif ($pricePerDropMetre) {
-        $row = pe_find_matrix_row_width_only(
-            $pdo, (int) $priceTable['id'], $widthMm, $roundUp
+    } elseif ($perSlat) {
+        $row = pe_find_matrix_row_by_drop(
+            $pdo, (int) $priceTable['id'], $dropMm, $roundUp
         );
         if ($row === null) {
             return ['error' => $roundUp
-                ? "Width $widthMm mm exceeds the largest entry in this rate list."
-                : "No rate for width $widthMm mm. Try the next available width."];
+                ? "Drop $dropMm mm exceeds the largest entry in this per-slat rate list."
+                : "No per-slat rate for drop $dropMm mm. Try the next available drop."];
         }
-        // Rate is per metre of drop.
-        $basePrice = round((float) $row['price'] * ($dropMm / 1000.0), 2);
+        $basePrice = (float) $row['price'];   // per slat; × quantity below
     } else {
         $row = pe_find_matrix_row(
             $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
@@ -812,19 +854,20 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         'fabric_colour'      => $fabric ? (string) ($fabric['colour'] ?? '')        : '',
         'fabric_code'        => $fabric ? (string) ($fabric['code']   ?? '')        : '',
 
-        // Dimensions: what was requested, what cell was actually used
+        // Dimensions: what was requested, what cell was actually used.
+        // width_only stores no drop; per_slat stores no width.
         'width_mm'           => $widthMm,
         'drop_mm'            => $dropMm,
-        'matrix_width_mm'    => (int) $row['width_mm'],
-        // Width-only rows store drop 0; per-metre-of-drop is linear so the
-        // "matrix drop" is the actual drop used in the rate × drop maths.
-        'matrix_drop_mm'     => $widthOnly ? 0
-                              : ($pricePerDropMetre ? $dropMm : (int) $row['drop_mm']),
-        // Round-up only flags a real grid round. Drop never "rounds" for
-        // width-only (no drop) or per-metre-of-drop (linear in drop).
+        'matrix_width_mm'    => $perSlat ? 0 : (int) $row['width_mm'],
+        'matrix_drop_mm'     => $widthOnly ? 0 : (int) $row['drop_mm'],
+        // Round-up flags a genuine round on whichever axis the mode uses.
         'rounded_up'         => $roundUp && (
-            (int) $row['width_mm'] !== $widthMm
-         || (!$widthOnly && !$pricePerDropMetre && (int) $row['drop_mm'] !== $dropMm)
+               ($perSlat   && (int) $row['drop_mm']  !== $dropMm)
+            || ($widthOnly && (int) $row['width_mm'] !== $widthMm)
+            || (!$perSlat && !$widthOnly && (
+                   (int) $row['width_mm'] !== $widthMm
+                || (int) $row['drop_mm']  !== $dropMm
+               ))
         ),
 
         // Pricing breakdown
