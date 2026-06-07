@@ -1146,6 +1146,20 @@ $activeNav = 'wizard';
                         </p>
                     <?php endif; ?>
 
+                    <!-- Copy the whole range from an existing product (e.g. a
+                         "fabric only" line that reuses the vertical blind's
+                         fabrics) instead of typing/pasting them here. -->
+                    <div class="helper" style="display:flex;align-items:center;
+                                justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                        <span>
+                            <strong>Same <?= e($labelL) ?>s as another product?</strong>
+                            Copy the whole range across (bands and all) rather than
+                            re-entering it.
+                        </span>
+                        <a href="/admin/products/options-copy.php?product_id=<?= (int) $productId ?>"
+                           class="btn btn-secondary">Copy from another product &rarr;</a>
+                    </div>
+
                     <?php if ($hasRequiresOption): ?>
                         <!-- Escape hatch for headrail-only / track / spares
                              products that have no fabric axis at all. Flips
