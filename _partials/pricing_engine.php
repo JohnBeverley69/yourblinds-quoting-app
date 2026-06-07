@@ -587,6 +587,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
     $product = false;
     foreach ([
+        'id, name, cost_price, requires_option, width_only, price_per_drop_metre',
         'id, name, cost_price, requires_option, width_only',
         'id, name, cost_price, requires_option',
         'id, name, cost_price',
@@ -613,6 +614,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     // the matrix lookup ignores drop and saved lines store drop 0. Absent
     // column ⇒ false (normal width × drop pricing).
     $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1;
+
+    // price_per_drop_metre = the price table holds a RATE per width band, and
+    // the price is rate × (drop in metres). It's a normal fabric product
+    // otherwise (fabric → band → table; width AND drop entered). Absent
+    // column ⇒ false. width_only takes precedence (a product can't be both).
+    $pricePerDropMetre = !$widthOnly
+        && isset($product['price_per_drop_metre'])
+        && (int) $product['price_per_drop_metre'] === 1;
+
     if ($widthOnly) {
         $dropMm = 0;                       // ignore any supplied drop
     } elseif ($dropMm <= 0) {
@@ -673,8 +683,11 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         }
     }
 
-    // 5. Matrix cell. Width-only products match on width alone; the rest
-    //    on the full width × drop grid.
+    // 5. Matrix cell / rate.
+    //    - width_only         → match on width alone; base = that price.
+    //    - price_per_drop_metre → the table holds a width → RATE list; match
+    //      the rate by width, then base = rate × (drop in metres).
+    //    - normal             → full width × drop grid.
     if ($widthOnly) {
         $row = pe_find_matrix_row_width_only(
             $pdo, (int) $priceTable['id'], $widthMm, $roundUp
@@ -684,6 +697,18 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
                 ? "Width $widthMm mm exceeds the largest entry in this price list."
                 : "No exact price for width $widthMm mm. Try the next available width."];
         }
+        $basePrice = (float) $row['price'];
+    } elseif ($pricePerDropMetre) {
+        $row = pe_find_matrix_row_width_only(
+            $pdo, (int) $priceTable['id'], $widthMm, $roundUp
+        );
+        if ($row === null) {
+            return ['error' => $roundUp
+                ? "Width $widthMm mm exceeds the largest entry in this rate list."
+                : "No rate for width $widthMm mm. Try the next available width."];
+        }
+        // Rate is per metre of drop.
+        $basePrice = round((float) $row['price'] * ($dropMm / 1000.0), 2);
     } else {
         $row = pe_find_matrix_row(
             $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
@@ -693,8 +718,8 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
                 ? "Size $widthMm × $dropMm mm exceeds the largest cell in this price table."
                 : "No exact price for $widthMm × $dropMm mm. Try the next available size."];
         }
+        $basePrice = (float) $row['price'];
     }
-    $basePrice = (float) $row['price'];
 
     // 6. Apply extras. Each $sel may now carry a `user_value` (typed
     //    length / count / etc.) — pass through to pe_apply_extra so it
@@ -791,10 +816,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         'width_mm'           => $widthMm,
         'drop_mm'            => $dropMm,
         'matrix_width_mm'    => (int) $row['width_mm'],
-        'matrix_drop_mm'     => (int) $row['drop_mm'],
+        // Width-only rows store drop 0; per-metre-of-drop is linear so the
+        // "matrix drop" is the actual drop used in the rate × drop maths.
+        'matrix_drop_mm'     => $widthOnly ? 0
+                              : ($pricePerDropMetre ? $dropMm : (int) $row['drop_mm']),
+        // Round-up only flags a real grid round. Drop never "rounds" for
+        // width-only (no drop) or per-metre-of-drop (linear in drop).
         'rounded_up'         => $roundUp && (
             (int) $row['width_mm'] !== $widthMm
-         || (int) $row['drop_mm']  !== $dropMm
+         || (!$widthOnly && !$pricePerDropMetre && (int) $row['drop_mm'] !== $dropMm)
         ),
 
         // Pricing breakdown

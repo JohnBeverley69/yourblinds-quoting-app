@@ -123,6 +123,28 @@ if ($hasWidthOnly) {
     } catch (Throwable $e) { /* keep 0 */ }
 }
 
+// price_per_drop_metre (migrate_price_per_drop_metre.php). 1 = price table
+// is a width→rate list; price = rate × drop. Detect + load. Default 0.
+$hasPricePerDrop = false;
+try {
+    $hasPricePerDrop = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'price_per_drop_metre'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$pricePerDropValue = 0;
+if ($hasPricePerDrop) {
+    try {
+        $ppStmt = db()->prepare('SELECT price_per_drop_metre FROM products WHERE id = ? AND client_id = ?');
+        $ppStmt->execute([$id, $clientId]);
+        $ppVal = $ppStmt->fetchColumn();
+        $pricePerDropValue = ($ppVal === null || $ppVal === false) ? 0 : (int) $ppVal;
+    } catch (Throwable $e) { /* keep 0 */ }
+}
+
 // Markup / discount are now per (product, system). A product with
 // systems carries one row per system; one without systems carries a
 // single row keyed by system_id IS NULL.
@@ -334,6 +356,8 @@ $f = [
     'requires_option'   => $requiresOptionValue,
     // 1 = priced on width alone (no drop). Optional column.
     'width_only'        => $widthOnlyValue,
+    // 1 = price table is width→rate; price = rate × drop. Optional column.
+    'price_per_drop_metre' => $pricePerDropValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -369,6 +393,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
     // Checkbox is "priced by width only" → width_only = 1.
     $f['width_only']        = !empty($_POST['width_only']) ? 1 : 0;
+    // Checkbox is "priced per metre of drop" → price_per_drop_metre = 1.
+    $f['price_per_drop_metre'] = !empty($_POST['price_per_drop_metre']) ? 1 : 0;
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -457,6 +483,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasWidthOnly) {
                 $cols[] = 'width_only = ?';
                 $vals[] = $f['width_only'];
+            }
+            if ($hasPricePerDrop) {
+                $cols[] = 'price_per_drop_metre = ?';
+                $vals[] = $f['price_per_drop_metre'];
             }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
@@ -946,6 +976,31 @@ $activeNav = 'products';
                                         InstaPrice hide the Drop field, and each price table is a
                                         single width &rarr; price list. Load one with the
                                         <strong>width-only importer</strong> on the price-tables page.
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($hasPricePerDrop): ?>
+                    <!-- Per-metre-of-drop pricing (e.g. Vertical Fabric Only):
+                         the price table is a width → rate list and the price is
+                         rate × drop. It's a normal fabric product otherwise
+                         (fabric → band, width AND drop entered). -->
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                                <input type="checkbox" name="price_per_drop_metre" value="1"
+                                       <?= (int) $f['price_per_drop_metre'] === 1 ? 'checked' : '' ?>
+                                       style="margin-top:0.1875rem">
+                                <span>
+                                    <strong>Priced per metre of drop — e.g. vertical fabric only.</strong>
+                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                        Each price table is a width &rarr; <em>rate</em> list, and the
+                                        price is that rate &times; the drop. Still a normal fabric
+                                        product (pick a <?= e(strtolower((string) $f['option_label'])) ?> /
+                                        band, enter width &amp; drop). Don't combine with "width only".
                                     </small>
                                 </span>
                             </label>

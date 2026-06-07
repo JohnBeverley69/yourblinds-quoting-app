@@ -62,6 +62,7 @@ $colExists = static function (string $col) use ($pdo): bool {
 };
 $hasRequiresOption = $colExists('requires_option');
 $hasWidthOnly      = $colExists('width_only');
+$hasPricePerDrop   = $colExists('price_per_drop_metre');
 $hasShowColField   = $colExists('show_colour_field');
 
 // ── Load product if id supplied ────────────────────────────────────────
@@ -196,6 +197,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasWidthOnly) {
                 $insCols[] = 'width_only';
                 $insVals[] = empty($_POST['width_only']) ? 0 : 1;
+            }
+            if ($hasPricePerDrop) {
+                $insCols[] = 'price_per_drop_metre';
+                $insVals[] = empty($_POST['price_per_drop_metre']) ? 0 : 1;
             }
             $insPh = implode(', ', array_fill(0, count($insCols), '?'));
             $ins = $pdo->prepare(
@@ -990,6 +995,27 @@ $activeNav = 'wizard';
                                                       font-weight:400;margin-top:0.2rem;line-height:1.5">
                                             The Drop field is hidden at quote time and each
                                             price table is a single width &rarr; price list.
+                                        </small>
+                                    </span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($hasPricePerDrop): ?>
+                            <div class="row" style="grid-template-columns:1fr">
+                                <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;
+                                              text-transform:none;letter-spacing:normal;font-weight:500;
+                                              color:var(--text-body)">
+                                    <input type="checkbox" name="price_per_drop_metre" value="1"
+                                           <?= !empty($_POST['price_per_drop_metre']) ? 'checked' : '' ?>
+                                           style="margin-top:0.2rem">
+                                    <span>
+                                        Priced <strong>per metre of drop</strong> —
+                                        e.g. vertical fabric only.
+                                        <small style="display:block;color:var(--text-faint);font-size:0.8125rem;
+                                                      font-weight:400;margin-top:0.2rem;line-height:1.5">
+                                            Each price table is a width &rarr; rate list; the price is
+                                            that rate &times; the drop. Leave the boxes above unticked.
                                         </small>
                                     </span>
                                 </label>
