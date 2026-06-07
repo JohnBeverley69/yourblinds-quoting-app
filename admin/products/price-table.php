@@ -22,11 +22,17 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require __DIR__ . '/../../_partials/units.php';
+require_once __DIR__ . '/../../_partials/price_table_parser.php';
 
 requireAdmin();
 
 $user     = current_user();
 $clientId = $user['client_id'];
+// Company default unit for displaying / entering grid widths + drops.
+// Cell values are PRICES (unit-independent); only the axis labels and the
+// add-width/add-drop inputs use the unit. Stored dims stay mm.
+$tableUnit = client_default_unit(db(), (int) $clientId);
 
 $tableId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 if ($tableId <= 0) {
@@ -682,13 +688,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
     $price = (array) ($_POST['price'] ?? []);
     $byWidth = [];   // width_mm => price (last wins)
     $rowErrs = [];
-    foreach ($wmm as $i => $w) {
-        $w = (int) $w;
+    foreach ($wmm as $i => $wRaw) {
+        // Widths are typed in the company unit — convert to mm. Explicit
+        // suffixes (e.g. "60in") still override via ptp_parse_dimension.
+        $wRaw = trim((string) $wRaw);
         $p = $price[$i] ?? '';
-        if ($w <= 0 && ($p === '' || $p === null)) continue;   // fully blank row
-        if ($w <= 0) { $rowErrs[] = 'Row ' . ($i + 1) . ': missing width.'; continue; }
+        if ($wRaw === '' && ($p === '' || $p === null)) continue;   // fully blank row
+        $w = $wRaw === '' ? 0 : (int) ptp_parse_dimension($wRaw, $tableUnit);
+        if ($w <= 0) { $rowErrs[] = 'Row ' . ($i + 1) . ': missing/invalid width.'; continue; }
         if ($p === '' || $p === null || !is_numeric($p) || (float) $p < 0) {
-            $rowErrs[] = 'Width ' . $w . 'mm: price must be a non-negative number.';
+            $rowErrs[] = 'Width ' . unit_format($w, $tableUnit) . ': price must be a non-negative number.';
             continue;
         }
         $byWidth[$w] = round((float) $p, 2);
@@ -818,9 +827,13 @@ if ($widthOnly) {
                     <input type="hidden" name="action" value="save_width">
                     <input type="hidden" name="id" value="<?= (int) $tableId ?>">
 
+                    <?php
+                        $woStep = $tableUnit === 'mm' ? '1' : 'any';
+                        $woPh   = $tableUnit === 'in' ? 'e.g. 31.5' : ($tableUnit === 'm' ? 'e.g. 0.8' : ($tableUnit === 'cm' ? 'e.g. 80' : 'e.g. 800'));
+                    ?>
                     <table class="wo-table" id="wo-table">
                         <thead>
-                            <tr><th>Width (mm)</th><th>Price (£)</th><th></th></tr>
+                            <tr><th>Width (<?= e(unit_suffix($tableUnit)) ?>)</th><th>Price (£)</th><th></th></tr>
                         </thead>
                         <tbody>
                             <?php
@@ -832,9 +845,9 @@ if ($widthOnly) {
                                 foreach ($renderRows as $r):
                             ?>
                                 <tr>
-                                    <td><input type="number" name="wmm[]" min="1" step="1"
-                                               value="<?= $r['width_mm'] === '' ? '' : (int) $r['width_mm'] ?>"
-                                               placeholder="e.g. 800"></td>
+                                    <td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>"
+                                               value="<?= $r['width_mm'] === '' ? '' : e(unit_format((int) $r['width_mm'], $tableUnit, false)) ?>"
+                                               placeholder="<?= e($woPh) ?>"></td>
                                     <td><input type="number" name="price[]" min="0" step="0.01"
                                                value="<?= $r['price'] === '' ? '' : e((string) $r['price']) ?>"
                                                placeholder="e.g. 7.94"></td>
@@ -864,7 +877,7 @@ if ($widthOnly) {
         function newRow() {
             var tr = document.createElement('tr');
             tr.innerHTML =
-                '<td><input type="number" name="wmm[]" min="1" step="1" placeholder="e.g. 800"></td>'
+                '<td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>" placeholder="<?= e($woPh) ?>"></td>'
               + '<td><input type="number" name="price[]" min="0" step="0.01" placeholder="e.g. 7.94"></td>'
               + '<td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>';
             tbody.appendChild(tr);

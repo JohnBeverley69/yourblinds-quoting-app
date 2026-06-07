@@ -3,11 +3,15 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require __DIR__ . '/../../_partials/units.php';
 
 requireAdmin();
 
 $user     = current_user();
 $clientId = $user['client_id'];
+// Company default unit — drives the live-preview drawer's size entry so it
+// matches what a salesperson sees. Sizes stay stored in mm.
+$previewUnit = client_default_unit(db(), (int) $clientId);
 
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -1913,6 +1917,8 @@ $activeNav = 'products';
     if (!openBtn || !drawer) return;
 
     var PRODUCT_ID = <?= (int) $id ?>;
+    var PREVIEW_UNIT = <?= json_encode($previewUnit) ?>;
+    var PREVIEW_UNIT_SFX = ({ mm: 'mm', cm: 'cm', m: 'm', in: '"' })[PREVIEW_UNIT] || 'mm';
     var productData = null;       // cached /api/product-data.php response
 
     // --- Open / close --------------------------------------------------
@@ -2047,7 +2053,7 @@ $activeNav = 'products';
         // Dimensions + quantity. Width-only products price on width alone
         // — no drop field.
         html += '<div class="pv-row">'
-              + '<label>' + (widthOnly ? 'Width (mm) &amp; quantity' : 'Dimensions (mm) &amp; quantity') + '</label>'
+              + '<label>' + (widthOnly ? ('Width (' + PREVIEW_UNIT_SFX + ') &amp; quantity') : ('Dimensions (' + PREVIEW_UNIT_SFX + ') &amp; quantity')) + '</label>'
               + '<div class="pv-dim-row">'
               +   '<input id="pv-width" type="number" placeholder="Width" min="1">'
               +   (widthOnly ? '' : '<input id="pv-drop" type="number" placeholder="Drop" min="1">')
@@ -2592,7 +2598,8 @@ $activeNav = 'products';
             width:      widthIn.value,
             drop:       (dropIn && dropIn.value) ? dropIn.value : '',
             quantity:   qtyIn.value || '1',
-            round_up:   '1'
+            round_up:   '1',
+            unit:       PREVIEW_UNIT
         });
 
         // Extras → same shape the real builder POSTs.
