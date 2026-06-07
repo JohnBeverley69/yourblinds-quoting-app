@@ -172,6 +172,17 @@ function current_user_has_role(string $role): bool
 function requireLogin(): void
 {
     if (is_logged_in()) {
+        // Every authenticated page is per-user / per-tenant, so it must
+        // never be stored by a SHARED cache (browser, proxy, or a hosting
+        // "page boost"/edge cache). Without this a shared cache can serve
+        // one account's page to another, or hand back stale data after an
+        // edit. Sent on every logged-in request (requireAdmin/Role funnel
+        // through here too). Guarded so it never trips a "headers already
+        // sent" notice.
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, private, max-age=0');
+            header('Pragma: no-cache');
+        }
         return;
     }
     $next = $_SERVER['REQUEST_URI'] ?? '';
