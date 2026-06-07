@@ -151,6 +151,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'units') {
+        // Tenant default measurement unit (migrate_measurement_unit.php).
+        // Dimensions are always stored in mm — this only sets how sizes are
+        // entered and shown. INSERT…ON DUPLICATE so it works even before a
+        // client_settings row exists.
+        $unit = (string) ($_POST['default_measurement_unit'] ?? 'mm');
+        if (!in_array($unit, ['mm', 'cm', 'm', 'in'], true)) $unit = 'mm';
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, default_measurement_unit)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE default_measurement_unit = VALUES(default_measurement_unit)'
+            )->execute([$clientId, $unit]);
+            $_SESSION['flash_success'] = 'Default measurement unit saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save measurement unit — '
+                . 'has migrate_measurement_unit.php been run? ' . $e->getMessage();
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'quote') {
         // default_markup_percent has been retired — markup is now set
         // per-product (Product → Edit → Markup %). The column is still
@@ -255,7 +277,11 @@ $settings = $settingsStmt->fetch() ?: [
     'email_from_name'          => '',
     'reply_to_email'           => '',
     'quote_footer'             => '',
+    'default_measurement_unit' => 'mm',
 ];
+// May be absent if the row exists but the migration hasn't run.
+$currentUnit = $settings['default_measurement_unit'] ?? 'mm';
+if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 $activeNav = 'settings';
 ?><!doctype html>
 <html lang="en">
@@ -516,6 +542,39 @@ $activeNav = 'settings';
                     </div>
                 </form>
             <?php endif; ?>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Measurements</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
+                The unit your team enters and sees blind sizes in. Sizes are
+                always stored the same way under the hood, so you can change
+                this any time. On a quote you can still override the unit for
+                one job, and you can always type a unit directly
+                (e.g. <code>60in</code>, <code>1.5m</code>) for a one-off.
+            </p>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="units">
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label for="default_measurement_unit">Default measurement unit</label>
+                        <select id="default_measurement_unit" name="default_measurement_unit">
+                            <?php foreach (['mm' => 'Millimetres (mm)', 'cm' => 'Centimetres (cm)',
+                                            'm' => 'Metres (m)', 'in' => 'Inches (in)'] as $uVal => $uLabel): ?>
+                                <option value="<?= e($uVal) ?>" <?= $currentUnit === $uVal ? 'selected' : '' ?>>
+                                    <?= e($uLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save unit</button>
+                </div>
+            </form>
         </section>
 
         <section class="section">

@@ -31,7 +31,7 @@ if (!function_exists('ptp_parse_dimension')) {
      *
      * Returns null for anything we can't pull a positive number out of.
      */
-    function ptp_parse_dimension(string $raw): ?int
+    function ptp_parse_dimension(string $raw, string $defaultUnit = 'mm'): ?int
     {
         $str = trim($raw);
         if ($str === '') return null;
@@ -41,18 +41,25 @@ if (!function_exists('ptp_parse_dimension')) {
         $num = (float) $cleaned;
         if ($num <= 0) return null;
 
+        // Explicit unit suffix ALWAYS wins, regardless of the tenant
+        // default — so a metres-shop user can still type "60in" for one
+        // odd blind and get inches.
         $lower = strtolower($str);
         if (strpos($lower, 'mm') !== false)              return (int) round($num);
         if (strpos($lower, 'cm') !== false)              return (int) round($num * 10);
         if (preg_match('/\d\s*m\b/i', $str))             return (int) round($num * 1000);
-        // Inches — quote characters (' or ") or "in"/"ins" suffix.
-        if (preg_match('/[\'"]|\bins?\b/i', $str))       return (int) round($num * 25.4);
+        // Inches — quote characters (' or ") or an in/ins/inch/inches
+        // suffix right after the number. Note: NO leading \b — there's no
+        // word boundary between a digit and a letter, so "60in" (no space)
+        // would otherwise be missed and fall through to a bare number.
+        if (preg_match('/[\'"]|\d\s*in(?:s|ch|ches)?\b/i', $str)) return (int) round($num * 25.4);
 
-        // No unit suffix — treat as millimetres. That's what people type
-        // for blind sizes. Metres must be written explicitly ("1.5m",
-        // handled above); without this rule a bare "10" used to balloon
-        // to 10,000mm via an over-eager "small number = metres" heuristic.
-        return (int) round($num);
+        // No unit suffix — interpret in the caller's default unit (the
+        // tenant / quote setting). Defaults to millimetres so price-sheet
+        // imports and any caller that doesn't pass a unit behave exactly
+        // as before.
+        $factor = ['mm' => 1.0, 'cm' => 10.0, 'm' => 1000.0, 'in' => 25.4][$defaultUnit] ?? 1.0;
+        return (int) round($num * $factor);
     }
 }
 
