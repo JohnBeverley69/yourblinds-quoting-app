@@ -29,6 +29,7 @@ require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require __DIR__ . '/../../_partials/pricing_engine.php';
 require __DIR__ . '/../../_partials/price_table_parser.php';
+require __DIR__ . '/../../_partials/units.php';
 
 requireLogin();
 
@@ -38,11 +39,14 @@ header('Cache-Control: no-store');
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
-// Free-text width / drop, parsed via the shared dimension parser (mm/cm/m/in).
+// Free-text width / drop, parsed via the shared dimension parser. A bare
+// number is read in the caller's unit (the quote / tenant setting, passed
+// as &unit=); explicit suffixes still override. Defaults to mm.
+$unit     = unit_is_valid($_GET['unit'] ?? null) ? (string) $_GET['unit'] : 'mm';
 $widthRaw = (string) ($_GET['width'] ?? '');
 $dropRaw  = (string) ($_GET['drop']  ?? '');
-$widthMm  = ptp_parse_dimension($widthRaw);
-$dropMm   = ptp_parse_dimension($dropRaw);
+$widthMm  = ptp_parse_dimension($widthRaw, $unit);
+$dropMm   = ptp_parse_dimension($dropRaw, $unit);
 
 if ($widthMm === null) {
     echo json_encode(['error' => 'Could not read width "' . $widthRaw . '".', 'stage' => 'input']);

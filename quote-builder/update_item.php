@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
 require __DIR__ . '/../_partials/pricing_engine.php';
 require __DIR__ . '/../_partials/price_table_parser.php';
+require __DIR__ . '/../_partials/units.php';
 
 requireLogin();
 
@@ -47,10 +48,11 @@ if (!$existing) {
 
 // Parse free-text width / drop using the shared dimension parser. Same as
 // add_item.php — the form sends raw input strings.
+$unit     = effective_unit($quote['measurement_unit'] ?? null, db(), $clientId);
 $widthRaw = (string) ($_POST['width'] ?? '');
 $dropRaw  = (string) ($_POST['drop']  ?? '');
-$widthMm  = ptp_parse_dimension($widthRaw);
-$dropMm   = ptp_parse_dimension($dropRaw);
+$widthMm  = ptp_parse_dimension($widthRaw, $unit);
+$dropMm   = ptp_parse_dimension($dropRaw, $unit);
 
 if ($widthMm === null) {
     qb_flash_redirect(

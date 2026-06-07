@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require __DIR__ . '/../_partials/units.php';
 
 requireLogin();
 
@@ -14,6 +15,12 @@ $_perms   = current_user_permissions();
 
 $id    = (int) ($_GET['id'] ?? 0);
 $quote = qb_load_quote_or_404($id, $clientId);
+
+// Measurement unit for THIS quote: the quote's own override if set, else
+// the tenant default, else mm. Sizes are stored in mm; this only drives
+// entry + display. (measurement_unit column may be absent pre-migration.)
+$measureUnit = effective_unit($quote['measurement_unit'] ?? null, db(), $clientId);
+$unitSuffix  = unit_suffix($measureUnit);
 
 // Access gate: admin / view-all / quote-creator-equivalents see any
 // quote in their tenant. Restricted users (typical fitter) can view
@@ -1152,22 +1159,40 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                      side by side) so we don't burn two rows on four short
                      inputs. Below 1100px it falls back to cols-3 and the
                      standalone notes row below takes over. -->
+                <div class="form-row full">
+                    <div class="form-group" style="max-width:18rem">
+                        <label for="item-unit">Measurement unit (this quote)</label>
+                        <select id="item-unit">
+                            <?php foreach (['mm' => 'Millimetres (mm)', 'cm' => 'Centimetres (cm)',
+                                            'm' => 'Metres (m)', 'in' => 'Inches (in)'] as $uVal => $uLabel): ?>
+                                <option value="<?= e($uVal) ?>" <?= $measureUnit === $uVal ? 'selected' : '' ?>>
+                                    <?= e($uLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.25rem">
+                            Re-displays this quote's sizes in the chosen unit. Sizes are stored
+                            the same way regardless.
+                        </small>
+                    </div>
+                </div>
+
                 <div class="form-row cols-3 cols-3-plus-notes">
                     <div class="form-group">
-                        <label for="item-width">Width <span class="required">*</span></label>
+                        <label for="item-width">Width (<?= e($unitSuffix) ?>) <span class="required">*</span></label>
                         <input id="item-width" name="width" type="text" required
                                autocomplete="off" autocorrect="off" autocapitalize="off"
                                data-lpignore="true" data-1p-ignore="true"
-                               value="<?= $editingItem ? (int) $editingItem['width_mm'] : '' ?>"
-                               placeholder="e.g. 1500, 150cm, 1.5m, 60in">
+                               value="<?= $editingItem ? e(unit_format((int) $editingItem['width_mm'], $measureUnit, false)) : '' ?>"
+                               placeholder="Width in <?= e($unitSuffix) ?>">
                     </div>
                     <div class="form-group" id="item-drop-group">
-                        <label for="item-drop">Drop <span class="required">*</span></label>
+                        <label for="item-drop">Drop (<?= e($unitSuffix) ?>) <span class="required">*</span></label>
                         <input id="item-drop" name="drop" type="text" required
                                autocomplete="off" autocorrect="off" autocapitalize="off"
                                data-lpignore="true" data-1p-ignore="true"
-                               value="<?= $editingItem ? (int) $editingItem['drop_mm'] : '' ?>"
-                               placeholder="e.g. 1800, 180cm, 1.8m, 72in">
+                               value="<?= $editingItem ? e(unit_format((int) $editingItem['drop_mm'], $measureUnit, false)) : '' ?>"
+                               placeholder="Drop in <?= e($unitSuffix) ?>">
                     </div>
                     <div class="form-group">
                         <label for="item-qty">Quantity</label>
@@ -1281,8 +1306,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?= qb_fmt_mm((int) $it['width_mm']) ?> ×
-                                        <?= qb_fmt_mm((int) $it['drop_mm']) ?>
+                                        <?= e(unit_format((int) $it['width_mm'], $measureUnit)) ?> ×
+                                        <?= e(unit_format((int) $it['drop_mm'], $measureUnit)) ?>
                                     </td>
                                     <td class="num"><?= (int) $it['quantity'] ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
@@ -1719,6 +1744,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var dropIn        = document.getElementById('item-drop');
     var dropGroup     = document.getElementById('item-drop-group');
     var qtyIn         = document.getElementById('item-qty');
+    var unitSel       = document.getElementById('item-unit');
+
+    // The quote's measurement unit. Sent to the preview API so a bare
+    // number is read in this unit (the server parses the same way).
+    var measureUnit = <?= json_encode($measureUnit) ?>;
+
+    // Changing the unit persists it to the quote and reloads so every
+    // already-listed size re-renders in the new unit consistently.
+    if (unitSel) {
+        unitSel.addEventListener('change', function () {
+            var f = document.createElement('form');
+            f.method = 'post';
+            f.action = '/quote-builder/set_unit.php';
+            f.innerHTML =
+                '<input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">'
+              + '<input type="hidden" name="quote_id" value="<?= (int) $id ?>">'
+              + '<input type="hidden" name="unit" value="' + unitSel.value + '">';
+            document.body.appendChild(f);
+            f.submit();
+        });
+    }
     var extrasWrap    = document.getElementById('item-extras-wrap');
     var extrasBox     = document.getElementById('item-extras');
     var previewBox    = document.getElementById('item-preview');
@@ -2471,7 +2517,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             width:      widthIn.value,
             drop:       dropIn.value,
             quantity:   qtyIn.value || '1',
-            round_up:   '1'
+            round_up:   '1',
+            unit:       measureUnit
         });
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]',  ex.extra_id);

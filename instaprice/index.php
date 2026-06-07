@@ -18,11 +18,15 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/units.php';
 
 requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+// Company default measurement unit — InstaPrice has no quote of its own,
+// so it starts on the company default with a local switcher.
+$defaultUnit = client_default_unit(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
@@ -149,8 +153,23 @@ $activeNav = 'instaprice';
 
                 <div id="ip-extras" style="margin-top:1rem"></div>
 
+                <div class="ip-grid" style="margin-top:1rem">
+                    <div class="ip-field">
+                        <label for="ip-unit">Measurement unit</label>
+                        <select id="ip-unit">
+                            <?php foreach (['mm' => 'Millimetres (mm)', 'cm' => 'Centimetres (cm)',
+                                            'm' => 'Metres (m)', 'in' => 'Inches (in)'] as $uVal => $uLabel): ?>
+                                <option value="<?= e($uVal) ?>" <?= $defaultUnit === $uVal ? 'selected' : '' ?>>
+                                    <?= e($uLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="ip-field"></div>
+                </div>
+
                 <div class="ip-field" style="margin-top:1rem">
-                    <label>Dimensions (mm) &amp; quantity</label>
+                    <label><span id="ip-dim-label">Dimensions</span> &amp; quantity</label>
                     <div class="ip-dims">
                         <input id="ip-width" type="text" inputmode="numeric"
                                autocomplete="off" autocorrect="off" autocapitalize="off"
@@ -192,6 +211,7 @@ $activeNav = 'instaprice';
                     <input type="hidden" name="width"       id="q-width">
                     <input type="hidden" name="drop"        id="q-drop">
                     <input type="hidden" name="quantity"    id="q-qty">
+                    <input type="hidden" name="unit"        id="q-unit">
                     <input type="hidden" name="extras_json" id="q-extras">
                 </form>
             <?php endif; ?>
@@ -225,6 +245,19 @@ $activeNav = 'instaprice';
     var currentFabricBand = '';
     var requiresOption = true;   // false for no-fabric products (headrail/track/spares)
     var widthOnly = false;       // true for width-only products (headrail/track) — no drop
+
+    // Active measurement unit (starts on the company default; the switcher
+    // changes it). Bare numbers are read in this unit; explicit suffixes
+    // (60in, 1.5m) still win.
+    var unitSel  = document.getElementById('ip-unit');
+    var dimLabel = document.getElementById('ip-dim-label');
+    var activeUnit = (unitSel && unitSel.value) ? unitSel.value : 'mm';
+    var UNIT_FACTOR = { mm: 1, cm: 10, m: 1000, in: 25.4 };
+    var UNIT_SUFFIX = { mm: 'mm', cm: 'cm', m: 'm', in: '"' };
+    function unitSfx() { return UNIT_SUFFIX[activeUnit] || 'mm'; }
+    function refreshDimLabel() {
+        if (dimLabel) dimLabel.textContent = 'Dimensions (' + unitSfx() + ')';
+    }
     var lastBase = null, lastExtras = 0;
     var ratesDirty = true;            // reset disc/markup to the system's defaults on next price
     var curDisc = null, curMarkup = null;   // remember overrides across panel rebuilds
@@ -557,7 +590,8 @@ $activeNav = 'instaprice';
             width:      widthIn.value,
             drop:       dropIn.value,
             quantity:   '1',
-            round_up:   '1'
+            round_up:   '1',
+            unit:       activeUnit
         });
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]', ex.extra_id);
@@ -670,13 +704,16 @@ $activeNav = 'instaprice';
         if (low.indexOf('mm') !== -1) return Math.round(n);
         if (low.indexOf('cm') !== -1) return Math.round(n * 10);
         if (/\d\s*m\b/i.test(s))      return Math.round(n * 1000);
-        if (/['"]|\bins?\b/i.test(s)) return Math.round(n * 25.4);
-        return Math.round(n);   // bare number = mm (metres need an explicit "m")
+        if (/['"]|\d\s*in(?:s|ch|ches)?\b/i.test(s)) return Math.round(n * 25.4);
+        // Bare number — interpret in the active unit (matches the server).
+        return Math.round(n * (UNIT_FACTOR[activeUnit] || 1));
     }
     function updateDimEcho() {
         var el = document.getElementById('ip-dim-echo');
         if (!el) return;
         var w = parseDim(widthIn.value), d = parseDim(dropIn.value);
+        // Echo back in mm so the operator can sanity-check the conversion
+        // (e.g. 60" really is 1524 mm).
         if (widthOnly) {
             if (w) { el.textContent = 'Using ' + w + ' mm wide'; el.hidden = false; }
             else   { el.hidden = true; }
@@ -691,6 +728,17 @@ $activeNav = 'instaprice';
         el.addEventListener('input', function () { updateDimEcho(); schedulePreview(); });
     });
     qtyIn.addEventListener('input', recompute);
+
+    // Unit switcher — change how typed numbers are read + relabel + recalc.
+    if (unitSel) {
+        unitSel.addEventListener('change', function () {
+            activeUnit = unitSel.value || 'mm';
+            refreshDimLabel();
+            updateDimEcho();
+            schedulePreview();
+        });
+    }
+    refreshDimLabel();
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
         productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';
@@ -707,6 +755,7 @@ $activeNav = 'instaprice';
         document.getElementById('q-width').value   = widthIn.value;
         document.getElementById('q-drop').value    = dropIn.value;
         document.getElementById('q-qty').value     = qtyIn.value || '1';
+        document.getElementById('q-unit').value    = activeUnit;
         document.getElementById('q-extras').value  = JSON.stringify(collectExtras());
         document.getElementById('ip-quote-form').submit();
     });

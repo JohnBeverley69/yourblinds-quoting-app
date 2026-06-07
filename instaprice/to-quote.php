@@ -15,6 +15,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../_partials/pricing_engine.php';
 require __DIR__ . '/../_partials/price_table_parser.php';
+require __DIR__ . '/../_partials/units.php';
 
 requireLogin();
 
@@ -38,9 +39,15 @@ if (!($isAdmin || !empty($perms['can_create_quotes']))) {
 }
 
 // --- Parse the spec --------------------------------------------------------
-$widthMm = ptp_parse_dimension((string) ($_POST['width'] ?? ''));
+// The unit the operator was working in (from the InstaPrice switcher).
+// Bare numbers are read in it; it's also stamped on the new quote so the
+// builder opens in the same unit.
+$quoteUnit = unit_is_valid($_POST['unit'] ?? null)
+    ? (string) $_POST['unit']
+    : client_default_unit(db(), $clientId);
+$widthMm = ptp_parse_dimension((string) ($_POST['width'] ?? ''), $quoteUnit);
 $dropRaw = (string) ($_POST['drop'] ?? '');
-$dropMm  = ptp_parse_dimension($dropRaw);
+$dropMm  = ptp_parse_dimension($dropRaw, $quoteUnit);
 // Blank drop → 0 (width-only products have none); the engine decides if a
 // drop is required.
 if ($dropMm === null && trim($dropRaw) === '') {
@@ -120,6 +127,15 @@ try {
         }
     }
     $quoteId = (int) $pdo->lastInsertId();
+
+    // Stamp the chosen unit on the quote so the builder opens in the same
+    // unit. Best-effort — older schema (no column) just falls back to the
+    // tenant default. Stays NULL/skipped if it equals the tenant default
+    // is unnecessary; storing it explicitly is harmless.
+    try {
+        $pdo->prepare('UPDATE quotes SET measurement_unit = ? WHERE id = ?')
+            ->execute([$quoteUnit, $quoteId]);
+    } catch (Throwable $e) { /* column absent — ignore */ }
 
     // Insert the line — mirrors quote-builder/add_item.php exactly.
     $ins = $pdo->prepare(
