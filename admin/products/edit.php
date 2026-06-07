@@ -1984,6 +1984,12 @@ $activeNav = 'products';
     function renderForm() {
         var html = '';
 
+        // No-fabric products (requires_option=false) hide the band +
+        // fabric pickers; width-only products (width_only=true) hide the
+        // drop. Mirrors the quote builder / InstaPrice.
+        var requiresOption = !(productData.product && productData.product.requires_option === false);
+        var widthOnly      = !!(productData.product && productData.product.width_only === true);
+
         // System
         var systems = productData.systems || [];
         if (systems.length) {
@@ -2001,7 +2007,7 @@ $activeNav = 'products';
         // band so a large catalogue isn't a long scroll. Scoped to the
         // (default) selected system. "All bands" keeps the unfiltered
         // behaviour.
-        if ((productData.bands || []).length) {
+        if (requiresOption && (productData.bands || []).length) {
             var pvDefaultSys = '';
             if (systems.length) {
                 var pvDef = systems.filter(function (s) { return s.is_default; })[0]
@@ -2022,26 +2028,29 @@ $activeNav = 'products';
         // hidden #pv-fabric carries the selected fabric id and is
         // what calculate() reads (so the rest of the JS doesn't have
         // to care that the widget changed).
-        html += '<div class="pv-row pv-typeahead-wrap">'
-              + '<label for="pv-fabric-text">'
-              +   esc(productData.product.option_label || 'Fabric')
-              +   ' <span class="req-mark">*</span>'
-              + '</label>'
-              + '<input id="pv-fabric-text" type="text" autocomplete="off"'
-              +       ' placeholder="Type to search (e.g. polaris cream)…">'
-              + '<input id="pv-fabric" type="hidden">'
-              + '<div id="pv-fabric-list" class="pv-typeahead-list" hidden></div>'
-              + '</div>';
+        if (requiresOption) {
+            html += '<div class="pv-row pv-typeahead-wrap">'
+                  + '<label for="pv-fabric-text">'
+                  +   esc(productData.product.option_label || 'Fabric')
+                  +   ' <span class="req-mark">*</span>'
+                  + '</label>'
+                  + '<input id="pv-fabric-text" type="text" autocomplete="off"'
+                  +       ' placeholder="Type to search (e.g. polaris cream)…">'
+                  + '<input id="pv-fabric" type="hidden">'
+                  + '<div id="pv-fabric-list" class="pv-typeahead-list" hidden></div>'
+                  + '</div>';
+        }
 
         // Options
         html += '<div id="pv-extras-wrap"></div>';
 
-        // Dimensions + quantity
+        // Dimensions + quantity. Width-only products price on width alone
+        // — no drop field.
         html += '<div class="pv-row">'
-              + '<label>Dimensions (mm) &amp; quantity</label>'
+              + '<label>' + (widthOnly ? 'Width (mm) &amp; quantity' : 'Dimensions (mm) &amp; quantity') + '</label>'
               + '<div class="pv-dim-row">'
               +   '<input id="pv-width" type="number" placeholder="Width" min="1">'
-              +   '<input id="pv-drop" type="number" placeholder="Drop" min="1">'
+              +   (widthOnly ? '' : '<input id="pv-drop" type="number" placeholder="Drop" min="1">')
               +   '<input id="pv-qty" type="number" value="1" min="1">'
               + '</div>'
               + '</div>';
@@ -2550,14 +2559,23 @@ $activeNav = 'products';
         var dropIn  = document.getElementById('pv-drop');
         var qtyIn   = document.getElementById('pv-qty');
 
+        // Flags again (productData is loaded). No-fabric → no fabric pick
+        // required; width-only → no drop required.
+        var requiresOption = !(productData.product && productData.product.requires_option === false);
+        var widthOnly      = !!(productData.product && productData.product.width_only === true);
+
         // Soft validation — show a guidance message in the panel
         // rather than a red error. The user just hasn't filled in
         // the required fields yet; that's the normal opening state.
-        if (!fabSel || !fabSel.value) {
+        if (requiresOption && (!fabSel || !fabSel.value)) {
             setResult('is-idle', 'Pick a fabric to see the price.');
             return;
         }
-        if (!widthIn || !widthIn.value || !dropIn || !dropIn.value) {
+        if (!widthIn || !widthIn.value) {
+            setResult('is-idle', widthOnly ? 'Enter a width to see the price.' : 'Enter a width and drop to see the price.');
+            return;
+        }
+        if (!widthOnly && (!dropIn || !dropIn.value)) {
             setResult('is-idle', 'Enter a width and drop to see the price.');
             return;
         }
@@ -2570,9 +2588,9 @@ $activeNav = 'products';
         var params = new URLSearchParams({
             product_id: String(PRODUCT_ID),
             system_id:  sysSel ? sysSel.value : '0',
-            option_id:  fabSel.value,
+            option_id:  (fabSel && fabSel.value) ? fabSel.value : '0',
             width:      widthIn.value,
-            drop:       dropIn.value,
+            drop:       (dropIn && dropIn.value) ? dropIn.value : '',
             quantity:   qtyIn.value || '1',
             round_up:   '1'
         });
