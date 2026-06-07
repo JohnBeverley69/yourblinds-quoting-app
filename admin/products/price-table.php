@@ -71,6 +71,18 @@ try {
     $widthOnly = (int) $woStmt->fetchColumn() === 1;
 } catch (Throwable $e) { /* column absent — keep false */ }
 
+// price_per_drop_metre products store a width → RATE list (price = rate ×
+// drop). Same 1-D editor as width-only, just labelled "rate". Optional col.
+$pricePerDrop = false;
+try {
+    $ppStmt = db()->prepare('SELECT price_per_drop_metre FROM products WHERE id = ? AND client_id = ?');
+    $ppStmt->execute([(int) $table['product_id'], $clientId]);
+    $pricePerDrop = (int) $ppStmt->fetchColumn() === 1;
+} catch (Throwable $e) { /* column absent — keep false */ }
+
+// Both modes use the simple 1-D editor (width → value, drop_mm 0).
+$oneDimEditor = $widthOnly || $pricePerDrop;
+
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
@@ -700,7 +712,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
             $rowErrs[] = 'Width ' . unit_format($w, $tableUnit) . ': price must be a non-negative number.';
             continue;
         }
-        $byWidth[$w] = round((float) $p, 2);
+        // Rates (per-metre-of-drop) keep more precision than flat prices.
+        $byWidth[$w] = round((float) $p, $pricePerDrop ? 4 : 2);
     }
 
     $pdo = db();
@@ -748,7 +761,7 @@ $justSaved = !empty($_GET['saved']);
 // 2-D grid for width_only products. Self-contained render + early exit so
 // none of the grid machinery below runs.
 // ---------------------------------------------------------------------------
-if ($widthOnly) {
+if ($oneDimEditor) {
     $woRowsStmt = db()->prepare(
         'SELECT width_mm, price FROM price_table_rows
           WHERE price_table_id = ? ORDER BY width_mm'
@@ -756,6 +769,19 @@ if ($widthOnly) {
     $woRowsStmt->execute([$tableId]);
     $woRows = $woRowsStmt->fetchAll(PDO::FETCH_ASSOC);
     $flashErrsDetailWO = $flashErrsDetail ?? [];
+
+    // Mode-specific wording: width-only = a flat price per width; per-metre-
+    // of-drop = a £/metre-of-drop rate per width.
+    $valLabel    = $pricePerDrop ? 'Rate (£/m drop)' : 'Price (£)';
+    $pricePh     = $pricePerDrop ? 'e.g. 0.71'       : 'e.g. 7.94';
+    $pageWord    = $pricePerDrop ? 'rates'           : 'prices';
+    $introTxt    = $pricePerDrop
+        ? 'Priced per metre of drop. Each row is a width and its £/metre rate; the price is rate × the drop (a quoted width rounds up to the next listed width).'
+        : 'Priced by width only. Each row is a width and its price; a quoted width rounds up to the next listed width.';
+    $importHref  = $pricePerDrop
+        ? '/admin/products/price-import-rates.php?product_id=' . (int) $table['product_id']
+        : '/admin/products/price-import-width.php?product_id=' . (int) $table['product_id'];
+    $importLabel = $pricePerDrop ? 'Import rates' : 'Import width prices';
 
     $activeNav = 'products';
     ?><!doctype html>
@@ -789,20 +815,18 @@ if ($widthOnly) {
                             [(string) $table['product_name'],     '/admin/products/edit.php?id=' . (int) $table['product_id']],
                             ['Systems',                           '/admin/products/systems.php?product_id=' . (int) $table['product_id']],
                             [(string) $table['system_name'],      null],
-                            ['Width prices',                      null],
+                            ['Width ' . $pageWord,                null],
                         ]);
                     ?>
                     <h1 class="page-title">
                         <?= e((string) $table['product_name']) ?>
-                        &mdash; <?= e((string) $table['system_name']) ?> width prices
+                        &mdash; <?= e((string) $table['system_name']) ?>
+                        <?php if ($pricePerDrop): ?> &middot; Band <?= e((string) $table['band_code']) ?><?php endif; ?>
+                        width <?= e($pageWord) ?>
                     </h1>
-                    <p class="page-subtitle">
-                        Priced by width only. Each row is a width and its price; a quoted
-                        width rounds up to the next listed width.
-                    </p>
+                    <p class="page-subtitle"><?= e($introTxt) ?></p>
                 </div>
-                <a href="/admin/products/price-import-width.php?product_id=<?= (int) $table['product_id'] ?>"
-                   class="btn btn-secondary">Import width prices</a>
+                <a href="<?= e($importHref) ?>" class="btn btn-secondary"><?= e($importLabel) ?></a>
             </div>
 
             <?php if ($flashMsg !== null): ?>
@@ -833,7 +857,7 @@ if ($widthOnly) {
                     ?>
                     <table class="wo-table" id="wo-table">
                         <thead>
-                            <tr><th>Width (<?= e(unit_suffix($tableUnit)) ?>)</th><th>Price (£)</th><th></th></tr>
+                            <tr><th>Width (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><th></th></tr>
                         </thead>
                         <tbody>
                             <?php
@@ -848,9 +872,9 @@ if ($widthOnly) {
                                     <td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>"
                                                value="<?= $r['width_mm'] === '' ? '' : e(unit_format((int) $r['width_mm'], $tableUnit, false)) ?>"
                                                placeholder="<?= e($woPh) ?>"></td>
-                                    <td><input type="number" name="price[]" min="0" step="0.01"
+                                    <td><input type="number" name="price[]" min="0" step="0.0001"
                                                value="<?= $r['price'] === '' ? '' : e((string) $r['price']) ?>"
-                                               placeholder="e.g. 7.94"></td>
+                                               placeholder="<?= e($pricePh) ?>"></td>
                                     <td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -862,7 +886,7 @@ if ($widthOnly) {
                     </div>
 
                     <div class="form-actions" style="margin-top:1.25rem">
-                        <button type="submit" class="btn btn-primary">Save width prices</button>
+                        <button type="submit" class="btn btn-primary">Save width <?= e($pageWord) ?></button>
                         <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
                            class="btn btn-secondary">Back</a>
                     </div>
@@ -878,7 +902,7 @@ if ($widthOnly) {
             var tr = document.createElement('tr');
             tr.innerHTML =
                 '<td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>" placeholder="<?= e($woPh) ?>"></td>'
-              + '<td><input type="number" name="price[]" min="0" step="0.01" placeholder="e.g. 7.94"></td>'
+              + '<td><input type="number" name="price[]" min="0" step="0.0001" placeholder="<?= e($pricePh) ?>"></td>'
               + '<td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>';
             tbody.appendChild(tr);
             var inp = tr.querySelector('input'); if (inp) inp.focus();

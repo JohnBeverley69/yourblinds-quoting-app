@@ -1312,6 +1312,9 @@ $activeNav = 'products';
                     <?php if ($hasWidthOnly && (int) $f['width_only'] === 1): ?>
                         <a href="/admin/products/price-import-width.php?product_id=<?= (int) $id ?>">Import width prices &raquo;</a>
                     <?php endif; ?>
+                    <?php if ($hasPricePerDrop && (int) $f['price_per_drop_metre'] === 1): ?>
+                        <a href="/admin/products/price-import-rates.php?product_id=<?= (int) $id ?>">Import rates &raquo;</a>
+                    <?php endif; ?>
                     <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>">Full manage &raquo;</a>
                 </span>
             </summary>
