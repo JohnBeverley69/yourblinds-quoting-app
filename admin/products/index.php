@@ -23,7 +23,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // into that system's tables. NULL when 0 or 2+ systems, in which
 // case we fall back to the systems list page.
 $rows = db()->prepare(
-    'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at,
+    'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at, p.requires_option,
             (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id AND o.active = 1) AS option_count,
             (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id AND e.active = 1) AS extra_count,
             (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) AS system_count,
@@ -43,8 +43,11 @@ $products = $rows->fetchAll();
 // "Ready to quote" = has at least one fabric AND at least one price
 // table. Systems and Options are nice-to-have but not strictly
 // required. The same check feeds the status pill on each row.
+// A no-fabric product (requires_option = 0, e.g. a headrail) doesn't need
+// an option/fabric to be quote-ready — just an active price table.
 $isQuoteReady = static function (array $p): bool {
-    return (int) $p['option_count'] > 0
+    $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
+    return (!$needsFabric || (int) $p['option_count'] > 0)
         && (int) $p['price_table_count'] > 0
         && (int) $p['active'] === 1;
 };
@@ -193,8 +196,9 @@ $activeNav = 'products';
                                     $statusBg    = '#fef3c7'; $statusFg = '#78350f';
                                     // Spell out what's missing so they don't have
                                     // to click in to find out.
+                                    $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
                                     $missing = [];
-                                    if ((int) $p['option_count']      === 0) $missing[] = 'fabric';
+                                    if ($needsFabric && (int) $p['option_count'] === 0) $missing[] = 'fabric';
                                     if ((int) $p['price_table_count'] === 0) $missing[] = 'price table';
                                     $statusLabel = 'Needs ' . implode(' + ', $missing);
                                 }
