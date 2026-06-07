@@ -821,13 +821,15 @@ $activeNav = 'products';
                     'Add if this blind has style variants (motorised/corded, slat sizes, etc.). Skip if not.',
                     'click to manage'
                 ) ?>
-                <?= $tile(
-                    'Fabrics',
-                    '/admin/products/options.php?product_id=' . (int) $id,
-                    $fabCount,
-                    'Add at least one fabric/colour. Each carries a band code (A/B/C…) used by price tables.',
-                    'click to manage'
-                ) ?>
+                <?php if ((int) $f['requires_option'] === 1): ?>
+                    <?= $tile(
+                        'Fabrics',
+                        '/admin/products/options.php?product_id=' . (int) $id,
+                        $fabCount,
+                        'Add at least one fabric/colour. Each carries a band code (A/B/C…) used by price tables.',
+                        'click to manage'
+                    ) ?>
+                <?php endif; ?>
                 <?= $tile(
                     'Options',
                     '/admin/products/extras.php?product_id=' . (int) $id,

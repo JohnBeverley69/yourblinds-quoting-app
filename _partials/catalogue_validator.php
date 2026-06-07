@@ -96,13 +96,25 @@ function catalogue_validate_product(int $productId, int $clientId): array
     $extrasUrl      = '/admin/products/extras.php?product_id=' . $productId;
     $editUrl        = '/admin/products/edit.php?id=' . $productId;
 
+    // Product flags. A no-fabric product (requires_option = 0, e.g. a
+    // headrail / track) is priced on system × size alone, so the
+    // "needs a fabric" rule doesn't apply to it. Try-fallback for schemas
+    // where migrate_requires_option.php hasn't run (absent ⇒ needs fabric).
+    $requiresOption = true;
+    try {
+        $rf = $pdo->prepare('SELECT requires_option FROM products WHERE id = ? AND client_id = ?');
+        $rf->execute([$productId, $clientId]);
+        $rv = $rf->fetchColumn();
+        $requiresOption = ($rv === false || $rv === null) ? true : ((int) $rv === 1);
+    } catch (Throwable $e) { /* keep true */ }
+
     // ── CRITICAL — product cannot quote ────────────────────────────
     $fabricCount = $count(
         'SELECT COUNT(*) FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1',
         [$productId, $clientId]
     );
-    if ($fabricCount === 0) {
+    if ($requiresOption && $fabricCount === 0) {
         $issue($issues, 'critical', 'no_active_fabric',
             'No fabrics added. Salespeople won\'t be able to pick a fabric for this product.',
             $fabricsUrl);

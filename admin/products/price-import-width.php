@@ -67,66 +67,93 @@ foreach ($systems as $s) {
 //
 // Layout (per system block): a system-name row, then a row of widths (in
 // metres), an "Ins" row (imperial — ignored), then a row of prices, then a
-// blank. There may or may not be a "Metric" label in column A of the widths
-// row, so we anchor on ORDER rather than a label: after a name row, the
-// first numeric data row (cols ≥ 3) is widths, the "Ins" row is skipped, and
-// the next numeric data row is prices. Cells come back as NULL when empty.
+// blank.
+//
+// IMPORTANT: this is written to be INDEX-AGNOSTIC. PhpSpreadsheet's
+// toArray() column keys can start at 0 or 1 depending on version/host, and a
+// sheet may have leading blank columns — so we must never assume a fixed
+// "data starts at column N". Instead:
+//   - a row's numeric cells are collected keyed by their actual column index;
+//   - the imperial row is detected by an "Ins" label cell ANYWHERE in it;
+//   - a system-name row is one with NO numeric cells but a text cell that
+//     isn't "Metric"/"Ins";
+//   - widths and prices are paired by SHARED column index, so they line up
+//     no matter where the first data column sits.
 $parseSheet = static function (string $path): array {
     require_once __DIR__ . '/../../vendor/autoload.php';
     $ss    = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
     $sheet = $ss->getActiveSheet();
-    $rows  = $sheet->toArray(null, true, false, false);   // 0-indexed
+    $rows  = array_values($sheet->toArray(null, true, false, false));
     $n     = count($rows);
-    $blocks = [];
 
-    // Numeric values from columns 3+ (index >= 2), keyed by column index.
-    $dataCells = static function (array $row): array {
+    // Numeric cells of a row, keyed by their column index.
+    $numericCells = static function (array $row): array {
         $out = [];
         foreach ($row as $idx => $val) {
-            if ($idx < 2) continue;
             if (is_numeric($val)) $out[$idx] = (float) $val;
         }
         return $out;
     };
-
-    for ($i = 0; $i < $n; $i++) {
-        $c0  = trim((string) ($rows[$i][0] ?? ''));
-        if ($c0 === '' || is_numeric($c0)) continue;
-        $lc0 = mb_strtolower($c0);
-        if ($lc0 === 'metric' || $lc0 === 'ins') continue;
-
-        // System-name row. Gather the next up-to-two numeric data rows
-        // (widths then prices), skipping the imperial "Ins" row.
-        $systemName = $c0;
-        $dataRows   = [];
-
-        for ($j = $i + 1; $j < min($n, $i + 8); $j++) {
-            $j0  = trim((string) ($rows[$j][0] ?? ''));
-            $j1  = trim((string) ($rows[$j][1] ?? ''));
-            $jl0 = mb_strtolower($j0);
-            $jl1 = mb_strtolower($j1);
-
-            // Next system name → this block is done.
-            if ($j0 !== '' && !is_numeric($j0)
-                && $jl0 !== 'metric' && $jl0 !== 'ins') {
-                break;
+    // Non-empty text cells of a row, lower-cased.
+    $textCells = static function (array $row): array {
+        $out = [];
+        foreach ($row as $val) {
+            if (is_string($val)) {
+                $t = trim($val);
+                if ($t !== '') $out[] = mb_strtolower($t);
             }
-            // Imperial row — skip.
-            if ($jl0 === 'ins' || $jl1 === 'ins') continue;
+        }
+        return $out;
+    };
+    $blocks = [];
+    $i = 0;
+    while ($i < $n) {
+        $nums = $numericCells($rows[$i]);
+        $txts = array_values(array_filter(
+            $textCells($rows[$i]),
+            static fn ($t) => $t !== 'metric' && $t !== 'ins'
+        ));
+        // A system-name row: no numbers, has a non-label text cell.
+        if ($nums || !$txts) { $i++; continue; }
 
-            $nums = $dataCells($rows[$j]);
-            if ($nums) {
-                $dataRows[] = $nums;
-                if (count($dataRows) >= 2) break;   // widths + prices
+        // Recover the original (non-lowercased) name from the row.
+        $systemName = '';
+        foreach ($rows[$i] as $val) {
+            if (is_string($val)) {
+                $t = trim($val);
+                $lt = mb_strtolower($t);
+                if ($t !== '' && $lt !== 'metric' && $lt !== 'ins') { $systemName = $t; break; }
             }
         }
 
-        if (count($dataRows) >= 2) {
-            $widthsByCol = $dataRows[0];
-            $pricesByCol = $dataRows[1];
+        // Collect ALL numeric rows in this block (stop at the next name
+        // row / EOF). A block is laid out widths → [inches] → prices, and
+        // the imperial row often has NO label to skip on — so we don't try
+        // to identify it. Instead: WIDTHS = the first number row, PRICES =
+        // the LAST number row. Any middle row (inches) is ignored. This is
+        // robust whether or not the sheet carries "Metric"/"Ins" labels.
+        $dataRows = [];
+        $j = $i + 1;
+        for (; $j < $n; $j++) {
+            $rnums = $numericCells($rows[$j]);
+            if (!$rnums) {
+                // Blank row → skip; a text-only (name) row → stop the block.
+                $rtxt = array_values(array_filter(
+                    $textCells($rows[$j]),
+                    static fn ($t) => $t !== 'metric' && $t !== 'ins'
+                ));
+                if ($rtxt) break;
+                continue;
+            }
+            $dataRows[] = $rnums;
+        }
+
+        if (count($dataRows) >= 2 && $systemName !== '') {
+            $widthsByCol = $dataRows[0];                       // first number row
+            $pricesByCol = $dataRows[count($dataRows) - 1];   // last number row
             $pairs = [];
             foreach ($widthsByCol as $idx => $wv) {
-                if (!isset($pricesByCol[$idx])) continue;
+                if (!isset($pricesByCol[$idx])) continue;   // pair by shared column
                 // Widths are in metres; convert to mm. (A value already
                 // >= 100 is treated as mm, just in case.)
                 $mm    = $wv < 100 ? (int) round($wv * 1000) : (int) round($wv);
@@ -138,6 +165,7 @@ $parseSheet = static function (string $path): array {
                 $blocks[] = ['system_name' => $systemName, 'pairs' => $pairs];
             }
         }
+        $i = $j;   // continue after the rows we consumed
     }
     return $blocks;
 };
