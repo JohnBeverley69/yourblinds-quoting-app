@@ -45,8 +45,13 @@ define('APP_ROOT', __DIR__);
                 $val = substr($val, 1, -1);
             }
         }
-        if (getenv($key) === false) {
-            putenv("$key=$val");
+        if (getenv($key) === false && !array_key_exists($key, $_ENV)) {
+            // putenv() is disabled on some managed hosts (e.g. Cloudways) via
+            // disable_functions — so guard it. $_ENV / $_SERVER (read by the
+            // env() helper below) are the real source of truth either way.
+            if (function_exists('putenv')) {
+                @putenv("$key=$val");
+            }
             $_ENV[$key]    = $val;
             $_SERVER[$key] = $val;
         }
@@ -55,8 +60,14 @@ define('APP_ROOT', __DIR__);
 
 function env(string $key, ?string $default = null): ?string
 {
+    // getenv() first (real host env vars / putenv where available), then the
+    // arrays the .env loader populates — so config still works on hosts that
+    // disable putenv().
     $v = getenv($key);
-    return $v === false ? $default : $v;
+    if ($v !== false)                     return $v;
+    if (array_key_exists($key, $_ENV))    return (string) $_ENV[$key];
+    if (array_key_exists($key, $_SERVER)) return (string) $_SERVER[$key];
+    return $default;
 }
 
 // ---------------------------------------------------------------------------

@@ -13,14 +13,17 @@ function db(): PDO
         return $pdo;
     }
 
-    $host    = getenv('DB_HOST') ?: '';
-    $name    = getenv('DB_NAME') ?: '';
-    $user    = getenv('DB_USER') ?: '';
-    $pass    = getenv('DB_PASS');
-    $port    = getenv('DB_PORT') ?: '3306';
-    $charset = getenv('DB_CHARSET') ?: 'utf8mb4';
+    // Read via env() (bootstrap's helper) so config still resolves on hosts
+    // that disable putenv()/getenv() — env() also reads the $_ENV/$_SERVER
+    // arrays the .env loader fills.
+    $host    = (string) (env('DB_HOST') ?? '');
+    $name    = (string) (env('DB_NAME') ?? '');
+    $user    = (string) (env('DB_USER') ?? '');
+    $pass    = env('DB_PASS');                          // null when unset
+    $port    = (string) (env('DB_PORT', '3306') ?? '3306');
+    $charset = (string) (env('DB_CHARSET', 'utf8mb4') ?? 'utf8mb4');
 
-    if ($host === '' || $name === '' || $user === '' || $pass === false) {
+    if ($host === '' || $name === '' || $user === '' || $pass === null) {
         throw new RuntimeException(
             'Database configuration missing: DB_HOST, DB_NAME, DB_USER and DB_PASS '
             . 'must be set in .env or the host environment.'

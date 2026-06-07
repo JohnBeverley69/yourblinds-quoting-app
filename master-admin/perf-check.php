@@ -66,7 +66,7 @@ echo "\n";
 
 // ── Database latency ───────────────────────────────────────────────
 echo "Database\n";
-echo "  host:               " . (getenv('DB_HOST') ?: '(unset)') . "\n";
+echo "  host:               " . (env('DB_HOST') ?: '(unset)') . "\n";
 $pdo = db();
 $n = 8;
 $t0 = microtime(true);
