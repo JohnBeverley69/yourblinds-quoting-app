@@ -54,6 +54,17 @@ if (!$table) {
     exit;
 }
 
+// Width-only products (headrail/track) are priced on width alone — the
+// 2-D grid editor doesn't apply. We render a simple width → price list
+// instead (rows stored at drop_mm 0, matching the engine's width-only
+// lookup). Optional column → default false on older schemas.
+$widthOnly = false;
+try {
+    $woStmt = db()->prepare('SELECT width_only FROM products WHERE id = ? AND client_id = ?');
+    $woStmt->execute([(int) $table['product_id'], $clientId]);
+    $widthOnly = (int) $woStmt->fetchColumn() === 1;
+} catch (Throwable $e) { /* column absent — keep false */ }
+
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
@@ -658,6 +669,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Width-only save — replaces the table with a width → price list. Rows are
+// stored at drop_mm 0 (what the width-only engine lookup expects). Posted
+// as parallel arrays wmm[] and price[]; blank / non-numeric rows skipped;
+// duplicate widths keep the last value.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
+    csrf_check();
+
+    $wmm   = (array) ($_POST['wmm']   ?? []);
+    $price = (array) ($_POST['price'] ?? []);
+    $byWidth = [];   // width_mm => price (last wins)
+    $rowErrs = [];
+    foreach ($wmm as $i => $w) {
+        $w = (int) $w;
+        $p = $price[$i] ?? '';
+        if ($w <= 0 && ($p === '' || $p === null)) continue;   // fully blank row
+        if ($w <= 0) { $rowErrs[] = 'Row ' . ($i + 1) . ': missing width.'; continue; }
+        if ($p === '' || $p === null || !is_numeric($p) || (float) $p < 0) {
+            $rowErrs[] = 'Width ' . $w . 'mm: price must be a non-negative number.';
+            continue;
+        }
+        $byWidth[$w] = round((float) $p, 2);
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
+        if ($byWidth) {
+            ksort($byWidth);
+            $ins = $pdo->prepare(
+                'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price)
+                 VALUES (?, ?, 0, ?)'
+            );
+            foreach ($byWidth as $w => $p) { $ins->execute([$tableId, $w, $p]); }
+        }
+        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
+        $pdo->commit();
+        $_SESSION['flash_success'] = 'Saved ' . count($byWidth) . ' width price'
+            . (count($byWidth) === 1 ? '' : 's') . '.'
+            . ($rowErrs ? ' ' . count($rowErrs) . ' row(s) had problems (see below).' : '');
+        if ($rowErrs) $_SESSION['flash_errors_detail'] = array_slice($rowErrs, 0, 25);
+        header('Location: /admin/products/price-table.php?id=' . $tableId . '&saved=1', true, 303);
+        exit;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        $error = 'Database error: ' . $e->getMessage();
+    }
+}
+
 // Read & clear flash messages set by the save handler above (after
 // the 303 redirect). $summary is reconstituted from the flash so the
 // existing render logic below still works.
@@ -671,6 +733,157 @@ unset($_SESSION['flash_errors_detail']);
 $error = $_SESSION['flash_error'] ?? null;
 unset($_SESSION['flash_error']);
 $justSaved = !empty($_GET['saved']);
+
+// ---------------------------------------------------------------------------
+// Width-only editor — a simple width → price list, shown instead of the
+// 2-D grid for width_only products. Self-contained render + early exit so
+// none of the grid machinery below runs.
+// ---------------------------------------------------------------------------
+if ($widthOnly) {
+    $woRowsStmt = db()->prepare(
+        'SELECT width_mm, price FROM price_table_rows
+          WHERE price_table_id = ? ORDER BY width_mm'
+    );
+    $woRowsStmt->execute([$tableId]);
+    $woRows = $woRowsStmt->fetchAll(PDO::FETCH_ASSOC);
+    $flashErrsDetailWO = $flashErrsDetail ?? [];
+
+    $activeNav = 'products';
+    ?><!doctype html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title><?= e((string) $table['product_name']) ?> &middot; Width prices &middot; YourBlinds</title>
+        <link rel="stylesheet" href="/app.css">
+        <style>
+            .wo-table { border-collapse: collapse; width: 100%; max-width: 30rem; }
+            .wo-table th, .wo-table td { padding: 0.375rem 0.5rem; text-align: left; }
+            .wo-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+                           color: var(--text-faint); border-bottom: 1px solid var(--border); }
+            .wo-table input { width: 100%; padding: 0.4375rem 0.5rem; border: 1px solid var(--border-strong);
+                              border-radius: 6px; font: inherit; background: var(--bg-input); color: var(--text-body); }
+            .wo-table td.rm { width: 2.5rem; text-align: center; }
+            .wo-rm-btn { background: transparent; border: 0; color: #b91c1c; cursor: pointer; font-size: 1rem; }
+        </style>
+    </head>
+    <body>
+    <div class="app-shell">
+        <?php require __DIR__ . '/../../_partials/sidebar.php'; ?>
+        <main class="app-main">
+            <div class="page-header">
+                <div>
+                    <?php
+                        require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                        echo render_breadcrumb([
+                            ['Products',                          '/admin/products/index.php'],
+                            [(string) $table['product_name'],     '/admin/products/edit.php?id=' . (int) $table['product_id']],
+                            ['Systems',                           '/admin/products/systems.php?product_id=' . (int) $table['product_id']],
+                            [(string) $table['system_name'],      null],
+                            ['Width prices',                      null],
+                        ]);
+                    ?>
+                    <h1 class="page-title">
+                        <?= e((string) $table['product_name']) ?>
+                        &mdash; <?= e((string) $table['system_name']) ?> width prices
+                    </h1>
+                    <p class="page-subtitle">
+                        Priced by width only. Each row is a width and its price; a quoted
+                        width rounds up to the next listed width.
+                    </p>
+                </div>
+                <a href="/admin/products/price-import-width.php?product_id=<?= (int) $table['product_id'] ?>"
+                   class="btn btn-secondary">Import width prices</a>
+            </div>
+
+            <?php if ($flashMsg !== null): ?>
+                <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+            <?php endif; ?>
+            <?php if ($error !== null): ?>
+                <div class="alert alert-error" role="alert"><?= e((string) $error) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($flashErrsDetailWO)): ?>
+                <div class="alert alert-error" role="alert">
+                    <ul style="margin:0;padding-left:1.25rem">
+                        <?php foreach ($flashErrsDetailWO as $d): ?>
+                            <li><?= e((string) $d) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+
+            <section class="section">
+                <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="save_width">
+                    <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+
+                    <table class="wo-table" id="wo-table">
+                        <thead>
+                            <tr><th>Width (mm)</th><th>Price (£)</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                                $renderRows = $woRows ?: [];
+                                if (!$renderRows) {
+                                    // Seed a few blank rows for a fresh table.
+                                    $renderRows = array_fill(0, 5, ['width_mm' => '', 'price' => '']);
+                                }
+                                foreach ($renderRows as $r):
+                            ?>
+                                <tr>
+                                    <td><input type="number" name="wmm[]" min="1" step="1"
+                                               value="<?= $r['width_mm'] === '' ? '' : (int) $r['width_mm'] ?>"
+                                               placeholder="e.g. 800"></td>
+                                    <td><input type="number" name="price[]" min="0" step="0.01"
+                                               value="<?= $r['price'] === '' ? '' : e((string) $r['price']) ?>"
+                                               placeholder="e.g. 7.94"></td>
+                                    <td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center">
+                        <button type="button" id="wo-add" class="btn btn-secondary btn-sm">+ Add row</button>
+                    </div>
+
+                    <div class="form-actions" style="margin-top:1.25rem">
+                        <button type="submit" class="btn btn-primary">Save width prices</button>
+                        <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
+                           class="btn btn-secondary">Back</a>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+    <script>
+    (function () {
+        var tbody = document.querySelector('#wo-table tbody');
+        var addBtn = document.getElementById('wo-add');
+        function newRow() {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><input type="number" name="wmm[]" min="1" step="1" placeholder="e.g. 800"></td>'
+              + '<td><input type="number" name="price[]" min="0" step="0.01" placeholder="e.g. 7.94"></td>'
+              + '<td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>';
+            tbody.appendChild(tr);
+            var inp = tr.querySelector('input'); if (inp) inp.focus();
+        }
+        if (addBtn) addBtn.addEventListener('click', newRow);
+        if (tbody) tbody.addEventListener('click', function (e) {
+            if (e.target && e.target.classList.contains('wo-rm-btn')) {
+                var tr = e.target.closest('tr');
+                if (tr) tr.remove();
+            }
+        });
+    })();
+    </script>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 
 // ---------------------------------------------------------------------------
 // Template download — generate a pre-populated XLSX matrix.
