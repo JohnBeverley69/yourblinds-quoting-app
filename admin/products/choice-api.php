@@ -86,6 +86,11 @@ if (!$extra) {
 }
 $productId = (int) $extra['product_id'];
 
+// Audit trail — log create / update / re-scope / delete / bulk "set all"
+// so catalogue changes are traceable ("did this choice get removed or
+// just re-scoped?"). Best-effort: never breaks the action.
+require_once __DIR__ . '/../../_partials/catalogue_audit.php';
+
 // Helper: validate that a system_id belongs to this product (or 0/null
 // for "all systems"). Returns the int id to store, or null. Throws on
 // an invalid id.
@@ -219,7 +224,11 @@ try {
             );
             foreach ($systemIdsToStore as $sid) {
                 $ins->execute([$extraId, $sid, $label, $sortOrder++]);
-                $created[] = $fetchChoice((int) $pdo->lastInsertId());
+                $newId = (int) $pdo->lastInsertId();
+                $created[] = $fetchChoice($newId);
+                catalogue_audit_log('choice', $newId, 'create', $label, null,
+                    ['label' => $label, 'system_id' => $sid], $productId,
+                    ['extra_id' => $extraId]);
             }
 
             echo json_encode([
@@ -300,6 +309,15 @@ try {
                     throw new RuntimeException('Unknown field "' . $field . '".');
             }
 
+            // Capture the "before" for a re-scope so the log reads
+            // "system_id: 26 → null"; other fields just record the new value.
+            $auditBefore = $field === 'system_id'
+                ? ['system_id' => $choiceRow['system_id'] !== null ? (int) $choiceRow['system_id'] : null]
+                : null;
+            catalogue_audit_log('choice', $choiceId, 'update', null, $auditBefore,
+                [$field => is_scalar($value) ? $value : null], $productId,
+                ['extra_id' => $extraId, 'field' => $field]);
+
             echo json_encode(['ok' => true]);
             break;
 
@@ -366,6 +384,9 @@ try {
             }
 
             $pdo->commit();
+            catalogue_audit_log('choice', $newId, 'duplicate', (string) $src['label'], null,
+                ['label' => (string) $src['label'], 'system_id' => $cloneSystemId], $productId,
+                ['extra_id' => $extraId, 'from_choice' => $sourceId]);
             echo json_encode(['ok' => true, 'choice' => $fetchChoice($newId)]);
             break;
 
@@ -451,6 +472,9 @@ try {
             }
             $pdo->commit();
 
+            catalogue_audit_log('choice', $choiceId, 'update', null, null,
+                ['bands' => $clean], $productId, ['extra_id' => $extraId, 'set' => 'bands']);
+
             echo json_encode([
                 'ok'    => true,
                 'bands' => $clean,
@@ -535,6 +559,9 @@ try {
             $affected = (int) $cntSt->fetchColumn();
             $pdo->commit();
 
+            catalogue_audit_log('extra', $extraId, 'update', null, null,
+                ['bands' => $clean], $productId, ['set' => 'bands_all', 'affected' => $affected]);
+
             echo json_encode([
                 'ok'       => true,
                 'bands'    => $clean,
@@ -569,10 +596,13 @@ try {
                 'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
             );
             $cntSt->execute([$extraId]);
+            $affected = (int) $cntSt->fetchColumn();
+            catalogue_audit_log('extra', $extraId, 'update', null, null,
+                ['system_id' => $systemId], $productId, ['set' => 'system_all', 'affected' => $affected]);
             echo json_encode([
                 'ok'        => true,
                 'system_id' => $systemId,
-                'affected'  => (int) $cntSt->fetchColumn(),
+                'affected'  => $affected,
             ]);
             break;
 
@@ -599,11 +629,14 @@ try {
                 'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
             );
             $cntSt->execute([$extraId]);
+            $affected = (int) $cntSt->fetchColumn();
+            catalogue_audit_log('extra', $extraId, 'update', null, null,
+                [$field => (float) $value], $productId, ['set' => 'price_all', 'affected' => $affected]);
             echo json_encode([
                 'ok'       => true,
                 'field'    => $field,
                 'value'    => (float) $value,
-                'affected' => (int) $cntSt->fetchColumn(),
+                'affected' => $affected,
             ]);
             break;
 
@@ -611,13 +644,18 @@ try {
         case 'delete':
             $choiceId = (int) ($_POST['choice_id'] ?? 0);
             $cSt = $pdo->prepare(
-                'SELECT id FROM product_extra_choices
+                'SELECT id, label, system_id FROM product_extra_choices
                   WHERE id = ? AND product_extra_id = ? LIMIT 1'
             );
             $cSt->execute([$choiceId, $extraId]);
-            if (!$cSt->fetch()) throw new RuntimeException('Choice not found.');
+            $delRow = $cSt->fetch();
+            if (!$delRow) throw new RuntimeException('Choice not found.');
             $pdo->prepare('DELETE FROM product_extra_choices WHERE id = ?')
                 ->execute([$choiceId]);
+            catalogue_audit_log('choice', $choiceId, 'delete', (string) $delRow['label'],
+                ['label'     => (string) $delRow['label'],
+                 'system_id' => $delRow['system_id'] !== null ? (int) $delRow['system_id'] : null],
+                null, $productId, ['extra_id' => $extraId]);
             echo json_encode(['ok' => true]);
             break;
 
