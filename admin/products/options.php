@@ -500,8 +500,12 @@ $activeNav = 'products';
                     <a href="/admin/products/edit.php?id=<?= (int) $productId ?>">Edit product</a>
                 </p>
             </div>
-            <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>"
-               class="btn btn-secondary">Import from Excel</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/admin/products/options-copy.php?product_id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">Copy from another product</a>
+                <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">Import from Excel</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>

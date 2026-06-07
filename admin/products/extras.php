@@ -334,6 +334,8 @@ $activeNav = 'products';
                     <a href="/admin/products/systems.php?product_id=<?= (int) $productId ?>">Systems</a>
                 </p>
             </div>
+            <a href="/admin/products/extras-copy.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Copy from another product</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>

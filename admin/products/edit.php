@@ -1254,6 +1254,7 @@ $activeNav = 'products';
                 <?= e((string) ($product['option_label'] ?? 'Fabric')) ?>s
                 <span class="count">(<?= (int) $fabricsTotal ?>)</span>
                 <span class="actions">
+                    <a href="/admin/products/options-copy.php?product_id=<?= (int) $id ?>">Copy from product &raquo;</a>
                     <a href="/admin/products/options-import.php?product_id=<?= (int) $id ?>">Import &raquo;</a>
                     <a href="/admin/products/options.php?product_id=<?= (int) $id ?>">Full manage &raquo;</a>
                 </span>
@@ -1430,6 +1431,7 @@ $activeNav = 'products';
                      as on extra.php; persistent green pill at rest. -->
                 <span id="save-indicator" class="save-indicator">All changes saved</span>
                 <span class="actions">
+                    <a href="/admin/products/extras-copy.php?product_id=<?= (int) $id ?>">Copy from product &raquo;</a>
                     <a href="/admin/products/extras.php?product_id=<?= (int) $id ?>">Full manage &raquo;</a>
                 </span>
             </summary>
