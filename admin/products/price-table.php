@@ -877,9 +877,26 @@ if ($perSqm) {
                     <div class="form-actions" style="margin-top:1.25rem">
                         <button type="submit" class="btn btn-primary">Save rate</button>
                         <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
-                           class="btn btn-secondary">Back</a>
+                           class="btn btn-secondary">&larr; Systems &amp; bands</a>
+                        <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>"
+                           class="btn btn-secondary">Back to product</a>
                     </div>
                 </form>
+
+                <div style="margin-top:1.5rem;padding:0.875rem 1.125rem;background:var(--bg-subtle-2);
+                            border:1px solid var(--border);border-radius:8px;font-size:0.875rem;
+                            line-height:1.6;color:var(--text-secondary);max-width:36rem">
+                    <strong style="color:var(--text-body)">What next?</strong>
+                    <ol style="margin:0.375rem 0 0;padding-left:1.25rem">
+                        <li>Set a &pound;/m&sup2; rate for <strong>each system &amp; band</strong> this
+                            product has &mdash; go back to
+                            <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>">Systems &amp; bands</a>
+                            and open each one.</li>
+                        <li>When the rates are in, quote it in
+                            <a href="/instaprice/index.php">InstaPrice</a> or the quote builder:
+                            enter a <strong>width &amp; height</strong> and the price is rate &times; area.</li>
+                    </ol>
+                </div>
             </section>
         </main>
     </div>
