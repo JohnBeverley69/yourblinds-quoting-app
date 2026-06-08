@@ -751,7 +751,7 @@ $activeNav = 'calendar';
                         // fitting/job stages appear on the dated calendar — the
                         // quote-side stages live on the orders list.
                         $legendLabels = job_status_labels();
-                        $legendStages = job_status_groups()['Fitting & job'] ?? [];
+                        $legendStages = job_status_groups()['Appointments & job'] ?? [];
                         foreach ($legendStages as $stageKey):
                             $swatch = $stagePalette[$stageKey] ?? '#2563eb';
                     ?>
@@ -880,6 +880,8 @@ $activeNav = 'calendar';
         if (apptStatus === 'cancelled') return 'cancelled';
         if (apptStatus === 'no_show')   return 'no_show';
         if (quoteStatus === 'fitted' || quoteStatus === 'invoiced' || quoteStatus === 'paid') return quoteStatus;
+        // No linked quote = a booked appointment (measure/survey), not a fitting.
+        if (quoteStatus === null || quoteStatus === undefined || quoteStatus === '') return 'appointment_booked';
         if (apptStatus === 'completed') return 'fitted';
         return 'booked';
     }

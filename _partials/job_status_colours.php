@@ -30,9 +30,10 @@ if (!function_exists('job_status_defaults')) {
             'sent'      => '#f59e0b',  // quote sent      (amber)
             'accepted'  => '#16a34a',  // accepted        (green)
             'declined'  => '#dc2626',  // declined        (red)
-            'ordered'   => '#0891b2',  // ordered         (cyan)
-            'booked'    => '#2563eb',  // fitting booked  (blue)
-            'fitted'    => '#0d9488',  // fitted          (teal)
+            'ordered'           => '#0891b2',  // ordered            (cyan)
+            'appointment_booked'=> '#2563eb',  // appointment booked (blue)
+            'booked'            => '#6366f1',  // fitting booked     (indigo)
+            'fitted'            => '#0d9488',  // fitted             (teal)
             'invoiced'  => '#ea580c',  // invoiced        (orange)
             'paid'      => '#475569',  // paid            (slate)
             'cancelled' => '#b91c1c',  // cancelled       (dark red)
@@ -48,9 +49,10 @@ if (!function_exists('job_status_defaults')) {
             'sent'      => 'Quote sent',
             'accepted'  => 'Accepted',
             'declined'  => 'Declined',
-            'ordered'   => 'Ordered',
-            'booked'    => 'Fitting booked',
-            'fitted'    => 'Fitted',
+            'ordered'            => 'Ordered',
+            'appointment_booked' => 'Appointment booked',
+            'booked'             => 'Fitting booked',
+            'fitted'             => 'Fitted',
             'invoiced'  => 'Invoiced',
             'paid'      => 'Paid',
             'cancelled' => 'Cancelled',
@@ -62,8 +64,8 @@ if (!function_exists('job_status_defaults')) {
     function job_status_groups(): array
     {
         return [
-            'Quote stages'      => ['draft', 'sent', 'accepted', 'declined', 'ordered'],
-            'Fitting & job'     => ['booked', 'fitted', 'invoiced', 'paid', 'cancelled', 'no_show'],
+            'Quote stages'          => ['draft', 'sent', 'accepted', 'declined', 'ordered'],
+            'Appointments & job'    => ['appointment_booked', 'booked', 'fitted', 'invoiced', 'paid', 'cancelled', 'no_show'],
         ];
     }
 
@@ -135,8 +137,9 @@ if (!function_exists('job_status_defaults')) {
     /**
      * Map a calendar appointment to one pipeline status (its "stage").
      * Cancel / no-show on the appointment always win; otherwise the quote's
-     * own fitted/invoiced/paid status carries through; a completed appointment
-     * counts as fitted; everything else is a booked fitting.
+     * own fitted/invoiced/paid status carries through. An appointment with no
+     * linked quote is a measure/survey visit — its own "Appointment booked"
+     * stage; once it's tied to a quote it's a fitting (booked → fitted).
      */
     function job_stage(string $apptStatus, ?string $quoteStatus): string
     {
@@ -145,6 +148,8 @@ if (!function_exists('job_status_defaults')) {
         if (in_array($quoteStatus, ['fitted', 'invoiced', 'paid'], true)) {
             return (string) $quoteStatus;
         }
+        // No linked quote = a booked appointment (measure/survey), not a fitting.
+        if ($quoteStatus === null || $quoteStatus === '') return 'appointment_booked';
         if ($apptStatus === 'completed') return 'fitted';
         return 'booked';
     }
