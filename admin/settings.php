@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/legal_text.php';
 
 requireAdmin();
 
@@ -260,6 +261,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /admin/settings.php');
         exit;
     }
+
+    if ($action === 'legal') {
+        // Terms & Conditions + Privacy Policy — free text, stored per client.
+        // Saved separately from the quote-defaults block so it can never
+        // disturb it. An empty box is a valid "configured but blank" value
+        // (disables that document); a NULL column means never configured.
+        $terms   = trim((string) ($_POST['terms_conditions'] ?? ''));
+        $privacy = trim((string) ($_POST['privacy_policy']   ?? ''));
+        try {
+            $stmt = db()->prepare(
+                'INSERT INTO client_settings (client_id, terms_conditions, privacy_policy)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                   terms_conditions = VALUES(terms_conditions),
+                   privacy_policy   = VALUES(privacy_policy)'
+            );
+            $stmt->execute([$clientId, $terms, $privacy]);
+            $_SESSION['flash_success'] = 'Terms & Conditions and Privacy Policy saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_terms_conditions.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
 }
 
 $clientStmt = db()->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
@@ -282,6 +308,15 @@ $settings = $settingsStmt->fetch() ?: [
 // May be absent if the row exists but the migration hasn't run.
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
 if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
+
+// Terms & Privacy textareas: show the stored value if configured, else
+// pre-fill with the suggested template as a starting point. A NULL column
+// (key absent — never saved, or migration not yet run) ⇒ show the template.
+$tcStored  = $settings['terms_conditions'] ?? null;
+$ppStored  = $settings['privacy_policy']   ?? null;
+$tcDisplay = $tcStored === null ? legal_default_terms()   : (string) $tcStored;
+$ppDisplay = $ppStored === null ? legal_default_privacy() : (string) $ppStored;
+
 $activeNav = 'settings';
 ?><!doctype html>
 <html lang="en">
@@ -673,6 +708,49 @@ $activeNav = 'settings';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save quote defaults</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Terms &amp; Conditions &amp; Privacy Policy</h2>
+            </div>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="legal">
+
+                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                    These print, personalised, at the bottom of your quote PDF and the
+                    customer-facing quote. A suggested template is pre-filled below &mdash;
+                    edit it to suit your business, then Save. <strong>Leave a box empty to
+                    show nothing.</strong> This is a starting point, not legal advice &mdash;
+                    have it reviewed before relying on it.
+                </p>
+                <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 1rem">
+                    These placeholders fill in automatically on each quote:
+                    <?php foreach (legal_token_list() as $tok => $desc): ?>
+                        <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px;font-size:0.8125rem"><?= e($tok) ?></code>
+                    <?php endforeach; ?>
+                </p>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="terms_conditions">Terms &amp; Conditions</label>
+                        <textarea id="terms_conditions" name="terms_conditions" rows="16"
+                                  style="font-family:inherit;line-height:1.5"><?= e($tcDisplay) ?></textarea>
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="privacy_policy">Privacy Policy</label>
+                        <textarea id="privacy_policy" name="privacy_policy" rows="16"
+                                  style="font-family:inherit;line-height:1.5"><?= e($ppDisplay) ?></textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save terms &amp; privacy policy</button>
                 </div>
             </form>
         </section>
