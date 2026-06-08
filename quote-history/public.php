@@ -67,6 +67,8 @@ try {
         $quote['privacy_policy']   = $lRow['privacy_policy'];
     }
 } catch (Throwable $e) { /* columns not present yet — skip */ }
+$tcText = trim((string) ($quote['terms_conditions'] ?? ''));
+$ppText = trim((string) ($quote['privacy_policy']   ?? ''));
 
 // First-view auto-promote: if the trade user shared the link via WhatsApp
 // or copy-paste (i.e. without going through email_pdf.php which already
@@ -475,6 +477,17 @@ if ($depositStored !== null) {
                 <input id="signature_name" name="signature_name" type="text"
                        required maxlength="150" autocomplete="name"
                        value="<?= e((string) $quote['end_customer_name']) ?>">
+                <?php if ($tcText !== ''): ?>
+                <label for="agree_terms"
+                       style="display:flex;align-items:flex-start;gap:0.5rem;margin:0.875rem 0 0.25rem;
+                              font-weight:400;cursor:pointer;line-height:1.5">
+                    <input id="agree_terms" name="agree_terms" type="checkbox" value="1"
+                           required style="margin-top:0.2rem">
+                    <span>I have read and understood the Terms &amp; Conditions of
+                        <?= e((string) ($quote['trade_company_name'] ?? 'the supplier')) ?>
+                        (shown below).</span>
+                </label>
+                <?php endif; ?>
                 <div class="actions">
                     <button type="submit" name="action" value="accept" class="btn-primary">
                         Accept quote
@@ -489,10 +502,6 @@ if ($depositStored !== null) {
         </div>
     <?php endif; ?>
 
-    <?php
-        $tcText = trim((string) ($quote['terms_conditions'] ?? ''));
-        $ppText = trim((string) ($quote['privacy_policy']   ?? ''));
-    ?>
     <?php if ($tcText !== '' || $ppText !== ''): ?>
         <div style="margin-top:1.5rem">
             <?php if ($tcText !== ''): ?>
