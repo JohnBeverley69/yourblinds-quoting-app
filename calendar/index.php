@@ -121,7 +121,7 @@ if (!$canViewAll) {
 if ($mineOnly) {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.quote_id,
+                a.duration_minutes, a.status, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name
            FROM appointments a
@@ -140,7 +140,7 @@ if ($mineOnly) {
 } else {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.quote_id,
+                a.duration_minutes, a.status, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name
            FROM appointments a
@@ -474,6 +474,38 @@ $activeNav = 'calendar';
            quote override on completed). */
         .cal-appt.from-quote.status-booked { background: #7c3aed; }
 
+        /* Quick "access note" marker. A small 📝 on every card to add/edit a
+           note; when a note exists the card gets a bold amber left bar so it's
+           obvious at a glance, and the marker goes full-colour. */
+        .cal-appt-note {
+            flex: 0 0 auto;
+            margin-left: 0.2rem;
+            font-size: 0.72rem;
+            line-height: 1;
+            cursor: pointer;
+            opacity: 0.4;
+            filter: grayscale(1);
+        }
+        .cal-appt-note:hover, .cal-appt-note:focus { opacity: 1; filter: none; outline: none; }
+        .cal-appt.has-note { box-shadow: inset 4px 0 0 #f59e0b; }
+        .cal-appt.has-note .cal-appt-note { opacity: 1; filter: none; }
+
+        /* Quick-note popover */
+        .note-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+                      display: flex; align-items: center; justify-content: center;
+                      z-index: 1000; padding: 1rem; }
+        .note-modal[hidden] { display: none; }
+        .note-modal-box { background: var(--bg-card); color: var(--text-body);
+                          border-radius: 12px; padding: 1.25rem; width: 100%;
+                          max-width: 26rem; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        .note-modal-box h3 { margin: 0 0 0.25rem; font-size: 1.0625rem; }
+        .note-modal-sub { margin: 0 0 0.75rem; font-size: 0.8125rem; color: var(--text-faint); }
+        .note-modal-box textarea { width: 100%; border: 1px solid var(--border-strong);
+                          border-radius: 8px; padding: 0.625rem 0.75rem; font: inherit;
+                          background: var(--bg-input); color: var(--text-body); resize: vertical; }
+        .note-modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+        .note-modal-err { margin-top: 0.5rem; color: #b91c1c; font-size: 0.8125rem; }
+
         /* ----- Tablet portrait & smaller: stack toolbar, slightly smaller cells. */
         @media (max-width: 900px) {
             .app-main { padding: 1rem; }
@@ -766,16 +798,22 @@ $activeNav = 'calendar';
                         <?php if ($appts): ?>
                             <div class="cal-appts">
                                 <?php foreach ($appts as $a): ?>
-                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?>"
+                                    <?php $noteTxt = trim((string) ($a['access_note'] ?? '')); ?>
+                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
                                        <?php if (!empty($a['quote_id'])): ?>
                                            data-quote-id="<?= (int) $a['quote_id'] ?>"
                                        <?php endif; ?>
-                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?>">
+                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
+                                        <span class="cal-appt-note" role="button" tabindex="0"
+                                              data-id="<?= (int) $a['id'] ?>"
+                                              data-note="<?= e($noteTxt) ?>"
+                                              title="<?= $noteTxt !== '' ? e($noteTxt) : 'Add a note' ?>"
+                                              aria-label="<?= $noteTxt !== '' ? 'Edit note' : 'Add note' ?>">&#128221;</span>
                                         <?php if (!empty($a['quote_id'])): ?>
                                             <!-- Single-tap shortcut to the order page. Stops the
                                                  click bubbling so the parent's view.php link
@@ -795,6 +833,20 @@ $activeNav = 'calendar';
             </div>
         </section>
     </main>
+</div>
+
+<div id="note-modal" class="note-modal" hidden>
+    <div class="note-modal-box" role="dialog" aria-modal="true" aria-labelledby="note-modal-title">
+        <h3 id="note-modal-title">Appointment note</h3>
+        <p class="note-modal-sub">A short reminder for the day &mdash; e.g. &ldquo;tap gently, baby asleep&rdquo;.</p>
+        <textarea id="note-modal-text" rows="3" maxlength="280" placeholder="Add a note…"></textarea>
+        <div class="note-modal-actions">
+            <button type="button" id="note-modal-save" class="btn btn-primary">Save</button>
+            <button type="button" id="note-modal-remove" class="btn btn-secondary">Remove</button>
+            <button type="button" id="note-modal-cancel" class="btn btn-secondary">Cancel</button>
+        </div>
+        <div id="note-modal-err" class="note-modal-err" hidden></div>
+    </div>
 </div>
 <script>
 (function () {
@@ -1001,13 +1053,21 @@ $activeNav = 'calendar';
                       + ' data-quote-id="' + a.quote_id + '"'
                       + ' title="Open order" aria-label="Open order">&rarr;</span>'
                     : '';
-                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + '"'
+                var note       = a.access_note || '';
+                var hasNoteCls = note ? ' has-note' : '';
+                var noteHtml   = '<span class="cal-appt-note" role="button" tabindex="0"'
+                      + ' data-id="' + a.id + '"'
+                      + ' data-note="' + escapeAttr(note) + '"'
+                      + ' title="' + escapeAttr(note || 'Add a note') + '"'
+                      + ' aria-label="' + (note ? 'Edit note' : 'Add note') + '">📝</span>';
+                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
-                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status) + '">'
+                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status + (note ? ' — ' + note : '')) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
                      +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
+                     +    noteHtml
                      +    openOrderHtml
                      +  '</a>';
             });
@@ -1076,6 +1136,66 @@ $activeNav = 'calendar';
         }).catch(function (err) {
             alert(err.message || 'Could not reschedule.');
         });
+    }
+
+    // -- Quick access-note popover -----------------------------------
+    var noteModal  = document.getElementById('note-modal');
+    var noteText   = document.getElementById('note-modal-text');
+    var noteErr    = document.getElementById('note-modal-err');
+    var noteApptId = null;
+
+    function openNote(id, current) {
+        noteApptId = id;
+        noteText.value = current || '';
+        noteErr.hidden = true;
+        noteModal.hidden = false;
+        noteText.focus();
+    }
+    function closeNote() { if (noteModal) { noteModal.hidden = true; } noteApptId = null; }
+
+    function saveNote(value) {
+        if (!noteApptId) return;
+        var fd = new FormData();
+        fd.append('appointment_id', noteApptId);
+        fd.append('access_note', value);
+        fetch('/calendar/save_note.php', {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+              if (!data.ok) throw new Error(data.error || 'Save failed.');
+              closeNote();
+              refreshAll();   // re-render cards so the marker updates
+          }).catch(function (err) {
+              noteErr.textContent = err.message || 'Could not save note.';
+              noteErr.hidden = false;
+          });
+    }
+
+    // Open on note-marker click/tap — delegated so it works for the cards
+    // the poll loop re-renders too. Stops the card's view.php link firing.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cal-appt-note');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openNote(btn.getAttribute('data-id'), btn.getAttribute('data-note') || '');
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var el = document.activeElement;
+        if (!el || !el.classList || !el.classList.contains('cal-appt-note')) return;
+        e.preventDefault();
+        openNote(el.getAttribute('data-id'), el.getAttribute('data-note') || '');
+    });
+
+    if (noteModal) {
+        document.getElementById('note-modal-save').addEventListener('click', function () { saveNote(noteText.value); });
+        document.getElementById('note-modal-remove').addEventListener('click', function () { saveNote(''); });
+        document.getElementById('note-modal-cancel').addEventListener('click', closeNote);
+        noteModal.addEventListener('click', function (e) { if (e.target === noteModal) closeNote(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !noteModal.hidden) closeNote(); });
     }
 })();
 </script>

@@ -121,7 +121,7 @@ if ($startParam !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $startParam) === 1
 if ($first !== null && $last !== null) {
     $gridSql = $mineOnly
         ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                  a.duration_minutes, a.status, a.quote_id,
+                  a.duration_minutes, a.status, a.quote_id, a.access_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name
              FROM appointments a
@@ -131,7 +131,7 @@ if ($first !== null && $last !== null) {
               AND a.appointment_date BETWEEN ? AND ?
          ORDER BY a.appointment_date, a.appointment_time'
         : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                  a.duration_minutes, a.status, a.quote_id,
+                  a.duration_minutes, a.status, a.quote_id, a.access_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name
              FROM appointments a
@@ -162,6 +162,7 @@ if ($first !== null && $last !== null) {
             'time'          => $fmt((string) $r['appointment_time']),
             'status'        => (string) $r['status'],
             'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
+            'access_note'   => (string) ($r['access_note']           ?? ''),
             'town'          => (string) ($r['installation_town']     ?? ''),
             'postcode'      => (string) ($r['installation_postcode'] ?? ''),
             'customer_name' => (string) ($r['customer_name']         ?? ''),
