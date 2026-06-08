@@ -93,9 +93,16 @@ if (isset($_GET['extras']) && is_array($_GET['extras'])) {
                 $cid = (int) $rawCid;
                 if ($cid > 0) $extras[] = $mkRow($eid, $cid);
             }
-        } else {
+        } elseif (array_key_exists('choice_id', $e)) {
+            // Single-pick dropdown — only counts when a choice was picked.
             $cid = (int) ($e['choice_id'] ?? 0);
             if ($cid > 0) $extras[] = $mkRow($eid, $cid);
+        } else {
+            // Number-only option: no choice_id submitted at all. Carry the
+            // typed value through with no choice (choice_id 0).
+            $row = ['extra_id' => $eid, 'choice_id' => 0];
+            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            $extras[] = $row;
         }
     }
 }

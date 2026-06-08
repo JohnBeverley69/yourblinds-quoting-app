@@ -187,16 +187,20 @@ function catalogue_validate_product(int $productId, int $clientId): array
     // needs to edit, not a generic list page. Saves a "where do I
     // even start?" round-trip.
 
-    // Active options with zero active choices. Salesperson would see
-    // an empty dropdown, which is worse than the option not existing.
+    // Active options with zero active choices render as an empty dropdown,
+    // which is worse than the option not existing — EXCEPT options that
+    // capture a number (length_input_label set). Those are legitimately
+    // choice-less: the quote builder shows them as a plain number input, so
+    // they shouldn't be flagged.
     $emptyExtras = $fetchAll(
-        'SELECT e.id, e.name
+        "SELECT e.id, e.name
            FROM product_extras e
           WHERE e.product_id = ? AND e.client_id = ? AND e.active = 1
+            AND COALESCE(e.length_input_label, '') = ''
             AND NOT EXISTS (
                 SELECT 1 FROM product_extra_choices c
                  WHERE c.product_extra_id = e.id AND c.active = 1
-            )',
+            )",
         [$productId, $clientId]
     );
     foreach ($emptyExtras as $e) {
