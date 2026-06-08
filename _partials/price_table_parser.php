@@ -288,15 +288,38 @@ if (!function_exists('ptp_parse_band_blocks')) {
     function ptp_parse_band_blocks(array $rows): array
     {
         $bands     = [];
-        $current   = null;
+        $current   = null;     // array of band codes this block serves, or null
         $widths    = [];
         $cells     = [];
         $expecting = 'band';   // band | widths | data
         $dropCol   = null;     // detected once per band — which column holds drops
+        $bareUnit  = null;     // default unit for bare (suffix-less) dimensions
+
+        // Pick the default unit for bare numbers, detected from the first
+        // widths row. Blind grids are written in metres (0.6–4.8), centimetres
+        // (60–480) or millimetres (600–4800). A unit suffix on a cell always
+        // wins; this only rescues suffix-less numbers — without it a metre grid
+        // collapses (0.6 → 1mm) and every cell collides on the unique key.
+        $detectUnit = static function (array $rawVals): string {
+            $maxBare = 0.0;
+            foreach ($rawVals as $s) {
+                $s = trim((string) $s);
+                if ($s === '' || preg_match('/[a-z\'"]/i', $s)) continue;   // suffixed → self-describes
+                $n = (float) str_replace(',', '', $s);
+                if ($n > $maxBare) $maxBare = $n;
+            }
+            if ($maxBare <= 0)  return 'mm';
+            if ($maxBare < 50)  return 'm';    // 0.6–4.8 → metres
+            if ($maxBare < 600) return 'cm';   // 60–480 → centimetres
+            return 'mm';
+        };
 
         $finalise = function () use (&$bands, &$current, &$cells) {
             if ($current !== null && $cells) {
-                $bands[] = ['code' => $current, 'cells' => $cells];
+                // One block can serve several bands ("AAA / AA") — same grid.
+                foreach ((array) $current as $code) {
+                    $bands[] = ['code' => $code, 'cells' => $cells];
+                }
             }
             $current = null;
             $cells   = [];
@@ -305,35 +328,48 @@ if (!function_exists('ptp_parse_band_blocks')) {
         foreach ($rows as $rowNum => $row) {
             $a = trim((string) ($row['A'] ?? ''));
 
-            // Tolerant band-header detection (anchored at end so we don't match
-            // things like "abandon" mid-text).
-            if (preg_match('/(?:price\s+)?b(?:and|nad)\s+([A-Z]+)\s*$/i', $a, $m)) {
-                $finalise();
-                $current   = strtoupper($m[1]);
-                $widths    = [];
-                $dropCol   = null;
-                $expecting = 'widths';
-                continue;
+            // Band header — one block may list several codes ("Band AAA / AA"
+            // or "Band A, B"). Capture all; the grid applies to each. Requires
+            // "band "/"bnad " so it won't match "abandon".
+            if (preg_match('/(?:price\s+)?b(?:and|nad)\s+(.+)$/i', $a, $m)) {
+                $codes = [];
+                foreach (preg_split('#[/,]#', $m[1]) ?: [] as $tok) {
+                    $tok = strtoupper(trim($tok));
+                    if (preg_match('/^[A-Z]{1,4}$/', $tok)) $codes[] = $tok;
+                }
+                if ($codes) {
+                    $finalise();
+                    $current   = $codes;
+                    $widths    = [];
+                    $dropCol   = null;
+                    $expecting = 'widths';
+                    continue;
+                }
             }
 
             if ($current === null) continue;
 
             if ($expecting === 'widths') {
-                // Try to capture widths from the row. Skip column A (it's the
-                // drop axis or a label). Need at least 2 numeric values to
-                // accept this as a widths row — that filters out lone-cell
-                // label rows that happen to contain a digit.
-                $candidate = [];
+                // Gather RAW (unconverted) candidate width strings from cols B+
+                // so we can detect their unit before converting. Skip column A
+                // (drop axis / label) and word labels ("Mtrs", "(ins)"). Need
+                // ≥2 to accept this as the widths row.
+                $rawWidths = [];
                 foreach ($row as $col => $val) {
                     if ($col === 'A') continue;
-                    $w = ptp_parse_dimension((string) ($val ?? ''));
-                    if ($w !== null && $w > 0) {
-                        $candidate[$col] = $w;
+                    $s = trim((string) ($val ?? ''));
+                    if ($s !== '' && preg_match('/\d/', $s) && !preg_match('/[a-z]{2,}/i', $s)) {
+                        $rawWidths[$col] = $s;
                     }
                 }
-                if (count($candidate) >= 2) {
-                    $widths    = $candidate;
-                    $expecting = 'data';
+                if (count($rawWidths) >= 2) {
+                    if ($bareUnit === null) $bareUnit = $detectUnit($rawWidths);
+                    $widths = [];
+                    foreach ($rawWidths as $col => $s) {
+                        $w = ptp_parse_dimension($s, $bareUnit);
+                        if ($w !== null && $w > 0) $widths[$col] = $w;
+                    }
+                    if (count($widths) >= 2) $expecting = 'data';
                 }
                 continue;
             }
@@ -344,10 +380,11 @@ if (!function_exists('ptp_parse_band_blocks')) {
             // column A holding label text in the widths row). On the first
             // data row of each band, sniff for the leftmost non-widths column
             // that holds a parseable dimension and lock it in.
+            $unit = $bareUnit ?? 'mm';
             if ($dropCol === null) {
                 foreach ($row as $col => $val) {
                     if (isset($widths[$col])) continue;
-                    $d = ptp_parse_dimension((string) ($val ?? ''));
+                    $d = ptp_parse_dimension((string) ($val ?? ''), $unit);
                     if ($d !== null && $d > 0) {
                         $dropCol = $col;
                         break;
@@ -356,7 +393,7 @@ if (!function_exists('ptp_parse_band_blocks')) {
                 if ($dropCol === null) continue; // not a data row yet
             }
 
-            $dropMm = ptp_parse_dimension((string) ($row[$dropCol] ?? ''));
+            $dropMm = ptp_parse_dimension((string) ($row[$dropCol] ?? ''), $unit);
             if ($dropMm === null) {
                 // Could be an inches reference row, a blank spacer, anything.
                 // Keep waiting for the next real data row.
