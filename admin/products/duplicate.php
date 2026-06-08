@@ -71,8 +71,33 @@ try {
     // Tenant scoping is enforced once here at the gate, then trusted
     // for every subsequent SELECT (which all filter by source product
     // id, which we've already verified is in this tenant's client_id).
+    // Optional product columns that vary by schema age. Probe once and
+    // reuse for BOTH the source SELECT and the INSERT, so a duplicate
+    // keeps the original's behaviour flags. Historically only cost_price
+    // was carried — the behaviour flags were NOT copied, so a duplicated
+    // headrail silently reverted to a normal width×drop product
+    // (width_only lost) and started showing a drop again. That's the bug
+    // this fixes.
+    //   cost_price        — nullable trade cost
+    //   requires_option   — 0 = no-fabric line (headrail/track/spares)
+    //   width_only        — 1 = priced on width alone (no drop)
+    //   price_per_slat    — 1 = width→rate table, price = rate × drop
+    //   show_colour_field — 1 = show the dedicated Colour sub-field
+    //   band_label        — per-product label for the band/range field
+    $optionalCols = [];
+    foreach (['cost_price', 'requires_option', 'width_only',
+              'price_per_slat', 'show_colour_field', 'band_label'] as $col) {
+        try {
+            $pdo->query("SELECT $col FROM products LIMIT 1");
+            $optionalCols[] = $col;
+        } catch (Throwable $e) {
+            // column not present on this schema — skip it everywhere
+        }
+    }
+
+    $srcCols = array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $optionalCols);
     $st = $pdo->prepare(
-        'SELECT id, name, option_label, sort_order, active, cost_price
+        'SELECT ' . implode(', ', $srcCols) . '
            FROM products
           WHERE id = ? AND client_id = ?
           LIMIT 1'
@@ -99,44 +124,26 @@ try {
 
     $newName = $src['name'] . ' (copy)';
 
-    // cost_price is nullable — copy it as-is (defensive about the
-    // column not existing on older schemas).
-    $hasCostPrice = false;
-    try {
-        $pdo->query('SELECT cost_price FROM products LIMIT 1');
-        $hasCostPrice = true;
-    } catch (Throwable $e) {
-        $hasCostPrice = false;
+    // Build the INSERT from the fixed columns plus whichever optional
+    // columns exist — values copied straight from the source row, except
+    // name (suffixed " (copy)") and sort_order (recalculated to last).
+    $insCols = ['client_id', 'name', 'option_label', 'sort_order', 'active'];
+    $insVals = [
+        $clientId,
+        $newName,
+        (string) ($src['option_label'] ?? ''),
+        $newSort,
+        (int) $src['active'],
+    ];
+    foreach ($optionalCols as $col) {
+        $insCols[] = $col;
+        $insVals[] = $src[$col];  // copy as-is (nullable + int both fine via PDO)
     }
-
-    if ($hasCostPrice) {
-        $ins = $pdo->prepare(
-            'INSERT INTO products
-              (client_id, name, option_label, sort_order, active, cost_price)
-              VALUES (?, ?, ?, ?, ?, ?)'
-        );
-        $ins->execute([
-            $clientId,
-            $newName,
-            (string) ($src['option_label'] ?? ''),
-            $newSort,
-            (int) $src['active'],
-            $src['cost_price'],
-        ]);
-    } else {
-        $ins = $pdo->prepare(
-            'INSERT INTO products
-              (client_id, name, option_label, sort_order, active)
-              VALUES (?, ?, ?, ?, ?)'
-        );
-        $ins->execute([
-            $clientId,
-            $newName,
-            (string) ($src['option_label'] ?? ''),
-            $newSort,
-            (int) $src['active'],
-        ]);
-    }
+    $ins = $pdo->prepare(
+        'INSERT INTO products (' . implode(', ', $insCols) . ')
+          VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
+    );
+    $ins->execute($insVals);
 
     $newProductId = (int) $pdo->lastInsertId();
 
