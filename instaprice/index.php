@@ -674,9 +674,12 @@ $activeNav = 'instaprice';
 
         document.getElementById('ip-base').textContent = money(pricePer);
         document.getElementById('ip-disc-price').textContent = money(discountedPer);
-        document.getElementById('ip-sell').textContent = money(sellPer);
+        // Headline the TOTAL (qty × unit) in bold; show the single price as
+        // the small grey supporting line. For qty 1 the total IS the single
+        // price, so the grey line is omitted.
+        document.getElementById('ip-sell').textContent = money(total);
         document.getElementById('ip-total').textContent = qty > 1
-            ? (qty + ' × ' + money(sellPer) + ' = ' + money(total)) : '';
+            ? (qty + ' × ' + money(sellPer) + ' each') : '';
     }
 
     // ----- Events -------------------------------------------------------
