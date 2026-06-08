@@ -123,9 +123,11 @@ if ($first !== null && $last !== null) {
         ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.quote_id, a.access_note,
                   a.installation_town, a.installation_postcode,
-                  c.name AS customer_name
+                  c.name AS customer_name,
+                  q.status AS quote_status
              FROM appointments a
         LEFT JOIN customers c ON c.id = a.customer_id
+        LEFT JOIN quotes q ON q.id = a.quote_id
             WHERE a.client_id = ?
               AND a.client_user_id = ?
               AND a.appointment_date BETWEEN ? AND ?
@@ -133,9 +135,11 @@ if ($first !== null && $last !== null) {
         : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.quote_id, a.access_note,
                   a.installation_town, a.installation_postcode,
-                  c.name AS customer_name
+                  c.name AS customer_name,
+                  q.status AS quote_status
              FROM appointments a
         LEFT JOIN customers c ON c.id = a.customer_id
+        LEFT JOIN quotes q ON q.id = a.quote_id
             WHERE a.client_id = ?
               AND a.appointment_date BETWEEN ? AND ?
          ORDER BY a.appointment_date, a.appointment_time';
@@ -161,6 +165,7 @@ if ($first !== null && $last !== null) {
             'title'         => (string) $r['title'],
             'time'          => $fmt((string) $r['appointment_time']),
             'status'        => (string) $r['status'],
+            'quote_status'  => $r['quote_status'] !== null ? (string) $r['quote_status'] : null,
             'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
             'access_note'   => (string) ($r['access_note']           ?? ''),
             'town'          => (string) ($r['installation_town']     ?? ''),
