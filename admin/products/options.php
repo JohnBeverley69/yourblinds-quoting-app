@@ -507,6 +507,8 @@ $activeNav = 'products';
                    class="btn btn-secondary">Copy from another product</a>
                 <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>"
                    class="btn btn-secondary">Import from Excel</a>
+                <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4"
+                   class="btn btn-primary">Next: price tables &rarr;</a>
             </div>
         </div>
 
@@ -822,6 +824,17 @@ $activeNav = 'products';
                 </form>
             <?php endif; ?>
         </section>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;
+                    margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">
+            <span style="flex:1;min-width:14rem;color:var(--text-faint);font-size:0.875rem">
+                Done with <?= e($labelL) ?>s &amp; bands? The next step is a price table for each band.
+            </span>
+            <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Back to product</a>
+            <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4"
+               class="btn btn-primary">Next: set up price tables &rarr;</a>
+        </div>
     </main>
 </div>
 
