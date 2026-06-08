@@ -26,12 +26,16 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
+
+// Traffic-light palette for this tenant — same colours as the calendar.
+$statusPalette = job_client_palette($clientId);
 $_perms   = current_user_permissions();
 
 // Row filter: non-admin users without view-all see only quotes
@@ -164,22 +168,14 @@ $activeNav = 'order-history';
         }
         .filter-chips a.active { background: var(--brand); color: #fff; }
         .filter-chips a:hover  { border-color: var(--border-strong); }
-        /* Status pills intentionally keep a literal palette so they
-           remain instantly recognisable in both themes (paid = green
-           regardless of dark/light). */
+        /* Status pills are coloured inline from the tenant's traffic-light
+           palette (the same colours as the calendar) — a job reads the same
+           colour everywhere. Editable per client in Settings. */
         .status-pill {
             display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem;
             font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
             border-radius: 999px;
         }
-        .status-draft     { background: var(--border); color: var(--text-secondary); }
-        .status-sent      { background: #dbeafe; color: #1e40af; }
-        .status-accepted  { background: #d1fae5; color: #065f46; }
-        .status-declined  { background: #fee2e2; color: #991b1b; }
-        .status-ordered   { background: #ede9fe; color: #5b21b6; }
-        .status-fitted    { background: #a7f3d0; color: #065f46; }
-        .status-invoiced  { background: #fef3c7; color: #92400e; }
-        .status-paid      { background: #14532d; color: #fff; }
         a.q-link { font-weight: 600; color: var(--text-primary); text-decoration: none; }
         a.q-link:hover { color: var(--link); text-decoration: underline; }
         .search-form { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
@@ -343,7 +339,9 @@ $activeNav = 'order-history';
                                         <td><?= e((string) ($r['end_customer_name'] ?? '')) ?></td>
                                         <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
                                         <td>
-                                            <span class="status-pill status-<?= e((string) $r['status']) ?>">
+                                            <?php $pillBg = job_status_colour((string) $r['status'], $statusPalette); ?>
+                                            <span class="status-pill status-<?= e((string) $r['status']) ?>"
+                                                  style="background:<?= e($pillBg) ?>;color:<?= e(job_status_text_colour($pillBg)) ?>">
                                                 <?= e((string) $r['status']) ?>
                                             </span>
                                         </td>

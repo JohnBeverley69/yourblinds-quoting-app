@@ -11,6 +11,10 @@ $user     = current_user();
 $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
+// Resolved traffic-light palette for this tenant (defaults + their overrides).
+// Shared by the card render, the legend, and the live-refresh JS below.
+$stagePalette = job_client_palette((int) $clientId);
+
 // ---------------------------------------------------------------------------
 // Resolve the date range being viewed.
 //
@@ -743,13 +747,15 @@ $activeNav = 'calendar';
                 <div class="cal-legend" aria-label="Status colours">
                     <?php
                         // Legend is generated from the same palette the cards use,
-                        // so adding/recolouring a stage never drifts out of sync.
-                        $legendPalette = job_stage_palette();
-                        $legendLabels  = job_stage_labels();
-                        foreach ($legendLabels as $stageKey => $stageLabel):
-                            $swatch = $legendPalette[$stageKey] ?? '#2563eb';
+                        // so recolouring a stage never drifts out of sync. Only the
+                        // fitting/job stages appear on the dated calendar — the
+                        // quote-side stages live on the orders list.
+                        $legendLabels = job_status_labels();
+                        $legendStages = job_status_groups()['Fitting & job'] ?? [];
+                        foreach ($legendStages as $stageKey):
+                            $swatch = $stagePalette[$stageKey] ?? '#2563eb';
                     ?>
-                        <span><i style="background:<?= e($swatch) ?>"></i> <?= e($stageLabel) ?></span>
+                        <span><i style="background:<?= e($swatch) ?>"></i> <?= e($legendLabels[$stageKey] ?? $stageKey) ?></span>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -810,7 +816,7 @@ $activeNav = 'calendar';
                                 <?php foreach ($appts as $a): ?>
                                     <?php $noteTxt = trim((string) ($a['access_note'] ?? '')); ?>
                                     <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?>"
-                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null)) ?>"
+                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette)) ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
@@ -869,7 +875,7 @@ $activeNav = 'calendar';
     // Job-stage traffic-light palette. Mirrors _partials/job_status_colours.php
     // so cards re-rendered by the 15s poll colour identically to the server
     // render — single source of truth emitted from PHP.
-    var STAGE_PALETTE = <?= json_encode(job_stage_palette(), JSON_UNESCAPED_SLASHES) ?>;
+    var STAGE_PALETTE = <?= json_encode($stagePalette, JSON_UNESCAPED_SLASHES) ?>;
     function jobStage(apptStatus, quoteStatus) {
         if (apptStatus === 'cancelled') return 'cancelled';
         if (apptStatus === 'no_show')   return 'no_show';
