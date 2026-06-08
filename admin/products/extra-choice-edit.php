@@ -107,11 +107,39 @@ $knownBands = array_map(
     $kbSt->fetchAll(PDO::FETCH_COLUMN)
 );
 
+// per_metre_basis (migrate_per_metre_basis.php) — the length a per-metre
+// charge runs along. Optional column: probe once; absent ⇒ width-based,
+// the historic default. Allowed values shared by validation + the UI.
+$perMetreBases = [
+    'width'           => 'Width',
+    'drop'            => 'Drop',
+    'width_plus_drop' => 'Width + Drop',
+    'perimeter'       => 'Perimeter (2 × W + 2 × D)',
+];
+$hasBasisColumn = false;
+try {
+    $hasBasisColumn = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'product_extra_choices'
+            AND COLUMN_NAME = 'per_metre_basis'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$perMetreBasis = 'width';
+if ($hasBasisColumn) {
+    $pbSt = db()->prepare('SELECT per_metre_basis FROM product_extra_choices WHERE id = ?');
+    $pbSt->execute([$id]);
+    $pbVal = (string) $pbSt->fetchColumn();
+    if (isset($perMetreBases[$pbVal])) $perMetreBasis = $pbVal;
+}
+
 $f = [
     'label'           => (string) $choice['label'],
     'price_delta'     => (string) $choice['price_delta'],
     'price_percent'   => (string) $choice['price_percent'],
     'price_per_metre' => (string) $choice['price_per_metre'],
+    'per_metre_basis' => $perMetreBasis,
     'cost_price'      => isset($choice['cost_price']) && $choice['cost_price'] !== null
                             ? (string) $choice['cost_price']
                             : '',
@@ -146,6 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
+    $f['per_metre_basis'] = (string) ($_POST['per_metre_basis'] ?? 'width');
+    if (!isset($perMetreBases[$f['per_metre_basis']])) $f['per_metre_basis'] = 'width';
     $f['cost_price']      = trim((string) ($_POST['cost_price']      ?? ''));
     $f['is_default']      = !empty($_POST['is_default']) ? 1 : 0;
     $f['active']          = !empty($_POST['active']) ? 1 : 0;
@@ -297,6 +327,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $f['active'],
                         $id,
                     ]);
+                }
+
+                // per_metre_basis lives on its own small UPDATE so it doesn't
+                // have to be threaded through both branches above. Skipped on
+                // schemas without the column (defaults to width everywhere).
+                if ($hasBasisColumn) {
+                    $pdo->prepare(
+                        'UPDATE product_extra_choices SET per_metre_basis = ? WHERE id = ?'
+                    )->execute([$f['per_metre_basis'], $id]);
                 }
 
                 // Replace the per-choice band scope. Empty $f['bands']
@@ -540,6 +579,28 @@ $activeNav = 'products';
                                step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
                     </div>
                 </div>
+
+                <?php if ($hasBasisColumn): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="per_metre_basis">Per-metre length is measured along</label>
+                        <select id="per_metre_basis" name="per_metre_basis">
+                            <?php foreach ($perMetreBases as $bKey => $bLabel): ?>
+                                <option value="<?= e($bKey) ?>"
+                                    <?= $f['per_metre_basis'] === $bKey ? 'selected' : '' ?>>
+                                    <?= e($bLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
+                            Only matters when <strong>Per metre (£/m)</strong> is set. Width is the
+                            usual choice; pick <strong>Perimeter</strong> for trims that run all the
+                            way around the blind (e.g. a magnetic strip) &mdash; charged on
+                            2&nbsp;&times;&nbsp;width&nbsp;+&nbsp;2&nbsp;&times;&nbsp;drop.
+                        </small>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <?php /* Per-extra-choice wholesale cost field removed —
                          cost is captured by the price/percent/per-metre

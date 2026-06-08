@@ -334,12 +334,21 @@ try {
                 $cloneSystemId = $validateSystemId($_POST['system_id']);
             }
 
+            // per_metre_basis is optional (migrate_per_metre_basis.php) —
+            // carry it onto the clone when the column is present.
+            $apiHasBasis = false;
+            try {
+                $pdo->query('SELECT per_metre_basis FROM product_extra_choices LIMIT 1');
+                $apiHasBasis = true;
+            } catch (Throwable $e) { /* column absent */ }
+            $basisSel = $apiHasBasis ? ', per_metre_basis' : '';
+
             $srcSt = $pdo->prepare(
-                'SELECT label, image_path,
+                "SELECT label, image_path,
                         price_delta, price_percent, price_per_metre,
-                        sort_order, active
+                        sort_order, active$basisSel
                    FROM product_extra_choices
-                  WHERE id = ? AND product_extra_id = ? LIMIT 1'
+                  WHERE id = ? AND product_extra_id = ? LIMIT 1"
             );
             $srcSt->execute([$sourceId, $extraId]);
             $src = $srcSt->fetch();
@@ -350,14 +359,16 @@ try {
             // Sort just after the source so the clone lands next to it.
             $newSort = (int) $src['sort_order'] + 1;
 
+            $basisCol = $apiHasBasis ? ', per_metre_basis' : '';
+            $basisPh  = $apiHasBasis ? ', ?' : '';
             $ins = $pdo->prepare(
-                'INSERT INTO product_extra_choices
+                "INSERT INTO product_extra_choices
                    (product_extra_id, system_id, label, image_path,
                     price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)'
+                    is_default, sort_order, active$basisCol)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?$basisPh)"
             );
-            $ins->execute([
+            $insVals = [
                 $extraId,
                 $cloneSystemId,
                 (string) $src['label'],
@@ -365,7 +376,9 @@ try {
                 $src['price_delta'], $src['price_percent'], $src['price_per_metre'],
                 $newSort,
                 (int) $src['active'],
-            ]);
+            ];
+            if ($apiHasBasis) $insVals[] = (string) ($src['per_metre_basis'] ?? 'width');
+            $ins->execute($insVals);
             $newId = (int) $pdo->lastInsertId();
 
             // Copy width-table rows so per-clone editing stays isolated.

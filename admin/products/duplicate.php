@@ -255,22 +255,33 @@ try {
     // system_id can be NULL (a choice that applies to every system).
     $choicesMap = [];
     if ($extrasMap) {
+        // per_metre_basis is optional (migrate_per_metre_basis.php). Carry it
+        // through when present so a duplicated trim keeps its perimeter basis.
+        $dupHasBasis = false;
+        try {
+            $pdo->query('SELECT per_metre_basis FROM product_extra_choices LIMIT 1');
+            $dupHasBasis = true;
+        } catch (Throwable $e) { /* column absent — width everywhere */ }
+        $basisSel = $dupHasBasis ? ', per_metre_basis' : '';
+        $basisCol = $dupHasBasis ? ', per_metre_basis' : '';
+        $basisPh  = $dupHasBasis ? ', ?' : '';
+
         $oldExtraIds = array_keys($extrasMap);
         $in = implode(',', array_fill(0, count($oldExtraIds), '?'));
         $srcChoices = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label, image_path,
                     price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active
+                    is_default, sort_order, active$basisSel
                FROM product_extra_choices
               WHERE product_extra_id IN ($in)"
         );
         $srcChoices->execute($oldExtraIds);
         $insChoice = $pdo->prepare(
-            'INSERT INTO product_extra_choices
+            "INSERT INTO product_extra_choices
               (product_extra_id, system_id, label, image_path,
                price_delta, price_percent, price_per_metre,
-               is_default, sort_order, active)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+               is_default, sort_order, active$basisCol)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?$basisPh)"
         );
         foreach ($srcChoices->fetchAll() as $c) {
             $newExtraId  = $extrasMap[(int) $c['product_extra_id']];
@@ -280,7 +291,7 @@ try {
                 // If the choice referenced a system we didn't copy
                 // (orphaned data), fall back to NULL = "any system".
             }
-            $insChoice->execute([
+            $vals = [
                 $newExtraId, $newSystemId,
                 (string) $c['label'], $c['image_path'] ?? null,
                 $c['price_delta'] ?? 0, $c['price_percent'] ?? 0,
@@ -288,7 +299,9 @@ try {
                 (int) ($c['is_default'] ?? 0),
                 (int) ($c['sort_order'] ?? 0),
                 (int) ($c['active'] ?? 1),
-            ]);
+            ];
+            if ($dupHasBasis) $vals[] = (string) ($c['per_metre_basis'] ?? 'width');
+            $insChoice->execute($vals);
             $choicesMap[(int) $c['id']] = (int) $pdo->lastInsertId();
         }
     }

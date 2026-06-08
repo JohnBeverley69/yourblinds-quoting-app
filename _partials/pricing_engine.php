@@ -292,7 +292,8 @@ function pe_apply_extra(
     int   $choiceId,
     int   $widthMm,
     float $basePrice,
-    ?float $userValue = null
+    ?float $userValue = null,
+    ?int  $dropMm = null
 ): array {
     // 1. Verify the extra belongs to this product + tenant. Option-level
     //    system scope no longer exists in this model — an option appears
@@ -341,25 +342,40 @@ function pe_apply_extra(
     //    any number (including 0) = explicit override for this choice.
     //    Try-fallback in case the column isn't there yet on older
     //    schemas (migrate_default_margins.php not run).
+    //    per_metre_basis: the length a per-metre charge is measured along
+    //    (width / drop / width+drop / perimeter). Added by
+    //    migrate_per_metre_basis.php — probe once per request so older schemas
+    //    (column absent) silently fall back to 'width', the historic default.
+    static $hasBasisCol = null;
+    if ($hasBasisCol === null) {
+        try {
+            $pdo->query('SELECT per_metre_basis FROM product_extra_choices LIMIT 1');
+            $hasBasisCol = true;
+        } catch (Throwable $e) {
+            $hasBasisCol = false;
+        }
+    }
+    $basisCol = $hasBasisCol ? ', per_metre_basis' : '';
+
     try {
         $st = $pdo->prepare(
-            'SELECT id, product_extra_id, system_id, label,
+            "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price, markup_pct_override
+                    cost_price, markup_pct_override$basisCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
-              LIMIT 1'
+              LIMIT 1"
         );
         $st->execute([$choiceId, $extraId]);
         $choice = $st->fetch();
     } catch (Throwable $colErr) {
         $st = $pdo->prepare(
-            'SELECT id, product_extra_id, system_id, label,
+            "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price
+                    cost_price$basisCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
-              LIMIT 1'
+              LIMIT 1"
         );
         $st->execute([$choiceId, $extraId]);
         $choice = $st->fetch();
@@ -394,7 +410,28 @@ function pe_apply_extra(
         $modesApplied[]  = 'percent';
     }
     if ($perMetre != 0.0) {
-        $amount         += ($widthMm / 1000.0) * $perMetre;
+        // Length the per-metre charge runs along. Width is the historic
+        // default; perimeter (2W+2D) is e.g. a magnetic strip / edge trim
+        // that goes all the way around the blind. Drop falls back to width
+        // when the engine wasn't given a drop (width-only products).
+        $basis     = (string) ($choice['per_metre_basis'] ?? 'width');
+        $dropForLen = ($dropMm !== null && $dropMm > 0) ? (float) $dropMm : (float) $widthMm;
+        switch ($basis) {
+            case 'drop':
+                $lengthMm = $dropForLen;
+                break;
+            case 'width_plus_drop':
+                $lengthMm = (float) $widthMm + $dropForLen;
+                break;
+            case 'perimeter':
+                $lengthMm = 2.0 * (float) $widthMm + 2.0 * $dropForLen;
+                break;
+            case 'width':
+            default:
+                $lengthMm = (float) $widthMm;
+                break;
+        }
+        $amount         += ($lengthMm / 1000.0) * $perMetre;
         $modesApplied[]  = 'per_metre';
     }
 
@@ -889,7 +926,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
 
         $applied = pe_apply_extra(
             $pdo, $clientId, $productId, $systemId, $eid, $cid,
-            $widthMm, $basePrice, $userValue
+            $widthMm, $basePrice, $userValue, $dropMm
         );
         if (isset($applied['error'])) {
             return ['error' => $applied['error']];
