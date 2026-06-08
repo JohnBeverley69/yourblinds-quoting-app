@@ -2715,12 +2715,13 @@ $activeNav = 'products';
             // Headline the line TOTAL in bold; the per-blind price becomes
             // the small supporting text. For qty 1 the total IS the per-blind
             // price, so just show that.
+            // Noun follows the product type — slats for per-slat products.
             var html;
             if (data.quantity > 1) {
-                html = '<strong>£' + Number(line).toFixed(2) + '</strong> for ' + data.quantity + ' blinds'
+                html = '<strong>£' + Number(line).toFixed(2) + '</strong> for ' + data.quantity + ' <?= $f['price_per_slat'] ? 'slats' : 'blinds' ?>'
                      + ' &middot; £' + Number(perBlind).toFixed(2) + ' each';
             } else {
-                html = '<strong>£' + Number(perBlind).toFixed(2) + '</strong> per blind';
+                html = '<strong>£' + Number(perBlind).toFixed(2) + '</strong> per <?= $f['price_per_slat'] ? 'slat' : 'blind' ?>';
             }
             html += '<div style="margin-top:0.1875rem;color:var(--text-secondary);font-size:0.75rem">'
                   + 'Base £' + Number(data.base_price).toFixed(2)

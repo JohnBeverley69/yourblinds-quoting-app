@@ -2576,12 +2576,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var unit  = Number(data.sell_price).toFixed(2);
             var total = Number(data.line_total).toFixed(2);
             var qty   = Number(data.quantity);
-            // Headline the line TOTAL in bold; per-blind price as subtext.
+            // Headline the line TOTAL in bold; per-unit price as subtext.
+            // Noun follows the product type — slats for per-slat products.
+            var noun   = perSlat ? 'slat'  : 'blind';
+            var nounPl = perSlat ? 'slats' : 'blinds';
             var bits;
             if (qty > 1) {
-                bits = ['<strong>£' + total + '</strong> for ' + qty + ' blinds', '£' + unit + ' each'];
+                bits = ['<strong>£' + total + '</strong> for ' + qty + ' ' + nounPl, '£' + unit + ' each'];
             } else {
-                bits = ['<strong>£' + unit + '</strong> per blind'];
+                bits = ['<strong>£' + unit + '</strong> per ' + noun];
             }
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
