@@ -18,6 +18,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
+require __DIR__ . '/../mailer.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -37,8 +38,12 @@ if ($token === '' || !preg_match('/^[a-f0-9]{40,128}$/i', $token)) {
 $pdo = db();
 
 $qStmt = $pdo->prepare(
-    'SELECT id, status, end_customer_name, client_id FROM quotes
-      WHERE public_token = ? LIMIT 1'
+    'SELECT q.id, q.status, q.end_customer_name, q.client_id,
+            q.end_customer_email, q.quote_number, q.public_token,
+            c.company_name AS trade_company_name
+       FROM quotes q
+       JOIN clients c ON c.id = q.client_id
+      WHERE q.public_token = ? LIMIT 1'
 );
 $qStmt->execute([$token]);
 $quote = $qStmt->fetch();
@@ -95,6 +100,30 @@ if ($action === 'accept') {
     // sees the job land on their calendar the moment the customer
     // accepts. Idempotent — repeat accepts don't multiply appointments.
     qb_create_appointment_from_quote($pdo, (int) $quote['id']);
+
+    // Thank-you email to the customer — best-effort, never blocks acceptance
+    // (mailer_send logs its own failures). Sent once: a second submit bounces
+    // at the status guard above before reaching here.
+    $custEmail = trim((string) ($quote['end_customer_email'] ?? ''));
+    if ($custEmail !== '' && filter_var($custEmail, FILTER_VALIDATE_EMAIL)) {
+        $company  = trim((string) ($quote['trade_company_name'] ?? '')) ?: 'your supplier';
+        $greeting = trim((string) ($quote['end_customer_name'] ?? '')) !== ''
+            ? (string) $quote['end_customer_name'] : 'there';
+        $appUrl   = trim((string) (env('APP_URL', '') ?? ''));
+        $viewUrl  = ($appUrl !== '' ? rtrim($appUrl, '/') : '')
+            . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
+
+        $subject = sprintf('Thank you for accepting quote %s', (string) $quote['quote_number']);
+        $body  = "Hello {$greeting},\n\n";
+        $body .= "Thank you for accepting your quote ({$quote['quote_number']}) — we really appreciate "
+               . "your business and are delighted to have you as a customer.\n\n";
+        $body .= "We'll be in touch shortly to arrange the next steps. If you have any questions in the "
+               . "meantime, just reply to this email.\n\n";
+        $body .= "You can view your quote any time here:\n{$viewUrl}\n\n";
+        $body .= "With thanks,\n{$company}";
+
+        mailer_send($custEmail, $subject, $body);
+    }
 
     $_SESSION['flash_success'] = 'Quote accepted. Thanks!';
     header('Location: ' . $publicUrl);
