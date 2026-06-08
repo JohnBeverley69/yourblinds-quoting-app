@@ -63,6 +63,7 @@ $colExists = static function (string $col) use ($pdo): bool {
 $hasRequiresOption = $colExists('requires_option');
 $hasWidthOnly      = $colExists('width_only');
 $hasPricePerDrop   = $colExists('price_per_slat');
+$hasPriceSqm       = $colExists('price_per_sqm');
 $hasShowColField   = $colExists('show_colour_field');
 
 // ── Load product if id supplied ────────────────────────────────────────
@@ -71,7 +72,8 @@ if ($productId > 0) {
     $cols = 'id, name, option_label'
           . ($hasRequiresOption ? ', requires_option'      : '')
           . ($hasWidthOnly      ? ', width_only'           : '')
-          . ($hasPricePerDrop   ? ', price_per_slat' : '');
+          . ($hasPricePerDrop   ? ', price_per_slat' : '')
+          . ($hasPriceSqm       ? ', price_per_sqm'        : '');
     $st = $pdo->prepare(
         "SELECT $cols FROM products WHERE id = ? AND client_id = ?"
     );
@@ -99,6 +101,10 @@ $widthOnly = isset($product['width_only']) && (int) $product['width_only'] === 1
 // the step-4 rate importer CTA. Absent column ⇒ false.
 $pricePerDrop = isset($product['price_per_slat'])
     && (int) $product['price_per_slat'] === 1;
+
+// price_per_sqm = priced by area (shutters). Absent column ⇒ false.
+$perSqm = isset($product['price_per_sqm'])
+    && (int) $product['price_per_sqm'] === 1;
 
 // ── State counts (drives both step inference and the "you're done with
 //    step X" indicators in the UI) ─────────────────────────────────────
@@ -207,6 +213,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasPricePerDrop) {
                 $insCols[] = 'price_per_slat';
                 $insVals[] = empty($_POST['price_per_slat']) ? 0 : 1;
+            }
+            if ($hasPriceSqm) {
+                $insCols[] = 'price_per_sqm';
+                $insVals[] = empty($_POST['price_per_sqm']) ? 0 : 1;
             }
             $insPh = implode(', ', array_fill(0, count($insCols), '?'));
             $ins = $pdo->prepare(
@@ -1023,6 +1033,27 @@ $activeNav = 'wizard';
                                             Price table is a drop &rarr; price-per-slat list; the line
                                             price is that rate &times; number of slats. Leave the boxes
                                             above unticked.
+                                        </small>
+                                    </span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($hasPriceSqm): ?>
+                            <div class="row" style="grid-template-columns:1fr">
+                                <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;
+                                              text-transform:none;letter-spacing:normal;font-weight:500;
+                                              color:var(--text-body)">
+                                    <input type="checkbox" name="price_per_sqm" value="1"
+                                           <?= !empty($_POST['price_per_sqm']) ? 'checked' : '' ?>
+                                           style="margin-top:0.2rem">
+                                    <span>
+                                        Priced <strong>per square metre</strong> &mdash; e.g. shutters.
+                                        <small style="display:block;color:var(--text-faint);font-size:0.8125rem;
+                                                      font-weight:400;margin-top:0.2rem;line-height:1.5">
+                                            A single &pound;/m&sup2; rate &times; area (width &times; height),
+                                            with an optional minimum area (set on the product edit page).
+                                            Leave the boxes above unticked.
                                         </small>
                                     </span>
                                 </label>
