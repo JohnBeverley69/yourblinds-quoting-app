@@ -251,6 +251,27 @@ function pe_find_matrix_row_by_drop(
 }
 
 /**
+ * Per-square-metre rate lookup (products.price_per_sqm = 1). There is no
+ * size grid — the price table holds a single £/m² rate (one row, stored
+ * with width_mm 0 / drop_mm 0 / price = the rate). The caller multiplies
+ * that rate by the area. Returns the row (id, price) or null if the rate
+ * hasn't been set yet.
+ */
+function pe_find_rate_per_sqm(PDO $pdo, int $priceTableId): ?array
+{
+    $st = $pdo->prepare(
+        'SELECT id, width_mm, drop_mm, price
+           FROM price_table_rows
+          WHERE price_table_id = ?
+          ORDER BY id ASC
+          LIMIT 1'
+    );
+    $st->execute([$priceTableId]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
  * Compute the £ contribution of one (extra, choice) selection to a single
  * blind, applying all four surcharge modes that have non-zero data.
  *
@@ -623,6 +644,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
     $product = false;
     foreach ([
+        'id, name, cost_price, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2',
         'id, name, cost_price, requires_option, width_only, price_per_slat',
         'id, name, cost_price, requires_option, width_only',
         'id, name, cost_price, requires_option',
@@ -659,7 +681,18 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         && isset($product['price_per_slat'])
         && (int) $product['price_per_slat'] === 1;
 
-    // Deferred dimension validation — depends on the mode.
+    // price_per_sqm = priced by AREA (e.g. shutters). The price table holds a
+    // single £/m² rate per (system, band); base = rate × area, area = width ×
+    // drop in metres, with an optional minimum billable area. Both dimensions
+    // are required. width_only / per_slat take precedence (a product is
+    // exactly one mode). Absent column ⇒ false.
+    $perSqm = !$widthOnly && !$perSlat
+        && isset($product['price_per_sqm'])
+        && (int) $product['price_per_sqm'] === 1;
+    $minAreaM2 = isset($product['min_area_m2']) ? (float) $product['min_area_m2'] : 0.0;
+
+    // Deferred dimension validation — depends on the mode. per_sqm needs both
+    // width and drop, so it falls into the same branch as a normal product.
     if ($perSlat) {
         $widthMm = 0;                                  // width isn't used
         if ($dropMm <= 0) return ['error' => 'Drop must be greater than zero.'];
@@ -751,6 +784,18 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
                 : "No per-slat rate for drop $dropMm mm. Try the next available drop."];
         }
         $basePrice = (float) $row['price'];   // per slat; × quantity below
+    } elseif ($perSqm) {
+        // Single £/m² rate × area (width × drop in metres), with an optional
+        // minimum billable area. No rounding of dimensions.
+        $row = pe_find_rate_per_sqm($pdo, (int) $priceTable['id']);
+        if ($row === null) {
+            return ['error' => "No £/m² rate set for "
+                              . $product['name'] . " in this price list."];
+        }
+        $ratePerM2 = (float) $row['price'];
+        $areaM2    = ($widthMm / 1000.0) * ($dropMm / 1000.0);
+        $billableM2 = max($areaM2, $minAreaM2);
+        $basePrice = $ratePerM2 * $billableM2;
     } else {
         $row = pe_find_matrix_row(
             $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
@@ -864,7 +909,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         'rounded_up'         => $roundUp && (
                ($perSlat   && (int) $row['drop_mm']  !== $dropMm)
             || ($widthOnly && (int) $row['width_mm'] !== $widthMm)
-            || (!$perSlat && !$widthOnly && (
+            || (!$perSlat && !$widthOnly && !$perSqm && (
                    (int) $row['width_mm'] !== $widthMm
                 || (int) $row['drop_mm']  !== $dropMm
                ))

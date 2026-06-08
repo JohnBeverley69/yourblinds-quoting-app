@@ -246,6 +246,8 @@ $activeNav = 'instaprice';
     var requiresOption = true;   // false for no-fabric products (headrail/track/spares)
     var widthOnly = false;       // true for width-only products (headrail/track) — no drop
     var perSlat = false;         // true for per-slat products (vertical fabric only) — no width
+    var perSqm = false;          // true for per-m² products (shutters) — width × height area
+    var minAreaM2 = 0;           // optional minimum billable area for per-m² products
 
     // Active measurement unit (starts on the company default; the switcher
     // changes it). Bare numbers are read in this unit; explicit suffixes
@@ -336,6 +338,8 @@ $activeNav = 'instaprice';
                           || productData.product.requires_option !== false;
             widthOnly = !!(productData.product && productData.product.width_only === true);
             perSlat   = !!(productData.product && productData.product.price_per_slat === true);
+            perSqm    = !!(productData.product && productData.product.price_per_sqm === true);
+            minAreaM2 = (productData.product && Number(productData.product.min_area_m2)) || 0;
             applyFabricVisibility();
 
             populateBands(bandsForCurrentSystem());
@@ -731,6 +735,14 @@ $activeNav = 'instaprice';
         } else if (widthOnly) {
             if (w) { el.textContent = 'Using ' + w + ' mm wide'; el.hidden = false; }
             else   { el.hidden = true; }
+        } else if (perSqm) {
+            if (w && d) {
+                var area = (w / 1000) * (d / 1000);
+                var billed = Math.max(area, minAreaM2 || 0);
+                var txt = 'Area: ' + area.toFixed(2) + ' m²';
+                if (billed > area + 0.0001) txt += ' (billed at min ' + billed.toFixed(2) + ' m²)';
+                el.textContent = txt; el.hidden = false;
+            } else { el.hidden = true; }
         } else if (w && d) {
             el.textContent = 'Using ' + w + ' × ' + d + ' mm'; el.hidden = false;
         } else {
