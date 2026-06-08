@@ -1757,6 +1757,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // Per-slat products (vertical fabric only) hide the WIDTH field; the
     // price is per-slat (looked up by drop) × the quantity (= slat count).
     var perSlat = false;
+    // Per-m² products (shutters) keep both width + height; the live preview
+    // shows the computed area.
+    var perSqm = false;
     var widthIn       = document.getElementById('item-width');
     var dropIn        = document.getElementById('item-drop');
     var widthGroup    = document.getElementById('item-width-group');
@@ -1905,6 +1908,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                           || productData.product.requires_option !== false;
             widthOnly = !!(productData.product && productData.product.width_only === true);
             perSlat   = !!(productData.product && productData.product.price_per_slat === true);
+            perSqm    = !!(productData.product && productData.product.price_per_sqm === true);
             applyFabricVisibility();
 
             // Fabric typeahead — enable input. Picking happens via the
@@ -2585,6 +2589,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 bits = ['<strong>£' + total + '</strong> for ' + qty + ' ' + nounPl, '£' + unit + ' each'];
             } else {
                 bits = ['<strong>£' + unit + '</strong> per ' + noun];
+            }
+            if (perSqm && data.width_mm && data.drop_mm) {
+                bits.push(((data.width_mm / 1000) * (data.drop_mm / 1000)).toFixed(2) + ' m²');
             }
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));

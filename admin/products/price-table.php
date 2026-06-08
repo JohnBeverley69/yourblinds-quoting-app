@@ -83,6 +83,15 @@ try {
 // Both modes use the simple 1-D editor (width → value, drop_mm 0).
 $oneDimEditor = $widthOnly || $pricePerDrop;
 
+// price_per_sqm products store a single £/m² rate (one row, width_mm 0 /
+// drop_mm 0 / price = rate) — a one-field editor, not a list. Optional col.
+$perSqm = false;
+try {
+    $sqStmt = db()->prepare('SELECT price_per_sqm FROM products WHERE id = ? AND client_id = ?');
+    $sqStmt->execute([(int) $table['product_id'], $clientId]);
+    $perSqm = (int) $sqStmt->fetchColumn() === 1;
+} catch (Throwable $e) { /* column absent — keep false */ }
+
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
@@ -688,6 +697,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
 }
 
 // ---------------------------------------------------------------------------
+// Per-m² save — the whole table is a single £/m² rate, stored as one row
+// (width_mm 0 / drop_mm 0 / price = rate), which pe_find_rate_per_sqm reads.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_sqm') {
+    csrf_check();
+
+    $rateRaw = trim((string) ($_POST['rate_per_sqm'] ?? ''));
+    if ($rateRaw === '' || !is_numeric($rateRaw) || (float) $rateRaw < 0) {
+        $_SESSION['flash_error'] = 'Enter a £/m² rate (a non-negative number).';
+        header('Location: /admin/products/price-table.php?id=' . $tableId, true, 303);
+        exit;
+    }
+    $rate = round((float) $rateRaw, 4);
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
+        $pdo->prepare(
+            'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, 0, 0, ?)'
+        )->execute([$tableId, $rate]);
+        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
+        $pdo->commit();
+        $_SESSION['flash_success'] = 'Saved £/m² rate.';
+        header('Location: /admin/products/price-table.php?id=' . $tableId . '&saved=1', true, 303);
+        exit;
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        $_SESSION['flash_error'] = 'Database error: ' . $e->getMessage();
+        header('Location: /admin/products/price-table.php?id=' . $tableId, true, 303);
+        exit;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Width-only save — replaces the table with a width → price list. Rows are
 // stored at drop_mm 0 (what the width-only engine lookup expects). Posted
 // as parallel arrays wmm[] and price[]; blank / non-numeric rows skipped;
@@ -757,6 +801,93 @@ unset($_SESSION['flash_errors_detail']);
 $error = $_SESSION['flash_error'] ?? null;
 unset($_SESSION['flash_error']);
 $justSaved = !empty($_GET['saved']);
+
+// ---------------------------------------------------------------------------
+// Per-m² editor — a single £/m² rate, shown instead of the 2-D grid for
+// price_per_sqm products. Stored as one row (0/0/rate). Self-contained
+// render + early exit so none of the grid machinery below runs.
+// ---------------------------------------------------------------------------
+if ($perSqm) {
+    $rateStmt = db()->prepare(
+        'SELECT price FROM price_table_rows WHERE price_table_id = ? ORDER BY id LIMIT 1'
+    );
+    $rateStmt->execute([$tableId]);
+    $rateVal = $rateStmt->fetchColumn();
+    $currentRate = ($rateVal === false || $rateVal === null)
+        ? '' : rtrim(rtrim(number_format((float) $rateVal, 4, '.', ''), '0'), '.');
+
+    $activeNav = 'products';
+    ?><!doctype html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title><?= e((string) $table['product_name']) ?> &middot; Price per m&sup2; &middot; YourBlinds</title>
+        <link rel="stylesheet" href="/app.css">
+    </head>
+    <body>
+    <div class="app-shell">
+        <?php require __DIR__ . '/../../_partials/sidebar.php'; ?>
+        <main class="app-main">
+            <div class="page-header">
+                <div>
+                    <?php
+                        require_once __DIR__ . '/../../_partials/breadcrumb.php';
+                        echo render_breadcrumb([
+                            ['Products',                      '/admin/products/index.php'],
+                            [(string) $table['product_name'], '/admin/products/edit.php?id=' . (int) $table['product_id']],
+                            ['Systems',                       '/admin/products/systems.php?product_id=' . (int) $table['product_id']],
+                            [(string) $table['system_name'],  null],
+                            ['Price per m²',                  null],
+                        ]);
+                    ?>
+                    <h1 class="page-title">
+                        <?= e((string) $table['product_name']) ?>
+                        &mdash; <?= e((string) $table['system_name']) ?>
+                        &middot; Band <?= e((string) $table['band_code']) ?>
+                        &middot; price per m&sup2;
+                    </h1>
+                    <p class="page-subtitle">
+                        Priced by area. The line price is this rate &times; area
+                        (width &times; height), with the product's minimum billable
+                        area applied.
+                    </p>
+                </div>
+            </div>
+
+            <?php if ($flashMsg !== null): ?>
+                <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+            <?php endif; ?>
+            <?php if ($error !== null): ?>
+                <div class="alert alert-error" role="alert"><?= e((string) $error) ?></div>
+            <?php endif; ?>
+
+            <section class="section">
+                <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="save_sqm">
+                    <input type="hidden" name="id" value="<?= (int) $tableId ?>">
+                    <div class="form-group" style="max-width:18rem">
+                        <label for="rate_per_sqm">Rate (&pound; per m&sup2;)</label>
+                        <input type="number" id="rate_per_sqm" name="rate_per_sqm"
+                               min="0" step="0.0001"
+                               value="<?= e($currentRate) ?>"
+                               placeholder="e.g. 350">
+                    </div>
+                    <div class="form-actions" style="margin-top:1.25rem">
+                        <button type="submit" class="btn btn-primary">Save rate</button>
+                        <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
+                           class="btn btn-secondary">Back</a>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 
 // ---------------------------------------------------------------------------
 // Width-only editor — a simple width → price list, shown instead of the
