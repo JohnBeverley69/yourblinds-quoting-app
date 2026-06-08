@@ -177,7 +177,7 @@ $activeNav = 'calendar';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Week view &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .wk-head {
             display: flex; align-items: center; gap: 0.75rem;

@@ -124,4 +124,22 @@ if (is_readable($composerAutoload)) {
 }
 unset($composerAutoload);
 
+// ---------------------------------------------------------------------------
+// Cache-busting asset URLs. Appends the file's last-modified time as a
+// version query (?v=…) so browsers and the edge cache fetch a fresh copy
+// whenever the asset changes — the mtime updates on every deploy (git pull),
+// so new CSS/JS shows up immediately without anyone hard-refreshing. Falls
+// back to the bare path if the file can't be stat'd. Memoised per request.
+//   <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+// ---------------------------------------------------------------------------
+function asset(string $path): string
+{
+    static $cache = [];
+    if (isset($cache[$path])) {
+        return $cache[$path];
+    }
+    $v = @filemtime(APP_ROOT . '/' . ltrim($path, '/'));
+    return $cache[$path] = $v ? $path . '?v=' . $v : $path;
+}
+
 require_once APP_ROOT . '/db.php';

@@ -649,7 +649,7 @@ $activeNav = 'products';
          (it sends X-CSRF-Token on every fetch to /choice-api.php). -->
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Edit product &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <?php
         // Phase 2B: choices-grid CSS shared with extra.php so each
         // Option below can embed a fully inline-editable grid.

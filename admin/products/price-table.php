@@ -854,7 +854,7 @@ if ($perSqm) {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= e((string) $table['product_name']) ?> &middot; Price per m&sup2; &middot; YourBlinds</title>
-        <link rel="stylesheet" href="/app.css">
+        <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     </head>
     <body>
     <div class="app-shell">
@@ -996,7 +996,7 @@ if ($oneDimEditor) {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= e((string) $table['product_name']) ?> &middot; Width prices &middot; YourBlinds</title>
-        <link rel="stylesheet" href="/app.css">
+        <link rel="stylesheet" href="<?= asset('/app.css') ?>">
         <style>
             .wo-table { border-collapse: collapse; width: 100%; max-width: 30rem; }
             .wo-table th, .wo-table td { padding: 0.375rem 0.5rem; text-align: left; }
@@ -1504,7 +1504,7 @@ $activeNav = 'products';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e((string) $table['product_name']) ?> &middot; Band <?= e((string) $table['band_code']) ?> &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .tip-box {
             background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px;

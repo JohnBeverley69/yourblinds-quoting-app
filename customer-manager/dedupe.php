@@ -166,7 +166,7 @@ $activeNav = 'customers';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Find duplicates &middot; Customers &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .group-card {
             background: #fff; border: 1px solid var(--border); border-radius: 10px;

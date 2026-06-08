@@ -125,7 +125,7 @@ $activeNav = 'master-admin';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Wipe products &middot; Master admin</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .danger-box {
             background: #fef2f2; border: 1px solid #fca5a5;

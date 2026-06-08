@@ -759,7 +759,7 @@ $activeNav = 'wizard';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Setup wizard &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .wiz-wrap { max-width: 44rem; margin: 0 auto; }
 

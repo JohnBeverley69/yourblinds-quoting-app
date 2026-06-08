@@ -250,7 +250,7 @@ $activeNav = 'calendar';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit appointment &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Mirror of calendar/new.php form styles. */
         .form { max-width: 820px; }

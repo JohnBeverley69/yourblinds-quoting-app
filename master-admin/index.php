@@ -62,7 +62,7 @@ $activeNav = 'master-admin';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Master Admin &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .feature-table th { white-space: nowrap; }
         .feature-table td.toggle { width: 1%; text-align: center; }

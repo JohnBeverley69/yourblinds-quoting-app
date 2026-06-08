@@ -177,7 +177,7 @@ $ageOf = static function (?string $ts): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pipeline &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Pipeline = horizontal-scrolling Kanban. On desktop the
            columns fit; on mobile you swipe sideways. Each column is

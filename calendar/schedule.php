@@ -134,7 +134,7 @@ $activeNav = 'my-schedule';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>My Schedule &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .schedule-summary {
             display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;

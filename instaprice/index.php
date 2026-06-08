@@ -46,7 +46,7 @@ $activeNav = 'instaprice';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>InstaPrice &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .ip-wrap { max-width: 880px; }
         .ip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }

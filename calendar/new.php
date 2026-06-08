@@ -219,7 +219,7 @@ $activeNav = 'calendar';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Book appointment &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Calendar form: extras on top of the shared form classes. */
         .form { max-width: 820px; }

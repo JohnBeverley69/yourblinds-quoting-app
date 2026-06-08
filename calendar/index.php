@@ -216,7 +216,7 @@ $activeNav = 'calendar';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Calendar &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Calendar-specific styles. Uses the app's navy palette
            (#1f3b5b primary, #93c5fd accent, #f4f7fb page bg). */
