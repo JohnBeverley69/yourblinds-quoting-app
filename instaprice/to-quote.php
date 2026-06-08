@@ -68,10 +68,26 @@ $rawExtras = json_decode((string) ($_POST['extras_json'] ?? '[]'), true);
 if (is_array($rawExtras)) {
     foreach ($rawExtras as $e) {
         if (!is_array($e)) continue;
-        $eid = (int) ($e['extra_id']  ?? 0);
-        $cid = (int) ($e['choice_id'] ?? 0);
-        if ($eid > 0 && $cid > 0) {
-            $extras[] = ['extra_id' => $eid, 'choice_id' => $cid];
+        $eid = (int) ($e['extra_id'] ?? 0);
+        if ($eid <= 0) continue;
+
+        $uv      = $e['user_value'] ?? null;
+        $uvFloat = ($uv !== null && $uv !== '' && is_numeric($uv) && (float) $uv > 0)
+            ? (float) $uv : null;
+
+        if (array_key_exists('choice_id', $e)) {
+            // Choice-backed option — only counts when a choice was picked.
+            $cid = (int) ($e['choice_id'] ?? 0);
+            if ($cid > 0) {
+                $row = ['extra_id' => $eid, 'choice_id' => $cid];
+                if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+                $extras[] = $row;
+            }
+        } else {
+            // Number-only option (no choices) — carry the typed measurement.
+            $row = ['extra_id' => $eid, 'choice_id' => 0];
+            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            $extras[] = $row;
         }
     }
 }
