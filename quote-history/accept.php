@@ -37,7 +37,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{40,128}$/i', $token)) {
 $pdo = db();
 
 $qStmt = $pdo->prepare(
-    'SELECT id, status, end_customer_name FROM quotes
+    'SELECT id, status, end_customer_name, client_id FROM quotes
       WHERE public_token = ? LIMIT 1'
 );
 $qStmt->execute([$token]);
@@ -61,6 +61,23 @@ if ((string) $quote['status'] !== 'sent') {
 if ($action === 'accept') {
     if ($name === '') {
         $_SESSION['flash_error'] = 'Please type your full name to confirm acceptance.';
+        header('Location: ' . $publicUrl);
+        exit;
+    }
+    // If the trade business has Terms & Conditions configured, the customer
+    // must tick the "I have read and understood" box. Enforced server-side
+    // too, not just via the HTML `required` checkbox. Guarded so it's a no-op
+    // on schemas where migrate_terms_conditions.php hasn't run.
+    $hasTerms = false;
+    try {
+        $tStmt = $pdo->prepare(
+            'SELECT terms_conditions FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $tStmt->execute([(int) $quote['client_id']]);
+        $hasTerms = trim((string) ($tStmt->fetchColumn() ?: '')) !== '';
+    } catch (Throwable $e) { /* column missing — treat as no terms */ }
+    if ($hasTerms && empty($_POST['agree_terms'])) {
+        $_SESSION['flash_error'] = 'Please confirm you have read and understood the Terms & Conditions before accepting.';
         header('Location: ' . $publicUrl);
         exit;
     }
