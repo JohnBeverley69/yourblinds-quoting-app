@@ -130,7 +130,7 @@ unset($composerAutoload);
 // whenever the asset changes — the mtime updates on every deploy (git pull),
 // so new CSS/JS shows up immediately without anyone hard-refreshing. Falls
 // back to the bare path if the file can't be stat'd. Memoised per request.
-//   <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+// Usage in a page head: asset('/app.css') returns e.g. /app.css?v=1718000000
 // ---------------------------------------------------------------------------
 function asset(string $path): string
 {
