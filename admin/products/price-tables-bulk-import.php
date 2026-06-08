@@ -33,6 +33,20 @@ if (!$system) {
 }
 $productId = (int) $system['product_id'];
 
+// Other systems on this product — so the import-success screen can offer
+// "now import the next one" (e.g. Special Frame after Standard Frame)
+// instead of dead-ending.
+$otherSystems = [];
+try {
+    $osStmt = db()->prepare(
+        'SELECT id, name FROM product_systems
+          WHERE product_id = ? AND client_id = ? AND id <> ? AND active = 1
+       ORDER BY sort_order, name'
+    );
+    $osStmt->execute([$productId, $clientId, $systemId]);
+    $otherSystems = $osStmt->fetchAll();
+} catch (Throwable $e) { /* non-fatal — just no "next system" buttons */ }
+
 $summary = null;
 $error   = null;
 
@@ -176,9 +190,20 @@ $activeNav = 'products';
                         </li>
                     <?php endforeach; ?>
                 </ul>
-                <div class="form-actions" style="margin-top:1rem">
+                <?php if ($otherSystems): ?>
+                    <p style="margin:1rem 0 0.25rem;color:var(--text-secondary);font-size:0.9375rem">
+                        Got prices for the other system<?= count($otherSystems) === 1 ? '' : 's' ?> too? Import next:
+                    </p>
+                <?php endif; ?>
+                <div class="form-actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <?php foreach ($otherSystems as $os): ?>
+                        <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $os['id'] ?>"
+                           class="btn btn-primary">Import <?= e((string) $os['name']) ?> &rarr;</a>
+                    <?php endforeach; ?>
                     <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
-                       class="btn btn-primary">View price tables</a>
+                       class="btn btn-secondary">View <?= e((string) $system['system_name']) ?> prices</a>
+                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4"
+                       class="btn <?= $otherSystems ? 'btn-secondary' : 'btn-primary' ?>">Back to setup wizard</a>
                 </div>
             </div>
         <?php endif; ?>
