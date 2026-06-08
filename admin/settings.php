@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/legal_text.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireAdmin();
 
@@ -284,6 +285,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
                 . ' — have you run migrate_terms_conditions.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
+    if ($action === 'status_colours') {
+        // Per-client traffic-light colours. Only store values that DIFFER
+        // from the built-in defaults, so the stored JSON stays small and any
+        // status added later inherits its default automatically. Invalid hex
+        // is ignored (the field falls back to the default).
+        $defaults  = job_status_defaults();
+        $overrides = [];
+        foreach ($defaults as $key => $default) {
+            $hex = job_status_sanitise_hex($_POST['colour_' . $key] ?? null);
+            if ($hex !== null && $hex !== strtolower($default)) {
+                $overrides[$key] = $hex;
+            }
+        }
+        try {
+            $json = $overrides ? json_encode($overrides, JSON_UNESCAPED_SLASHES) : null;
+            $stmt = db()->prepare(
+                'INSERT INTO client_settings (client_id, job_status_colours)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE job_status_colours = VALUES(job_status_colours)'
+            );
+            $stmt->execute([$clientId, $json]);
+            $_SESSION['flash_success'] = 'Status colours saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save colours: ' . $e->getMessage()
+                . ' — have you run migrate_job_status_colours.php?';
         }
         header('Location: /admin/settings.php');
         exit;
@@ -797,6 +828,56 @@ $activeNav = 'settings';
                 </div>
             </form>
         </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Status colours</h2>
+            </div>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="status_colours">
+
+                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem">
+                    Your &ldquo;traffic-light&rdquo; colours. A job shows the same colour
+                    everywhere it appears &mdash; on the <strong>calendar</strong> and in your
+                    <strong>orders list</strong> &mdash; and the calendar updates itself as the
+                    job moves from stage to stage. Pick a colour for each stage below; the
+                    sample pill updates as you go.
+                </p>
+
+                <?php
+                    $colourPalette = job_client_palette((int) $clientId);
+                    $colourLabels  = job_status_labels();
+                    foreach (job_status_groups() as $groupName => $groupKeys):
+                ?>
+                    <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);margin:0.5rem 0 0.5rem"><?= e($groupName) ?></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem">
+                        <?php foreach ($groupKeys as $sk):
+                            $cur = $colourPalette[$sk] ?? '#2563eb';
+                            $txt = job_status_text_colour($cur);
+                        ?>
+                            <div style="display:flex;align-items:center;gap:0.5rem;border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.625rem;background:var(--bg-card)">
+                                <input type="color"
+                                       name="colour_<?= e($sk) ?>"
+                                       value="<?= e($cur) ?>"
+                                       data-status="<?= e($sk) ?>"
+                                       class="status-colour-input"
+                                       aria-label="<?= e($colourLabels[$sk] ?? $sk) ?> colour"
+                                       style="width:2.25rem;height:2.25rem;border:none;background:none;padding:0;cursor:pointer">
+                                <span class="status-colour-pill" data-for="<?= e($sk) ?>"
+                                      style="display:inline-block;padding:0.0625rem 0.5rem;font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;border-radius:999px;background:<?= e($cur) ?>;color:<?= e($txt) ?>">
+                                    <?= e($colourLabels[$sk] ?? $sk) ?>
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save status colours</button>
+                </div>
+            </form>
+        </section>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
@@ -828,6 +909,25 @@ $legalPreviewTokens = [
         if (!ta) { return; }
         render(ta, box);
         ta.addEventListener('input', function () { render(ta, box); });
+    });
+
+    // Live status-colour previews — mirrors job_status_text_colour() in PHP so
+    // the sample pill stays legible whatever colour is picked.
+    function textOn(hex) {
+        var h = hex.replace('#', '');
+        if (h.length !== 6) { return '#ffffff'; }
+        var r = parseInt(h.substr(0, 2), 16),
+            g = parseInt(h.substr(2, 2), 16),
+            b = parseInt(h.substr(4, 2), 16);
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1f2937' : '#ffffff';
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.status-colour-input'), function (inp) {
+        var pill = document.querySelector('.status-colour-pill[data-for="' + inp.getAttribute('data-status') + '"]');
+        if (!pill) { return; }
+        inp.addEventListener('input', function () {
+            pill.style.background = inp.value;
+            pill.style.color = textOn(inp.value);
+        });
     });
 })();
 </script>
