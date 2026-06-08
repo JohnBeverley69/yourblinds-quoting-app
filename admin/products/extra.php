@@ -341,7 +341,7 @@ $activeNav = 'products';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title><?= e((string) $extra['name']) ?> &middot; Choices &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <?php require __DIR__ . '/../../_partials/choices_grid_css.php'; ?>
     <style>
         /* (page-specific styles, none for now — all moved to the

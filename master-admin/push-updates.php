@@ -266,7 +266,7 @@ $activeNav = 'push-updates';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Push catalogue updates &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .info-panel {
             background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px;

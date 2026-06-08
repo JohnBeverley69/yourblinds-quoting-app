@@ -562,7 +562,7 @@ $tenants = $pdo->query(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Backup &amp; Restore &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .danger-zone {
             border: 1px solid #fecaca; background: #fef2f2;

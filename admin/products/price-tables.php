@@ -266,7 +266,7 @@ $activeNav = 'products';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e((string) $system['product_name']) ?> &middot; <?= e((string) $system['system_name']) ?> &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .form-row.cols-3-narrow { grid-template-columns: 1fr 2fr 3fr; }
         @media (max-width: 800px) { .form-row.cols-3-narrow { grid-template-columns: 1fr; } }

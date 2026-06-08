@@ -118,7 +118,7 @@ $activeNav = 'products';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bulk import &middot; <?= e((string) $system['system_name']) ?> &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .tip-box {
             background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px;

@@ -228,7 +228,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Quote <?= e((string) $quote['quote_number']) ?> &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .status-pill {
             display: inline-block; padding: 0.125rem 0.625rem; font-size: 0.75rem;

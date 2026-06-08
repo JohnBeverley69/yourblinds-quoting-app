@@ -439,7 +439,7 @@ $activeNav = 'dashboard';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .period-bar {
             display: flex; gap: 0.375rem; flex-wrap: wrap;

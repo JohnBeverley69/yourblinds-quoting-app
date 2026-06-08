@@ -395,7 +395,7 @@ $activeNav = 'products';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e((string) $product['name']) ?> &middot; <?= e($label) ?>s &middot; YourBlinds</title>
-    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .form-row.cols-5 { grid-template-columns: 1fr 1fr 2fr 1fr 0.75fr; }
         @media (max-width: 800px) {
