@@ -51,7 +51,7 @@ $colExists = static function (string $col) use ($pdo): bool {
 
 echo "Migrating: client Terms & Conditions + Privacy Policy…\n\n";
 
-foreach (['terms_conditions', 'privacy_policy'] as $col) {
+foreach (['terms_conditions', 'privacy_policy', 'accept_email_body'] as $col) {
     if ($colExists($col)) {
         $ops[] = "client_settings.$col already exists — skipped.";
     } else {
