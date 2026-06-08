@@ -321,6 +321,16 @@ $tcDisplay = $tcStored === null ? legal_default_terms()        : (string) $tcSto
 $ppDisplay = $ppStored === null ? legal_default_privacy()      : (string) $ppStored;
 $aeDisplay = $aeStored === null ? legal_default_accept_email() : (string) $aeStored;
 
+// Company address (one line) for the live preview of the legal/email
+// templates — mirrors how legal_render_tokens builds {{company_address}}.
+$previewAddress = implode(', ', array_filter([
+    (string) ($client['address1'] ?? ''),
+    (string) ($client['address2'] ?? ''),
+    (string) ($client['town']     ?? ''),
+    (string) ($client['county']   ?? ''),
+    (string) ($client['postcode'] ?? ''),
+], static fn ($p) => trim((string) $p) !== ''));
+
 $activeNav = 'settings';
 ?><!doctype html>
 <html lang="en">
@@ -743,6 +753,11 @@ $activeNav = 'settings';
                         <label for="terms_conditions">Terms &amp; Conditions</label>
                         <textarea id="terms_conditions" name="terms_conditions" rows="16"
                                   style="font-family:inherit;line-height:1.5"><?= e($tcDisplay) ?></textarea>
+                        <div style="margin-top:0.5rem">
+                            <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);margin-bottom:0.25rem">Preview <span style="text-transform:none;letter-spacing:normal">— with example customer &amp; quote</span></div>
+                            <div class="legal-preview" data-src="terms_conditions"
+                                 style="white-space:pre-wrap;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary);background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:0.625rem 0.75rem;max-height:16rem;overflow:auto"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="form-row full">
@@ -750,6 +765,11 @@ $activeNav = 'settings';
                         <label for="privacy_policy">Privacy Policy</label>
                         <textarea id="privacy_policy" name="privacy_policy" rows="16"
                                   style="font-family:inherit;line-height:1.5"><?= e($ppDisplay) ?></textarea>
+                        <div style="margin-top:0.5rem">
+                            <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);margin-bottom:0.25rem">Preview <span style="text-transform:none;letter-spacing:normal">— with example customer &amp; quote</span></div>
+                            <div class="legal-preview" data-src="privacy_policy"
+                                 style="white-space:pre-wrap;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary);background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:0.625rem 0.75rem;max-height:16rem;overflow:auto"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="form-row full">
@@ -764,6 +784,11 @@ $activeNav = 'settings';
                         </p>
                         <textarea id="accept_email_body" name="accept_email_body" rows="10"
                                   style="font-family:inherit;line-height:1.5"><?= e($aeDisplay) ?></textarea>
+                        <div style="margin-top:0.5rem">
+                            <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);margin-bottom:0.25rem">Preview <span style="text-transform:none;letter-spacing:normal">— what the customer receives</span></div>
+                            <div class="legal-preview" data-src="accept_email_body"
+                                 style="white-space:pre-wrap;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary);background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:0.625rem 0.75rem;max-height:16rem;overflow:auto"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -775,5 +800,36 @@ $activeNav = 'settings';
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
+<?php
+// Live-preview token values: the tenant's REAL company details + EXAMPLE
+// customer/quote data, so a client editing a template sees exactly what the
+// customer gets — making the {{placeholders}} self-explanatory.
+$legalPreviewTokens = [
+    '{{company_name}}'    => (string) ($client['company_name'] ?? ''),
+    '{{company_address}}' => $previewAddress,
+    '{{company_email}}'   => (string) ($client['email'] ?? ''),
+    '{{company_phone}}'   => (string) ($client['phone'] ?? ''),
+    '{{customer_name}}'   => 'Jane Smith',
+    '{{quote_number}}'    => 'BEV-2026-0042',
+    '{{quote_link}}'      => 'https://your-site/quote-history/public.php?token=abc123',
+    '{{date}}'            => date('j F Y'),
+];
+?>
+<script>
+(function () {
+    var TOKENS = <?= json_encode($legalPreviewTokens, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+    function render(ta, box) {
+        var txt = ta.value;
+        for (var k in TOKENS) { txt = txt.split(k).join(TOKENS[k]); }
+        box.textContent = txt;   // textContent — never interprets HTML
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.legal-preview'), function (box) {
+        var ta = document.getElementById(box.getAttribute('data-src'));
+        if (!ta) { return; }
+        render(ta, box);
+        ta.addEventListener('input', function () { render(ta, box); });
+    });
+})();
+</script>
 </body>
 </html>
