@@ -1,0 +1,69 @@
+name: Deploy to Cloudways
+
+# Zero-click deploy: every push to main (i.e. every merged PR) tells
+# Cloudways to pull the latest code into the live site. Replaces the
+# manual "Start Deployment" click in the Cloudways panel.
+#
+# Credentials live in GitHub repo Secrets (Settings -> Secrets and
+# variables -> Actions), never in this file:
+#   CLOUDWAYS_EMAIL      - the email you log into Cloudways with
+#   CLOUDWAYS_API_KEY    - Cloudways -> Account -> API Keys
+#   CLOUDWAYS_SERVER_ID  - numeric id from the Cloudways app URL
+#   CLOUDWAYS_APP_ID     - numeric id from the Cloudways app URL
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # also allow a manual run from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudways git pull
+        env:
+          CW_EMAIL:     ${{ secrets.CLOUDWAYS_EMAIL }}
+          CW_API_KEY:   ${{ secrets.CLOUDWAYS_API_KEY }}
+          CW_SERVER_ID: ${{ secrets.CLOUDWAYS_SERVER_ID }}
+          CW_APP_ID:    ${{ secrets.CLOUDWAYS_APP_ID }}
+        run: |
+          set -euo pipefail
+
+          # Fail early with a clear message if a secret is missing.
+          for v in CW_EMAIL CW_API_KEY CW_SERVER_ID CW_APP_ID; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Missing GitHub secret for $v. Add it under Settings -> Secrets and variables -> Actions."
+              exit 1
+            fi
+          done
+
+          echo "Requesting Cloudways access token..."
+          TOKEN=$(curl -sS -X POST https://api.cloudways.com/api/v1/oauth/access_token \
+            -d "email=${CW_EMAIL}" \
+            -d "api_key=${CW_API_KEY}" | jq -r '.access_token // empty')
+
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Could not get a Cloudways access token. Check CLOUDWAYS_EMAIL and CLOUDWAYS_API_KEY."
+            exit 1
+          fi
+
+          echo "Triggering git pull of 'main' into the live app..."
+          HTTP=$(curl -sS -o /tmp/cw_resp.json -w '%{http_code}' \
+            -X POST https://api.cloudways.com/api/v1/git/pull \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -d "server_id=${CW_SERVER_ID}" \
+            -d "app_id=${CW_APP_ID}" \
+            -d "branch_name=main" \
+            -d "deploy_path=")
+
+          echo "Cloudways HTTP status: $HTTP"
+          echo "Cloudways response:"
+          cat /tmp/cw_resp.json || true
+          echo ""
+
+          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
+            echo "Deploy triggered successfully. Confirm in Cloudways -> Deployment Via Git -> logs."
+          else
+            echo "::error::Cloudways returned HTTP $HTTP — deploy not triggered. See response above."
+            exit 1
+          fi
