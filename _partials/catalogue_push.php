@@ -68,11 +68,27 @@ function push_catalogue_to_client(
         'errors'                 => [],
     ];
 
+    // Behaviour flags that vary by schema age. Probe once so a pushed
+    // product carries the same pricing behaviour as the master — without
+    // this, a pushed headrail lost width_only (and friends) and started
+    // showing a drop on the target tenant. Empty on older schemas.
+    $flagCols = [];
+    foreach (['requires_option', 'width_only', 'price_per_slat',
+              'show_colour_field', 'band_label', 'cost_price'] as $col) {
+        try {
+            $pdo->query("SELECT $col FROM products LIMIT 1");
+            $flagCols[] = $col;
+        } catch (Throwable $e) {
+            // column not present on this schema — skip it everywhere
+        }
+    }
+
     // Pull all source products that start with the prefix. LIKE with
     // an escaped trailing % matches anything beginning with the
     // (possibly user-supplied) prefix.
+    $selCols = array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $flagCols);
     $sel = $pdo->prepare(
-        'SELECT id, name, option_label, sort_order, active
+        'SELECT ' . implode(', ', $selCols) . '
            FROM products
           WHERE client_id = ?
             AND name LIKE ?
@@ -84,7 +100,7 @@ function push_catalogue_to_client(
     foreach ($sourceProducts as $sp) {
         try {
             $pdo->beginTransaction();
-            push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $targetClientId, $summary);
+            push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $targetClientId, $summary, $flagCols);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -108,8 +124,17 @@ function push_one_product(
     array $sourceProduct,
     int $sourceClientId,
     int $targetClientId,
-    array &$summary
+    array &$summary,
+    array $flagCols = []
 ): void {
+    // Behaviour flags present on the source row (subset of $flagCols that
+    // actually came back in the SELECT). Carried onto the target so a
+    // pushed product prices the same way as the master.
+    $flags = array_values(array_filter(
+        $flagCols,
+        static fn ($c) => array_key_exists($c, $sourceProduct)
+    ));
+
     // ---- 1. The product itself ----
     $tgtPid = pp_find_product_by_name($pdo, $targetClientId, (string) $sourceProduct['name']);
     if ($tgtPid === null) {
@@ -120,33 +145,45 @@ function push_one_product(
         $sortStmt->execute([$targetClientId]);
         $nextSort = (int) $sortStmt->fetchColumn();
 
-        $ins = $pdo->prepare(
-            'INSERT INTO products (client_id, name, option_label, sort_order, active)
-             VALUES (?, ?, ?, ?, ?)'
-        );
-        $ins->execute([
+        $insCols = ['client_id', 'name', 'option_label', 'sort_order', 'active'];
+        $insVals = [
             $targetClientId,
             (string) $sourceProduct['name'],
             (string) ($sourceProduct['option_label'] ?? 'Fabric'),
             $nextSort,
             (int) ($sourceProduct['active'] ?? 1),
-        ]);
+        ];
+        foreach ($flags as $col) {
+            $insCols[] = $col;
+            $insVals[] = $sourceProduct[$col];  // copy as-is
+        }
+        $ins = $pdo->prepare(
+            'INSERT INTO products (' . implode(', ', $insCols) . ')
+             VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
+        );
+        $ins->execute($insVals);
         $tgtPid = (int) $pdo->lastInsertId();
         $summary['products_added']++;
     } else {
         // Update non-name fields on the existing product. NAME is the
-        // match key so we deliberately don't update it.
-        $upd = $pdo->prepare(
-            'UPDATE products
-                SET option_label = ?, active = ?
-              WHERE id = ? AND client_id = ?'
-        );
-        $upd->execute([
+        // match key so we deliberately don't update it. Behaviour flags
+        // are kept in sync with the master so a corrected flag propagates.
+        $setCols = ['option_label = ?', 'active = ?'];
+        $setVals = [
             (string) ($sourceProduct['option_label'] ?? 'Fabric'),
             (int) ($sourceProduct['active'] ?? 1),
-            $tgtPid,
-            $targetClientId,
-        ]);
+        ];
+        foreach ($flags as $col) {
+            $setCols[] = "$col = ?";
+            $setVals[] = $sourceProduct[$col];
+        }
+        $setVals[] = $tgtPid;
+        $setVals[] = $targetClientId;
+        $upd = $pdo->prepare(
+            'UPDATE products SET ' . implode(', ', $setCols) . '
+              WHERE id = ? AND client_id = ?'
+        );
+        $upd->execute($setVals);
         $summary['products_updated']++;
     }
 
