@@ -1464,6 +1464,27 @@ $activeNav = 'wizard';
                     </div>
                 <?php endif; ?>
 
+                <?php if (!$widthOnly && !$pricePerDrop && empty($perSqm) && $systems): ?>
+                    <!-- Normal width × drop products: bulk-import a price grid
+                         per system (all its bands in one file) rather than hand-
+                         filling each table. The importer creates the tables. -->
+                    <div class="wiz-card" style="background:#eff6ff;border-color:#bfdbfe">
+                        <h2 style="color:#1e40af">Got a price spreadsheet? Import it</h2>
+                        <p class="lede" style="color:#1e40af">
+                            Upload your width &times; drop price grid for a system (all its
+                            bands in one file) and we'll create and fill its tables in one
+                            go &mdash; no need to create the empty tables first. Do each
+                            system in turn.
+                        </p>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
+                            <?php foreach ($systems as $s): ?>
+                                <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $s['id'] ?>"
+                                   class="btn btn-primary">Import <?= e((string) $s['name']) ?> &rarr;</a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if (!empty($missingCombos)): ?>
                     <div class="wiz-card" style="background:#fffbeb;border-color:#fcd34d">
                         <h2 style="color:#78350f">
