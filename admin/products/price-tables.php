@@ -322,6 +322,8 @@ $activeNav = 'products';
                    class="btn btn-secondary">Single-band import</a>
                 <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
                    class="btn btn-secondary">Bulk import (multiple bands)</a>
+                <a href="/admin/products/extras.php?product_id=<?= (int) $productId ?>"
+                   class="btn btn-primary">Next: options &rarr;</a>
             </div>
         </div>
 
@@ -485,6 +487,17 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </section>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;
+                    margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">
+            <span style="flex:1;min-width:14rem;color:var(--text-faint);font-size:0.875rem">
+                Prices in? Next, add any options &mdash; operation, controls, extras.
+            </span>
+            <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Back to product</a>
+            <a href="/admin/products/extras.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-primary">Next: options &rarr;</a>
+        </div>
     </main>
 </div>
 <?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>

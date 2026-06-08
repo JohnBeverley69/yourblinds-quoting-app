@@ -339,6 +339,8 @@ $activeNav = 'products';
                    class="btn btn-secondary">&larr; Back to setup wizard</a>
                 <a href="/admin/products/extras-copy.php?product_id=<?= (int) $productId ?>"
                    class="btn btn-secondary">Copy from another product</a>
+                <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+                   class="btn btn-primary">Finish &rarr;</a>
             </div>
         </div>
 
@@ -597,6 +599,17 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </section>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;
+                    margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">
+            <span style="flex:1;min-width:14rem;color:var(--text-faint);font-size:0.875rem">
+                That's everything &mdash; your product is ready to quote. 🎉
+            </span>
+            <a href="/admin/products/index.php"
+               class="btn btn-secondary">All products</a>
+            <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+               class="btn btn-primary">Finish &mdash; back to product &rarr;</a>
+        </div>
     </main>
 </div>
 <?php if ($extras): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
