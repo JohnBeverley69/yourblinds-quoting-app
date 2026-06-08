@@ -391,7 +391,7 @@ if ($depositStored !== null) {
                         <?php if ($exs): ?>
                             <div class="extras">
                                 <?php foreach ($exs as $ex): ?>
-                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php
+                                    + <?= e((string) $ex['extra_name_snapshot']) ?><?php if (($ex['choice_label_snapshot'] ?? '') !== ''): ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php endif;
                                         if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0):
                                             echo ' &mdash; ' . e(rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.')) . 'mm';
                                         endif;

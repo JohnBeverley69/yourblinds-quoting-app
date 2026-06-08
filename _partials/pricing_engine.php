@@ -484,6 +484,57 @@ function pe_apply_extra(
 }
 
 /**
+ * Apply a "number-only" option — one with a measurement input and NO choices
+ * to pick (e.g. "Distance From Bottom to Handle Centre"). It's purely a spec
+ * captured for the supplier docs, so it never affects the price. Returns an
+ * extras_applied row with a NULL choice and a zero amount, or null if this
+ * extra isn't actually a valid number-only option (so the caller skips it).
+ */
+function pe_apply_number_only_extra(PDO $pdo, int $clientId, int $productId, int $extraId, ?float $userValue): ?array
+{
+    try {
+        $st = $pdo->prepare(
+            'SELECT id, name, length_input_label
+               FROM product_extras
+              WHERE id = ? AND product_id = ? AND client_id = ? AND active = 1
+              LIMIT 1'
+        );
+        $st->execute([$extraId, $productId, $clientId]);
+        $extra = $st->fetch();
+    } catch (Throwable $e) {
+        return null;   // pre-migration schema — no length-input feature
+    }
+    // Must be a number-capturing option to qualify.
+    if (!$extra || empty($extra['length_input_label'])) return null;
+
+    // If it actually has active choices, a missing choice_id means "nothing
+    // picked", not a number-only option — leave it to the normal path / skip.
+    $cChk = $pdo->prepare(
+        'SELECT 1 FROM product_extra_choices
+          WHERE product_extra_id = ? AND active = 1 LIMIT 1'
+    );
+    $cChk->execute([$extraId]);
+    if ($cChk->fetchColumn()) return null;
+
+    $resolvedUserValue = ($userValue !== null && $userValue > 0)
+        ? round((float) $userValue, 2) : null;
+
+    return [
+        'extra_id'            => (int)    $extra['id'],
+        'extra_name'          => (string) $extra['name'],
+        'choice_id'           => null,   // no choice — column is nullable
+        'choice_label'        => '',     // empty snapshot → display shows just the name
+        // 'flat' (not a new enum value) with a £0 amount — guaranteed-valid
+        // mode that shows no price. Number-only options never affect pricing.
+        'mode'                => 'flat',
+        'amount_applied'      => 0.0,
+        'cost_snapshot'       => 0.0,
+        'length_input_label'  => $extra['length_input_label'],
+        'user_value'          => $resolvedUserValue,
+    ];
+}
+
+/**
  * Read the two tenant-wide default margins from client_settings.
  * Cached per-request because they're hit for every price-table /
  * option lookup. Returns ['price_table' => float, 'options' => float]
@@ -816,7 +867,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     foreach ($extras as $sel) {
         $eid = (int) ($sel['extra_id']  ?? 0);
         $cid = (int) ($sel['choice_id'] ?? 0);
-        if ($eid <= 0 || $cid <= 0) continue;
+        if ($eid <= 0) continue;
 
         // Accept either 'user_value' or 'value' (the JS form might use
         // either name). Empty / non-numeric → null.
@@ -824,6 +875,17 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         $userValue = (is_numeric($rawUserValue) && (float) $rawUserValue > 0)
             ? (float) $rawUserValue
             : null;
+
+        if ($cid <= 0) {
+            // Number-only option (no choice to pick) — a measurement input
+            // captured for the supplier docs. Spec-only: never changes the
+            // price, just snapshots the typed value onto the quote line.
+            $applied = pe_apply_number_only_extra($pdo, $clientId, $productId, $eid, $userValue);
+            if ($applied !== null) {
+                $extrasApplied[] = $applied;   // amount 0 → no extrasTotal change
+            }
+            continue;
+        }
 
         $applied = pe_apply_extra(
             $pdo, $clientId, $productId, $systemId, $eid, $cid,

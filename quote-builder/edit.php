@@ -1290,7 +1290,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <?php if (!empty($extrasByItem[(int) $it['id']])): ?>
                                             <div class="item-extras">
                                                 <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
-                                                    + <?= e((string) $ex['extra_name_snapshot']) ?>: <?= e((string) $ex['choice_label_snapshot']) ?>
+                                                    + <?= e((string) $ex['extra_name_snapshot']) ?><?php if (($ex['choice_label_snapshot'] ?? '') !== ''): ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php endif; ?>
                                                     <?php if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0): ?>
                                                         — <?= e(rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.')) ?>mm
                                                     <?php endif; ?>
@@ -2212,6 +2212,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 });
                 if (!ok) return false;
             }
+            // Number-only option (a measurement input, no choices): there's
+            // nothing for choiceAvailable to match, but it should still show
+            // once any parent gate above has passed.
+            if ((extra.choices || []).length === 0 && extra.length_input_label) return true;
             return extra.choices.some(choiceAvailable);
         }
 
@@ -2226,6 +2230,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var visibleChoices = extra.choices.filter(choiceAvailable);
             var selectedThumb = null;
 
+            // A number-capturing option with NO choices to pick is just a
+            // number input — emit no picker at all. An empty dropdown is
+            // useless, and a hidden *required* <select> with no option would
+            // block the whole form from submitting. Keyed on genuinely having
+            // no choices (matches the server + isVisible), not on choices
+            // being filtered out by band/system.
+            var numberOnly = !!extra.length_input_label && (extra.choices || []).length === 0;
+
             var out = '<div data-extra-id="' + extra.id + '"'
                     + (isChild ? ' class="extra-child"' : '')
                     + '>';
@@ -2234,7 +2246,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                  + '</label>';
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
 
-            if (extra.allow_multi) {
+            if (numberOnly) {
+                // ---------- Number-only option ----------
+                // No choices to pick — the number input rendered below is the
+                // entire control. Nothing to emit here.
+            } else if (extra.allow_multi) {
                 // ---------- Multi-pick tick-box list ----------
                 //
                 // Each ticked choice becomes its own quote_item_extras
@@ -2335,6 +2351,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                      + '<input type="number" min="0" step="1"'
                      + ' name="extras[' + idx + '][user_value]"'
                      + ' value="' + escapeAttr(uvValue) + '"'
+                     + (numberOnly && extra.is_required ? ' required' : '')
                      + ' data-uv-for="' + extra.id + '"'
                      + ' style="width:100%;padding:0.375rem 0.5rem;'
                      + 'border:1px solid var(--border-strong);border-radius:6px;font:inherit">'
@@ -2517,7 +2534,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             // Single-pick: read the <select>'s value.
             var sel = div.querySelector('select');
-            if (!sel) return;
+            if (!sel) {
+                // No picker at all = a number-only option. Emit a record
+                // carrying just the typed value (no choice_id) so the engine
+                // can snapshot it onto the quote line.
+                if (uvIn) {
+                    var nrec = { extra_id: eid };
+                    if (userValue !== null) nrec.user_value = userValue;
+                    out.push(nrec);
+                }
+                return;
+            }
             var cid = parseInt(sel.value, 10);
             if (cid > 0) {
                 var rec = { extra_id: eid, choice_id: cid };
@@ -2557,7 +2584,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]',  ex.extra_id);
-            params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            // choice_id is omitted for number-only options (no choices) so
+            // the server can tell them apart from an unpicked dropdown.
+            if (ex.choice_id !== undefined) {
+                params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            }
             // Optional user-typed length/spec value — only present when
             // the extra has a length_input_label. Server-side pricing
             // engine snapshots it onto quote_item_extras.user_value.
