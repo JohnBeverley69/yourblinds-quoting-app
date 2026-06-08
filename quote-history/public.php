@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';   // for e()
+require __DIR__ . '/../_partials/legal_text.php';
 
 // htmlspecialchars helper — we don't have e() yet outside middleware. Already
 // pulled in via the require above so it's safe to call.
@@ -51,6 +52,21 @@ if (!$quote) {
     http_response_code(404);
     exit('Quote not found.');
 }
+
+// Terms & Conditions + Privacy Policy (optional columns). Separate guarded
+// query so the page still renders if migrate_terms_conditions.php hasn't run.
+$quote['terms_conditions'] = null;
+$quote['privacy_policy']   = null;
+try {
+    $lStmt = db()->prepare(
+        'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
+    );
+    $lStmt->execute([(int) $quote['client_id']]);
+    if ($lRow = $lStmt->fetch()) {
+        $quote['terms_conditions'] = $lRow['terms_conditions'];
+        $quote['privacy_policy']   = $lRow['privacy_policy'];
+    }
+} catch (Throwable $e) { /* columns not present yet — skip */ }
 
 // First-view auto-promote: if the trade user shared the link via WhatsApp
 // or copy-paste (i.e. without going through email_pdf.php which already
@@ -470,6 +486,27 @@ if ($depositStored !== null) {
                     </button>
                 </div>
             </form>
+        </div>
+    <?php endif; ?>
+
+    <?php
+        $tcText = trim((string) ($quote['terms_conditions'] ?? ''));
+        $ppText = trim((string) ($quote['privacy_policy']   ?? ''));
+    ?>
+    <?php if ($tcText !== '' || $ppText !== ''): ?>
+        <div style="margin-top:1.5rem">
+            <?php if ($tcText !== ''): ?>
+            <details style="border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.5rem">
+                <summary style="cursor:pointer;font-weight:600;color:#111827">Terms &amp; Conditions</summary>
+                <div style="white-space:pre-line;font-size:0.8125rem;line-height:1.6;color:#374151;margin-top:0.75rem"><?= e(legal_render_tokens($tcText, $quote)) ?></div>
+            </details>
+            <?php endif; ?>
+            <?php if ($ppText !== ''): ?>
+            <details style="border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem 1rem">
+                <summary style="cursor:pointer;font-weight:600;color:#111827">Privacy Policy</summary>
+                <div style="white-space:pre-line;font-size:0.8125rem;line-height:1.6;color:#374151;margin-top:0.75rem"><?= e(legal_render_tokens($ppText, $quote)) ?></div>
+            </details>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
