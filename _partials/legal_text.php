@@ -56,6 +56,7 @@ if (!function_exists('legal_render_tokens')) {
             '{{company_phone}}'   => (string) ($quote['trade_phone'] ?? ''),
             '{{customer_name}}'   => (string) ($quote['end_customer_name'] ?? ''),
             '{{quote_number}}'    => (string) ($quote['quote_number'] ?? ''),
+            '{{quote_link}}'      => (string) ($quote['quote_link'] ?? ''),
             '{{date}}'            => date('j F Y'),
         ]);
     }
@@ -181,6 +182,30 @@ We may update this notice from time to time; the current version is always avail
 
 13. CONTACT US
 {{company_name}}, {{company_address}} — {{company_email}} — {{company_phone}}.
+TXT;
+    }
+}
+
+if (!function_exists('legal_default_accept_email')) {
+    /**
+     * Default thank-you email body sent to the customer when they accept a
+     * quote. Plain text. Tokens: {{customer_name}} {{company_name}}
+     * {{quote_number}} {{quote_link}}.
+     */
+    function legal_default_accept_email(): string
+    {
+        return <<<'TXT'
+Hello {{customer_name}},
+
+Thank you for accepting your quote {{quote_number}} — we really appreciate your business and are delighted to have you as a customer.
+
+We'll be in touch shortly to arrange the next steps. If you have any questions in the meantime, just reply to this email.
+
+You can view your quote any time here:
+{{quote_link}}
+
+With thanks,
+{{company_name}}
 TXT;
     }
 }

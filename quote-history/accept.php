@@ -19,6 +19,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../mailer.php';
+require __DIR__ . '/../_partials/legal_text.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -103,26 +104,45 @@ if ($action === 'accept') {
 
     // Thank-you email to the customer — best-effort, never blocks acceptance
     // (mailer_send logs its own failures). Sent once: a second submit bounces
-    // at the status guard above before reaching here.
+    // at the status guard above before reaching here. The body is the tenant's
+    // editable template (Settings); NULL/missing column ⇒ default template;
+    // a saved-empty value ⇒ no email (the tenant turned it off).
     $custEmail = trim((string) ($quote['end_customer_email'] ?? ''));
     if ($custEmail !== '' && filter_var($custEmail, FILTER_VALIDATE_EMAIL)) {
-        $company  = trim((string) ($quote['trade_company_name'] ?? '')) ?: 'your supplier';
-        $greeting = trim((string) ($quote['end_customer_name'] ?? '')) !== ''
-            ? (string) $quote['end_customer_name'] : 'there';
-        $appUrl   = trim((string) (env('APP_URL', '') ?? ''));
-        $viewUrl  = ($appUrl !== '' ? rtrim($appUrl, '/') : '')
-            . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
+        $acceptEmailBody = null;
+        try {
+            $aeStmt = $pdo->prepare(
+                'SELECT accept_email_body FROM client_settings WHERE client_id = ? LIMIT 1'
+            );
+            $aeStmt->execute([(int) $quote['client_id']]);
+            $val = $aeStmt->fetchColumn();
+            $acceptEmailBody = ($val === false) ? null : $val;   // false = no row ⇒ default
+        } catch (Throwable $e) { /* column missing ⇒ use default template */ }
 
-        $subject = sprintf('Thank you for accepting quote %s', (string) $quote['quote_number']);
-        $body  = "Hello {$greeting},\n\n";
-        $body .= "Thank you for accepting your quote ({$quote['quote_number']}) — we really appreciate "
-               . "your business and are delighted to have you as a customer.\n\n";
-        $body .= "We'll be in touch shortly to arrange the next steps. If you have any questions in the "
-               . "meantime, just reply to this email.\n\n";
-        $body .= "You can view your quote any time here:\n{$viewUrl}\n\n";
-        $body .= "With thanks,\n{$company}";
+        // Resolve the body: null ⇒ default; ''/whitespace ⇒ disabled (skip).
+        $template = null;
+        if ($acceptEmailBody === null) {
+            $template = legal_default_accept_email();
+        } elseif (trim((string) $acceptEmailBody) !== '') {
+            $template = (string) $acceptEmailBody;
+        }
 
-        mailer_send($custEmail, $subject, $body);
+        if ($template !== null) {
+            $appUrl  = trim((string) (env('APP_URL', '') ?? ''));
+            $viewUrl = ($appUrl !== '' ? rtrim($appUrl, '/') : '')
+                . '/quote-history/public.php?token=' . urlencode((string) $quote['public_token']);
+
+            // Token context — blank customer name falls back to "there".
+            $ctx = $quote;
+            $ctx['end_customer_name'] = trim((string) ($quote['end_customer_name'] ?? '')) !== ''
+                ? (string) $quote['end_customer_name'] : 'there';
+            $ctx['quote_link'] = $viewUrl;
+
+            $subject = sprintf('Thank you for accepting quote %s', (string) $quote['quote_number']);
+            $body    = legal_render_tokens($template, $ctx);
+
+            mailer_send($custEmail, $subject, $body);
+        }
     }
 
     $_SESSION['flash_success'] = 'Quote accepted. Thanks!';

@@ -267,18 +267,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Saved separately from the quote-defaults block so it can never
         // disturb it. An empty box is a valid "configured but blank" value
         // (disables that document); a NULL column means never configured.
-        $terms   = trim((string) ($_POST['terms_conditions'] ?? ''));
-        $privacy = trim((string) ($_POST['privacy_policy']   ?? ''));
+        $terms    = trim((string) ($_POST['terms_conditions']  ?? ''));
+        $privacy  = trim((string) ($_POST['privacy_policy']    ?? ''));
+        $acceptEm = trim((string) ($_POST['accept_email_body'] ?? ''));
         try {
             $stmt = db()->prepare(
-                'INSERT INTO client_settings (client_id, terms_conditions, privacy_policy)
-                 VALUES (?, ?, ?)
+                'INSERT INTO client_settings (client_id, terms_conditions, privacy_policy, accept_email_body)
+                 VALUES (?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
-                   terms_conditions = VALUES(terms_conditions),
-                   privacy_policy   = VALUES(privacy_policy)'
+                   terms_conditions  = VALUES(terms_conditions),
+                   privacy_policy    = VALUES(privacy_policy),
+                   accept_email_body = VALUES(accept_email_body)'
             );
-            $stmt->execute([$clientId, $terms, $privacy]);
-            $_SESSION['flash_success'] = 'Terms & Conditions and Privacy Policy saved.';
+            $stmt->execute([$clientId, $terms, $privacy, $acceptEm]);
+            $_SESSION['flash_success'] = 'Terms, Privacy Policy and acceptance email saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
                 . ' — have you run migrate_terms_conditions.php?';
@@ -312,10 +314,12 @@ if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 // Terms & Privacy textareas: show the stored value if configured, else
 // pre-fill with the suggested template as a starting point. A NULL column
 // (key absent — never saved, or migration not yet run) ⇒ show the template.
-$tcStored  = $settings['terms_conditions'] ?? null;
-$ppStored  = $settings['privacy_policy']   ?? null;
-$tcDisplay = $tcStored === null ? legal_default_terms()   : (string) $tcStored;
-$ppDisplay = $ppStored === null ? legal_default_privacy() : (string) $ppStored;
+$tcStored  = $settings['terms_conditions']  ?? null;
+$ppStored  = $settings['privacy_policy']    ?? null;
+$aeStored  = $settings['accept_email_body'] ?? null;
+$tcDisplay = $tcStored === null ? legal_default_terms()        : (string) $tcStored;
+$ppDisplay = $ppStored === null ? legal_default_privacy()      : (string) $ppStored;
+$aeDisplay = $aeStored === null ? legal_default_accept_email() : (string) $aeStored;
 
 $activeNav = 'settings';
 ?><!doctype html>
@@ -748,9 +752,23 @@ $activeNav = 'settings';
                                   style="font-family:inherit;line-height:1.5"><?= e($ppDisplay) ?></textarea>
                     </div>
                 </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="accept_email_body">Thank-you email (sent when a customer accepts a quote)</label>
+                        <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.5rem">
+                            Placeholders: <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{customer_name}}</code>
+                            <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{company_name}}</code>
+                            <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{quote_number}}</code>
+                            <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{quote_link}}</code>.
+                            Leave empty to send no thank-you email.
+                        </p>
+                        <textarea id="accept_email_body" name="accept_email_body" rows="10"
+                                  style="font-family:inherit;line-height:1.5"><?= e($aeDisplay) ?></textarea>
+                    </div>
+                </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save terms &amp; privacy policy</button>
+                    <button type="submit" class="btn btn-primary">Save terms, privacy &amp; email</button>
                 </div>
             </form>
         </section>
