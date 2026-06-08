@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
@@ -62,15 +63,22 @@ $stmt = db()->prepare(
             a.installation_address1, a.installation_address2,
             a.installation_town, a.installation_county, a.installation_postcode,
             c.name AS customer_name,
-            u.full_name AS assignee_name
+            u.full_name AS assignee_name,
+            q.status AS quote_status
        FROM appointments a
   LEFT JOIN customers    c ON c.id = a.customer_id
   LEFT JOIN client_users u ON u.id = a.client_user_id
+  LEFT JOIN quotes       q ON q.id = a.quote_id
       WHERE a.client_id = ? AND a.appointment_date = ?
    ORDER BY a.appointment_time'
 );
 $stmt->execute([$clientId, $date]);
 $appts = $stmt->fetchAll();
+
+// Same traffic-light palette as the main calendar + Settings, so the stop
+// badges match everywhere.
+$stagePalette = job_client_palette((int) $clientId);
+$stageLabels  = job_status_labels();
 
 // Strip down to just the rows that have *some* address — a stop with no
 // address can't be plotted, but we still want to show it in the list below.
@@ -273,10 +281,8 @@ $activeNav = 'calendar';
             color: #fff;
             white-space: nowrap;
         }
-        .stop-status.status-booked    { background: #2563eb; }
-        .stop-status.status-completed { background: #16a34a; }
-        .stop-status.status-cancelled { background: #dc2626; }
-        .stop-status.status-no_show   { background: var(--text-faint); }
+        /* Stop-status pill colours come inline from the tenant's traffic-light
+           palette (same as the calendar + Settings) — see the render below. */
         .run-noaddr {
             color: #b45309;
             background: #fffbeb;
@@ -468,8 +474,13 @@ $activeNav = 'calendar';
                                     <div class="stop-addr" style="color:#b45309">No address recorded — not on the map.</div>
                                 <?php endif; ?>
                             </div>
-                            <span class="stop-status status-<?= e((string) $a['status']) ?>">
-                                <?= e(ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
+                            <?php
+                                $stStage  = job_stage((string) $a['status'], $a['quote_status'] ?? null);
+                                $stColour = $stagePalette[$stStage] ?? '#2563eb';
+                            ?>
+                            <span class="stop-status"
+                                  style="background:<?= e($stColour) ?>;color:<?= e(job_status_text_colour($stColour)) ?>">
+                                <?= e($stageLabels[$stStage] ?? ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
                             </span>
                         </li>
                     <?php endforeach; ?>
