@@ -2576,8 +2576,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var unit  = Number(data.sell_price).toFixed(2);
             var total = Number(data.line_total).toFixed(2);
             var qty   = Number(data.quantity);
-            var bits = ['<strong>£' + unit + '</strong> per blind'];
-            if (qty > 1) bits.push('× ' + qty + ' = <strong>£' + total + '</strong>');
+            // Headline the line TOTAL in bold; per-blind price as subtext.
+            var bits;
+            if (qty > 1) {
+                bits = ['<strong>£' + total + '</strong> for ' + qty + ' blinds', '£' + unit + ' each'];
+            } else {
+                bits = ['<strong>£' + unit + '</strong> per blind'];
+            }
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
             <?php if ($isAdmin || $_perms['can_view_costs']): ?>
