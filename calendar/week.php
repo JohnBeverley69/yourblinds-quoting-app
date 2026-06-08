@@ -26,6 +26,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
@@ -128,6 +129,11 @@ $colorForUser = static function (?int $uid) use ($userPalette): string {
     if (!$uid) return 'var(--text-faint)';
     return $userPalette[$uid % count($userPalette)];
 };
+
+// Same traffic-light palette as the calendar + Settings, so a job's hue is
+// consistent everywhere. On these richer cards we wash the background with a
+// tint of the stage colour (a solid fill would swamp the text).
+$stagePalette = job_client_palette($clientId);
 
 $statusColour = static function (string $s): array {
     return match ($s) {
@@ -422,7 +428,8 @@ $activeNav = 'calendar';
                             $time   = (string) ($appt['appointment_time'] ?? '09:00:00');
                             $top    = $timeToTop($time);
                             $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
-                            $palette = $statusColour((string) ($appt['status'] ?? ''));
+                            $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette);
+                            $stageTint = job_status_tint($stageClr);
                             $borderClr = $colorForUser((int) ($appt['client_user_id'] ?? 0));
                             $title    = trim((string) ($appt['title'] ?? ''));
                             $custName = trim((string) ($appt['customer_name'] ?? ''));
@@ -433,14 +440,17 @@ $activeNav = 'calendar';
                             $timeLabel = substr($time, 0, 5);
                             $qref     = trim((string) ($appt['quote_number'] ?? ''));
                             $prog     = $quoteProgress($appt['quote_status'] ?? null);
+                            // Progress-dot colour from the shared palette too.
+                            $wqs = (string) ($appt['quote_status'] ?? '');
+                            if ($wqs !== '' && isset($stagePalette[$wqs])) $prog['colour'] = $stagePalette[$wqs];
                         ?>
                             <a class="wk-card"
                                href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                                style="top:<?= $top ?>px;
                                       height:<?= $height ?>px;
-                                      background:<?= $palette['bg'] ?>;
+                                      background:<?= e($stageTint) ?>;
                                       border-left-color:<?= $borderClr ?>;
-                                      color:<?= $palette['fg'] ?>;
+                                      color:var(--text-primary);
                                       --prog-clr:<?= e($prog['colour']) ?>;">
                                 <div class="wc-time">
                                     <?= e($timeLabel) ?>

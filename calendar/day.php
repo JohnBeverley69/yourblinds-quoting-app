@@ -36,6 +36,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
@@ -180,6 +181,11 @@ $statusColour = static function (string $s): array {
         default        => ['bg' => '#fef3c7', 'fg' => '#78350f', 'border' => '#fde68a'],
     };
 };
+
+// Same traffic-light palette as the calendar + Settings. On these rich cards
+// we wash the background with a tint of the stage colour and use the solid
+// colour for the left accent, so the hue matches without swamping the text.
+$stagePalette = job_client_palette($clientId);
 
 // Quote status → 5-segment progress bar. Mirrors what Once shows
 // as the stacked horizontal bars on each card: a glanceable
@@ -555,7 +561,8 @@ $activeNav = 'calendar';
                                 $time = (string) ($appt['appointment_time'] ?? '09:00:00');
                                 $top    = $timeToTop($time);
                                 $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
-                                $palette = $statusColour((string) ($appt['status'] ?? ''));
+                                $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette);
+                                $stageTint = job_status_tint($stageClr);
 
                                 // Build address: prefer installation_* fields,
                                 // fall back to customer's home address.
@@ -588,6 +595,9 @@ $activeNav = 'calendar';
                                 $durMin = (int) ($appt['duration_minutes'] ?? 60);
                                 $qref   = trim((string) ($appt['quote_number'] ?? ''));
                                 $prog   = $quoteProgress($appt['quote_status'] ?? null);
+                                // Progress-dot colour from the shared palette too.
+                                $dqs = (string) ($appt['quote_status'] ?? '');
+                                if ($dqs !== '' && isset($stagePalette[$dqs])) $prog['colour'] = $stagePalette[$dqs];
 
                                 // Time chip — always shown so the user can
                                 // glance at the card and read the booked
@@ -621,9 +631,9 @@ $activeNav = 'calendar';
                                      data-href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                                      style="top:<?= $top ?>px;
                                             height:<?= $height ?>px;
-                                            background:<?= $palette['bg'] ?>;
-                                            border-left-color:<?= $palette['border'] ?>;
-                                            color:<?= $palette['fg'] ?>;
+                                            background:<?= e($stageTint) ?>;
+                                            border-left-color:<?= e($stageClr) ?>;
+                                            color:var(--text-primary);
                                             --prog-clr:<?= e($prog['colour']) ?>;">
                                     <div class="ac-time">
                                         <?= e($timeLabel) ?>
