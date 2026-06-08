@@ -135,6 +135,22 @@ if (!function_exists('job_status_defaults')) {
     }
 
     /**
+     * A translucent wash of a colour — for the richer week/day cards, where a
+     * solid fill would swamp the text. Returns an rgba() string so the same
+     * hue reads through in both light and dark themes; pair it with a solid
+     * border/accent of the source colour for a glanceable match to the palette.
+     */
+    function job_status_tint(string $hex, float $alpha = 0.14): string
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) !== 6) return 'transparent';
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        return "rgba($r, $g, $b, $alpha)";
+    }
+
+    /**
      * Map a calendar appointment to one pipeline status (its "stage").
      * Cancel / no-show on the appointment always win; otherwise the quote's
      * own fitted/invoiced/paid status carries through. An appointment with no
