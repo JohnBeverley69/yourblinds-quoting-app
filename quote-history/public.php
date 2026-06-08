@@ -483,9 +483,10 @@ if ($depositStored !== null) {
                               font-weight:400;cursor:pointer;line-height:1.5">
                     <input id="agree_terms" name="agree_terms" type="checkbox" value="1"
                            required style="margin-top:0.2rem">
-                    <span>I have read and understood the Terms &amp; Conditions of
-                        <?= e((string) ($quote['trade_company_name'] ?? 'the supplier')) ?>
-                        (shown below).</span>
+                    <span>I agree to the
+                        <a href="/quote-history/terms.php?token=<?= e($token) ?>"
+                           target="_blank" rel="noopener" style="color:#2563eb">Terms &amp; Conditions</a>
+                        of <?= e((string) ($quote['trade_company_name'] ?? 'the supplier')) ?>.</span>
                 </label>
                 <?php endif; ?>
                 <div class="actions">
@@ -503,20 +504,14 @@ if ($depositStored !== null) {
     <?php endif; ?>
 
     <?php if ($tcText !== '' || $ppText !== ''): ?>
-        <div style="margin-top:1.5rem">
-            <?php if ($tcText !== ''): ?>
-            <details style="border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.5rem">
-                <summary style="cursor:pointer;font-weight:600;color:#111827">Terms &amp; Conditions</summary>
-                <div style="white-space:pre-line;font-size:0.8125rem;line-height:1.6;color:#374151;margin-top:0.75rem"><?= e(legal_render_tokens($tcText, $quote)) ?></div>
-            </details>
-            <?php endif; ?>
-            <?php if ($ppText !== ''): ?>
-            <details style="border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem 1rem">
-                <summary style="cursor:pointer;font-weight:600;color:#111827">Privacy Policy</summary>
-                <div style="white-space:pre-line;font-size:0.8125rem;line-height:1.6;color:#374151;margin-top:0.75rem"><?= e(legal_render_tokens($ppText, $quote)) ?></div>
-            </details>
-            <?php endif; ?>
-        </div>
+        <?php
+            $legalLinkLabel = ($tcText !== '' && $ppText !== '') ? 'Terms & Conditions & Privacy Policy'
+                            : ($tcText !== '' ? 'Terms & Conditions' : 'Privacy Policy');
+        ?>
+        <p style="margin-top:1.25rem;font-size:0.875rem;text-align:center">
+            <a href="/quote-history/terms.php?token=<?= e($token) ?>"
+               target="_blank" rel="noopener" style="color:#2563eb"><?= e($legalLinkLabel) ?></a>
+        </p>
     <?php endif; ?>
 
     <?php if (!empty($quote['quote_footer'])): ?>
