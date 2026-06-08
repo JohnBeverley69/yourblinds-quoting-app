@@ -4,6 +4,8 @@ declare(strict_types=1);
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
+require_once __DIR__ . '/../_partials/legal_text.php';
+
 /**
  * YourBlinds — customer-facing quote PDF rendering.
  *
@@ -50,6 +52,22 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
     if (!$quote) {
         return null;
     }
+
+    // Terms & Conditions + Privacy Policy (optional columns). Loaded with a
+    // separate guarded query — kept out of the main SELECT so the PDF still
+    // renders if migrate_terms_conditions.php hasn't been run yet.
+    $quote['terms_conditions'] = null;
+    $quote['privacy_policy']   = null;
+    try {
+        $lstmt = $pdo->prepare(
+            'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $lstmt->execute([$clientId]);
+        if ($lrow = $lstmt->fetch()) {
+            $quote['terms_conditions'] = $lrow['terms_conditions'];
+            $quote['privacy_policy']   = $lrow['privacy_policy'];
+        }
+    } catch (Throwable $e) { /* columns not present yet — skip */ }
 
     // Items, in line-no order. We use the snapshot fields (frozen at quote
     // time) rather than current product names, so re-rendering an old quote
@@ -206,6 +224,10 @@ table { border-collapse: collapse; }
 .notes p  { margin: 0; white-space: pre-line; }
 .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e5e7eb;
           font-size: 9px; color: #9ca3af; text-align: center; }
+.legal { margin-top: 18px; page-break-before: always; }
+.legal h3 { margin: 0 0 6px; font-size: 11px; color: #111827; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em; }
+.legal p  { margin: 0; white-space: pre-line; font-size: 8px; line-height: 1.5; color: #374151; }
 </style>
 </head>
 <body>
@@ -327,6 +349,22 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <div class="notes">
 <h3>Notes</h3>
 <p><?= e((string) $quote['notes']) ?></p>
+</div>
+<?php endif; ?>
+
+<?php $tcText = trim((string) ($quote['terms_conditions'] ?? '')); ?>
+<?php if ($tcText !== ''): ?>
+<div class="legal">
+<h3>Terms &amp; Conditions</h3>
+<p><?= e(legal_render_tokens($tcText, $quote)) ?></p>
+</div>
+<?php endif; ?>
+
+<?php $ppText = trim((string) ($quote['privacy_policy'] ?? '')); ?>
+<?php if ($ppText !== ''): ?>
+<div class="legal">
+<h3>Privacy Policy</h3>
+<p><?= e(legal_render_tokens($ppText, $quote)) ?></p>
 </div>
 <?php endif; ?>
 
