@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
@@ -123,9 +124,11 @@ if ($mineOnly) {
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                 a.duration_minutes, a.status, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
-                c.name AS customer_name
+                c.name AS customer_name,
+                q.status AS quote_status
            FROM appointments a
       LEFT JOIN customers c ON c.id = a.customer_id
+      LEFT JOIN quotes q ON q.id = a.quote_id
           WHERE a.client_id = ?
             AND a.client_user_id = ?
             AND a.appointment_date BETWEEN ? AND ?
@@ -142,9 +145,11 @@ if ($mineOnly) {
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                 a.duration_minutes, a.status, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
-                c.name AS customer_name
+                c.name AS customer_name,
+                q.status AS quote_status
            FROM appointments a
       LEFT JOIN customers c ON c.id = a.customer_id
+      LEFT JOIN quotes q ON q.id = a.quote_id
           WHERE a.client_id = ?
             AND a.appointment_date BETWEEN ? AND ?
        ORDER BY a.appointment_date, a.appointment_time'
@@ -736,11 +741,16 @@ $activeNav = 'calendar';
                     <?php endif; ?>
                 </div>
                 <div class="cal-legend" aria-label="Status colours">
-                    <span><i style="background:#2563eb"></i> Booked</span>
-                    <span><i style="background:#7c3aed"></i> From quote</span>
-                    <span><i style="background:#16a34a"></i> Completed</span>
-                    <span><i style="background:#dc2626"></i> Cancelled</span>
-                    <span><i style="background:var(--text-faint)"></i> No-show</span>
+                    <?php
+                        // Legend is generated from the same palette the cards use,
+                        // so adding/recolouring a stage never drifts out of sync.
+                        $legendPalette = job_stage_palette();
+                        $legendLabels  = job_stage_labels();
+                        foreach ($legendLabels as $stageKey => $stageLabel):
+                            $swatch = $legendPalette[$stageKey] ?? '#2563eb';
+                    ?>
+                        <span><i style="background:<?= e($swatch) ?>"></i> <?= e($stageLabel) ?></span>
+                    <?php endforeach; ?>
                 </div>
             </div>
 
@@ -800,6 +810,7 @@ $activeNav = 'calendar';
                                 <?php foreach ($appts as $a): ?>
                                     <?php $noteTxt = trim((string) ($a['access_note'] ?? '')); ?>
                                     <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?>"
+                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null)) ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
@@ -854,6 +865,21 @@ $activeNav = 'calendar';
 
     var endpoint  = '/calendar/reschedule.php';
     var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // Job-stage traffic-light palette. Mirrors _partials/job_status_colours.php
+    // so cards re-rendered by the 15s poll colour identically to the server
+    // render — single source of truth emitted from PHP.
+    var STAGE_PALETTE = <?= json_encode(job_stage_palette(), JSON_UNESCAPED_SLASHES) ?>;
+    function jobStage(apptStatus, quoteStatus) {
+        if (apptStatus === 'cancelled') return 'cancelled';
+        if (apptStatus === 'no_show')   return 'no_show';
+        if (quoteStatus === 'fitted' || quoteStatus === 'invoiced' || quoteStatus === 'paid') return quoteStatus;
+        if (apptStatus === 'completed') return 'fitted';
+        return 'booked';
+    }
+    function jobStageColour(apptStatus, quoteStatus) {
+        return STAGE_PALETTE[jobStage(apptStatus, quoteStatus)] || '#2563eb';
+    }
 
     var pendingTray  = document.getElementById('pending-tray');
     var pendingCards = document.getElementById('pending-cards');
@@ -1061,6 +1087,7 @@ $activeNav = 'calendar';
                       + ' title="' + escapeAttr(note || 'Add a note') + '"'
                       + ' aria-label="' + (note ? 'Edit note' : 'Add note') + '">📝</span>';
                 html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + '"'
+                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status)) + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
