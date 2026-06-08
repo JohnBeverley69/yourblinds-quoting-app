@@ -78,7 +78,8 @@ $activeNav = 'instaprice';
         #ip-extras > div[data-extra-id] { margin-bottom: 0.75rem; }
         #ip-extras .extra-child { margin-left: 1rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
         #ip-extras label { display:block; font-size:0.8125rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.25rem; }
-        #ip-extras select { width:100%; padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
+        #ip-extras select,
+        #ip-extras input[type="number"] { width:100%; padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
             border-radius:8px; background:var(--bg-input); color:var(--text-body); font:inherit; }
 
         /* Price panel */
@@ -446,6 +447,8 @@ $activeNav = 'instaprice';
                 preset[eid + '__multi'] = Array.from(multi).filter(function (cb) { return cb.checked; })
                     .map(function (cb) { return parseInt(cb.dataset.multiChoice, 10); });
             }
+            var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
+            if (uvIn) preset[eid + '__uv'] = uvIn.value;
         });
         var systemId = parseInt(systemSel.value, 10) || 0;
 
@@ -499,15 +502,28 @@ $activeNav = 'instaprice';
                 });
                 if (!ok) return false;
             }
+            // Number-only option (a measurement input, no choices) is always
+            // visible once any parent gate passes — nothing for choiceAvailable
+            // to match.
+            if ((extra.choices || []).length === 0 && extra.length_input_label) return true;
             return extra.choices.some(choiceAvailable);
         }
         function renderOne(extra, isChild) {
             var idx = productData.extras.indexOf(extra);
             var visible = extra.choices.filter(choiceAvailable);
+            // Number-only option: no choices, just a measurement input.
+            var numberOnly = !!extra.length_input_label && (extra.choices || []).length === 0;
             var out = '<div data-extra-id="' + extra.id + '"' + (isChild ? ' class="extra-child"' : '') + '>';
             out += '<label>' + escapeHtml(extra.name) + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '') + '</label>';
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
-            if (extra.allow_multi) {
+            if (numberOnly) {
+                var uvP   = preset[extra.id + '__uv'];
+                var uvVal = (uvP !== undefined && uvP !== null) ? uvP : '';
+                out += '<input type="number" min="0" step="1" data-uv-for="' + extra.id + '"'
+                     + (extra.is_required ? ' required' : '')
+                     + ' value="' + escapeAttr(uvVal) + '"'
+                     + ' placeholder="' + escapeAttr(extra.length_input_label) + '">';
+            } else if (extra.allow_multi) {
                 var pm = preset[extra.id + '__multi'];
                 var pre = Array.isArray(pm) ? pm.slice() : visible.filter(function (c) { return c.is_default; }).map(function (c) { return c.id; });
                 out += '<div style="display:flex;flex-direction:column;gap:0.3125rem;padding:0.4375rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px">';
@@ -555,6 +571,11 @@ $activeNav = 'instaprice';
         extrasBox.querySelectorAll('select, input[data-multi-choice]').forEach(function (el) {
             el.addEventListener('change', function () { renderExtras(); schedulePreview(); });
         });
+        // Number-only inputs don't affect price, but capturing keystrokes keeps
+        // the value sticky across re-renders and ready for "Convert to quote".
+        extrasBox.querySelectorAll('input[data-uv-for]').forEach(function (el) {
+            el.addEventListener('input', schedulePreview);
+        });
     }
     function collectExtras() {
         var out = [];
@@ -569,7 +590,17 @@ $activeNav = 'instaprice';
                 return;
             }
             var sel = div.querySelector('select');
-            if (!sel) return;
+            if (!sel) {
+                // Number-only option — no picker, just the typed measurement.
+                var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
+                if (uvIn) {
+                    var rec = { extra_id: eid };
+                    var uv = parseFloat(uvIn.value);
+                    if (uvIn.value !== '' && uv > 0) rec.user_value = uv;
+                    out.push(rec);
+                }
+                return;
+            }
             var cid = parseInt(sel.value, 10);
             if (cid > 0) out.push({ extra_id: eid, choice_id: cid });
         });
@@ -606,7 +637,14 @@ $activeNav = 'instaprice';
         });
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]', ex.extra_id);
-            params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            // Omit choice_id for number-only options so the server can tell
+            // them apart from an unpicked dropdown.
+            if (ex.choice_id !== undefined) {
+                params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            }
+            if (ex.user_value !== undefined) {
+                params.append('extras[' + i + '][user_value]', ex.user_value);
+            }
         });
         var myseq = ++previewSeq;   // only the latest request may update the panel
         try {
