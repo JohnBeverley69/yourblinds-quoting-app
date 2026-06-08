@@ -527,6 +527,22 @@ a { color: var(--link); }
     font-family: inherit;
 }
 
+/* Dropdown option legibility (Safari / macOS).
+ *
+ * The native <select> pop-up list is rendered by the OS. On a Mac in Dark
+ * Mode, Safari draws that list with a dark system background while our
+ * option text stays the (dark) theme colour — leaving the product / option
+ * lists unreadable (reported by a tester: "couldn't see any of the products
+ * or options"). Pinning BOTH the option background and text to the theme
+ * variables forces a legible pairing in either theme, on any OS. Global
+ * (not scoped to .form-group) so the inline-styled selects in the quote
+ * builder / InstaPrice are covered too. */
+select option,
+select optgroup {
+    background-color: var(--bg-input);
+    color: var(--text-body);
+}
+
 .form-actions {
     display: flex;
     gap: 0.75rem;
