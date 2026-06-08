@@ -304,6 +304,8 @@ $activeNav = 'products';
             </div>
             <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>"
                class="btn btn-secondary">&larr; Back to setup wizard</a>
+            <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-primary">Next: fabrics &rarr;</a>
         </div>
 
         <?php if ($flashMsg !== null): ?>
@@ -442,6 +444,17 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </section>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;
+                    margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">
+            <span style="flex:1;min-width:14rem;color:var(--text-faint);font-size:0.875rem">
+                Systems sorted? Next, add the fabrics customers can pick.
+            </span>
+            <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
+               class="btn btn-secondary">Back to product</a>
+            <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>"
+               class="btn btn-primary">Next: fabrics &rarr;</a>
+        </div>
 
         <!-- Shared hidden form for the per-row "Rename" buttons. The JS
              prompts for a new name and submits this. -->
