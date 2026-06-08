@@ -703,10 +703,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_sqm') {
     csrf_check();
 
+    // Preserve the wizard context (carried on the form action URL) across
+    // the redirect so saving keeps the "back to wizard / next table" flow.
+    $wizQs = (($_GET['from'] ?? '') === 'wizard')
+        ? '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0) : '';
+
     $rateRaw = trim((string) ($_POST['rate_per_sqm'] ?? ''));
     if ($rateRaw === '' || !is_numeric($rateRaw) || (float) $rateRaw < 0) {
         $_SESSION['flash_error'] = 'Enter a £/m² rate (a non-negative number).';
-        header('Location: /admin/products/price-table.php?id=' . $tableId, true, 303);
+        header('Location: /admin/products/price-table.php?id=' . $tableId . $wizQs, true, 303);
         exit;
     }
     $rate = round((float) $rateRaw, 4);
@@ -721,12 +726,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_sqm') {
         $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
         $pdo->commit();
         $_SESSION['flash_success'] = 'Saved £/m² rate.';
-        header('Location: /admin/products/price-table.php?id=' . $tableId . '&saved=1', true, 303);
+        header('Location: /admin/products/price-table.php?id=' . $tableId . '&saved=1' . $wizQs, true, 303);
         exit;
     } catch (Throwable $e) {
         $pdo->rollBack();
         $_SESSION['flash_error'] = 'Database error: ' . $e->getMessage();
-        header('Location: /admin/products/price-table.php?id=' . $tableId, true, 303);
+        header('Location: /admin/products/price-table.php?id=' . $tableId . $wizQs, true, 303);
         exit;
     }
 }
@@ -816,6 +821,32 @@ if ($perSqm) {
     $currentRate = ($rateVal === false || $rateVal === null)
         ? '' : rtrim(rtrim(number_format((float) $rateVal, 4, '.', ''), '0'), '.');
 
+    // Wizard context — surfaced when the user clicked through from the setup
+    // wizard's step-4 checklist, so we can offer "next table" / "back to
+    // wizard" instead of the generic links (mirrors the 2-D grid editor).
+    $fromWizard   = ($_GET['from'] ?? '') === 'wizard';
+    $wizardBackId = $fromWizard ? (int) ($_GET['product_id'] ?? 0) : 0;
+    $wizSuffix    = $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '';
+
+    // Next empty sibling price table on this product (drives the wizard
+    // "next" step). Null when every other table is already filled.
+    $nextTableHint = null;
+    $nextStmt = db()->prepare(
+        "SELECT t.id, t.band_code, s.name AS system_name,
+                (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS cells
+           FROM price_tables t
+           JOIN product_systems s ON s.id = t.system_id
+          WHERE t.product_id = ? AND t.client_id = ? AND t.id != ?
+            AND t.active = 1
+       ORDER BY cells ASC, t.id ASC
+          LIMIT 1"
+    );
+    $nextStmt->execute([(int) $table['product_id'], $clientId, $tableId]);
+    $nextRow = $nextStmt->fetch();
+    if ($nextRow && (int) $nextRow['cells'] === 0) {
+        $nextTableHint = $nextRow;
+    }
+
     $activeNav = 'products';
     ?><!doctype html>
     <html lang="en">
@@ -855,7 +886,21 @@ if ($perSqm) {
                 </div>
             </div>
 
-            <?php if ($flashMsg !== null): ?>
+            <?php if ($fromWizard && $justSaved): ?>
+                <div class="alert alert-success" role="status"
+                     style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                    <span style="flex:1">&check; <?= e((string) ($flashMsg ?? 'Saved.')) ?></span>
+                    <?php if ($nextTableHint): ?>
+                        <a href="/admin/products/price-table.php?id=<?= (int) $nextTableHint['id'] ?>&from=wizard&product_id=<?= $wizardBackId ?>"
+                           class="btn btn-primary btn-sm">
+                            Next: <?= e((string) $nextTableHint['system_name']) ?><?php if ((string) $nextTableHint['band_code'] !== ''): ?> &mdash; Band <?= e((string) $nextTableHint['band_code']) ?><?php endif; ?> &rarr;
+                        </a>
+                    <?php else: ?>
+                        <a href="/admin/products/wizard.php?id=<?= $wizardBackId ?>&step=4"
+                           class="btn btn-primary btn-sm">All rates set &mdash; back to setup &rarr;</a>
+                    <?php endif; ?>
+                </div>
+            <?php elseif ($flashMsg !== null): ?>
                 <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
             <?php endif; ?>
             <?php if ($error !== null): ?>
@@ -863,7 +908,7 @@ if ($perSqm) {
             <?php endif; ?>
 
             <section class="section">
-                <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?>">
+                <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $wizSuffix ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="save_sqm">
                     <input type="hidden" name="id" value="<?= (int) $tableId ?>">
@@ -876,13 +921,19 @@ if ($perSqm) {
                     </div>
                     <div class="form-actions" style="margin-top:1.25rem">
                         <button type="submit" class="btn btn-primary">Save rate</button>
-                        <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
-                           class="btn btn-secondary">&larr; Systems &amp; bands</a>
-                        <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>"
-                           class="btn btn-secondary">Back to product</a>
+                        <?php if ($fromWizard): ?>
+                            <a href="/admin/products/wizard.php?id=<?= $wizardBackId ?>&step=4"
+                               class="btn btn-secondary">&larr; Back to setup wizard</a>
+                        <?php else: ?>
+                            <a href="/admin/products/systems.php?product_id=<?= (int) $table['product_id'] ?>"
+                               class="btn btn-secondary">&larr; Systems &amp; bands</a>
+                            <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>"
+                               class="btn btn-secondary">Back to product</a>
+                        <?php endif; ?>
                     </div>
                 </form>
 
+                <?php if (!$fromWizard): ?>
                 <div style="margin-top:1.5rem;padding:0.875rem 1.125rem;background:var(--bg-subtle-2);
                             border:1px solid var(--border);border-radius:8px;font-size:0.875rem;
                             line-height:1.6;color:var(--text-secondary);max-width:36rem">
@@ -897,6 +948,7 @@ if ($perSqm) {
                             enter a <strong>width &amp; height</strong> and the price is rate &times; area.</li>
                     </ol>
                 </div>
+                <?php endif; ?>
             </section>
         </main>
     </div>
