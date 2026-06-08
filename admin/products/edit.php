@@ -145,6 +145,51 @@ if ($hasPricePerDrop) {
     } catch (Throwable $e) { /* keep 0 */ }
 }
 
+// price_per_sqm + min_area_m2 (migrate_price_per_sqm.php). 1 = priced by
+// area: a single £/m² rate × (width × drop), with an optional minimum
+// billable area. Detect + load both. Default 0 / blank.
+$hasPriceSqm = false;
+try {
+    $hasPriceSqm = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'price_per_sqm'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$hasMinArea = false;
+try {
+    $hasMinArea = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'min_area_m2'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$priceSqmValue = 0;
+$minAreaValue  = '';
+if ($hasPriceSqm || $hasMinArea) {
+    try {
+        $sqCols = [];
+        if ($hasPriceSqm) $sqCols[] = 'price_per_sqm';
+        if ($hasMinArea)  $sqCols[] = 'min_area_m2';
+        $sqStmt = db()->prepare('SELECT ' . implode(', ', $sqCols)
+            . ' FROM products WHERE id = ? AND client_id = ?');
+        $sqStmt->execute([$id, $clientId]);
+        $sqRow = $sqStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        if ($hasPriceSqm) {
+            $priceSqmValue = (int) ($sqRow['price_per_sqm'] ?? 0);
+        }
+        if ($hasMinArea && isset($sqRow['min_area_m2']) && $sqRow['min_area_m2'] !== null) {
+            $mv = (float) $sqRow['min_area_m2'];
+            // Clean display: 0.500 → "0.5"; 0 → "" (blank).
+            $minAreaValue = $mv > 0 ? rtrim(rtrim(number_format($mv, 3, '.', ''), '0'), '.') : '';
+        }
+    } catch (Throwable $e) { /* keep defaults */ }
+}
+
 // Markup / discount are now per (product, system). A product with
 // systems carries one row per system; one without systems carries a
 // single row keyed by system_id IS NULL.
@@ -358,6 +403,10 @@ $f = [
     'width_only'        => $widthOnlyValue,
     // 1 = price table is width→rate; price = rate × drop. Optional column.
     'price_per_slat' => $pricePerDropValue,
+    // 1 = priced per square metre (rate × area). Optional column.
+    'price_per_sqm'  => $priceSqmValue,
+    // Minimum billable area in m² ('' = none). Optional column.
+    'min_area_m2'    => $minAreaValue,
     // Controls whether the dedicated "Colour" sub-field appears on
     // the fabric forms. Default 1 (show) for backward compat when
     // migrate_show_colour_field.php hasn't run yet.
@@ -395,6 +444,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['width_only']        = !empty($_POST['width_only']) ? 1 : 0;
     // Checkbox is "priced per metre of drop" → price_per_slat = 1.
     $f['price_per_slat'] = !empty($_POST['price_per_slat']) ? 1 : 0;
+    // Checkbox is "priced per square metre" → price_per_sqm = 1.
+    $f['price_per_sqm']  = !empty($_POST['price_per_sqm']) ? 1 : 0;
+    // Optional minimum billable area in m² (blank/0 = no minimum).
+    $f['min_area_m2']    = trim((string) ($_POST['min_area_m2'] ?? ''));
     $f['show_colour_field'] = !empty($_POST['show_colour_field']) ? 1 : 0;
     $f['cost_price']        = trim((string) ($_POST['cost_price']   ?? ''));
 
@@ -487,6 +540,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasPricePerDrop) {
                 $cols[] = 'price_per_slat = ?';
                 $vals[] = $f['price_per_slat'];
+            }
+            if ($hasPriceSqm) {
+                $cols[] = 'price_per_sqm = ?';
+                $vals[] = $f['price_per_sqm'];
+            }
+            if ($hasMinArea) {
+                $cols[] = 'min_area_m2 = ?';
+                $mv = is_numeric($f['min_area_m2']) ? (float) $f['min_area_m2'] : 0.0;
+                $vals[] = $mv > 0 ? $mv : 0;
             }
             if ($hasShowColField) {
                 $cols[] = 'show_colour_field = ?';
@@ -1007,6 +1069,48 @@ $activeNav = 'products';
                             </label>
                         </div>
                     </div>
+                <?php endif; ?>
+
+                <?php if ($hasPriceSqm): ?>
+                    <!-- Per-square-metre pricing (e.g. shutters): the price
+                         table holds a single £/m² rate; the line price is
+                         rate × area (width × height), with an optional
+                         minimum billable area. Both width and height are
+                         required at quote time. -->
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                                <input type="checkbox" name="price_per_sqm" value="1"
+                                       <?= (int) $f['price_per_sqm'] === 1 ? 'checked' : '' ?>
+                                       style="margin-top:0.1875rem">
+                                <span>
+                                    <strong>Priced per square metre &mdash; e.g. shutters.</strong>
+                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                        The price is a single <strong>&pound;/m&sup2; rate</strong> per
+                                        system/band, multiplied by the area (width &times; height). Set
+                                        the rate on the price-tables page. Both width and height are
+                                        required at quote time. Don't combine with "width only" or
+                                        "per slat".
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    <?php if ($hasMinArea): ?>
+                    <div class="form-row full">
+                        <div class="form-group" style="max-width:20rem">
+                            <label for="min_area_m2">Minimum billable area (m&sup2;)</label>
+                            <input type="number" id="min_area_m2" name="min_area_m2"
+                                   step="0.001" min="0"
+                                   value="<?= e((string) $f['min_area_m2']) ?>"
+                                   placeholder="e.g. 0.5 (blank = none)">
+                            <small style="display:block;color:var(--text-faint);font-size:0.8125rem;margin-top:0.1875rem;line-height:1.5">
+                                The area is billed at no less than this. Blank or 0 = no minimum.
+                                Only applies to per-m&sup2; products.
+                            </small>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 <?php endif; ?>
 
                 <?php if ($hasShowColField): ?>

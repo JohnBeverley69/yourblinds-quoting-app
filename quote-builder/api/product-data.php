@@ -47,6 +47,7 @@ $pdo = db();
 // endpoint works on schemas where either migration hasn't run.
 $product = false;
 foreach ([
+    'id, name, option_label, band_label, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2',
     'id, name, option_label, band_label, requires_option, width_only, price_per_slat',
     'id, name, option_label, band_label, requires_option, width_only',
     'id, name, option_label, band_label, requires_option',
@@ -347,6 +348,13 @@ echo json_encode([
         // hide the WIDTH field and treat quantity as the slat count.
         'price_per_slat' => isset($product['price_per_slat'])
             && (int) $product['price_per_slat'] === 1,
+        // price_per_sqm = priced by area. Front-ends show BOTH width and
+        // height and display the computed area. min_area_m2 is the optional
+        // minimum billable area (0 = none). Absent column ⇒ false / 0.
+        'price_per_sqm' => isset($product['price_per_sqm'])
+            && (int) $product['price_per_sqm'] === 1,
+        'min_area_m2' => isset($product['min_area_m2'])
+            ? (float) $product['min_area_m2'] : 0.0,
     ],
     'systems'       => $systems,
     'bands'         => $bands,
