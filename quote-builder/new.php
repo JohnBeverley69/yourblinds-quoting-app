@@ -40,6 +40,11 @@ $f = [
 ];
 $error = null;
 
+// The measure appointment this quote is being raised from (if any). Carried
+// from the calendar's "Create quote" link through the form, so on save we can
+// link that calendar entry to the quote — letting it track the quote stages.
+$appointmentId = (int) ($_GET['appointment_id'] ?? $_POST['appointment_id'] ?? 0);
+
 // Pre-fill from an appointment when arriving via the calendar's
 // "Create quote" link (/quote-builder/new.php?appointment_id=N).
 // Copies the linked customer + the appointment's installation
@@ -221,6 +226,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             $newId = (int) $pdo->lastInsertId();
+
+            // Link the originating measure appointment to this quote so its
+            // calendar entry tracks the quote's progress (sent → accepted → …).
+            // Only fills an as-yet-unlinked appointment in this tenant.
+            if ($appointmentId > 0) {
+                $pdo->prepare(
+                    'UPDATE appointments SET quote_id = ?
+                      WHERE id = ? AND client_id = ? AND quote_id IS NULL'
+                )->execute([$newId, $appointmentId, $clientId]);
+            }
+
             $pdo->commit();
 
             $_SESSION['flash_success'] = 'Quote ' . $quoteNumber . ' created.';
@@ -313,6 +329,9 @@ $activeNav = 'order-history';
             </p>
             <form method="post" action="/quote-builder/new.php" class="form" novalidate>
                 <?= csrf_field() ?>
+                <?php if ($appointmentId > 0): ?>
+                    <input type="hidden" name="appointment_id" value="<?= (int) $appointmentId ?>">
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">

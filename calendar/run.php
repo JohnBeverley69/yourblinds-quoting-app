@@ -59,7 +59,7 @@ $homeAddress = $homeParts ? implode(', ', $homeParts) : '';
 // Day's appointments, time-ordered.
 // ---------------------------------------------------------------------------
 $stmt = db()->prepare(
-    'SELECT a.id, a.title, a.appointment_time, a.duration_minutes, a.status,
+    'SELECT a.id, a.title, a.appointment_time, a.duration_minutes, a.status, a.appt_kind,
             a.installation_address1, a.installation_address2,
             a.installation_town, a.installation_county, a.installation_postcode,
             c.name AS customer_name,
@@ -475,12 +475,13 @@ $activeNav = 'calendar';
                                 <?php endif; ?>
                             </div>
                             <?php
-                                $stStage  = job_stage((string) $a['status'], $a['quote_status'] ?? null);
+                                $stKind   = (string) ($a['appt_kind'] ?? 'measure');
+                                $stStage  = job_stage((string) $a['status'], $a['quote_status'] ?? null, $stKind);
                                 $stColour = $stagePalette[$stStage] ?? '#2563eb';
                             ?>
                             <span class="stop-status"
-                                  style="background:<?= e($stColour) ?>;color:<?= e(job_status_text_colour($stColour)) ?>">
-                                <?= e($stageLabels[$stStage] ?? ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
+                                  style="background:<?= e($stColour) ?>;color:<?= e(job_status_text_colour($stColour)) ?><?= $stKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '' ?>">
+                                <?= $stKind === 'fitting' ? '&#128295; ' : '' ?><?= e($stageLabels[$stStage] ?? ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
                             </span>
                         </li>
                     <?php endforeach; ?>

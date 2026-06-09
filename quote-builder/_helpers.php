@@ -346,10 +346,22 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         return null;
     }
 
+    // appt_kind distinguishes the measure visit from the fitting. Probe once;
+    // pre-migration installs just have the single linked appointment.
+    static $hasKind = null;
+    if ($hasKind === null) {
+        try { $pdo->query('SELECT appt_kind FROM appointments LIMIT 1'); $hasKind = true; }
+        catch (Throwable $e) { $hasKind = false; }
+    }
+
     // Idempotency check — re-acceptance, double-click, replay attack, all
     // safe; we never end up with two installation appointments per quote.
+    // Only ever reuse a FITTING here, so a measure appointment now linked to
+    // the same quote isn't mistaken for the install.
     $exist = $pdo->prepare(
-        'SELECT id FROM appointments WHERE quote_id = ? LIMIT 1'
+        $hasKind
+            ? "SELECT id FROM appointments WHERE quote_id = ? AND appt_kind = 'fitting' LIMIT 1"
+            : 'SELECT id FROM appointments WHERE quote_id = ? LIMIT 1'
     );
     $exist->execute([$quoteId]);
     $existingId = $exist->fetchColumn();
@@ -376,11 +388,11 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
             title, appointment_date, appointment_time, duration_minutes,
             installation_address1, installation_address2,
             installation_town, installation_county, installation_postcode,
-            notes, status)
+            notes, status' . ($hasKind ? ', appt_kind' : '') . ')
          VALUES (?, NULL, ?, ?,
                  ?, NULL, ?, 60,
                  ?, ?, ?, ?, ?,
-                 ?, ?)'
+                 ?, ?' . ($hasKind ? ", 'fitting'" : '') . ')'
     );
     $ins->execute([
         (int) $quote['client_id'],

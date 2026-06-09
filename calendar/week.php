@@ -75,7 +75,7 @@ for ($i = 0; $i < 7; $i++) {
 // missing.
 $pdo = db();
 $sql = "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-               a.duration_minutes, a.status, a.quote_id, a.client_user_id,
+               a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.client_user_id,
                a.installation_town, a.installation_postcode,
                c.name      AS customer_name,
                c.phone     AS customer_phone,
@@ -428,7 +428,8 @@ $activeNav = 'calendar';
                             $time   = (string) ($appt['appointment_time'] ?? '09:00:00');
                             $top    = $timeToTop($time);
                             $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
-                            $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette);
+                            $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
+                            $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
                             $stageTint = job_status_tint($stageClr);
                             $borderClr = $colorForUser((int) ($appt['client_user_id'] ?? 0));
                             $title    = trim((string) ($appt['title'] ?? ''));
@@ -444,14 +445,14 @@ $activeNav = 'calendar';
                             $wqs = (string) ($appt['quote_status'] ?? '');
                             if ($wqs !== '' && isset($stagePalette[$wqs])) $prog['colour'] = $stagePalette[$wqs];
                         ?>
-                            <a class="wk-card"
+                            <a class="wk-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?>"
                                href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                                style="top:<?= $top ?>px;
                                       height:<?= $height ?>px;
                                       background:<?= e($stageTint) ?>;
                                       border-left-color:<?= $borderClr ?>;
                                       color:var(--text-primary);
-                                      --prog-clr:<?= e($prog['colour']) ?>;">
+                                      --prog-clr:<?= e($prog['colour']) ?><?= $apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '' ?>;">
                                 <div class="wc-time">
                                     <?= e($timeLabel) ?>
                                     <?php if ($qref !== ''): ?>
