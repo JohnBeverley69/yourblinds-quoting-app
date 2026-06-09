@@ -104,6 +104,17 @@ if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly',  '1');
     ini_set('session.cookie_samesite',  'Lax');
     ini_set('session.use_only_cookies', '1');
+
+    // Keep trade users signed in through the working day. PHP's default idle
+    // timeout (~24 min) was logging people out mid-task — e.g. an idle tab
+    // failing the next "add a blind" request with a session/CSRF error. This
+    // is an IDLE window that slides forward on every request, so an active
+    // user never hits it; it only ends a session left genuinely untouched
+    // this long. 12 hours covers a full day plus lunch/site-visit gaps.
+    $sessionLifetime = 12 * 60 * 60;
+    ini_set('session.gc_maxlifetime',  (string) $sessionLifetime);
+    ini_set('session.cookie_lifetime', (string) $sessionLifetime);
+
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     if ($isHttps) {
