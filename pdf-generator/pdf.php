@@ -58,16 +58,23 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
     // renders if migrate_terms_conditions.php hasn't been run yet.
     $quote['terms_conditions'] = null;
     $quote['privacy_policy']   = null;
+    $legalAvailable = false;
     try {
         $lstmt = $pdo->prepare(
             'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
         );
         $lstmt->execute([$clientId]);
+        $legalAvailable = true;
         if ($lrow = $lstmt->fetch()) {
             $quote['terms_conditions'] = $lrow['terms_conditions'];
             $quote['privacy_policy']   = $lrow['privacy_policy'];
         }
     } catch (Throwable $e) { /* columns not present yet — skip */ }
+    // NULL / no settings row → standard template (live by default).
+    if ($legalAvailable) {
+        $quote['terms_conditions'] = legal_effective_terms($quote['terms_conditions'] ?? null);
+        $quote['privacy_policy']   = legal_effective_privacy($quote['privacy_policy'] ?? null);
+    }
 
     // Items, in line-no order. We use the snapshot fields (frozen at quote
     // time) rather than current product names, so re-rendering an old quote
