@@ -370,6 +370,35 @@ $activeNav = 'settings';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Settings &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+    <style>
+        /* Sub-menu tabs — break the long settings page into themed panels
+           so there's no marathon scroll. Active panel is shown, the rest
+           hidden; the chosen tab is remembered across saves (localStorage). */
+        .settings-tabs {
+            display: flex; flex-wrap: wrap; gap: 0.25rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.25rem;
+        }
+        .settings-tab {
+            appearance: none; -webkit-appearance: none;
+            border: 1px solid transparent; border-bottom: none;
+            background: transparent; cursor: pointer;
+            padding: 0.625rem 1rem; margin-bottom: -1px;
+            font: inherit; font-weight: 600; font-size: 0.9375rem;
+            color: var(--text-muted); border-radius: 8px 8px 0 0;
+            min-height: 44px;
+        }
+        .settings-tab:hover { color: var(--text-primary); background: var(--bg-subtle-2); }
+        .settings-tab.is-active {
+            color: var(--brand); background: var(--bg-card);
+            border-color: var(--border); border-bottom-color: var(--bg-card);
+        }
+        .settings-panel { display: none; }
+        .settings-panel.is-active { display: block; }
+        @media (max-width: 600px) {
+            .settings-tab { padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+        }
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -389,6 +418,16 @@ $activeNav = 'settings';
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
+
+        <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+            <button type="button" class="settings-tab is-active" id="tab-company" data-tab="company" role="tab" aria-selected="true">Company</button>
+            <button type="button" class="settings-tab" id="tab-quoting" data-tab="quoting" role="tab" aria-selected="false">Quoting</button>
+            <button type="button" class="settings-tab" id="tab-legal" data-tab="legal" role="tab" aria-selected="false">Legal</button>
+            <button type="button" class="settings-tab" id="tab-colours" data-tab="colours" role="tab" aria-selected="false">Status colours</button>
+        </div>
+
+        <div class="settings-panels">
+        <div class="settings-panel is-active" data-panel="company" role="tabpanel" aria-labelledby="tab-company">
 
         <section class="section">
             <div class="section-header">
@@ -530,6 +569,9 @@ $activeNav = 'settings';
                 </div>
             </form>
         </section>
+
+        </div><!-- /tab: company -->
+        <div class="settings-panel" data-panel="quoting" role="tabpanel" aria-labelledby="tab-quoting">
 
         <!--
             Default margins. Two tenant-wide percentages that act as
@@ -757,6 +799,9 @@ $activeNav = 'settings';
             </form>
         </section>
 
+        </div><!-- /tab: quoting -->
+        <div class="settings-panel" data-panel="legal" role="tabpanel" aria-labelledby="tab-legal">
+
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Terms &amp; Conditions &amp; Privacy Policy</h2>
@@ -829,6 +874,9 @@ $activeNav = 'settings';
             </form>
         </section>
 
+        </div><!-- /tab: legal -->
+        <div class="settings-panel" data-panel="colours" role="tabpanel" aria-labelledby="tab-colours">
+
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Status colours</h2>
@@ -878,6 +926,9 @@ $activeNav = 'settings';
                 </div>
             </form>
         </section>
+
+        </div><!-- /tab: colours -->
+        </div><!-- /settings-panels -->
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
@@ -929,6 +980,46 @@ $legalPreviewTokens = [
             pill.style.color = textOn(inp.value);
         });
     });
+
+    // ---- Sub-menu tabs ------------------------------------------------------
+    // Show one panel at a time. The active tab is remembered (localStorage) so
+    // saving a section — which reloads the page — lands you back on it, not at
+    // the top. A URL #hash wins over the saved tab (for deep links).
+    var tabs   = Array.prototype.slice.call(document.querySelectorAll('.settings-tab'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('.settings-panel'));
+    if (tabs.length) {
+        var STORE = 'yb_settings_tab';
+        function activate(name, persist) {
+            var matched = false;
+            tabs.forEach(function (t) {
+                var on = t.getAttribute('data-tab') === name;
+                t.classList.toggle('is-active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                if (on) { matched = true; }
+            });
+            if (!matched) { return false; }
+            panels.forEach(function (p) {
+                p.classList.toggle('is-active', p.getAttribute('data-panel') === name);
+            });
+            if (persist) { try { localStorage.setItem(STORE, name); } catch (e) {} }
+            return true;
+        }
+        tabs.forEach(function (t) {
+            t.addEventListener('click', function () {
+                var name = t.getAttribute('data-tab');
+                activate(name, true);
+                if (window.history && history.replaceState) {
+                    history.replaceState(null, '', '#' + name);
+                }
+            });
+        });
+        var fromHash = (window.location.hash || '').replace('#', '');
+        var saved = '';
+        try { saved = localStorage.getItem(STORE) || ''; } catch (e) {}
+        if (!activate(fromHash, false) && !activate(saved, false)) {
+            activate(tabs[0].getAttribute('data-tab'), false);
+        }
+    }
 })();
 </script>
 </body>
