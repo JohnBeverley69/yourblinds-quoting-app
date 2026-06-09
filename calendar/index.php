@@ -165,8 +165,13 @@ if ($mineOnly) {
     ]);
 }
 
+// "Fittings only" users (typically fitters) see just the fitting jobs —
+// measure/sales visits are hidden from their calendar.
+$fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
+
 $byDate = [];
 foreach ($stmt->fetchAll() as $row) {
+    if ($fittingsOnly && (string) ($row['appt_kind'] ?? 'measure') !== 'fitting') continue;
     $byDate[$row['appointment_date']][] = $row;
 }
 

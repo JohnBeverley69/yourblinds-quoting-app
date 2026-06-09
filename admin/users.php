@@ -33,6 +33,7 @@ $form = [
     'can_create_orders'          => 0,
     'can_view_all_customer_jobs' => 0,
     'can_view_costs'             => 0,
+    'can_view_fittings_only'     => 0,
 ];
 $error = null;
 
@@ -42,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['first_name','last_name','username','email'] as $f) {
         $form[$f] = trim((string) ($_POST[$f] ?? ''));
     }
-    foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs'] as $f) {
+    foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
     $password = (string) ($_POST['password'] ?? '');
@@ -96,6 +97,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             );
             foreach ($rolesIn as $r) {
                 $insRole->execute([$newUserId, $r]);
+            }
+            // Fittings-only scope (column added by migrate_fittings_only_perm.php).
+            // Guarded so creating a user still works pre-migration.
+            if (!empty($form['can_view_fittings_only'])) {
+                try {
+                    $pdo->query('SELECT can_view_fittings_only FROM client_users LIMIT 0');
+                    $pdo->prepare('UPDATE client_users SET can_view_fittings_only = 1 WHERE id = ?')
+                        ->execute([$newUserId]);
+                } catch (Throwable $e) { /* column not present yet — skip */ }
             }
             $pdo->commit();
             $_SESSION['flash_success'] = 'User added.';
@@ -252,7 +262,16 @@ $activeNav = 'users';
                                 <input type="checkbox" name="can_view_costs" value="1" <?= $form['can_view_costs'] ? 'checked' : '' ?>>
                                 View costs
                             </label>
+                            <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;"
+                                   title="Calendar shows only fitting jobs — measure/sales visits are hidden. Ideal for fitters.">
+                                <input type="checkbox" name="can_view_fittings_only" value="1" <?= $form['can_view_fittings_only'] ? 'checked' : '' ?>>
+                                Fittings only
+                            </label>
                         </div>
+                        <p style="margin:0.5rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
+                            <strong>Fittings only</strong> limits the calendar to fitting jobs (hides measures /
+                            sales visits) — handy for fitters.
+                        </p>
                     </div>
                 </div>
 

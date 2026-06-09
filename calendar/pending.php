@@ -158,7 +158,9 @@ if ($first !== null && $last !== null) {
         return $t === false ? $time : strtolower($t->format('g:ia'));
     };
 
+    $fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
     foreach ($gStmt->fetchAll() as $r) {
+        if ($fittingsOnly && (string) ($r['appt_kind'] ?? 'measure') !== 'fitting') continue;
         $date = (string) $r['appointment_date'];
         $grid[$date][] = [
             'id'            => (int)    $r['id'],

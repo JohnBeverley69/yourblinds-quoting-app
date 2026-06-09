@@ -91,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'can_create_orders'          => !empty($_POST['can_create_orders']) ? 1 : 0,
         'can_view_all_customer_jobs' => !empty($_POST['can_view_all_customer_jobs']) ? 1 : 0,
         'can_view_costs'             => !empty($_POST['can_view_costs']) ? 1 : 0,
+        'can_view_fittings_only'     => !empty($_POST['can_view_fittings_only']) ? 1 : 0,
         // Dashboard panel flags. Tenant admins ignore these (always
         // see the full dashboard); they only affect non-admin users.
         'dash_view_revenue'          => !empty($_POST['dash_view_revenue'])  ? 1 : 0,
@@ -131,6 +132,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         } catch (Throwable $e) {
             $hasDashCols = false;
         }
+        try {
+            db()->query("SELECT can_view_fittings_only FROM client_users LIMIT 0");
+            $hasFittingsCol = true;
+        } catch (Throwable $e) {
+            $hasFittingsCol = false;
+        }
 
         try {
             $sql = 'UPDATE client_users
@@ -145,6 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                            can_create_orders          = ?,
                            can_view_all_customer_jobs = ?,
                            can_view_costs             = ?,';
+            if ($hasFittingsCol) {
+                $sql .= '   can_view_fittings_only     = ?,';
+            }
             if ($hasDashCols) {
                 $sql .= '   dash_view_revenue          = ?,
                            dash_view_team             = ?,
@@ -170,6 +180,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $perms['can_view_all_customer_jobs'],
                 $perms['can_view_costs'],
             ];
+            if ($hasFittingsCol) {
+                $params[] = $perms['can_view_fittings_only'];
+            }
             if ($hasDashCols) {
                 $params[] = $perms['dash_view_revenue'];
                 $params[] = $perms['dash_view_team'];
@@ -378,7 +391,16 @@ $activeNav = 'users';
                                 <input type="checkbox" name="can_view_costs" value="1" <?= !empty($target['can_view_costs']) ? 'checked' : '' ?>>
                                 View costs
                             </label>
+                            <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;"
+                                   title="The calendar shows this user only fitting jobs — measure/sales visits are hidden. Ideal for fitters.">
+                                <input type="checkbox" name="can_view_fittings_only" value="1" <?= !empty($target['can_view_fittings_only']) ? 'checked' : '' ?>>
+                                Fittings only
+                            </label>
                         </div>
+                        <p style="margin:0.5rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
+                            <strong>Fittings only</strong> limits a user's calendar to fitting jobs (hides measures /
+                            sales visits) — handy for fitters.
+                        </p>
                     </div>
                 </div>
 

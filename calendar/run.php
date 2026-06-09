@@ -75,6 +75,11 @@ $stmt = db()->prepare(
 $stmt->execute([$clientId, $date]);
 $appts = $stmt->fetchAll();
 
+// "Fittings only" users see just fitting jobs.
+if (!empty(current_user_permissions()['can_view_fittings_only'])) {
+    $appts = array_values(array_filter($appts, static fn ($a) => (string) ($a['appt_kind'] ?? 'measure') === 'fitting'));
+}
+
 // Same traffic-light palette as the main calendar + Settings, so the stop
 // badges match everywhere.
 $stagePalette = job_client_palette((int) $clientId);

@@ -111,8 +111,11 @@ try {
     $apRows = $apStmt->fetchAll();
 }
 
+// "Fittings only" users (e.g. fitters) see just the fitting jobs.
+$fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
 $byDate = [];
 foreach ($apRows as $r) {
+    if ($fittingsOnly && (string) ($r['appt_kind'] ?? 'measure') !== 'fitting') continue;
     $byDate[(string) $r['appointment_date']][] = $r;
 }
 
