@@ -319,6 +319,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /admin/settings.php');
         exit;
     }
+
+    if ($action === 'joke') {
+        // Dashboard "Joke of the day" on/off (migrate_joke_toggle.php).
+        $jokeOn = !empty($_POST['feature_joke_of_day']) ? 1 : 0;
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, feature_joke_of_day)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE feature_joke_of_day = VALUES(feature_joke_of_day)'
+            )->execute([$clientId, $jokeOn]);
+            $_SESSION['flash_success'] = $jokeOn ? 'Joke of the day is on.' : 'Joke of the day is off.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_joke_toggle.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
 }
 
 $clientStmt = db()->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
@@ -566,6 +584,32 @@ $activeNav = 'settings';
                     <button type="submit" class="btn btn-primary">
                         <?= !empty($client['logo_path']) ? 'Replace logo' : 'Upload logo' ?>
                     </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Dashboard</h2>
+            </div>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="joke">
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:inline-flex;align-items:center;gap:.5rem;font-weight:600;">
+                            <input type="checkbox" name="feature_joke_of_day" value="1"
+                                   <?= ((int) ($settings['feature_joke_of_day'] ?? 1)) === 1 ? 'checked' : '' ?>>
+                            😄 Show a &ldquo;Joke of the day&rdquo; on the dashboard
+                        </label>
+                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                            A little light relief for your team on the dashboard (staff only — never
+                            shown to customers). Dismissible per day. Untick to switch it off.
+                        </p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </section>
