@@ -44,16 +44,16 @@ if (!$quote) {
 }
 
 // Legal text (guarded — columns may not exist on an un-migrated schema).
+// NULL / no row = never configured → standard template (live by default).
 $tcText = $ppText = '';
 try {
     $lStmt = db()->prepare(
         'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
     );
     $lStmt->execute([(int) $quote['client_id']]);
-    if ($lRow = $lStmt->fetch()) {
-        $tcText = trim((string) ($lRow['terms_conditions'] ?? ''));
-        $ppText = trim((string) ($lRow['privacy_policy']   ?? ''));
-    }
+    $lRow  = $lStmt->fetch();
+    $tcText = trim(legal_effective_terms($lRow ? ($lRow['terms_conditions'] ?? null) : null));
+    $ppText = trim(legal_effective_privacy($lRow ? ($lRow['privacy_policy'] ?? null) : null));
 } catch (Throwable $e) { /* not migrated — show nothing */ }
 
 $company = (string) ($quote['trade_company_name'] ?? '');

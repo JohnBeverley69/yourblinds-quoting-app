@@ -208,4 +208,24 @@ With thanks,
 {{company_name}}
 TXT;
     }
+
+    /**
+     * Effective legal text for a client: their saved value, or the standard
+     * template when they have NEVER configured it (NULL). An explicitly-saved
+     * empty string means "disabled" and is returned as-is. This makes the
+     * default T&Cs / Privacy Policy / acceptance email apply to every client
+     * out of the box, without anyone having to open Settings and Save first.
+     */
+    function legal_effective_terms(?string $stored): string
+    {
+        return $stored === null ? legal_default_terms() : $stored;
+    }
+    function legal_effective_privacy(?string $stored): string
+    {
+        return $stored === null ? legal_default_privacy() : $stored;
+    }
+    function legal_effective_accept_email(?string $stored): string
+    {
+        return $stored === null ? legal_default_accept_email() : $stored;
+    }
 }

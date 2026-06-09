@@ -55,20 +55,26 @@ if (!$quote) {
 
 // Terms & Conditions + Privacy Policy (optional columns). Separate guarded
 // query so the page still renders if migrate_terms_conditions.php hasn't run.
+// $legalAvailable distinguishes "feature present" from the un-migrated case.
 $quote['terms_conditions'] = null;
 $quote['privacy_policy']   = null;
+$legalAvailable = false;
 try {
     $lStmt = db()->prepare(
         'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
     );
     $lStmt->execute([(int) $quote['client_id']]);
+    $legalAvailable = true;
     if ($lRow = $lStmt->fetch()) {
         $quote['terms_conditions'] = $lRow['terms_conditions'];
         $quote['privacy_policy']   = $lRow['privacy_policy'];
     }
 } catch (Throwable $e) { /* columns not present yet — skip */ }
-$tcText = trim((string) ($quote['terms_conditions'] ?? ''));
-$ppText = trim((string) ($quote['privacy_policy']   ?? ''));
+// NULL (or no settings row yet) = never configured → fall back to the standard
+// template, so the T&Cs (and the accept checkbox) apply for every client by
+// default. An explicitly saved empty string = "disabled" and stays empty.
+$tcText = $legalAvailable ? trim(legal_effective_terms($quote['terms_conditions'] ?? null)) : '';
+$ppText = $legalAvailable ? trim(legal_effective_privacy($quote['privacy_policy'] ?? null)) : '';
 
 // First-view auto-promote: if the trade user shared the link via WhatsApp
 // or copy-paste (i.e. without going through email_pdf.php which already

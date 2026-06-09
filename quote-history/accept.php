@@ -80,7 +80,11 @@ if ($action === 'accept') {
             'SELECT terms_conditions FROM client_settings WHERE client_id = ? LIMIT 1'
         );
         $tStmt->execute([(int) $quote['client_id']]);
-        $hasTerms = trim((string) ($tStmt->fetchColumn() ?: '')) !== '';
+        $stored    = $tStmt->fetchColumn();   // string | null | false (no row)
+        $storedVal = ($stored === false || $stored === null) ? null : (string) $stored;
+        // NULL / no row → the standard template applies (non-empty) → the
+        // customer must tick the box. Explicit empty string = disabled.
+        $hasTerms  = trim(legal_effective_terms($storedVal)) !== '';
     } catch (Throwable $e) { /* column missing — treat as no terms */ }
     if ($hasTerms && empty($_POST['agree_terms'])) {
         $_SESSION['flash_error'] = 'Please confirm you have read and understood the Terms & Conditions before accepting.';
