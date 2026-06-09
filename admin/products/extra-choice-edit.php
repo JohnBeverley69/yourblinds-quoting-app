@@ -690,13 +690,18 @@ $activeNav = 'products';
                 </fieldset>
 
                 <?php if (!empty($choice['image_path'])): ?>
-                    <form method="post" action="/admin/products/extra-choice-edit.php?id=<?= (int) $id ?>"
-                          style="margin:0 0 1rem"
-                          data-confirm="Remove the thumbnail for this choice?">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="_action" value="remove_image">
-                        <button type="submit" class="btn btn-secondary btn-sm">Remove thumbnail</button>
-                    </form>
+                    <?php /* Submit button INSIDE the main form (not a nested <form> — that
+                             is invalid HTML and silently closes the main form early, which
+                             killed "Save changes" on any choice that already had an image).
+                             name=_action routes this submit to the remove-image handler;
+                             formnovalidate so the empty-label guard can't block a removal. */ ?>
+                    <div style="margin:0 0 1rem">
+                        <button type="submit" name="_action" value="remove_image" formnovalidate
+                                class="btn btn-secondary btn-sm"
+                                onclick="return confirm('Remove the thumbnail for this choice?');">
+                            Remove thumbnail
+                        </button>
+                    </div>
                 <?php endif; ?>
 
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
