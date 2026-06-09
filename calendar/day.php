@@ -155,8 +155,11 @@ try {
 // Group by user_id so each column knows what to render. Unassigned
 // rows (NULL client_user_id) go into the "Unassigned" virtual column
 // at the end.
+// "Fittings only" users (e.g. fitters) see just the fitting jobs.
+$fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
 $byUser = [];
 foreach ($apRows as $r) {
+    if ($fittingsOnly && (string) ($r['appt_kind'] ?? 'measure') !== 'fitting') continue;
     $uid = (int) ($r['client_user_id'] ?? 0);
     $byUser[$uid][] = $r;
 }

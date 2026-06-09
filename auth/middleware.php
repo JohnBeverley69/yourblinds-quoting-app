@@ -69,6 +69,8 @@ function current_user_permissions(): array
         'can_create_orders'          => false,
         'can_view_all_customer_jobs' => false,
         'can_view_costs'             => false,
+        // Fittings-only scope — see migrate_fittings_only_perm.php.
+        'can_view_fittings_only'     => false,
         // Dashboard panel flags — see migrate_dashboard_perms.php.
         // Admins (role='admin') bypass these checks at the page level;
         // these only affect non-admin users.
@@ -82,21 +84,32 @@ function current_user_permissions(): array
     $user = current_user();
     if (!$user) return $cache = $blank;
 
+    // can_view_fittings_only is optional (migrate_fittings_only_perm.php).
+    // Probe once and include it conditionally so a missing column can't drop
+    // the other permissions to the legacy fallback.
+    static $hasFittingsOnly = null;
+    if ($hasFittingsOnly === null) {
+        try { db()->query('SELECT can_view_fittings_only FROM client_users LIMIT 1'); $hasFittingsOnly = true; }
+        catch (Throwable $e) { $hasFittingsOnly = false; }
+    }
+    $fittingsSel = $hasFittingsOnly ? 'COALESCE(can_view_fittings_only, 0) AS can_view_fittings_only,' : '';
+
     // Try with the dashboard flags first; fall back to the legacy SELECT
     // if the migration hasn't run yet so the page still works.
     try {
         $st = db()->prepare(
-            'SELECT COALESCE(can_create_quotes, 0)          AS can_create_quotes,
+            "SELECT COALESCE(can_create_quotes, 0)          AS can_create_quotes,
                     COALESCE(can_create_orders, 0)          AS can_create_orders,
                     COALESCE(can_view_all_customer_jobs, 0) AS can_view_all_customer_jobs,
                     COALESCE(can_view_costs, 0)             AS can_view_costs,
+                    $fittingsSel
                     COALESCE(dash_view_revenue,  0)         AS dash_view_revenue,
                     COALESCE(dash_view_team,     0)         AS dash_view_team,
                     COALESCE(dash_view_products, 0)         AS dash_view_products,
                     COALESCE(dash_view_profit,   0)         AS dash_view_profit,
                     COALESCE(dash_view_recent,   0)         AS dash_view_recent
                FROM client_users
-              WHERE id = ? AND client_id = ? LIMIT 1'
+              WHERE id = ? AND client_id = ? LIMIT 1"
         );
         $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
         $row = $st->fetch() ?: [];
@@ -123,6 +136,7 @@ function current_user_permissions(): array
         'can_create_orders'          => $b('can_create_orders'),
         'can_view_all_customer_jobs' => $b('can_view_all_customer_jobs'),
         'can_view_costs'             => $b('can_view_costs'),
+        'can_view_fittings_only'     => $b('can_view_fittings_only'),
         'dash_view_revenue'          => $b('dash_view_revenue'),
         'dash_view_team'             => $b('dash_view_team'),
         'dash_view_products'         => $b('dash_view_products'),
