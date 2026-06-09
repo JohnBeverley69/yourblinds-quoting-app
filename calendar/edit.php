@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
+require __DIR__ . '/../_partials/bookable_users.php';
 
 requireLogin();
 
@@ -77,15 +78,14 @@ $f = [
 $error        = null;
 $conflictWarn = null;   // soft double-booking warning (overridable)
 
-// Bookable users: anyone active belonging to this client.
-$usersStmt = db()->prepare(
-    'SELECT id, full_name, role
-       FROM client_users
-      WHERE client_id = ? AND active = 1
-      ORDER BY full_name'
+// Bookable users — scoped to the appointment's kind: a fitting offers
+// 'fitter', a measure offers 'sales'. The currently-assigned user is always
+// kept in the list so an existing assignment is never silently dropped.
+$bookableUsers = bookable_users_for_kind(
+    (int) $clientId,
+    (string) ($appt['appt_kind'] ?? 'measure'),
+    (int) ($appt['client_user_id'] ?? 0)
 );
-$usersStmt->execute([$clientId]);
-$bookableUsers = $usersStmt->fetchAll();
 
 // Quotes available for linking. Most-recent first, capped at 200 —
 // covers small/medium tenants; bigger ones get the search box below
