@@ -32,6 +32,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
 
@@ -66,18 +67,24 @@ $showAll = !empty($_GET['all']);   // override → ignore the date window
 // For restricted users it's forced on anyway via the WHERE below.
 $mineOnly = !empty($_GET['mine']);
 
+// Column colours come from the tenant's traffic-light palette (Settings →
+// Status colours), so the pipeline matches the calendar and orders list.
+// 'fitted' = materials installed, awaiting invoice — a critical stage that
+// was missing; without it, installed-but-not-invoiced jobs were
+// indistinguishable from ones still awaiting materials.
+$plPalette = job_client_palette($clientId);
+$plCol = static function (string $key, string $label) use ($plPalette): array {
+    $bg = $plPalette[$key] ?? '#2563eb';
+    return [$label, $bg, job_status_text_colour($bg)];
+};
 $columns = [
-    'draft'    => ['Draft',     '#fef3c7', '#92400e'],
-    'sent'     => ['Sent',      '#fed7aa', '#9a3412'],
-    'accepted' => ['Accepted',  '#bbf7d0', '#166534'],
-    'ordered'  => ['Ordered',   '#bfdbfe', '#1e3a8a'],
-    // 'fitted' = materials installed, awaiting invoice. Critical
-    // stage that was missing — without it, "ordered" jobs that
-    // had been installed but not yet invoiced were
-    // indistinguishable from ones still awaiting materials.
-    'fitted'   => ['Fitted',    '#a7f3d0', '#065f46'],
-    'invoiced' => ['Invoiced',  '#ddd6fe', '#5b21b6'],
-    'paid'     => ['Paid',      '#d1fae5', '#065f46'],
+    'draft'    => $plCol('draft',    'Draft'),
+    'sent'     => $plCol('sent',     'Sent'),
+    'accepted' => $plCol('accepted', 'Accepted'),
+    'ordered'  => $plCol('ordered',  'Ordered'),
+    'fitted'   => $plCol('fitted',   'Fitted'),
+    'invoiced' => $plCol('invoiced', 'Invoiced'),
+    'paid'     => $plCol('paid',     'Paid'),
 ];
 // 'declined' is a terminal state — surfaced via a filter chip, not
 // a column. Keeping it out of the kanban stops dead leads from
@@ -390,7 +397,7 @@ $ageOf = static function (?string $ts): string {
                     <div class="pl-col">
                         <div class="pl-col-head">
                             <span class="pl-col-name"
-                                  style="background:<?= $bg ?>;color:<?= $fg ?>">
+                                  style="background:<?= e($bg) ?>;color:<?= e($fg) ?>">
                                 <?= e($label) ?>
                             </span>
                             <div class="pl-col-meta">
