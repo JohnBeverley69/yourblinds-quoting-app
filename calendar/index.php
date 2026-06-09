@@ -126,7 +126,7 @@ if (!$canViewAll) {
 if ($mineOnly) {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.quote_id, a.access_note,
+                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
@@ -147,7 +147,7 @@ if ($mineOnly) {
 } else {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.quote_id, a.access_note,
+                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
@@ -483,6 +483,15 @@ $activeNav = 'calendar';
            quote override on completed). */
         .cal-appt.from-quote.status-booked { background: #7c3aed; }
 
+        /* Measure vs fitting. The card colour shows the job STAGE; this dark
+           outline marks FITTINGS (the install visits) so they stand apart from
+           measure/survey visits at a glance. Measures have no outline. */
+        .cal-appt.is-fitting {
+            outline: 2px solid #111827;
+            outline-offset: -2px;
+        }
+        [data-theme="dark"] .cal-appt.is-fitting { outline-color: #f9fafb; }
+
         /* Quick "access note" marker. A small 📝 on every card to add/edit a
            note; when a note exists the card gets a bold amber left bar so it's
            obvious at a glance, and the marker goes full-colour. */
@@ -746,17 +755,19 @@ $activeNav = 'calendar';
                 </div>
                 <div class="cal-legend" aria-label="Status colours">
                     <?php
-                        // Legend is generated from the same palette the cards use,
-                        // so recolouring a stage never drifts out of sync. Only the
-                        // fitting/job stages appear on the dated calendar — the
-                        // quote-side stages live on the orders list.
+                        // Legend generated from the same palette the cards use, so
+                        // recolouring a stage never drifts out of sync. The calendar
+                        // now shows the whole pipeline: a MEASURE entry walks the
+                        // quote stages, a FITTING entry the install stages.
                         $legendLabels = job_status_labels();
-                        $legendStages = job_status_groups()['Appointments & job'] ?? [];
-                        foreach ($legendStages as $stageKey):
+                        foreach ($legendLabels as $stageKey => $stageLbl):
                             $swatch = $stagePalette[$stageKey] ?? '#2563eb';
                     ?>
-                        <span><i style="background:<?= e($swatch) ?>"></i> <?= e($legendLabels[$stageKey] ?? $stageKey) ?></span>
+                        <span><i style="background:<?= e($swatch) ?>"></i> <?= e($stageLbl) ?></span>
                     <?php endforeach; ?>
+                    <span title="Fittings carry a dark outline; measures don't.">
+                        <i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting
+                    </span>
                 </div>
             </div>
 
@@ -814,16 +825,20 @@ $activeNav = 'calendar';
                         <?php if ($appts): ?>
                             <div class="cal-appts">
                                 <?php foreach ($appts as $a): ?>
-                                    <?php $noteTxt = trim((string) ($a['access_note'] ?? '')); ?>
-                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?>"
-                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette)) ?>"
+                                    <?php
+                                        $noteTxt  = trim((string) ($a['access_note'] ?? ''));
+                                        $apptKind = (string) ($a['appt_kind'] ?? 'measure');
+                                        $isFit    = $apptKind === 'fitting';
+                                    ?>
+                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?><?= $isFit ? ' is-fitting' : ' is-measure' ?>"
+                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind)) ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
                                        <?php if (!empty($a['quote_id'])): ?>
                                            data-quote-id="<?= (int) $a['quote_id'] ?>"
                                        <?php endif; ?>
-                                       title="<?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
+                                       title="<?= $isFit ? 'Fitting' : 'Measure' ?>: <?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
                                         <span class="cal-appt-note" role="button" tabindex="0"
@@ -876,17 +891,22 @@ $activeNav = 'calendar';
     // so cards re-rendered by the 15s poll colour identically to the server
     // render — single source of truth emitted from PHP.
     var STAGE_PALETTE = <?= json_encode($stagePalette, JSON_UNESCAPED_SLASHES) ?>;
-    function jobStage(apptStatus, quoteStatus) {
+    function jobStage(apptStatus, quoteStatus, apptKind) {
         if (apptStatus === 'cancelled') return 'cancelled';
         if (apptStatus === 'no_show')   return 'no_show';
-        if (quoteStatus === 'fitted' || quoteStatus === 'invoiced' || quoteStatus === 'paid') return quoteStatus;
-        // No linked quote = a booked appointment (measure/survey), not a fitting.
-        if (quoteStatus === null || quoteStatus === undefined || quoteStatus === '') return 'appointment_booked';
-        if (apptStatus === 'completed') return 'fitted';
-        return 'booked';
+        var qs = quoteStatus || '';
+        if (apptKind === 'fitting') {
+            if (qs === 'fitted' || qs === 'invoiced' || qs === 'paid') return qs;
+            if (apptStatus === 'completed') return 'fitted';
+            return 'booked';   // fitting booked
+        }
+        // Measure / survey visit — follows the quote through its early life.
+        if (qs === '') return 'appointment_booked';
+        if (['draft','sent','accepted','declined','ordered','fitted','invoiced','paid'].indexOf(qs) !== -1) return qs;
+        return 'appointment_booked';
     }
-    function jobStageColour(apptStatus, quoteStatus) {
-        return STAGE_PALETTE[jobStage(apptStatus, quoteStatus)] || '#2563eb';
+    function jobStageColour(apptStatus, quoteStatus, apptKind) {
+        return STAGE_PALETTE[jobStage(apptStatus, quoteStatus, apptKind)] || '#2563eb';
     }
 
     var pendingTray  = document.getElementById('pending-tray');
@@ -1089,17 +1109,20 @@ $activeNav = 'calendar';
                     : '';
                 var note       = a.access_note || '';
                 var hasNoteCls = note ? ' has-note' : '';
+                var kind       = a.appt_kind || 'measure';
+                var kindCls    = kind === 'fitting' ? ' is-fitting' : ' is-measure';
+                var kindLabel  = kind === 'fitting' ? 'Fitting' : 'Measure';
                 var noteHtml   = '<span class="cal-appt-note" role="button" tabindex="0"'
                       + ' data-id="' + a.id + '"'
                       + ' data-note="' + escapeAttr(note) + '"'
                       + ' title="' + escapeAttr(note || 'Add a note') + '"'
                       + ' aria-label="' + (note ? 'Edit note' : 'Add note') + '">📝</span>';
-                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + '"'
-                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status)) + '"'
+                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + kindCls + '"'
+                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status, kind)) + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
-                     +  ' title="' + escapeAttr(a.title + ' — ' + a.status + (note ? ' — ' + note : '')) + '">'
+                     +  ' title="' + escapeAttr(kindLabel + ': ' + a.title + ' — ' + a.status + (note ? ' — ' + note : '')) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
                      +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
                      +    noteHtml

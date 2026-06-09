@@ -151,28 +151,44 @@ if (!function_exists('job_status_defaults')) {
     }
 
     /**
-     * Map a calendar appointment to one pipeline status (its "stage").
-     * Cancel / no-show on the appointment always win; otherwise the quote's
-     * own fitted/invoiced/paid status carries through. An appointment with no
-     * linked quote is a measure/survey visit — its own "Appointment booked"
-     * stage; once it's tied to a quote it's a fitting (booked → fitted).
+     * Map a calendar appointment to one pipeline status (its "stage"), aware of
+     * whether it's the MEASURE visit or the FITTING — the two track different
+     * halves of the job:
+     *
+     *   measure  : Appointment booked (no quote) → draft → sent → accepted /
+     *              declined / ordered, following the linked quote's life.
+     *   fitting  : Fitting booked (accepted/ordered, scheduled) → fitted →
+     *              invoiced → paid.
+     *
+     * Cancel / no-show on the appointment always win.
      */
-    function job_stage(string $apptStatus, ?string $quoteStatus): string
+    function job_stage(string $apptStatus, ?string $quoteStatus, string $apptKind = 'measure'): string
     {
         if ($apptStatus === 'cancelled') return 'cancelled';
         if ($apptStatus === 'no_show')   return 'no_show';
-        if (in_array($quoteStatus, ['fitted', 'invoiced', 'paid'], true)) {
-            return (string) $quoteStatus;
+
+        $qs = (string) ($quoteStatus ?? '');
+
+        if ($apptKind === 'fitting') {
+            // The install visit. Accepted/ordered read as "fitting booked"
+            // (scheduled, awaiting the fit); then it tracks the job to paid.
+            if (in_array($qs, ['fitted', 'invoiced', 'paid'], true)) return $qs;
+            if ($apptStatus === 'completed') return 'fitted';
+            return 'booked';
         }
-        // No linked quote = a booked appointment (measure/survey), not a fitting.
-        if ($quoteStatus === null || $quoteStatus === '') return 'appointment_booked';
-        if ($apptStatus === 'completed') return 'fitted';
-        return 'booked';
+
+        // Measure / survey visit — follows the quote through its early life.
+        if ($qs === '') return 'appointment_booked';   // booked, no quote yet
+        if (in_array($qs, ['draft', 'sent', 'accepted', 'declined', 'ordered',
+                           'fitted', 'invoiced', 'paid'], true)) {
+            return $qs;
+        }
+        return 'appointment_booked';
     }
 
     /** Calendar card colour for an appointment, from a resolved palette. */
-    function job_stage_colour(string $apptStatus, ?string $quoteStatus, ?array $palette = null): string
+    function job_stage_colour(string $apptStatus, ?string $quoteStatus, ?array $palette = null, string $apptKind = 'measure'): string
     {
-        return job_status_colour(job_stage($apptStatus, $quoteStatus), $palette);
+        return job_status_colour(job_stage($apptStatus, $quoteStatus, $apptKind), $palette);
     }
 }
