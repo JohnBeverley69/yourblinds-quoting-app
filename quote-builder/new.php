@@ -235,6 +235,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'UPDATE appointments SET quote_id = ?
                       WHERE id = ? AND client_id = ? AND quote_id IS NULL'
                 )->execute([$newId, $appointmentId, $clientId]);
+            } else {
+                // No prior appointment — this is a walk-up / on-site quote. Give
+                // it a measure entry (today, assigned to the creator) so it
+                // appears on the consoles as a new customer with a chain to follow.
+                qb_create_measure_from_quote($pdo, $newId, (int) $user['user_id']);
             }
 
             $pdo->commit();
