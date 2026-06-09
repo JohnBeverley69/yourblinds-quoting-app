@@ -740,6 +740,18 @@ $activeNav = 'dashboard';
             <?php unset($_SESSION['flash_error']); ?>
         <?php endif; ?>
 
+        <?php
+            // Joke of the Day — per-client toggle (migrate_joke_toggle.php),
+            // default on. Guarded so it still shows pre-migration.
+            $jokeEnabled = true;
+            try {
+                $jSt = db()->prepare('SELECT COALESCE(feature_joke_of_day, 1) FROM client_settings WHERE client_id = ? LIMIT 1');
+                $jSt->execute([$clientId]);
+                $jVal = $jSt->fetchColumn();
+                if ($jVal !== false) $jokeEnabled = ((int) $jVal) === 1;
+            } catch (Throwable $e) { /* column not present — keep default on */ }
+        ?>
+        <?php if ($jokeEnabled): ?>
         <?php /* Joke of the Day — a bit of fun. Hidden by default; the JS shows
                  it once a day (dismissible), so a fresh page after dismissing
                  doesn't pop it back up. Staff-only (it's on the dashboard). */ ?>
@@ -806,6 +818,7 @@ $activeNav = 'dashboard';
             });
         })();
         </script>
+        <?php endif; /* $jokeEnabled */ ?>
 
         <div class="period-bar">
             <?php
