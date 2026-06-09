@@ -690,9 +690,9 @@ $activeNav = 'products';
                 </fieldset>
 
                 <?php if (!empty($choice['image_path'])): ?>
-                    <?php /* Submit button INSIDE the main form (not a nested <form> — that
-                             is invalid HTML and silently closes the main form early, which
-                             killed "Save changes" on any choice that already had an image).
+                    <?php /* Submit button INSIDE the main form. A nested form element here is
+                             invalid HTML and silently closes the main form early, which killed
+                             "Save changes" on any choice that already had an image.
                              name=_action routes this submit to the remove-image handler;
                              formnovalidate so the empty-label guard can't block a removal. */ ?>
                     <div style="margin:0 0 1rem">
