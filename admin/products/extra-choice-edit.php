@@ -677,7 +677,10 @@ $activeNav = 'products';
                     </p>
                     <?php if (!empty($choice['image_path'])): ?>
                         <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem">
-                            <img src="<?= e((string) $choice['image_path']) ?>" alt="Current thumbnail"
+                            <?php /* asset() appends ?v=<file-mtime> so a re-upload (same
+                                     filename, new contents) busts the browser's image cache —
+                                     otherwise the old/broken thumbnail lingers until a hard refresh. */ ?>
+                            <img src="<?= e(asset((string) $choice['image_path'])) ?>" alt="Current thumbnail"
                                  style="max-height:80px;max-width:160px;background:#fff;padding:0.25rem;border:1px solid var(--border);border-radius:6px">
                             <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Current thumbnail. Upload a new file below to replace, or use the Remove button.
