@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/appointment_conflict.php';
 
 requireLogin();
 
@@ -105,11 +106,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Duration must be between 5 and 1440 minutes.';
     } else {
         // assigned_to must be a real user belonging to this client (or 0/none).
-        $assignedId = null;
+        $assignedId   = null;
+        $assigneeName = '';
         if ($f['assigned_to'] > 0) {
             foreach ($bookableUsers as $u) {
                 if ((int) $u['id'] === $f['assigned_to']) {
-                    $assignedId = (int) $u['id'];
+                    $assignedId   = (int) $u['id'];
+                    $assigneeName = (string) $u['full_name'];
                     break;
                 }
             }
@@ -125,6 +128,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ?: DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']);
             $timeStored = $timeObj->format('H:i:s');
 
+            // Double-booking guard — a salesperson can't be in two places at
+            // once. Only applies when an assignee is set.
+            $clash = appointment_find_conflict(
+                db(), (int) $clientId, $assignedId,
+                $f['appointment_date'], $timeStored, (int) $f['duration_minutes']
+            );
+        }
+
+        if ($error === null && isset($clash) && $clash !== null) {
+            $error = appointment_conflict_message($clash, $assigneeName);
+        }
+
+        if ($error === null) {
             $billingDifferent = $f['different_billing_address'] === 1;
 
             $pdo = db();

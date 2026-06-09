@@ -26,6 +26,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/appointment_conflict.php';
 
 requireLogin();
 
@@ -100,6 +101,35 @@ if ($dateRaw !== '') {
 }
 
 $pdo = db();
+
+// Double-booking guard — dragging onto a date can't put an assigned person
+// in two places at once. Only relevant when actually scheduling to a date
+// (unschedule → pending tray is always fine). Look up this appointment's
+// own assignee / time / duration, then check the target date for an overlap.
+if ($newDate !== null) {
+    $self = $pdo->prepare(
+        'SELECT client_user_id, appointment_time, duration_minutes
+           FROM appointments WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $self->execute([$apptId, $clientId]);
+    $selfRow = $self->fetch();
+    if ($selfRow && $selfRow['client_user_id'] !== null) {
+        $clash = appointment_find_conflict(
+            $pdo, $clientId, (int) $selfRow['client_user_id'],
+            $newDate, (string) $selfRow['appointment_time'],
+            (int) ($selfRow['duration_minutes'] ?? 60), $apptId
+        );
+        if ($clash !== null) {
+            // Pull the assignee's name for a friendly message.
+            $an = $pdo->prepare('SELECT full_name FROM client_users WHERE id = ? LIMIT 1');
+            $an->execute([(int) $selfRow['client_user_id']]);
+            $assigneeName = (string) ($an->fetchColumn() ?: '');
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'error' => appointment_conflict_message($clash, $assigneeName)]);
+            exit;
+        }
+    }
+}
 
 try {
     // Tenant scope check + only-touch-it-if-it-belongs-to-us.
