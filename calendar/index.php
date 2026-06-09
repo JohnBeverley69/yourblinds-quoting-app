@@ -1147,10 +1147,11 @@ $activeNav = 'calendar';
     if (!document.hidden) startPolling();
 
     // -- AJAX --------------------------------------------------------
-    function reschedule(id, date) {
+    function reschedule(id, date, override) {
         var fd = new FormData();
         fd.append('appointment_id',  id);
         fd.append('appointment_date', date);
+        if (override) fd.append('override', '1');
 
         fetch(endpoint, {
             method: 'POST',
@@ -1158,16 +1159,26 @@ $activeNav = 'calendar';
             headers: { 'X-CSRF-Token': csrfToken },
             credentials: 'same-origin'
         }).then(function (r) {
-            return r.json().then(function (data) {
-                if (!data.ok) throw new Error(data.error || 'Save failed.');
-                return data;
-            });
-        }).then(function () {
-            // Pull the freshest state from the server (also picks up
-            // anything any other open tab / colleague has done in
-            // between). Surgical DOM update via the same path the
-            // polling loop uses — no full page reload, no flash.
-            refreshAll();
+            return r.json();
+        }).then(function (data) {
+            if (data.ok) {
+                // Pull the freshest state from the server (also picks up
+                // anything any other open tab / colleague has done in
+                // between). Surgical DOM update via the same path the
+                // polling loop uses — no full page reload, no flash.
+                refreshAll();
+                return;
+            }
+            // Overridable double-booking warning — confirm, then retry.
+            if (data.conflict && !override) {
+                if (confirm((data.error || 'Double-booking.') + '\n\nBook anyway?')) {
+                    reschedule(id, date, true);
+                } else {
+                    refreshAll();   // user declined — snap the card back to truth
+                }
+                return;
+            }
+            throw new Error(data.error || 'Save failed.');
         }).catch(function (err) {
             alert(err.message || 'Could not reschedule.');
         });

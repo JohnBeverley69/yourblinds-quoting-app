@@ -74,7 +74,8 @@ $f = [
     'notes'                     => (string) ($appt['notes'] ?? ''),
 ];
 
-$error = null;
+$error        = null;
+$conflictWarn = null;   // soft double-booking warning (overridable)
 
 // Bookable users: anyone active belonging to this client.
 $usersStmt = db()->prepare(
@@ -199,11 +200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
         }
 
-        if ($error === null && isset($clash) && $clash !== null) {
-            $error = appointment_conflict_message($clash, $assigneeName);
+        // Soft double-booking warning — overridable via "Save anyway".
+        if ($error === null && isset($clash) && $clash !== null && empty($_POST['override_conflict'])) {
+            $conflictWarn = appointment_conflict_message($clash, $assigneeName);
         }
 
-        if ($error === null) {
+        if ($error === null && $conflictWarn === null) {
             $billingDifferent = $f['different_billing_address'] === 1;
 
             $u = db()->prepare(
@@ -350,6 +352,21 @@ $activeNav = 'calendar';
         <section class="section">
             <form method="post" action="/calendar/edit.php?id=<?= (int) $id ?>" class="form" novalidate>
                 <?= csrf_field() ?>
+
+                <?php if ($conflictWarn !== null): ?>
+                    <div role="alert" style="background:#fffbeb;border:1px solid #fde68a;
+                         color:#92400e;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;
+                         font-size:0.9375rem">
+                        &#9888;&#65039; <?= e($conflictWarn) ?>
+                        <div style="margin-top:0.625rem">
+                            <button type="submit" name="override_conflict" value="1"
+                                    class="btn btn-primary"
+                                    style="background:#d97706;border-color:#d97706">
+                                Save anyway
+                            </button>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <fieldset class="form-fieldset">
                     <legend>Customer</legend>
