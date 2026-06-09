@@ -292,7 +292,9 @@ if ($extraIds) {
             'system_id'  => $r['system_id'] !== null ? (int) $r['system_id'] : null,
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
-            'image_url'  => !empty($r['image_path']) ? (string) $r['image_path'] : null,
+            // asset() adds ?v=<mtime> so a re-uploaded thumbnail (same path)
+            // isn't served stale from the browser cache in the quote builder.
+            'image_url'  => !empty($r['image_path']) ? asset((string) $r['image_path']) : null,
             // bands = list of band_codes this choice applies to.
             // Empty list = "applies to every band on the product".
             // Non-empty = "only when the picked fabric is on one of
