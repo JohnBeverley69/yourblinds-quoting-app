@@ -104,6 +104,7 @@ if ($canViewAll) {
 $apStmt = $pdo->prepare(
     "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
             a.status, a.appt_kind, a.quote_id, a.client_user_id,
+            a.has_issue, a.issue_note,
             a.installation_town, a.installation_postcode,
             c.name      AS customer_name,
             c.phone     AS customer_phone,
@@ -131,6 +132,7 @@ try {
     $fallback = $pdo->prepare(
         "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
                 a.status, a.quote_id, a.client_user_id,
+                a.has_issue, a.issue_note,
                 a.installation_town, a.installation_postcode,
                 c.name      AS customer_name,
                 c.phone     AS customer_phone,
@@ -190,6 +192,7 @@ $statusColour = static function (string $s): array {
 // we wash the background with a tint of the stage colour and use the solid
 // colour for the left accent, so the hue matches without swamping the text.
 $stagePalette = job_client_palette($clientId);
+$issueColour  = $stagePalette['issue'] ?? '#e11d48';
 
 // Quote status → 5-segment progress bar. Mirrors what Once shows
 // as the stacked horizontal bars on each card: a glanceable
@@ -568,6 +571,10 @@ $activeNav = 'calendar';
                                 $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                                 $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
                                 $stageTint = job_status_tint($stageClr);
+                                $isIssue   = !empty($appt['has_issue']);
+                                $issueTxt  = trim((string) ($appt['issue_note'] ?? ''));
+                                $dayOutline = $isIssue ? ';outline:2px solid ' . $issueColour . ';outline-offset:-2px'
+                                            : ($apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '');
 
                                 // Build address: prefer installation_* fields,
                                 // fall back to customer's home address.
@@ -632,14 +639,15 @@ $activeNav = 'calendar';
                                     gives us the navigate-on-click behaviour
                                     without the nesting trap.
                                 -->
-                                <div class="appt-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?>"
+                                <div class="appt-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?>"
                                      data-href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
+                                     title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                      style="top:<?= $top ?>px;
                                             height:<?= $height ?>px;
                                             background:<?= e($stageTint) ?>;
                                             border-left-color:<?= e($stageClr) ?>;
                                             color:var(--text-primary);
-                                            --prog-clr:<?= e($prog['colour']) ?><?= $apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '' ?>;">
+                                            --prog-clr:<?= e($prog['colour']) ?><?= e($dayOutline) ?>;">
                                     <div class="ac-time">
                                         <?= e($timeLabel) ?>
                                         <?php if ($qref !== ''): ?>
@@ -647,7 +655,7 @@ $activeNav = 'calendar';
                                         <?php endif; ?>
                                     </div>
                                     <div class="ac-title <?= $hasOnlyHeading ? 'ac-placeholder' : '' ?>">
-                                        <?= e($heading) ?>
+                                        <?= $isIssue ? '⚠️ ' : '' ?><?= e($heading) ?>
                                     </div>
                                     <?php if ($custName !== '' && $title !== ''): ?>
                                         <div class="ac-desc"><?= e($title) ?></div>

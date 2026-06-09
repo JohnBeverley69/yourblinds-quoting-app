@@ -14,6 +14,7 @@ $isAdmin  = $user['role'] === 'admin';
 // Resolved traffic-light palette for this tenant (defaults + their overrides).
 // Shared by the card render, the legend, and the live-refresh JS below.
 $stagePalette = job_client_palette((int) $clientId);
+$issueColour  = $stagePalette['issue'] ?? '#e11d48';
 
 // ---------------------------------------------------------------------------
 // Resolve the date range being viewed.
@@ -127,6 +128,7 @@ if ($mineOnly) {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                 a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
+                a.has_issue, a.issue_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
@@ -148,6 +150,7 @@ if ($mineOnly) {
     $stmt = db()->prepare(
         'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                 a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
+                a.has_issue, a.issue_note,
                 a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
@@ -169,9 +172,16 @@ if ($mineOnly) {
 // measure/sales visits are hidden from their calendar.
 $fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
 
+// ?issue=1 → show only flagged-issue jobs. $issueCount is the total in view
+// (counted before the filter) so the toggle can show a badge.
+$issueOnly  = isset($_GET['issue']) && (string) $_GET['issue'] === '1';
+$issueCount = 0;
+
 $byDate = [];
 foreach ($stmt->fetchAll() as $row) {
     if ($fittingsOnly && (string) ($row['appt_kind'] ?? 'measure') !== 'fitting') continue;
+    if (!empty($row['has_issue'])) $issueCount++;
+    if ($issueOnly && empty($row['has_issue'])) continue;
     $byDate[$row['appointment_date']][] = $row;
 }
 
@@ -319,6 +329,16 @@ $activeNav = 'calendar';
             height: 10px;
             border-radius: 2px;
         }
+        .cal-issue-toggle {
+            display: inline-flex; align-items: center; gap: 0.375rem;
+            text-decoration: none; color: var(--text-muted);
+            border: 1px solid transparent; border-radius: 999px;
+            padding: 0.0625rem 0.5rem; cursor: pointer; font-size: 0.8125rem;
+        }
+        .cal-issue-toggle i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+        .cal-issue-toggle:hover { border-color: var(--border-strong); color: var(--text-primary); }
+        .cal-issue-toggle.is-active { background: var(--issue-clr, #e11d48); color: #fff; border-color: transparent; }
+        .cal-issue-toggle.is-active i { outline-color: #fff !important; }
         .cal-grid {
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -496,6 +516,26 @@ $activeNav = 'calendar';
             outline-offset: -2px;
         }
         [data-theme="dark"] .cal-appt.is-fitting { outline-color: #f9fafb; }
+
+        /* Issue flag — a job that's gone sideways. A red ⚠ marker (full-colour
+           when flagged) plus a red ring that OVERRIDES the fitting outline, so a
+           problem job jumps out whatever stage/kind it is. The stage colour
+           underneath still tells you where it sits in the chain. */
+        .cal-appt.is-issue {
+            outline: 2px solid var(--issue-clr, #e11d48) !important;
+            outline-offset: -2px;
+        }
+        .cal-appt-issue {
+            flex: 0 0 auto;
+            margin-left: 0.2rem;
+            font-size: 0.72rem;
+            line-height: 1;
+            cursor: pointer;
+            opacity: 0.4;
+            filter: grayscale(1);
+        }
+        .cal-appt-issue:hover, .cal-appt-issue:focus { opacity: 1; filter: none; outline: none; }
+        .cal-appt.is-issue .cal-appt-issue { opacity: 1; filter: none; }
 
         /* Quick "access note" marker. A small 📝 on every card to add/edit a
            note; when a note exists the card gets a bold amber left bar so it's
@@ -766,6 +806,7 @@ $activeNav = 'calendar';
                         // quote stages, a FITTING entry the install stages.
                         $legendLabels = job_status_labels();
                         foreach ($legendLabels as $stageKey => $stageLbl):
+                            if ($stageKey === 'issue') continue;   // a flag, shown separately
                             $swatch = $stagePalette[$stageKey] ?? '#2563eb';
                     ?>
                         <span><i style="background:<?= e($swatch) ?>"></i> <?= e($stageLbl) ?></span>
@@ -773,6 +814,18 @@ $activeNav = 'calendar';
                     <span title="Fittings carry a dark outline; measures don't.">
                         <i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting
                     </span>
+                    <?php
+                        // Issues filter — also the legend entry for the red ring.
+                        $issueHref = '/calendar/index.php?week=' . urlencode($anchorMonday->format('Y-m-d'))
+                            . ($mineOnly ? '&mine=1' : '')
+                            . ($issueOnly ? '' : '&issue=1');
+                    ?>
+                    <a href="<?= e($issueHref) ?>" class="cal-issue-toggle<?= $issueOnly ? ' is-active' : '' ?>"
+                       style="--issue-clr:<?= e($issueColour) ?>"
+                       title="<?= $issueOnly ? 'Showing only flagged issues — click to show all jobs' : 'Show only flagged-issue jobs' ?>">
+                        <i style="background:transparent;outline:2px solid var(--issue-clr);outline-offset:-2px"></i>
+                        &#9888;&#65039; Issues<?= $issueCount > 0 ? ' (' . (int) $issueCount . ')' : '' ?>
+                    </a>
                 </div>
             </div>
 
@@ -834,18 +887,26 @@ $activeNav = 'calendar';
                                         $noteTxt  = trim((string) ($a['access_note'] ?? ''));
                                         $apptKind = (string) ($a['appt_kind'] ?? 'measure');
                                         $isFit    = $apptKind === 'fitting';
+                                        $isIssue  = !empty($a['has_issue']);
+                                        $issueTxt = trim((string) ($a['issue_note'] ?? ''));
                                     ?>
-                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?><?= $isFit ? ' is-fitting' : ' is-measure' ?>"
-                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind)) ?>"
+                                    <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?><?= $isFit ? ' is-fitting' : ' is-measure' ?><?= $isIssue ? ' is-issue' : '' ?>"
+                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind)) ?><?= $isIssue ? ';--issue-clr:' . e($issueColour) : '' ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
                                        <?php if (!empty($a['quote_id'])): ?>
                                            data-quote-id="<?= (int) $a['quote_id'] ?>"
                                        <?php endif; ?>
-                                       title="<?= $isFit ? 'Fitting' : 'Measure' ?>: <?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
+                                       title="<?= $isFit ? 'Fitting' : 'Measure' ?>: <?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $isIssue ? ' &mdash; ⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
+                                        <span class="cal-appt-issue" role="button" tabindex="0"
+                                              data-id="<?= (int) $a['id'] ?>"
+                                              data-issue="<?= $isIssue ? '1' : '0' ?>"
+                                              data-issue-note="<?= e($issueTxt) ?>"
+                                              title="<?= $isIssue ? ($issueTxt !== '' ? e($issueTxt) : 'Flagged issue') : 'Flag an issue' ?>"
+                                              aria-label="<?= $isIssue ? 'Edit issue' : 'Flag issue' ?>">&#9888;&#65039;</span>
                                         <span class="cal-appt-note" role="button" tabindex="0"
                                               data-id="<?= (int) $a['id'] ?>"
                                               data-note="<?= e($noteTxt) ?>"
@@ -885,6 +946,20 @@ $activeNav = 'calendar';
         <div id="note-modal-err" class="note-modal-err" hidden></div>
     </div>
 </div>
+
+<div id="issue-modal" class="note-modal" hidden>
+    <div class="note-modal-box" role="dialog" aria-modal="true" aria-labelledby="issue-modal-title">
+        <h3 id="issue-modal-title">⚠️ Flag an issue</h3>
+        <p class="note-modal-sub">What's the problem? &mdash; e.g. &ldquo;wrong colour delivered&rdquo;, &ldquo;no access&rdquo;, &ldquo;remake needed&rdquo;.</p>
+        <textarea id="issue-modal-text" rows="3" maxlength="280" placeholder="Describe the issue (optional)…"></textarea>
+        <div class="note-modal-actions">
+            <button type="button" id="issue-modal-save" class="btn btn-primary">Flag as issue</button>
+            <button type="button" id="issue-modal-clear" class="btn btn-secondary">Clear issue</button>
+            <button type="button" id="issue-modal-cancel" class="btn btn-secondary">Cancel</button>
+        </div>
+        <div id="issue-modal-err" class="note-modal-err" hidden></div>
+    </div>
+</div>
 <script>
 (function () {
     'use strict';
@@ -896,6 +971,7 @@ $activeNav = 'calendar';
     // so cards re-rendered by the 15s poll colour identically to the server
     // render — single source of truth emitted from PHP.
     var STAGE_PALETTE = <?= json_encode($stagePalette, JSON_UNESCAPED_SLASHES) ?>;
+    var ISSUE_CLR = STAGE_PALETTE['issue'] || '#e11d48';
     function jobStage(apptStatus, quoteStatus, apptKind) {
         if (apptStatus === 'cancelled') return 'cancelled';
         if (apptStatus === 'no_show')   return 'no_show';
@@ -1003,7 +1079,8 @@ $activeNav = 'calendar';
     var rangeEnd     = '<?= e($rangeEnd->format('Y-m-d')) ?>';
     var pollEndpoint = '/calendar/pending.php?start=' + encodeURIComponent(rangeStart)
                      + '&end=' + encodeURIComponent(rangeEnd)
-        + (window.location.search.indexOf('mine=1') !== -1 ? '&mine=1' : '');
+        + (window.location.search.indexOf('mine=1') !== -1 ? '&mine=1' : '')
+        + (window.location.search.indexOf('issue=1') !== -1 ? '&issue=1' : '');
     var pollMs = 15000;
     var pollTimer = null;
     var lastPendingJson = null;
@@ -1117,19 +1194,30 @@ $activeNav = 'calendar';
                 var kind       = a.appt_kind || 'measure';
                 var kindCls    = kind === 'fitting' ? ' is-fitting' : ' is-measure';
                 var kindLabel  = kind === 'fitting' ? 'Fitting' : 'Measure';
+                var isIssue    = !!(a.has_issue && a.has_issue != 0);
+                var issueNote  = a.issue_note || '';
+                var issueCls   = isIssue ? ' is-issue' : '';
+                var issueStyle = isIssue ? ';--issue-clr:' + ISSUE_CLR : '';
+                var issueHtml  = '<span class="cal-appt-issue" role="button" tabindex="0"'
+                      + ' data-id="' + a.id + '"'
+                      + ' data-issue="' + (isIssue ? '1' : '0') + '"'
+                      + ' data-issue-note="' + escapeAttr(issueNote) + '"'
+                      + ' title="' + escapeAttr(isIssue ? (issueNote || 'Flagged issue') : 'Flag an issue') + '"'
+                      + ' aria-label="' + (isIssue ? 'Edit issue' : 'Flag issue') + '">⚠️</span>';
                 var noteHtml   = '<span class="cal-appt-note" role="button" tabindex="0"'
                       + ' data-id="' + a.id + '"'
                       + ' data-note="' + escapeAttr(note) + '"'
                       + ' title="' + escapeAttr(note || 'Add a note') + '"'
                       + ' aria-label="' + (note ? 'Edit note' : 'Add note') + '">📝</span>';
-                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + kindCls + '"'
-                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status, kind)) + '"'
+                html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + kindCls + issueCls + '"'
+                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status, kind)) + issueStyle + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
-                     +  ' title="' + escapeAttr(kindLabel + ': ' + a.title + ' — ' + a.status + (note ? ' — ' + note : '')) + '">'
+                     +  ' title="' + escapeAttr(kindLabel + ': ' + a.title + ' — ' + a.status + (isIssue ? ' — ⚠ ISSUE' + (issueNote ? ': ' + issueNote : '') : '') + (note ? ' — ' + note : '')) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
                      +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
+                     +    issueHtml
                      +    noteHtml
                      +    openOrderHtml
                      +  '</a>';
@@ -1270,6 +1358,66 @@ $activeNav = 'calendar';
         document.getElementById('note-modal-cancel').addEventListener('click', closeNote);
         noteModal.addEventListener('click', function (e) { if (e.target === noteModal) closeNote(); });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !noteModal.hidden) closeNote(); });
+    }
+
+    // -- Quick issue popover -----------------------------------------
+    var issueModal  = document.getElementById('issue-modal');
+    var issueText   = document.getElementById('issue-modal-text');
+    var issueErr    = document.getElementById('issue-modal-err');
+    var issueApptId = null;
+
+    function openIssue(id, note) {
+        issueApptId = id;
+        issueText.value = note || '';
+        issueErr.hidden = true;
+        issueModal.hidden = false;
+        issueText.focus();
+    }
+    function closeIssue() { if (issueModal) { issueModal.hidden = true; } issueApptId = null; }
+
+    function saveIssue(hasIssue, note) {
+        if (!issueApptId) return;
+        var fd = new FormData();
+        fd.append('appointment_id', issueApptId);
+        fd.append('has_issue', hasIssue ? '1' : '0');
+        fd.append('issue_note', note || '');
+        fetch('/calendar/save_issue.php', {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+              if (!data.ok) throw new Error(data.error || 'Save failed.');
+              closeIssue();
+              refreshAll();   // re-render cards so the flag/ring updates
+          }).catch(function (err) {
+              issueErr.textContent = err.message || 'Could not save issue.';
+              issueErr.hidden = false;
+          });
+    }
+
+    // Open on ⚠-marker click/tap — delegated for poll-rendered cards too.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cal-appt-issue');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openIssue(btn.getAttribute('data-id'), btn.getAttribute('data-issue-note') || '');
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var el = document.activeElement;
+        if (!el || !el.classList || !el.classList.contains('cal-appt-issue')) return;
+        e.preventDefault();
+        openIssue(el.getAttribute('data-id'), el.getAttribute('data-issue-note') || '');
+    });
+
+    if (issueModal) {
+        document.getElementById('issue-modal-save').addEventListener('click', function () { saveIssue(true, issueText.value); });
+        document.getElementById('issue-modal-clear').addEventListener('click', function () { saveIssue(false, ''); });
+        document.getElementById('issue-modal-cancel').addEventListener('click', closeIssue);
+        issueModal.addEventListener('click', function (e) { if (e.target === issueModal) closeIssue(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !issueModal.hidden) closeIssue(); });
     }
 })();
 </script>

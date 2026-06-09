@@ -60,6 +60,7 @@ $homeAddress = $homeParts ? implode(', ', $homeParts) : '';
 // ---------------------------------------------------------------------------
 $stmt = db()->prepare(
     'SELECT a.id, a.title, a.appointment_time, a.duration_minutes, a.status, a.appt_kind,
+            a.has_issue, a.issue_note,
             a.installation_address1, a.installation_address2,
             a.installation_town, a.installation_county, a.installation_postcode,
             c.name AS customer_name,
@@ -483,10 +484,15 @@ $activeNav = 'calendar';
                                 $stKind   = (string) ($a['appt_kind'] ?? 'measure');
                                 $stStage  = job_stage((string) $a['status'], $a['quote_status'] ?? null, $stKind);
                                 $stColour = $stagePalette[$stStage] ?? '#2563eb';
+                                $stIssue  = !empty($a['has_issue']);
+                                $stIssueClr = $stagePalette['issue'] ?? '#e11d48';
+                                $stOutline = $stIssue ? ';outline:2px solid ' . $stIssueClr . ';outline-offset:-2px'
+                                           : ($stKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '');
                             ?>
                             <span class="stop-status"
-                                  style="background:<?= e($stColour) ?>;color:<?= e(job_status_text_colour($stColour)) ?><?= $stKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '' ?>">
-                                <?= $stKind === 'fitting' ? '&#128295; ' : '' ?><?= e($stageLabels[$stStage] ?? ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
+                                  title="<?= $stIssue && trim((string) ($a['issue_note'] ?? '')) !== '' ? e((string) $a['issue_note']) : '' ?>"
+                                  style="background:<?= e($stColour) ?>;color:<?= e(job_status_text_colour($stColour)) ?><?= e($stOutline) ?>">
+                                <?= $stIssue ? '&#9888;&#65039; ' : ($stKind === 'fitting' ? '&#128295; ' : '') ?><?= e($stageLabels[$stStage] ?? ucfirst(str_replace('_', '-', (string) $a['status']))) ?>
                             </span>
                         </li>
                     <?php endforeach; ?>

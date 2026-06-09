@@ -38,8 +38,9 @@ if (!function_exists('job_status_defaults')) {
             'paid'      => '#475569',  // paid            (slate)
             'cancelled' => '#b91c1c',  // cancelled       (dark red)
             'no_show'   => '#9ca3af',  // no-show         (grey)
-        ];
-    }
+            'issue'     => '#e11d48',  // issue / problem (crimson) — an OVERLAY
+        ];                              //  flag, not a stage: shows as a ⚠ pill
+    }                                   //  + ring on top of the card's stage colour.
 
     /** Human label for each status. */
     function job_status_labels(): array
@@ -57,6 +58,7 @@ if (!function_exists('job_status_defaults')) {
             'paid'      => 'Paid',
             'cancelled' => 'Cancelled',
             'no_show'   => 'No-show',
+            'issue'     => 'Issue',
         ];
     }
 
@@ -66,6 +68,7 @@ if (!function_exists('job_status_defaults')) {
         return [
             'Quote stages'          => ['draft', 'sent', 'accepted', 'declined', 'ordered'],
             'Appointments & job'    => ['appointment_booked', 'booked', 'fitted', 'invoiced', 'paid', 'cancelled', 'no_show'],
+            'Flags'                 => ['issue'],
         ];
     }
 
