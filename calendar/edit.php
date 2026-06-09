@@ -73,6 +73,8 @@ $f = [
     'billing_county'            => (string) ($appt['billing_county'] ?? ''),
     'billing_postcode'          => (string) ($appt['billing_postcode'] ?? ''),
     'notes'                     => (string) ($appt['notes'] ?? ''),
+    'has_issue'                 => !empty($appt['has_issue']) ? 1 : 0,
+    'issue_note'                => (string) ($appt['issue_note'] ?? ''),
 ];
 
 $error        = null;
@@ -132,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
     foreach (array_keys($f) as $k) {
-        if ($k === 'different_billing_address') {
+        if ($k === 'different_billing_address' || $k === 'has_issue') {
             $f[$k] = !empty($_POST[$k]) ? 1 : 0;
         } elseif ($k === 'duration_minutes' || $k === 'assigned_to' || $k === 'quote_id') {
             $f[$k] = (int) ($_POST[$k] ?? 0);
@@ -252,6 +254,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id,
                 $clientId,
             ]);
+
+            // Issue flag + note on a small guarded UPDATE so editing still
+            // works on a schema where migrate_appointment_issue.php hasn't run.
+            try {
+                db()->prepare(
+                    'UPDATE appointments SET has_issue = ?, issue_note = ? WHERE id = ? AND client_id = ?'
+                )->execute([
+                    (int) $f['has_issue'],
+                    ($f['has_issue'] && trim((string) $f['issue_note']) !== '') ? trim((string) $f['issue_note']) : null,
+                    $id, $clientId,
+                ]);
+            } catch (Throwable $e) { /* columns not present yet — skip */ }
 
             $_SESSION['flash_success'] = 'Appointment updated.';
             header('Location: /calendar/view.php?id=' . $id);
@@ -490,6 +504,21 @@ $activeNav = 'calendar';
                         <div class="form-group">
                             <label for="notes">Notes</label>
                             <textarea id="notes" name="notes" rows="4"><?= e((string) $f['notes']) ?></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label style="display:inline-flex;align-items:center;gap:.4rem;font-weight:600;color:#be123c;">
+                                <input type="checkbox" name="has_issue" value="1" <?= !empty($f['has_issue']) ? 'checked' : '' ?>>
+                                &#9888;&#65039; Flag this job as having an issue
+                            </label>
+                            <textarea id="issue_note" name="issue_note" rows="2" maxlength="280"
+                                      placeholder="What's the problem? (optional) — e.g. wrong colour, no access, remake needed"
+                                      style="margin-top:0.5rem"><?= e((string) $f['issue_note']) ?></textarea>
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                                Flagged jobs show a red ⚠ ring on the calendar and appear in the Issues filter.
+                            </small>
                         </div>
                     </div>
                 </fieldset>

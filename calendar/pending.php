@@ -122,6 +122,7 @@ if ($first !== null && $last !== null) {
     $gridSql = $mineOnly
         ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
+                  a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name,
                   q.status AS quote_status
@@ -134,6 +135,7 @@ if ($first !== null && $last !== null) {
          ORDER BY a.appointment_date, a.appointment_time'
         : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
+                  a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name,
                   q.status AS quote_status
@@ -159,8 +161,10 @@ if ($first !== null && $last !== null) {
     };
 
     $fittingsOnly = !empty(current_user_permissions()['can_view_fittings_only']);
+    $issueOnly    = isset($_GET['issue']) && (string) $_GET['issue'] === '1';
     foreach ($gStmt->fetchAll() as $r) {
         if ($fittingsOnly && (string) ($r['appt_kind'] ?? 'measure') !== 'fitting') continue;
+        if ($issueOnly && empty($r['has_issue'])) continue;
         $date = (string) $r['appointment_date'];
         $grid[$date][] = [
             'id'            => (int)    $r['id'],
@@ -168,6 +172,8 @@ if ($first !== null && $last !== null) {
             'time'          => $fmt((string) $r['appointment_time']),
             'status'        => (string) $r['status'],
             'appt_kind'     => (string) ($r['appt_kind'] ?? 'measure'),
+            'has_issue'     => !empty($r['has_issue']) ? 1 : 0,
+            'issue_note'    => (string) ($r['issue_note'] ?? ''),
             'quote_status'  => $r['quote_status'] !== null ? (string) $r['quote_status'] : null,
             'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
             'access_note'   => (string) ($r['access_note']           ?? ''),

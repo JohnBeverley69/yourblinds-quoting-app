@@ -76,6 +76,7 @@ for ($i = 0; $i < 7; $i++) {
 $pdo = db();
 $sql = "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.client_user_id,
+               a.has_issue, a.issue_note,
                a.installation_town, a.installation_postcode,
                c.name      AS customer_name,
                c.phone     AS customer_phone,
@@ -137,6 +138,7 @@ $colorForUser = static function (?int $uid) use ($userPalette): string {
 // consistent everywhere. On these richer cards we wash the background with a
 // tint of the stage colour (a solid fill would swamp the text).
 $stagePalette = job_client_palette($clientId);
+$issueColour  = $stagePalette['issue'] ?? '#e11d48';
 
 $statusColour = static function (string $s): array {
     return match ($s) {
@@ -447,15 +449,21 @@ $activeNav = 'calendar';
                             // Progress-dot colour from the shared palette too.
                             $wqs = (string) ($appt['quote_status'] ?? '');
                             if ($wqs !== '' && isset($stagePalette[$wqs])) $prog['colour'] = $stagePalette[$wqs];
+                            $isIssue  = !empty($appt['has_issue']);
+                            $issueTxt = trim((string) ($appt['issue_note'] ?? ''));
+                            // Outline: issue (red) wins over the fitting (dark) outline.
+                            $outline = $isIssue ? ';outline:2px solid ' . $issueColour . ';outline-offset:-2px'
+                                     : ($apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '');
                         ?>
-                            <a class="wk-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?>"
+                            <a class="wk-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?>"
                                href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
+                               title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                style="top:<?= $top ?>px;
                                       height:<?= $height ?>px;
                                       background:<?= e($stageTint) ?>;
                                       border-left-color:<?= $borderClr ?>;
                                       color:var(--text-primary);
-                                      --prog-clr:<?= e($prog['colour']) ?><?= $apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '' ?>;">
+                                      --prog-clr:<?= e($prog['colour']) ?><?= e($outline) ?>;">
                                 <div class="wc-time">
                                     <?= e($timeLabel) ?>
                                     <?php if ($qref !== ''): ?>
@@ -463,7 +471,7 @@ $activeNav = 'calendar';
                                     <?php endif; ?>
                                 </div>
                                 <div class="wc-title <?= $hasOnly ? 'wc-placeholder' : '' ?>">
-                                    <?= e($heading) ?>
+                                    <?= $isIssue ? '⚠️ ' : '' ?><?= e($heading) ?>
                                 </div>
                                 <?php if (!empty($appt['assignee_name'])): ?>
                                     <div class="wc-assignee">
