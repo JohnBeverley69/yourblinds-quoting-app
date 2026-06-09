@@ -32,6 +32,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/pie_chart.php';
+require __DIR__ . '/../_partials/joke_of_the_day.php';
 
 requireLogin();
 
@@ -738,6 +739,73 @@ $activeNav = 'dashboard';
             </div>
             <?php unset($_SESSION['flash_error']); ?>
         <?php endif; ?>
+
+        <?php /* Joke of the Day — a bit of fun. Hidden by default; the JS shows
+                 it once a day (dismissible), so a fresh page after dismissing
+                 doesn't pop it back up. Staff-only (it's on the dashboard). */ ?>
+        <div id="jotd" class="jotd" hidden>
+            <span class="jotd-emoji" aria-hidden="true">😄</span>
+            <div class="jotd-body">
+                <div class="jotd-label">Joke of the day</div>
+                <div class="jotd-text" id="jotd-text"><?= e(joke_of_the_day()) ?></div>
+            </div>
+            <div class="jotd-actions">
+                <button type="button" id="jotd-another" class="jotd-btn" title="Give me another">🔁 Another</button>
+                <button type="button" id="jotd-hide" class="jotd-btn" title="Hide until tomorrow">✕</button>
+            </div>
+        </div>
+        <style>
+            .jotd {
+                display: flex; align-items: center; gap: 0.75rem;
+                background: linear-gradient(90deg, #fffbeb, #fef9c3);
+                border: 1px solid #fde68a; border-radius: 12px;
+                padding: 0.625rem 0.875rem; margin-bottom: 1rem;
+            }
+            [data-theme="dark"] .jotd {
+                background: rgba(250, 204, 21, 0.08); border-color: rgba(250, 204, 21, 0.3);
+            }
+            .jotd-emoji { font-size: 1.5rem; line-height: 1; flex: 0 0 auto; }
+            .jotd-body { flex: 1 1 auto; min-width: 0; }
+            .jotd-label {
+                font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em;
+                font-weight: 700; color: #b45309;
+            }
+            [data-theme="dark"] .jotd-label { color: #fbbf24; }
+            .jotd-text { font-size: 0.9375rem; color: var(--text-primary); margin-top: 0.0625rem; }
+            .jotd-actions { display: flex; gap: 0.25rem; flex: 0 0 auto; }
+            .jotd-btn {
+                appearance: none; border: 1px solid transparent; background: transparent;
+                cursor: pointer; font: inherit; font-size: 0.8125rem; color: #b45309;
+                border-radius: 8px; padding: 0.25rem 0.5rem; line-height: 1;
+            }
+            .jotd-btn:hover { background: rgba(180, 83, 9, 0.1); }
+        </style>
+        <script>
+        (function () {
+            var box = document.getElementById('jotd');
+            if (!box) return;
+            var JOKES = <?= json_encode(jokes_list(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+            var textEl = document.getElementById('jotd-text');
+            // Show once per day: if dismissed today, stay hidden.
+            var today = new Date().toISOString().slice(0, 10);
+            var hidden = '';
+            try { hidden = localStorage.getItem('yb_jotd_hidden') || ''; } catch (e) {}
+            if (hidden !== today) { box.hidden = false; }
+
+            document.getElementById('jotd-hide').addEventListener('click', function () {
+                box.hidden = true;
+                try { localStorage.setItem('yb_jotd_hidden', today); } catch (e) {}
+            });
+            document.getElementById('jotd-another').addEventListener('click', function () {
+                if (!JOKES.length) return;
+                var cur = textEl.textContent, next = cur, guard = 0;
+                while (next === cur && guard++ < 20) {
+                    next = JOKES[Math.floor(Math.random() * JOKES.length)];
+                }
+                textEl.textContent = next;
+            });
+        })();
+        </script>
 
         <div class="period-bar">
             <?php
