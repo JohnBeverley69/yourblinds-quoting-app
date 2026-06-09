@@ -411,3 +411,84 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
 
     return (int) $pdo->lastInsertId();
 }
+
+/**
+ * Create a MEASURE calendar entry for a quote raised without a prior
+ * appointment — the "walk-up" case (a salesperson quotes a neighbour on the
+ * spot). Gives the new customer a calendar presence so the consoles see the
+ * job and its chain (draft → sent → accepted → fitting), exactly like a quote
+ * raised from a booked measure.
+ *
+ * Lands TODAY (the visit is happening), assigned to the creating user, marked
+ * completed. Idempotent: one measure per quote. Returns the appointment id, or
+ * null if the quote is missing / already has a measure.
+ */
+function qb_create_measure_from_quote(PDO $pdo, int $quoteId, ?int $assignedUserId = null): ?int
+{
+    if ($quoteId <= 0) return null;
+
+    static $hasKind = null;
+    if ($hasKind === null) {
+        try { $pdo->query('SELECT appt_kind FROM appointments LIMIT 1'); $hasKind = true; }
+        catch (Throwable $e) { $hasKind = false; }
+    }
+
+    $q = $pdo->prepare(
+        'SELECT id, client_id, quote_number, customer_id,
+                end_customer_name,
+                end_customer_address1, end_customer_address2,
+                end_customer_town, end_customer_county, end_customer_postcode,
+                notes
+           FROM quotes WHERE id = ? LIMIT 1'
+    );
+    $q->execute([$quoteId]);
+    $quote = $q->fetch();
+    if (!$quote || empty($quote['client_id'])) return null;
+
+    // Idempotency — only ever one measure per quote.
+    $exist = $pdo->prepare(
+        $hasKind
+            ? "SELECT id FROM appointments WHERE quote_id = ? AND appt_kind = 'measure' LIMIT 1"
+            : 'SELECT id FROM appointments WHERE quote_id = ? LIMIT 1'
+    );
+    $exist->execute([$quoteId]);
+    if (($existingId = $exist->fetchColumn()) !== false) return (int) $existingId;
+
+    $title = trim((string) $quote['end_customer_name']) !== ''
+        ? (string) $quote['end_customer_name']
+        : ('Quote ' . (string) $quote['quote_number']);
+    $notes = "On-site quote — created in the field for a walk-up customer.\n"
+           . 'Quote ' . $quote['quote_number'] . '.'
+           . (!empty($quote['notes']) ? "\n\nQuote notes:\n" . $quote['notes'] : '');
+
+    $ins = $pdo->prepare(
+        'INSERT INTO appointments
+           (client_id, client_user_id, customer_id, quote_id,
+            title, appointment_date, appointment_time, duration_minutes,
+            installation_address1, installation_address2,
+            installation_town, installation_county, installation_postcode,
+            notes, status' . ($hasKind ? ', appt_kind' : '') . ')
+         VALUES (?, ?, ?, ?,
+                 ?, ?, ?, 30,
+                 ?, ?, ?, ?, ?,
+                 ?, ?' . ($hasKind ? ", 'measure'" : '') . ')'
+    );
+    $ins->execute([
+        (int) $quote['client_id'],
+        ($assignedUserId !== null && $assignedUserId > 0) ? $assignedUserId : null,
+        $quote['customer_id'] !== null ? (int) $quote['customer_id'] : null,
+        (int) $quote['id'],
+        $title,
+        date('Y-m-d'),
+        date('H:i:s'),
+        $quote['end_customer_address1'] ?: null,
+        $quote['end_customer_address2'] ?: null,
+        $quote['end_customer_town']     ?: null,
+        $quote['end_customer_county']   ?: null,
+        $quote['end_customer_postcode'] ?: null,
+        $notes,
+        'completed',
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
