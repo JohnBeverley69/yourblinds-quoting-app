@@ -106,7 +106,8 @@ $pdo = db();
 // in two places at once. Only relevant when actually scheduling to a date
 // (unschedule → pending tray is always fine). Look up this appointment's
 // own assignee / time / duration, then check the target date for an overlap.
-if ($newDate !== null) {
+// override=1 means the user already saw the warning and chose "Book anyway".
+if ($newDate !== null && empty($_POST['override'])) {
     $self = $pdo->prepare(
         'SELECT client_user_id, appointment_time, duration_minutes
            FROM appointments WHERE id = ? AND client_id = ? LIMIT 1'
@@ -120,12 +121,17 @@ if ($newDate !== null) {
             (int) ($selfRow['duration_minutes'] ?? 60), $apptId
         );
         if ($clash !== null) {
-            // Pull the assignee's name for a friendly message.
+            // Pull the assignee's name for a friendly message. conflict=true
+            // tells the front-end this is an overridable warning, not a hard
+            // failure — it confirms, then retries with override=1.
             $an = $pdo->prepare('SELECT full_name FROM client_users WHERE id = ? LIMIT 1');
             $an->execute([(int) $selfRow['client_user_id']]);
             $assigneeName = (string) ($an->fetchColumn() ?: '');
-            http_response_code(409);
-            echo json_encode(['ok' => false, 'error' => appointment_conflict_message($clash, $assigneeName)]);
+            echo json_encode([
+                'ok'       => false,
+                'conflict' => true,
+                'error'    => appointment_conflict_message($clash, $assigneeName),
+            ]);
             exit;
         }
     }
