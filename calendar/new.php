@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
+require __DIR__ . '/../_partials/bookable_users.php';
 
 requireLogin();
 
@@ -66,41 +67,9 @@ $f = [
 $error        = null;
 $conflictWarn = null;   // soft double-booking warning (overridable)
 
-// Bookable users for a sales/measure appointment: those with the 'sales'
-// role. Uses the multi-role junction (client_user_roles) when present, and
-// falls back to the primary-role column otherwise. If nobody is tagged
-// 'sales' (e.g. a one-person shop), show everyone so booking is never blocked.
-$loadSalesUsers = static function () use ($clientId): array {
-    try {
-        $st = db()->prepare(
-            "SELECT DISTINCT u.id, u.full_name, u.role
-               FROM client_users u
-               JOIN client_user_roles r ON r.user_id = u.id
-              WHERE u.client_id = ? AND u.active = 1 AND r.role = 'sales'
-           ORDER BY u.full_name"
-        );
-        $st->execute([$clientId]);
-        return $st->fetchAll();
-    } catch (Throwable $e) {
-        // Junction table not present — use the primary role column.
-        $st = db()->prepare(
-            "SELECT id, full_name, role FROM client_users
-              WHERE client_id = ? AND active = 1 AND role = 'sales'
-           ORDER BY full_name"
-        );
-        $st->execute([$clientId]);
-        return $st->fetchAll();
-    }
-};
-$bookableUsers = $loadSalesUsers();
-if (!$bookableUsers) {
-    $allStmt = db()->prepare(
-        'SELECT id, full_name, role FROM client_users
-          WHERE client_id = ? AND active = 1 ORDER BY full_name'
-    );
-    $allStmt->execute([$clientId]);
-    $bookableUsers = $allStmt->fetchAll();
-}
+// Bookable users — a new booking is a measure/sales visit, so it offers the
+// 'sales' role (kind-aware loader, shared with the edit form).
+$bookableUsers = bookable_users_for_kind((int) $clientId, 'measure');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
