@@ -23,6 +23,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_settle_if_paid
 
 requireLogin();
 
@@ -115,6 +116,12 @@ if ($id > 0) {
         $amount, $receivedAt, $method, $reference, $notes,
     ]);
     $_SESSION['flash_success'] = 'Payment recorded: ' . acct_fmt_money($amount) . '.';
+}
+
+// Auto-mark the quote paid once the balance is settled (or un-settle if this
+// was an edit that reduced it back below the total).
+if ($quoteId) {
+    qb_settle_if_paid($pdo, (int) $quoteId, $clientId);
 }
 
 header('Location: ' . $returnTo);

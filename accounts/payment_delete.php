@@ -12,6 +12,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_settle_if_paid
 
 requireLogin();
 
@@ -40,10 +41,20 @@ if ($id <= 0) {
     exit;
 }
 
+// Grab the linked quote before deleting so we can re-settle its paid status
+// (removing money may drop a "paid" order back below its total).
+$qSt = db()->prepare('SELECT quote_id FROM payments WHERE id = ? AND client_id = ? LIMIT 1');
+$qSt->execute([$id, $clientId]);
+$linkedQuoteId = (int) ($qSt->fetchColumn() ?: 0);
+
 $st = db()->prepare(
     'DELETE FROM payments WHERE id = ? AND client_id = ?'
 );
 $st->execute([$id, $clientId]);
+
+if ($st->rowCount() === 1 && $linkedQuoteId > 0) {
+    qb_settle_if_paid(db(), $linkedQuoteId, $clientId);
+}
 
 $_SESSION['flash_success'] = $st->rowCount() === 1
     ? 'Payment deleted.'

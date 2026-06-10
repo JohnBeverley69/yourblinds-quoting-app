@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
+require __DIR__ . '/../_partials/calendar_money.php';
 
 requireLogin();
 
@@ -211,6 +212,30 @@ $pendingSql = $mineOnly
 $pStmt = db()->prepare($pendingSql);
 $pStmt->execute($mineOnly ? [$clientId, (int) $user['user_id']] : [$clientId]);
 $pendingAppts = $pStmt->fetchAll();
+
+// Calendar money figures — gated by the per-tenant Settings checkbox. When on,
+// batch-load each linked quote's value / received / balance, and pre-render the
+// money HTML keyed by quote id so both the PHP cells AND the JS re-render (used
+// after a drag) can show the same line.
+$showMoney = false;
+try {
+    $mqStmt = db()->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
+    $mqStmt->execute([$clientId]);
+    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
+} catch (Throwable $e) { /* column not migrated — figures stay off */ }
+$moneyByQuote     = [];
+$moneyHtmlByQuote = [];   // quote_id => pre-rendered HTML (white text, for the coloured pills)
+if ($showMoney) {
+    $qids = [];
+    foreach ($byDate as $rows) {
+        foreach ($rows as $r) { if (!empty($r['quote_id'])) $qids[] = (int) $r['quote_id']; }
+    }
+    foreach ($pendingAppts as $r) { if (!empty($r['quote_id'])) $qids[] = (int) $r['quote_id']; }
+    $moneyByQuote = calendar_money_for_quotes(db(), (int) $clientId, $qids);
+    foreach ($moneyByQuote as $qid => $m) {
+        $moneyHtmlByQuote[$qid] = calendar_money_html($m, true);
+    }
+}
 
 $dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 
@@ -922,6 +947,9 @@ $activeNav = 'calendar';
                                                   title="Open order"
                                                   aria-label="Open order">→</span>
                                         <?php endif; ?>
+                                        <?php if ($showMoney && !empty($a['quote_id']) && isset($moneyHtmlByQuote[(int) $a['quote_id']])): ?>
+                                            <?= $moneyHtmlByQuote[(int) $a['quote_id']] ?>
+                                        <?php endif; ?>
                                     </a>
                                 <?php endforeach; ?>
                             </div>
@@ -971,6 +999,9 @@ $activeNav = 'calendar';
     // so cards re-rendered by the 15s poll colour identically to the server
     // render — single source of truth emitted from PHP.
     var STAGE_PALETTE = <?= json_encode($stagePalette, JSON_UNESCAPED_SLASHES) ?>;
+    // Pre-rendered money line per quote id (empty {} when the figures are off),
+    // so a drag re-render shows the same value/balance line as the initial load.
+    var CAL_MONEY = <?= json_encode($moneyHtmlByQuote ?: new stdClass(), JSON_UNESCAPED_SLASHES) ?>;
     var ISSUE_CLR = STAGE_PALETTE['issue'] || '#e11d48';
     function jobStage(apptStatus, quoteStatus, apptKind) {
         if (apptStatus === 'cancelled') return 'cancelled';
@@ -1220,6 +1251,7 @@ $activeNav = 'calendar';
                      +    issueHtml
                      +    noteHtml
                      +    openOrderHtml
+                     +    (a.quote_id && CAL_MONEY[a.quote_id] ? CAL_MONEY[a.quote_id] : '')
                      +  '</a>';
             });
 

@@ -37,6 +37,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
+require __DIR__ . '/../_partials/calendar_money.php';
 
 requireLogin();
 
@@ -192,6 +193,21 @@ $statusColour = static function (string $s): array {
 // we wash the background with a tint of the stage colour and use the solid
 // colour for the left accent, so the hue matches without swamping the text.
 $stagePalette = job_client_palette($clientId);
+
+// Calendar money figures — gated by the per-tenant Settings checkbox. When on,
+// batch-load each linked quote's value / received / balance for the cards.
+$showMoney = false;
+try {
+    $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
+    $mqStmt->execute([$clientId]);
+    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
+} catch (Throwable $e) { /* column not migrated — figures stay off */ }
+$moneyByQuote = [];
+if ($showMoney) {
+    $qids = [];
+    foreach ($apRows as $r) { if (!empty($r['quote_id'])) $qids[] = (int) $r['quote_id']; }
+    $moneyByQuote = calendar_money_for_quotes($pdo, $clientId, $qids);
+}
 $issueColour  = $stagePalette['issue'] ?? '#e11d48';
 
 // Quote status → 5-segment progress bar. Mirrors what Once shows
@@ -768,6 +784,10 @@ $activeNav = 'calendar';
                                     <?php endif; ?>
                                     <?php if ($phone !== ''): ?>
                                         <div class="ac-phone"><?= e($phone) ?></div>
+                                    <?php endif; ?>
+
+                                    <?php if ($showMoney && !empty($appt['quote_id']) && isset($moneyByQuote[(int) $appt['quote_id']])): ?>
+                                        <?= calendar_money_html($moneyByQuote[(int) $appt['quote_id']], false) ?>
                                     <?php endif; ?>
 
                                     <?php if (!empty($appt['quote_status'])): ?>

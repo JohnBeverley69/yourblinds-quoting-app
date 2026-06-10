@@ -99,6 +99,9 @@ if ($action === 'record_paid') {
           WHERE id = ? AND client_id = ?'
     )->execute([$amt, $quoteId, $clientId]);
 
+    // If this deposit alone settles the order, auto-mark it paid.
+    qb_settle_if_paid(db(), $quoteId, $clientId);
+
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
@@ -112,6 +115,7 @@ if ($action === 'mark_paid') {
         db()->prepare(
             'UPDATE quotes SET deposit_paid_at = NULL WHERE id = ? AND client_id = ?'
         )->execute([$quoteId, $clientId]);
+        qb_settle_if_paid(db(), $quoteId, $clientId);   // may un-settle from paid
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
             'success',
@@ -121,6 +125,7 @@ if ($action === 'mark_paid') {
         db()->prepare(
             'UPDATE quotes SET deposit_paid_at = NOW() WHERE id = ? AND client_id = ?'
         )->execute([$quoteId, $clientId]);
+        qb_settle_if_paid(db(), $quoteId, $clientId);
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
             'success',

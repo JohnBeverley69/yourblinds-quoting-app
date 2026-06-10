@@ -337,6 +337,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /admin/settings.php');
         exit;
     }
+
+    if ($action === 'calendar_money') {
+        // Show/hide order value + balance on the calendars (migrate_calendar_money.php).
+        $on = !empty($_POST['calendar_show_money']) ? 1 : 0;
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, calendar_show_money)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE calendar_show_money = VALUES(calendar_show_money)'
+            )->execute([$clientId, $on]);
+            $_SESSION['flash_success'] = $on
+                ? 'Calendar will show order value + balance.'
+                : 'Calendar money figures are now hidden.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_calendar_money.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
 }
 
 $clientStmt = db()->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
@@ -605,6 +625,34 @@ $activeNav = 'settings';
                         <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             A little light relief for your team on the dashboard (staff only — never
                             shown to customers). Dismissible per day. Untick to switch it off.
+                        </p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Calendar</h2>
+            </div>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="calendar_money">
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:inline-flex;align-items:center;gap:.5rem;font-weight:600;">
+                            <input type="checkbox" name="calendar_show_money" value="1"
+                                   <?= ((int) ($settings['calendar_show_money'] ?? 0)) === 1 ? 'checked' : '' ?>>
+                            💷 Show order value + balance on the calendar
+                        </label>
+                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                            On the month, week and day calendars, each job linked to a quote shows its
+                            order value, amount received (deposit + payments) and outstanding balance —
+                            with a PAID badge once it's settled. Leave unticked to keep figures off the
+                            calendar (e.g. if fitters share the view).
                         </p>
                     </div>
                 </div>
