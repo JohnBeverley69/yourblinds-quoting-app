@@ -36,11 +36,15 @@ $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $action   = (string) ($_POST['_action'] ?? '');
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 
-if (!qb_is_editable($quote)) {
+// A deposit is an accepted-order activity, NOT a draft one — so it's allowed
+// once the quote has been accepted (through to invoiced), without forcing a
+// reopen-to-draft. (The old draft-only gate is exactly what made the deposit
+// section read-only on an accepted quote.)
+if (!in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced'], true)) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
-        'Quote is locked. Reopen as draft to change the deposit.'
+        'A deposit can be recorded once the quote has been accepted.'
     );
 }
 
@@ -73,6 +77,32 @@ if ($action === 'save_amount') {
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
         'Deposit set to £' . number_format($amt, 2) . '.'
+    );
+}
+
+// Record (or amend) the deposit the customer ACTUALLY paid: sets the amount
+// AND stamps it paid in one step. This is the main entry point from the editor
+// now — the trade user types what was paid (the settings % is offered as a
+// suggestion in the UI) and it's logged as received.
+if ($action === 'record_paid') {
+    $raw = trim((string) ($_POST['deposit_amount'] ?? ''));
+    if (!is_numeric($raw) || (float) $raw < 0) {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId,
+            'error',
+            'Deposit must be a non-negative number.'
+        );
+    }
+    $amt = round((float) $raw, 2);
+    db()->prepare(
+        'UPDATE quotes SET deposit_amount = ?, deposit_paid_at = NOW()
+          WHERE id = ? AND client_id = ?'
+    )->execute([$amt, $quoteId, $clientId]);
+
+    qb_flash_redirect(
+        '/quote-builder/edit.php?id=' . $quoteId,
+        'success',
+        'Deposit of £' . number_format($amt, 2) . ' recorded as paid.'
     );
 }
 

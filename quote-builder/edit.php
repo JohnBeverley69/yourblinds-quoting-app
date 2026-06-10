@@ -1375,16 +1375,46 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         </section>
 
         <?php
-            // Deposit panel — only shown once a quote has gained a
-            // deposit_amount (i.e. it's been accepted at some point).
-            // change_status.php seeds the amount the first time a quote
-            // lands in 'accepted'; the trade user can then edit it and
-            // toggle paid/unpaid here.
+            // Deposit panel. Taking a deposit is an accepted-ORDER activity, so
+            // it shows for any order-state quote (not just draft). The trade
+            // user records what the customer ACTUALLY paid here; the tenant's
+            // default-deposit setting is offered as a suggestion they can accept
+            // or override.
             $depositAmount = $quote['deposit_amount'] ?? null;
             $depositPaidAt = $quote['deposit_paid_at'] ?? null;
-            $hasDeposit    = $depositAmount !== null;
+
+            // Suggested deposit from tenant settings — same basis change_status
+            // uses to seed on accept (percent of total, or a flat figure).
+            $depositSuggestion   = null;
+            $depositSuggestLabel = 'Suggested deposit';
+            try {
+                try {
+                    $dpS = db()->prepare('SELECT default_deposit_mode, default_deposit_percent, default_deposit_flat FROM client_settings WHERE client_id = ? LIMIT 1');
+                    $dpS->execute([$clientId]);
+                    $dp = $dpS->fetch() ?: [];
+                } catch (PDOException $e) {
+                    if ($e->getCode() !== '42S22') throw $e;   // not "column missing"
+                    $dpS = db()->prepare('SELECT default_deposit_percent FROM client_settings WHERE client_id = ? LIMIT 1');
+                    $dpS->execute([$clientId]);
+                    $dp = $dpS->fetch() ?: [];
+                }
+                $depTotal = (float) $quote['total'];
+                if ((string) ($dp['default_deposit_mode'] ?? 'percent') === 'flat') {
+                    $depositSuggestion = round(min((float) ($dp['default_deposit_flat'] ?? 0), $depTotal), 2);
+                } else {
+                    $pct = (float) ($dp['default_deposit_percent'] ?? 50);
+                    $depositSuggestion   = round($depTotal * $pct / 100, 2);
+                    $depositSuggestLabel = 'Suggested ' . rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.') . '%';
+                }
+            } catch (Throwable $e) { /* settings missing — just skip the hint */ }
+
+            // Pre-fill the entry box with what's already recorded, else the
+            // suggestion, else leave blank.
+            $depositPrefill = $depositAmount !== null
+                ? (float) $depositAmount
+                : ($depositSuggestion !== null ? $depositSuggestion : null);
         ?>
-        <?php if ($hasDeposit): ?>
+        <?php if ($quoteIsOrder): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
@@ -1394,47 +1424,53 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <p style="background:#d1fae5;color:#065f46;
                           padding:0.5rem 0.75rem;border-radius:8px;
                           margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
-                    ✓ Paid
-                    <?= e(qb_fmt_money((float) $depositAmount)) ?>
+                    ✓ Deposit paid <?= e(qb_fmt_money((float) $depositAmount)) ?>
                     on <?= e(date('j M Y', strtotime((string) $depositPaidAt))) ?>
                 </p>
-            <?php else: ?>
-                <p style="background:#fef3c7;color:#92400e;
-                          padding:0.5rem 0.75rem;border-radius:8px;
-                          margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">
-                    Outstanding deposit:
-                    <?= e(qb_fmt_money((float) $depositAmount)) ?>
-                </p>
-            <?php endif; ?>
-
-            <?php if ($editable): ?>
                 <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
                     <form method="post" action="/quote-builder/deposit.php"
                           style="display:flex;gap:0.375rem;align-items:center;margin:0">
                         <?= csrf_field() ?>
-                        <input type="hidden" name="_action" value="save_amount">
+                        <input type="hidden" name="_action" value="record_paid">
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                        <label style="font-size:0.8125rem;color:var(--text-faint);margin:0">Amount £</label>
+                        <label style="font-size:0.8125rem;color:var(--text-faint);margin:0">Amend £</label>
                         <input type="number" name="deposit_amount" step="0.01" min="0"
                                value="<?= e(number_format((float) $depositAmount, 2, '.', '')) ?>"
-                               style="width:7rem;padding:0.375rem 0.5rem;
-                                      border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                               style="width:7rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
                         <button type="submit" class="btn btn-secondary"
-                                style="padding:0.3125rem 0.75rem;font-size:0.8125rem">
-                            Save amount
-                        </button>
+                                style="padding:0.3125rem 0.75rem;font-size:0.8125rem">Save</button>
                     </form>
                     <form method="post" action="/quote-builder/deposit.php" style="margin:0">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_action" value="mark_paid">
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                        <button type="submit"
-                                class="btn <?= $depositPaidAt ? 'btn-secondary' : 'btn-primary' ?>"
-                                style="padding:0.3125rem 0.875rem;font-size:0.8125rem">
-                            <?= $depositPaidAt ? 'Mark unpaid' : 'Mark deposit paid' ?>
-                        </button>
+                        <button type="submit" class="btn btn-secondary"
+                                style="padding:0.3125rem 0.875rem;font-size:0.8125rem">Mark unpaid</button>
                     </form>
                 </div>
+            <?php else: ?>
+                <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.625rem">
+                    Enter the deposit the customer has paid.
+                </p>
+                <form method="post" action="/quote-builder/deposit.php"
+                      style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="record_paid">
+                    <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                    <label for="dep-amt" style="font-size:0.8125rem;color:var(--text-faint);margin:0">Deposit paid £</label>
+                    <input id="dep-amt" type="number" name="deposit_amount" step="0.01" min="0"
+                           <?= $depositPrefill !== null ? 'value="' . e(number_format($depositPrefill, 2, '.', '')) . '"' : '' ?>
+                           style="width:8rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                    <button type="submit" class="btn btn-primary"
+                            style="padding:0.3125rem 0.875rem;font-size:0.8125rem">Record deposit paid</button>
+                    <?php if ($depositSuggestion !== null): ?>
+                        <span style="font-size:0.8125rem;color:var(--text-faint)">
+                            <?= e($depositSuggestLabel) ?>:
+                            <a href="#" onclick="document.getElementById('dep-amt').value='<?= e(number_format($depositSuggestion, 2, '.', '')) ?>';return false;"
+                               style="font-weight:600;color:var(--brand);text-decoration:none"><?= e(qb_fmt_money($depositSuggestion)) ?></a>
+                        </span>
+                    <?php endif; ?>
+                </form>
             <?php endif; ?>
         </section>
         <?php endif; ?>
