@@ -442,6 +442,42 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
 }
 
 /**
+ * Remove the pending install for a quote that's been declined.
+ *
+ * When a customer cancels, the auto-created fitting shouldn't linger on the
+ * calendar. Deletes the FITTING linked to this quote, but never:
+ *   - a measure (that sales visit happened), nor
+ *   - an install that's already been completed (history).
+ * Matches appt_kind = 'fitting' when the column exists; in all cases skips
+ * 'completed' appointments as a backstop. Idempotent — returns how many
+ * appointments were removed (0 if there was nothing to clear). Failures are
+ * logged and swallowed so they can't break the status change itself.
+ */
+function qb_remove_fitting_for_quote(PDO $pdo, int $quoteId, int $clientId): int
+{
+    if ($quoteId <= 0 || $clientId <= 0) return 0;
+
+    static $hasKind = null;
+    if ($hasKind === null) {
+        try { $pdo->query('SELECT appt_kind FROM appointments LIMIT 1'); $hasKind = true; }
+        catch (Throwable $e) { $hasKind = false; }
+    }
+
+    try {
+        $sql = "DELETE FROM appointments
+                 WHERE quote_id = ? AND client_id = ?
+                   AND status <> 'completed'"
+             . ($hasKind ? " AND appt_kind = 'fitting'" : '');
+        $del = $pdo->prepare($sql);
+        $del->execute([$quoteId, $clientId]);
+        return $del->rowCount();
+    } catch (Throwable $e) {
+        error_log('qb_remove_fitting_for_quote failed: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
  * Create a MEASURE calendar entry for a quote raised without a prior
  * appointment — the "walk-up" case (a salesperson quotes a neighbour on the
  * spot). Gives the new customer a calendar presence so the consoles see the

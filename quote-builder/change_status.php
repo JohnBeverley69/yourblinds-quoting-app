@@ -141,6 +141,16 @@ try {
         }
     }
 
+    // Declining cancels the job — pull its pending install off the calendar so
+    // a phantom fitting doesn't linger. Never removes a completed install or a
+    // measure visit.
+    if ($target === 'declined') {
+        $removed = qb_remove_fitting_for_quote($pdo, $quoteId, $clientId);
+        if ($removed > 0) {
+            $appointmentMsg = ' The pending fitting has been removed from the calendar.';
+        }
+    }
+
     $pdo->commit();
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
