@@ -478,6 +478,68 @@ function qb_remove_fitting_for_quote(PDO $pdo, int $quoteId, int $clientId): int
 }
 
 /**
+ * Auto-settle a quote's payment status. "Received" = the paid deposit
+ * (deposit_amount when deposit_paid_at is set) + the sum of the payments table.
+ * When that covers the order total, the quote is marked 'paid'; if a later
+ * deletion/reduction drops it back below, a previously-auto-paid quote steps
+ * back to 'invoiced'. Only acts on order-state quotes (accepted..paid) — never
+ * a draft/sent/declined. Called after any deposit or payment change.
+ *
+ * Returns true if the status changed. Failures are logged and swallowed so a
+ * money change can never 500 on the settle step.
+ */
+function qb_settle_if_paid(PDO $pdo, int $quoteId, int $clientId): bool
+{
+    if ($quoteId <= 0 || $clientId <= 0) return false;
+
+    try {
+        $q = $pdo->prepare(
+            'SELECT total, deposit_amount, deposit_paid_at, status
+               FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $q->execute([$quoteId, $clientId]);
+        $r = $q->fetch();
+        if (!$r) return false;
+
+        $status = (string) $r['status'];
+        if (!in_array($status, ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'], true)) {
+            return false;
+        }
+
+        $total = (float) $r['total'];
+        $dep   = !empty($r['deposit_paid_at']) ? (float) ($r['deposit_amount'] ?? 0) : 0.0;
+        $pay   = 0.0;
+        try {
+            $ps = $pdo->prepare(
+                'SELECT COALESCE(SUM(amount), 0) FROM payments
+                  WHERE quote_id = ? AND client_id = ?'
+            );
+            $ps->execute([$quoteId, $clientId]);
+            $pay = (float) $ps->fetchColumn();
+        } catch (Throwable $e) { /* no payments table — deposit only */ }
+
+        $received  = round($dep + $pay, 2);
+        $fullyPaid = $total > 0 && $received >= $total - 0.0049;
+
+        if ($fullyPaid && $status !== 'paid') {
+            $pdo->prepare("UPDATE quotes SET status = 'paid' WHERE id = ? AND client_id = ?")
+                ->execute([$quoteId, $clientId]);
+            return true;
+        }
+        if (!$fullyPaid && $status === 'paid') {
+            // Money pulled back out — un-settle to the nearest pre-paid state.
+            $pdo->prepare("UPDATE quotes SET status = 'invoiced' WHERE id = ? AND client_id = ?")
+                ->execute([$quoteId, $clientId]);
+            return true;
+        }
+        return false;
+    } catch (Throwable $e) {
+        error_log('qb_settle_if_paid failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
  * Create a MEASURE calendar entry for a quote raised without a prior
  * appointment — the "walk-up" case (a salesperson quotes a neighbour on the
  * spot). Gives the new customer a calendar presence so the consoles see the
