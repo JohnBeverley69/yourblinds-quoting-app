@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
     $apptId = (int) $_GET['appointment_id'];
     if ($apptId > 0) {
         $aSt = db()->prepare(
-            'SELECT a.customer_id,
+            'SELECT a.customer_id, a.quote_id,
                     a.installation_address1, a.installation_address2,
                     a.installation_town, a.installation_county, a.installation_postcode,
                     c.name AS cust_name, c.email AS cust_email,
@@ -86,6 +86,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
             $f['end_customer_town']     = (string) ($appt['installation_town']     ?: ($appt['cust_town']     ?? ''));
             $f['end_customer_county']   = (string) ($appt['installation_county']   ?: ($appt['cust_county']   ?? ''));
             $f['end_customer_postcode'] = (string) ($appt['installation_postcode'] ?: ($appt['cust_postcode'] ?? ''));
+
+            // Straight-through: the appointment already carries the customer and
+            // a name, so there's nothing to add on this confirm screen. Create
+            // the draft immediately and jump to the editor, saving the extra
+            // click. Guarded on quote_id IS NULL so re-visiting (back button,
+            // hand-typed URL) can't spawn a second quote — and skipped if the
+            // name is blank, falling back to the manual form below. Any failure
+            // also falls through to the form so the user is never blocked.
+            if (empty($appt['quote_id']) && trim((string) $f['end_customer_name']) !== '') {
+                try {
+                    $res = qb_create_quote_from_fields(db(), $clientId, $f, $apptId, (int) $user['user_id']);
+                    $_SESSION['flash_success'] = 'Quote ' . $res['number'] . ' created.';
+                    header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
+                    exit;
+                } catch (Throwable $e) {
+                    $error = 'Could not start the quote automatically — '
+                           . 'please check the details below and click Create quote.';
+                }
+            }
         }
     }
 }
@@ -143,115 +162,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($error === null) {
-        $pdo = db();
-        $pdo->beginTransaction();
         try {
-            // If no existing customer picked but a name was entered, auto-
-            // create a customer record so the same person is findable on
-            // the next quote. The quote is then linked to that new id.
-            if ($f['customer_id'] === 0 && $f['end_customer_name'] !== '') {
-                $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
-                $custIns = $pdo->prepare(
-                    'INSERT INTO customers
-                       (client_id, name, email, phone, has_whatsapp,
-                        address1, address2, town, county, postcode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $custIns->execute([
-                    $clientId,
-                    $f['end_customer_name'],
-                    $emptyToNull($f['end_customer_email']),
-                    $emptyToNull($f['end_customer_phone']),
-                    (int) $f['has_whatsapp'],
-                    $emptyToNull($f['end_customer_address1']),
-                    $emptyToNull($f['end_customer_address2']),
-                    $emptyToNull($f['end_customer_town']),
-                    $emptyToNull($f['end_customer_county']),
-                    $emptyToNull($f['end_customer_postcode']),
-                ]);
-                $f['customer_id'] = (int) $pdo->lastInsertId();
-            }
-
-            // Snapshot the tenant's VAT rate at the time the quote is created.
-            $vatSt = $pdo->prepare(
-                'SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1'
-            );
-            $vatSt->execute([$clientId]);
-            $vatPct = (float) ($vatSt->fetchColumn() ?? 20.0);
-
-            // Generate a quote number with a couple of retries against the
-            // tiny race window between SELECT MAX and INSERT.
-            $attempt = 0;
-            while (true) {
-                $attempt++;
-                try {
-                    $quoteNumber = qb_generate_quote_number($clientId);
-                    $token       = qb_generate_public_token();
-                    $st = $pdo->prepare(
-                        'INSERT INTO quotes
-                          (client_id, quote_number, customer_id,
-                           end_customer_name, end_customer_email, end_customer_phone, has_whatsapp,
-                           end_customer_address1, end_customer_address2,
-                           end_customer_town, end_customer_county, end_customer_postcode,
-                           status, vat_percent, notes,
-                           public_token, created_by_user_id)
-                         VALUES
-                          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           "draft", ?, ?, ?, ?)'
-                    );
-                    $st->execute([
-                        $clientId,
-                        $quoteNumber,
-                        $f['customer_id'] > 0 ? $f['customer_id'] : null,
-                        $f['end_customer_name'],
-                        $f['end_customer_email']    !== '' ? $f['end_customer_email']    : null,
-                        $f['end_customer_phone']    !== '' ? $f['end_customer_phone']    : null,
-                        (int) $f['has_whatsapp'],
-                        $f['end_customer_address1'] !== '' ? $f['end_customer_address1'] : null,
-                        $f['end_customer_address2'] !== '' ? $f['end_customer_address2'] : null,
-                        $f['end_customer_town']     !== '' ? $f['end_customer_town']     : null,
-                        $f['end_customer_county']   !== '' ? $f['end_customer_county']   : null,
-                        $f['end_customer_postcode'] !== '' ? $f['end_customer_postcode'] : null,
-                        $vatPct,
-                        $f['notes'] !== '' ? $f['notes'] : null,
-                        $token,
-                        (int) $user['user_id'],
-                    ]);
-                    break;
-                } catch (PDOException $e) {
-                    if ($attempt >= 3 || !str_contains($e->getMessage(), 'uniq_quote_number_per_client')) {
-                        throw $e;
-                    }
-                    // race window — try a fresh number
-                }
-            }
-            $newId = (int) $pdo->lastInsertId();
-
-            // Link the originating measure appointment to this quote so its
-            // calendar entry tracks the quote's progress (sent → accepted → …).
-            // Only fills an as-yet-unlinked appointment in this tenant.
-            if ($appointmentId > 0) {
-                $pdo->prepare(
-                    'UPDATE appointments SET quote_id = ?
-                      WHERE id = ? AND client_id = ? AND quote_id IS NULL'
-                )->execute([$newId, $appointmentId, $clientId]);
-            } else {
-                // No prior appointment — this is a walk-up / on-site quote. Give
-                // it a measure entry (today, assigned to the creator) so it
-                // appears on the consoles as a new customer with a chain to follow.
-                qb_create_measure_from_quote($pdo, $newId, (int) $user['user_id']);
-            }
-
-            $pdo->commit();
-
-            $_SESSION['flash_success'] = 'Quote ' . $quoteNumber . ' created.';
+            $res = qb_create_quote_from_fields(db(), $clientId, $f, $appointmentId, (int) $user['user_id']);
+            $_SESSION['flash_success'] = 'Quote ' . $res['number'] . ' created.';
             // Land on the Add-line section so the user can start picking
             // products straight away — customer details are already filled
             // in from the form they just submitted.
-            header('Location: /quote-builder/edit.php?id=' . $newId . '#add-line');
+            header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
             exit;
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
             $error = 'Could not create quote: ' . $e->getMessage();
         }
     }
