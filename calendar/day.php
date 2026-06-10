@@ -243,52 +243,101 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
     return max(60, ($m / 60) * $pxPerHour);
 };
 
-// Push-down layout for overlapping cards within one column. The min-height
-// above keeps every card readable, but it also means appointments close
-// together in time (e.g. 10:00 / 10:30 / 11:00) would render as full-height
-// blocks piling on top of each other. Rather than squeeze them side by side
-// (which truncates the names to "ST…", "SA…"), we keep each card FULL WIDTH
-// and push any that would collide further down the column — the column simply
-// grows taller to fit. A card never sits ABOVE its true time position, only
-// below, and its exact time is always on the time chip, so a pushed card still
-// reads true. Cards space back out to real positions as soon as the day has
-// room again.
+// Expanding timeline. Tightly-packed bookings need more vertical room than
+// their literal duration — but we want the TIME AXIS to stretch with them so
+// an hour label always sits level with the cards booked around that hour,
+// rather than the cards drifting away from a fixed ruler.
 //
-// Returns ['pos' => [rowIdx => ['top' => px, 'height' => px]], 'height' => px]
-// where 'height' is the laid-out content height of the whole column.
-$GAP_PX = 4;   // vertical gap between stacked cards
-$layoutColumn = static function (array $rows) use ($timeToTop, $durationToHeight, $GAP_PX): array {
-    // Lay cards out in start order so a later card only ever pushes down.
-    $order = array_keys($rows);
-    usort($order, static fn ($a, $b) =>
-        $timeToTop((string) ($rows[$a]['appointment_time'] ?? '09:00:00'))
-        <=> $timeToTop((string) ($rows[$b]['appointment_time'] ?? '09:00:00')));
-
-    $pos = [];
-    $runningBottom = 0.0;   // bottom px of the last placed card
-    foreach ($order as $idx) {
-        $natural = $timeToTop((string) ($rows[$idx]['appointment_time'] ?? '09:00:00'));
-        $height  = $durationToHeight((int) ($rows[$idx]['duration_minutes'] ?? 60));
-        // Sit at the true time, unless that would overlap the card above —
-        // then drop just below it.
-        $top = $runningBottom > 0 ? max($natural, $runningBottom + $GAP_PX) : $natural;
-        $pos[$idx] = ['top' => $top, 'height' => $height];
-        $runningBottom = $top + $height;
-    }
-    return ['pos' => $pos, 'height' => $runningBottom];
+// We build one shared, monotonic time→pixel map ($ymap) for the whole board:
+//   - it starts out linear (pxPerHour),
+//   - wherever a column's cards can't fit at full height, it stretches there
+//     and everything below shifts down with it (it never snaps back up), and
+//   - the SAME map positions the hour ticks AND the cards, so they stay aligned.
+//
+// It's a longest-path over "break points" (every hour boundary + every
+// appointment start time): each card adds the rule that the next card in its
+// column must sit at least a full card-height below it, which is what forces
+// the stretch.
+$timeToMin = static function (string $t) use ($startHour): int {
+    [$h, $m] = array_pad(explode(':', $t), 2, 0);
+    return (((int) $h) - $startHour) * 60 + (int) $m;
 };
+$linearY = static fn (int $min): float => ($min / 60) * $pxPerHour;
 
-// Pre-lay-out every column up front so we can size the board to the tallest
-// one before we start emitting HTML.
-$columnLayouts = [];
-$maxColHeight  = 0.0;
+// Break points: every hour boundary, plus every appointment's start minute.
+$breakSet = [];
+for ($h = $startHour; $h <= $endHour; $h++) { $breakSet[($h - $startHour) * 60] = true; }
+
+// Per-column card list (start minute + pixel height), and the "next card must
+// clear this one" edges that force the timeline to stretch.
+$colCards = [];   // cid => [ ['idx'=>rowIdx, 'min'=>startMin, 'h'=>height], ... ] (sorted)
+$edges    = [];   // toMin => [ ['from'=>fromMin, 'w'=>weight], ... ]
 foreach ($columns as $col) {
-    $cid = (int) $col['id'];
-    $columnLayouts[$cid] = $layoutColumn($byUser[$cid] ?? []);
-    $maxColHeight = max($maxColHeight, $columnLayouts[$cid]['height']);
+    $cid  = (int) $col['id'];
+    $list = [];
+    foreach (($byUser[$cid] ?? []) as $rowIdx => $r) {
+        $sMin = $timeToMin((string) ($r['appointment_time'] ?? '09:00:00'));
+        $list[] = ['idx' => $rowIdx, 'min' => $sMin,
+                   'h'   => $durationToHeight((int) ($r['duration_minutes'] ?? 60))];
+        $breakSet[$sMin] = true;
+    }
+    usort($list, static fn ($a, $b) => $a['min'] <=> $b['min']);
+    for ($i = 0, $n = count($list); $i < $n - 1; $i++) {
+        // Only between distinct times — identical-time cards in one column
+        // can't both align to a tick; the per-column push-down below stacks
+        // those.
+        if ($list[$i + 1]['min'] > $list[$i]['min']) {
+            $edges[$list[$i + 1]['min']][] = ['from' => $list[$i]['min'], 'w' => $list[$i]['h']];
+        }
+    }
+    $colCards[$cid] = $list;
 }
-// Board is at least the full time range, taller if a busy column overflows it.
-$boardHeight = (int) ceil(max($gridHeight, $maxColHeight));
+
+// Longest-path forward pass → a pixel y for every break point.
+$mins = array_keys($breakSet);
+sort($mins);
+$ymap = [];
+$prevMin = null;
+foreach ($mins as $m) {
+    $y = $linearY($m);
+    if ($prevMin !== null) {
+        // At least the linear gap from the previous point — keeps the map
+        // monotonic and carries any earlier stretch forward.
+        $y = max($y, $ymap[$prevMin] + ($linearY($m) - $linearY($prevMin)));
+    }
+    foreach ($edges[$m] ?? [] as $e) {
+        $y = max($y, $ymap[$e['from']] + $e['w']);   // a card below it must clear
+    }
+    $ymap[$m] = $y;
+    $prevMin  = $m;
+}
+
+// Pixel y for an hour boundary (axis ticks + grid lines).
+$hourY = static fn (int $h): float => $ymap[($h - $startHour) * 60] ?? (($h - $startHour) * $pxPerHour);
+
+// Card positions: anchor each to the shared map, then a light per-column
+// push-down as a safety net for any residual same-time overlaps. Distinct-time
+// cards already clear each other via $ymap, so they stay put on the ticks.
+$GAP_PX = 4;
+$columnLayouts = [];
+$maxBottom = $ymap[($endHour - $startHour) * 60] ?? (float) $gridHeight;
+foreach ($colCards as $cid => $list) {
+    $pos = [];
+    $runningBottom = 0.0;
+    foreach ($list as $c) {
+        $natural = $ymap[$c['min']];
+        $top = $runningBottom > 0 ? max($natural, $runningBottom + $GAP_PX) : $natural;
+        $pos[$c['idx']] = ['top' => $top, 'height' => $c['h']];
+        $runningBottom  = $top + $c['h'];
+        $maxBottom      = max($maxBottom, $runningBottom);
+    }
+    $columnLayouts[$cid] = ['pos' => $pos];
+}
+$boardHeight = (int) ceil(max($gridHeight, $maxBottom));
+
+// Break points as [y, minutes-from-start] for the click-to-create inverse map.
+$axisPoints = [];
+foreach ($mins as $m) { $axisPoints[] = [$ymap[$m], $m]; }
 
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'calendar';
@@ -588,7 +637,7 @@ $activeNav = 'calendar';
                     <!-- Time axis -->
                     <div class="time-axis" style="height: <?= $boardHeight ?>px">
                         <?php for ($h = $startHour; $h < $endHour; $h++):
-                            $top = ($h - $startHour) * $pxPerHour;
+                            $top = $hourY($h);
                         ?>
                             <div class="time-tick" style="top: <?= $top ?>px">
                                 <?= sprintf('%d', $h > 12 ? $h - 12 : $h) ?>
@@ -610,7 +659,7 @@ $activeNav = 'calendar';
                             <!-- Faint hour grid lines so eyes can snap to the time axis -->
                             <?php for ($h = $startHour; $h < $endHour; $h++): ?>
                                 <div class="hour-line"
-                                     style="top: <?= ($h - $startHour) * $pxPerHour ?>px"></div>
+                                     style="top: <?= $hourY($h) ?>px"></div>
                             <?php endfor; ?>
 
                             <?php
@@ -810,6 +859,25 @@ $activeNav = 'calendar';
     var pxPerHour = <?= (int) $pxPerHour ?>;
     var dateYmd   = '<?= e($dateYmd) ?>';
 
+    // Break points of the (possibly stretched) time axis as [y_px, minutes-
+    // from-startHour], ascending. Used to convert a click's Y back into the
+    // real time, since the axis is no longer a straight pxPerHour ruler.
+    var axisPts = <?= json_encode($axisPoints, JSON_THROW_ON_ERROR) ?>;
+    function yToMin(y) {
+        if (!axisPts.length) return (y / pxPerHour) * 60;
+        if (y <= axisPts[0][0]) return axisPts[0][1];
+        for (var i = 1; i < axisPts.length; i++) {
+            var a = axisPts[i - 1], b = axisPts[i];
+            if (y <= b[0]) {
+                var span = b[0] - a[0];
+                return span <= 0 ? b[1] : a[1] + (y - a[0]) / span * (b[1] - a[1]);
+            }
+        }
+        // Below the last break point → extrapolate at the base scale.
+        var last = axisPts[axisPts.length - 1];
+        return last[1] + ((y - last[0]) / pxPerHour) * 60;
+    }
+
     // Existing card → navigate to edit page on click. Icon
     // anchors inside the card have their own onclick=stopPropagation
     // so the right action runs (tel:, mailto:, etc.) without ALSO
@@ -830,7 +898,7 @@ $activeNav = 'calendar';
             }
             var rect = col.getBoundingClientRect();
             var y    = ev.clientY - rect.top;        // 0 = top of column
-            var mins = (y / pxPerHour) * 60;         // minutes since startHour
+            var mins = yToMin(y);                    // minutes since startHour
             mins     = Math.max(0, Math.round(mins / 15) * 15);   // snap to 15min
             var h    = startHour + Math.floor(mins / 60);
             var m    = mins % 60;
@@ -850,14 +918,14 @@ $activeNav = 'calendar';
             col.addEventListener('mousemove', function (ev) {
                 var rect = col.getBoundingClientRect();
                 var y    = ev.clientY - rect.top;
-                var mins = (y / pxPerHour) * 60;
+                var mins = yToMin(y);
                 mins     = Math.max(0, Math.round(mins / 15) * 15);
                 var h    = startHour + Math.floor(mins / 60);
                 var m    = mins % 60;
                 var hh = (h < 10 ? '0' : '') + h;
                 var mm = (m < 10 ? '0' : '') + m;
                 hint.textContent = '+ New at ' + hh + ':' + mm;
-                hint.style.top = ((mins / 60) * pxPerHour) + 'px';
+                hint.style.top = y + 'px';   // track the cursor (axis is non-linear)
             });
         }
     });
