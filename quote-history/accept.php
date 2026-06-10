@@ -159,6 +159,9 @@ if ($action === 'decline') {
         'UPDATE quotes SET status = "declined" WHERE id = ?'
     )->execute([(int) $quote['id']]);
 
+    // Customer declined — clear the pending install off the calendar too.
+    qb_remove_fitting_for_quote($pdo, (int) $quote['id'], (int) $quote['client_id']);
+
     $_SESSION['flash_success'] = 'Quote declined. Your supplier has been notified.';
     header('Location: ' . $publicUrl);
     exit;
