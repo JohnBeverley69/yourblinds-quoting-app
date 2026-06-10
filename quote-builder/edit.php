@@ -790,7 +790,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <div class="read-only-banner">
                 This quote is in <strong><?= e((string) $quote['status']) ?></strong> state and is read-only.
                 <?php if (in_array('draft', $transitions, true)): ?>
-                    Use <strong>Reopen as draft</strong> below to edit it.
+                    Use <strong>Reopen as draft</strong> above to edit it.
                 <?php endif; ?>
             </div>
         <?php endif; ?>
