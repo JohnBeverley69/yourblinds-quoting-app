@@ -243,6 +243,75 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
     return max(60, ($m / 60) * $pxPerHour);
 };
 
+// Side-by-side layout for overlapping cards within one column. Without this,
+// appointments close together in time (e.g. 10:00 / 10:30 / 11:00) render as
+// full-height blocks stacked on top of each other and become unreadable —
+// the min-height above makes even short visits tall enough to collide. This
+// mirrors how Google/Once lay overlapping events out: group anything that
+// overlaps into a cluster, slot each into the first free "lane", and split the
+// column width between the lanes so they sit beside each other.
+//
+// Returns an array keyed by the row's position in $rows: each entry is
+// ['lane' => int (0-based column), 'lanes' => int (how many to split into)].
+// Non-overlapping cards come back as lane 0 of 1 → full width, unchanged.
+$computeLayout = static function (array $rows) use ($timeToTop, $durationToHeight): array {
+    // Pixel start/end for each row (end uses the same min-height as render).
+    $iv = [];
+    foreach ($rows as $i => $r) {
+        $s = $timeToTop((string) ($r['appointment_time'] ?? '09:00:00'));
+        $e = $s + $durationToHeight((int) ($r['duration_minutes'] ?? 60));
+        $iv[$i] = ['s' => $s, 'e' => $e];
+    }
+
+    // Process in start order (ties broken by end) so lane assignment is stable.
+    $order = array_keys($iv);
+    usort($order, static fn ($a, $b) => ($iv[$a]['s'] <=> $iv[$b]['s']) ?: ($iv[$a]['e'] <=> $iv[$b]['e']));
+
+    $layout = [];
+    foreach ($rows as $i => $r) { $layout[$i] = ['lane' => 0, 'lanes' => 1]; }
+
+    // Close a cluster: greedily place each card in the first lane whose
+    // previous card has already ended, then stamp the lane count on them all.
+    $closeCluster = static function (array $cluster) use ($iv, &$layout): void {
+        if (!$cluster) return;
+        $laneEnds = [];        // lane index → end px of its last card
+        $laneOf   = [];
+        foreach ($cluster as $idx) {
+            $placed = false;
+            foreach ($laneEnds as $ln => $end) {
+                if ($iv[$idx]['s'] >= $end) {          // lane is free again
+                    $laneOf[$idx] = $ln; $laneEnds[$ln] = $iv[$idx]['e']; $placed = true; break;
+                }
+            }
+            if (!$placed) {
+                $ln = count($laneEnds);
+                $laneOf[$idx] = $ln; $laneEnds[$ln] = $iv[$idx]['e'];
+            }
+        }
+        $lanes = count($laneEnds);
+        foreach ($cluster as $idx) {
+            $layout[$idx] = ['lane' => $laneOf[$idx], 'lanes' => $lanes];
+        }
+    };
+
+    // Sweep: a card that starts at/after the cluster's furthest end begins a
+    // fresh cluster (no overlap with anything before it).
+    $cluster = [];
+    $clusterMaxEnd = null;
+    foreach ($order as $idx) {
+        if ($clusterMaxEnd !== null && $iv[$idx]['s'] >= $clusterMaxEnd) {
+            $closeCluster($cluster);
+            $cluster = [];
+            $clusterMaxEnd = null;
+        }
+        $cluster[] = $idx;
+        $clusterMaxEnd = $clusterMaxEnd === null ? $iv[$idx]['e'] : max($clusterMaxEnd, $iv[$idx]['e']);
+    }
+    $closeCluster($cluster);
+
+    return $layout;
+};
+
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'calendar';
 ?><!doctype html>
@@ -564,10 +633,30 @@ $activeNav = 'calendar';
                                      style="top: <?= ($h - $startHour) * $pxPerHour ?>px"></div>
                             <?php endfor; ?>
 
-                            <?php foreach ($colRows as $appt):
+                            <?php
+                                // Pre-compute side-by-side lanes for this
+                                // column so overlapping cards sit beside each
+                                // other instead of piling up.
+                                $colLayout = $computeLayout($colRows);
+                            ?>
+                            <?php foreach ($colRows as $rowIdx => $appt):
                                 $time = (string) ($appt['appointment_time'] ?? '09:00:00');
                                 $top    = $timeToTop($time);
                                 $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
+
+                                // Lane geometry — when this card shares its slot
+                                // with others, split the column width so they
+                                // render side by side. Single cards keep the
+                                // CSS default (full width).
+                                $lane     = (int) ($colLayout[$rowIdx]['lane']  ?? 0);
+                                $laneCnt  = (int) ($colLayout[$rowIdx]['lanes'] ?? 1);
+                                $laneStyle = $laneCnt > 1
+                                    ? sprintf(
+                                        'left:calc(0.25rem + (100%% - 0.5rem) * %d / %d);'
+                                        . 'width:calc((100%% - 0.5rem) / %d - 2px);right:auto;',
+                                        $lane, $laneCnt, $laneCnt
+                                      )
+                                    : '';
                                 $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                                 $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
                                 $stageTint = job_status_tint($stageClr);
@@ -644,6 +733,7 @@ $activeNav = 'calendar';
                                      title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                      style="top:<?= $top ?>px;
                                             height:<?= $height ?>px;
+                                            <?= $laneStyle ?>
                                             background:<?= e($stageTint) ?>;
                                             border-left-color:<?= e($stageClr) ?>;
                                             color:var(--text-primary);
