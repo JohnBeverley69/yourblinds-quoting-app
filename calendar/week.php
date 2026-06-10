@@ -10,10 +10,11 @@ declare(strict_types=1);
  *   1 time axis  + 7 days (Monday through Sunday)
  *
  * Cards are positioned at appointment_time + sized by
- * duration_minutes, same as day view. To distinguish fitters in
- * the mixed column, each card gets a coloured left-border indexed
- * by user_id — so a glance tells you "the orange ones are
- * Allan's, the blue ones are Simon's".
+ * duration_minutes, same as day view. Each card carries its job's
+ * status colour — a translucent wash for the body plus a thick
+ * solid strip down the left — matching the month + day views so a
+ * job is the same colour everywhere. The assignee's name is printed
+ * on the card for who's-doing-what.
  *
  * Click an empty slot to create an appointment on that day + time
  * (no fitter pre-fill — week view is multi-fitter so the user
@@ -125,14 +126,6 @@ $startHour = 7;
 $endHour   = 22;
 $pxPerHour = 60;
 $gridHeight = ($endHour - $startHour) * $pxPerHour;
-
-// Per-user colour for the left border. Hash on user_id into a small
-// fixed palette so the same fitter is always the same colour.
-$userPalette = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#db2777','#0891b2','#65a30d','#ea580c','#4f46e5'];
-$colorForUser = static function (?int $uid) use ($userPalette): string {
-    if (!$uid) return 'var(--text-faint)';
-    return $userPalette[$uid % count($userPalette)];
-};
 
 // Same traffic-light palette as the calendar + Settings, so a job's hue is
 // consistent everywhere. On these richer cards we wash the background with a
@@ -372,7 +365,7 @@ $activeNav = 'calendar';
             position: absolute; left: 0.25rem; right: 0.25rem;
             padding: 0.3125rem 0.4375rem;
             border-radius: 4px;
-            border-left: 4px solid transparent;
+            border-left: 6px solid transparent;
             font-size: 0.75rem; line-height: 1.3;
             overflow: hidden; text-decoration: none; color: inherit;
             transition: box-shadow 100ms;
@@ -514,8 +507,7 @@ $activeNav = 'calendar';
                             $height = $dayPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                             $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                             $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
-                            $stageTint = job_status_tint($stageClr);
-                            $borderClr = $colorForUser((int) ($appt['client_user_id'] ?? 0));
+                            $stageTint = job_status_tint($stageClr, 0.22);
                             $title    = trim((string) ($appt['title'] ?? ''));
                             $custName = trim((string) ($appt['customer_name'] ?? ''));
                             $heading  = $custName !== ''
@@ -540,7 +532,7 @@ $activeNav = 'calendar';
                                style="top:<?= $top ?>px;
                                       height:<?= $height ?>px;
                                       background:<?= e($stageTint) ?>;
-                                      border-left-color:<?= $borderClr ?>;
+                                      border-left-color:<?= e($stageClr) ?>;
                                       color:var(--text-primary);
                                       --prog-clr:<?= e($prog['colour']) ?><?= e($outline) ?>;">
                                 <div class="wc-time">

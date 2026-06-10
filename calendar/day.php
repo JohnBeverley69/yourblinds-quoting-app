@@ -457,7 +457,7 @@ $activeNav = 'calendar';
         .appt-card {
             position: absolute; left: 0.25rem; right: 0.25rem;
             padding: 0.375rem 0.5rem;
-            border-radius: 6px; border-left: 3px solid transparent;
+            border-radius: 6px; border-left: 6px solid transparent;
             font-size: 0.8125rem; line-height: 1.35;
             overflow: hidden;
             text-decoration: none; color: inherit;
@@ -673,7 +673,7 @@ $activeNav = 'calendar';
                                 $height = $colPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                                 $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                                 $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
-                                $stageTint = job_status_tint($stageClr);
+                                $stageTint = job_status_tint($stageClr, 0.22);
                                 $isIssue   = !empty($appt['has_issue']);
                                 $issueTxt  = trim((string) ($appt['issue_note'] ?? ''));
                                 $dayOutline = $isIssue ? ';outline:2px solid ' . $issueColour . ';outline-offset:-2px'
