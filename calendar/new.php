@@ -38,7 +38,22 @@ $defaultTime = preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', $qsTime) === 1
     : '09:00';
 
 $qsAssigned = (int) ($_GET['assigned_to'] ?? 0);
-$defaultAssigned = $qsAssigned > 0 ? $qsAssigned : (int) $user['user_id'];
+
+// Bookable users for a measure/sales visit (the 'sales' role). Loaded here so
+// the assignee default can fall back to the sole salesperson when there's only
+// one — saves picking her by hand on every booking.
+$bookableUsers = bookable_users_for_kind((int) $clientId, 'measure');
+$bookableIds   = array_map(static fn ($u) => (int) $u['id'], $bookableUsers);
+
+if ($qsAssigned > 0) {
+    $defaultAssigned = $qsAssigned;                   // explicit pick from a day-view slot
+} elseif (in_array((int) $user['user_id'], $bookableIds, true)) {
+    $defaultAssigned = (int) $user['user_id'];        // booking as yourself (you're a salesperson)
+} elseif (count($bookableUsers) === 1) {
+    $defaultAssigned = (int) $bookableUsers[0]['id']; // sole salesperson — preselect her
+} else {
+    $defaultAssigned = 0;                             // multiple/none → leave unassigned
+}
 
 // Form defaults — refilled from $_POST after a validation error.
 $f = [
@@ -66,10 +81,6 @@ $f = [
 
 $error        = null;
 $conflictWarn = null;   // soft double-booking warning (overridable)
-
-// Bookable users — a new booking is a measure/sales visit, so it offers the
-// 'sales' role (kind-aware loader, shared with the edit form).
-$bookableUsers = bookable_users_for_kind((int) $clientId, 'measure');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
