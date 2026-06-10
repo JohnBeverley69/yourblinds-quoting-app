@@ -243,74 +243,52 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
     return max(60, ($m / 60) * $pxPerHour);
 };
 
-// Side-by-side layout for overlapping cards within one column. Without this,
-// appointments close together in time (e.g. 10:00 / 10:30 / 11:00) render as
-// full-height blocks stacked on top of each other and become unreadable —
-// the min-height above makes even short visits tall enough to collide. This
-// mirrors how Google/Once lay overlapping events out: group anything that
-// overlaps into a cluster, slot each into the first free "lane", and split the
-// column width between the lanes so they sit beside each other.
+// Push-down layout for overlapping cards within one column. The min-height
+// above keeps every card readable, but it also means appointments close
+// together in time (e.g. 10:00 / 10:30 / 11:00) would render as full-height
+// blocks piling on top of each other. Rather than squeeze them side by side
+// (which truncates the names to "ST…", "SA…"), we keep each card FULL WIDTH
+// and push any that would collide further down the column — the column simply
+// grows taller to fit. A card never sits ABOVE its true time position, only
+// below, and its exact time is always on the time chip, so a pushed card still
+// reads true. Cards space back out to real positions as soon as the day has
+// room again.
 //
-// Returns an array keyed by the row's position in $rows: each entry is
-// ['lane' => int (0-based column), 'lanes' => int (how many to split into)].
-// Non-overlapping cards come back as lane 0 of 1 → full width, unchanged.
-$computeLayout = static function (array $rows) use ($timeToTop, $durationToHeight): array {
-    // Pixel start/end for each row (end uses the same min-height as render).
-    $iv = [];
-    foreach ($rows as $i => $r) {
-        $s = $timeToTop((string) ($r['appointment_time'] ?? '09:00:00'));
-        $e = $s + $durationToHeight((int) ($r['duration_minutes'] ?? 60));
-        $iv[$i] = ['s' => $s, 'e' => $e];
-    }
+// Returns ['pos' => [rowIdx => ['top' => px, 'height' => px]], 'height' => px]
+// where 'height' is the laid-out content height of the whole column.
+$GAP_PX = 4;   // vertical gap between stacked cards
+$layoutColumn = static function (array $rows) use ($timeToTop, $durationToHeight, $GAP_PX): array {
+    // Lay cards out in start order so a later card only ever pushes down.
+    $order = array_keys($rows);
+    usort($order, static fn ($a, $b) =>
+        $timeToTop((string) ($rows[$a]['appointment_time'] ?? '09:00:00'))
+        <=> $timeToTop((string) ($rows[$b]['appointment_time'] ?? '09:00:00')));
 
-    // Process in start order (ties broken by end) so lane assignment is stable.
-    $order = array_keys($iv);
-    usort($order, static fn ($a, $b) => ($iv[$a]['s'] <=> $iv[$b]['s']) ?: ($iv[$a]['e'] <=> $iv[$b]['e']));
-
-    $layout = [];
-    foreach ($rows as $i => $r) { $layout[$i] = ['lane' => 0, 'lanes' => 1]; }
-
-    // Close a cluster: greedily place each card in the first lane whose
-    // previous card has already ended, then stamp the lane count on them all.
-    $closeCluster = static function (array $cluster) use ($iv, &$layout): void {
-        if (!$cluster) return;
-        $laneEnds = [];        // lane index → end px of its last card
-        $laneOf   = [];
-        foreach ($cluster as $idx) {
-            $placed = false;
-            foreach ($laneEnds as $ln => $end) {
-                if ($iv[$idx]['s'] >= $end) {          // lane is free again
-                    $laneOf[$idx] = $ln; $laneEnds[$ln] = $iv[$idx]['e']; $placed = true; break;
-                }
-            }
-            if (!$placed) {
-                $ln = count($laneEnds);
-                $laneOf[$idx] = $ln; $laneEnds[$ln] = $iv[$idx]['e'];
-            }
-        }
-        $lanes = count($laneEnds);
-        foreach ($cluster as $idx) {
-            $layout[$idx] = ['lane' => $laneOf[$idx], 'lanes' => $lanes];
-        }
-    };
-
-    // Sweep: a card that starts at/after the cluster's furthest end begins a
-    // fresh cluster (no overlap with anything before it).
-    $cluster = [];
-    $clusterMaxEnd = null;
+    $pos = [];
+    $runningBottom = 0.0;   // bottom px of the last placed card
     foreach ($order as $idx) {
-        if ($clusterMaxEnd !== null && $iv[$idx]['s'] >= $clusterMaxEnd) {
-            $closeCluster($cluster);
-            $cluster = [];
-            $clusterMaxEnd = null;
-        }
-        $cluster[] = $idx;
-        $clusterMaxEnd = $clusterMaxEnd === null ? $iv[$idx]['e'] : max($clusterMaxEnd, $iv[$idx]['e']);
+        $natural = $timeToTop((string) ($rows[$idx]['appointment_time'] ?? '09:00:00'));
+        $height  = $durationToHeight((int) ($rows[$idx]['duration_minutes'] ?? 60));
+        // Sit at the true time, unless that would overlap the card above —
+        // then drop just below it.
+        $top = $runningBottom > 0 ? max($natural, $runningBottom + $GAP_PX) : $natural;
+        $pos[$idx] = ['top' => $top, 'height' => $height];
+        $runningBottom = $top + $height;
     }
-    $closeCluster($cluster);
-
-    return $layout;
+    return ['pos' => $pos, 'height' => $runningBottom];
 };
+
+// Pre-lay-out every column up front so we can size the board to the tallest
+// one before we start emitting HTML.
+$columnLayouts = [];
+$maxColHeight  = 0.0;
+foreach ($columns as $col) {
+    $cid = (int) $col['id'];
+    $columnLayouts[$cid] = $layoutColumn($byUser[$cid] ?? []);
+    $maxColHeight = max($maxColHeight, $columnLayouts[$cid]['height']);
+}
+// Board is at least the full time range, taller if a busy column overflows it.
+$boardHeight = (int) ceil(max($gridHeight, $maxColHeight));
 
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'calendar';
@@ -602,11 +580,13 @@ $activeNav = 'calendar';
                     <?php endforeach; ?>
                 </div>
 
-                <!-- Body: time axis + fitter columns -->
+                <!-- Body: time axis + fitter columns. Height is the tallest
+                     laid-out column (≥ the full time range) so pushed-down
+                     cards in a busy column are never clipped. -->
                 <div class="day-board-body"
-                     style="height: <?= $gridHeight + 24 ?>px">
+                     style="height: <?= $boardHeight + 24 ?>px">
                     <!-- Time axis -->
-                    <div class="time-axis" style="height: <?= $gridHeight ?>px">
+                    <div class="time-axis" style="height: <?= $boardHeight ?>px">
                         <?php for ($h = $startHour; $h < $endHour; $h++):
                             $top = ($h - $startHour) * $pxPerHour;
                         ?>
@@ -625,7 +605,7 @@ $activeNav = 'calendar';
                         <div class="fitter-col"
                              data-user-id="<?= $colId ?>"
                              data-user-name="<?= e((string) $col['full_name']) ?>"
-                             style="height: <?= $gridHeight ?>px">
+                             style="height: <?= $boardHeight ?>px">
                             <div class="new-hint">Click to create appointment</div>
                             <!-- Faint hour grid lines so eyes can snap to the time axis -->
                             <?php for ($h = $startHour; $h < $endHour; $h++): ?>
@@ -634,29 +614,14 @@ $activeNav = 'calendar';
                             <?php endfor; ?>
 
                             <?php
-                                // Pre-compute side-by-side lanes for this
-                                // column so overlapping cards sit beside each
-                                // other instead of piling up.
-                                $colLayout = $computeLayout($colRows);
+                                // Precomputed push-down geometry for this column
+                                // (full-width cards, collisions pushed down).
+                                $colPos = $columnLayouts[$colId]['pos'] ?? [];
                             ?>
                             <?php foreach ($colRows as $rowIdx => $appt):
-                                $time = (string) ($appt['appointment_time'] ?? '09:00:00');
-                                $top    = $timeToTop($time);
-                                $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
-
-                                // Lane geometry — when this card shares its slot
-                                // with others, split the column width so they
-                                // render side by side. Single cards keep the
-                                // CSS default (full width).
-                                $lane     = (int) ($colLayout[$rowIdx]['lane']  ?? 0);
-                                $laneCnt  = (int) ($colLayout[$rowIdx]['lanes'] ?? 1);
-                                $laneStyle = $laneCnt > 1
-                                    ? sprintf(
-                                        'left:calc(0.25rem + (100%% - 0.5rem) * %d / %d);'
-                                        . 'width:calc((100%% - 0.5rem) / %d - 2px);right:auto;',
-                                        $lane, $laneCnt, $laneCnt
-                                      )
-                                    : '';
+                                $time   = (string) ($appt['appointment_time'] ?? '09:00:00');
+                                $top    = $colPos[$rowIdx]['top']    ?? $timeToTop($time);
+                                $height = $colPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                                 $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                                 $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
                                 $stageTint = job_status_tint($stageClr);
@@ -733,7 +698,6 @@ $activeNav = 'calendar';
                                      title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                      style="top:<?= $top ?>px;
                                             height:<?= $height ?>px;
-                                            <?= $laneStyle ?>
                                             background:<?= e($stageTint) ?>;
                                             border-left-color:<?= e($stageClr) ?>;
                                             color:var(--text-primary);
