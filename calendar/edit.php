@@ -89,6 +89,17 @@ $bookableUsers = bookable_users_for_kind(
     (int) ($appt['client_user_id'] ?? 0)
 );
 
+// If the appointment is still unassigned and there's exactly one eligible
+// person for its kind (e.g. the only fitter / only salesperson), pre-select
+// them so it doesn't sit unassigned by accident — mirrors the new-booking
+// form. First load only; a POST carries whatever the user actually chose
+// (including a deliberate "Unassigned").
+if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+    && (int) ($appt['client_user_id'] ?? 0) === 0
+    && count($bookableUsers) === 1) {
+    $f['assigned_to'] = (int) $bookableUsers[0]['id'];
+}
+
 // Quotes available for linking. Most-recent first, capped at 200 —
 // covers small/medium tenants; bigger ones get the search box below
 // the select. Defensive against the quotes table being absent.
