@@ -492,3 +492,126 @@ function qb_create_measure_from_quote(PDO $pdo, int $quoteId, ?int $assignedUser
 
     return (int) $pdo->lastInsertId();
 }
+
+/**
+ * Create a draft quote from a prepared $f field bundle (the New-quote form's
+ * shape) and return ['id' => int, 'number' => string].
+ *
+ * Everything the New-quote POST handler used to do inline:
+ *   - auto-create a customer record when none is linked but a name is given,
+ *   - snapshot the tenant VAT rate,
+ *   - generate a unique quote number (small retry against the insert race),
+ *   - insert the draft quote,
+ *   - link the originating measure appointment, or — for a walk-up with no
+ *     appointment — create a measure entry so the job shows on the consoles.
+ *
+ * Runs in its own transaction and throws on failure (rolls back first). Shared
+ * by the manual form submit and the "Start quote" calendar shortcut that
+ * creates a quote straight from an appointment without the confirm screen.
+ */
+function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $appointmentId, int $userId): array
+{
+    $pdo->beginTransaction();
+    try {
+        // If no existing customer picked but a name was entered, auto-create a
+        // customer record so the same person is findable on the next quote.
+        if ((int) ($f['customer_id'] ?? 0) === 0 && (string) $f['end_customer_name'] !== '') {
+            $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
+            $custIns = $pdo->prepare(
+                'INSERT INTO customers
+                   (client_id, name, email, phone, has_whatsapp,
+                    address1, address2, town, county, postcode)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $custIns->execute([
+                $clientId,
+                (string) $f['end_customer_name'],
+                $emptyToNull((string) $f['end_customer_email']),
+                $emptyToNull((string) $f['end_customer_phone']),
+                (int) $f['has_whatsapp'],
+                $emptyToNull((string) $f['end_customer_address1']),
+                $emptyToNull((string) $f['end_customer_address2']),
+                $emptyToNull((string) $f['end_customer_town']),
+                $emptyToNull((string) $f['end_customer_county']),
+                $emptyToNull((string) $f['end_customer_postcode']),
+            ]);
+            $f['customer_id'] = (int) $pdo->lastInsertId();
+        }
+
+        // Snapshot the tenant's VAT rate at the time the quote is created.
+        $vatSt = $pdo->prepare(
+            'SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $vatSt->execute([$clientId]);
+        $vatPct = (float) ($vatSt->fetchColumn() ?? 20.0);
+
+        // Generate a quote number with a couple of retries against the tiny
+        // race window between SELECT MAX and INSERT.
+        $attempt = 0;
+        while (true) {
+            $attempt++;
+            try {
+                $quoteNumber = qb_generate_quote_number($clientId);
+                $token       = qb_generate_public_token();
+                $st = $pdo->prepare(
+                    'INSERT INTO quotes
+                      (client_id, quote_number, customer_id,
+                       end_customer_name, end_customer_email, end_customer_phone, has_whatsapp,
+                       end_customer_address1, end_customer_address2,
+                       end_customer_town, end_customer_county, end_customer_postcode,
+                       status, vat_percent, notes,
+                       public_token, created_by_user_id)
+                     VALUES
+                      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       "draft", ?, ?, ?, ?)'
+                );
+                $st->execute([
+                    $clientId,
+                    $quoteNumber,
+                    (int) $f['customer_id'] > 0 ? (int) $f['customer_id'] : null,
+                    (string) $f['end_customer_name'],
+                    (string) $f['end_customer_email']    !== '' ? (string) $f['end_customer_email']    : null,
+                    (string) $f['end_customer_phone']    !== '' ? (string) $f['end_customer_phone']    : null,
+                    (int) $f['has_whatsapp'],
+                    (string) $f['end_customer_address1'] !== '' ? (string) $f['end_customer_address1'] : null,
+                    (string) $f['end_customer_address2'] !== '' ? (string) $f['end_customer_address2'] : null,
+                    (string) $f['end_customer_town']     !== '' ? (string) $f['end_customer_town']     : null,
+                    (string) $f['end_customer_county']   !== '' ? (string) $f['end_customer_county']   : null,
+                    (string) $f['end_customer_postcode'] !== '' ? (string) $f['end_customer_postcode'] : null,
+                    $vatPct,
+                    (string) ($f['notes'] ?? '') !== '' ? (string) $f['notes'] : null,
+                    $token,
+                    $userId,
+                ]);
+                break;
+            } catch (PDOException $e) {
+                if ($attempt >= 3 || !str_contains($e->getMessage(), 'uniq_quote_number_per_client')) {
+                    throw $e;
+                }
+                // race window — try a fresh number
+            }
+        }
+        $newId = (int) $pdo->lastInsertId();
+
+        // Link the originating measure appointment to this quote so its
+        // calendar entry tracks the quote's progress. Only fills an as-yet-
+        // unlinked appointment in this tenant.
+        if ($appointmentId > 0) {
+            $pdo->prepare(
+                'UPDATE appointments SET quote_id = ?
+                  WHERE id = ? AND client_id = ? AND quote_id IS NULL'
+            )->execute([$newId, $appointmentId, $clientId]);
+        } else {
+            // No prior appointment — walk-up / on-site quote. Give it a measure
+            // entry (today, assigned to the creator) so it appears on the
+            // consoles as a new customer with a chain to follow.
+            qb_create_measure_from_quote($pdo, $newId, $userId);
+        }
+
+        $pdo->commit();
+        return ['id' => $newId, 'number' => $quoteNumber];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
