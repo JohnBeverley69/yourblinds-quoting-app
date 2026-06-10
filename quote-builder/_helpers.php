@@ -369,6 +369,34 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         return (int) $existingId;
     }
 
+    // Default the install to the sole fitter when there's exactly one, so it
+    // lands assigned (and shows in that fitter's day-view column) instead of
+    // sitting unassigned. With several fitters we can't guess — leave it NULL
+    // for the trade user to pick. Mirrors the new-booking "only salesperson"
+    // default. Uses the multi-role junction when present, else the primary-role
+    // column.
+    $fitterId  = null;
+    $fClientId = (int) $quote['client_id'];
+    try {
+        $fq = $pdo->prepare(
+            "SELECT u.id FROM client_users u
+               JOIN client_user_roles r ON r.user_id = u.id
+              WHERE u.client_id = ? AND u.active = 1 AND r.role = 'fitter'"
+        );
+        $fq->execute([$fClientId]);
+        $fitterIds = $fq->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        $fq = $pdo->prepare(
+            "SELECT id FROM client_users
+              WHERE client_id = ? AND active = 1 AND role = 'fitter'"
+        );
+        $fq->execute([$fClientId]);
+        $fitterIds = $fq->fetchAll(PDO::FETCH_COLUMN);
+    }
+    if (count($fitterIds) === 1) {
+        $fitterId = (int) $fitterIds[0];
+    }
+
     // Land in the Pending Fitting tray (NULL appointment_date) so
     // the trade user has to consciously place it on a real date —
     // dragging from the tray onto a calendar cell, or opening the
@@ -389,13 +417,14 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
             installation_address1, installation_address2,
             installation_town, installation_county, installation_postcode,
             notes, status' . ($hasKind ? ', appt_kind' : '') . ')
-         VALUES (?, NULL, ?, ?,
+         VALUES (?, ?, ?, ?,
                  ?, NULL, ?, 60,
                  ?, ?, ?, ?, ?,
                  ?, ?' . ($hasKind ? ", 'fitting'" : '') . ')'
     );
     $ins->execute([
         (int) $quote['client_id'],
+        $fitterId,
         $quote['customer_id'] !== null ? (int) $quote['customer_id'] : null,
         (int) $quote['id'],
         $title,
