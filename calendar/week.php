@@ -180,6 +180,81 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
     return max(60, ($m / 60) * $pxPerHour);
 };
 
+// Expanding timeline — same approach as the day view, but here the columns are
+// the 7 days, all sharing the single left axis. So the axis stretches at any
+// hour where ANY day is packed too tight to fit at full height, and the same
+// shared map ($ymap) positions the hour ticks AND every day's cards, keeping
+// the hour labels level with the bookings. Longest-path over break points
+// (hour boundaries + appointment starts); each card requires the next card in
+// the same day to sit at least a full card-height below it.
+$timeToMin = static function (string $t) use ($startHour): int {
+    [$h, $m] = array_pad(explode(':', $t), 2, 0);
+    return (((int) $h) - $startHour) * 60 + (int) $m;
+};
+$linearY = static fn (int $min): float => ($min / 60) * $pxPerHour;
+
+$breakSet = [];
+for ($h = $startHour; $h <= $endHour; $h++) { $breakSet[($h - $startHour) * 60] = true; }
+
+$dayCards = [];   // ymd => [ ['idx'=>rowIdx, 'min'=>startMin, 'h'=>height], ... ] (sorted)
+$edges    = [];   // toMin => [ ['from'=>fromMin, 'w'=>weight], ... ]
+foreach ($days as $d) {
+    $ymd  = $d['ymd'];
+    $list = [];
+    foreach (($byDate[$ymd] ?? []) as $rowIdx => $r) {
+        $sMin = $timeToMin((string) ($r['appointment_time'] ?? '09:00:00'));
+        $list[] = ['idx' => $rowIdx, 'min' => $sMin,
+                   'h'   => $durationToHeight((int) ($r['duration_minutes'] ?? 60))];
+        $breakSet[$sMin] = true;
+    }
+    usort($list, static fn ($a, $b) => $a['min'] <=> $b['min']);
+    for ($i = 0, $n = count($list); $i < $n - 1; $i++) {
+        if ($list[$i + 1]['min'] > $list[$i]['min']) {
+            $edges[$list[$i + 1]['min']][] = ['from' => $list[$i]['min'], 'w' => $list[$i]['h']];
+        }
+    }
+    $dayCards[$ymd] = $list;
+}
+
+$mins = array_keys($breakSet);
+sort($mins);
+$ymap = [];
+$prevMin = null;
+foreach ($mins as $m) {
+    $y = $linearY($m);
+    if ($prevMin !== null) {
+        $y = max($y, $ymap[$prevMin] + ($linearY($m) - $linearY($prevMin)));
+    }
+    foreach ($edges[$m] ?? [] as $e) {
+        $y = max($y, $ymap[$e['from']] + $e['w']);
+    }
+    $ymap[$m] = $y;
+    $prevMin  = $m;
+}
+
+$hourY = static fn (int $h): float => $ymap[($h - $startHour) * 60] ?? (($h - $startHour) * $pxPerHour);
+
+$GAP_PX = 4;
+$columnLayouts = [];
+$maxBottom = $ymap[($endHour - $startHour) * 60] ?? (float) $gridHeight;
+foreach ($dayCards as $ymd => $list) {
+    $pos = [];
+    $runningBottom = 0.0;
+    foreach ($list as $c) {
+        $natural = $ymap[$c['min']];
+        $top = $runningBottom > 0 ? max($natural, $runningBottom + $GAP_PX) : $natural;
+        $pos[$c['idx']] = ['top' => $top, 'height' => $c['h']];
+        $runningBottom  = $top + $c['h'];
+        $maxBottom      = max($maxBottom, $runningBottom);
+    }
+    $columnLayouts[$ymd] = ['pos' => $pos];
+}
+$boardHeight = (int) ceil(max($gridHeight, $maxBottom));
+
+// Break points as [y, minutes-from-start] for the click-to-create inverse map.
+$axisPoints = [];
+foreach ($mins as $m) { $axisPoints[] = [$ymap[$m], $m]; }
+
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'calendar';
 ?><!doctype html>
@@ -405,10 +480,10 @@ $activeNav = 'calendar';
                 <?php endforeach; ?>
             </div>
 
-            <div class="wk-board-body" style="height: <?= $gridHeight + 24 ?>px">
-                <div class="time-axis" style="height: <?= $gridHeight ?>px">
+            <div class="wk-board-body" style="height: <?= $boardHeight + 24 ?>px">
+                <div class="time-axis" style="height: <?= $boardHeight ?>px">
                     <?php for ($h = $startHour; $h < $endHour; $h++):
-                        $top = ($h - $startHour) * $pxPerHour;
+                        $top = $hourY($h);
                     ?>
                         <div class="time-tick" style="top: <?= $top ?>px">
                             <?= sprintf('%d', $h > 12 ? $h - 12 : ($h === 0 ? 12 : $h)) ?>
@@ -422,17 +497,21 @@ $activeNav = 'calendar';
                 ?>
                     <div class="wk-day-col <?= $d['isToday'] ? 'is-today' : '' ?>"
                          data-date="<?= e($d['ymd']) ?>"
-                         style="height: <?= $gridHeight ?>px">
+                         style="height: <?= $boardHeight ?>px">
                         <div class="new-hint">+ New</div>
                         <?php for ($h = $startHour; $h < $endHour; $h++): ?>
                             <div class="hour-line"
-                                 style="top: <?= ($h - $startHour) * $pxPerHour ?>px"></div>
+                                 style="top: <?= $hourY($h) ?>px"></div>
                         <?php endfor; ?>
 
-                        <?php foreach ($dayRows as $appt):
+                        <?php
+                            // Push-down positions for this day from the shared map.
+                            $dayPos = $columnLayouts[$d['ymd']]['pos'] ?? [];
+                        ?>
+                        <?php foreach ($dayRows as $rowIdx => $appt):
                             $time   = (string) ($appt['appointment_time'] ?? '09:00:00');
-                            $top    = $timeToTop($time);
-                            $height = $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
+                            $top    = $dayPos[$rowIdx]['top']    ?? $timeToTop($time);
+                            $height = $dayPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                             $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                             $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
                             $stageTint = job_status_tint($stageClr);
@@ -502,6 +581,24 @@ $activeNav = 'calendar';
     var startHour = <?= (int) $startHour ?>;
     var pxPerHour = <?= (int) $pxPerHour ?>;
 
+    // Break points of the (possibly stretched) shared time axis as [y_px,
+    // minutes-from-startHour], ascending — used to map a click's Y back to the
+    // real time, since the axis is no longer a straight pxPerHour ruler.
+    var axisPts = <?= json_encode($axisPoints, JSON_THROW_ON_ERROR) ?>;
+    function yToMin(y) {
+        if (!axisPts.length) return (y / pxPerHour) * 60;
+        if (y <= axisPts[0][0]) return axisPts[0][1];
+        for (var i = 1; i < axisPts.length; i++) {
+            var a = axisPts[i - 1], b = axisPts[i];
+            if (y <= b[0]) {
+                var span = b[0] - a[0];
+                return span <= 0 ? b[1] : a[1] + (y - a[0]) / span * (b[1] - a[1]);
+            }
+        }
+        var last = axisPts[axisPts.length - 1];
+        return last[1] + ((y - last[0]) / pxPerHour) * 60;
+    }
+
     document.querySelectorAll('.wk-day-col').forEach(function (col) {
         col.addEventListener('click', function (ev) {
             if (ev.target !== col
@@ -511,7 +608,7 @@ $activeNav = 'calendar';
             }
             var rect = col.getBoundingClientRect();
             var y    = ev.clientY - rect.top;
-            var mins = (y / pxPerHour) * 60;
+            var mins = yToMin(y);
             mins     = Math.max(0, Math.round(mins / 15) * 15);
             var h    = startHour + Math.floor(mins / 60);
             var m    = mins % 60;
@@ -527,14 +624,14 @@ $activeNav = 'calendar';
             col.addEventListener('mousemove', function (ev) {
                 var rect = col.getBoundingClientRect();
                 var y    = ev.clientY - rect.top;
-                var mins = (y / pxPerHour) * 60;
+                var mins = yToMin(y);
                 mins     = Math.max(0, Math.round(mins / 15) * 15);
                 var h    = startHour + Math.floor(mins / 60);
                 var m    = mins % 60;
                 var hh = (h < 10 ? '0' : '') + h;
                 var mm = (m < 10 ? '0' : '') + m;
                 hint.textContent = '+ ' + hh + ':' + mm;
-                hint.style.top = ((mins / 60) * pxPerHour) + 'px';
+                hint.style.top = y + 'px';   // track the cursor (axis is non-linear)
             });
         }
     });
