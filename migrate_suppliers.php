@@ -71,6 +71,34 @@ $pdo->exec(
 );
 echo "suppliers table: ensured\n";
 
+// Align the suppliers table's collation with product_options. A freshly-created
+// table takes the server's DEFAULT collation, which often differs from the
+// older tables — and comparing the two in SQL (UNION/JOIN, e.g. product ->
+// supplier) throws "Illegal mix of collations". Convert to match so every
+// supplier join is safe. Best-effort + idempotent.
+try {
+    $cSt = $pdo->query(
+        "SELECT t.TABLE_COLLATION, c.CHARACTER_SET_NAME
+           FROM INFORMATION_SCHEMA.TABLES t
+           JOIN INFORMATION_SCHEMA.COLLATION_CHARACTER_SET_APPLICABILITY c
+             ON c.COLLATION_NAME = t.TABLE_COLLATION
+          WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = 'product_options' LIMIT 1"
+    );
+    $cc = $cSt ? $cSt->fetch(PDO::FETCH_ASSOC) : null;
+    if ($cc && !empty($cc['TABLE_COLLATION']) && !empty($cc['CHARACTER_SET_NAME'])
+        && preg_match('/^[A-Za-z0-9_]+$/', (string) $cc['TABLE_COLLATION'])
+        && preg_match('/^[A-Za-z0-9_]+$/', (string) $cc['CHARACTER_SET_NAME'])) {
+        $charset   = (string) $cc['CHARACTER_SET_NAME'];
+        $collation = (string) $cc['TABLE_COLLATION'];
+        $pdo->exec("ALTER TABLE suppliers CONVERT TO CHARACTER SET $charset COLLATE $collation");
+        echo "suppliers collation: aligned to product_options ($collation)\n";
+    } else {
+        echo "suppliers collation: product_options collation not found (skipped)\n";
+    }
+} catch (Throwable $e) {
+    echo 'suppliers collation: align skipped (' . $e->getMessage() . ")\n";
+}
+
 // 2) products.supplier_name ------------------------------------------------
 if (!$columnExists($pdo, 'products', 'supplier_name')) {
     $pdo->exec('ALTER TABLE products ADD COLUMN supplier_name VARCHAR(150) NULL');

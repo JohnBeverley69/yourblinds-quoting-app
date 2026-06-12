@@ -429,28 +429,46 @@ $settings = $settingsStmt->fetch() ?: [
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
 if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 
-// Suppliers list for the Suppliers tab — the union of names known to the
-// suppliers table (backfilled from fabrics + In House) plus any supplier names
-// sitting on fabrics that aren't in the table yet, each with its saved order
-// email. So a supplier typed on a product/fabric shows up here automatically.
+// Suppliers list for the Suppliers tab — the suppliers table (backfilled from
+// fabrics + In House) with their saved order emails, PLUS any supplier names
+// sitting on fabrics that aren't in the table yet so a supplier typed on a
+// product shows up here automatically.
+//
+// Done as TWO simple single-table queries merged in PHP, NOT a cross-table
+// UNION/JOIN: the suppliers table is new and may carry a different collation
+// from the older product_options table, and comparing the two in SQL throws
+// "Illegal mix of collations" — which silently emptied this list.
 $supplierRows = [];
 try {
-    $supStmt = db()->prepare(
-        "SELECT t.name, MAX(s.email) AS email
-           FROM (
-                 SELECT name FROM suppliers WHERE client_id = ?
-                 UNION
-                 SELECT DISTINCT TRIM(supplier_name) FROM product_options
-                  WHERE client_id = ? AND supplier_name IS NOT NULL AND TRIM(supplier_name) <> ''
-                ) t
-      LEFT JOIN suppliers s ON s.client_id = ? AND s.name = t.name
-       GROUP BY t.name
-       ORDER BY (t.name = 'In House') DESC, t.name"
+    $byName = [];
+    $sSt = db()->prepare('SELECT name, email FROM suppliers WHERE client_id = ?');
+    $sSt->execute([$clientId]);
+    foreach ($sSt->fetchAll() as $r) {
+        $nm = trim((string) $r['name']);
+        if ($nm === '') continue;
+        $byName[$nm] = ['name' => $nm, 'email' => (string) ($r['email'] ?? '')];
+    }
+    // Fabric supplier names not yet in the suppliers table (email blank).
+    $fSt = db()->prepare(
+        "SELECT DISTINCT TRIM(supplier_name) AS name FROM product_options
+          WHERE client_id = ? AND supplier_name IS NOT NULL AND TRIM(supplier_name) <> ''"
     );
-    $supStmt->execute([$clientId, $clientId, $clientId]);
-    $supplierRows = $supStmt->fetchAll();
+    $fSt->execute([$clientId]);
+    foreach ($fSt->fetchAll() as $r) {
+        $nm = trim((string) $r['name']);
+        if ($nm !== '' && !isset($byName[$nm])) {
+            $byName[$nm] = ['name' => $nm, 'email' => ''];
+        }
+    }
+    // In House first, then alphabetical.
+    uasort($byName, static function ($a, $b) {
+        $ai = $a['name'] === 'In House'; $bi = $b['name'] === 'In House';
+        if ($ai !== $bi) return $ai ? -1 : 1;
+        return strcasecmp($a['name'], $b['name']);
+    });
+    $supplierRows = array_values($byName);
 } catch (Throwable $e) {
-    // suppliers table not migrated yet — the tab shows a run-migration hint.
+    error_log('settings suppliers load failed: ' . $e->getMessage());
 }
 $supplierDelivery = (string) ($settings['supplier_delivery_address'] ?? '');
 
