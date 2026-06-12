@@ -183,9 +183,13 @@ $timeToTop = static function (string $t) use ($startHour, $pxPerHour): float {
     $minsFromStart = (((int) $h) - $startHour) * 60 + (int) $m;
     return ($minsFromStart / 60) * $pxPerHour;
 };
-$durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
+// Minimum card height. The money line (value · paid · balance) adds a row, so
+// when it's shown cards need a little more room or the line overflows under the
+// next card. The layout below sizes + spaces cards by this, so they stay clear.
+$minCardPx = $showMoney ? 86 : 60;
+$durationToHeight = static function (?int $minutes) use ($pxPerHour, $minCardPx): float {
     $m = $minutes && $minutes > 0 ? $minutes : 60;
-    return max(60, ($m / 60) * $pxPerHour);
+    return max($minCardPx, ($m / 60) * $pxPerHour);
 };
 
 // Expanding timeline — same approach as the day view, but here the columns are
