@@ -73,22 +73,27 @@ $mineOnly = !empty($_GET['mine']);
 // was missing; without it, installed-but-not-invoiced jobs were
 // indistinguishable from ones still awaiting materials.
 $plPalette = job_client_palette($clientId);
-$plCol = static function (string $key, string $label) use ($plPalette): array {
-    $bg = $plPalette[$key] ?? '#2563eb';
-    return [$label, $bg, job_status_text_colour($bg)];
+$plCol = static function (string $colourKey, string $label, array $statuses) use ($plPalette): array {
+    $bg = $plPalette[$colourKey] ?? '#2563eb';
+    return [$label, $bg, job_status_text_colour($bg), $statuses];
 };
+// Columns map to the funnel. 'Quote' merges draft + sent — a draft is just a
+// quote that hasn't been sent yet (flagged with a "Not sent" pill on the card),
+// so it doesn't warrant its own column. Declined gets its own column.
 $columns = [
-    'draft'    => $plCol('draft',    'Draft'),
-    'sent'     => $plCol('sent',     'Sent'),
-    'accepted' => $plCol('accepted', 'Accepted'),
-    'ordered'  => $plCol('ordered',  'Ordered'),
-    'fitted'   => $plCol('fitted',   'Fitted'),
-    'invoiced' => $plCol('invoiced', 'Invoiced'),
-    'paid'     => $plCol('paid',     'Paid'),
+    'quote'    => $plCol('sent',     'Quote',    ['draft', 'sent']),
+    'declined' => $plCol('declined', 'Declined', ['declined']),
+    'accepted' => $plCol('accepted', 'Accepted', ['accepted']),
+    'ordered'  => $plCol('ordered',  'Ordered',  ['ordered']),
+    'fitted'   => $plCol('fitted',   'Fitted',   ['fitted']),
+    'invoiced' => $plCol('invoiced', 'Invoiced', ['invoiced']),
+    'paid'     => $plCol('paid',     'Paid',     ['paid']),
 ];
-// 'declined' is a terminal state — surfaced via a filter chip, not
-// a column. Keeping it out of the kanban stops dead leads from
-// cluttering the view.
+// Status → column key (draft + sent both land in 'quote').
+$statusToCol = [];
+foreach ($columns as $colKey => $meta) {
+    foreach ($meta[3] as $s) { $statusToCol[$s] = $colKey; }
+}
 
 $byStatus = array_fill_keys(array_keys($columns), []);
 $totals   = array_fill_keys(array_keys($columns), 0.0);
@@ -143,15 +148,16 @@ if ($hasQuotes) {
         $st->execute($params);
         foreach ($st->fetchAll() as $row) {
             $status = (string) ($row['status'] ?? '');
-            if (!isset($byStatus[$status])) continue;   // skip 'declined' etc.
+            $col    = $statusToCol[$status] ?? null;
+            if ($col === null) continue;   // unknown status — skip
 
-            $counts[$status]++;
-            $totals[$status] += (float) ($row['total'] ?? 0);
+            $counts[$col]++;
+            $totals[$col] += (float) ($row['total'] ?? 0);
 
-            if (count($byStatus[$status]) < $CARD_CAP_PER_COL) {
-                $byStatus[$status][] = $row;
+            if (count($byStatus[$col]) < $CARD_CAP_PER_COL) {
+                $byStatus[$col][] = $row;
             } else {
-                $truncated[$status] = true;
+                $truncated[$col] = true;
             }
         }
     } catch (Throwable $e) {
@@ -282,6 +288,16 @@ $ageOf = static function (?string $ts): string {
         }
         .pl-card .pl-card-place {
             color: var(--text-faint); font-size: 0.6875rem;
+        }
+        /* "Not sent" flag on a draft quote sitting in the Quote column —
+           a glanceable reminder it hasn't gone to the customer yet. */
+        .pl-card .pl-card-notsent {
+            display: inline-block; margin-top: 0.3125rem;
+            font-size: 0.625rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.03em;
+            color: #92400e; background: #fef3c7;
+            border: 1px solid #fde68a; border-radius: 999px;
+            padding: 0.0625rem 0.4375rem;
         }
         /* Payment chip — surfaced on every card, regardless of column.
            A paid-up-front quote sitting in 'accepted' was previously
@@ -459,6 +475,10 @@ $ageOf = static function (?string $ts): string {
                                                 </span>
                                             <?php endif; ?>
                                         </div>
+                                        <?php if (($c['status'] ?? '') === 'draft'): ?>
+                                            <div><span class="pl-card-notsent"
+                                                  title="This quote hasn't been sent to the customer yet">Not sent</span></div>
+                                        <?php endif; ?>
                                         <div class="pl-card-row">
                                             <?php if ($canViewCosts): ?>
                                                 <span class="pl-card-total">
