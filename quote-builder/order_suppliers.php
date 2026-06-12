@@ -72,14 +72,18 @@ try {
     }
 } catch (Throwable $e) { /* columns may be absent — fall back to company details */ }
 
+// IMPORTANT: we must NOT override the From *address* — the SMTP relay
+// (AuthSMTP) only accepts the verified MAIL_FROM sender and rejects anything
+// else, which fails the send. Instead send via the verified address but show
+// the client's name as the sender and set Reply-To to the client's email, so
+// the supplier sees the order from the client and replies reach them.
 $mailOpts = [];
-if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-    $mailOpts['from_email']     = $fromEmail;
-    $mailOpts['reply_to_email'] = $fromEmail;
-}
 if ($fromName !== '') {
     $mailOpts['from_name']     = $fromName;
     $mailOpts['reply_to_name'] = $fromName;
+}
+if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+    $mailOpts['reply_to_email'] = $fromEmail;
 }
 
 // Supplier emails (name -> email). Looked up in PHP (collation-safe).
@@ -144,7 +148,10 @@ try {
 
 // Helper: is a supplier group sendable? (named + has an email)
 $emailFor   = static fn (string $name) => $name !== '' ? ($emailByName[$name] ?? '') : '';
-$isSendable = static fn (string $name) => $name !== '' && ($emailByName[$name] ?? '') !== '';
+// Sendable = a named supplier with a VALID order email (a junk/placeholder
+// address would otherwise pass and then fail at send).
+$isSendable = static fn (string $name) => $name !== ''
+    && filter_var($emailByName[$name] ?? '', FILTER_VALIDATE_EMAIL) !== false;
 
 // ── Send ──────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -347,9 +354,10 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                                 These lines' products have no supplier set — assign one on the product
                                 (Products &rsaquo; edit) to order them.
                             </div>
-                        <?php elseif ($email === ''): ?>
+                        <?php elseif (!$sendable): ?>
                             <div class="sup-warn">
-                                No order email for <strong><?= e($name) ?></strong> — add one under
+                                <?= $email === '' ? 'No order email' : 'That order email (' . e($email) . ') isn\'t valid' ?>
+                                for <strong><?= e($name) ?></strong> — fix it under
                                 Settings &rsaquo; Suppliers to send this.
                             </div>
                         <?php endif; ?>
