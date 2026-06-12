@@ -359,17 +359,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'suppliers') {
-        // The supplier LIST is driven by what's assigned to products — this
-        // screen only stores each supplier's order email + the delivery
-        // address. Names arrive as hidden fields (read-only here); to add or
-        // remove a supplier you set it on the product.
+        // Master suppliers list: add / rename / set email / remove, plus the
+        // delivery address. Rows keyed by suppliers.id (empty id = a new row);
+        // supplier_delete[] holds the ids ticked for removal. Products also
+        // auto-add their supplier here when saved, so the list fills itself.
+        $ids      = (array) ($_POST['supplier_id']    ?? []);
         $names    = (array) ($_POST['supplier_name']  ?? []);
         $emails   = (array) ($_POST['supplier_email'] ?? []);
+        $deletes  = array_values(array_filter(array_map('intval', (array) ($_POST['supplier_delete'] ?? []))));
         $delivery = trim((string) ($_POST['supplier_delivery_address'] ?? ''));
 
-        // Validate emails up front so a typo can't store a dud order address.
+        // Validate emails (rows being deleted are skipped).
         $badFor = null;
         foreach ($names as $i => $rawName) {
+            if (in_array((int) ($ids[$i] ?? 0), $deletes, true)) continue;
             $nm = trim((string) $rawName);
             if ($nm === '') continue;
             $em = trim((string) ($emails[$i] ?? ''));
@@ -388,18 +391,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  ON DUPLICATE KEY UPDATE supplier_delivery_address = VALUES(supplier_delivery_address)'
             )->execute([$clientId, $delivery !== '' ? $delivery : null]);
 
-            // Store each supplier's email (keyed by name).
-            $up = db()->prepare(
+            if ($deletes) {
+                $place = implode(',', array_fill(0, count($deletes), '?'));
+                db()->prepare("DELETE FROM suppliers WHERE client_id = ? AND id IN ($place)")
+                    ->execute(array_merge([$clientId], $deletes));
+            }
+
+            $upd = db()->prepare('UPDATE suppliers SET name = ?, email = ? WHERE id = ? AND client_id = ?');
+            $ins = db()->prepare(
                 'INSERT INTO suppliers (client_id, name, email) VALUES (?, ?, ?)
                  ON DUPLICATE KEY UPDATE email = VALUES(email)'
             );
+            $renameClash = false;
             foreach ($names as $i => $rawName) {
+                $sid = (int) ($ids[$i] ?? 0);
+                if (in_array($sid, $deletes, true)) continue;
                 $nm = trim((string) $rawName);
                 if ($nm === '') continue;
                 $emVal = (($em = trim((string) ($emails[$i] ?? ''))) !== '') ? $em : null;
-                $up->execute([$clientId, $nm, $emVal]);
+                if ($sid > 0) {
+                    try {
+                        $upd->execute([$nm, $emVal, $sid, $clientId]);
+                    } catch (PDOException $e) {
+                        if (str_contains($e->getMessage(), 'uniq_supplier_per_client')) { $renameClash = true; continue; }
+                        throw $e;
+                    }
+                } else {
+                    $ins->execute([$clientId, $nm, $emVal]);
+                }
             }
-            $_SESSION['flash_success'] = 'Supplier emails saved.';
+            $_SESSION['flash_success'] = $renameClash
+                ? 'Suppliers saved — a rename was skipped because that name is already in your list.'
+                : 'Suppliers saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save suppliers: ' . $e->getMessage()
                 . ' — have you run migrate_suppliers.php?';
@@ -430,45 +453,17 @@ $settings = $settingsStmt->fetch() ?: [
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
 if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 
-// Suppliers list for the Suppliers tab — DRIVEN BY PRODUCTS: the distinct
-// suppliers assigned to this tenant's products. This screen just stores each
-// one's order email (kept in the suppliers table, keyed by name). Two simple
-// per-table reads merged in PHP — collation-safe, no cross-table compare.
+// Suppliers list for the Suppliers tab — the master suppliers table, keyed by
+// id so each row can be edited / renamed / removed. Products auto-add their
+// supplier here when saved (so the list fills itself), and you can manage it.
 $supplierRows = [];
 try {
-    // Saved emails, keyed by supplier name.
-    $emailByName = [];
-    try {
-        $es = db()->prepare('SELECT name, email FROM suppliers WHERE client_id = ?');
-        $es->execute([$clientId]);
-        foreach ($es->fetchAll() as $r) {
-            $emailByName[trim((string) $r['name'])] = (string) ($r['email'] ?? '');
-        }
-    } catch (Throwable $e) { /* table may be absent pre-migration */ }
-
-    // Suppliers actually assigned to products = the source of truth for the list.
-    $names = [];
-    try {
-        $ps = db()->prepare(
-            "SELECT DISTINCT supplier_name AS n FROM products
-              WHERE client_id = ? AND supplier_name IS NOT NULL AND TRIM(supplier_name) <> ''"
-        );
-        $ps->execute([$clientId]);
-        foreach ($ps->fetchAll(PDO::FETCH_COLUMN) as $n) {
-            $n = trim((string) $n);
-            if ($n !== '') $names[$n] = true;
-        }
-    } catch (Throwable $e) { /* products.supplier_name may be absent pre-migration */ }
-
-    $names = array_keys($names);
-    usort($names, static function ($a, $b) {
-        $ai = $a === 'In House'; $bi = $b === 'In House';
-        if ($ai !== $bi) return $ai ? -1 : 1;
-        return strcasecmp($a, $b);
-    });
-    foreach ($names as $n) {
-        $supplierRows[] = ['name' => $n, 'email' => $emailByName[$n] ?? ''];
-    }
+    $sSt = db()->prepare(
+        "SELECT id, name, email FROM suppliers
+          WHERE client_id = ? ORDER BY (name = 'In House') DESC, name"
+    );
+    $sSt->execute([$clientId]);
+    $supplierRows = $sSt->fetchAll();
 } catch (Throwable $e) {
     error_log('settings suppliers load failed: ' . $e->getMessage());
 }
@@ -1134,9 +1129,9 @@ $activeNav = 'settings';
                 </div>
 
                 <p style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0.5rem">
-                    These are the suppliers assigned to your products. Add the email each
-                    one's orders should be sent to, then Save. To add or remove a supplier,
-                    set it on the product (<strong>Products &rsaquo; edit a product &rsaquo; Supplier</strong>).
+                    Add the order email for each supplier. You can rename a supplier, tick
+                    <strong>Remove</strong> to delete it, or add one in the bottom row — then Save.
+                    Suppliers you set on products appear here automatically.
                 </p>
 
                 <?php
@@ -1146,27 +1141,40 @@ $activeNav = 'settings';
                     <thead><tr>
                         <th style="width:35%">Supplier</th>
                         <th>Order email</th>
+                        <th style="width:5.5rem;text-align:center">Remove</th>
                     </tr></thead>
                     <tbody>
-                        <?php if (!$supplierRows): ?>
-                            <tr><td colspan="2" style="color:var(--text-faint)">
-                                No suppliers yet — assign a supplier to a product
-                                (Products &rsaquo; edit a product) and it'll appear here.
-                            </td></tr>
-                        <?php endif; ?>
                         <?php foreach ($supplierRows as $sup): ?>
                             <tr>
-                                <td style="font-weight:600;vertical-align:middle">
-                                    <input type="hidden" name="supplier_name[]" value="<?= e((string) $sup['name']) ?>">
-                                    <?= e((string) $sup['name']) ?>
+                                <td>
+                                    <input type="hidden" name="supplier_id[]" value="<?= (int) $sup['id'] ?>">
+                                    <input type="text" name="supplier_name[]" maxlength="150"
+                                           value="<?= e((string) $sup['name']) ?>" style="<?= $supInputStyle ?>">
                                 </td>
                                 <td>
                                     <input type="email" name="supplier_email[]" maxlength="190"
                                            value="<?= e((string) ($sup['email'] ?? '')) ?>"
                                            placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
                                 </td>
+                                <td style="text-align:center">
+                                    <input type="checkbox" name="supplier_delete[]" value="<?= (int) $sup['id'] ?>"
+                                           aria-label="Remove <?= e((string) $sup['name']) ?>"
+                                           style="width:18px;height:18px;cursor:pointer">
+                                </td>
                             </tr>
                         <?php endforeach; ?>
+                        <tr>
+                            <td>
+                                <input type="hidden" name="supplier_id[]" value="">
+                                <input type="text" name="supplier_name[]" maxlength="150"
+                                       placeholder="+ Add a supplier" style="<?= $supInputStyle ?>">
+                            </td>
+                            <td>
+                                <input type="email" name="supplier_email[]" maxlength="190"
+                                       placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
+                            </td>
+                            <td></td>
+                        </tr>
                     </tbody>
                 </table>
 

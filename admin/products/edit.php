@@ -619,6 +619,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $u->execute($vals);
 
+            // Auto-add this product's supplier to the master suppliers list so
+            // it shows under Settings > Suppliers (where its order email is set).
+            // INSERT IGNORE leaves an existing supplier (and its email) untouched.
+            if ($hasSupplierCol && $f['supplier_name'] !== '') {
+                try {
+                    $pdo->prepare('INSERT IGNORE INTO suppliers (client_id, name) VALUES (?, ?)')
+                        ->execute([$clientId, $f['supplier_name']]);
+                } catch (Throwable $e) { /* suppliers table may be absent */ }
+            }
+
             // Markup: 0 (or empty) DELETES the row so the engine falls
             // back to the tenant default (client_settings
             // .default_price_table_markup_pct). Non-zero values upsert
