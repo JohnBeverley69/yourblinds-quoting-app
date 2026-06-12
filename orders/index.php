@@ -61,6 +61,12 @@ try {
 // 'declined (0)' chip clogging the bar.
 $allStatuses   = ['draft', 'sent', 'accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'];
 $orderStatuses = ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'];
+$quoteStatuses = ['draft', 'sent', 'declined'];
+
+// This page doubles as Quote history (pre-acceptance) and Order history
+// (accepted onward) — the two sidebar links pass ?scope=. Default is orders.
+$scope = (($_GET['scope'] ?? '') === 'quotes') ? 'quotes' : 'orders';
+$scopeStatuses = $scope === 'quotes' ? $quoteStatuses : $orderStatuses;
 
 $status = trim((string) ($_GET['status'] ?? ''));
 $q      = trim((string) ($_GET['q'] ?? ''));
@@ -68,7 +74,13 @@ $q      = trim((string) ($_GET['q'] ?? ''));
 $where  = ['q.client_id = ?'];
 $params = [$clientId];
 
-if ($status !== '' && in_array($status, $allStatuses, true)) {
+// Restrict to the current scope's statuses.
+$scopePlace = implode(',', array_fill(0, count($scopeStatuses), '?'));
+$where[]    = "q.status IN ($scopePlace)";
+foreach ($scopeStatuses as $ss) { $params[] = $ss; }
+
+// A specific status chip narrows further — but only within this scope.
+if ($status !== '' && in_array($status, $scopeStatuses, true)) {
     $where[]  = 'q.status = ?';
     $params[] = $status;
 }
@@ -134,6 +146,9 @@ foreach ($countSt->fetchAll() as $r) {
     $counts[$r['status']] = (int) $r['n'];
     $grandTotal += (int) $r['n'];
 }
+// Total within the current scope (for the "All" chip).
+$scopeTotal = 0;
+foreach ($scopeStatuses as $ss) { $scopeTotal += $counts[$ss] ?? 0; }
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -146,18 +161,21 @@ $fmtDate = static function (?string $dt): string {
     return $ts ? date('j M Y', $ts) : '—';
 };
 
-// Convenience flag — when filtered to an order-side status, the
-// Deposit/Outstanding columns are meaningful for every visible row.
-// In "All" view they still render but dash out for pre-acceptance.
-$isOrderView = in_array($status, $orderStatuses, true);
+// Deposit/Outstanding columns only make sense for orders (accepted onward),
+// so they're shown in the orders scope and hidden in the quotes scope.
+$isOrderView = $scope === 'orders';
 
-$activeNav = 'order-history';
+$pageTitle = $scope === 'quotes' ? 'Quote history' : 'Order history';
+$pageSub   = $scope === 'quotes'
+    ? 'Quotes still in the pipeline — drafts, sent, and declined.'
+    : 'Accepted onward — orders, invoices and paid jobs.';
+$activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
 ?><!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Order history &middot; YourBlinds</title>
+    <title><?= e($pageTitle) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .filter-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
@@ -209,12 +227,10 @@ $activeNav = 'order-history';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Order history</h1>
-                <p class="page-subtitle">
-                    Every quote in the funnel — drafts, sent quotes, orders, invoices, paid jobs.
-                </p>
+                <h1 class="page-title"><?= e($pageTitle) ?></h1>
+                <p class="page-subtitle"><?= e($pageSub) ?></p>
                 <div style="display:inline-flex;background:var(--bg-subtle-2);border-radius:8px;padding:0.125rem;margin-top:0.5rem">
-                    <a href="/orders/index.php"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?>"
                        style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,0.06)">List</a>
                     <a href="/orders/pipeline.php"
                        style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;color:var(--text-faint)">Pipeline</a>
@@ -236,12 +252,12 @@ $activeNav = 'order-history';
 
         <section class="section">
             <div class="filter-chips">
-                <a href="/orders/index.php" class="<?= $status === '' ? 'active' : '' ?>">
-                    All (<?= $grandTotal ?>)
+                <a href="/orders/index.php?scope=<?= e($scope) ?>" class="<?= $status === '' ? 'active' : '' ?>">
+                    All (<?= $scopeTotal ?>)
                 </a>
-                <?php foreach ($allStatuses as $s): ?>
+                <?php foreach ($scopeStatuses as $s): ?>
                     <?php if (empty($counts[$s])) continue; ?>
-                    <a href="/orders/index.php?status=<?= e($s) ?>"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?>&status=<?= e($s) ?>"
                        class="<?= $status === $s ? 'active' : '' ?>">
                         <?= ucfirst($s) ?> (<?= (int) $counts[$s] ?>)
                     </a>
@@ -249,6 +265,7 @@ $activeNav = 'order-history';
             </div>
 
             <form method="get" action="/orders/index.php" class="search-form">
+                <input type="hidden" name="scope" value="<?= e($scope) ?>">
                 <?php if ($status !== ''): ?>
                     <input type="hidden" name="status" value="<?= e($status) ?>">
                 <?php endif; ?>
@@ -256,7 +273,7 @@ $activeNav = 'order-history';
                        placeholder="Search by quote #, customer name, or postcode...">
                 <button type="submit" class="btn btn-secondary">Search</button>
                 <?php if ($q !== ''): ?>
-                    <a href="/orders/index.php<?= $status !== '' ? '?status=' . e($status) : '' ?>"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?><?= $status !== '' ? '&status=' . e($status) : '' ?>"
                        class="btn btn-secondary">Clear</a>
                 <?php endif; ?>
             </form>
@@ -264,7 +281,7 @@ $activeNav = 'order-history';
             <?php if (!$rows): ?>
                 <div class="empty-state">
                     <?php if ($q !== '' || $status !== ''): ?>
-                        Nothing matches your filter. <a href="/orders/index.php">Clear filters</a>.
+                        Nothing matches your filter. <a href="/orders/index.php?scope=<?= e($scope) ?>">Clear filters</a>.
                     <?php elseif ($canCreateQuotes): ?>
                         No quotes yet.
                         <a href="/quote-builder/new.php">Start a new quote &rarr;</a>
@@ -306,8 +323,10 @@ $activeNav = 'order-history';
                                     <th>Status</th>
                                     <th>Created</th>
                                     <th class="num">Total</th>
-                                    <th>Deposit</th>
-                                    <?php if ($accountsEnabled): ?>
+                                    <?php if ($isOrderView): ?>
+                                        <th>Deposit</th>
+                                    <?php endif; ?>
+                                    <?php if ($isOrderView && $accountsEnabled): ?>
                                         <th class="num">Outstanding</th>
                                     <?php endif; ?>
                                 </tr>
@@ -359,6 +378,7 @@ $activeNav = 'order-history';
                                             <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
                                         </td>
                                         <td class="num"><?= e($money($r['total'])) ?></td>
+                                        <?php if ($isOrderView): ?>
                                         <td>
                                             <?php if (!$isOrderRow || $dep === null): ?>
                                                 <span style="color:var(--text-faint);font-size:0.8125rem">—</span>
@@ -372,7 +392,8 @@ $activeNav = 'order-history';
                                                 </span>
                                             <?php endif; ?>
                                         </td>
-                                        <?php if ($accountsEnabled): ?>
+                                        <?php endif; ?>
+                                        <?php if ($isOrderView && $accountsEnabled): ?>
                                             <td class="num">
                                                 <?php if (!$isOrderRow): ?>
                                                     <span style="color:var(--text-faint);font-size:0.8125rem">—</span>

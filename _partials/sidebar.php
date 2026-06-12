@@ -133,7 +133,8 @@ $navSections = [
         'items' => [
             'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
             'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-            'order-history' => ['/orders/index.php',           'Order history', $hasQuotes && ($canSeeOrders || $canSeeQuoteHistory)],
+            'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
+            'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
             'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
         ],
