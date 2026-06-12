@@ -213,6 +213,12 @@ $activeNav = 'order-history';
                 <p class="page-subtitle">
                     Every quote in the funnel — drafts, sent quotes, orders, invoices, paid jobs.
                 </p>
+                <div style="display:inline-flex;background:var(--bg-subtle-2);border-radius:8px;padding:0.125rem;margin-top:0.5rem">
+                    <a href="/orders/index.php"
+                       style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,0.06)">List</a>
+                    <a href="/orders/pipeline.php"
+                       style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;color:var(--text-faint)">Pipeline</a>
+                </div>
             </div>
             <?php if ($canCreateQuotes): ?>
                 <a href="/quote-builder/new.php" class="btn btn-primary">
@@ -240,11 +246,6 @@ $activeNav = 'order-history';
                         <?= ucfirst($s) ?> (<?= (int) $counts[$s] ?>)
                     </a>
                 <?php endforeach; ?>
-                <span class="view-toggle">
-                    <a href="/orders/pipeline.php" title="Kanban view of the funnel">
-                        Pipeline view &rarr;
-                    </a>
-                </span>
             </div>
 
             <form method="get" action="/orders/index.php" class="search-form">
