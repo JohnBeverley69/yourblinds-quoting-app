@@ -167,13 +167,26 @@ foreach ($apRows as $r) {
     $byUser[$uid][] = $r;
 }
 
+// Show money on cards? (Settings checkbox.) Resolved here because it sets the
+// row scale below — a card with the money line needs a taller hour to fit.
+$showMoney = false;
+try {
+    $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
+    $mqStmt->execute([$clientId]);
+    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
+} catch (Throwable $e) { /* column not migrated — figures stay off */ }
+
 // Hour range. 7am → 10pm covers early starts, normal daytime, and
 // evening fittings (some tenants quote installs after the homeowner
 // gets in from work). Vertical scroll handles the height.
 $startHour = 7;
 $endHour   = 22;
 $totalHours = $endHour - $startHour;
-$pxPerHour  = 60;   // 1 hour = 60 px → roughly 1 minute = 1 px (easy maths)
+// Pixels per hour. Tall enough that a normal (~1h) appointment's card — money
+// line included — fills its own hour slot, so the axis stays a TRUE linear
+// ruler and only genuinely-overlapping bookings stretch it (and it recovers
+// afterwards). Compact when money figures are off.
+$pxPerHour  = $showMoney ? 90 : 60;
 $gridHeight = $totalHours * $pxPerHour;
 
 // Status → colour. yellow = pending/scheduled, green = confirmed,
@@ -194,14 +207,7 @@ $statusColour = static function (string $s): array {
 // colour for the left accent, so the hue matches without swamping the text.
 $stagePalette = job_client_palette($clientId);
 
-// Calendar money figures — gated by the per-tenant Settings checkbox. When on,
-// batch-load each linked quote's value / received / balance for the cards.
-$showMoney = false;
-try {
-    $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
-    $mqStmt->execute([$clientId]);
-    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
-} catch (Throwable $e) { /* column not migrated — figures stay off */ }
+// Money figures per quote for the cards (the flag was resolved above).
 $moneyByQuote = [];
 if ($showMoney) {
     $qids = [];
@@ -252,11 +258,12 @@ $timeToTop = static function (string $t) use ($startHour, $pxPerHour): float {
     $minsFromStart = (((int) $h) - $startHour) * 60 + (int) $m;
     return ($minsFromStart / 60) * $pxPerHour;
 };
-$durationToHeight = static function (?int $minutes) use ($pxPerHour): float {
+// Minimum card height — kept below one hour's pixels so a normal appointment
+// fills its slot exactly (no false stretch). Taller when the money line shows.
+$minCardPx = $showMoney ? 84 : 60;
+$durationToHeight = static function (?int $minutes) use ($pxPerHour, $minCardPx): float {
     $m = $minutes && $minutes > 0 ? $minutes : 60;
-    // Min height 60px = enough for time chip + heading line + a bit
-    // of breathing room. Below this the card looked blank.
-    return max(60, ($m / 60) * $pxPerHour);
+    return max($minCardPx, ($m / 60) * $pxPerHour);
 };
 
 // Expanding timeline. Tightly-packed bookings need more vertical room than
@@ -317,9 +324,12 @@ $prevMin = null;
 foreach ($mins as $m) {
     $y = $linearY($m);
     if ($prevMin !== null) {
-        // At least the linear gap from the previous point — keeps the map
-        // monotonic and carries any earlier stretch forward.
-        $y = max($y, $ymap[$prevMin] + ($linearY($m) - $linearY($prevMin)));
+        // Monotonic only (never go backwards). NOT "previous + linear gap" —
+        // that would carry an earlier stretch forward forever. Using the raw
+        // previous y lets the axis RECOVER to the true linear ruler as soon as
+        // the natural time positions catch up (i.e. once there's a gap to
+        // absorb a cluster's extra height).
+        $y = max($y, $ymap[$prevMin]);
     }
     foreach ($edges[$m] ?? [] as $e) {
         $y = max($y, $ymap[$e['from']] + $e['w']);   // a card below it must clear
