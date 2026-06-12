@@ -77,6 +77,51 @@ if ($hasBandLabel) {
     } catch (Throwable $e) { /* keep '' */ }
 }
 
+// supplier_name is an optional column (migrate_suppliers.php) — the supplier
+// this product is ordered from. Drives the Settings suppliers list and (later)
+// the split-by-supplier order email. Detected + loaded separately, same as
+// band_label above.
+$hasSupplierCol = false;
+try {
+    $hasSupplierCol = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'supplier_name'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$supplierValue = '';
+if ($hasSupplierCol) {
+    try {
+        $spStmt = db()->prepare('SELECT supplier_name FROM products WHERE id = ? AND client_id = ?');
+        $spStmt->execute([$id, $clientId]);
+        $spVal = $spStmt->fetchColumn();
+        $supplierValue = ($spVal === null || $spVal === false) ? '' : (string) $spVal;
+    } catch (Throwable $e) { /* keep '' */ }
+}
+
+// Known supplier names for the picker's datalist: those already on products
+// PLUS any in the suppliers table, with "In House" always offered. Two simple
+// per-table queries merged in PHP (collation-safe — no cross-table compare).
+$knownSuppliers = [];
+foreach ([
+    'SELECT DISTINCT supplier_name AS n FROM products  WHERE client_id = ? AND supplier_name IS NOT NULL AND supplier_name <> \'\'',
+    'SELECT name          AS n FROM suppliers WHERE client_id = ?',
+] as $sql) {
+    try {
+        $ks = db()->prepare($sql);
+        $ks->execute([$clientId]);
+        foreach ($ks->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $n = trim((string) $n);
+            if ($n !== '') $knownSuppliers[$n] = true;
+        }
+    } catch (Throwable $e) { /* table/column may not exist yet */ }
+}
+$knownSuppliers = array_keys($knownSuppliers);
+sort($knownSuppliers);
+if (!in_array('In House', $knownSuppliers, true)) $knownSuppliers[] = 'In House';
+
 // requires_option is an optional column (migrate_requires_option.php).
 // 0 = a "no-fabric" product (headrail/track/spares): no fabric axis,
 // priced on system × size. Detect + load separately. Default 1 (needs a
@@ -395,6 +440,8 @@ $f = [
     // axis is called in this product's world. "Fabric" for rollers,
     // "Colour" for metal venetians, "Finish" for wood, etc.
     'option_label'      => (string) ($product['option_label'] ?? 'Fabric'),
+    // Supplier this product is ordered from ('' = none). Optional column.
+    'supplier_name'     => $supplierValue,
     // Per-product label for the band step ('' = "Band"). Optional column.
     'band_label'        => $bandLabelValue,
     // 1 = needs a fabric (normal); 0 = no-fabric product. Optional column.
@@ -437,6 +484,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['name']              = trim((string) ($_POST['name']         ?? ''));
     $f['active']            = !empty($_POST['active']) ? 1 : 0;
     $f['option_label']      = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
+    $f['supplier_name']     = trim((string) ($_POST['supplier_name'] ?? ''));
     $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
     // Checkbox is "this product has no fabrics" → requires_option = 0.
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
@@ -528,6 +576,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasBandLabel) {
                 $cols[] = 'band_label = ?';
                 $vals[] = $f['band_label'] !== '' ? $f['band_label'] : null;
+            }
+            if ($hasSupplierCol) {
+                $cols[] = 'supplier_name = ?';
+                $vals[] = $f['supplier_name'] !== '' ? $f['supplier_name'] : null;
             }
             if ($hasRequiresOption) {
                 $cols[] = 'requires_option = ?';
@@ -974,6 +1026,28 @@ $activeNav = 'products';
                         </small>
                     </div>
                 </div>
+
+                <?php if ($hasSupplierCol): ?>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="supplier_name">Supplier</label>
+                            <input id="supplier_name" name="supplier_name" type="text"
+                                   maxlength="150" list="supplier-options"
+                                   value="<?= e((string) $f['supplier_name']) ?>"
+                                   placeholder="e.g. Decora, Louvolite, In House">
+                            <datalist id="supplier-options">
+                                <?php foreach ($knownSuppliers as $sn): ?>
+                                    <option value="<?= e((string) $sn) ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                                Who supplies this product. Pick an existing supplier or type a new one &mdash;
+                                new names appear under <strong>Settings &rsaquo; Suppliers</strong> where you
+                                add their order email. Use <em>In House</em> for products you make yourself.
+                            </small>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php if ($hasBandLabel): ?>
                     <div class="form-row full">
