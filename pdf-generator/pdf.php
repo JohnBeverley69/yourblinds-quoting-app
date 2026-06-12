@@ -136,6 +136,107 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
 }
 
 /**
+ * Render a SUPPLIER purchase-order PDF (A4) — bytes, for emailing to a
+ * supplier. Unlike the customer quote, this DOES show dimensions and is
+ * spec-only (no customer prices). $ctx carries the buyer/company + delivery
+ * details; $items is the spec list for this one supplier. Returns null if
+ * Dompdf isn't installed.
+ */
+function pdf_render_supplier_order(array $ctx, array $items): ?string
+{
+    if (!class_exists(Dompdf::class)) {
+        error_log('[YourBlinds] Dompdf not installed — cannot render supplier order PDF.');
+        return null;
+    }
+
+    $e   = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $mm  = static fn ($v) => ($v === null || $v === '' || (int) $v === 0) ? '—' : number_format((int) $v) . ' mm';
+    $nl2 = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
+
+    $rows = '';
+    $n = 0;
+    foreach ($items as $it) {
+        $n++;
+        $fabric = trim(implode(' / ', array_filter([
+            (string) ($it['fabric'] ?? ''),
+            (string) ($it['colour'] ?? ''),
+            (string) ($it['code'] ?? ''),
+        ], static fn ($s) => trim($s) !== '')));
+        $rows .= '<tr>'
+              . '<td class="num">' . $n . '</td>'
+              . '<td><strong>' . $e($it['product'] ?? '') . '</strong>'
+              . ((string) ($it['system'] ?? '') !== '' ? '<br><span class="muted">' . $e($it['system']) . '</span>' : '')
+              . '</td>'
+              . '<td>' . ($fabric !== '' ? $e($fabric) : '—')
+              . ((string) ($it['band'] ?? '') !== '' ? '<br><span class="muted">Band ' . $e($it['band']) . '</span>' : '')
+              . '</td>'
+              . '<td>' . $e($mm($it['width_mm'] ?? null)) . ' &times; ' . $e($mm($it['drop_mm'] ?? null)) . '</td>'
+              . '<td class="num">' . (int) ($it['quantity'] ?? 1) . '</td>'
+              . '<td>' . $e($it['room'] ?? '')
+              . ((string) ($it['notes'] ?? '') !== '' ? '<br><span class="muted">' . $nl2($it['notes']) . '</span>' : '')
+              . '</td>'
+              . '</tr>';
+    }
+
+    $totalQty = array_sum(array_map(static fn ($it) => (int) ($it['quantity'] ?? 1), $items));
+
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
+        . '.head{display:block;margin-bottom:14px}'
+        . '.title{font-size:20px;font-weight:bold;color:#111827;margin:0 0 2px}'
+        . '.meta{font-size:11px;color:#374151}'
+        . '.cols{width:100%;margin:10px 0 14px}'
+        . '.cols td{vertical-align:top;width:50%;padding:0}'
+        . '.box-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:2px}'
+        . '.box{font-size:11px;line-height:1.4}'
+        . 'table.items{width:100%;border-collapse:collapse;margin-top:6px}'
+        . 'table.items th{background:#1f3b5b;color:#fff;font-size:10px;text-align:left;padding:6px 7px}'
+        . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
+        . 'table.items td.num,table.items th.num{text-align:center;width:34px}'
+        . '.muted{color:#6b7280;font-size:10px}'
+        . '.foot{margin-top:14px;font-size:10px;color:#6b7280}'
+        . '</style></head><body>'
+        . '<div class="head">'
+        . '<div class="title">PURCHASE ORDER</div>'
+        . '<div class="meta"><strong>' . $e($ctx['company_name'] ?? '') . '</strong>'
+        . ((string) ($ctx['po_ref'] ?? '') !== '' ? ' &nbsp;|&nbsp; Ref: <strong>' . $e($ctx['po_ref']) . '</strong>' : '')
+        . ((string) ($ctx['date'] ?? '') !== '' ? ' &nbsp;|&nbsp; ' . $e($ctx['date']) : '')
+        . '</div></div>'
+        . '<table class="cols"><tr>'
+        . '<td><div class="box-label">Supplier</div><div class="box"><strong>' . $e($ctx['supplier_name'] ?? '') . '</strong></div></td>'
+        . '<td><div class="box-label">Deliver to</div><div class="box">'
+        . ((string) ($ctx['delivery_address'] ?? '') !== '' ? $nl2($ctx['delivery_address']) : '<span class="muted">— no delivery address set —</span>')
+        . '</div></td>'
+        . '</tr><tr>'
+        . '<td style="padding-top:10px"><div class="box-label">Ordered by</div><div class="box">'
+        . $e($ctx['company_name'] ?? '')
+        . ((string) ($ctx['company_email'] ?? '') !== '' ? '<br>' . $e($ctx['company_email']) : '')
+        . ((string) ($ctx['company_phone'] ?? '') !== '' ? '<br>' . $e($ctx['company_phone']) : '')
+        . '</div></td><td></td>'
+        . '</tr></table>'
+        . '<table class="items"><thead><tr>'
+        . '<th class="num">#</th><th>Product</th><th>Fabric / colour / code</th>'
+        . '<th>Size (W &times; D)</th><th class="num">Qty</th><th>Room / notes</th>'
+        . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<div class="foot">' . count($items) . ' line(s), ' . (int) $totalQty . ' item(s) total. '
+        . 'Please confirm receipt and lead time to the contact above.</div>'
+        . '</body></html>';
+
+    $options = new Options();
+    $options->set('isRemoteEnabled',      false);
+    $options->set('isHtml5ParserEnabled', true);
+    $options->set('defaultFont',          'helvetica');
+    $options->set('chroot',               APP_ROOT);
+
+    $dompdf = new Dompdf($options);
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    return $dompdf->output();
+}
+
+/**
  * Build the printable HTML for one quote — customer-facing version.
  * Inline CSS — Dompdf has isRemoteEnabled = false (intentionally), so
  * external stylesheets won't load.
