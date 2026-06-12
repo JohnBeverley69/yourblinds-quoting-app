@@ -16,13 +16,20 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
  * @param string           $body        plain text body
  * @param array|null       $attachment  ['content' => bytes, 'filename' => name, 'mime' => mime]
  * @param string|null      $htmlBody    optional HTML alternative
+ * @param array|null       $opts        per-send overrides:
+ *                                       ['from_email','from_name',
+ *                                        'reply_to_email','reply_to_name']
+ *                                       — e.g. send "from" the trade client's
+ *                                       own settings. Invalid emails fall back
+ *                                       to the MAIL_FROM default.
  */
 function mailer_send(
     $to,
     string $subject,
     string $body,
     ?array $attachment = null,
-    ?string $htmlBody = null
+    ?string $htmlBody = null,
+    ?array $opts = null
 ): bool {
     if (!class_exists(PHPMailer::class)) {
         error_log('[YourBlinds] PHPMailer not installed — run "composer install" to enable email.');
@@ -55,8 +62,18 @@ function mailer_send(
         $mailer->CharSet    = 'UTF-8';
         $mailer->Timeout    = 15;
 
-        $mailer->setFrom($from, $fromName);
-        $mailer->addReplyTo($from, $fromName);
+        // Per-send overrides (e.g. the trade client's own from/reply-to from
+        // their Settings). Bad addresses fall back to the configured default.
+        $opts      = $opts ?? [];
+        $fromEmail = (!empty($opts['from_email']) && filter_var($opts['from_email'], FILTER_VALIDATE_EMAIL))
+            ? (string) $opts['from_email'] : $from;
+        $fromNm    = !empty($opts['from_name']) ? (string) $opts['from_name'] : $fromName;
+        $replyEmail = (!empty($opts['reply_to_email']) && filter_var($opts['reply_to_email'], FILTER_VALIDATE_EMAIL))
+            ? (string) $opts['reply_to_email'] : $fromEmail;
+        $replyNm    = !empty($opts['reply_to_name']) ? (string) $opts['reply_to_name'] : $fromNm;
+
+        $mailer->setFrom($fromEmail, $fromNm);
+        $mailer->addReplyTo($replyEmail, $replyNm);
 
         foreach ((array) $to as $recipient) {
             $recipient = trim((string) $recipient);

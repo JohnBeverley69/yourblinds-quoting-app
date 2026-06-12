@@ -58,6 +58,30 @@ try {
     $deliveryAddress = (string) ($dStmt->fetchColumn() ?: '');
 } catch (Throwable $e) { /* column may be absent pre-migration */ }
 
+// Send the order "from" the trade client's own settings — their email-from
+// name + reply-to address — falling back to the company name/email. So a
+// supplier sees the order coming from the client, and replies reach them.
+$fromName  = (string) ($client['company_name'] ?? '');
+$fromEmail = (string) ($client['email'] ?? '');
+try {
+    $fsStmt = db()->prepare('SELECT email_from_name, reply_to_email FROM client_settings WHERE client_id = ? LIMIT 1');
+    $fsStmt->execute([$clientId]);
+    if ($fsRow = $fsStmt->fetch()) {
+        if (trim((string) ($fsRow['email_from_name'] ?? '')) !== '') $fromName  = trim((string) $fsRow['email_from_name']);
+        if (trim((string) ($fsRow['reply_to_email']  ?? '')) !== '') $fromEmail = trim((string) $fsRow['reply_to_email']);
+    }
+} catch (Throwable $e) { /* columns may be absent — fall back to company details */ }
+
+$mailOpts = [];
+if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+    $mailOpts['from_email']     = $fromEmail;
+    $mailOpts['reply_to_email'] = $fromEmail;
+}
+if ($fromName !== '') {
+    $mailOpts['from_name']     = $fromName;
+    $mailOpts['reply_to_name'] = $fromName;
+}
+
 // Supplier emails (name -> email). Looked up in PHP (collation-safe).
 $emailByName = [];
 try {
@@ -204,7 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email,
             ($client['company_name'] ?: 'Order') . ' — Purchase Order ' . $quote['quote_number'],
             implode("\n", $bodyLines),
-            $attachment
+            $attachment,
+            null,
+            $mailOpts
         );
 
         if ($ok) {
