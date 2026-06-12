@@ -768,6 +768,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         </button>
                     </form>
                 <?php endforeach; ?>
+                <?php if ($quoteIsOrder && ($isAdmin || !empty($_perms['can_create_orders']))): ?>
+                    <a href="/quote-builder/order_suppliers.php?id=<?= (int) $quote['id'] ?>"
+                       class="btn btn-secondary">📦 Send to suppliers</a>
+                <?php endif; ?>
             </div>
         </section>
 
