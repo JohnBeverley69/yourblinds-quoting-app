@@ -329,8 +329,13 @@ $ageOf = static function (?string $ts): string {
                 <h1 class="page-title">Pipeline</h1>
                 <p class="page-subtitle">
                     Where every job is in the funnel.
-                    <a href="/orders/index.php">List view &rarr;</a>
                 </p>
+                <div style="display:inline-flex;background:var(--bg-subtle-2);border-radius:8px;padding:0.125rem;margin-top:0.5rem">
+                    <a href="/orders/index.php"
+                       style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;color:var(--text-faint)">List</a>
+                    <a href="/orders/pipeline.php"
+                       style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,0.06)">Pipeline</a>
+                </div>
             </div>
         </div>
 
