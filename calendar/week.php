@@ -122,10 +122,20 @@ foreach ($apRows as $r) {
     $byDate[(string) $r['appointment_date']][] = $r;
 }
 
-// Hour range — match day view.
+// Money figures? (Settings checkbox) — resolved here as it sets the row scale.
+$showMoney = false;
+try {
+    $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
+    $mqStmt->execute([$clientId]);
+    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
+} catch (Throwable $e) { /* column not migrated — figures stay off */ }
+
+// Hour range — match day view. pxPerHour is tall enough that a normal (~1h)
+// appointment's card (money line included) fills its slot, so the axis stays a
+// true linear ruler and only genuinely-overlapping bookings stretch it.
 $startHour = 7;
 $endHour   = 22;
-$pxPerHour = 60;
+$pxPerHour = $showMoney ? 90 : 60;
 $gridHeight = ($endHour - $startHour) * $pxPerHour;
 
 // Same traffic-light palette as the calendar + Settings, so a job's hue is
@@ -133,13 +143,6 @@ $gridHeight = ($endHour - $startHour) * $pxPerHour;
 // tint of the stage colour (a solid fill would swamp the text).
 $stagePalette = job_client_palette($clientId);
 
-// Calendar money figures — gated by the per-tenant Settings checkbox.
-$showMoney = false;
-try {
-    $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
-    $mqStmt->execute([$clientId]);
-    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
-} catch (Throwable $e) { /* column not migrated — figures stay off */ }
 $moneyByQuote = [];
 if ($showMoney) {
     $qids = [];
@@ -183,10 +186,9 @@ $timeToTop = static function (string $t) use ($startHour, $pxPerHour): float {
     $minsFromStart = (((int) $h) - $startHour) * 60 + (int) $m;
     return ($minsFromStart / 60) * $pxPerHour;
 };
-// Minimum card height. The money line (value · paid · balance) adds a row, so
-// when it's shown cards need a little more room or the line overflows under the
-// next card. The layout below sizes + spaces cards by this, so they stay clear.
-$minCardPx = $showMoney ? 86 : 60;
+// Minimum card height — kept below one hour's pixels so a normal appointment
+// fills its slot exactly (no false stretch). Taller when the money line shows.
+$minCardPx = $showMoney ? 84 : 60;
 $durationToHeight = static function (?int $minutes) use ($pxPerHour, $minCardPx): float {
     $m = $minutes && $minutes > 0 ? $minutes : 60;
     return max($minCardPx, ($m / 60) * $pxPerHour);
@@ -235,7 +237,9 @@ $prevMin = null;
 foreach ($mins as $m) {
     $y = $linearY($m);
     if ($prevMin !== null) {
-        $y = max($y, $ymap[$prevMin] + ($linearY($m) - $linearY($prevMin)));
+        // Monotonic only — lets the axis RECOVER to the true linear ruler once
+        // the natural positions catch up, instead of carrying a stretch forward.
+        $y = max($y, $ymap[$prevMin]);
     }
     foreach ($edges[$m] ?? [] as $e) {
         $y = max($y, $ymap[$e['from']] + $e['w']);
