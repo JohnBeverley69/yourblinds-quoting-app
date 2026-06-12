@@ -335,6 +335,15 @@ $activeNav = 'order-history';
                                             <a href="/quote-builder/edit.php?id=<?= (int) $r['id'] ?>" class="q-link">
                                                 <?= e((string) $r['quote_number']) ?>
                                             </a>
+                                            <?php if ($isOrderRow && ($isAdmin || !empty($_perms['can_create_orders']))): ?>
+                                                <div style="margin-top:0.1875rem">
+                                                    <a href="/quote-builder/order_suppliers.php?id=<?= (int) $r['id'] ?>"
+                                                       title="Send this order to its suppliers"
+                                                       style="font-size:0.6875rem;color:var(--link);text-decoration:none;white-space:nowrap">
+                                                        &#128230; Send to suppliers
+                                                    </a>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                         <td><?= e((string) ($r['end_customer_name'] ?? '')) ?></td>
                                         <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
