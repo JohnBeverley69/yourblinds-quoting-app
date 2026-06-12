@@ -357,6 +357,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /admin/settings.php');
         exit;
     }
+
+    if ($action === 'suppliers') {
+        // Save each supplier's order email (upsert by name) + the shared
+        // delivery address that goes on every supplier order.
+        $names    = (array) ($_POST['supplier_name']  ?? []);
+        $emails   = (array) ($_POST['supplier_email'] ?? []);
+        $delivery = trim((string) ($_POST['supplier_delivery_address'] ?? ''));
+
+        // Validate emails up front — reject the whole save if one's malformed
+        // so a typo doesn't silently store a dud order address.
+        $badFor = null;
+        foreach ($names as $i => $rawName) {
+            $nm = trim((string) $rawName);
+            if ($nm === '') continue;
+            $em = trim((string) ($emails[$i] ?? ''));
+            if ($em !== '' && !filter_var($em, FILTER_VALIDATE_EMAIL)) { $badFor = $nm; break; }
+        }
+        if ($badFor !== null) {
+            $_SESSION['flash_error'] = 'That doesn\'t look like a valid email for "' . $badFor . '".';
+            header('Location: /admin/settings.php');
+            exit;
+        }
+
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, supplier_delivery_address)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE supplier_delivery_address = VALUES(supplier_delivery_address)'
+            )->execute([$clientId, $delivery !== '' ? $delivery : null]);
+
+            $up = db()->prepare(
+                'INSERT INTO suppliers (client_id, name, email)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE email = VALUES(email)'
+            );
+            foreach ($names as $i => $rawName) {
+                $nm = trim((string) $rawName);
+                if ($nm === '') continue;
+                $em = trim((string) ($emails[$i] ?? ''));
+                $up->execute([$clientId, $nm, $em !== '' ? $em : null]);
+            }
+            $_SESSION['flash_success'] = 'Suppliers saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save suppliers: ' . $e->getMessage()
+                . ' — have you run migrate_suppliers.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
 }
 
 $clientStmt = db()->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
@@ -379,6 +428,31 @@ $settings = $settingsStmt->fetch() ?: [
 // May be absent if the row exists but the migration hasn't run.
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
 if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
+
+// Suppliers list for the Suppliers tab — the union of names known to the
+// suppliers table (backfilled from fabrics + In House) plus any supplier names
+// sitting on fabrics that aren't in the table yet, each with its saved order
+// email. So a supplier typed on a product/fabric shows up here automatically.
+$supplierRows = [];
+try {
+    $supStmt = db()->prepare(
+        "SELECT t.name, MAX(s.email) AS email
+           FROM (
+                 SELECT name FROM suppliers WHERE client_id = ?
+                 UNION
+                 SELECT DISTINCT TRIM(supplier_name) FROM product_options
+                  WHERE client_id = ? AND supplier_name IS NOT NULL AND TRIM(supplier_name) <> ''
+                ) t
+      LEFT JOIN suppliers s ON s.client_id = ? AND s.name = t.name
+       GROUP BY t.name
+       ORDER BY (t.name = 'In House') DESC, t.name"
+    );
+    $supStmt->execute([$clientId, $clientId, $clientId]);
+    $supplierRows = $supStmt->fetchAll();
+} catch (Throwable $e) {
+    // suppliers table not migrated yet — the tab shows a run-migration hint.
+}
+$supplierDelivery = (string) ($settings['supplier_delivery_address'] ?? '');
 
 // Terms & Privacy textareas: show the stored value if configured, else
 // pre-fill with the suggested template as a starting point. A NULL column
@@ -462,6 +536,7 @@ $activeNav = 'settings';
             <button type="button" class="settings-tab" id="tab-quoting" data-tab="quoting" role="tab" aria-selected="false">Quoting</button>
             <button type="button" class="settings-tab" id="tab-legal" data-tab="legal" role="tab" aria-selected="false">Legal</button>
             <button type="button" class="settings-tab" id="tab-colours" data-tab="colours" role="tab" aria-selected="false">Status colours</button>
+            <button type="button" class="settings-tab" id="tab-suppliers" data-tab="suppliers" role="tab" aria-selected="false">Suppliers</button>
         </div>
 
         <div class="settings-panels">
@@ -1020,6 +1095,74 @@ $activeNav = 'settings';
         </section>
 
         </div><!-- /tab: colours -->
+        <div class="settings-panel" data-panel="suppliers" role="tabpanel" aria-labelledby="tab-suppliers">
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Suppliers</h2>
+            </div>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="suppliers">
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="supplier_delivery_address">Delivery address <span style="font-weight:400;color:var(--text-faint)">(where suppliers ship to)</span></label>
+                        <textarea id="supplier_delivery_address" name="supplier_delivery_address" rows="4"
+                                  placeholder="Your business / warehouse address — this goes on every supplier order"><?= e($supplierDelivery) ?></textarea>
+                    </div>
+                </div>
+
+                <p style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0.5rem">
+                    Every supplier used by your products is listed here. Add the email
+                    that orders should be sent to. New suppliers you type on a product
+                    appear here automatically — fill in their email and Save.
+                </p>
+
+                <table class="table" style="font-size:0.9375rem;margin:0 0 1rem">
+                    <thead><tr><th>Supplier</th><th>Order email</th></tr></thead>
+                    <tbody>
+                        <?php if (!$supplierRows): ?>
+                            <tr><td colspan="2" style="color:var(--text-faint)">
+                                No suppliers yet — add one below, or assign suppliers to your products.
+                            </td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($supplierRows as $sup): ?>
+                            <tr>
+                                <td style="font-weight:600">
+                                    <input type="hidden" name="supplier_name[]" value="<?= e((string) $sup['name']) ?>">
+                                    <?= e((string) $sup['name']) ?>
+                                </td>
+                                <td>
+                                    <input type="email" name="supplier_email[]" maxlength="190"
+                                           value="<?= e((string) ($sup['email'] ?? '')) ?>"
+                                           placeholder="orders@supplier.com"
+                                           style="width:100%;max-width:24rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <tr>
+                            <td>
+                                <input type="text" name="supplier_name[]" maxlength="150"
+                                       placeholder="+ Add a supplier"
+                                       style="width:100%;max-width:16rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                            </td>
+                            <td>
+                                <input type="email" name="supplier_email[]" maxlength="190"
+                                       placeholder="orders@supplier.com"
+                                       style="width:100%;max-width:24rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save suppliers</button>
+                </div>
+            </form>
+        </section>
+
+        </div><!-- /tab: suppliers -->
         </div><!-- /settings-panels -->
     </main>
 </div>
