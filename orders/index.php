@@ -68,7 +68,23 @@ $quoteStatuses = ['draft', 'sent', 'declined'];
 $scope = (($_GET['scope'] ?? '') === 'quotes') ? 'quotes' : 'orders';
 $scopeStatuses = $scope === 'quotes' ? $quoteStatuses : $orderStatuses;
 
-$status = trim((string) ($_GET['status'] ?? ''));
+// Filter chips per scope. Quotes scope mirrors the pipeline: draft + sent are
+// one "Quote" group (a draft is just a quote that's not sent yet). Each chip is
+// key => [label, statuses[]].
+$chipDefs = $scope === 'quotes'
+    ? [
+        'quote'    => ['Quote',    ['draft', 'sent']],
+        'declined' => ['Declined', ['declined']],
+      ]
+    : [
+        'accepted' => ['Accepted', ['accepted']],
+        'ordered'  => ['Ordered',  ['ordered']],
+        'fitted'   => ['Fitted',   ['fitted']],
+        'invoiced' => ['Invoiced', ['invoiced']],
+        'paid'     => ['Paid',     ['paid']],
+      ];
+
+$status = trim((string) ($_GET['status'] ?? ''));   // now a CHIP key (may be a group)
 $q      = trim((string) ($_GET['q'] ?? ''));
 
 $where  = ['q.client_id = ?'];
@@ -79,10 +95,12 @@ $scopePlace = implode(',', array_fill(0, count($scopeStatuses), '?'));
 $where[]    = "q.status IN ($scopePlace)";
 foreach ($scopeStatuses as $ss) { $params[] = $ss; }
 
-// A specific status chip narrows further — but only within this scope.
-if ($status !== '' && in_array($status, $scopeStatuses, true)) {
-    $where[]  = 'q.status = ?';
-    $params[] = $status;
+// A chip narrows further to its status group, within this scope.
+if ($status !== '' && isset($chipDefs[$status])) {
+    $chipStatuses = $chipDefs[$status][1];
+    $cPlace = implode(',', array_fill(0, count($chipStatuses), '?'));
+    $where[] = "q.status IN ($cPlace)";
+    foreach ($chipStatuses as $cs) { $params[] = $cs; }
 }
 if ($q !== '') {
     $where[]  = '(q.quote_number LIKE ? OR q.end_customer_name LIKE ? OR q.end_customer_postcode LIKE ?)';
@@ -255,11 +273,14 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                 <a href="/orders/index.php?scope=<?= e($scope) ?>" class="<?= $status === '' ? 'active' : '' ?>">
                     All (<?= $scopeTotal ?>)
                 </a>
-                <?php foreach ($scopeStatuses as $s): ?>
-                    <?php if (empty($counts[$s])) continue; ?>
-                    <a href="/orders/index.php?scope=<?= e($scope) ?>&status=<?= e($s) ?>"
-                       class="<?= $status === $s ? 'active' : '' ?>">
-                        <?= ucfirst($s) ?> (<?= (int) $counts[$s] ?>)
+                <?php foreach ($chipDefs as $chipKey => [$chipLabel, $chipStatuses]):
+                    $chipCount = 0;
+                    foreach ($chipStatuses as $cs) { $chipCount += $counts[$cs] ?? 0; }
+                    if ($chipCount === 0) continue;
+                ?>
+                    <a href="/orders/index.php?scope=<?= e($scope) ?>&status=<?= e($chipKey) ?>"
+                       class="<?= $status === $chipKey ? 'active' : '' ?>">
+                        <?= e($chipLabel) ?> (<?= $chipCount ?>)
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -368,11 +389,22 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                                         <td><?= e((string) ($r['end_customer_name'] ?? '')) ?></td>
                                         <td><?= e((string) ($r['end_customer_postcode'] ?? '')) ?></td>
                                         <td>
-                                            <?php $pillBg = job_status_colour((string) $r['status'], $statusPalette); ?>
-                                            <span class="status-pill status-<?= e((string) $r['status']) ?>"
+                                            <?php
+                                                $rawStatus    = (string) $r['status'];
+                                                // In the quotes scope, draft + sent both read as "Quote"
+                                                // (a draft is just an un-sent quote) — mirrors the pipeline.
+                                                $isQuoteStage = $scope === 'quotes' && in_array($rawStatus, ['draft', 'sent'], true);
+                                                $pillLabel    = $isQuoteStage ? 'Quote' : $rawStatus;
+                                                $pillBg       = job_status_colour($isQuoteStage ? 'sent' : $rawStatus, $statusPalette);
+                                            ?>
+                                            <span class="status-pill status-<?= e($rawStatus) ?>"
                                                   style="background:<?= e($pillBg) ?>;color:<?= e(job_status_text_colour($pillBg)) ?>">
-                                                <?= e((string) $r['status']) ?>
+                                                <?= e($pillLabel) ?>
                                             </span>
+                                            <?php if ($rawStatus === 'draft'): ?>
+                                                <span title="This quote hasn't been sent to the customer yet"
+                                                      style="display:inline-block;margin-left:0.25rem;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:0.0625rem 0.4375rem">Not sent</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">
                                             <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
