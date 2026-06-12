@@ -556,8 +556,13 @@ $activeNav = 'calendar';
             font-size: 0.72rem;
             line-height: 1;
             cursor: pointer;
-            opacity: 0.4;
-            filter: grayscale(1);
+            /* Faded when inactive, but legible on the coloured cards: lift the
+               opacity and brighten the greyscale toward white, with a soft dark
+               halo so the glyph reads on any card colour. Active states below
+               restore full colour + opacity. */
+            opacity: 0.8;
+            filter: grayscale(1) brightness(1.4);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
         }
         .cal-appt-issue:hover, .cal-appt-issue:focus { opacity: 1; filter: none; outline: none; }
         .cal-appt.is-issue .cal-appt-issue { opacity: 1; filter: none; }
@@ -571,8 +576,13 @@ $activeNav = 'calendar';
             font-size: 0.72rem;
             line-height: 1;
             cursor: pointer;
-            opacity: 0.4;
-            filter: grayscale(1);
+            /* Faded when inactive, but legible on the coloured cards: lift the
+               opacity and brighten the greyscale toward white, with a soft dark
+               halo so the glyph reads on any card colour. Active states below
+               restore full colour + opacity. */
+            opacity: 0.8;
+            filter: grayscale(1) brightness(1.4);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
         }
         .cal-appt-note:hover, .cal-appt-note:focus { opacity: 1; filter: none; outline: none; }
         .cal-appt.has-note { box-shadow: inset 4px 0 0 #f59e0b; }
