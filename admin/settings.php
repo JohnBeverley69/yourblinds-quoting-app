@@ -359,16 +359,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'suppliers') {
-        // Save each supplier's order email (upsert by name) + the shared
-        // delivery address that goes on every supplier order.
+        // Save the delivery address + the supplier list: add / rename / set
+        // email / delete. Rows are keyed by suppliers.id (empty id = a new row);
+        // supplier_delete[] carries the ids ticked for removal.
+        $ids      = (array) ($_POST['supplier_id']    ?? []);
         $names    = (array) ($_POST['supplier_name']  ?? []);
         $emails   = (array) ($_POST['supplier_email'] ?? []);
+        $deletes  = array_values(array_filter(array_map('intval', (array) ($_POST['supplier_delete'] ?? []))));
         $delivery = trim((string) ($_POST['supplier_delivery_address'] ?? ''));
 
-        // Validate emails up front — reject the whole save if one's malformed
-        // so a typo doesn't silently store a dud order address.
+        // Validate emails up front (rows being deleted are skipped).
         $badFor = null;
         foreach ($names as $i => $rawName) {
+            if (in_array((int) ($ids[$i] ?? 0), $deletes, true)) continue;
             $nm = trim((string) $rawName);
             if ($nm === '') continue;
             $em = trim((string) ($emails[$i] ?? ''));
@@ -387,18 +390,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  ON DUPLICATE KEY UPDATE supplier_delivery_address = VALUES(supplier_delivery_address)'
             )->execute([$clientId, $delivery !== '' ? $delivery : null]);
 
-            $up = db()->prepare(
-                'INSERT INTO suppliers (client_id, name, email)
-                 VALUES (?, ?, ?)
+            // Removals first (tenant-scoped).
+            if ($deletes) {
+                $place = implode(',', array_fill(0, count($deletes), '?'));
+                db()->prepare("DELETE FROM suppliers WHERE client_id = ? AND id IN ($place)")
+                    ->execute(array_merge([$clientId], $deletes));
+            }
+
+            $upd = db()->prepare('UPDATE suppliers SET name = ?, email = ? WHERE id = ? AND client_id = ?');
+            $ins = db()->prepare(
+                'INSERT INTO suppliers (client_id, name, email) VALUES (?, ?, ?)
                  ON DUPLICATE KEY UPDATE email = VALUES(email)'
             );
+            $renameClash = false;
             foreach ($names as $i => $rawName) {
+                $sid = (int) ($ids[$i] ?? 0);
+                if (in_array($sid, $deletes, true)) continue;
                 $nm = trim((string) $rawName);
                 if ($nm === '') continue;
-                $em = trim((string) ($emails[$i] ?? ''));
-                $up->execute([$clientId, $nm, $em !== '' ? $em : null]);
+                $emVal = (($em = trim((string) ($emails[$i] ?? ''))) !== '') ? $em : null;
+                if ($sid > 0) {
+                    try {
+                        $upd->execute([$nm, $emVal, $sid, $clientId]);
+                    } catch (PDOException $e) {
+                        // Renamed onto a name that's already in the list — skip it.
+                        if (str_contains($e->getMessage(), 'uniq_supplier_per_client')) { $renameClash = true; continue; }
+                        throw $e;
+                    }
+                } else {
+                    $ins->execute([$clientId, $nm, $emVal]);
+                }
             }
-            $_SESSION['flash_success'] = 'Suppliers saved.';
+            $_SESSION['flash_success'] = $renameClash
+                ? 'Suppliers saved — a rename was skipped because that name is already in your list.'
+                : 'Suppliers saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save suppliers: ' . $e->getMessage()
                 . ' — have you run migrate_suppliers.php?';
@@ -429,44 +454,18 @@ $settings = $settingsStmt->fetch() ?: [
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
 if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 
-// Suppliers list for the Suppliers tab — the suppliers table (backfilled from
-// fabrics + In House) with their saved order emails, PLUS any supplier names
-// sitting on fabrics that aren't in the table yet so a supplier typed on a
-// product shows up here automatically.
-//
-// Done as TWO simple single-table queries merged in PHP, NOT a cross-table
-// UNION/JOIN: the suppliers table is new and may carry a different collation
-// from the older product_options table, and comparing the two in SQL throws
-// "Illegal mix of collations" — which silently emptied this list.
+// Suppliers list for the Suppliers tab — the managed suppliers table (seeded
+// from fabrics + In House by the migration). Single-table read keyed by id, so
+// each row can be edited / renamed / deleted and deletes stick. (Avoids the
+// cross-table UNION/JOIN that hit "Illegal mix of collations" before.)
 $supplierRows = [];
 try {
-    $byName = [];
-    $sSt = db()->prepare('SELECT name, email FROM suppliers WHERE client_id = ?');
-    $sSt->execute([$clientId]);
-    foreach ($sSt->fetchAll() as $r) {
-        $nm = trim((string) $r['name']);
-        if ($nm === '') continue;
-        $byName[$nm] = ['name' => $nm, 'email' => (string) ($r['email'] ?? '')];
-    }
-    // Fabric supplier names not yet in the suppliers table (email blank).
-    $fSt = db()->prepare(
-        "SELECT DISTINCT TRIM(supplier_name) AS name FROM product_options
-          WHERE client_id = ? AND supplier_name IS NOT NULL AND TRIM(supplier_name) <> ''"
+    $sSt = db()->prepare(
+        "SELECT id, name, email FROM suppliers
+          WHERE client_id = ? ORDER BY (name = 'In House') DESC, name"
     );
-    $fSt->execute([$clientId]);
-    foreach ($fSt->fetchAll() as $r) {
-        $nm = trim((string) $r['name']);
-        if ($nm !== '' && !isset($byName[$nm])) {
-            $byName[$nm] = ['name' => $nm, 'email' => ''];
-        }
-    }
-    // In House first, then alphabetical.
-    uasort($byName, static function ($a, $b) {
-        $ai = $a['name'] === 'In House'; $bi = $b['name'] === 'In House';
-        if ($ai !== $bi) return $ai ? -1 : 1;
-        return strcasecmp($a['name'], $b['name']);
-    });
-    $supplierRows = array_values($byName);
+    $sSt->execute([$clientId]);
+    $supplierRows = $sSt->fetchAll();
 } catch (Throwable $e) {
     error_log('settings suppliers load failed: ' . $e->getMessage());
 }
@@ -1132,44 +1131,50 @@ $activeNav = 'settings';
                 </div>
 
                 <p style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0.5rem">
-                    Every supplier used by your products is listed here. Add the email
-                    that orders should be sent to. New suppliers you type on a product
-                    appear here automatically — fill in their email and Save.
+                    Add the email each supplier's orders should be sent to. You can rename
+                    a supplier or tick <strong>Remove</strong> to delete it, then Save.
                 </p>
 
+                <?php
+                    $supInputStyle = 'width:100%;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit';
+                ?>
                 <table class="table" style="font-size:0.9375rem;margin:0 0 1rem">
-                    <thead><tr><th>Supplier</th><th>Order email</th></tr></thead>
+                    <thead><tr>
+                        <th style="width:30%">Supplier</th>
+                        <th>Order email</th>
+                        <th style="width:5.5rem;text-align:center">Remove</th>
+                    </tr></thead>
                     <tbody>
-                        <?php if (!$supplierRows): ?>
-                            <tr><td colspan="2" style="color:var(--text-faint)">
-                                No suppliers yet — add one below, or assign suppliers to your products.
-                            </td></tr>
-                        <?php endif; ?>
                         <?php foreach ($supplierRows as $sup): ?>
                             <tr>
-                                <td style="font-weight:600">
-                                    <input type="hidden" name="supplier_name[]" value="<?= e((string) $sup['name']) ?>">
-                                    <?= e((string) $sup['name']) ?>
+                                <td>
+                                    <input type="hidden" name="supplier_id[]" value="<?= (int) $sup['id'] ?>">
+                                    <input type="text" name="supplier_name[]" maxlength="150"
+                                           value="<?= e((string) $sup['name']) ?>" style="<?= $supInputStyle ?>">
                                 </td>
                                 <td>
                                     <input type="email" name="supplier_email[]" maxlength="190"
                                            value="<?= e((string) ($sup['email'] ?? '')) ?>"
-                                           placeholder="orders@supplier.com"
-                                           style="width:100%;max-width:24rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                                           placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
+                                </td>
+                                <td style="text-align:center">
+                                    <input type="checkbox" name="supplier_delete[]" value="<?= (int) $sup['id'] ?>"
+                                           aria-label="Remove <?= e((string) $sup['name']) ?>"
+                                           style="width:18px;height:18px;cursor:pointer">
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                         <tr>
                             <td>
+                                <input type="hidden" name="supplier_id[]" value="">
                                 <input type="text" name="supplier_name[]" maxlength="150"
-                                       placeholder="+ Add a supplier"
-                                       style="width:100%;max-width:16rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                                       placeholder="+ Add a supplier" style="<?= $supInputStyle ?>">
                             </td>
                             <td>
                                 <input type="email" name="supplier_email[]" maxlength="190"
-                                       placeholder="orders@supplier.com"
-                                       style="width:100%;max-width:24rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                                       placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
                             </td>
+                            <td></td>
                         </tr>
                     </tbody>
                 </table>
