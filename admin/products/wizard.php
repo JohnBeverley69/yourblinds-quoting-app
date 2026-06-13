@@ -798,16 +798,16 @@ $activeNav = 'wizard';
             text-transform: uppercase; letter-spacing: 0.04em;
             font-weight: 600;
         }
-        .wiz-stepper li.current .lbl { color: #1f3b5b; }
+        .wiz-stepper li.current .lbl { color: var(--text-body); }
         .wiz-stepper li.done    .lbl { color: #065f46; }
         .wiz-stepper a { color: inherit; text-decoration: none; }
 
         .wiz-card {
-            background: #fff; border: 1px solid var(--border);
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 12px; padding: 1.5rem 1.625rem;
         }
         .wiz-card h2 {
-            margin: 0 0 0.25rem; font-size: 1.25rem; color: #1f3b5b;
+            margin: 0 0 0.25rem; font-size: 1.25rem; color: var(--text-body);
         }
         .wiz-card .lede {
             color: var(--text-muted); font-size: 0.9375rem;

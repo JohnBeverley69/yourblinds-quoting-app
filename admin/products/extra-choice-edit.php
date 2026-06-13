@@ -514,7 +514,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
         }
         .toggle-stack {
             display: flex; flex-direction: column; gap: 0.625rem;
@@ -598,7 +598,7 @@ $activeNav = 'products';
                     its height. Empty label = no box on this choice.
                 -->
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:0 0 1rem">
-                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
                         Ask for a number on this choice
                     </legend>
                     <label style="display:inline-flex;align-items:flex-start;gap:0.5rem;font-weight:500;cursor:pointer;margin-bottom:0.625rem">
@@ -622,7 +622,7 @@ $activeNav = 'products';
                                maxlength="60"
                                value="<?= e((string) $f['length_input_label']) ?>"
                                placeholder="e.g. Top offset (mm)"
-                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
+                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-input);box-sizing:border-box;margin-top:0.25rem">
                         <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.25rem">
                             Include the unit (e.g. <em>mm</em>) so the salesperson knows what to type.
                         </small>
@@ -752,7 +752,7 @@ $activeNav = 'products';
                 <?php endif; ?>
 
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
-                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
                         Thumbnail image (optional)
                     </legend>
                     <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
@@ -794,7 +794,7 @@ $activeNav = 'products';
                 <?php endif; ?>
 
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
-                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
                         Width-based price table (optional)
                     </legend>
                     <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.5rem">
@@ -813,7 +813,7 @@ $activeNav = 'products';
                     </p>
                     <textarea name="width_price_table" id="width_price_table"
                               rows="6"
-                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;resize:vertical"
+                              style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:0.875rem;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-input);resize:vertical"
                               placeholder="800, 15.00&#10;1200, 22.50&#10;1600, 30.00"><?= e($widthTablePasted) ?></textarea>
 
                     <p style="font-size:0.875rem;margin:0.75rem 0 0.25rem;color:var(--text-secondary);font-weight:600">

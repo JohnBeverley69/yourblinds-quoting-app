@@ -112,13 +112,13 @@ $activeNav = 'billing';
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .bill-summary {
-            background: #fff; border: 1px solid var(--border); border-radius: 12px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
             padding: 1rem 1.25rem; margin-bottom: 1.25rem;
             display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem;
             align-items: center;
         }
         .bill-summary .bs-count {
-            font-size: 1.125rem; font-weight: 700; color: #1f3b5b;
+            font-size: 1.125rem; font-weight: 700; color: var(--text-body);
         }
         .bill-summary .bs-total {
             font-size: 1rem; color: var(--text-secondary);
@@ -148,7 +148,7 @@ $activeNav = 'billing';
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
         .plan-card {
-            background: #fff; border: 1px solid var(--border); border-radius: 12px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
             padding: 1.125rem 1.25rem;
             display: flex; flex-direction: column; gap: 0.5rem;
         }
@@ -169,7 +169,7 @@ $activeNav = 'billing';
             display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
         }
         .plan-card .p-name {
-            font-size: 1.125rem; font-weight: 700; color: #1f3b5b;
+            font-size: 1.125rem; font-weight: 700; color: var(--text-body);
             flex: 1 1 auto;
         }
         .plan-card .p-price {

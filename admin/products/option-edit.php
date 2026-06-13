@@ -226,7 +226,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
         }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
@@ -290,7 +290,7 @@ $activeNav = 'products';
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <small style="display:block;margin-top:0.35rem;color:#6b7280;font-size:0.8125rem">
+                            <small style="display:block;margin-top:0.35rem;color:var(--text-faint);font-size:0.8125rem">
                                 Which system this <?= e($labelL) ?> belongs to.
                                 <strong>All systems</strong> = shows on every system; scope it
                                 (e.g. to <em><?= e((string) $systems[0]['name']) ?></em>) so it

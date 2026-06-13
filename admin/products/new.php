@@ -104,7 +104,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
         }
     </style>
 </head>

@@ -403,7 +403,7 @@ $activeNav = 'products';
         }
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
         }
         .checkbox-row {
             display: inline-flex; align-items: center; gap: 0.5rem;
@@ -429,8 +429,8 @@ $activeNav = 'products';
         .band-chip {
             font: inherit; font-size: 0.8125rem; font-weight: 600;
             padding: 0.1875rem 0.625rem;
-            color: #1f3b5b; background: #fff;
-            border: 1px solid #cbd5e1; border-radius: 999px;
+            color: var(--text-body); background: var(--bg-card);
+            border: 1px solid var(--border-dashed); border-radius: 999px;
             cursor: pointer; transition: background 0.1s, border-color 0.1s;
         }
         .band-chip:hover { background: #1f3b5b; color: #fff; border-color: #1f3b5b; }
@@ -473,7 +473,7 @@ $activeNav = 'products';
             background: transparent; border: 0; cursor: pointer;
             color: var(--text-faint); font-size: 0.8125rem; text-decoration: underline;
         }
-        .fabric-search-bar .clear-btn:hover { color: #1f3b5b; }
+        .fabric-search-bar .clear-btn:hover { color: var(--brand); }
         .fabric-count { font-size: 0.875rem; color: var(--text-faint); }
         tr.is-hidden { display: none; }
     </style>
@@ -592,7 +592,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label for="bulk_names"><?= e(ucfirst($labelL)) ?> names &mdash; one per line <span class="required">*</span></label>
                         <textarea id="bulk_names" name="bulk_names" rows="10"
-                                  style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.9375rem"
+                                  style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-input);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.9375rem"
                                   placeholder="<?= e($labelL === 'slat' ? "Cream\nWalnut\nOak\nWhite Gloss" : "Cream\nStone\nBlack\nPolaris White") ?>"></textarea>
                     </div>
 
@@ -790,7 +790,7 @@ $activeNav = 'products';
                                         <?php if ($showSystemCol): ?>
                                             <td>
                                                 <?php if ($rowSysId === null): ?>
-                                                    <span style="color:#6b7280;font-size:0.8125rem">All systems</span>
+                                                    <span style="color:var(--text-faint);font-size:0.8125rem">All systems</span>
                                                 <?php else: ?>
                                                     <?= e($rowSysName) ?>
                                                 <?php endif; ?>

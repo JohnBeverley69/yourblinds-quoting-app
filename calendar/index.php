@@ -736,12 +736,12 @@ $activeNav = 'calendar';
                     <?php endif; ?>
                     &middot;
                     <a href="/calendar/week.php"
-                       style="color:#1f3b5b;font-weight:600">
+                       style="color:var(--brand);font-weight:600">
                         📆 Week
                     </a>
                     &middot;
                     <a href="/calendar/day.php"
-                       style="color:#1f3b5b;font-weight:600">
+                       style="color:var(--brand);font-weight:600">
                         📅 Day
                     </a>
                 </p>
@@ -891,17 +891,17 @@ $activeNav = 'calendar';
                 <!-- Empty-state hint when the user can't see Everyone and
                      hasn't got any appointments of their own yet. Without
                      this the grid just looks empty and broken. -->
-                <div style="background:#eef2f7;border:1px dashed #cbd5e1;
+                <div style="background:var(--bg-subtle);border:1px dashed var(--border-dashed);
                             border-radius:10px;padding:1rem 1.125rem;
-                            margin:0 0 1rem;color:#1f3b5b;font-size:0.9375rem">
+                            margin:0 0 1rem;color:var(--text-body);font-size:0.9375rem">
                     No appointments assigned to you in this 6-week window.
                     <?php if (!$canViewAll): ?>
                         Once an admin assigns you to a job, it'll appear
                         here and on your <a href="/calendar/schedule.php"
-                        style="color:#1f3b5b;font-weight:600">My Schedule</a> page.
+                        style="color:var(--brand);font-weight:600">My Schedule</a> page.
                     <?php else: ?>
                         Switch back to <a href="/calendar/index.php?week=<?= e($anchorMonday->format('Y-m-d')) ?>"
-                        style="color:#1f3b5b;font-weight:600">Everyone</a>
+                        style="color:var(--brand);font-weight:600">Everyone</a>
                         to see the whole team's diary.
                     <?php endif; ?>
                 </div>

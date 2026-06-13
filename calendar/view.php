@@ -349,7 +349,7 @@ $activeNav = 'calendar';
             margin: 0 0 0.75rem;
             font-size: 0.8125rem;
             font-weight: 600;
-            color: #1f3b5b;
+            color: var(--text-body);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
@@ -398,7 +398,7 @@ $activeNav = 'calendar';
             padding: 0.5rem 0.75rem;
             border: 1px solid var(--border-strong);
             border-radius: 8px;
-            background: #fff;
+            background: var(--bg-input);
             color: inherit;
             min-width: 9rem;
         }
@@ -414,7 +414,7 @@ $activeNav = 'calendar';
             border-radius: 8px;
             padding: 0.875rem 1rem;
             font-size: 0.9375rem;
-            color: #1f2937;
+            color: var(--text-body);
         }
     </style>
 </head>

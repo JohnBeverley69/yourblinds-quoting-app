@@ -287,20 +287,20 @@ $activeNav = 'calendar';
         }
         .wk-nav {
             display: inline-flex; align-items: center; gap: 0.25rem;
-            background: #fff; border: 1px solid var(--border-strong);
+            background: var(--bg-card); border: 1px solid var(--border-strong);
             border-radius: 8px; padding: 0.1875rem;
         }
         .wk-nav a, .wk-nav span {
             display: inline-flex; align-items: center; justify-content: center;
             min-width: 2rem; height: 2rem; padding: 0 0.5rem;
-            text-decoration: none; color: #1f3b5b;
+            text-decoration: none; color: var(--text-body);
             font-weight: 600; font-size: 0.875rem;
             border-radius: 5px;
         }
         .wk-nav a:hover { background: var(--bg-subtle-2); }
         .wk-nav .today-pill { background: #1f3b5b; color: #fff; }
         .wk-range {
-            font-size: 1.0625rem; font-weight: 700; color: #1f3b5b;
+            font-size: 1.0625rem; font-weight: 700; color: var(--text-body);
         }
         .view-switch {
             display: inline-flex; background: var(--bg-subtle-2); border-radius: 8px;
@@ -311,11 +311,11 @@ $activeNav = 'calendar';
             text-decoration: none; color: var(--text-faint);
             font-size: 0.875rem; font-weight: 600;
         }
-        .view-switch a.is-active { background: #fff; color: #1f3b5b;
+        .view-switch a.is-active { background: var(--bg-card); color: var(--text-body);
                                     box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
         .wk-board {
-            background: #fff; border: 1px solid var(--border);
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; overflow: hidden;
         }
         .wk-board-head, .wk-board-body {

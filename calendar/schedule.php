@@ -141,7 +141,7 @@ $activeNav = 'my-schedule';
             margin: 0.25rem 0 1.25rem;
             font-size: 0.9375rem; color: var(--text-muted);
         }
-        .schedule-summary strong { color: #1f3b5b; }
+        .schedule-summary strong { color: var(--text-body); }
         .schedule-summary .pending-link {
             background: #fef3c7; color: #92400e;
             padding: 0.125rem 0.625rem; border-radius: 999px;
@@ -151,7 +151,7 @@ $activeNav = 'my-schedule';
 
         .sched-section { margin: 0 0 1.5rem; }
         .sched-section h2 {
-            font-size: 0.8125rem; font-weight: 700; color: #1f3b5b;
+            font-size: 0.8125rem; font-weight: 700; color: var(--text-body);
             text-transform: uppercase; letter-spacing: 0.06em;
             margin: 0 0 0.5rem;
         }
@@ -166,7 +166,7 @@ $activeNav = 'my-schedule';
         }
 
         .sched-card {
-            background: #fff;
+            background: var(--bg-card);
             border: 1px solid var(--border); border-radius: 12px;
             padding: 0.875rem 1rem;
             display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem;
@@ -174,7 +174,7 @@ $activeNav = 'my-schedule';
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
         }
         .sched-card .time {
-            font-weight: 700; color: #1f3b5b; font-size: 1.0625rem;
+            font-weight: 700; color: var(--text-body); font-size: 1.0625rem;
             min-width: 4.5rem; text-align: right; padding-top: 0.0625rem;
             font-variant-numeric: tabular-nums;
         }
@@ -189,7 +189,7 @@ $activeNav = 'my-schedule';
         .sched-card .address, .sched-card .phone {
             display: block; margin-top: 0.1875rem;
             font-size: 0.9375rem;
-            text-decoration: none; color: #1f3b5b;
+            text-decoration: none; color: var(--text-body);
             word-break: break-word;
         }
         .sched-card .address::before { content: '📍 '; }
@@ -201,9 +201,9 @@ $activeNav = 'my-schedule';
         .sched-card .actions a {
             font-size: 0.8125rem; padding: 0.25rem 0.625rem;
             border: 1px solid var(--border); border-radius: 999px;
-            text-decoration: none; color: #1f3b5b; background: var(--bg-subtle);
+            text-decoration: none; color: var(--text-body); background: var(--bg-subtle);
         }
-        .sched-card .actions a:hover { background: #eef2f7; }
+        .sched-card .actions a:hover { background: var(--bg-subtle-2); }
         .sched-card .status {
             display: inline-block;
             font-size: 0.6875rem; font-weight: 700;

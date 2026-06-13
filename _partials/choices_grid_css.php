@@ -29,7 +29,7 @@
         padding: 0.25rem 0.25rem; border-bottom: 1px solid var(--bg-subtle-2);
         vertical-align: middle;
     }
-    .grid-table tbody tr:hover td { background: #fafbfd; }
+    .grid-table tbody tr:hover td { background: var(--bg-subtle); }
     .grid-table tbody tr.is-saving td { background: #fefce8; }
     .grid-table tbody tr.just-saved td {
         background: #ecfdf5; transition: background 600ms ease-out;
@@ -56,10 +56,10 @@
     }
     .cell-input.num { -moz-appearance: textfield; }
     .cell-input:hover, .cell-select:hover {
-        border-color: var(--border-strong); background: #fff;
+        border-color: var(--border-strong); background: var(--bg-input);
     }
     .cell-input:focus, .cell-select:focus {
-        outline: none; border-color: #1f3b5b; background: #fff;
+        outline: none; border-color: var(--brand); background: var(--bg-input);
         box-shadow: 0 0 0 3px rgba(31, 59, 91, 0.12);
     }
 
@@ -77,10 +77,10 @@
     .row-actions a, .row-actions button {
         font-size: 0.8125rem; padding: 0.25rem 0.5rem; margin: 0 0 0 0.125rem;
         border: 0; background: transparent; cursor: pointer; border-radius: 6px;
-        color: #1f3b5b; text-decoration: none;
+        color: var(--brand); text-decoration: none;
     }
     .row-actions a:hover, .row-actions button:hover {
-        background: #eef2f7;
+        background: var(--bg-subtle);
     }
     .row-actions .btn-more { color: var(--text-muted); }
     .row-actions .btn-sub  { color: #15803d; }
@@ -112,16 +112,16 @@
         transform: translateY(-50%); color: var(--text-faint); font-size: 0.75rem;
     }
     .multi-select > summary:hover {
-        border-color: var(--border-strong); background: #fff;
+        border-color: var(--border-strong); background: var(--bg-input);
     }
     .multi-select[open] > summary {
-        border-color: #1f3b5b; background: #fff;
+        border-color: var(--brand); background: var(--bg-input);
         box-shadow: 0 0 0 3px rgba(31, 59, 91, 0.12);
     }
     .multi-opts {
         position: absolute; top: 100%; left: 0; right: 0;
         margin-top: 4px; padding: 0.375rem;
-        background: #fff; border: 1px solid var(--border-strong);
+        background: var(--bg-card); border: 1px solid var(--border-strong);
         border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         z-index: 30; min-width: 200px;
     }
@@ -146,7 +146,7 @@
         padding: 0.375rem 0.5rem; cursor: pointer; border-radius: 6px;
         font-size: 0.9375rem; color: var(--text-primary);
     }
-    .multi-opts label:hover { background: #eef2f7; }
+    .multi-opts label:hover { background: var(--bg-subtle); }
     .multi-opts input[type="checkbox"] {
         width: 16px; height: 16px; margin: 0;
     }
@@ -198,7 +198,7 @@
        Option page.
        =========================================================== */
     .sub-card {
-        background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
         padding: 0.75rem 0.875rem;
         margin-bottom: 0.875rem;
     }
@@ -214,7 +214,7 @@
     }
     .gate-pill {
         display: inline-block; padding: 0.0625rem 0.5rem;
-        background: #eef2f7; color: #1f3b5b;
+        background: var(--bg-subtle); color: var(--brand);
         border-radius: 999px; font-size: 0.75rem; font-weight: 600;
     }
     .sub-card-actions {
@@ -226,14 +226,14 @@
         background: transparent; border: 0; padding: 0; cursor: pointer;
         font: inherit; text-decoration: none;
     }
-    .sub-card-actions .btn-primary-link   { color: #1f3b5b; font-weight: 600; }
+    .sub-card-actions .btn-primary-link   { color: var(--brand); font-weight: 600; }
     .sub-card-actions .btn-secondary-link { color: var(--text-muted); }
     .sub-card-actions .btn-danger-link    { color: #b91c1c; }
     .sub-card-actions a:hover, .sub-card-actions button:hover { text-decoration: underline; }
     /* Sub-option's inline grid keeps the same look but a subtle
        background so it's visually grouped with its card header. */
     .sub-card > .choices-grid-wrap {
-        background: #fff; border: 1px solid var(--border); border-radius: 8px;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
     }
 
     details.add-sub-form > summary {
@@ -248,7 +248,7 @@
     details.add-sub-form[open] > summary { background: #dbeafe; }
     details.add-sub-form > .form {
         margin-top: 0.75rem;
-        background: #fff; border: 1px solid var(--border); border-radius: 10px;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
         padding: 1rem;
     }
     .req-pill {
