@@ -203,7 +203,9 @@ function pdf_render_supplier_order(array $ctx, array $items): ?string
         . ((string) ($ctx['date'] ?? '') !== '' ? ' &nbsp;|&nbsp; ' . $e($ctx['date']) : '')
         . '</div></div>'
         . '<table class="cols"><tr>'
-        . '<td><div class="box-label">Supplier</div><div class="box"><strong>' . $e($ctx['supplier_name'] ?? '') . '</strong></div></td>'
+        . '<td><div class="box-label">Supplier</div><div class="box"><strong>' . $e($ctx['supplier_name'] ?? '') . '</strong>'
+        . ((string) ($ctx['account_number'] ?? '') !== '' ? '<br><span class="muted">Account no: ' . $e($ctx['account_number']) . '</span>' : '')
+        . '</div></td>'
         . '<td><div class="box-label">Deliver to</div><div class="box">'
         . ((string) ($ctx['delivery_address'] ?? '') !== '' ? $nl2($ctx['delivery_address']) : '<span class="muted">— no delivery address set —</span>')
         . '</div></td>'
