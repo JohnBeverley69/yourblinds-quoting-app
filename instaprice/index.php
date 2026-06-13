@@ -449,6 +449,11 @@ $activeNav = 'instaprice';
             }
             var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
             if (uvIn) preset[eid + '__uv'] = uvIn.value;
+            // Per-choice number inputs — keyed by choice so a re-render keeps
+            // each value (mirrors the full quote builder).
+            div.querySelectorAll('input[data-cuv-for]').forEach(function (cin) {
+                preset[eid + '__cuv__' + cin.getAttribute('data-cuv-for')] = cin.value;
+            });
         });
         var systemId = parseInt(systemSel.value, 10) || 0;
 
@@ -513,6 +518,19 @@ $activeNav = 'instaprice';
             var visible = extra.choices.filter(choiceAvailable);
             // Number-only option: no choices, just a measurement input.
             var numberOnly = !!extra.length_input_label && (extra.choices || []).length === 0;
+            // Per-choice number box (choice.length_input_label) — e.g. each
+            // offset side or a mid-rail height. Value sticky via preset.
+            function choiceNumberInput(c) {
+                if (!c.length_input_label) return '';
+                var pv = preset[extra.id + '__cuv__' + c.id];
+                var val = (pv !== undefined && pv !== null) ? String(pv) : '';
+                return '<div style="margin-top:0.25rem">'
+                     + '<input type="number" min="0" step="1" data-cuv-for="' + c.id + '"'
+                     + ' value="' + escapeAttr(val) + '"'
+                     + ' placeholder="' + escapeAttr(c.length_input_label) + '"'
+                     + ' style="max-width:12rem">'
+                     + '</div>';
+            }
             var out = '<div data-extra-id="' + extra.id + '"' + (isChild ? ' class="extra-child"' : '') + '>';
             out += '<label>' + escapeHtml(extra.name) + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '') + '</label>';
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
@@ -529,8 +547,11 @@ $activeNav = 'instaprice';
                 out += '<div style="display:flex;flex-direction:column;gap:0.3125rem;padding:0.4375rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px">';
                 visible.forEach(function (c) {
                     var t = pre.indexOf(c.id) !== -1;
-                    out += '<label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400">'
-                         + '<input type="checkbox" data-multi-choice="' + c.id + '"' + (t ? ' checked' : '') + '> ' + escapeHtml(c.label) + '</label>';
+                    out += '<div>'
+                         + '<label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400">'
+                         + '<input type="checkbox" data-multi-choice="' + c.id + '"' + (t ? ' checked' : '') + '> ' + escapeHtml(c.label) + '</label>'
+                         + (t ? choiceNumberInput(c) : '')
+                         + '</div>';
                 });
                 out += '</div>';
             } else {
@@ -538,14 +559,17 @@ $activeNav = 'instaprice';
                 var hasDef = visible.some(function (c) { return c.is_default; });
                 out += '<select>';
                 if (!hasDef) out += '<option value=""' + (pv === '' ? ' selected' : '') + '>— Select —</option>';
+                var selChoice = null;
                 visible.forEach(function (c) {
                     var sel;
                     if (pv !== undefined && pv !== '') sel = String(c.id) === pv;
                     else if (pv === '') sel = false;
                     else sel = c.is_default;
+                    if (sel) selChoice = c;
                     out += '<option value="' + c.id + '"' + (sel ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
                 });
                 out += '</select>';
+                if (selChoice) out += choiceNumberInput(selChoice);
             }
             out += '</div>';
             return out;
@@ -573,7 +597,7 @@ $activeNav = 'instaprice';
         });
         // Number-only inputs don't affect price, but capturing keystrokes keeps
         // the value sticky across re-renders and ready for "Convert to quote".
-        extrasBox.querySelectorAll('input[data-uv-for]').forEach(function (el) {
+        extrasBox.querySelectorAll('input[data-uv-for], input[data-cuv-for]').forEach(function (el) {
             el.addEventListener('input', schedulePreview);
         });
     }
@@ -582,10 +606,23 @@ $activeNav = 'instaprice';
         extrasBox.querySelectorAll('[data-extra-id]').forEach(function (div) {
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             if (eid <= 0) return;
+            // This choice's own typed value (per-choice number box), or null.
+            function valueFor(cid) {
+                var cin = div.querySelector('input[data-cuv-for="' + cid + '"]');
+                if (cin && cin.value !== '') { var v = parseFloat(cin.value); if (v > 0) return v; }
+                return null;
+            }
             var multi = div.querySelectorAll('input[data-multi-choice]');
             if (multi.length) {
                 multi.forEach(function (cb) {
-                    if (cb.checked) { var cid = parseInt(cb.dataset.multiChoice, 10); if (cid > 0) out.push({ extra_id: eid, choice_id: cid }); }
+                    if (!cb.checked) return;
+                    var cid = parseInt(cb.dataset.multiChoice, 10);
+                    if (cid > 0) {
+                        var rec = { extra_id: eid, choice_id: cid };
+                        var v = valueFor(cid);
+                        if (v !== null) rec.user_value = v;
+                        out.push(rec);
+                    }
                 });
                 return;
             }
@@ -602,7 +639,12 @@ $activeNav = 'instaprice';
                 return;
             }
             var cid = parseInt(sel.value, 10);
-            if (cid > 0) out.push({ extra_id: eid, choice_id: cid });
+            if (cid > 0) {
+                var rec = { extra_id: eid, choice_id: cid };
+                var v = valueFor(cid);
+                if (v !== null) rec.user_value = v;
+                out.push(rec);
+            }
         });
         return out;
     }
