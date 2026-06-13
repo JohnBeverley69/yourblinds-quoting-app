@@ -1244,21 +1244,58 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Back up your data</h2>
             </div>
+            <?php $lastBackup = $client['last_backup_at'] ?? null; ?>
             <p style="color:var(--text-secondary);margin:0 0 1rem;max-width:42rem">
-                Download a copy of <strong>all your quotes and orders</strong> (with their line
+                Download a copy of <strong>your quotes and orders</strong> (with their line
                 items, totals and payments) to keep on your own computer. Useful as a regular
                 off-site backup or to work with your figures in a spreadsheet.
             </p>
-            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
-                <a href="/admin/export.php?format=xlsx" class="btn btn-primary">⬇ Download Excel (.xlsx)</a>
-                <a href="/admin/export.php?format=pdf" class="btn btn-secondary">⬇ Download PDF summary</a>
+
+            <!-- Date range — leave both blank for everything -->
+            <div style="display:flex;gap:1rem 1.25rem;flex-wrap:wrap;align-items:flex-end;margin:0 0 0.5rem">
+                <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.8125rem;color:var(--text-secondary)">
+                    From
+                    <input type="date" id="backup-from" class="form-control" style="min-width:9.5rem">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.8125rem;color:var(--text-secondary)">
+                    To
+                    <input type="date" id="backup-to" class="form-control" style="min-width:9.5rem">
+                </label>
+                <div style="display:flex;gap:0.375rem;flex-wrap:wrap">
+                    <button type="button" class="btn btn-secondary btn-sm" data-backup-preset="all">All time</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-backup-preset="30">Last 30 days</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-backup-preset="ytd">This year</button>
+                </div>
             </div>
+
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0 0">
+                <button type="button" id="backup-xlsx" class="btn btn-primary">⬇ Download Excel (.xlsx)</button>
+                <button type="button" id="backup-pdf" class="btn btn-secondary">⬇ Download PDF summary</button>
+            </div>
+
+            <!-- Incremental: only what changed since the last FULL Excel backup -->
+            <div style="margin:1rem 0 0;padding:0.875rem 1rem;border:1px solid var(--border);border-radius:0.5rem;max-width:42rem">
+                <?php if ($lastBackup): ?>
+                    <p style="margin:0 0 0.625rem;font-size:0.875rem;color:var(--text-secondary)">
+                        Last full backup: <strong><?= e(date('j M Y, g:ia', strtotime((string) $lastBackup))) ?></strong>.
+                        Get just the quotes and orders created or changed since then:
+                    </p>
+                    <a href="/admin/export.php?format=xlsx&amp;since_last=1" class="btn btn-secondary btn-sm">⬇ Changes since last backup (Excel)</a>
+                <?php else: ?>
+                    <p style="margin:0;font-size:0.875rem;color:var(--text-faint)">
+                        Once you take a full Excel backup (the button above, with no dates set),
+                        a <em>“Changes since last backup”</em> option appears here so you can grab
+                        only what's new or changed next time.
+                    </p>
+                <?php endif; ?>
+            </div>
+
             <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.875rem 0 0;max-width:42rem">
                 The <strong>Excel</strong> file has two sheets — a Quotes &amp; Orders summary and a
                 full Line items list — and is the one to keep as your backup (you can open, sort and
-                filter it). The <strong>PDF</strong> is a printable one-look summary list of every
-                order. It's your live data each time, so download a fresh copy whenever you want an
-                up-to-date snapshot.
+                filter it). The <strong>PDF</strong> is a printable one-look summary. Dates filter by
+                <strong>order date</strong> (accepted, or created if not yet accepted). A full Excel
+                backup (no dates) is what the “since last backup” option counts from.
             </p>
         </section>
         </div><!-- /tab: backup -->
@@ -1314,6 +1351,45 @@ $legalPreviewTokens = [
             pill.style.color = textOn(inp.value);
         });
     });
+
+    // ---- Data backup: build the export URL from the date pickers ------------
+    (function () {
+        var from = document.getElementById('backup-from');
+        var to   = document.getElementById('backup-to');
+        if (!from || !to) { return; }
+
+        function go(format) {
+            var qs = ['format=' + format];
+            if (from.value) { qs.push('from=' + encodeURIComponent(from.value)); }
+            if (to.value)   { qs.push('to='   + encodeURIComponent(to.value)); }
+            window.location.href = '/admin/export.php?' + qs.join('&');
+        }
+        var xlsx = document.getElementById('backup-xlsx');
+        var pdf  = document.getElementById('backup-pdf');
+        if (xlsx) { xlsx.addEventListener('click', function () { go('xlsx'); }); }
+        if (pdf)  { pdf.addEventListener('click',  function () { go('pdf'); }); }
+
+        // Local-date ISO (not toISOString → that's UTC and can slip a day).
+        function iso(d) {
+            var m = String(d.getMonth() + 1), day = String(d.getDate());
+            if (m.length < 2)   { m = '0' + m; }
+            if (day.length < 2) { day = '0' + day; }
+            return d.getFullYear() + '-' + m + '-' + day;
+        }
+        Array.prototype.forEach.call(document.querySelectorAll('[data-backup-preset]'), function (btn) {
+            btn.addEventListener('click', function () {
+                var preset = btn.getAttribute('data-backup-preset'), today = new Date();
+                if (preset === 'all') {
+                    from.value = ''; to.value = '';
+                } else if (preset === '30') {
+                    var d = new Date(); d.setDate(d.getDate() - 30);
+                    from.value = iso(d); to.value = iso(today);
+                } else if (preset === 'ytd') {
+                    from.value = today.getFullYear() + '-01-01'; to.value = iso(today);
+                }
+            });
+        });
+    })();
 
     // ---- Sub-menu tabs ------------------------------------------------------
     // Show one panel at a time. The active tab is remembered (localStorage) so
