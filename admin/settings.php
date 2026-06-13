@@ -702,7 +702,7 @@ $activeNav = 'settings';
             <?php if (!empty($client['logo_path'])): ?>
                 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:1rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
                     <img src="<?= e((string) $client['logo_path']) ?>" alt="Logo"
-                         style="max-height:80px;max-width:200px;background:#fff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
+                         style="max-height:80px;max-width:200px;background:#ffffff;padding:0.25rem;border:1px solid #e5e7eb;border-radius:6px">
                     <form method="post" action="/admin/settings.php" style="margin:0"
                           data-confirm="Remove the company logo?">
                         <?= csrf_field() ?>

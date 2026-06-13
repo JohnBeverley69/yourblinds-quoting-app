@@ -767,7 +767,7 @@ $activeNav = 'products';
                                      filename, new contents) busts the browser's image cache —
                                      otherwise the old/broken thumbnail lingers until a hard refresh. */ ?>
                             <img src="<?= e(asset((string) $choice['image_path'])) ?>" alt="Current thumbnail"
-                                 style="max-height:80px;max-width:160px;background:#fff;padding:0.25rem;border:1px solid var(--border);border-radius:6px">
+                                 style="max-height:80px;max-width:160px;background:#ffffff;padding:0.25rem;border:1px solid var(--border);border-radius:6px">
                             <small style="color:var(--text-faint);font-size:0.8125rem">
                                 Current thumbnail. Upload a new file below to replace, or use the Remove button.
                             </small>

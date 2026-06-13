@@ -130,6 +130,36 @@
     color-scheme: dark;
 }
 
+/* ===========================================================================
+   Dark-mode safety net for legacy hard-coded inline colours
+   ---------------------------------------------------------------------------
+   A lot of older inline styles bake in LIGHT-theme colours — white fills and
+   dark text — that don't flip with the theme, so in dark mode the field
+   backgrounds stay white while the text turns light and the fields vanish
+   (reported on the product/option editing screens). These rules retro-fit
+   those inline styles to the theme variables, dark mode only. Light mode is
+   untouched.
+
+   Safe by construction:
+   - Text rules match `color:#hex` written tight (no space). The navy is also
+     used as `background: #1f3b5b` / `border-color: #1f3b5b` — but those are
+     written WITH a space after the colon, so the tight `color:#` selectors
+     never touch them.
+   - Background rules use `#fff;` or end-of-attribute `#fff`, which never match
+     the amber `#fffbeb`. Logo / image PREVIEW boxes deliberately keep a white
+     fill — they're written `#ffffff` (6-digit) so these `#fff` rules skip them.
+   The real fix for any new code is to use the var(--…) tokens, not hex. */
+[data-theme="dark"] [style*="color:#1f3b5b"] { color: var(--text-body) !important; }
+[data-theme="dark"] [style*="color:#111827"] { color: var(--text-primary) !important; }
+[data-theme="dark"] [style*="color:#1f2937"] { color: var(--text-body) !important; }
+[data-theme="dark"] [style*="color:#374151"] { color: var(--text-secondary) !important; }
+[data-theme="dark"] [style*="color:#4b5563"] { color: var(--text-muted) !important; }
+[data-theme="dark"] [style*="color:#6b7280"] { color: var(--text-faint) !important; }
+[data-theme="dark"] [style*="color:#9ca3af"] { color: var(--text-faint) !important; }
+[data-theme="dark"] [style*="color:#000"]    { color: var(--text-primary) !important; }
+[data-theme="dark"] [style*="background:#fff;"],
+[data-theme="dark"] [style$="background:#fff"] { background: var(--bg-card) !important; }
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 
