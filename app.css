@@ -160,6 +160,21 @@
 [data-theme="dark"] [style*="background:#fff;"],
 [data-theme="dark"] [style$="background:#fff"] { background: var(--bg-card) !important; }
 
+/* Belt-and-braces for FORM FIELDS: many pages have their own embedded <style>
+   block that hard-codes `background: #fff` on inputs/selects/textareas — a CSS
+   rule, so the inline-attribute net above can't reach it, and the field turns
+   white-on-light in dark mode (its text goes light → invisible). Force every
+   real field onto the themed input colours in dark mode. Buttons, toggles and
+   colour pickers are excluded — their backgrounds are meaningful. The proper
+   per-page fix is still to use the var(--…) tokens; this just guarantees no
+   field is ever invisible. */
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background-color: var(--bg-input) !important;
+    color: var(--text-body) !important;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 

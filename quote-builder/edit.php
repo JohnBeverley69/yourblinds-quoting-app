@@ -317,7 +317,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         #add-line .form-actions.sticky-save {
             position: sticky;
             bottom: 0;
-            background: #fff;
+            background: var(--bg-card);
             margin-top: 0.5rem;
             padding: 0.625rem 0;
             border-top: 1px solid var(--border);
@@ -343,7 +343,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
            drifting around the grid. */
         .extras-grid .extra-cell {
             display: flex; flex-direction: column; gap: 0.5rem;
-            background: rgba(243, 244, 246, 0.5);   /* light gray @ 50% */
+            background: var(--bg-subtle);
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 0.75rem 0.875rem;
@@ -352,7 +352,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             width: 100%;
             padding: 0.4375rem 0.625rem;
             font: inherit;
-            background: #fff;
+            background: var(--bg-input);
             border: 1px solid var(--border-strong);
             border-radius: 8px;
             box-sizing: border-box;
@@ -360,7 +360,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .extras-grid .extra-cell .extra-child {
             margin-left: 0.625rem;
             padding-left: 0.625rem;
-            border-left: 2px solid #cbd5e1;
+            border-left: 2px solid var(--border-strong);
         }
         .extras-grid .extra-cell .extra-child label {
             font-size: 0.75rem;
@@ -372,14 +372,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         .form-group input[type="number"], .form-group input[type="text"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
             box-sizing: border-box;
         }
         .fabric-picker { position: relative; }
         .fabric-results {
             position: absolute; top: 100%; left: 0; right: 0;
             max-height: 360px; overflow-y: auto;
-            background: #fff; border: 1px solid var(--border-strong);
+            background: var(--bg-card); border: 1px solid var(--border-strong);
             border-radius: 8px;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
             z-index: 20; margin-top: 4px;
@@ -390,7 +390,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
         .fabric-results .frow:last-child { border-bottom: 0; }
         .fabric-results .frow:hover,
-        .fabric-results .frow.active { background: #eff6ff; }
+        .fabric-results .frow.active { background: var(--bg-subtle-2); }
         .fabric-results .fname { font-weight: 600; color: var(--text-primary); font-size: 0.9375rem; }
         .fabric-results .fmeta { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.125rem; }
         .fabric-results .fband {
@@ -469,15 +469,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
            "you're here to enter a payment."
            =========================================================== */
         .record-payment-card {
-            background: #eff6ff;
-            border: 2px solid #1f3b5b;
+            background: var(--alert-info-bg);
+            border: 2px solid var(--brand);
             border-radius: 12px;
             padding: 1rem 1.125rem;
             margin: 0.5rem 0 0;
         }
         .record-payment-card__title {
             margin: 0 0 0.25rem;
-            font-size: 1.0625rem; font-weight: 700; color: #1f3b5b;
+            font-size: 1.0625rem; font-weight: 700; color: var(--alert-info-text);
         }
         .record-payment-card__hint {
             margin: 0 0 0.875rem; color: var(--text-muted); font-size: 0.875rem;
@@ -492,17 +492,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .record-payment-card .rp-field--amount { flex: 0 0 8rem; }
         .record-payment-card .rp-field--ref    { flex: 2 1 12rem; }
         .record-payment-card .rp-field label {
-            font-size: 0.8125rem; color: #1f3b5b; font-weight: 600;
+            font-size: 0.8125rem; color: var(--alert-info-text); font-weight: 600;
         }
         .record-payment-card .rp-field input,
         .record-payment-card .rp-field select {
             padding: 0.5rem 0.625rem;
             border: 1px solid #93c5fd; border-radius: 6px;
-            font: inherit; background: #fff;
+            font: inherit; background: var(--bg-input);
         }
         .record-payment-card .rp-field input:focus,
         .record-payment-card .rp-field select:focus {
-            border-color: #1f3b5b;
+            border-color: var(--brand);
             outline: 3px solid rgba(31, 59, 91, 0.18);
         }
         /* The Amount field is the only one that almost always needs
