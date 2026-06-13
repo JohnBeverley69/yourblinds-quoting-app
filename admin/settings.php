@@ -588,6 +588,7 @@ $activeNav = 'settings';
             <button type="button" class="settings-tab" id="tab-legal" data-tab="legal" role="tab" aria-selected="false">Legal</button>
             <button type="button" class="settings-tab" id="tab-colours" data-tab="colours" role="tab" aria-selected="false">Status colours</button>
             <button type="button" class="settings-tab" id="tab-suppliers" data-tab="suppliers" role="tab" aria-selected="false">Suppliers</button>
+            <button type="button" class="settings-tab" id="tab-backup" data-tab="backup" role="tab" aria-selected="false">Back up data</button>
         </div>
 
         <div class="settings-panels">
@@ -1237,6 +1238,30 @@ $activeNav = 'settings';
         </section>
 
         </div><!-- /tab: suppliers -->
+
+        <div class="settings-panel" data-panel="backup" role="tabpanel" aria-labelledby="tab-backup">
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Back up your data</h2>
+            </div>
+            <p style="color:var(--text-secondary);margin:0 0 1rem;max-width:42rem">
+                Download a copy of <strong>all your quotes and orders</strong> (with their line
+                items, totals and payments) to keep on your own computer. Useful as a regular
+                off-site backup or to work with your figures in a spreadsheet.
+            </p>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+                <a href="/admin/export.php?format=xlsx" class="btn btn-primary">⬇ Download Excel (.xlsx)</a>
+                <a href="/admin/export.php?format=pdf" class="btn btn-secondary">⬇ Download PDF summary</a>
+            </div>
+            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.875rem 0 0;max-width:42rem">
+                The <strong>Excel</strong> file has two sheets — a Quotes &amp; Orders summary and a
+                full Line items list — and is the one to keep as your backup (you can open, sort and
+                filter it). The <strong>PDF</strong> is a printable one-look summary list of every
+                order. It's your live data each time, so download a fresh copy whenever you want an
+                up-to-date snapshot.
+            </p>
+        </section>
+        </div><!-- /tab: backup -->
         </div><!-- /settings-panels -->
     </main>
 </div>
