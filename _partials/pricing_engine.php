@@ -430,19 +430,23 @@ function pe_apply_extra(
         // when the engine wasn't given a drop (width-only products).
         $basis     = (string) ($choice['per_metre_basis'] ?? 'width');
         $dropForLen = ($dropMm !== null && $dropMm > 0) ? (float) $dropMm : (float) $widthMm;
+        // Width can be 0 when the product type doesn't use it (per-slat forces
+        // width to 0). A width-based per-metre charge then falls back to drop
+        // so the surcharge isn't silently billed at £0.
+        $widthForLen = ($widthMm !== null && $widthMm > 0) ? (float) $widthMm : $dropForLen;
         switch ($basis) {
             case 'drop':
                 $lengthMm = $dropForLen;
                 break;
             case 'width_plus_drop':
-                $lengthMm = (float) $widthMm + $dropForLen;
+                $lengthMm = $widthForLen + $dropForLen;
                 break;
             case 'perimeter':
-                $lengthMm = 2.0 * (float) $widthMm + 2.0 * $dropForLen;
+                $lengthMm = 2.0 * $widthForLen + 2.0 * $dropForLen;
                 break;
             case 'width':
             default:
-                $lengthMm = (float) $widthMm;
+                $lengthMm = $widthForLen;
                 break;
         }
         $amount         += ($lengthMm / 1000.0) * $perMetre;
