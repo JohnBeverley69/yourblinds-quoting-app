@@ -27,6 +27,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
+require_once __DIR__ . '/../_partials/payments_ledger.php';
 
 requireLogin();
 
@@ -357,7 +358,8 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                                     $isOrderRow = in_array((string) $r['status'], $orderStatuses, true);
                                     $dep    = $r['deposit_amount'];
                                     $depAt  = $r['deposit_paid_at'];
-                                    $depCounted = $depAt ? (float) ($dep ?? 0) : 0.0;
+                                    // 0 once the deposit is its own payment row (already in payments_total).
+                                    $depCounted = deposit_extra_for($depAt, $dep);
                                     $outstanding = round(
                                         (float) $r['total']
                                         - (float) ($r['payments_total'] ?? 0)

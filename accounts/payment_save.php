@@ -63,10 +63,17 @@ $returnTo  = safe_local_redirect(
 // the target order.
 $checkQuoteId = $quoteId;
 if ($id > 0) {
-    $exQ = $pdo->prepare('SELECT quote_id FROM payments WHERE id = ? AND client_id = ? LIMIT 1');
+    $depCol = payments_has_is_deposit() ? ', is_deposit' : ', 0 AS is_deposit';
+    $exQ = $pdo->prepare("SELECT quote_id$depCol FROM payments WHERE id = ? AND client_id = ? LIMIT 1");
     $exQ->execute([$id, $clientId]);
     $exRow = $exQ->fetch();
     $checkQuoteId = ($exRow && $exRow['quote_id'] !== null) ? (int) $exRow['quote_id'] : null;
+    // The deposit's payment row is managed on the order, not editable here.
+    if ($exRow && (int) ($exRow['is_deposit'] ?? 0) === 1) {
+        $_SESSION['flash_error'] = 'The deposit is managed on the order — change it from the order\'s deposit panel.';
+        header('Location: ' . $returnTo);
+        exit;
+    }
 }
 if (!acct_user_can_touch_quote($pdo, $clientId, $user, $checkQuoteId)
     || ($id > 0 && !acct_user_can_touch_quote($pdo, $clientId, $user, $quoteId))) {

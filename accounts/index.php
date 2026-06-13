@@ -72,8 +72,9 @@ if ($method !== '' && array_key_exists($method, acct_methods())) {
 }
 
 $payerSel = acct_has_payer_column() ? 'p.payer_name' : 'NULL AS payer_name';
+$depSel   = payments_has_is_deposit() ? 'p.is_deposit' : '0 AS is_deposit';
 $sql = 'SELECT p.id, p.amount, p.received_at, p.method, p.reference, p.notes,
-               p.quote_id, p.customer_id, ' . $payerSel . ',
+               p.quote_id, p.customer_id, ' . $payerSel . ', ' . $depSel . ',
                c.name AS customer_name,
                qq.quote_number
           FROM payments p
@@ -119,13 +120,16 @@ $summaryRow = $summary->fetch() ?: ['all_time' => 0, 'this_month' => 0];
 // acct_outstanding_for_quote(), but folded into a single SQL so we
 // don't have to walk every quote in PHP. Restricted to user-assigned
 // orders when the permission requires it.
+// The deposit subtraction is dropped once the deposit is its own payment row
+// (it's then already inside the payments SUM); kept pre-migration.
+$depTermSql = payments_has_is_deposit() ? '' : "
+         - CASE WHEN q.deposit_paid_at IS NOT NULL
+                THEN IFNULL(q.deposit_amount, 0)
+                ELSE 0 END";
 $outSql = "SELECT
        IFNULL(SUM(
          q.total
-         - IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
-         - CASE WHEN q.deposit_paid_at IS NOT NULL
-                THEN IFNULL(q.deposit_amount, 0)
-                ELSE 0 END
+         - IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)$depTermSql
        ), 0) AS outstanding
        FROM quotes q
       WHERE q.client_id = ?
@@ -170,8 +174,7 @@ $prefillFound      = false;
 if ($prefillQuoteId > 0) {
     foreach ($payableQuotes as $pq) {
         if ((int) $pq['id'] !== $prefillQuoteId) continue;
-        $depCounted = $pq['deposit_paid_at']
-            ? (float) ($pq['deposit_amount'] ?? 0) : 0.0;
+        $depCounted = deposit_extra_for($pq['deposit_paid_at'] ?? null, $pq['deposit_amount'] ?? null);
         $out = round(
             (float) $pq['total']
             - (float) $pq['payments_total']
@@ -463,8 +466,7 @@ $activeNav = 'accounts';
                                 — Standalone payment (no order linked) —
                             </option>
                             <?php foreach ($payableQuotes as $pq):
-                                $depCounted = $pq['deposit_paid_at']
-                                    ? (float) ($pq['deposit_amount'] ?? 0) : 0.0;
+                                $depCounted = deposit_extra_for($pq['deposit_paid_at'] ?? null, $pq['deposit_amount'] ?? null);
                                 $out = round(
                                     (float) $pq['total']
                                     - (float) $pq['payments_total']
@@ -800,15 +802,15 @@ $activeNav = 'accounts';
                             if (!$g['quote_id']) continue;
                             $q = $quoteInfo[$g['quote_id']] ?? null;
                             if (!$q) continue;
-                            $depCounted = $q['deposit_paid_at']
-                                ? (float) ($q['deposit_amount'] ?? 0) : 0.0;
+                            // 0 once the deposit is its own payment row (it's then
+                            // already inside this group's payment rows / paid_total).
+                            $depCounted = deposit_extra_for($q['deposit_paid_at'] ?? null, $q['deposit_amount'] ?? null);
                             $g['order_total'] = (float) $q['total'];
                             $g['outstanding'] = round(
                                 $g['order_total'] - $g['paid_total'] - $depCounted, 2
                             );
-                            // Roll the deposit-as-payment into the
-                            // displayed "paid" figure so the user sees
-                            // ONE total they recognise as "money in."
+                            // Roll any legacy (pre-migration) deposit into the
+                            // displayed "paid" figure so the user sees ONE total.
                             $g['paid_total'] = round($g['paid_total'] + $depCounted, 2);
                         }
                         unset($g);
@@ -880,7 +882,7 @@ $activeNav = 'accounts';
                                     </thead>
                                     <tbody>
                                         <?php foreach ($g['payments'] as $p): ?>
-                                            <tr>
+                                            <tr<?= !empty($p['is_deposit']) ? ' style="background:var(--alert-success-bg)"' : '' ?>>
                                                 <td><?= e(date('j M Y', strtotime((string) $p['received_at']))) ?></td>
                                                 <td>
                                                     <span class="method-pill">
@@ -891,7 +893,13 @@ $activeNav = 'accounts';
                                                 <td class="num">
                                                     <?= e(acct_fmt_money((float) $p['amount'])) ?>
                                                 </td>
-                                                <?php
+                                                <td style="white-space:nowrap">
+                                                <?php if (!empty($p['is_deposit'])): ?>
+                                                    <!-- The deposit lives in the payments ledger but is
+                                                         managed on the order itself (deposit panel), so it
+                                                         isn't edited/deleted here. -->
+                                                    <span style="color:var(--text-faint);font-style:italic;font-size:0.75rem">managed on the order</span>
+                                                <?php else:
                                                     // Edit pre-fills the panel above (no delete + re-add).
                                                     $editQuoteId    = (int) ($p['quote_id'] ?? 0);
                                                     $editQuoteLabel = '';
@@ -902,7 +910,6 @@ $activeNav = 'accounts';
                                                         }
                                                     }
                                                 ?>
-                                                <td style="white-space:nowrap">
                                                     <button type="button" class="btn btn-sm btn-secondary pg-edit-btn"
                                                             style="padding:0.1875rem 0.5rem;font-size:0.75rem;margin-right:0.25rem"
                                                             data-id="<?= (int) $p['id'] ?>"
@@ -926,6 +933,7 @@ $activeNav = 'accounts';
                                                             ×
                                                         </button>
                                                     </form>
+                                                <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>

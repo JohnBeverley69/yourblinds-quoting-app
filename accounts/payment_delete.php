@@ -55,6 +55,17 @@ if (!acct_user_can_touch_quote(db(), $clientId, $user, $linkedQuoteId > 0 ? $lin
     exit;
 }
 
+// The deposit's payment row is managed on the order (deposit panel), not here.
+if (payments_has_is_deposit()) {
+    $dChk = db()->prepare('SELECT is_deposit FROM payments WHERE id = ? AND client_id = ? LIMIT 1');
+    $dChk->execute([$id, $clientId]);
+    if ((int) $dChk->fetchColumn() === 1) {
+        $_SESSION['flash_error'] = 'The deposit is managed on the order — change it from the order\'s deposit panel.';
+        header('Location: ' . $returnTo);
+        exit;
+    }
+}
+
 $st = db()->prepare(
     'DELETE FROM payments WHERE id = ? AND client_id = ?'
 );

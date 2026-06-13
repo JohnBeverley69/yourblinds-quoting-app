@@ -108,10 +108,12 @@ function acct_payments_total_for_quote(PDO $pdo, int $quoteId, ?int $clientId = 
  */
 function acct_received_total_for_quote(PDO $pdo, array $quote): float
 {
+    require_once __DIR__ . '/../_partials/payments_ledger.php';
     $payments = acct_payments_total_for_quote(
         $pdo, (int) $quote['id'], isset($quote['client_id']) ? (int) $quote['client_id'] : null
     );
-    $deposit  = !empty($quote['deposit_paid_at']) ? (float) ($quote['deposit_amount'] ?? 0) : 0.0;
+    // 0 post-migration (the deposit is already a payment row inside $payments).
+    $deposit  = deposit_extra_for($quote['deposit_paid_at'] ?? null, $quote['deposit_amount'] ?? null);
     return round($payments + $deposit, 2);
 }
 

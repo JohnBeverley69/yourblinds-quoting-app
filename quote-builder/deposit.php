@@ -19,6 +19,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../_partials/payments_ledger.php';
 
 requireLogin();
 
@@ -55,6 +56,7 @@ if ($action === 'save_amount') {
         db()->prepare(
             'UPDATE quotes SET deposit_amount = NULL WHERE id = ? AND client_id = ?'
         )->execute([$quoteId, $clientId]);
+        qb_sync_deposit_payment(db(), $quoteId, $clientId);
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
             'success',
@@ -72,6 +74,9 @@ if ($action === 'save_amount') {
     db()->prepare(
         'UPDATE quotes SET deposit_amount = ? WHERE id = ? AND client_id = ?'
     )->execute([$amt, $quoteId, $clientId]);
+    // Keep a paid deposit's ledger row in step with the new amount, then settle.
+    qb_sync_deposit_payment(db(), $quoteId, $clientId);
+    qb_settle_if_paid(db(), $quoteId, $clientId);
 
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
@@ -99,7 +104,8 @@ if ($action === 'record_paid') {
           WHERE id = ? AND client_id = ?'
     )->execute([$amt, $quoteId, $clientId]);
 
-    // If this deposit alone settles the order, auto-mark it paid.
+    // Mirror the deposit into the payments ledger, then settle.
+    qb_sync_deposit_payment(db(), $quoteId, $clientId);
     qb_settle_if_paid(db(), $quoteId, $clientId);
 
     qb_flash_redirect(
@@ -115,6 +121,7 @@ if ($action === 'mark_paid') {
         db()->prepare(
             'UPDATE quotes SET deposit_paid_at = NULL WHERE id = ? AND client_id = ?'
         )->execute([$quoteId, $clientId]);
+        qb_sync_deposit_payment(db(), $quoteId, $clientId);   // removes the deposit row
         qb_settle_if_paid(db(), $quoteId, $clientId);   // may un-settle from paid
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
@@ -125,6 +132,7 @@ if ($action === 'mark_paid') {
         db()->prepare(
             'UPDATE quotes SET deposit_paid_at = NOW() WHERE id = ? AND client_id = ?'
         )->execute([$quoteId, $clientId]);
+        qb_sync_deposit_payment(db(), $quoteId, $clientId);
         qb_settle_if_paid(db(), $quoteId, $clientId);
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,

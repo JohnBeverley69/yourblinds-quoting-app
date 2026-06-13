@@ -12,6 +12,8 @@ declare(strict_types=1);
  * outstanding calc on the quote-edit Payments panel.
  */
 
+require_once __DIR__ . '/payments_ledger.php';
+
 if (!function_exists('calendar_money_for_quotes')) {
 
     /**
@@ -38,10 +40,12 @@ if (!function_exists('calendar_money_for_quotes')) {
             );
             $qs->execute(array_merge([$clientId], $ids));
             foreach ($qs->fetchAll() as $r) {
-                $dep = !empty($r['deposit_paid_at']) ? (float) ($r['deposit_amount'] ?? 0) : 0.0;
                 $out[(int) $r['id']] = [
                     'total'    => (float) $r['total'],
-                    'deposit'  => $dep,
+                    // 'deposit' = display figure; 'deposit_extra' = what to ADD
+                    // to received (0 once the deposit is its own payment row).
+                    'deposit'       => !empty($r['deposit_paid_at']) ? (float) ($r['deposit_amount'] ?? 0) : 0.0,
+                    'deposit_extra' => deposit_extra_for($r['deposit_paid_at'] ?? null, $r['deposit_amount'] ?? null),
                     'payments' => 0.0,
                     'status'   => (string) $r['status'],
                 ];
@@ -65,7 +69,7 @@ if (!function_exists('calendar_money_for_quotes')) {
         } catch (Throwable $e) { /* no payments table — fine */ }
 
         foreach ($out as &$m) {
-            $received     = round($m['deposit'] + $m['payments'], 2);
+            $received     = round($m['deposit_extra'] + $m['payments'], 2);
             $m['received'] = $received;
             $m['balance']  = round($m['total'] - $received, 2);
             // Settled if the money's all in OR the quote's been marked paid.
