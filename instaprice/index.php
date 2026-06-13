@@ -461,12 +461,18 @@ $activeNav = 'instaprice';
         productData.extras.forEach(function (e) { e.choices.forEach(function (c) { choiceToExtra[c.id] = e.id; }); });
         var childrenOf = {};
         productData.extras.forEach(function (e) {
-            (e.parent_choice_ids || []).forEach(function (pid) {
-                var owner = choiceToExtra[pid];
-                if (owner === undefined) return;
-                if (!childrenOf[owner]) childrenOf[owner] = [];
-                if (childrenOf[owner].indexOf(e.id) === -1) childrenOf[owner].push(e.id);
-            });
+            var parents = e.parent_choice_ids || [];
+            if (!parents.length) return;
+            // Single owner — nest a child under its FIRST matching parent only,
+            // matching the real quote builder. Mapping it under every parent
+            // would render the child once per parent (duplicated in the tree).
+            var owner;
+            for (var i = 0; i < parents.length; i++) {
+                if (choiceToExtra[parents[i]] !== undefined) { owner = choiceToExtra[parents[i]]; break; }
+            }
+            if (owner === undefined) return;
+            if (!childrenOf[owner]) childrenOf[owner] = [];
+            if (childrenOf[owner].indexOf(e.id) === -1) childrenOf[owner].push(e.id);
         });
 
         function choiceAvailable(c) {
@@ -571,6 +577,16 @@ $activeNav = 'instaprice';
                 out += '</select>';
                 if (selChoice) out += choiceNumberInput(selChoice);
             }
+            // Group-level measurement input for an extra that has BOTH a label
+            // and choices (numberOnly rendered its own above). Mirrors the
+            // quote builder so the measurement isn't silently dropped here.
+            if (extra.length_input_label && !numberOnly) {
+                var guvP   = preset[extra.id + '__uv'];
+                var guvVal = (guvP !== undefined && guvP !== null) ? guvP : '';
+                out += '<input type="number" min="0" step="1" data-uv-for="' + extra.id + '"'
+                     + ' value="' + escapeAttr(guvVal) + '"'
+                     + ' placeholder="' + escapeAttr(extra.length_input_label) + '">';
+            }
             out += '</div>';
             return out;
         }
@@ -606,10 +622,13 @@ $activeNav = 'instaprice';
         extrasBox.querySelectorAll('[data-extra-id]').forEach(function (div) {
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             if (eid <= 0) return;
-            // This choice's own typed value (per-choice number box), or null.
+            // This choice's own value (per-choice box), else the group-level
+            // measurement, else null — matches the quote builder's precedence.
             function valueFor(cid) {
                 var cin = div.querySelector('input[data-cuv-for="' + cid + '"]');
                 if (cin && cin.value !== '') { var v = parseFloat(cin.value); if (v > 0) return v; }
+                var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
+                if (uvIn && uvIn.value !== '') { var gv = parseFloat(uvIn.value); if (gv > 0) return gv; }
                 return null;
             }
             var multi = div.querySelectorAll('input[data-multi-choice]');

@@ -125,12 +125,27 @@ if (!$canViewAll) {
     $mineOnly = true;   // forced — URL ?mine=0 / no param is ignored
 }
 
+// Optional appointment columns (added by later migrations: appt_kind,
+// access_note, has_issue, issue_note). Probe once so a tenant that hasn't
+// run those migrations doesn't fatally 500 the whole calendar — the render
+// code already null-coalesces each of these to a safe default.
+$apptOptSql = '';
+try {
+    $cSt = db()->query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments'
+            AND COLUMN_NAME IN ('appt_kind','access_note','has_issue','issue_note')"
+    );
+    foreach ($cSt->fetchAll(PDO::FETCH_COLUMN) as $col) {
+        if (preg_match('/^[a-z_]+$/', (string) $col)) $apptOptSql .= 'a.' . $col . ', ';
+    }
+} catch (Throwable $e) { /* leave empty — omit the optional columns */ }
+
 if ($mineOnly) {
     $stmt = db()->prepare(
-        'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
-                a.has_issue, a.issue_note,
-                a.installation_town, a.installation_postcode,
+        "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                a.duration_minutes, a.status, a.quote_id,
+                {$apptOptSql}a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
            FROM appointments a
@@ -139,7 +154,7 @@ if ($mineOnly) {
           WHERE a.client_id = ?
             AND a.client_user_id = ?
             AND a.appointment_date BETWEEN ? AND ?
-       ORDER BY a.appointment_date, a.appointment_time'
+       ORDER BY a.appointment_date, a.appointment_time"
     );
     $stmt->execute([
         $clientId,
@@ -149,10 +164,9 @@ if ($mineOnly) {
     ]);
 } else {
     $stmt = db()->prepare(
-        'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
-                a.has_issue, a.issue_note,
-                a.installation_town, a.installation_postcode,
+        "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                a.duration_minutes, a.status, a.quote_id,
+                {$apptOptSql}a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
                 q.status AS quote_status
            FROM appointments a
@@ -160,7 +174,7 @@ if ($mineOnly) {
       LEFT JOIN quotes q ON q.id = a.quote_id
           WHERE a.client_id = ?
             AND a.appointment_date BETWEEN ? AND ?
-       ORDER BY a.appointment_date, a.appointment_time'
+       ORDER BY a.appointment_date, a.appointment_time"
     );
     $stmt->execute([
         $clientId,

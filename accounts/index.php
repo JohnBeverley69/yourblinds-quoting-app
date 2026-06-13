@@ -129,7 +129,7 @@ $outSql = "SELECT
        ), 0) AS outstanding
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','invoiced','paid')";
+        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')";
 $outParams = [$clientId];
 if ($restrictToMine) {
     $outSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
@@ -149,7 +149,7 @@ $pickSql = "SELECT q.id, q.quote_number, q.end_customer_name, q.total,
               AS payments_total
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','invoiced','paid')";
+        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')";
 $pickParams = [$clientId];
 if ($restrictToMine) {
     $pickSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';

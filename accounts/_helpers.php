@@ -32,6 +32,29 @@ function acct_method_label(string $method): string
 }
 
 /**
+ * May this user record/edit/delete a payment tied to $quoteId?
+ *
+ * Mirrors the Accounts listing gate (accounts/index.php): admins and users
+ * with can_view_all_customer_jobs reach everything; a restricted user may
+ * only touch payments on quotes they have an appointment assigned to.
+ * Standalone payments (no quote) are back-office only — a restricted user
+ * can't see them in the list, so can't write them either.
+ */
+function acct_user_can_touch_quote(PDO $pdo, int $clientId, array $user, ?int $quoteId): bool
+{
+    if (($user['role'] ?? '') === 'admin') return true;
+    $perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
+    if (!empty($perms['can_view_all_customer_jobs'])) return true;
+    if ($quoteId === null || $quoteId <= 0) return false;   // standalone — back-office only
+    $st = $pdo->prepare(
+        'SELECT 1 FROM appointments
+          WHERE quote_id = ? AND client_user_id = ? AND client_id = ? LIMIT 1'
+    );
+    $st->execute([$quoteId, (int) ($user['user_id'] ?? 0), $clientId]);
+    return (bool) $st->fetchColumn();
+}
+
+/**
  * Does the payments table have the optional payer_name column?
  *
  * payer_name records who a payment came from — most useful for
@@ -54,15 +77,25 @@ function acct_has_payer_column(): bool
 }
 
 /**
- * Sum of explicit payments recorded against a quote.
+ * Sum of explicit payments recorded against a quote. Pass $clientId to
+ * tenant-scope the sum (defence-in-depth — every other money query is
+ * tenant-scoped; quote_id is globally unique so it's correct either way).
  */
-function acct_payments_total_for_quote(PDO $pdo, int $quoteId): float
+function acct_payments_total_for_quote(PDO $pdo, int $quoteId, ?int $clientId = null): float
 {
-    $st = $pdo->prepare(
-        'SELECT IFNULL(SUM(amount), 0)
-           FROM payments WHERE quote_id = ?'
-    );
-    $st->execute([$quoteId]);
+    if ($clientId !== null) {
+        $st = $pdo->prepare(
+            'SELECT IFNULL(SUM(amount), 0)
+               FROM payments WHERE quote_id = ? AND client_id = ?'
+        );
+        $st->execute([$quoteId, $clientId]);
+    } else {
+        $st = $pdo->prepare(
+            'SELECT IFNULL(SUM(amount), 0)
+               FROM payments WHERE quote_id = ?'
+        );
+        $st->execute([$quoteId]);
+    }
     return (float) $st->fetchColumn();
 }
 
@@ -75,7 +108,9 @@ function acct_payments_total_for_quote(PDO $pdo, int $quoteId): float
  */
 function acct_received_total_for_quote(PDO $pdo, array $quote): float
 {
-    $payments = acct_payments_total_for_quote($pdo, (int) $quote['id']);
+    $payments = acct_payments_total_for_quote(
+        $pdo, (int) $quote['id'], isset($quote['client_id']) ? (int) $quote['client_id'] : null
+    );
     $deposit  = !empty($quote['deposit_paid_at']) ? (float) ($quote['deposit_amount'] ?? 0) : 0.0;
     return round($payments + $deposit, 2);
 }

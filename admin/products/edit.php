@@ -2774,17 +2774,22 @@ $activeNav = 'products';
             return out;
         }
 
-        // Group by top-level + render children inline.
+        // Group by top-level + render children inline. Single owner — a child
+        // nests under its FIRST matching parent only, matching the real quote
+        // builder (multi-owner would duplicate the child in the preview tree).
+        var pvChoiceToExtra = {};
+        extras.forEach(function (e) { (e.choices || []).forEach(function (c) { pvChoiceToExtra[c.id] = e.id; }); });
         var childMap = {};
         extras.forEach(function (e) {
-            (e.parent_choice_ids || []).forEach(function (pid) {
-                extras.forEach(function (other) {
-                    if ((other.choices || []).some(function (c) { return c.id === pid; })) {
-                        if (!childMap[other.id]) childMap[other.id] = [];
-                        if (childMap[other.id].indexOf(e.id) === -1) childMap[other.id].push(e.id);
-                    }
-                });
-            });
+            var parents = e.parent_choice_ids || [];
+            if (!parents.length) return;
+            var owner;
+            for (var i = 0; i < parents.length; i++) {
+                if (pvChoiceToExtra[parents[i]] !== undefined) { owner = pvChoiceToExtra[parents[i]]; break; }
+            }
+            if (owner === undefined) return;
+            if (!childMap[owner]) childMap[owner] = [];
+            if (childMap[owner].indexOf(e.id) === -1) childMap[owner].push(e.id);
         });
 
         function renderTree(extra, depth) {

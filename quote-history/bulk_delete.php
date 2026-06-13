@@ -34,6 +34,15 @@ csrf_check();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Deleting quotes/orders is a back-office action — gate on admin or
+// quote-creation rights (a plain fitter must not be able to bulk-destroy
+// orders). Matches quote-builder/delete.php.
+$perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
+if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])) {
+    http_response_code(403);
+    exit('Not permitted.');
+}
+
 $ids = $_POST['quote_ids'] ?? [];
 if (!is_array($ids)) $ids = [];
 $ids = array_values(array_unique(array_filter(
@@ -95,6 +104,13 @@ $deletable = array_values(array_diff(
 $deleted = 0;
 if ($deletable) {
     $delPh  = implode(',', array_fill(0, count($deletable), '?'));
+    // supplier_orders has no FK to quotes — clean its send-log rows so they
+    // don't outlive the deleted quotes.
+    try {
+        $pdo->prepare(
+            "DELETE FROM supplier_orders WHERE quote_id IN ($delPh) AND client_id = ?"
+        )->execute(array_merge($deletable, [$clientId]));
+    } catch (Throwable $e) { /* table absent — nothing to clean */ }
     $stmt   = $pdo->prepare(
         "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"
     );
