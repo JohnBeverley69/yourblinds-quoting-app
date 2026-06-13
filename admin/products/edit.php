@@ -2689,11 +2689,18 @@ $activeNav = 'products';
                 });
                 if (!match) return false;
             }
+            // Number-only option (a measurement input, no choices) stays
+            // visible once any parent gate passes — there's no choice for
+            // choiceAvailable to match. Mirrors the quote builder.
+            if ((extra.choices || []).length === 0 && extra.length_input_label) return true;
             return (extra.choices || []).some(choiceAvailable);
         }
 
         function renderOne(extra) {
             var visible = (extra.choices || []).filter(choiceAvailable);
+            // No choices + a number input = a number-only option (e.g. a wand
+            // length): render just the input below, no empty dropdown.
+            var numberOnly = !!extra.length_input_label && (extra.choices || []).length === 0;
             // Per-choice number box (choice.length_input_label) — mirrors the
             // quote builder so the product admin can preview offset / mid-rail
             // style inputs while setting the product up.
@@ -2713,7 +2720,10 @@ $activeNav = 'products';
                  + (extra.is_required ? ' <span class="req-mark">*</span>' : '')
                  + '</label>';
 
-            if (extra.allow_multi) {
+            if (numberOnly) {
+                // No picker — the extra-level number input below is the whole
+                // control (rendered by the length_input_label block).
+            } else if (extra.allow_multi) {
                 var presetMulti = preset[extra.id + '__m'];
                 var preIds = Array.isArray(presetMulti)
                     ? presetMulti.slice()

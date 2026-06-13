@@ -190,6 +190,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 && !str_starts_with($returnTo, '//')
                 && !preg_match('#^/?\w+://#', $returnTo)) {
                 header('Location: ' . $returnTo);
+            } elseif ($lengthLabel !== null) {
+                // Number-input option (e.g. "Wand control length"): the
+                // salesperson just types a value, so it needs NO choices.
+                // Don't strand the user on an empty add-choices page —
+                // land them back on the options list with a clear note.
+                // They can still open it to add pickable choices if they
+                // want both a list AND a typed value.
+                $_SESSION['flash_success'] = 'Option "' . $f['name'] . '" added — it captures a typed '
+                    . 'number, so it needs no choices and is ready to use. Open it only if you also '
+                    . 'want pickable choices alongside the number.';
+                header('Location: /admin/products/extras.php?product_id=' . $productId);
             } else {
                 header('Location: /admin/products/extra.php?id=' . $newId);
             }
@@ -216,9 +227,17 @@ $availableChoices = $choiceStmt->fetchAll();
 // Sort purely by sort_order so drag-and-drop fully controls position.
 // Conditional (parent-choice-gated) rows still get their visual indent
 // + ↳ marker so the relationship reads at a glance regardless of position.
+// length_input_label is optional (migrate_extra_length_input) — probe so
+// the list still loads pre-migration. When set with no choices, the option
+// is a "number-only" measurement and the list says so instead of "0".
+$extraLenCol = '';
+try {
+    db()->query('SELECT length_input_label FROM product_extras LIMIT 1');
+    $extraLenCol = ', e.length_input_label';
+} catch (Throwable $e) { /* column absent — treat every option as choice-based */ }
 $rows = db()->prepare(
     'SELECT e.id, e.name, e.is_required, e.sort_order, e.active, e.updated_at,
-            e.parent_choice_id,
+            e.parent_choice_id' . $extraLenCol . ',
             (SELECT COUNT(*) FROM product_extra_choices c WHERE c.product_extra_id = e.id) AS choice_count
        FROM product_extras e
       WHERE e.product_id = ? AND e.client_id = ?
@@ -565,7 +584,12 @@ $activeNav = 'products';
                                     </td>
                                     <td class="num">
                                         <a href="/admin/products/extra.php?id=<?= (int) $x['id'] ?>">
-                                            <?= (int) $x['choice_count'] ?>
+                                            <?php if ((int) $x['choice_count'] === 0 && !empty($x['length_input_label'])): ?>
+                                                <span title="This option captures a typed number, not pickable choices"
+                                                      style="font-size:0.8125rem;color:var(--text-muted);white-space:nowrap">✎ number</span>
+                                            <?php else: ?>
+                                                <?= (int) $x['choice_count'] ?>
+                                            <?php endif; ?>
                                         </a>
                                     </td>
                                     <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">
