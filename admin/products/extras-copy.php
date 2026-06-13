@@ -320,6 +320,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
                 'INSERT INTO product_extra_parent_choices
                    (product_extra_id, product_extra_choice_id) VALUES (?, ?)'
             );
+            // Fallback resolver for a gating parent whose option was NOT
+            // copied this run because it already existed on the target
+            // (skipped by name). Match the source gating choice to the
+            // existing target choice by (option name + choice label), so a
+            // re-copy doesn't leave the child ungated. Keyed identically on
+            // both sides.
+            $srcChoiceKey = [];
+            $scSt = $pdo->prepare(
+                'SELECT c.id, c.label, e.name AS extra_name
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE e.product_id = ? AND e.client_id = ?'
+            );
+            $scSt->execute([$sourceId, $clientId]);
+            foreach ($scSt->fetchAll() as $r) {
+                $srcChoiceKey[(int) $r['id']] =
+                    mb_strtolower(trim((string) $r['extra_name'])) . '|' . mb_strtolower(trim((string) $r['label']));
+            }
+            $targetChoiceByKey = [];
+            $tcSt = $pdo->prepare(
+                'SELECT c.id, c.label, e.name AS extra_name
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE e.product_id = ? AND e.client_id = ? AND e.active = 1'
+            );
+            $tcSt->execute([$productId, $clientId]);
+            foreach ($tcSt->fetchAll() as $r) {
+                $targetChoiceByKey[
+                    mb_strtolower(trim((string) $r['extra_name'])) . '|' . mb_strtolower(trim((string) $r['label']))
+                ] = (int) $r['id'];
+            }
+
             foreach ($copiedExtras as $oldExtraId => $newExtraId) {
                 $pg = $pdo->prepare(
                     'SELECT product_extra_choice_id FROM product_extra_parent_choices
@@ -328,8 +360,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
                 $pg->execute([$oldExtraId]);
                 foreach ($pg->fetchAll(PDO::FETCH_COLUMN) as $oldPcid) {
                     $oldPcid = (int) $oldPcid;
-                    if (isset($choiceIdMap[$oldPcid])) {
-                        $gateIns->execute([$newExtraId, $choiceIdMap[$oldPcid]]);
+                    $newPcid = $choiceIdMap[$oldPcid] ?? null;
+                    if ($newPcid === null) {
+                        // Parent option already on the target (skipped this
+                        // run) — match its gating choice by name.
+                        $k = $srcChoiceKey[$oldPcid] ?? null;
+                        if ($k !== null && isset($targetChoiceByKey[$k])) {
+                            $newPcid = $targetChoiceByKey[$k];
+                        }
+                    }
+                    if ($newPcid !== null) {
+                        $gateIns->execute([$newExtraId, $newPcid]);
                     } else {
                         $droppedGates++;
                     }
