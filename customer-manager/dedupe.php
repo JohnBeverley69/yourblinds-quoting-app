@@ -169,11 +169,11 @@ $activeNav = 'customers';
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .group-card {
-            background: #fff; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
             padding: 0.875rem 1rem; margin-bottom: 0.875rem;
         }
         .group-card h3 {
-            margin: 0 0 0.5rem; font-size: 1rem; color: #1f3b5b;
+            margin: 0 0 0.5rem; font-size: 1rem; color: var(--text-body);
         }
         .group-card table {
             width: 100%; border-collapse: collapse; font-size: 0.875rem;

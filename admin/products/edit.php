@@ -720,7 +720,7 @@ $activeNav = 'products';
     <style>
         .form-group input[type="number"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
         }
         /* Kill the browser's up/down spinner on the markup/discount
            inputs — pricing % is typed by hand, the spinner just adds
@@ -759,7 +759,7 @@ $activeNav = 'products';
         .pricing-table td.num { width: 7rem; }
         .pricing-table td.num input {
             width: 100%; padding: 0.4375rem 0.625rem;
-            border: 1px solid var(--border-strong); border-radius: 6px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-input);
             font: inherit; box-sizing: border-box;
         }
     </style>
@@ -857,11 +857,11 @@ $activeNav = 'products';
             if ($catalogueIssues):
                 $worst = catalogue_worst_severity($catalogueIssues);
         ?>
-            <details id="catalogue-health" open style="background:#fff;border:1px solid var(--border);border-radius:10px;
+            <details id="catalogue-health" open style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
                                   padding:0.625rem 0.875rem;margin-bottom:0.875rem">
                 <summary style="cursor:pointer;list-style:none;display:flex;
                                 align-items:center;gap:0.5rem;font-weight:600;
-                                color:#1f3b5b;font-size:0.9375rem">
+                                color:var(--text-body);font-size:0.9375rem">
                     <span aria-hidden="true">
                         <?= $worst === 'critical' ? '🚨' : ($worst === 'warning' ? '⚠️' : 'ℹ️') ?>
                     </span>
@@ -1237,7 +1237,7 @@ $activeNav = 'products';
                          wants per-product overhead, but no UI for now. */ ?>
 
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
-                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
                         Pricing per system
                     </legend>
                     <?php
@@ -1263,12 +1263,12 @@ $activeNav = 'products';
                         (<?= number_format($_tenantDefaultMarkup, 2) ?>%
                         — change on
                         <a href="/admin/settings.php#default_price_table_markup_pct"
-                           style="color:#1f3b5b">Settings</a>).</strong>
+                           style="color:var(--brand)">Settings</a>).</strong>
                         <?php if (!$systems): ?>
                             <br><em>No systems on this product yet — values below apply to
                             every quote. Add systems on the
                             <a href="/admin/products/systems.php?product_id=<?= (int) $id ?>"
-                               style="color:#1f3b5b">Systems</a> page to split them out.</em>
+                               style="color:var(--brand)">Systems</a> page to split them out.</em>
                         <?php endif; ?>
                     </p>
 
@@ -1387,18 +1387,18 @@ $activeNav = 'products';
         -->
         <style>
             details.cat-section {
-                background: #fff; border: 1px solid var(--border);
+                background: var(--bg-card); border: 1px solid var(--border);
                 border-radius: 12px; padding: 0; margin-bottom: 1rem;
                 overflow: hidden;
             }
             details.cat-section > summary {
                 list-style: none; cursor: pointer;
                 padding: 0.875rem 1.125rem;
-                background: #f8fafc; border-bottom: 1px solid var(--border);
+                background: var(--bg-subtle); border-bottom: 1px solid var(--border);
                 display: flex; align-items: center; gap: 0.625rem;
-                font-size: 1.0625rem; font-weight: 600; color: #1f3b5b;
+                font-size: 1.0625rem; font-weight: 600; color: var(--text-body);
             }
-            details.cat-section[open] > summary { background: #eef2f7; }
+            details.cat-section[open] > summary { background: var(--bg-subtle-2); }
             details.cat-section > summary::-webkit-details-marker { display: none; }
             details.cat-section > summary::before {
                 content: '▸'; display: inline-block;
@@ -1415,14 +1415,14 @@ $activeNav = 'products';
             details.cat-section > summary .actions a,
             details.cat-section > summary .actions form button {
                 font-size: 0.8125rem; padding: 0.3125rem 0.625rem;
-                background: #fff; color: #1f3b5b;
+                background: var(--bg-card); color: var(--text-body);
                 border: 1px solid var(--border-strong); border-radius: 6px;
                 text-decoration: none; font-weight: 500;
                 cursor: pointer;
             }
             details.cat-section > summary .actions a:hover,
             details.cat-section > summary .actions form button:hover {
-                border-color: #1f3b5b; background: var(--bg-subtle-2);
+                border-color: var(--text-body); background: var(--bg-subtle-2);
             }
             details.cat-section > .body { padding: 0.875rem 1.125rem 1rem; }
             details.cat-section .item-row {
@@ -1462,7 +1462,7 @@ $activeNav = 'products';
             details.cat-section .item-row .row-actions button {
                 font-size: 0.8125rem; padding: 0.1875rem 0.4375rem;
                 background: transparent; border: 0; cursor: pointer;
-                color: #1f3b5b; text-decoration: none;
+                color: var(--brand); text-decoration: none;
             }
             details.cat-section .item-row .row-actions .delete {
                 color: #b91c1c;
@@ -1519,7 +1519,7 @@ $activeNav = 'products';
                         <div class="drag" title="Drag to reorder (use Full manage page)">⋮⋮</div>
                         <div class="name">
                             <a href="/admin/products/price-tables.php?system_id=<?= (int) $s['id'] ?>"
-                               style="color:#1f3b5b;text-decoration:none">
+                               style="color:var(--brand);text-decoration:none">
                                 <?= e((string) $s['name']) ?>
                             </a>
                             <?php if ((int) $s['is_default'] === 1): ?>
@@ -1775,7 +1775,7 @@ $activeNav = 'products';
                         powered by the shared choices_grid partial +
                         the shared JS at the bottom of this page.
                     -->
-                    <details class="option-inline" style="border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;background:#fff">
+                    <details class="option-inline" style="border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;background:var(--bg-card)">
                         <summary style="list-style:none;cursor:pointer;padding:0.5625rem 0.75rem;display:flex;align-items:center;gap:0.625rem;font-weight:500">
                             <span style="color:var(--text-faint);font-size:0.75rem">▸</span>
                             <span style="color:var(--text-primary)"><?= e((string) $opt['name']) ?></span>
@@ -1794,9 +1794,9 @@ $activeNav = 'products';
                             <?php endif; ?>
                             <span style="margin-left:auto;display:flex;gap:0.5rem;font-size:0.8125rem;font-weight:500">
                                 <a href="/admin/products/extra-edit.php?id=<?= $oid ?>"
-                                   style="color:#1f3b5b;text-decoration:none">Settings</a>
+                                   style="color:var(--brand);text-decoration:none">Settings</a>
                                 <a href="/admin/products/extra.php?id=<?= $oid ?>"
-                                   style="color:#1f3b5b;text-decoration:none">Sub-options &amp; full edit &raquo;</a>
+                                   style="color:var(--brand);text-decoration:none">Sub-options &amp; full edit &raquo;</a>
                             </span>
                         </summary>
                         <div style="padding:0.5rem 0.75rem 0.875rem;border-top:1px solid var(--bg-subtle-2)">
@@ -1863,10 +1863,10 @@ $activeNav = 'products';
                 ?>
                     <div style="padding:0.625rem 0.25rem;border-bottom:1px solid var(--bg-subtle-2)">
                         <div style="display:flex;align-items:baseline;gap:0.625rem;flex-wrap:wrap;margin-bottom:0.375rem">
-                            <strong style="color:#1f3b5b">
+                            <strong style="color:var(--text-body)">
                                 <?php if ($firstSystemId > 0): ?>
                                     <a href="/admin/products/price-tables.php?system_id=<?= $firstSystemId ?>"
-                                       style="color:#1f3b5b;text-decoration:none">
+                                       style="color:var(--brand);text-decoration:none">
                                         <?= e((string) $sysName) ?>
                                     </a>
                                 <?php else: ?>
@@ -1879,11 +1879,11 @@ $activeNav = 'products';
                             </span>
                             <?php if ($firstSystemId > 0): ?>
                                 <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= $firstSystemId ?>"
-                                   style="color:#1f3b5b;font-size:0.8125rem;margin-left:auto">
+                                   style="color:var(--brand);font-size:0.8125rem;margin-left:auto">
                                     Bulk import &raquo;
                                 </a>
                                 <a href="/admin/products/price-tables.php?system_id=<?= $firstSystemId ?>"
-                                   style="color:#1f3b5b;font-size:0.8125rem">
+                                   style="color:var(--brand);font-size:0.8125rem">
                                     Manage &raquo;
                                 </a>
                             <?php endif; ?>
@@ -1998,7 +1998,7 @@ $activeNav = 'products';
     .preview-drawer {
         position: fixed; top: 0; right: 0; bottom: 0;
         width: min(480px, 100vw);
-        background: #fff; box-shadow: -8px 0 30px rgba(0,0,0,0.15);
+        background: var(--bg-card); box-shadow: -8px 0 30px rgba(0,0,0,0.15);
         z-index: 9001; display: flex; flex-direction: column;
         transform: translateX(100%); transition: transform 220ms ease-out;
     }
@@ -2006,11 +2006,11 @@ $activeNav = 'products';
     .preview-drawer-head {
         display: flex; align-items: center; gap: 0.5rem;
         padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
-        background: #f8fafc;
+        background: var(--bg-subtle);
         flex-shrink: 0;
     }
     .preview-drawer-head h2 {
-        margin: 0; font-size: 0.9375rem; color: #1f3b5b;
+        margin: 0; font-size: 0.9375rem; color: var(--text-body);
     }
     .preview-drawer-head .badge {
         font-size: 0.625rem; font-weight: 600; color: var(--text-faint);
@@ -2024,7 +2024,7 @@ $activeNav = 'products';
     .preview-drawer-head .head-btns button {
         background: transparent; border: 0; cursor: pointer;
         padding: 0.25rem 0.5rem; border-radius: 6px;
-        font-size: 0.8125rem; color: #1f3b5b;
+        font-size: 0.8125rem; color: var(--brand);
     }
     .preview-drawer-head .head-btns button:hover { background: var(--border); }
     /* Sticky result panel: pinned to the top of the scroll area so
@@ -2034,7 +2034,7 @@ $activeNav = 'products';
     .preview-result-pin {
         position: sticky; top: 0; z-index: 2;
         padding: 0.5rem 0.75rem;
-        background: #fff;
+        background: var(--bg-card);
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
     }
@@ -2052,7 +2052,7 @@ $activeNav = 'products';
     .preview-drawer-body .pv-row input,
     .preview-drawer-body .pv-row select {
         padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
-        border-radius: 6px; font: inherit; background: #fff;
+        border-radius: 6px; font: inherit; background: var(--bg-input);
         font-size: 0.875rem;
     }
     .preview-drawer-body .pv-row .req-mark { color: #b91c1c; }
@@ -2064,7 +2064,7 @@ $activeNav = 'products';
     .preview-drawer-body .pv-extras > .pv-row:last-child { margin-bottom: 0; }
     .preview-drawer-body .pv-extra-child {
         margin-left: 0.625rem; padding-left: 0.5rem;
-        border-left: 2px solid #cbd5e1;
+        border-left: 2px solid var(--border-dashed);
         margin-top: 0.375rem;
     }
     .preview-drawer-body .pv-dim-row {
@@ -2081,7 +2081,7 @@ $activeNav = 'products';
         position: absolute; top: 100%; left: 0; right: 0;
         z-index: 10;
         max-height: 16rem; overflow-y: auto;
-        background: #fff; border: 1px solid var(--border-strong); border-top: 0;
+        background: var(--bg-card); border: 1px solid var(--border-strong); border-top: 0;
         border-radius: 0 0 6px 6px;
         box-shadow: 0 8px 16px rgba(0,0,0,0.12);
         font-size: 0.8125rem;
@@ -2096,7 +2096,7 @@ $activeNav = 'products';
     .pv-typeahead-item.is-empty {
         color: var(--text-faint); cursor: default; font-style: italic;
     }
-    .pv-typeahead-item.is-empty:hover { background: #fff; color: var(--text-faint); }
+    .pv-typeahead-item.is-empty:hover { background: var(--bg-card); color: var(--text-faint); }
     .pv-typeahead-pinned {
         font-size: 0.6875rem; color: var(--text-faint);
         text-transform: uppercase; letter-spacing: 0.04em;
@@ -2728,7 +2728,7 @@ $activeNav = 'products';
                 var preIds = Array.isArray(presetMulti)
                     ? presetMulti.slice()
                     : visible.filter(function (c) { return c.is_default; }).map(function (c) { return c.id; });
-                out += '<div style="display:flex;flex-direction:column;gap:0.25rem;background:#fff;padding:0.4375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px">';
+                out += '<div style="display:flex;flex-direction:column;gap:0.25rem;background:var(--bg-input);padding:0.4375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px">';
                 visible.forEach(function (c) {
                     var ticked = preIds.indexOf(c.id) !== -1;
                     out += '<div>'

@@ -197,7 +197,7 @@ $activeNav = 'master-admin';
         .form-group input[type="email"],
         .form-group input[type="password"] {
             width: 100%; font: inherit; padding: 0.5625rem 0.75rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
             box-sizing: border-box;
         }
         .toggle-stack {
@@ -248,7 +248,7 @@ $activeNav = 'master-admin';
                 free trial</strong> on every paid add-on (Maps, Postcode lookup,
                 Accounts) — they can subscribe via PayPal before the trial ends to
                 keep features active. Trials are visible on
-                <a href="/master-admin/pricing.php" style="color:#1f3b5b">Pricing</a>
+                <a href="/master-admin/pricing.php" style="color:var(--brand)">Pricing</a>
                 where you can extend, shorten, or revoke them per tenant.
             </p>
 

@@ -150,11 +150,11 @@ $activeNav = 'push-updates';
         table.audit td.client { color: #991b1b; font-weight: 600; }
         table.audit td.null   { color: var(--text-faint); font-style: italic; }
         .tenant-card {
-            background: #fff; border: 1px solid var(--border);
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; padding: 0.875rem 1.125rem;
             margin-bottom: 0.875rem;
         }
-        .tenant-card h2 { margin: 0; font-size: 1rem; color: #1f3b5b; }
+        .tenant-card h2 { margin: 0; font-size: 1rem; color: var(--text-body); }
         .tenant-card.clean { border-color: #a7f3d0; background: #ecfdf5; }
         .tenant-card.clean .clean-msg {
             color: #065f46; font-size: 0.875rem; margin-top: 0.25rem;

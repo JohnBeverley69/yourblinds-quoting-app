@@ -183,7 +183,7 @@ $activeNav = 'paypal-health';
             margin-bottom: 1rem;
         }
         .ph-tile {
-            background: #fff; border: 1px solid var(--border);
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; padding: 0.75rem 0.875rem;
         }
         .ph-tile .lbl {
@@ -205,13 +205,13 @@ $activeNav = 'paypal-health';
         .ph-tile.bad .val { color: #991b1b; }
 
         .ph-card {
-            background: #fff; border: 1px solid var(--border);
+            background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; padding: 1rem 1.125rem;
             margin-bottom: 1rem;
         }
         .ph-card h2 {
             margin: 0 0 0.625rem; font-size: 1rem;
-            color: #1f3b5b;
+            color: var(--text-body);
         }
         .ph-grid {
             display: grid; grid-template-columns: 12rem 1fr;
@@ -244,7 +244,7 @@ $activeNav = 'paypal-health';
             text-transform: uppercase; letter-spacing: 0.05em;
             color: var(--text-faint); font-weight: 600;
         }
-        table.ph-events tr.row-processed         td { background: #fff; }
+        table.ph-events tr.row-processed         td { background: var(--bg-card); }
         table.ph-events tr.row-no_matching_tenant td { background: #fffbeb; }
         table.ph-events tr.row-unhandled_event_type td { background: var(--bg-subtle); color: var(--text-faint); }
         table.ph-events tr.row-verification_failed td { background: #fef2f2; color: #991b1b; }
@@ -477,7 +477,7 @@ $activeNav = 'paypal-health';
             </div>
 
             <p style="margin:0.875rem 0 0;padding-top:0.75rem;border-top:1px solid var(--bg-subtle-2);color:var(--text-faint);font-size:0.8125rem;line-height:1.5">
-                <strong style="color:#1f3b5b">Send a test event:</strong>
+                <strong style="color:var(--text-body)">Send a test event:</strong>
                 PayPal's
                 <a href="<?= $envIsLive
                     ? 'https://developer.paypal.com/dashboard/webhooks/simulator'

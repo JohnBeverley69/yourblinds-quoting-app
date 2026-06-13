@@ -140,7 +140,7 @@ $activeNav = 'products';
             margin-bottom: 1rem;
         }
         .tip-box code {
-            background: #fff; padding: 0.0625rem 0.375rem; border-radius: 4px;
+            background: var(--bg-card); padding: 0.0625rem 0.375rem; border-radius: 4px;
             border: 1px solid var(--border); font-size: 0.8125rem;
         }
         .summary-list { margin: 0; padding-left: 1.25rem; }

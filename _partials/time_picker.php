@@ -45,7 +45,7 @@ if ($tpFirst) define('TP_PARTIAL_INCLUDED', true);
     .tp-options {
         position: absolute; top: 100%; left: 0; right: 0;
         margin-top: 4px;
-        background: #fff;
+        background: var(--bg-card);
         border: 1px solid var(--border-strong); border-radius: 8px;
         box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         z-index: 30;
@@ -58,7 +58,7 @@ if ($tpFirst) define('TP_PARTIAL_INCLUDED', true);
         font-size: 0.9375rem; color: var(--text-primary);
         font-variant-numeric: tabular-nums;
     }
-    .tp-opt:hover, .tp-opt.is-active { background: #eff6ff; }
+    .tp-opt:hover, .tp-opt.is-active { background: var(--bg-subtle-2); }
     .tp-opt.is-hidden { display: none; }
     .tp-empty {
         padding: 0.5rem 0.75rem; color: var(--text-faint);

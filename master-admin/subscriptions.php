@@ -300,11 +300,11 @@ $activeNav = 'subscriptions';
         .sub-search {
             width: 100%; max-width: 28rem;
             padding: 0.5rem 0.75rem; font: inherit; font-size: 0.9375rem;
-            border: 1px solid var(--border-strong); border-radius: 8px; background: #fff;
+            border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-input);
             margin-bottom: 0.875rem;
         }
         details.tenant-card {
-            background: #fff; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
             margin-bottom: 0.5rem; overflow: hidden;
         }
         details.tenant-card > summary {
@@ -373,7 +373,7 @@ $activeNav = 'subscriptions';
         .sub-row .sub-field input,
         .sub-row .sub-field select {
             padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
-            border-radius: 6px; font: inherit; background: #fff;
+            border-radius: 6px; font: inherit; background: var(--bg-input);
         }
         .sub-row .sub-delete button {
             background: transparent; color: #b91c1c; border: 0;
@@ -394,7 +394,7 @@ $activeNav = 'subscriptions';
            Delete button + a "show editor" toggle. Stays editable for
            the rare case of moving the tenant back to paid. */
         details.sub-superseded {
-            background: #fafafa; border: 1px dashed var(--border);
+            background: var(--bg-subtle); border: 1px dashed var(--border);
             border-radius: 8px; margin-top: 0.5rem; padding: 0;
         }
         details.sub-superseded > summary {
@@ -434,7 +434,7 @@ $activeNav = 'subscriptions';
         .plan-picker label {
             display: inline-flex; align-items: center; gap: 0.375rem;
             padding: 0.375rem 0.625rem;
-            background: #fff; border: 1px solid var(--border-strong);
+            background: var(--bg-card); border: 1px solid var(--border-strong);
             border-radius: 999px; font-size: 0.8125rem;
             cursor: pointer; user-select: none;
             transition: background 100ms, border-color 100ms;
@@ -466,7 +466,7 @@ $activeNav = 'subscriptions';
         }
         .add-row-shared input, .add-row-shared select {
             padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
-            border-radius: 6px; font: inherit; background: #fff;
+            border-radius: 6px; font: inherit; background: var(--bg-input);
         }
         @media (max-width: 1000px) {
             .add-row-shared { grid-template-columns: 1fr 1fr; }
@@ -513,7 +513,7 @@ $activeNav = 'subscriptions';
         }
         .comp-add select, .comp-add input {
             padding: 0.375rem 0.5rem; border: 1px solid var(--border-strong);
-            border-radius: 6px; font: inherit; background: #fff;
+            border-radius: 6px; font: inherit; background: var(--bg-input);
         }
         .comp-add button {
             background: #5b21b6; color: #fff; border: 0;
@@ -674,7 +674,7 @@ $activeNav = 'subscriptions';
 
                                     <div class="sub-field">
                                         <label>Plan</label>
-                                        <div style="padding:0.375rem 0;font-weight:600;color:#1f3b5b">
+                                        <div style="padding:0.375rem 0;font-weight:600;color:var(--text-body)">
                                             <?= e($plans[$plan]['name'] ?? $plan) ?>
                                         </div>
                                     </div>
@@ -779,7 +779,7 @@ $activeNav = 'subscriptions';
 
                                             <div class="sub-field">
                                                 <label>Plan</label>
-                                                <div style="padding:0.375rem 0;font-weight:600;color:#1f3b5b">
+                                                <div style="padding:0.375rem 0;font-weight:600;color:var(--text-body)">
                                                     <?= e($planName) ?>
                                                 </div>
                                             </div>

@@ -256,7 +256,7 @@ $activeNav = 'calendar';
             padding: 0.5625rem 0.75rem;
             border: 1px solid var(--border-strong);
             border-radius: 8px;
-            background: #fff;
+            background: var(--bg-input);
             color: inherit;
         }
         .form-group input[type="date"]:focus,
@@ -282,7 +282,7 @@ $activeNav = 'calendar';
             padding: 0 0.5rem;
             font-size: 0.8125rem;
             font-weight: 600;
-            color: #1f3b5b;
+            color: var(--text-body);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }

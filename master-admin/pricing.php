@@ -329,11 +329,11 @@ $activeNav = 'pricing';
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .price-card {
-            background: #fff; border: 1px solid var(--border); border-radius: 12px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
             padding: 1.125rem 1.25rem; margin-bottom: 1rem;
         }
         .price-card h3 {
-            margin: 0 0 0.25rem; color: #1f3b5b; font-size: 1.125rem;
+            margin: 0 0 0.25rem; color: var(--text-body); font-size: 1.125rem;
         }
         .price-card .pc-desc { color: var(--text-muted); font-size: 0.875rem; margin: 0 0 0.875rem; }
         .price-card form {
@@ -348,7 +348,7 @@ $activeNav = 'pricing';
         }
         .price-card .pc-field input {
             padding: 0.4375rem 0.5625rem; border: 1px solid var(--border-strong);
-            border-radius: 6px; font: inherit; background: #fff;
+            border-radius: 6px; font: inherit; background: var(--bg-input);
         }
         .price-card .pc-field code {
             display: block; padding: 0.4375rem 0.5625rem;
@@ -376,7 +376,7 @@ $activeNav = 'pricing';
             .price-card form > .pc-submit { grid-column: 1 / -1; justify-self: end; }
         }
         .comp-row {
-            background: #fff; border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
             padding: 0.5rem 0.875rem; margin-bottom: 0.375rem;
             display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
         }
@@ -412,7 +412,7 @@ $activeNav = 'pricing';
         }
         .add-comp select, .add-comp input {
             padding: 0.4375rem 0.5625rem; border: 1px solid var(--border-strong);
-            border-radius: 6px; font: inherit; background: #fff;
+            border-radius: 6px; font: inherit; background: var(--bg-input);
         }
         @media (max-width: 800px) {
             .add-comp form { grid-template-columns: 1fr 1fr; }
@@ -596,7 +596,7 @@ $activeNav = 'pricing';
                                        value="<?= e($expires ?: $defaultTrialExpiry) ?>"
                                        style="padding:0.25rem 0.375rem;border:1px solid var(--border-strong);
                                               border-radius:4px;font-size:0.8125rem">
-                                <button type="submit" style="color:#1f3b5b">Save</button>
+                                <button type="submit" style="color:var(--brand)">Save</button>
                             </form>
                             <form method="post" action="/master-admin/pricing.php"
                                   data-confirm="Convert this trial to a permanent comp (free forever) for <?= e((string) $c['company_name']) ?>?"
