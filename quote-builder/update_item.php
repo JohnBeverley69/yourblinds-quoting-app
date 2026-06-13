@@ -93,9 +93,18 @@ if (isset($_POST['extras']) && is_array($_POST['extras'])) {
         $uvFloat = ($uv !== null && $uv !== '' && is_numeric($uv) && (float) $uv > 0)
             ? (float) $uv : null;
 
-        $mkRow = static function (int $eid, int $cid) use ($uvFloat): array {
+        // Per-choice typed values: extras[N][choice_user_values][<choice_id>].
+        // A choice's own value wins over the group-level user_value.
+        $choiceUv = (isset($e['choice_user_values']) && is_array($e['choice_user_values']))
+            ? $e['choice_user_values'] : [];
+
+        $mkRow = static function (int $eid, int $cid) use ($uvFloat, $choiceUv): array {
             $row = ['extra_id' => $eid, 'choice_id' => $cid];
-            if ($uvFloat !== null) $row['user_value'] = $uvFloat;
+            $pc  = $choiceUv[$cid] ?? null;
+            $pcFloat = ($pc !== null && $pc !== '' && is_numeric($pc) && (float) $pc > 0)
+                ? (float) $pc : null;
+            $val = $pcFloat ?? $uvFloat;
+            if ($val !== null) $row['user_value'] = $val;
             return $row;
         };
 

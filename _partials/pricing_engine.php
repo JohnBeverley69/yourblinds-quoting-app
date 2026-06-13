@@ -357,11 +357,25 @@ function pe_apply_extra(
     }
     $basisCol = $hasBasisCol ? ', per_metre_basis' : '';
 
+    // Per-choice number input (migrate_choice_length_input.php). When set,
+    // this choice captures its own user_value (e.g. "Top offset (mm)") —
+    // distinct from a group-level length input on the extra. Probe once.
+    static $hasChoiceLenCol = null;
+    if ($hasChoiceLenCol === null) {
+        try {
+            $pdo->query('SELECT length_input_label FROM product_extra_choices LIMIT 1');
+            $hasChoiceLenCol = true;
+        } catch (Throwable $e) {
+            $hasChoiceLenCol = false;
+        }
+    }
+    $choiceLenCol = $hasChoiceLenCol ? ', length_input_label' : '';
+
     try {
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price, markup_pct_override$basisCol
+                    cost_price, markup_pct_override$basisCol$choiceLenCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -372,7 +386,7 @@ function pe_apply_extra(
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price$basisCol
+                    cost_price$basisCol$choiceLenCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -502,8 +516,13 @@ function pe_apply_extra(
     // (mm) and we record it so the supplier docs show the spec. Could
     // also drive pricing later (multiply choice.price_per_metre by
     // userValue/1000 instead of widthMm/1000) — out of scope for v1.
+    // Accept the typed value when EITHER the group-level extra OR this
+    // specific choice asks for a number (per-choice input added by
+    // migrate_choice_length_input.php).
     $resolvedUserValue = null;
-    if (!empty($extra['length_input_label']) && $userValue !== null && $userValue > 0) {
+    $wantsUserValue = !empty($extra['length_input_label'])
+                   || !empty($choice['length_input_label']);
+    if ($wantsUserValue && $userValue !== null && $userValue > 0) {
         $resolvedUserValue = round((float) $userValue, 2);
     }
 
@@ -515,7 +534,8 @@ function pe_apply_extra(
         'mode'                => $primary,
         'amount_applied'      => round($amount, 2),
         'cost_snapshot'       => $costSnapshot,
-        'length_input_label'  => $extra['length_input_label'] ?? null,
+        'length_input_label'  => $extra['length_input_label']
+                                 ?? ($choice['length_input_label'] ?? null),
         'user_value'          => $resolvedUserValue,
     ];
 }
