@@ -1489,10 +1489,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $paymentsLoaded  = false;
             if ($accountsEnabled) {
                 try {
+                    // Exclude the deposit's own payment row — the deposit has its
+                    // dedicated panel/section here, so it'd otherwise show twice.
+                    // The deposit is still added to totalReceived below via
+                    // $depositCounted, so the figure is unchanged.
+                    $depFilter = payments_has_is_deposit() ? ' AND is_deposit = 0' : '';
                     $pStmt = db()->prepare(
                         'SELECT id, amount, received_at, method, reference, notes
                            FROM payments
-                          WHERE quote_id = ? AND client_id = ?
+                          WHERE quote_id = ? AND client_id = ?' . $depFilter . '
                        ORDER BY received_at DESC, id DESC'
                     );
                     $pStmt->execute([(int) $quote['id'], $clientId]);

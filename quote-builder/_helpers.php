@@ -4,6 +4,8 @@ declare(strict_types=1);
 // Quote-builder helpers — loaded by every page in this module. Caller must
 // have already required bootstrap.php + auth/middleware.php.
 
+require_once __DIR__ . '/../_partials/payments_ledger.php';
+
 /**
  * Load a quote scoped to the given client. 404s if not found / wrong tenant.
  */
@@ -546,7 +548,9 @@ function qb_settle_if_paid(PDO $pdo, int $quoteId, int $clientId): bool
         }
 
         $total = (float) $r['total'];
-        $dep   = !empty($r['deposit_paid_at']) ? (float) ($r['deposit_amount'] ?? 0) : 0.0;
+        // 0 once the deposit is its own payment row (post-migration) — then it's
+        // already inside $pay. Else the legacy deposit-on-the-quote amount.
+        $dep   = deposit_extra_for($r['deposit_paid_at'] ?? null, $r['deposit_amount'] ?? null);
         $pay   = 0.0;
         try {
             $ps = $pdo->prepare(
