@@ -2633,6 +2633,10 @@ $activeNav = 'products';
                     .filter(function (cb) { return cb.checked; })
                     .map(function (cb) { return parseInt(cb.dataset.pvMulti, 10); });
             }
+            // Per-choice number boxes — keep each value across re-renders.
+            div.querySelectorAll('input[data-pv-cuv]').forEach(function (cin) {
+                preset[eid + '__cuv__' + cin.getAttribute('data-pv-cuv')] = cin.value;
+            });
         });
 
         function effectiveChoiceIds(extra) {
@@ -2690,6 +2694,20 @@ $activeNav = 'products';
 
         function renderOne(extra) {
             var visible = (extra.choices || []).filter(choiceAvailable);
+            // Per-choice number box (choice.length_input_label) — mirrors the
+            // quote builder so the product admin can preview offset / mid-rail
+            // style inputs while setting the product up.
+            function choiceNumberInput(c) {
+                if (!c.length_input_label) return '';
+                var pv = preset[extra.id + '__cuv__' + c.id];
+                var val = (pv !== undefined && pv !== null) ? String(pv) : '';
+                return '<div style="margin-top:0.25rem">'
+                     + '<input type="number" data-pv-cuv="' + c.id + '" min="0" step="1"'
+                     + ' value="' + esc(val) + '"'
+                     + ' placeholder="' + esc(c.length_input_label) + '"'
+                     + ' style="padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;max-width:12rem">'
+                     + '</div>';
+            }
             var out = '<div class="pv-row" data-pv-extra="' + extra.id + '">';
             out += '<label>' + esc(extra.name)
                  + (extra.is_required ? ' <span class="req-mark">*</span>' : '')
@@ -2703,9 +2721,12 @@ $activeNav = 'products';
                 out += '<div style="display:flex;flex-direction:column;gap:0.25rem;background:#fff;padding:0.4375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px">';
                 visible.forEach(function (c) {
                     var ticked = preIds.indexOf(c.id) !== -1;
-                    out += '<label style="display:inline-flex;align-items:center;gap:0.4375rem;cursor:pointer;font-weight:400">'
+                    out += '<div>'
+                         + '<label style="display:inline-flex;align-items:center;gap:0.4375rem;cursor:pointer;font-weight:400">'
                          + '<input type="checkbox" data-pv-multi="' + c.id + '"' + (ticked ? ' checked' : '') + '>'
-                         + ' ' + esc(c.label) + '</label>';
+                         + ' ' + esc(c.label) + '</label>'
+                         + (ticked ? choiceNumberInput(c) : '')
+                         + '</div>';
                 });
                 out += '</div>';
             } else {
@@ -2718,15 +2739,18 @@ $activeNav = 'products';
                 if (!hasDef && !hideSelect) {
                     out += '<option value=""' + (presetVal === '' ? ' selected' : '') + '>— Select —</option>';
                 }
+                var pvSelChoice = null;
                 visible.forEach(function (c) {
                     var isSel;
                     if (hideSelect)                                  isSel = true;
                     else if (presetVal !== undefined && presetVal !== '') isSel = String(c.id) === presetVal;
                     else if (presetVal === '')                       isSel = false;
                     else                                             isSel = c.is_default;
+                    if (isSel) pvSelChoice = c;
                     out += '<option value="' + c.id + '"' + (isSel ? ' selected' : '') + '>' + esc(c.label) + '</option>';
                 });
                 out += '</select>';
+                if (pvSelChoice) out += choiceNumberInput(pvSelChoice);
             }
 
             if (extra.length_input_label) {
@@ -2864,6 +2888,12 @@ $activeNav = 'products';
             var multiBoxes = div.querySelectorAll('input[data-pv-multi]');
             var uvIn = div.querySelector('input[data-pv-uv]');
             var uvVal = uvIn && uvIn.value !== '' ? parseFloat(uvIn.value) : null;
+            // This choice's own number box wins over the group-level one.
+            function valueFor(cid) {
+                var cin = div.querySelector('input[data-pv-cuv="' + cid + '"]');
+                if (cin && cin.value !== '') { var v = parseFloat(cin.value); if (v > 0) return v; }
+                return (uvVal && uvVal > 0) ? uvVal : null;
+            }
             if (multiBoxes.length) {
                 multiBoxes.forEach(function (cb) {
                     if (!cb.checked) return;
@@ -2871,7 +2901,8 @@ $activeNav = 'products';
                     if (cid > 0) {
                         params.append('extras[' + i + '][extra_id]',  eid);
                         params.append('extras[' + i + '][choice_id]', cid);
-                        if (uvVal && uvVal > 0) params.append('extras[' + i + '][user_value]', uvVal);
+                        var v = valueFor(cid);
+                        if (v !== null) params.append('extras[' + i + '][user_value]', v);
                         i++;
                     }
                 });
@@ -2882,7 +2913,8 @@ $activeNav = 'products';
                 if (cid > 0) {
                     params.append('extras[' + i + '][extra_id]',  eid);
                     params.append('extras[' + i + '][choice_id]', cid);
-                    if (uvVal && uvVal > 0) params.append('extras[' + i + '][user_value]', uvVal);
+                    var v = valueFor(cid);
+                    if (v !== null) params.append('extras[' + i + '][user_value]', v);
                     i++;
                 }
             }
