@@ -6,6 +6,12 @@ declare(strict_types=1);
  * pages and the quote-builder Payments section.
  */
 
+// Deposit-ledger helpers (payments_has_is_deposit / deposit_extra_for) are
+// used directly by the accounts pages, so load them at file scope — not just
+// inside acct_received_total_for_quote(). Without this, accounts/index.php
+// fatals with "undefined function payments_has_is_deposit()".
+require_once __DIR__ . '/../_partials/payments_ledger.php';
+
 /**
  * Allowed payment methods. Stored as the raw value; display label
  * is mapped via acct_method_label(). Adding a new method here is
