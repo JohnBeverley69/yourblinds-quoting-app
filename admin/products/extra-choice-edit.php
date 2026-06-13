@@ -134,8 +134,21 @@ if ($hasBasisColumn) {
     if (isset($perMetreBases[$pbVal])) $perMetreBasis = $pbVal;
 }
 
+// Per-choice number input label (migrate_choice_length_input.php). Loaded
+// on its own so it doesn't have to be threaded through the cost-column
+// try-fallback above. Absent column = feature off for this install.
+$hasChoiceLenColumn = false;
+$choiceLenLabel     = '';
+try {
+    $clSt = db()->prepare('SELECT length_input_label FROM product_extra_choices WHERE id = ?');
+    $clSt->execute([$id]);
+    $choiceLenLabel     = (string) ($clSt->fetchColumn() ?: '');
+    $hasChoiceLenColumn = true;
+} catch (Throwable $e) { /* column absent — keep feature off */ }
+
 $f = [
     'label'           => (string) $choice['label'],
+    'length_input_label' => $choiceLenLabel,
     'price_delta'     => (string) $choice['price_delta'],
     'price_percent'   => (string) $choice['price_percent'],
     'price_per_metre' => (string) $choice['price_per_metre'],
@@ -171,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
     $f['label']           = trim((string) ($_POST['label'] ?? ''));
+    $f['length_input_label'] = trim((string) ($_POST['length_input_label'] ?? ''));
     $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
@@ -206,6 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Label is required.';
     } elseif (strlen($f['label']) > 150) {
         $error = 'Label is too long (max 150 chars).';
+    } elseif (strlen($f['length_input_label']) > 60) {
+        $error = 'Number-input label is too long (max 60 chars).';
     } elseif (!is_numeric($f['price_delta'])) {
         $error = 'Flat surcharge must be a number.';
     } elseif (!is_numeric($f['price_percent'])) {
@@ -336,6 +352,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare(
                         'UPDATE product_extra_choices SET per_metre_basis = ? WHERE id = ?'
                     )->execute([$f['per_metre_basis'], $id]);
+                }
+
+                // Per-choice number-input label — own small UPDATE, same
+                // pattern. Empty string → NULL ("no number box on this choice").
+                if ($hasChoiceLenColumn) {
+                    $lenVal = $f['length_input_label'] !== '' ? $f['length_input_label'] : null;
+                    $pdo->prepare(
+                        'UPDATE product_extra_choices SET length_input_label = ? WHERE id = ?'
+                    )->execute([$lenVal, $id]);
                 }
 
                 // Replace the per-choice band scope. Empty $f['bands']
@@ -561,6 +586,67 @@ $activeNav = 'products';
                                value="<?= e((string) $f['label']) ?>">
                     </div>
                 </div>
+
+                <?php if ($hasChoiceLenColumn):
+                    $hasChoiceLen = $f['length_input_label'] !== '';
+                ?>
+                <!--
+                    Per-choice number input. Same tickbox+label pattern as the
+                    option editor, but it lives on THIS choice — so e.g. an
+                    "Offset" option can have Top / Bottom / Left / Right choices,
+                    each with its own mm box, or a "Mid rail" choice can capture
+                    its height. Empty label = no box on this choice.
+                -->
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:#1f3b5b;text-transform:uppercase;letter-spacing:0.05em">
+                        Ask for a number on this choice
+                    </legend>
+                    <label style="display:inline-flex;align-items:flex-start;gap:0.5rem;font-weight:500;cursor:pointer;margin-bottom:0.625rem">
+                        <input type="checkbox" id="show_choice_len"
+                               <?= $hasChoiceLen ? 'checked' : '' ?>
+                               style="margin-top:0.25rem">
+                        <span>
+                            Show a number input when this choice is picked
+                            <small style="display:block;color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-top:0.125rem">
+                                For measurements like an offset size or mid-rail height &mdash;
+                                the salesperson types a value next to this choice. Recorded on
+                                the quote line; it doesn't change the price.
+                            </small>
+                        </span>
+                    </label>
+                    <div id="choice_len_wrap" style="<?= $hasChoiceLen ? '' : 'display:none' ?>;margin-left:1.625rem">
+                        <label for="length_input_label" style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary)">
+                            What to call this field
+                        </label>
+                        <input id="length_input_label" name="length_input_label" type="text"
+                               maxlength="60"
+                               value="<?= e((string) $f['length_input_label']) ?>"
+                               placeholder="e.g. Top offset (mm)"
+                               style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:#fff;box-sizing:border-box;margin-top:0.25rem">
+                        <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.25rem">
+                            Include the unit (e.g. <em>mm</em>) so the salesperson knows what to type.
+                        </small>
+                    </div>
+                </fieldset>
+                <script>
+                (function () {
+                    var tick = document.getElementById('show_choice_len');
+                    var wrap = document.getElementById('choice_len_wrap');
+                    var lbl  = document.getElementById('length_input_label');
+                    if (!tick || !wrap || !lbl) return;
+                    tick.addEventListener('change', function () {
+                        if (tick.checked) {
+                            wrap.style.display = '';
+                            if (lbl.value.trim() === '') lbl.value = 'Size (mm)';
+                            setTimeout(function () { lbl.focus(); lbl.select(); }, 0);
+                        } else {
+                            wrap.style.display = 'none';
+                            lbl.value = '';
+                        }
+                    });
+                })();
+                </script>
+                <?php endif; ?>
 
                 <div class="form-row cols-3">
                     <div class="form-group">

@@ -2149,6 +2149,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
             if (uvIn) preset[eid + '__uv'] = uvIn.value;
+
+            // Per-choice number inputs (data-cuv-for="<choiceId>") — keyed by
+            // choice so a re-render (e.g. ticking another box) doesn't wipe a
+            // value the salesperson already typed against a different choice.
+            div.querySelectorAll('input[data-cuv-for]').forEach(function (cin) {
+                preset[eid + '__cuv__' + cin.getAttribute('data-cuv-for')] = cin.value;
+            });
         });
 
         var systemId = parseInt(systemSel.value, 10) || 0;
@@ -2278,6 +2285,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // being filtered out by band/system.
             var numberOnly = !!extra.length_input_label && (extra.choices || []).length === 0;
 
+            // Per-choice number input (choice.length_input_label). Rendered
+            // next to a chosen choice so e.g. each offset side or a mid-rail
+            // can capture its own mm value. Keyed by choice id; the value
+            // survives re-renders via the preset map. Spec only — no price.
+            function choiceNumberInput(c) {
+                if (!c.length_input_label) return '';
+                var pv  = preset[extra.id + '__cuv__' + c.id];
+                var val = (pv !== undefined && pv !== null) ? String(pv) : '';
+                return '<div class="choice-user-value" style="margin-top:0.25rem">'
+                     + '<label style="display:block;font-size:0.7rem;font-weight:600;'
+                     + 'color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;'
+                     + 'margin-bottom:0.125rem">' + escapeHtml(c.length_input_label) + '</label>'
+                     + '<input type="number" min="0" step="1"'
+                     + ' name="extras[' + idx + '][choice_user_values][' + c.id + ']"'
+                     + ' value="' + escapeAttr(val) + '"'
+                     + ' data-cuv-for="' + c.id + '"'
+                     + ' style="width:100%;max-width:12rem;padding:0.3125rem 0.5rem;'
+                     + 'border:1px solid var(--border-strong);border-radius:6px;font:inherit">'
+                     + '</div>';
+            }
+
             var out = '<div data-extra-id="' + extra.id + '"'
                     + (isChild ? ' class="extra-child"' : '')
                     + '>';
@@ -2318,7 +2346,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 visibleChoices.forEach(function (c) {
                     var ticked = preselectIds.indexOf(c.id) !== -1;
                     if (ticked && c.image_url) selectedThumb = c.image_url;
-                    out += '<label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400">'
+                    // Each row = the tick-box label, plus this choice's own
+                    // number box underneath when it's ticked (re-render on
+                    // tick reveals/hides it).
+                    out += '<div class="multi-choice-row">'
+                         + '<label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400">'
                          + '<input type="checkbox"'
                          + ' name="extras[' + idx + '][choice_ids][]"'
                          + ' value="' + c.id + '"'
@@ -2326,7 +2358,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                          + (ticked ? ' checked' : '')
                          + '>'
                          + ' ' + escapeHtml(c.label)
-                         + '</label>';
+                         + '</label>'
+                         + (ticked ? choiceNumberInput(c) : '')
+                         + '</div>';
                 });
                 out += '</div>';
             } else {
@@ -2352,6 +2386,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                          + (presetVal === '' ? ' selected' : '')
                          + '>— Select —</option>';
                 }
+                var selChoice = null;
                 visibleChoices.forEach(function (c) {
                     var isSelected;
                     if (hideSelect) {
@@ -2363,11 +2398,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     } else {
                         isSelected = c.is_default;
                     }
+                    if (isSelected) selChoice = c;
                     if (isSelected && !hideSelect && c.image_url) selectedThumb = c.image_url;
                     out += '<option value="' + c.id + '"'
                          + (isSelected ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
                 });
                 out += '</select>';
+                // The selected choice's own number box (if it asks for one).
+                if (selChoice) out += choiceNumberInput(selChoice);
             }
 
             if (selectedThumb) {
@@ -2514,10 +2552,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 if (sel) sel.value = String(ex.choice_id);
             }
             if (ex.user_value !== undefined && ex.user_value !== null) {
+                // Group-level box (extra-scoped)...
                 var uvIn = document.querySelector(
                     'input[data-uv-for="' + ex.extra_id + '"]'
                 );
                 if (uvIn) uvIn.value = String(ex.user_value);
+                // ...and the per-choice box (choice-scoped), if this choice
+                // has one. Only exists once the choice is ticked/selected and
+                // re-rendered — the multi-pass apply loop fills it in.
+                if (ex.choice_id) {
+                    var cuvIn = document.querySelector(
+                        '[data-extra-id="' + ex.extra_id + '"] input[data-cuv-for="' + ex.choice_id + '"]'
+                    );
+                    if (cuvIn) cuvIn.value = String(ex.user_value);
+                }
             }
         }
 
@@ -2547,14 +2595,25 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             if (eid <= 0) return;
 
-            // user_value is optional — only present when the extra has
-            // a length_input_label. Same value used for every ticked
-            // choice on a multi-pick option.
+            // Group-level user_value — present when the EXTRA has a
+            // length_input_label (one box shared across ticked choices).
             var uvIn = div.querySelector('input[data-uv-for="' + eid + '"]');
             var userValue = null;
             if (uvIn && uvIn.value !== '') {
                 var uv = parseFloat(uvIn.value);
                 if (uv > 0) userValue = uv;
+            }
+
+            // Per-choice value — present when a CHOICE has its own number box.
+            // It wins over the group-level value for that choice. Returns the
+            // record's user_value (number) or null.
+            function valueFor(cid) {
+                var cin = div.querySelector('input[data-cuv-for="' + cid + '"]');
+                if (cin && cin.value !== '') {
+                    var v = parseFloat(cin.value);
+                    if (v > 0) return v;
+                }
+                return userValue;
             }
 
             // Multi-pick: one record per ticked checkbox.
@@ -2565,7 +2624,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     var cid = parseInt(cb.dataset.multiChoice, 10);
                     if (cid > 0) {
                         var rec = { extra_id: eid, choice_id: cid };
-                        if (userValue !== null) rec.user_value = userValue;
+                        var val = valueFor(cid);
+                        if (val !== null) rec.user_value = val;
                         out.push(rec);
                     }
                 });
@@ -2588,7 +2648,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var cid = parseInt(sel.value, 10);
             if (cid > 0) {
                 var rec = { extra_id: eid, choice_id: cid };
-                if (userValue !== null) rec.user_value = userValue;
+                var val = valueFor(cid);
+                if (val !== null) rec.user_value = val;
                 out.push(rec);
             }
         });

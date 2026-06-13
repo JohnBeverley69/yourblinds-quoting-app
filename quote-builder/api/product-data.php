@@ -247,10 +247,17 @@ $choicesByExtra = [];
 $bandsByChoice  = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
+    // Per-choice number-input label (migrate_choice_length_input.php) is
+    // optional — probe so pre-migration tenants still load.
+    $choiceLenCol = '';
+    try {
+        $pdo->query('SELECT length_input_label FROM product_extra_choices LIMIT 1');
+        $choiceLenCol = ', length_input_label';
+    } catch (Throwable $e) { /* column absent — choices report null */ }
     $st = $pdo->prepare(
         "SELECT id, product_extra_id, system_id, label,
                 price_delta, price_percent, price_per_metre,
-                is_default, sort_order, image_path
+                is_default, sort_order, image_path$choiceLenCol
            FROM product_extra_choices
           WHERE product_extra_id IN ($ph) AND active = 1
        ORDER BY product_extra_id, sort_order, label"
@@ -292,6 +299,11 @@ if ($extraIds) {
             'system_id'  => $r['system_id'] !== null ? (int) $r['system_id'] : null,
             'label'      => (string) $r['label'],
             'is_default' => (bool)   $r['is_default'],
+            // length_input_label — when non-empty, the quote builder renders
+            // a number box next to THIS choice (e.g. "Top offset (mm)"). The
+            // typed value rides on the choice's quote_item_extras row.
+            'length_input_label' => isset($r['length_input_label']) && $r['length_input_label'] !== ''
+                ? (string) $r['length_input_label'] : null,
             // asset() adds ?v=<mtime> so a re-uploaded thumbnail (same path)
             // isn't served stale from the browser cache in the quote builder.
             'image_url'  => !empty($r['image_path']) ? asset((string) $r['image_path']) : null,
