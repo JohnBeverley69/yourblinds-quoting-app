@@ -36,6 +36,28 @@ function mailer_send(
         return false;
     }
 
+    // ── Non-production guard ────────────────────────────────────────────────
+    // A staging / test copy must NEVER email a real customer or supplier. Off
+    // production, redirect every message to a single intercept inbox
+    // (MAIL_INTERCEPT_TO) so testers can hammer "send" with zero real-world
+    // fallout; if no inbox is configured, drop it silently. We return true in
+    // both cases so the app's flows continue exactly as if the mail had sent.
+    // Inert on production (APP_ENV defaults to 'production').
+    $appEnv = strtolower((string) (env('APP_ENV', 'production') ?? 'production'));
+    if ($appEnv !== 'production' && $appEnv !== 'prod') {
+        $origList  = implode(', ', array_filter(array_map(
+            static fn ($r) => trim((string) $r), (array) $to
+        ), static fn ($r) => $r !== ''));
+        $intercept = trim((string) (env('MAIL_INTERCEPT_TO', '') ?? ''));
+        if ($intercept === '' || !filter_var($intercept, FILTER_VALIDATE_EMAIL)) {
+            error_log('[YourBlinds][' . $appEnv . '] email suppressed (set MAIL_INTERCEPT_TO to capture) — '
+                . 'would have gone to: ' . ($origList !== '' ? $origList : '(no recipient)'));
+            return true;
+        }
+        $to      = $intercept;
+        $subject = '[' . strtoupper($appEnv) . ($origList !== '' ? ' → ' . $origList : '') . '] ' . $subject;
+    }
+
     $host     = (string) (env('MAIL_HOST',      'mail.authsmtp.com')     ?? 'mail.authsmtp.com');
     $port     = (int)    (env('MAIL_PORT',      '2525')                  ?? 2525);
     $username = (string) (env('MAIL_USERNAME',  '')                      ?? '');
