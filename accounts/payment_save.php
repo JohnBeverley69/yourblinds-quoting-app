@@ -49,6 +49,10 @@ $dateRaw   = trim((string) ($_POST['received_at'] ?? ''));
 $method    = (string) ($_POST['method']      ?? 'bank_transfer');
 $reference = trim((string) ($_POST['reference']   ?? '')) ?: null;
 $notes     = trim((string) ($_POST['notes']       ?? '')) ?: null;
+// Who the payment came from. Most useful for standalone payments with no
+// linked order/customer. Only persisted if the column exists (migration).
+$payerName = trim((string) ($_POST['payer_name']  ?? '')) ?: null;
+$hasPayer  = acct_has_payer_column();
 $returnTo  = safe_local_redirect(
     (string) ($_POST['return_to'] ?? ''), '/accounts/index.php'
 );
@@ -99,22 +103,28 @@ if ($id > 0) {
                 received_at = ?,
                 method      = ?,
                 reference   = ?,
-                notes       = ?
+                notes       = ?'
+        . ($hasPayer ? ',
+                payer_name  = ?' : '') . '
           WHERE id = ? AND client_id = ?'
     );
-    $st->execute([$amount, $receivedAt, $method, $reference, $notes, $id, $clientId]);
+    $params = [$amount, $receivedAt, $method, $reference, $notes];
+    if ($hasPayer) $params[] = $payerName;
+    $params[] = $id;
+    $params[] = $clientId;
+    $st->execute($params);
     $_SESSION['flash_success'] = 'Payment updated.';
 } else {
-    $st = $pdo->prepare(
-        'INSERT INTO payments
-            (client_id, quote_id, customer_id,
-             amount, received_at, method, reference, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $st->execute([
+    $cols = 'client_id, quote_id, customer_id, amount, received_at, method, reference, notes'
+          . ($hasPayer ? ', payer_name' : '');
+    $vals = $hasPayer ? '?, ?, ?, ?, ?, ?, ?, ?, ?' : '?, ?, ?, ?, ?, ?, ?, ?';
+    $st = $pdo->prepare("INSERT INTO payments ($cols) VALUES ($vals)");
+    $params = [
         $clientId, $quoteId, $customerId,
         $amount, $receivedAt, $method, $reference, $notes,
-    ]);
+    ];
+    if ($hasPayer) $params[] = $payerName;
+    $st->execute($params);
     $_SESSION['flash_success'] = 'Payment recorded: ' . acct_fmt_money($amount) . '.';
 }
 

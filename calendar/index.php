@@ -445,11 +445,13 @@ $activeNav = 'calendar';
             color: #fff;
             background: #1f3b5b;
             border-radius: 999px;
-            width: 28px;
-            height: 28px;
+            padding: 0.1875rem 0.5rem;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            /* Pill, not a fixed circle — the DD/MM date needs the width.
+               flex-start stops the span stretching across the cell. */
+            align-self: flex-start;
         }
         .cal-appts {
             display: flex;
@@ -672,7 +674,10 @@ $activeNav = 'calendar';
             background: #fff;
             border: 1px solid #fde68a; border-radius: 8px;
             cursor: grab; user-select: none;
-            font-size: 0.8125rem; color: var(--text-primary);
+            /* Card background is a hardcoded light (#fff), so the text must
+               be a hardcoded dark too — var(--text-primary) goes near-white
+               in dark mode and the card became unreadable (Tyler). */
+            font-size: 0.8125rem; color: #1f2937;
             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .pending-card:active { cursor: grabbing; }
@@ -681,7 +686,7 @@ $activeNav = 'calendar';
             overflow: hidden; text-overflow: ellipsis;
         }
         .pending-card .pc-meta {
-            color: var(--text-faint); font-size: 0.75rem; margin-top: 0.25rem;
+            color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;
         }
         .pending-card.dragging,
         .cal-appt.dragging { opacity: 0.4; }
@@ -726,13 +731,15 @@ $activeNav = 'calendar';
                         📅 Day
                     </a>
                 </p>
-            </div>
-            <div class="actions-bar">
                 <?php if ($canViewAll): ?>
-                    <!-- View toggle. Only shown to admins and users with
-                         can_view_all_customer_jobs — others are locked
-                         to their own appointments and don't need it. -->
-                    <div class="cal-view-toggle" role="group" aria-label="Calendar view">
+                    <!-- Everyone / Just-me view toggle. Sits under the
+                         subtitle alongside the other view switches (Week /
+                         Day), deliberately kept clear of the primary action
+                         buttons on the right — a rounded pill next to the
+                         rectangular buttons read as clustered (Tyler). Only
+                         shown to admins and users with can_view_all_customer_jobs;
+                         others are locked to their own appointments. -->
+                    <div class="cal-view-toggle" role="group" aria-label="Calendar view" style="margin-top:0.625rem">
                         <a href="/calendar/index.php?week=<?= e($anchorMonday->format('Y-m-d')) ?>"
                            class="cal-toggle-btn <?= $mineOnly ? '' : 'is-active' ?>">
                             Everyone
@@ -743,6 +750,8 @@ $activeNav = 'calendar';
                         </a>
                     </div>
                 <?php endif; ?>
+            </div>
+            <div class="actions-bar">
                 <?php if ($mapsEnabled): ?>
                     <a href="/calendar/run.php" class="btn btn-success">Today's run &rarr;</a>
                 <?php endif; ?>
@@ -902,7 +911,10 @@ $activeNav = 'calendar';
                         $isToday     = $iso === $todayStr;
                         $weekday3    = $cellDate->format('D');
                         $appts       = $byDate[$iso] ?? [];
-                        $dayLabel    = (int) $cellDate->format('j');
+                        // DD/MM rather than a bare day number — makes the
+                        // date unambiguous in every cell (Tyler), regardless
+                        // of which month the rolling 6-week window spans.
+                        $dayLabel    = $cellDate->format('d/m');
                         $isOutside   = $dominantYm !== null
                                     && $cellDate->format('Y-m') !== $dominantYm;
                         $cellClasses = 'cal-cell';
@@ -914,7 +926,7 @@ $activeNav = 'calendar';
                         <a class="cal-cell-add"
                            href="/calendar/new.php?date=<?= e($iso) ?>"
                            aria-label="New appointment on <?= e($cellDate->format('j F Y')) ?>"></a>
-                        <span class="cal-day-num" data-weekday="<?= e($weekday3) ?>"><?= $dayLabel ?></span>
+                        <span class="cal-day-num" data-weekday="<?= e($weekday3) ?>"><?= e($dayLabel) ?></span>
                         <?php if ($appts): ?>
                             <div class="cal-appts">
                                 <?php foreach ($appts as $a): ?>

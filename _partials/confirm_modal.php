@@ -42,7 +42,12 @@ define('CFM_MODAL_INCLUDED', true);
     }
     .cfm-overlay.is-open { display: flex; }
     .cfm-box {
-        background: #fff;
+        /* Theme-aware: the message text uses var(--text-primary), which
+           is near-white in dark mode — on a hardcoded white box that left
+           the text invisible (Tyler: remove-logo + delete-payment dialogs
+           unreadable). Match the box to the card background like the other
+           modals so it reads in both themes. */
+        background: var(--bg-card);
         max-width: 480px; width: 100%;
         padding: 1.25rem 1.25rem 1rem;
         border-radius: 12px;
