@@ -77,15 +77,25 @@ function acct_has_payer_column(): bool
 }
 
 /**
- * Sum of explicit payments recorded against a quote.
+ * Sum of explicit payments recorded against a quote. Pass $clientId to
+ * tenant-scope the sum (defence-in-depth — every other money query is
+ * tenant-scoped; quote_id is globally unique so it's correct either way).
  */
-function acct_payments_total_for_quote(PDO $pdo, int $quoteId): float
+function acct_payments_total_for_quote(PDO $pdo, int $quoteId, ?int $clientId = null): float
 {
-    $st = $pdo->prepare(
-        'SELECT IFNULL(SUM(amount), 0)
-           FROM payments WHERE quote_id = ?'
-    );
-    $st->execute([$quoteId]);
+    if ($clientId !== null) {
+        $st = $pdo->prepare(
+            'SELECT IFNULL(SUM(amount), 0)
+               FROM payments WHERE quote_id = ? AND client_id = ?'
+        );
+        $st->execute([$quoteId, $clientId]);
+    } else {
+        $st = $pdo->prepare(
+            'SELECT IFNULL(SUM(amount), 0)
+               FROM payments WHERE quote_id = ?'
+        );
+        $st->execute([$quoteId]);
+    }
     return (float) $st->fetchColumn();
 }
 
@@ -98,7 +108,9 @@ function acct_payments_total_for_quote(PDO $pdo, int $quoteId): float
  */
 function acct_received_total_for_quote(PDO $pdo, array $quote): float
 {
-    $payments = acct_payments_total_for_quote($pdo, (int) $quote['id']);
+    $payments = acct_payments_total_for_quote(
+        $pdo, (int) $quote['id'], isset($quote['client_id']) ? (int) $quote['client_id'] : null
+    );
     $deposit  = !empty($quote['deposit_paid_at']) ? (float) ($quote['deposit_amount'] ?? 0) : 0.0;
     return round($payments + $deposit, 2);
 }

@@ -104,6 +104,13 @@ $deletable = array_values(array_diff(
 $deleted = 0;
 if ($deletable) {
     $delPh  = implode(',', array_fill(0, count($deletable), '?'));
+    // supplier_orders has no FK to quotes — clean its send-log rows so they
+    // don't outlive the deleted quotes.
+    try {
+        $pdo->prepare(
+            "DELETE FROM supplier_orders WHERE quote_id IN ($delPh) AND client_id = ?"
+        )->execute(array_merge($deletable, [$clientId]));
+    } catch (Throwable $e) { /* table absent — nothing to clean */ }
     $stmt   = $pdo->prepare(
         "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"
     );

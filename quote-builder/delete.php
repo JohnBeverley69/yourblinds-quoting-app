@@ -42,6 +42,13 @@ try {
     }
 } catch (Throwable $e) { /* payments table absent (feature off) — nothing to orphan */ }
 
+// supplier_orders has no FK to quotes, so its send-log rows would otherwise
+// be left behind pointing at a now-deleted quote. Clean them up explicitly.
+try {
+    db()->prepare('DELETE FROM supplier_orders WHERE quote_id = ? AND client_id = ?')
+        ->execute([$quoteId, $clientId]);
+} catch (Throwable $e) { /* table absent — nothing to clean */ }
+
 // Tenant-scoped delete. ON DELETE CASCADE on quote_items + quote_item_extras
 // cleans up the children automatically.
 db()->prepare('DELETE FROM quotes WHERE id = ? AND client_id = ?')
