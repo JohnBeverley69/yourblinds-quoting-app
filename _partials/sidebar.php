@@ -174,7 +174,21 @@ $navSections = [
 // production (APP_ENV defaults to 'production'). Fixed, click-through.
 $_ybEnv = strtolower((string) (function_exists('env') ? (env('APP_ENV', 'production') ?? 'production') : 'production'));
 $_ybNonProd = ($_ybEnv !== 'production' && $_ybEnv !== 'prod');
+
+// Global "emails paused" (testing mode) banner — shows EVERYWHERE, including
+// the live site, so the super-admin can't forget the switch is on. Defensive
+// (pre-migration / non-super reads as off).
+require_once __DIR__ . '/app_settings.php';
+$_ybEmailPaused = function_exists('app_setting_on') && app_setting_on('email_paused');
 ?>
+<?php if ($_ybEmailPaused): ?>
+<div role="status" aria-label="Outgoing emails are paused" style="
+    position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;
+    background:#b91c1c;color:#fff;font:600 12px/1.2 system-ui,sans-serif;letter-spacing:0.03em;
+    padding:5px 14px;border-radius:0 0 8px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.3)">
+    📧 Emails paused (testing mode)
+</div>
+<?php endif; ?>
 <?php if ($_ybNonProd): ?>
 <div role="status" aria-label="Staging environment — test data" style="
     position:fixed;left:0.5rem;bottom:0.5rem;z-index:2147483646;pointer-events:none;

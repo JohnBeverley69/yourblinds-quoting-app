@@ -4,6 +4,12 @@ declare(strict_types=1);
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
+// Global "pause emails" switch lives here. Required at file scope (not lazily
+// inside the function) so app_setting_on() is ALWAYS defined when we check it —
+// a missing symbol would silently read as "not paused", which on the live site
+// is exactly the failure this guard exists to prevent.
+require_once __DIR__ . '/_partials/app_settings.php';
+
 /**
  * YourBlinds — generic SMTP send helper.
  *
@@ -34,6 +40,22 @@ function mailer_send(
     if (!class_exists(PHPMailer::class)) {
         error_log('[YourBlinds] PHPMailer not installed — run "composer install" to enable email.');
         return false;
+    }
+
+    // ── Global "pause emails" switch (testing mode) ─────────────────────────
+    // A super-admin toggle (Master Admin) that stops ALL outgoing email
+    // site-wide — used while a QA tester pokes the LIVE site, so they can't
+    // email a real supplier or customer. Works in every environment, including
+    // production. Drops + logs the message and reports success so app flows
+    // continue exactly as if it had sent. Defensive: pre-migration / DB error
+    // simply means "not paused".
+    if (function_exists('app_setting_on') && app_setting_on('email_paused')) {
+        $origList = implode(', ', array_filter(array_map(
+            static fn ($r) => trim((string) $r), (array) $to
+        ), static fn ($r) => $r !== ''));
+        error_log('[YourBlinds] email PAUSED (testing mode) — would have gone to: '
+            . ($origList !== '' ? $origList : '(no recipient)') . ' | subject: ' . $subject);
+        return true;
     }
 
     // ── Non-production guard ────────────────────────────────────────────────
