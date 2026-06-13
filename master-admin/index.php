@@ -4,8 +4,12 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/billing_helpers.php';
+require_once __DIR__ . '/../_partials/app_settings.php';
 
 requireSuperAdmin();
+
+// Global "pause emails" (testing mode) — current state for the toggle card.
+$emailPaused = app_setting_on('email_paused');
 
 $user        = current_user();
 $myClientId  = (int) $user['client_id'];
@@ -149,6 +153,32 @@ $activeNav = 'master-admin';
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
+
+        <!-- Testing mode: pause ALL outgoing email site-wide. For letting a QA
+             tester poke the live site without emailing real suppliers/customers. -->
+        <section class="section" style="<?= $emailPaused ? 'border:2px solid #b91c1c;' : '' ?>">
+            <h2 class="section-title" style="margin:0 0 0.5rem">Testing mode</h2>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5;max-width:46rem">
+                Tick this to <strong>pause every outgoing email</strong> across the whole site —
+                quote emails, supplier orders, password resets, the lot. Use it while a tester is
+                trying things out, so they can't accidentally email a real customer or supplier.
+                <strong>Remember to untick it before you go live.</strong>
+            </p>
+            <?php if ($emailPaused): ?>
+                <p style="margin:0 0 1rem;font-weight:600;color:#b91c1c">
+                    📧 Emails are currently PAUSED — nothing is being sent.
+                </p>
+            <?php endif; ?>
+            <form method="post" action="/master-admin/email-toggle.php">
+                <?= csrf_field() ?>
+                <label style="display:flex;align-items:center;gap:0.6rem;margin:0 0 1rem;font-size:0.95rem;cursor:pointer">
+                    <input type="checkbox" name="email_paused" value="1" <?= $emailPaused ? 'checked' : '' ?>
+                           style="width:1.15rem;height:1.15rem">
+                    Pause all outgoing emails (testing mode)
+                </label>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </section>
 
         <section class="section">
             <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
