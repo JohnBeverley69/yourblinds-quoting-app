@@ -28,12 +28,48 @@ $pdo      = db();
 $format   = strtolower((string) ($_GET['format'] ?? 'xlsx'));
 if (!in_array($format, ['xlsx', 'pdf'], true)) $format = 'xlsx';
 
-// Company name — filename + report title.
-$cStmt = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+// Company name + last-backup marker — filename, report title, "since last backup".
+$cStmt = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
 $cStmt->execute([$clientId]);
-$company = trim((string) ($cStmt->fetchColumn() ?: '')) ?: 'YourBlinds';
+$clientRow  = $cStmt->fetch() ?: [];
+$company    = trim((string) ($clientRow['company_name'] ?? '')) ?: 'YourBlinds';
+$lastBackup = $clientRow['last_backup_at'] ?? null;   // null pre-migration / never backed up
 
-// Quotes + orders (everything in the funnel) for this tenant.
+// ── Date filtering ────────────────────────────────────────────────────────
+// from/to (YYYY-MM-DD) filter by ORDER DATE (accepted, else created) — "give me
+// this period's orders". since_last=1 instead filters by ACTIVITY (created OR
+// edited) >= the last complete backup — "everything new or changed since then".
+// Bad/garbled dates are ignored rather than 500ing.
+$rawFrom   = trim((string) ($_GET['from'] ?? ''));
+$rawTo     = trim((string) ($_GET['to'] ?? ''));
+$sinceLast = !empty($_GET['since_last']) && !empty($lastBackup);
+
+$validDate = static fn (string $s): bool => (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $s);
+
+$where  = ['q.client_id = ?'];
+$params = [$clientId];
+
+if ($sinceLast) {
+    // Activity basis: anything created OR last edited since the marker.
+    $where[]  = 'COALESCE(q.updated_at, q.accepted_at, q.created_at) >= ?';
+    $params[] = (string) $lastBackup;
+    $rangeLabel = 'since last backup (' . date('j M Y', strtotime((string) $lastBackup)) . ')';
+} else {
+    // Order-date basis for an explicit From/To window.
+    $dateExpr = 'COALESCE(q.accepted_at, q.created_at)';
+    $parts = [];
+    if ($validDate($rawFrom)) { $where[] = "$dateExpr >= ?"; $params[] = $rawFrom . ' 00:00:00'; $parts[] = 'from ' . date('j M Y', strtotime($rawFrom)); }
+    // 'to' is inclusive of the whole chosen day → compare against the next midnight.
+    if ($validDate($rawTo))   { $where[] = "$dateExpr < ?";  $params[] = date('Y-m-d', strtotime($rawTo . ' +1 day')) . ' 00:00:00'; $parts[] = 'to ' . date('j M Y', strtotime($rawTo)); }
+    $rangeLabel = $parts ? implode(' ', $parts) : 'all data';
+}
+
+// A FULL backup = unfiltered Excel. Only that moves the last-backup marker.
+$isFullBackup = !$sinceLast && !$validDate($rawFrom) && !$validDate($rawTo);
+
+$whereSql = implode(' AND ', $where);
+
+// Quotes + orders (everything in the funnel) for this tenant, filtered.
 $qStmt = $pdo->prepare(
     "SELECT q.id, q.quote_number, q.status, q.total,
             q.deposit_amount, q.deposit_paid_at, q.created_at, q.accepted_at,
@@ -41,10 +77,10 @@ $qStmt = $pdo->prepare(
             COALESCE(c.postcode, q.end_customer_postcode, '') AS postcode
        FROM quotes q
        LEFT JOIN customers c ON c.id = q.customer_id
-      WHERE q.client_id = ?
+      WHERE $whereSql
       ORDER BY COALESCE(q.accepted_at, q.created_at) DESC, q.id DESC"
 );
-$qStmt->execute([$clientId]);
+$qStmt->execute($params);
 $quotes = $qStmt->fetchAll();
 
 // Payments per quote (for received / outstanding). Optional table.
@@ -80,10 +116,10 @@ $iStmt = $pdo->prepare(
             qi.width_mm, qi.drop_mm, qi.quantity, qi.line_total
        FROM quote_items qi
        JOIN quotes q ON q.id = qi.quote_id
-      WHERE q.client_id = ?
+      WHERE $whereSql
       ORDER BY qi.quote_id, qi.line_no"
 );
-$iStmt->execute([$clientId]);
+$iStmt->execute($params);
 $lineItems = $iStmt->fetchAll();
 
 $slug = trim((string) (preg_replace('/[^a-z0-9]+/i', '-', $company) ?? ''), '-');
@@ -122,6 +158,7 @@ if ($format === 'pdf') {
         . '</style></head><body>'
         . '<h1>' . $e($company) . ' — Quotes &amp; Orders</h1>'
         . '<p class="sub">' . count($quotes) . ' record' . (count($quotes) === 1 ? '' : 's')
+            . ' &middot; ' . $e(ucfirst($rangeLabel))
             . ' &middot; generated ' . $e(date('j M Y')) . '</p>'
         . '<table><thead><tr>'
         . '<th>Quote #</th><th>Customer</th><th>Postcode</th><th>Status</th><th>Date</th>'
@@ -205,6 +242,15 @@ $s2->getStyle('A1:L1')->getFont()->setBold(true);
 foreach (range('A', 'L') as $col) $s2->getColumnDimension($col)->setAutoSize(true);
 
 $ss->setActiveSheetIndex(0);
+
+// Only a FULL Excel backup advances the "last backup" marker, so the next
+// "since last backup" can't silently skip data a partial export left out.
+if ($isFullBackup) {
+    try {
+        $upd = $pdo->prepare('UPDATE clients SET last_backup_at = NOW() WHERE id = ?');
+        $upd->execute([$clientId]);
+    } catch (Throwable $e) { /* column not migrated yet — marker simply not tracked */ }
+}
 
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment; filename="' . $slug . '-orders-' . $dateStr . '.xlsx"');
