@@ -129,6 +129,49 @@ try {
     qb_flash_redirect($backToQuote, 'error', 'Could not read the order lines: ' . $e->getMessage());
 }
 
+// Options / extras per line — the supplier needs the full spec (tilt, mid
+// rail, offsets, etc.), including any typed measurements. user_value is an
+// optional column (migrate_extra_length_input) so probe with a fallback.
+$extrasByItem = [];
+$lineIds = array_map(static fn ($l) => (int) $l['id'], $lines);
+if ($lineIds) {
+    $eph = implode(',', array_fill(0, count($lineIds), '?'));
+    try {
+        $exSt = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value
+               FROM quote_item_extras WHERE quote_item_id IN ($eph) ORDER BY id"
+        );
+        $exSt->execute($lineIds);
+        $exRows = $exSt->fetchAll();
+    } catch (Throwable $e) {
+        $exSt = db()->prepare(
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot
+               FROM quote_item_extras WHERE quote_item_id IN ($eph) ORDER BY id"
+        );
+        $exSt->execute($lineIds);
+        $exRows = $exSt->fetchAll();
+        foreach ($exRows as &$er) { $er['user_value'] = null; }
+        unset($er);
+    }
+    foreach ($exRows as $er) {
+        $extrasByItem[(int) $er['quote_item_id']][] = $er;
+    }
+}
+
+// One option → its human spec line, e.g. "Tilt: Wand" or "Offset: Top — 50mm".
+// Price (amount_applied) is deliberately omitted — that's our customer
+// surcharge, not something the supplier needs.
+$fmtExtraSpec = static function (array $ex): string {
+    $name   = trim((string) ($ex['extra_name_snapshot'] ?? ''));
+    $choice = trim((string) ($ex['choice_label_snapshot'] ?? ''));
+    $out    = $name;
+    if ($choice !== '') $out .= ($out !== '' ? ': ' : '') . $choice;
+    if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0) {
+        $out .= ' — ' . rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.') . 'mm';
+    }
+    return $out;
+};
+
 // Group by the product's supplier. Empty supplier = "unassigned" (a blocker).
 $groups = [];   // name => ['items'=>[], 'qty'=>int]
 foreach ($lines as $ln) {
@@ -192,6 +235,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'quantity' => $it['quantity'],
             'room'     => $it['room_name'],
             'notes'    => $it['notes'],
+            // Options/extras spec lines for this item (tilt, mid rail,
+            // offsets + their measurements, etc.).
+            'options'  => array_map($fmtExtraSpec, $extrasByItem[(int) $it['id']] ?? []),
         ], $items);
 
         $ctx = [
@@ -228,6 +274,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bodyLines[] = '- ' . (int) ($pi['quantity'] ?? 1) . ' x ' . $pi['product']
                 . ($fab !== '' ? ' — ' . $fab : '') . ' — ' . $sz
                 . ((string) ($pi['room'] ?? '') !== '' ? ' (' . $pi['room'] . ')' : '');
+            foreach (($pi['options'] ?? []) as $opt) {
+                $bodyLines[] = '    • ' . $opt;
+            }
         }
         $bodyLines[] = '';
         if (trim($deliveryAddress) !== '') {
@@ -306,6 +355,8 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
         .sup-items th { text-align: left; padding: 0.4rem 1rem; color: var(--text-faint); font-size: 0.75rem; text-transform: uppercase; }
         .sup-items td { padding: 0.4rem 1rem; border-top: 1px solid var(--border-faint); vertical-align: top; }
         .sup-meta { color: var(--text-faint); font-size: 0.8125rem; }
+        .sup-opt  { color: #1f3b5b; font-size: 0.8125rem; font-weight: 600; }
+        [data-theme="dark"] .sup-opt { color: #93c5fd; }
     </style>
 </head>
 <body>
@@ -397,6 +448,9 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                                     <tr>
                                         <td><strong><?= e((string) $it['product_name_snapshot']) ?></strong>
                                             <?= (string) $it['system_name_snapshot'] !== '' ? '<br><span class="sup-meta">' . e((string) $it['system_name_snapshot']) . '</span>' : '' ?>
+                                            <?php foreach (($extrasByItem[(int) $it['id']] ?? []) as $ex): ?>
+                                                <br><span class="sup-opt">+ <?= e($fmtExtraSpec($ex)) ?></span>
+                                            <?php endforeach; ?>
                                         </td>
                                         <td><?= $fab !== '' ? e($fab) : '—' ?></td>
                                         <td><?= (int) ($it['width_mm'] ?? 0) ?> &times; <?= (int) ($it['drop_mm'] ?? 0) ?> mm</td>

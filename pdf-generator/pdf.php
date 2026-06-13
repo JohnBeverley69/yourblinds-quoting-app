@@ -162,10 +162,20 @@ function pdf_render_supplier_order(array $ctx, array $items): ?string
             (string) ($it['colour'] ?? ''),
             (string) ($it['code'] ?? ''),
         ], static fn ($s) => trim($s) !== '')));
+        // Options / extras (tilt, mid rail, offsets + measurements, …) — the
+        // supplier needs these to make the item. Listed under the product.
+        $optsHtml = '';
+        if (!empty($it['options']) && is_array($it['options'])) {
+            foreach ($it['options'] as $opt) {
+                if (trim((string) $opt) === '') continue;
+                $optsHtml .= '<br><span class="opt">+ ' . $e($opt) . '</span>';
+            }
+        }
         $rows .= '<tr>'
               . '<td class="num">' . $n . '</td>'
               . '<td><strong>' . $e($it['product'] ?? '') . '</strong>'
               . ((string) ($it['system'] ?? '') !== '' ? '<br><span class="muted">' . $e($it['system']) . '</span>' : '')
+              . $optsHtml
               . '</td>'
               . '<td>' . ($fabric !== '' ? $e($fabric) : '—')
               . ((string) ($it['band'] ?? '') !== '' ? '<br><span class="muted">Band ' . $e($it['band']) . '</span>' : '')
@@ -194,6 +204,7 @@ function pdf_render_supplier_order(array $ctx, array $items): ?string
         . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
         . 'table.items td.num,table.items th.num{text-align:center;width:34px}'
         . '.muted{color:#6b7280;font-size:10px}'
+        . '.opt{color:#1f3b5b;font-size:10px;font-weight:bold}'
         . '.foot{margin-top:14px;font-size:10px;color:#6b7280}'
         . '</style></head><body>'
         . '<div class="head">'
