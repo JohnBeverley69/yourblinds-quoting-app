@@ -475,6 +475,7 @@ $activeNav = 'accounts';
                             ?>
                                 <option value="<?= (int) $pq['id'] ?>"
                                         data-outstanding="<?= e(number_format($out, 2, '.', '')) ?>"
+                                        data-deposit="<?= $depCounted > 0 ? e(acct_fmt_money($depCounted)) : '' ?>"
                                         <?= $sel ? 'selected' : '' ?>>
                                     <?= e((string) $pq['quote_number']) ?>
                                     — <?= e((string) ($pq['end_customer_name'] ?? '?')) ?>
@@ -482,6 +483,12 @@ $activeNav = 'accounts';
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <!-- Warns that a paid deposit is already counted, so the
+                             user doesn't re-enter it as a payment (double-count).
+                             The Amount pre-fills to OUTSTANDING, which already
+                             excludes the deposit. -->
+                        <div id="np-deposit-note" hidden
+                             style="margin-top:0.25rem;font-size:0.75rem;color:#92400e"></div>
                     </div>
 
                     <div class="np-field" style="flex:0 0 7rem">
@@ -548,11 +555,24 @@ $activeNav = 'accounts';
                 var sel = document.getElementById('np-quote');
                 var amt = document.getElementById('np-amount');
                 if (!sel || !amt) return;
+                var depNote = document.getElementById('np-deposit-note');
                 sel.addEventListener('change', function () {
                     var opt = sel.options[sel.selectedIndex];
                     var out = opt ? opt.getAttribute('data-outstanding') : '';
                     if (out && (!amt.value || parseFloat(amt.value) === 0)) {
                         amt.value = out;
+                    }
+                    // Flag an already-counted deposit so it isn't re-entered.
+                    if (depNote) {
+                        var dep = opt ? opt.getAttribute('data-deposit') : '';
+                        if (dep) {
+                            depNote.textContent = '✓ Deposit of ' + dep
+                                + ' is already recorded on this order — the amount above is the'
+                                + ' remaining balance, so don’t re-enter the deposit.';
+                            depNote.hidden = false;
+                        } else {
+                            depNote.hidden = true;
+                        }
                     }
                 });
             })();

@@ -127,6 +127,19 @@ try {
         }
     }
 
+    // Reopening to draft: clear an UNPAID deposit so it re-derives from the
+    // (possibly edited) total when the order is accepted again — a percent
+    // deposit otherwise stays frozen against the old total. A deposit already
+    // marked paid is real money received and is left untouched.
+    if ($target === 'draft' && empty($quote['deposit_paid_at'])) {
+        try {
+            $pdo->prepare('UPDATE quotes SET deposit_amount = NULL WHERE id = ? AND client_id = ?')
+                ->execute([$quoteId, $clientId]);
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S22') throw $e;   // column absent pre-migration — fine
+        }
+    }
+
     // Mirror the public-accept side: when the trade user marks a quote
     // accepted, also drop a placeholder installation appointment on the
     // calendar so it's never forgotten. Idempotent — safe to re-run if
