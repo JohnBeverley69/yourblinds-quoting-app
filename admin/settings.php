@@ -15,6 +15,25 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
+/**
+ * Does the suppliers table have the optional account_number column?
+ * Added by migrate_supplier_account_number.php. Lets the save handler +
+ * the Suppliers tab degrade gracefully if the migration hasn't run yet.
+ * Cached per-request.
+ */
+function suppliers_has_account_column(): bool
+{
+    static $has = null;
+    if ($has !== null) return $has;
+    try {
+        $st = db()->query("SHOW COLUMNS FROM suppliers LIKE 'account_number'");
+        $has = $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        $has = false;
+    }
+    return $has;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['_action'] ?? '');
@@ -363,11 +382,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // delivery address. Rows keyed by suppliers.id (empty id = a new row);
         // supplier_delete[] holds the ids ticked for removal. Products also
         // auto-add their supplier here when saved, so the list fills itself.
-        $ids      = (array) ($_POST['supplier_id']    ?? []);
-        $names    = (array) ($_POST['supplier_name']  ?? []);
-        $emails   = (array) ($_POST['supplier_email'] ?? []);
+        $ids      = (array) ($_POST['supplier_id']      ?? []);
+        $names    = (array) ($_POST['supplier_name']    ?? []);
+        $emails   = (array) ($_POST['supplier_email']   ?? []);
+        $accounts = (array) ($_POST['supplier_account'] ?? []);
         $deletes  = array_values(array_filter(array_map('intval', (array) ($_POST['supplier_delete'] ?? []))));
         $delivery = trim((string) ($_POST['supplier_delivery_address'] ?? ''));
+        $hasAcct  = suppliers_has_account_column();
 
         // Validate emails (rows being deleted are skipped).
         $badFor = null;
@@ -397,27 +418,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute(array_merge([$clientId], $deletes));
             }
 
-            $upd = db()->prepare('UPDATE suppliers SET name = ?, email = ? WHERE id = ? AND client_id = ?');
-            $ins = db()->prepare(
-                'INSERT INTO suppliers (client_id, name, email) VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE email = VALUES(email)'
-            );
+            if ($hasAcct) {
+                $upd = db()->prepare('UPDATE suppliers SET name = ?, email = ?, account_number = ? WHERE id = ? AND client_id = ?');
+                $ins = db()->prepare(
+                    'INSERT INTO suppliers (client_id, name, email, account_number) VALUES (?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE email = VALUES(email), account_number = VALUES(account_number)'
+                );
+            } else {
+                $upd = db()->prepare('UPDATE suppliers SET name = ?, email = ? WHERE id = ? AND client_id = ?');
+                $ins = db()->prepare(
+                    'INSERT INTO suppliers (client_id, name, email) VALUES (?, ?, ?)
+                     ON DUPLICATE KEY UPDATE email = VALUES(email)'
+                );
+            }
             $renameClash = false;
             foreach ($names as $i => $rawName) {
                 $sid = (int) ($ids[$i] ?? 0);
                 if (in_array($sid, $deletes, true)) continue;
                 $nm = trim((string) $rawName);
                 if ($nm === '') continue;
-                $emVal = (($em = trim((string) ($emails[$i] ?? ''))) !== '') ? $em : null;
+                $emVal   = (($em = trim((string) ($emails[$i] ?? ''))) !== '') ? $em : null;
+                $acctVal = (($ac = trim((string) ($accounts[$i] ?? ''))) !== '') ? $ac : null;
                 if ($sid > 0) {
                     try {
-                        $upd->execute([$nm, $emVal, $sid, $clientId]);
+                        $upd->execute($hasAcct
+                            ? [$nm, $emVal, $acctVal, $sid, $clientId]
+                            : [$nm, $emVal, $sid, $clientId]);
                     } catch (PDOException $e) {
                         if (str_contains($e->getMessage(), 'uniq_supplier_per_client')) { $renameClash = true; continue; }
                         throw $e;
                     }
                 } else {
-                    $ins->execute([$clientId, $nm, $emVal]);
+                    $ins->execute($hasAcct
+                        ? [$clientId, $nm, $emVal, $acctVal]
+                        : [$clientId, $nm, $emVal]);
                 }
             }
             $_SESSION['flash_success'] = $renameClash
@@ -457,9 +491,11 @@ if (!in_array($currentUnit, ['mm', 'cm', 'm', 'in'], true)) $currentUnit = 'mm';
 // id so each row can be edited / renamed / removed. Products auto-add their
 // supplier here when saved (so the list fills itself), and you can manage it.
 $supplierRows = [];
+$supHasAccount = suppliers_has_account_column();
 try {
     $sSt = db()->prepare(
-        "SELECT id, name, email FROM suppliers
+        'SELECT id, name, email, ' . ($supHasAccount ? 'account_number' : 'NULL AS account_number') . "
+           FROM suppliers
           WHERE client_id = ? ORDER BY (name = 'In House') DESC, name"
     );
     $sSt->execute([$clientId]);
@@ -1139,8 +1175,11 @@ $activeNav = 'settings';
                 ?>
                 <table class="table" style="font-size:0.9375rem;margin:0 0 1rem">
                     <thead><tr>
-                        <th style="width:35%">Supplier</th>
+                        <th style="width:30%">Supplier</th>
                         <th>Order email</th>
+                        <?php if ($supHasAccount): ?>
+                            <th style="width:20%">Account no.</th>
+                        <?php endif; ?>
                         <th style="width:5.5rem;text-align:center">Remove</th>
                     </tr></thead>
                     <tbody>
@@ -1156,6 +1195,13 @@ $activeNav = 'settings';
                                            value="<?= e((string) ($sup['email'] ?? '')) ?>"
                                            placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
                                 </td>
+                                <?php if ($supHasAccount): ?>
+                                <td>
+                                    <input type="text" name="supplier_account[]" maxlength="100"
+                                           value="<?= e((string) ($sup['account_number'] ?? '')) ?>"
+                                           placeholder="Your account no." style="<?= $supInputStyle ?>;max-width:16rem">
+                                </td>
+                                <?php endif; ?>
                                 <td style="text-align:center">
                                     <input type="checkbox" name="supplier_delete[]" value="<?= (int) $sup['id'] ?>"
                                            aria-label="Remove <?= e((string) $sup['name']) ?>"
@@ -1173,6 +1219,12 @@ $activeNav = 'settings';
                                 <input type="email" name="supplier_email[]" maxlength="190"
                                        placeholder="orders@supplier.com" style="<?= $supInputStyle ?>;max-width:24rem">
                             </td>
+                            <?php if ($supHasAccount): ?>
+                            <td>
+                                <input type="text" name="supplier_account[]" maxlength="100"
+                                       placeholder="Your account no." style="<?= $supInputStyle ?>;max-width:16rem">
+                            </td>
+                            <?php endif; ?>
                             <td></td>
                         </tr>
                     </tbody>
