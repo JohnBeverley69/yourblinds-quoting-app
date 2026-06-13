@@ -116,6 +116,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
         }
     }
 
+    // Auto-include conditional CHILD options. A child (gated via
+    // product_extra_parent_choices on one of a selected option's choices)
+    // is meaningless without its parent — selecting "Handle Insert" must
+    // also bring its "Position" sub-option, or the copy is broken. Expand
+    // the selection to the full sub-tree before copying.
+    $autoAddedChildren = 0;
+    if ($error === null && $wanted) {
+        $cmSt = $pdo->prepare(
+            'SELECT DISTINCT pepc.product_extra_id AS child_id,
+                    pc.product_extra_id            AS parent_id
+               FROM product_extra_parent_choices pepc
+               JOIN product_extra_choices pc ON pc.id = pepc.product_extra_choice_id
+               JOIN product_extras ce       ON ce.id = pepc.product_extra_id
+              WHERE ce.product_id = ? AND ce.client_id = ? AND ce.active = 1'
+        );
+        $cmSt->execute([$sourceId, $clientId]);
+        $childrenOf = [];
+        foreach ($cmSt->fetchAll() as $r) {
+            $childrenOf[(int) $r['parent_id']][] = (int) $r['child_id'];
+        }
+        // BFS the selection to pull in every descendant.
+        $queue = $wanted;
+        $inSet = array_fill_keys($wanted, true);
+        while ($queue) {
+            $pid = (int) array_shift($queue);
+            foreach ($childrenOf[$pid] ?? [] as $cid) {
+                if (!isset($inSet[$cid])) {
+                    $inSet[$cid] = true;
+                    $wanted[]    = $cid;
+                    $queue[]     = $cid;
+                    $autoAddedChildren++;
+                }
+            }
+        }
+    }
+
     if ($error === null) {
         // System-name → target system id (case-insensitive). NULL-safe.
         $tSys = $pdo->prepare(
@@ -284,6 +320,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
                 'INSERT INTO product_extra_parent_choices
                    (product_extra_id, product_extra_choice_id) VALUES (?, ?)'
             );
+            // Fallback resolver for a gating parent whose option was NOT
+            // copied this run because it already existed on the target
+            // (skipped by name). Match the source gating choice to the
+            // existing target choice by (option name + choice label), so a
+            // re-copy doesn't leave the child ungated. Keyed identically on
+            // both sides.
+            $srcChoiceKey = [];
+            $scSt = $pdo->prepare(
+                'SELECT c.id, c.label, e.name AS extra_name
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE e.product_id = ? AND e.client_id = ?'
+            );
+            $scSt->execute([$sourceId, $clientId]);
+            foreach ($scSt->fetchAll() as $r) {
+                $srcChoiceKey[(int) $r['id']] =
+                    mb_strtolower(trim((string) $r['extra_name'])) . '|' . mb_strtolower(trim((string) $r['label']));
+            }
+            $targetChoiceByKey = [];
+            $tcSt = $pdo->prepare(
+                'SELECT c.id, c.label, e.name AS extra_name
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE e.product_id = ? AND e.client_id = ? AND e.active = 1'
+            );
+            $tcSt->execute([$productId, $clientId]);
+            foreach ($tcSt->fetchAll() as $r) {
+                $targetChoiceByKey[
+                    mb_strtolower(trim((string) $r['extra_name'])) . '|' . mb_strtolower(trim((string) $r['label']))
+                ] = (int) $r['id'];
+            }
+
             foreach ($copiedExtras as $oldExtraId => $newExtraId) {
                 $pg = $pdo->prepare(
                     'SELECT product_extra_choice_id FROM product_extra_parent_choices
@@ -292,8 +360,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
                 $pg->execute([$oldExtraId]);
                 foreach ($pg->fetchAll(PDO::FETCH_COLUMN) as $oldPcid) {
                     $oldPcid = (int) $oldPcid;
-                    if (isset($choiceIdMap[$oldPcid])) {
-                        $gateIns->execute([$newExtraId, $choiceIdMap[$oldPcid]]);
+                    $newPcid = $choiceIdMap[$oldPcid] ?? null;
+                    if ($newPcid === null) {
+                        // Parent option already on the target (skipped this
+                        // run) — match its gating choice by name.
+                        $k = $srcChoiceKey[$oldPcid] ?? null;
+                        if ($k !== null && isset($targetChoiceByKey[$k])) {
+                            $newPcid = $targetChoiceByKey[$k];
+                        }
+                    }
+                    if ($newPcid !== null) {
+                        $gateIns->execute([$newExtraId, $newPcid]);
                     } else {
                         $droppedGates++;
                     }
@@ -315,6 +392,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
             $msg = "Copied $copiedOptions option" . ($copiedOptions === 1 ? '' : 's')
                  . " ($copiedChoices choice" . ($copiedChoices === 1 ? '' : 's') . ")"
                  . ' from "' . $source['name'] . '".';
+            if ($autoAddedChildren > 0) {
+                $msg .= " Pulled in $autoAddedChildren linked sub-option"
+                      . ($autoAddedChildren === 1 ? '' : 's') . ' automatically.';
+            }
             if ($skippedExisting > 0) {
                 $msg .= " Skipped $skippedExisting already on this product (same name).";
             }
@@ -384,8 +465,11 @@ $activeNav = 'products';
                 Pick a product to copy options from, tick the ones you want, and
                 they'll be cloned into <strong><?= e((string) $target['name']) ?></strong>
                 &mdash; choices, band scoping and width-table pricing included.
-                Each choice's <strong>system</strong> is matched to this product's
-                same-named system; anything with no match becomes "all systems".
+                Any <strong>conditional sub-options</strong> (e.g. a "Position"
+                that only shows when another option is set) are pulled in
+                automatically with their parent. Each choice's <strong>system</strong>
+                is matched to this product's same-named system; anything with no
+                match becomes "all systems".
             </p>
         </section>
 
