@@ -40,7 +40,7 @@
             'id'   => (int) $s['id'],
             'name' => (string) $s['name'],
         ], $systems),
-        JSON_THROW_ON_ERROR
+        JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
     ) ?>;
 
     // Band-scoping, mirrored from PHP. bandsColShown gates whether
@@ -53,7 +53,7 @@
     // so you couldn't scope a new option's bands without reloading or
     // going through the Edit link.
     var bandsColShown  = <?= (isset($renderBandMultiSelect) && $renderBandMultiSelect !== null) ? 'true' : 'false' ?>;
-    var knownBandsList = <?= json_encode(array_values($knownBands ?? []), JSON_THROW_ON_ERROR) ?>;
+    var knownBandsList = <?= json_encode(array_values($knownBands ?? []), JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
     // Save-status pill is PERSISTENT — it always shows one of:
     //   "All changes saved" (green, default at rest)

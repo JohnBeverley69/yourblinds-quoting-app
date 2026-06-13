@@ -34,6 +34,15 @@ csrf_check();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Deleting quotes/orders is a back-office action — gate on admin or
+// quote-creation rights (a plain fitter must not be able to bulk-destroy
+// orders). Matches quote-builder/delete.php.
+$perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
+if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])) {
+    http_response_code(403);
+    exit('Not permitted.');
+}
+
 $ids = $_POST['quote_ids'] ?? [];
 if (!is_array($ids)) $ids = [];
 $ids = array_values(array_unique(array_filter(

@@ -26,6 +26,45 @@ function qb_load_quote_or_404(int $quoteId, int $clientId): array
 }
 
 /**
+ * Can this user act on this quote? Mirrors the read gate in
+ * quote-builder/edit.php so the WRITE handlers (add/update/delete item,
+ * save details, duplicate, delete) enforce the same boundary the UI does.
+ *
+ * Admin, view-all and quote-creator users reach any quote in their tenant.
+ * A restricted user (typical fitter) may only act on quotes they have an
+ * appointment assigned to — the orders they're installing.
+ *
+ * Tenant scoping is assumed already done (the quote was loaded via
+ * qb_load_quote_or_404, which filters by client_id).
+ */
+function qb_user_can_access_quote(array $quote, array $user, array $perms): bool
+{
+    if (($user['role'] ?? '') === 'admin'
+        || !empty($perms['can_view_all_customer_jobs'])
+        || !empty($perms['can_create_quotes'])) {
+        return true;
+    }
+    $st = db()->prepare(
+        'SELECT 1 FROM appointments
+          WHERE quote_id = ? AND client_user_id = ? AND client_id = ?
+          LIMIT 1'
+    );
+    $st->execute([(int) $quote['id'], (int) ($user['user_id'] ?? 0), (int) $quote['client_id']]);
+    return (bool) $st->fetchColumn();
+}
+
+/**
+ * 404 (not 403 — don't confirm existence) if the user can't act on the quote.
+ */
+function qb_require_quote_access(array $quote, array $user, array $perms): void
+{
+    if (!qb_user_can_access_quote($quote, $user, $perms)) {
+        http_response_code(404);
+        exit('Quote not found.');
+    }
+}
+
+/**
  * Recompute and persist subtotal / VAT / total based on current line items.
  * Called after every add / delete on items.
  */

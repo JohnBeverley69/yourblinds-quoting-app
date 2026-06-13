@@ -122,4 +122,22 @@ $result = pe_calculate_item(db(), $clientId, $input);
 if (isset($result['error'])) {
     $result['stage'] = 'engine';
 }
+
+// Strip wholesale-cost figures for users who aren't allowed to see costs.
+// The UI never displays these (cost_price_per_blind / extras_cost_total /
+// per-extra cost_snapshot reveal what the business pays its suppliers), but
+// the raw API response carried them to anyone logged in. The front-end
+// doesn't read these fields, so removing them changes nothing it needs.
+$isAdmin   = ($user['role'] ?? '') === 'admin';
+$canCosts  = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
+if (!$canCosts && !isset($result['error'])) {
+    unset($result['cost_price_per_blind'], $result['extras_cost_total']);
+    if (!empty($result['extras_applied']) && is_array($result['extras_applied'])) {
+        foreach ($result['extras_applied'] as &$exRow) {
+            if (is_array($exRow)) unset($exRow['cost_snapshot']);
+        }
+        unset($exRow);
+    }
+}
+
 echo json_encode($result);

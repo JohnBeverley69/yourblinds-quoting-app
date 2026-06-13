@@ -47,6 +47,14 @@ $qSt = db()->prepare('SELECT quote_id FROM payments WHERE id = ? AND client_id =
 $qSt->execute([$id, $clientId]);
 $linkedQuoteId = (int) ($qSt->fetchColumn() ?: 0);
 
+// Permission: restricted users may only delete payments on their assigned
+// orders (and never standalone payments). Mirrors the Accounts listing.
+if (!acct_user_can_touch_quote(db(), $clientId, $user, $linkedQuoteId > 0 ? $linkedQuoteId : null)) {
+    $_SESSION['flash_error'] = 'You don\'t have permission to delete that payment.';
+    header('Location: ' . $returnTo);
+    exit;
+}
+
 $st = db()->prepare(
     'DELETE FROM payments WHERE id = ? AND client_id = ?'
 );

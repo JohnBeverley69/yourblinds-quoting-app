@@ -22,6 +22,7 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
+qb_require_quote_access($quote, $user, current_user_permissions());
 
 if (!qb_is_editable($quote)) {
     qb_flash_redirect(

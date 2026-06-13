@@ -57,6 +57,24 @@ $returnTo  = safe_local_redirect(
     (string) ($_POST['return_to'] ?? ''), '/accounts/index.php'
 );
 
+// Permission: a restricted user (no can_view_all_customer_jobs) may only
+// record/edit payments on quotes they're assigned to — and never standalone
+// ones. For an edit, check the payment's CURRENT order; for a new payment,
+// the target order.
+$checkQuoteId = $quoteId;
+if ($id > 0) {
+    $exQ = $pdo->prepare('SELECT quote_id FROM payments WHERE id = ? AND client_id = ? LIMIT 1');
+    $exQ->execute([$id, $clientId]);
+    $exRow = $exQ->fetch();
+    $checkQuoteId = ($exRow && $exRow['quote_id'] !== null) ? (int) $exRow['quote_id'] : null;
+}
+if (!acct_user_can_touch_quote($pdo, $clientId, $user, $checkQuoteId)
+    || ($id > 0 && !acct_user_can_touch_quote($pdo, $clientId, $user, $quoteId))) {
+    $_SESSION['flash_error'] = 'You don\'t have permission to record payments for that order.';
+    header('Location: ' . $returnTo);
+    exit;
+}
+
 // Validation.
 $error = null;
 if (!is_numeric($amountRaw) || (float) $amountRaw == 0) {
