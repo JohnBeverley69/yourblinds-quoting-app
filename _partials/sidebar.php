@@ -169,7 +169,21 @@ $navSections = [
         ],
     ],
 ];
+// Non-production badge — make it unmistakable that this is a test copy with
+// throwaway data, so nobody confuses staging for the live site. Inert on
+// production (APP_ENV defaults to 'production'). Fixed, click-through.
+$_ybEnv = strtolower((string) (function_exists('env') ? (env('APP_ENV', 'production') ?? 'production') : 'production'));
+$_ybNonProd = ($_ybEnv !== 'production' && $_ybEnv !== 'prod');
 ?>
+<?php if ($_ybNonProd): ?>
+<div role="status" aria-label="Staging environment — test data" style="
+    position:fixed;left:0.5rem;bottom:0.5rem;z-index:2147483646;pointer-events:none;
+    background:#b91c1c;color:#fff;font:600 11px/1.2 system-ui,sans-serif;
+    letter-spacing:0.04em;text-transform:uppercase;padding:5px 9px;border-radius:6px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3)">
+    ⚠ <?= e(strtoupper($_ybEnv)) ?> · test data
+</div>
+<?php endif; ?>
 <script>
 (function () {
     // Theme = dark/light. Cookie-backed (no DB column needed).
