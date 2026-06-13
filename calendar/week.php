@@ -485,7 +485,7 @@ $activeNav = 'calendar';
                 <?php foreach ($days as $d): ?>
                     <div class="wk-day-name <?= $d['isToday'] ? 'is-today' : '' ?>">
                         <div class="wk-dow"><?= e($d['date']->format('D')) ?></div>
-                        <div class="wk-dom"><?= e($d['date']->format('j')) ?></div>
+                        <div class="wk-dom"><?= e($d['date']->format('d/m')) ?></div>
                         <?php
                             $cnt = count($byDate[$d['ymd']] ?? []);
                             if ($cnt > 0):
