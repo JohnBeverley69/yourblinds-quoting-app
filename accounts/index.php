@@ -810,6 +810,16 @@ $activeNav = 'accounts';
                             // displayed "paid" figure so the user sees
                             // ONE total they recognise as "money in."
                             $g['paid_total'] = round($g['paid_total'] + $depCounted, 2);
+                            // Surface the paid deposit as a (read-only) line in
+                            // this order's ledger so it's visibly counted — the
+                            // user can see it's already recorded and won't
+                            // re-enter it as a payment (the double-count).
+                            if ($depCounted > 0) {
+                                $g['deposit'] = [
+                                    'amount'  => $depCounted,
+                                    'paid_at' => (string) $q['deposit_paid_at'],
+                                ];
+                            }
                         }
                         unset($g);
                     }
@@ -879,6 +889,18 @@ $activeNav = 'accounts';
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <?php if (!empty($g['deposit'])): ?>
+                                            <!-- The paid deposit, shown read-only so it's visibly part
+                                                 of this order's ledger. It's managed on the order itself,
+                                                 not here, so there's no delete button. -->
+                                            <tr style="background:var(--alert-success-bg)">
+                                                <td><?= e(date('j M Y', strtotime((string) $g['deposit']['paid_at']))) ?></td>
+                                                <td><span class="method-pill">Deposit</span></td>
+                                                <td style="color:var(--text-faint);font-style:italic">recorded on the order</td>
+                                                <td class="num"><?= e(acct_fmt_money((float) $g['deposit']['amount'])) ?></td>
+                                                <td></td>
+                                            </tr>
+                                        <?php endif; ?>
                                         <?php foreach ($g['payments'] as $p): ?>
                                             <tr>
                                                 <td><?= e(date('j M Y', strtotime((string) $p['received_at']))) ?></td>
