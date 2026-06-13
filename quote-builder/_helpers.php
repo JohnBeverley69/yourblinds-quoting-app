@@ -561,14 +561,35 @@ function qb_settle_if_paid(PDO $pdo, int $quoteId, int $clientId): bool
         $fullyPaid = $total > 0 && $received >= $total - 0.0049;
 
         if ($fullyPaid && $status !== 'paid') {
-            $pdo->prepare("UPDATE quotes SET status = 'paid' WHERE id = ? AND client_id = ?")
-                ->execute([$quoteId, $clientId]);
+            // Remember where it came from so un-settling can restore the real
+            // prior state (a deposit alone can jump accepted -> paid, skipping
+            // invoiced). pre_paid_status is optional (migrate_quote_pre_paid_status).
+            try {
+                $pdo->prepare("UPDATE quotes SET pre_paid_status = ?, status = 'paid' WHERE id = ? AND client_id = ?")
+                    ->execute([$status, $quoteId, $clientId]);
+            } catch (Throwable $e) {
+                $pdo->prepare("UPDATE quotes SET status = 'paid' WHERE id = ? AND client_id = ?")
+                    ->execute([$quoteId, $clientId]);
+            }
             return true;
         }
         if (!$fullyPaid && $status === 'paid') {
-            // Money pulled back out — un-settle to the nearest pre-paid state.
-            $pdo->prepare("UPDATE quotes SET status = 'invoiced' WHERE id = ? AND client_id = ?")
-                ->execute([$quoteId, $clientId]);
+            // Money pulled back out — restore the captured pre-paid state if we
+            // have one, else fall back to 'invoiced' (the historic default).
+            $back = 'invoiced';
+            try {
+                $pp = $pdo->prepare('SELECT pre_paid_status FROM quotes WHERE id = ? AND client_id = ? LIMIT 1');
+                $pp->execute([$quoteId, $clientId]);
+                $prev = (string) ($pp->fetchColumn() ?: '');
+                if (in_array($prev, ['accepted', 'ordered', 'fitted', 'invoiced'], true)) $back = $prev;
+            } catch (Throwable $e) { /* column absent — keep 'invoiced' */ }
+            try {
+                $pdo->prepare("UPDATE quotes SET pre_paid_status = NULL, status = ? WHERE id = ? AND client_id = ?")
+                    ->execute([$back, $quoteId, $clientId]);
+            } catch (Throwable $e) {
+                $pdo->prepare("UPDATE quotes SET status = ? WHERE id = ? AND client_id = ?")
+                    ->execute([$back, $quoteId, $clientId]);
+            }
             return true;
         }
         return false;
