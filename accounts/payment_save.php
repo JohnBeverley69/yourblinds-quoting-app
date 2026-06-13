@@ -115,9 +115,14 @@ if ($quoteId) {
 
 if ($id > 0) {
     // UPDATE — tenant-scoped via client_id in WHERE.
+    // quote_id + customer_id ARE written on update — the edit form lets the
+    // user re-point a payment to a different order (or to Standalone), and
+    // previously that change was silently dropped.
     $st = $pdo->prepare(
         'UPDATE payments
-            SET amount      = ?,
+            SET quote_id    = ?,
+                customer_id = ?,
+                amount      = ?,
                 received_at = ?,
                 method      = ?,
                 reference   = ?,
@@ -126,7 +131,7 @@ if ($id > 0) {
                 payer_name  = ?' : '') . '
           WHERE id = ? AND client_id = ?'
     );
-    $params = [$amount, $receivedAt, $method, $reference, $notes];
+    $params = [$quoteId, $customerId, $amount, $receivedAt, $method, $reference, $notes];
     if ($hasPayer) $params[] = $payerName;
     $params[] = $id;
     $params[] = $clientId;
@@ -147,9 +152,14 @@ if ($id > 0) {
 }
 
 // Auto-mark the quote paid once the balance is settled (or un-settle if this
-// was an edit that reduced it back below the total).
-if ($quoteId) {
-    qb_settle_if_paid($pdo, (int) $quoteId, $clientId);
+// was an edit that reduced it back below the total). On an edit that re-points
+// or clears the order link, BOTH the new and the previous order must be
+// re-evaluated ($checkQuoteId holds the payment's previous quote for updates).
+$toSettle = [];
+if ($quoteId) $toSettle[(int) $quoteId] = true;
+if ($id > 0 && $checkQuoteId) $toSettle[(int) $checkQuoteId] = true;
+foreach (array_keys($toSettle) as $sq) {
+    qb_settle_if_paid($pdo, (int) $sq, $clientId);
 }
 
 header('Location: ' . $returnTo);
