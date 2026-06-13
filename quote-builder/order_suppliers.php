@@ -86,13 +86,24 @@ if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
     $mailOpts['reply_to_email'] = $fromEmail;
 }
 
-// Supplier emails (name -> email). Looked up in PHP (collation-safe).
-$emailByName = [];
+// Supplier emails + account numbers (name -> value). Looked up in PHP
+// (collation-safe). account_number is optional (migrate_supplier_account_number)
+// — probe for it so this still works on tenants who haven't migrated.
+$emailByName   = [];
+$accountByName = [];
 try {
-    $eStmt = db()->prepare('SELECT name, email FROM suppliers WHERE client_id = ?');
+    $supHasAccount = false;
+    try {
+        $supHasAccount = db()->query("SHOW COLUMNS FROM suppliers LIKE 'account_number'")->fetchColumn() !== false;
+    } catch (Throwable $e) { /* leave false */ }
+    $eStmt = db()->prepare(
+        'SELECT name, email' . ($supHasAccount ? ', account_number' : '') . ' FROM suppliers WHERE client_id = ?'
+    );
     $eStmt->execute([$clientId]);
     foreach ($eStmt->fetchAll() as $r) {
-        $emailByName[trim((string) $r['name'])] = trim((string) ($r['email'] ?? ''));
+        $nm = trim((string) $r['name']);
+        $emailByName[$nm]   = trim((string) ($r['email'] ?? ''));
+        $accountByName[$nm] = $supHasAccount ? trim((string) ($r['account_number'] ?? '')) : '';
     }
 } catch (Throwable $e) { /* suppliers table may be absent */ }
 
@@ -164,8 +175,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($chosen as $name) {
         $name = trim($name);
         if (!isset($groups[$name]) || !$isSendable($name)) { continue; }
-        $email = $emailFor($name);
-        $items = $groups[$name]['items'];
+        $email   = $emailFor($name);
+        $account = $accountByName[$name] ?? '';
+        $items   = $groups[$name]['items'];
 
         // Map snapshots → the PDF's spec rows.
         $pdfItems = array_map(static fn ($it) => [
@@ -187,6 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'company_email'    => (string) ($client['email'] ?? ''),
             'company_phone'    => (string) ($client['phone'] ?? ''),
             'supplier_name'    => $name,
+            'account_number'   => $account,
             'delivery_address' => $deliveryAddress,
             'quote_number'     => (string) $quote['quote_number'],
             'po_ref'           => (string) $quote['quote_number'],
@@ -203,6 +216,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ' (ref ' . $quote['quote_number'] . '). Full specification is attached as a PDF.',
             '',
         ];
+        if ($account !== '') {
+            $bodyLines[] = 'Our account number with you: ' . $account;
+            $bodyLines[] = '';
+        }
         foreach ($pdfItems as $pi) {
             $fab = implode(' / ', array_filter([
                 (string) $pi['fabric'], (string) $pi['colour'], (string) $pi['code'],
@@ -336,6 +353,9 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                             <span class="sup-name"><?= $name !== '' ? e($name) : '⚠️ No supplier set' ?></span>
                             <?php if ($name !== ''): ?>
                                 <span class="sup-email"><?= $email !== '' ? e($email) : '— no email —' ?></span>
+                                <?php if (($acct = $accountByName[$name] ?? '') !== ''): ?>
+                                    <span class="sup-meta">· acct <?= e($acct) ?></span>
+                                <?php endif; ?>
                             <?php endif; ?>
                             <?php if (!empty($lastSent[$name])): ?>
                                 <span class="sup-meta">· last sent <?= e(date('j M Y, H:i', strtotime((string) $lastSent[$name]))) ?></span>
