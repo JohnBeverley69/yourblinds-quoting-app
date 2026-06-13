@@ -71,8 +71,9 @@ if ($method !== '' && array_key_exists($method, acct_methods())) {
     $params[] = $method;
 }
 
+$payerSel = acct_has_payer_column() ? 'p.payer_name' : 'NULL AS payer_name';
 $sql = 'SELECT p.id, p.amount, p.received_at, p.method, p.reference, p.notes,
-               p.quote_id, p.customer_id,
+               p.quote_id, p.customer_id, ' . $payerSel . ',
                c.name AS customer_name,
                qq.quote_number
           FROM payments p
@@ -194,7 +195,7 @@ $activeNav = 'accounts';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Accounts &middot; YourBlinds</title>
+    <title>Payments &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .summary-cards {
@@ -406,12 +407,11 @@ $activeNav = 'accounts';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Accounts</h1>
+                <h1 class="page-title">Payments</h1>
                 <p class="page-subtitle">Payments received against your orders.</p>
             </div>
             <button type="button"
-                    onclick="document.getElementById('new-payment-panel').open = true;
-                             document.getElementById('np-amount').focus();"
+                    onclick="ybNewPayment()"
                     class="btn btn-primary">
                 + Record payment
             </button>
@@ -445,10 +445,14 @@ $activeNav = 'accounts';
              we got here via ?prefill_quote= from the Orders page. -->
         <details id="new-payment-panel" class="np-panel"
                  <?= ($flashErr || $prefillFound) ? 'open' : '' ?>>
-            <summary>+ Record payment</summary>
+            <summary><span id="np-summary-text">+ Record payment</span></summary>
             <form method="post" action="/accounts/payment_save.php" class="np-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="return_to" value="/accounts/index.php">
+                <!-- Present = UPDATE an existing payment; blank = INSERT a new
+                     one. Set by the Edit buttons in the history below; cleared
+                     by ybNewPayment(). -->
+                <input type="hidden" name="id" id="np-id" value="">
 
                 <div class="np-grid">
                     <div class="np-field" style="flex:2 1 14rem">
@@ -506,6 +510,18 @@ $activeNav = 'accounts';
                         </select>
                     </div>
 
+                    <?php if (acct_has_payer_column()): ?>
+                    <div class="np-field" style="flex:1 1 12rem">
+                        <!-- Who paid. Most useful for standalone payments
+                             (no linked order/customer to name) — keeps the
+                             sender out of the Reference field (Tyler). -->
+                        <label for="np-payer">Received from (optional)</label>
+                        <input id="np-payer" name="payer_name" type="text"
+                               maxlength="200"
+                               placeholder="Who paid — e.g. customer name">
+                    </div>
+                    <?php endif; ?>
+
                     <div class="np-field" style="flex:1 1 12rem">
                         <label for="np-reference">Reference (optional)</label>
                         <input id="np-reference" name="reference" type="text"
@@ -515,9 +531,9 @@ $activeNav = 'accounts';
                 </div>
 
                 <div class="np-actions">
-                    <button type="submit" class="btn btn-primary">Save payment</button>
+                    <button type="submit" id="np-submit" class="btn btn-primary">Save payment</button>
                     <button type="button" class="btn btn-secondary"
-                            onclick="document.getElementById('new-payment-panel').open = false;">
+                            onclick="ybResetPayment()">
                         Cancel
                     </button>
                 </div>
@@ -540,6 +556,107 @@ $activeNav = 'accounts';
                     }
                 });
             })();
+            // ---- New / Edit payment panel mode --------------------------
+            // The same panel records a new payment AND edits an existing
+            // one. ybEditPayment() fills it from a history row; ybNewPayment()
+            // / ybResetPayment() clear it back to "record new".
+            var TODAY_YMD = '<?= e(date('Y-m-d')) ?>';
+
+            function ybSetPanelMode(isEdit) {
+                var sumLabel = document.getElementById('np-summary-text');
+                var submit   = document.getElementById('np-submit');
+                if (sumLabel) sumLabel.textContent = isEdit ? '✎ Edit payment' : '+ Record payment';
+                if (submit)   submit.textContent   = isEdit ? 'Update payment'  : 'Save payment';
+            }
+
+            // Reset to "record new" and close the panel (Cancel button).
+            function ybResetPayment() {
+                var panel = document.getElementById('new-payment-panel');
+                var id    = document.getElementById('np-id');
+                if (id) id.value = '';
+                ybSetPanelMode(false);
+                if (panel) panel.open = false;
+            }
+
+            // Small helper — set a field's value by element id, no-op if
+            // the field isn't on the page (e.g. payer field absent before
+            // the migration runs). Addressed by id, NOT form.<name>, since
+            // names like "method" collide with HTMLFormElement IDL props.
+            function ybSetField(elId, val) {
+                var el = document.getElementById(elId);
+                if (el) el.value = val;
+            }
+
+            // Open a blank "record new payment" form (header + button).
+            function ybNewPayment() {
+                var panel = document.getElementById('new-payment-panel');
+                var id    = document.getElementById('np-id');
+                if (id) id.value = '';
+                ybSetPanelMode(false);
+                // Clear edit-populated values back to sensible new-payment
+                // defaults so a previous edit doesn't bleed through.
+                ybSetField('np-quote', '');
+                ybSetField('np-amount', '');
+                ybSetField('np-date', TODAY_YMD);
+                ybSetField('np-method', 'bank_transfer');
+                ybSetField('np-reference', '');
+                ybSetField('np-payer', '');
+                if (panel) panel.open = true;
+                var amt = document.getElementById('np-amount');
+                if (amt) amt.focus();
+            }
+
+            // Populate the panel from a history row's Edit button.
+            function ybEditPayment(btn) {
+                var panel = document.getElementById('new-payment-panel');
+                if (!panel) return;
+                var d = btn.dataset;
+                ybSetField('np-id', d.id || '');
+                ybSetField('np-amount', d.amount || '');
+                ybSetField('np-date', d.date || TODAY_YMD);
+                ybSetField('np-method', d.method || 'bank_transfer');
+                ybSetField('np-reference', d.reference || '');
+                ybSetField('np-payer', d.payer || '');
+
+                // Quote linkage. The picker only lists orders with an
+                // outstanding balance, so a payment against a now-fully-paid
+                // order won't have a matching option — inject one so editing
+                // doesn't silently re-file the payment as standalone.
+                var sel = document.getElementById('np-quote');
+                if (sel) {
+                    var qid = d.quote || '';
+                    if (qid) {
+                        var found = false, i;
+                        for (i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value === qid) { found = true; break; }
+                        }
+                        if (!found) {
+                            var opt = document.createElement('option');
+                            opt.value = qid;
+                            opt.textContent = d.quoteLabel || ('Order #' + qid);
+                            sel.appendChild(opt);
+                        }
+                        sel.value = qid;
+                    } else {
+                        sel.value = '';
+                    }
+                }
+
+                ybSetPanelMode(true);
+                panel.open = true;
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                var amt = document.getElementById('np-amount');
+                if (amt) { amt.focus(); amt.select(); }
+            }
+
+            // Wire all Edit buttons in the history.
+            document.addEventListener('click', function (e) {
+                var btn = e.target.closest('.pg-edit-btn');
+                if (!btn) return;
+                e.preventDefault();
+                ybEditPayment(btn);
+            });
+
             // If we landed here from the Orders page's outstanding link,
             // scroll the open panel into view and focus the amount so
             // the user can verify-and-Enter to save.
@@ -609,14 +726,24 @@ $activeNav = 'accounts';
                     $groups = [];
                     foreach ($payments as $p) {
                         $qid = (int) ($p['quote_id'] ?? 0);
+                        // Standalone payments have no customer; group by the
+                        // payer name so different senders don't pile into one
+                        // anonymous "—" card. Falls back to customer_id (0).
+                        $payer = trim((string) ($p['payer_name'] ?? ''));
                         $key = $qid > 0
                             ? 'q:' . $qid
-                            : 's:' . (int) ($p['customer_id'] ?? 0);
+                            : 's:' . (int) ($p['customer_id'] ?? 0) . ':' . strtolower($payer);
+                        // Display name: real customer if linked, else the
+                        // payer (sender) on standalone payments, else dash.
+                        $displayName = $p['customer_name'] ?? null;
+                        if ($qid <= 0 && ($displayName === null || $displayName === '') && $payer !== '') {
+                            $displayName = $payer;
+                        }
                         if (!isset($groups[$key])) {
                             $groups[$key] = [
                                 'quote_id'      => $qid ?: null,
                                 'quote_number'  => $p['quote_number'] ?? null,
-                                'customer_name' => $p['customer_name'] ?? null,
+                                'customer_name' => $displayName,
                                 'payments'      => [],
                                 'paid_total'    => 0.0,
                                 'latest'        => '',
@@ -744,7 +871,30 @@ $activeNav = 'accounts';
                                                 <td class="num">
                                                     <?= e(acct_fmt_money((float) $p['amount'])) ?>
                                                 </td>
+                                                <?php
+                                                    // Edit pre-fills the panel above (no delete + re-add).
+                                                    $editQuoteId    = (int) ($p['quote_id'] ?? 0);
+                                                    $editQuoteLabel = '';
+                                                    if ($editQuoteId > 0) {
+                                                        $editQuoteLabel = trim((string) ($g['quote_number'] ?? ('Order #' . $editQuoteId)));
+                                                        if (!empty($g['customer_name'])) {
+                                                            $editQuoteLabel .= ' — ' . (string) $g['customer_name'];
+                                                        }
+                                                    }
+                                                ?>
                                                 <td style="white-space:nowrap">
+                                                    <button type="button" class="btn btn-sm btn-secondary pg-edit-btn"
+                                                            style="padding:0.1875rem 0.5rem;font-size:0.75rem;margin-right:0.25rem"
+                                                            data-id="<?= (int) $p['id'] ?>"
+                                                            data-amount="<?= e(number_format((float) $p['amount'], 2, '.', '')) ?>"
+                                                            data-date="<?= e(date('Y-m-d', strtotime((string) $p['received_at']))) ?>"
+                                                            data-method="<?= e((string) $p['method']) ?>"
+                                                            data-reference="<?= e((string) ($p['reference'] ?? '')) ?>"
+                                                            data-payer="<?= e((string) ($p['payer_name'] ?? '')) ?>"
+                                                            data-quote="<?= $editQuoteId > 0 ? (int) $editQuoteId : '' ?>"
+                                                            data-quote-label="<?= e($editQuoteLabel) ?>">
+                                                        Edit
+                                                    </button>
                                                     <form method="post" action="/accounts/payment_delete.php"
                                                           style="display:inline;margin:0"
                                                           data-confirm="Delete this payment? (Won't undo the bank entry — adjust on your bank reconciliation if needed.)">

@@ -136,7 +136,11 @@ $navSections = [
             'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
             'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
-            'accounts'      => ['/accounts/index.php',         'Accounts',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+            // Labelled "Payments" (not "Accounts") so first-time users
+            // don't mistake it for login/staff-account management — they'd
+            // click here first to create employee logins (Tyler). The nav
+            // key + route stay 'accounts' to avoid churn.
+            'accounts'      => ['/accounts/index.php',         'Payments',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
         ],
     ],
     [

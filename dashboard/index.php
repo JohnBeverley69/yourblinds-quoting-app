@@ -773,6 +773,10 @@ $activeNav = 'dashboard';
                 border: 1px solid #fde68a; border-radius: 12px;
                 padding: 0.625rem 0.875rem; margin-bottom: 1rem;
             }
+            /* display:flex above overrides the default [hidden] display:none,
+               so box.hidden=true (the ✕ button and the once-a-day guard)
+               never actually hid it (Tyler: ✕ won't close it). Re-assert. */
+            .jotd[hidden] { display: none; }
             [data-theme="dark"] .jotd {
                 background: rgba(250, 204, 21, 0.08); border-color: rgba(250, 204, 21, 0.3);
             }

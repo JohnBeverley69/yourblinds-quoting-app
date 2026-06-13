@@ -32,6 +32,28 @@ function acct_method_label(string $method): string
 }
 
 /**
+ * Does the payments table have the optional payer_name column?
+ *
+ * payer_name records who a payment came from — most useful for
+ * standalone payments (no linked order/customer to name). Added by
+ * migrate_payment_payer.php. This probe lets the UI + save handler
+ * degrade gracefully if a tenant hasn't run the migration yet, rather
+ * than 500ing on an unknown column. Cached per-request.
+ */
+function acct_has_payer_column(): bool
+{
+    static $has = null;
+    if ($has !== null) return $has;
+    try {
+        $st = db()->query("SHOW COLUMNS FROM payments LIKE 'payer_name'");
+        $has = $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        $has = false;
+    }
+    return $has;
+}
+
+/**
  * Sum of explicit payments recorded against a quote.
  */
 function acct_payments_total_for_quote(PDO $pdo, int $quoteId): float
