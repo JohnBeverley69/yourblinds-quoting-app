@@ -372,7 +372,7 @@ $activeNav = 'calendar';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Day view &middot; <?= e($date->format('D j M')) ?> &middot; YourBlinds</title>
+    <title>Day view &middot; <?= e($date->format('D d/m')) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Header — date nav + view switch. */
@@ -616,7 +616,7 @@ $activeNav = 'calendar';
             </div>
             <div class="day-date">
                 <span class="day-of-week"><?= e($date->format('D')) ?></span>
-                <?= e($date->format('j M Y')) ?>
+                <?= e($date->format('d/m/Y')) ?>
             </div>
             <form method="get" action="/calendar/day.php" class="day-jump">
                 <input type="date" name="date" value="<?= e($dateYmd) ?>"
