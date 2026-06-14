@@ -12,6 +12,10 @@ if (is_logged_in()) {
 $error      = null;
 $identifier = '';
 $next       = (string) ($_GET['next'] ?? '');
+// Set when the password was right but the email isn't confirmed yet (self
+// sign-up). Drives a "resend confirmation" link in the form below.
+$needsVerification = false;
+$unverifiedEmail   = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -31,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // require one slot per occurrence, so the same value is bound twice.
         $stmt = db()->prepare(
             'SELECT u.id, u.client_id, u.full_name, u.password_hash,
-                    u.role, u.active, u.is_super_admin,
+                    u.role, u.active, u.is_super_admin, u.email,
                     c.company_name
                FROM client_users u
                JOIN clients c ON c.id = u.client_id
@@ -47,7 +51,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         record_login_attempt($ip, $identifier, $valid);
 
+        // Email-verification gate (self sign-up). Only checked when the password
+        // is correct. Defensive: if the column doesn't exist yet (migration not
+        // run) the probe throws and we treat the user as verified, so no
+        // existing account is ever locked out.
+        $verified = true;
         if ($valid) {
+            try {
+                $vs = db()->prepare('SELECT email_verified_at FROM client_users WHERE id = ? LIMIT 1');
+                $vs->execute([(int) $user['id']]);
+                $vAt = $vs->fetchColumn();
+                $verified = ($vAt === false) ? true : ($vAt !== null);
+            } catch (Throwable $e) {
+                $verified = true;
+            }
+        }
+
+        if ($valid && !$verified) {
+            $needsVerification = true;
+            $unverifiedEmail   = (string) ($user['email'] ?? '');
+            $error = 'Please confirm your email address before signing in — check your inbox for the link we sent.';
+        } elseif ($valid) {
             // Session fixation defence: regenerate ID at the privilege boundary.
             session_regenerate_id(true);
 
@@ -118,6 +142,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
 
+        <?php if ($needsVerification): ?>
+            <p class="auth-footer">
+                <a href="/auth/resend_verification.php?email=<?= e(urlencode($unverifiedEmail)) ?>">Resend confirmation email &rarr;</a>
+            </p>
+        <?php endif; ?>
+
         <form method="post" action="/auth/login.php" novalidate autocomplete="on">
             <?= csrf_field() ?>
             <?php if ($next !== ''): ?>
@@ -151,6 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <button type="submit">Sign in</button>
         </form>
+
+        <p class="auth-footer">
+            New to YourBlinds? <a href="/auth/signup.php">Create an account</a>
+        </p>
 
         <p class="auth-meta">
             &copy; <?= date('Y') ?> YourBlinds. All rights reserved.
