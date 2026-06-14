@@ -147,6 +147,7 @@ $navSections = [
         'name'  => 'Setup',
         'items' => [
             'products' => ['/admin/products/index.php', 'Products', $isAdmin],
+            'price-library' => ['/library/index.php',   'Supplier catalogues', $isAdmin],
             'users'    => ['/admin/users.php',          'Users',    $isAdmin],
             'settings' => ['/admin/settings.php',       'Settings', $isAdmin],
             'billing'  => ['/billing/index.php',        'Billing',  $isAdmin],
