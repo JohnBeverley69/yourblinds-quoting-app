@@ -1387,7 +1387,14 @@ $activeNav = 'wizard';
                 foreach ($priceTables as $t) {
                     if ((int) $t['cell_count'] > 0) $filledTables++;
                 }
-                $allFilled = $totalTables > 0 && $filledTables === $totalTables;
+                // "All set" only when every EXISTING table is filled AND there
+                // are no (system + band) combinations still missing a table —
+                // otherwise a Roof blind (etc.) silently wouldn't price. Without
+                // the missingCombos check the banner declared "ready to quote"
+                // while the warning below said tables were still needed (a
+                // self-contradiction on one screen).
+                $allFilled = $totalTables > 0 && $filledTables === $totalTables
+                          && empty($missingCombos);
             ?>
                 <?php if ($allFilled): ?>
                     <div class="wiz-done-tile">
@@ -1422,10 +1429,17 @@ $activeNav = 'wizard';
                             <?php elseif ($totalTables === 0): ?>
                                 Create the price tables below — one per band × system —
                                 then fill in the prices.
-                            <?php else: ?>
+                            <?php elseif ($filledTables < $totalTables): ?>
                                 <?= $filledTables ?> of <?= $totalTables ?> filled in.
                                 Click <em>Fill in</em> on each to type or paste
                                 prices straight from a supplier sheet.
+                            <?php else: ?>
+                                Your <?= $totalTables ?> price table<?= $totalTables === 1 ? '' : 's' ?>
+                                <?= $totalTables === 1 ? 'is' : 'are' ?> filled in — there
+                                <?= count($missingCombos) === 1
+                                    ? 'is just 1 more (system + band) combination'
+                                    : 'are just ' . count($missingCombos) . ' more (system + band) combinations' ?>
+                                to set up, listed below.
                             <?php endif; ?>
                         </p>
                     </div>
