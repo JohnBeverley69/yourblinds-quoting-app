@@ -47,6 +47,45 @@ try {
     $otherSystems = $osStmt->fetchAll();
 } catch (Throwable $e) { /* non-fatal — just no "next system" buttons */ }
 
+// Of those other systems, which still have a band WITHOUT a price table?
+// (Same gap logic as the setup wizard.) Only those should be offered as
+// "import next" — re-nudging a system that's already fully priced is what made
+// this success screen look like a dead-end (e.g. offering "Import Free Hanging"
+// after it was already done). Banded products only; if the product has no band
+// codes the gap query can't see its systems, so we keep the full list as a
+// safe default.
+$systemsNeedingImport = $otherSystems;
+try {
+    $bandStmt = db()->prepare(
+        "SELECT 1 FROM product_options
+          WHERE product_id = ? AND client_id = ? AND active = 1
+            AND band_code IS NOT NULL AND band_code <> '' LIMIT 1"
+    );
+    $bandStmt->execute([$productId, $clientId]);
+    if ($bandStmt->fetchColumn()) {
+        $gapStmt = db()->prepare(
+            "SELECT DISTINCT s.id
+               FROM product_systems s
+               JOIN product_options po
+                 ON po.product_id = s.product_id AND po.client_id = s.client_id
+                AND po.active = 1 AND po.band_code IS NOT NULL AND po.band_code <> ''
+                AND (po.system_id IS NULL OR po.system_id = s.id)
+              WHERE s.product_id = ? AND s.client_id = ? AND s.active = 1
+                AND NOT EXISTS (
+                  SELECT 1 FROM price_tables t
+                   WHERE t.product_id = s.product_id AND t.system_id = s.id
+                     AND t.band_code = po.band_code AND t.client_id = ? AND t.active = 1
+                )"
+        );
+        $gapStmt->execute([$productId, $clientId, $clientId]);
+        $gapIds = array_map('intval', array_column($gapStmt->fetchAll(), 'id'));
+        $systemsNeedingImport = array_values(array_filter(
+            $otherSystems,
+            static fn ($os) => in_array((int) $os['id'], $gapIds, true)
+        ));
+    }
+} catch (Throwable $e) { /* keep the safe fallback (show all) */ }
+
 $summary = null;
 $error   = null;
 
@@ -190,20 +229,24 @@ $activeNav = 'products';
                         </li>
                     <?php endforeach; ?>
                 </ul>
-                <?php if ($otherSystems): ?>
+                <?php if ($systemsNeedingImport): ?>
                     <p style="margin:1rem 0 0.25rem;color:var(--text-secondary);font-size:0.9375rem">
-                        Got prices for the other system<?= count($otherSystems) === 1 ? '' : 's' ?> too? Import next:
+                        Got prices for the other system<?= count($systemsNeedingImport) === 1 ? '' : 's' ?> too? Import next:
+                    </p>
+                <?php else: ?>
+                    <p style="margin:1rem 0 0.25rem;color:var(--alert-success-text);font-size:0.9375rem;font-weight:600">
+                        ✓ That's every system priced for this product — it's ready to quote.
                     </p>
                 <?php endif; ?>
                 <div class="form-actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
-                    <?php foreach ($otherSystems as $os): ?>
+                    <?php foreach ($systemsNeedingImport as $os): ?>
                         <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $os['id'] ?>"
                            class="btn btn-primary">Import <?= e((string) $os['name']) ?> &rarr;</a>
                     <?php endforeach; ?>
                     <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
                        class="btn btn-secondary">View <?= e((string) $system['system_name']) ?> prices</a>
                     <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4"
-                       class="btn <?= $otherSystems ? 'btn-secondary' : 'btn-primary' ?>">Back to setup wizard</a>
+                       class="btn <?= $systemsNeedingImport ? 'btn-secondary' : 'btn-primary' ?>">Back to setup wizard</a>
                 </div>
             </div>
         <?php endif; ?>
