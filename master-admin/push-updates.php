@@ -707,6 +707,24 @@ $activeNav = 'push-updates';
                 </script>
             </section>
         <?php endif; ?>
+
+        <?php if ($srcProducts && !$tenants): ?>
+            <!-- Source products exist but there's nowhere to send them. Without
+                 this note the whole "Push to which tenants?" section just
+                 vanished, which reads as broken rather than "no targets". -->
+            <section class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Push to which tenants?</h2>
+                </div>
+                <p style="color:var(--text-secondary);font-size:0.9375rem;line-height:1.5;max-width:46rem">
+                    There are <strong>no other tenants to push to.</strong> The catalogue is
+                    only ever pushed to <em>other</em> client accounts &mdash; never the one
+                    you're signed into. Add or restore a client tenant via
+                    <a href="/master-admin/new-client.php" style="color:var(--brand)">Master Admin &rarr; New client</a>,
+                    then come back here.
+                </p>
+            </section>
+        <?php endif; ?>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
