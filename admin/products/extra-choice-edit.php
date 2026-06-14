@@ -146,9 +146,22 @@ try {
     $hasChoiceLenColumn = true;
 } catch (Throwable $e) { /* column absent — keep feature off */ }
 
+// Per-unit price (migrate_extra_per_unit.php). Loaded on its own for the same
+// reason. Absent column = per-unit pricing off for this install.
+$hasPerUnitColumn = false;
+$choicePerUnit    = '';
+try {
+    $puSt = db()->prepare('SELECT price_per_unit FROM product_extra_choices WHERE id = ?');
+    $puSt->execute([$id]);
+    $v = $puSt->fetchColumn();
+    $choicePerUnit    = ($v === false || $v === null) ? '' : (string) (float) $v;
+    $hasPerUnitColumn = true;
+} catch (Throwable $e) { /* column absent — keep feature off */ }
+
 $f = [
     'label'           => (string) $choice['label'],
     'length_input_label' => $choiceLenLabel,
+    'price_per_unit'  => $choicePerUnit,
     'price_delta'     => (string) $choice['price_delta'],
     'price_percent'   => (string) $choice['price_percent'],
     'price_per_metre' => (string) $choice['price_per_metre'],
@@ -188,6 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['price_delta']     = trim((string) ($_POST['price_delta']     ?? '0'));
     $f['price_percent']   = trim((string) ($_POST['price_percent']   ?? '0'));
     $f['price_per_metre'] = trim((string) ($_POST['price_per_metre'] ?? '0'));
+    $f['price_per_unit']  = trim((string) ($_POST['price_per_unit']  ?? ''));
     $f['per_metre_basis'] = (string) ($_POST['per_metre_basis'] ?? 'width');
     if (!isset($perMetreBases[$f['per_metre_basis']])) $f['per_metre_basis'] = 'width';
     $f['cost_price']      = trim((string) ($_POST['cost_price']      ?? ''));
@@ -228,6 +242,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Percent surcharge must be a number.';
     } elseif (!is_numeric($f['price_per_metre'])) {
         $error = 'Per-metre surcharge must be a number.';
+    } elseif ($f['price_per_unit'] !== '' && !is_numeric($f['price_per_unit'])) {
+        $error = 'Price per unit must be a number.';
     } else {
         require_once __DIR__ . '/../../_partials/price_table_parser.php';
 
@@ -354,6 +370,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )->execute([$f['per_metre_basis'], $id]);
                 }
 
+                // Per-unit price (× the typed quantity). Blank or 0 → NULL ("not
+                // priced per unit"). A per-unit choice NEEDS a number box to
+                // capture the quantity, so if it's priced per unit but has no
+                // number-input label yet, default the label to "Quantity".
+                $puVal = ($f['price_per_unit'] !== '' && (float) $f['price_per_unit'] != 0.0)
+                       ? round((float) $f['price_per_unit'], 2) : null;
+                if ($puVal !== null && trim((string) $f['length_input_label']) === '') {
+                    $f['length_input_label'] = 'Quantity';
+                }
+
                 // Per-choice number-input label — own small UPDATE, same
                 // pattern. Empty string → NULL ("no number box on this choice").
                 if ($hasChoiceLenColumn) {
@@ -361,6 +387,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare(
                         'UPDATE product_extra_choices SET length_input_label = ? WHERE id = ?'
                     )->execute([$lenVal, $id]);
+                }
+
+                if ($hasPerUnitColumn) {
+                    $pdo->prepare(
+                        'UPDATE product_extra_choices SET price_per_unit = ? WHERE id = ?'
+                    )->execute([$puVal, $id]);
                 }
 
                 // Replace the per-choice band scope. Empty $f['bands']
@@ -665,6 +697,24 @@ $activeNav = 'products';
                                step="0.01" value="<?= e((string) $f['price_per_metre']) ?>">
                     </div>
                 </div>
+
+                <?php if ($hasPerUnitColumn): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="price_per_unit">Price per unit (£) &mdash; &times; quantity</label>
+                        <input id="price_per_unit" name="price_per_unit" type="number"
+                               step="0.01" min="0" placeholder="e.g. 2.50"
+                               value="<?= e((string) $f['price_per_unit']) ?>">
+                        <small style="color:var(--text-faint);font-size:0.8125rem">
+                            For things sold <strong>per unit</strong> &mdash; brackets, fixings and the like.
+                            The salesperson types <strong>how many</strong> and the line adds this price
+                            &times; that quantity. Setting it adds a <em>Quantity</em> box on the quote
+                            automatically (rename it under &ldquo;Ask for a number on this choice&rdquo; above
+                            if you'd prefer, e.g. &ldquo;Number of brackets&rdquo;).
+                        </small>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <?php if ($hasBasisColumn): ?>
                 <div class="form-row full">

@@ -371,11 +371,25 @@ function pe_apply_extra(
     }
     $choiceLenCol = $hasChoiceLenCol ? ', length_input_label' : '';
 
+    // Per-unit price × quantity (migrate_extra_per_unit.php). When set, the
+    // choice's typed number is treated as a QUANTITY and multiplied by this
+    // unit price — e.g. face-fix brackets at £2.50 each × however many. Probe once.
+    static $hasPerUnitCol = null;
+    if ($hasPerUnitCol === null) {
+        try {
+            $pdo->query('SELECT price_per_unit FROM product_extra_choices LIMIT 1');
+            $hasPerUnitCol = true;
+        } catch (Throwable $e) {
+            $hasPerUnitCol = false;
+        }
+    }
+    $perUnitCol = $hasPerUnitCol ? ', price_per_unit' : '';
+
     try {
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price, markup_pct_override$basisCol$choiceLenCol
+                    cost_price, markup_pct_override$basisCol$choiceLenCol$perUnitCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -386,7 +400,7 @@ function pe_apply_extra(
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price$basisCol$choiceLenCol
+                    cost_price$basisCol$choiceLenCol$perUnitCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -453,6 +467,16 @@ function pe_apply_extra(
         $modesApplied[]  = 'per_metre';
     }
 
+    // 4b. Per-unit × quantity. The salesperson types a quantity into the
+    //     choice's number input ($userValue); the line adds unit-price × qty —
+    //     e.g. 5 face-fix brackets at £2.50 = £12.50. Only contributes when both
+    //     a unit price is set AND a positive quantity was typed.
+    $perUnit = isset($choice['price_per_unit']) ? (float) $choice['price_per_unit'] : 0.0;
+    if ($perUnit != 0.0 && $userValue !== null && (float) $userValue > 0) {
+        $amount         += $perUnit * (float) $userValue;
+        $modesApplied[]  = 'per_unit';
+    }
+
     // 5. Width-based price table (the 4th mode).
     //    Find smallest entry where width_mm >= request.
     $st = $pdo->prepare(
@@ -505,7 +529,7 @@ function pe_apply_extra(
 
     // 7. Pick the primary mode for the snapshot.
     $primary = 'flat';
-    foreach (['width_table', 'per_metre', 'percent', 'flat'] as $m) {
+    foreach (['width_table', 'per_unit', 'per_metre', 'percent', 'flat'] as $m) {
         if (in_array($m, $modesApplied, true)) { $primary = $m; break; }
     }
 
@@ -516,16 +540,16 @@ function pe_apply_extra(
         ? round((float) $choice['cost_price'], 2)
         : 0.0;
 
-    // user_value: pass-through for now. The salesperson typed e.g. 1230
-    // (mm) and we record it so the supplier docs show the spec. Could
-    // also drive pricing later (multiply choice.price_per_metre by
-    // userValue/1000 instead of widthMm/1000) — out of scope for v1.
-    // Accept the typed value when EITHER the group-level extra OR this
-    // specific choice asks for a number (per-choice input added by
-    // migrate_choice_length_input.php).
+    // user_value: snapshotted for the spec on supplier docs. For a per-unit
+    // choice the typed number IS the quantity and DOES drive the price (mode 4b
+    // above); for a length/offset choice it's still pass-through (recorded, not
+    // priced). Accept the typed value when the group-level extra OR this choice
+    // asks for a number (migrate_choice_length_input.php) OR the choice is
+    // priced per unit (migrate_extra_per_unit.php).
     $resolvedUserValue = null;
     $wantsUserValue = !empty($extra['length_input_label'])
-                   || !empty($choice['length_input_label']);
+                   || !empty($choice['length_input_label'])
+                   || (isset($choice['price_per_unit']) && (float) $choice['price_per_unit'] != 0.0);
     if ($wantsUserValue && $userValue !== null && $userValue > 0) {
         $resolvedUserValue = round((float) $userValue, 2);
     }
