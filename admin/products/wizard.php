@@ -913,6 +913,26 @@ $activeNav = 'wizard';
             foreach (($priceTables ?? []) as $t) { if ((int) $t['cell_count'] > 0) $filledTables++; }
             $allFilled = $totalTables > 0 && $filledTables === $totalTables && empty($missingCombos);
             $lastStep  = count($STEPS);
+
+            // Which systems still need a price import? A band with no table yet
+            // (missingCombos) OR an existing table that's still empty. Drives the
+            // "Got a price spreadsheet?" card: only offer "Import X" for systems
+            // that need it, and hide the card entirely once every system is
+            // priced — so a finished product stops nagging you to re-import what's
+            // already done. Keyed by system name (common to all three lists).
+            $needImportNames = [];
+            foreach (($missingCombos ?? []) as $m) {
+                $needImportNames[(string) ($m['system_name'] ?? '')] = true;
+            }
+            foreach (($priceTables ?? []) as $t) {
+                if ((int) ($t['cell_count'] ?? 0) === 0) {
+                    $needImportNames[(string) ($t['system_name'] ?? '')] = true;
+                }
+            }
+            $systemsNeedingImport = array_values(array_filter(
+                ($systems ?? []),
+                static fn ($s) => isset($needImportNames[(string) ($s['name'] ?? '')])
+            ));
             ?>
             <!-- Stepper -->
             <ol class="wiz-stepper">
@@ -1484,10 +1504,13 @@ $activeNav = 'wizard';
                     </div>
                 <?php endif; ?>
 
-                <?php if (!$widthOnly && !$pricePerDrop && empty($perSqm) && $systems): ?>
+                <?php if (!$widthOnly && !$pricePerDrop && empty($perSqm) && $systemsNeedingImport): ?>
                     <!-- Normal width × drop products: bulk-import a price grid
                          per system (all its bands in one file) rather than hand-
-                         filling each table. The importer creates the tables. -->
+                         filling each table. The importer creates the tables.
+                         Only systems that still NEED prices are listed, and the
+                         whole card disappears once everything's imported — no
+                         more "Import X" nagging for a system that's already done. -->
                     <div class="wiz-card" style="background:#eff6ff;border-color:#bfdbfe">
                         <h2 style="color:#1e40af">Got a price spreadsheet? Import it</h2>
                         <p class="lede" style="color:#1e40af">
@@ -1497,7 +1520,7 @@ $activeNav = 'wizard';
                             system in turn.
                         </p>
                         <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
-                            <?php foreach ($systems as $s): ?>
+                            <?php foreach ($systemsNeedingImport as $s): ?>
                                 <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $s['id'] ?>"
                                    class="btn btn-primary">Import <?= e((string) $s['name']) ?> &rarr;</a>
                             <?php endforeach; ?>
