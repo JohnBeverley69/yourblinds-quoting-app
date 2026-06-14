@@ -902,11 +902,25 @@ $activeNav = 'wizard';
                 </div>
             </div>
 
+            <?php
+            // Final-step completion — computed here (before the stepper) so the
+            // PRICE TABLES bubble can show a ✓ once every table is filled and no
+            // (system + band) combo is missing, instead of a static "4" that
+            // never ticks because it's the last step. Same rule as the green
+            // "All set" banner below. Defensive: vars may be unset off step 4.
+            $totalTables  = count($priceTables ?? []);
+            $filledTables = 0;
+            foreach (($priceTables ?? []) as $t) { if ((int) $t['cell_count'] > 0) $filledTables++; }
+            $allFilled = $totalTables > 0 && $filledTables === $totalTables && empty($missingCombos);
+            $lastStep  = count($STEPS);
+            ?>
             <!-- Stepper -->
             <ol class="wiz-stepper">
                 <?php foreach ($STEPS as $n => [$lbl, $sub]):
-                    $isDone    = $n < $step;
-                    $isCurrent = $n === $step;
+                    // Earlier steps tick once passed; the LAST step ticks when
+                    // its work is actually complete (it's never "passed").
+                    $isDone    = $n < $step || ($n === $lastStep && $allFilled);
+                    $isCurrent = ($n === $step) && !$isDone;
                     $cls = $isDone ? 'done' : ($isCurrent ? 'current' : '');
                     // Allow back-navigation only to already-completed
                     // steps (don't let users skip forward by clicking).
@@ -1382,19 +1396,11 @@ $activeNav = 'wizard';
 
             <!-- ─── STEP 4: Price tables ─────────────────────────────── -->
             <?php if ($step === 4 && $product):
-                $totalTables  = count($priceTables);
-                $filledTables = 0;
-                foreach ($priceTables as $t) {
-                    if ((int) $t['cell_count'] > 0) $filledTables++;
-                }
-                // "All set" only when every EXISTING table is filled AND there
-                // are no (system + band) combinations still missing a table —
-                // otherwise a Roof blind (etc.) silently wouldn't price. Without
-                // the missingCombos check the banner declared "ready to quote"
-                // while the warning below said tables were still needed (a
-                // self-contradiction on one screen).
-                $allFilled = $totalTables > 0 && $filledTables === $totalTables
-                          && empty($missingCombos);
+                // $totalTables / $filledTables / $allFilled are computed above
+                // (before the stepper, so the last step can tick when complete).
+                // "All set" rule: every existing table filled AND no (system +
+                // band) combo still missing — otherwise a Roof blind silently
+                // wouldn't price, and this banner would contradict the warning.
             ?>
                 <?php if ($allFilled): ?>
                     <div class="wiz-done-tile">
