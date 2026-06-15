@@ -212,6 +212,12 @@ switch ($type) {
                         cancelled_at = CASE WHEN ? = 'active' THEN NULL ELSE cancelled_at END
                   WHERE client_id = ? AND plan_code = ?"
             )->execute([$newStatus, $pe2, $newStatus, $clientId, $planCode]);
+            // Async activation: enforce one-tier-at-a-time + stamp the
+            // commitment now that it's actually active (return.php couldn't,
+            // because at redirect time it was still 'pending').
+            if ($newStatus === 'active') {
+                billing_on_tier_activated($clientId, $planCode);
+            }
             billing_sync_feature_flags_force($clientId);
         } catch (Throwable $e) {
             error_log('PayPal webhook activation lookup failed: ' . $e->getMessage());
@@ -257,6 +263,7 @@ switch ($type) {
                         current_period_end = ?
                   WHERE client_id = ? AND plan_code = ?"
             )->execute([$pe2, $clientId, $planCode]);
+            billing_on_tier_activated($clientId, $planCode);   // idempotent on renewals
             billing_sync_feature_flags_force($clientId);
         } catch (Throwable $e) {
             error_log('PayPal renewal lookup failed: ' . $e->getMessage());

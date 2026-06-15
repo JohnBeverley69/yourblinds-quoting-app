@@ -343,6 +343,59 @@ function billing_current_tier_code(int $clientId): string
 }
 
 /**
+ * Run once a tier subscription becomes ACTIVE (from billing/return.php OR the
+ * PayPal webhook — activation can be async, so both call this). It:
+ *   1. Stamps the minimum-term commitment (Platinum's 12 months) if unset.
+ *   2. Supersedes any OTHER active tier — a tenant is on one tier at a time —
+ *      cancelling its PayPal subscription and marking the local row cancelled.
+ *
+ * Safe to call repeatedly (idempotent). PayPal cancellation is attempted only
+ * when paypal.php is loaded (both callers load it).
+ */
+function billing_on_tier_activated(int $clientId, string $planCode): void
+{
+    $pdo = db();
+
+    // 1. Minimum-term commitment.
+    $term = billing_plan_term_months($planCode);
+    if ($term !== null) {
+        $endDate = date('Y-m-d', strtotime('+' . $term . ' months'));
+        $pdo->prepare(
+            'UPDATE tenant_subscriptions SET commitment_end_at = ?
+              WHERE client_id = ? AND plan_code = ? AND commitment_end_at IS NULL'
+        )->execute([$endDate, $clientId, $planCode]);
+    }
+
+    // 2. Supersede any other tier still on the books.
+    $others = $pdo->prepare(
+        "SELECT plan_code, external_subscription_id
+           FROM tenant_subscriptions
+          WHERE client_id = ? AND plan_code <> ?
+            AND status IN ('active', 'trial', 'past_due', 'pending')"
+    );
+    $others->execute([$clientId, $planCode]);
+    foreach ($others->fetchAll(PDO::FETCH_ASSOC) as $o) {
+        $oldId = (string) ($o['external_subscription_id'] ?? '');
+        if ($oldId !== '' && function_exists('paypal_is_configured') && paypal_is_configured()) {
+            try {
+                paypal_request(
+                    'POST',
+                    '/v1/billing/subscriptions/' . rawurlencode($oldId) . '/cancel',
+                    ['reason' => 'Superseded by ' . $planCode . ' tier']
+                );
+            } catch (Throwable $e) {
+                error_log('PayPal cancel of superseded tier failed (continuing): ' . $e->getMessage());
+            }
+        }
+        $pdo->prepare(
+            "UPDATE tenant_subscriptions
+                SET status = 'cancelled', cancelled_at = NOW()
+              WHERE client_id = ? AND plan_code = ?"
+        )->execute([$clientId, (string) $o['plan_code']]);
+    }
+}
+
+/**
  * Is this tenant inside a minimum-term commitment for this plan? (i.e. a
  * term plan with commitment_end_at today or later — can't cancel in-app yet.)
  * Returns the commitment end date (Y-m-d) if so, else null.
@@ -483,6 +536,7 @@ function billing_status_labels(): array
     return [
         'trial'     => 'Trial',
         'active'    => 'Active',
+        'pending'   => 'Activating',
         'past_due'  => 'Past due',
         'cancelled' => 'Cancelled',
         'expired'   => 'Expired',
