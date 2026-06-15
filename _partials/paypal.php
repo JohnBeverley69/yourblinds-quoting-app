@@ -166,7 +166,10 @@ function paypal_map_status(string $paypalStatus): string
 {
     return match (strtoupper($paypalStatus)) {
         'ACTIVE'                       => 'active',
-        'APPROVED', 'APPROVAL_PENDING' => 'past_due',
+        // Buyer approved, but PayPal hasn't flipped it to ACTIVE yet
+        // (activation is often async). NOT a payment failure — it's pending
+        // activation; the webhook flips it to active shortly.
+        'APPROVED', 'APPROVAL_PENDING' => 'pending',
         'SUSPENDED'                    => 'past_due',
         'CANCELLED'                    => 'cancelled',
         'EXPIRED'                      => 'expired',

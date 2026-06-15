@@ -59,6 +59,8 @@ foreach ($paidPlans as $code => $_p) {
         $cta = 'cancel';
     } elseif ($hasTrial) {
         $cta = 'trial';
+    } elseif ($sub && (string) $sub['status'] === 'pending') {
+        $cta = 'pending';
     } elseif ($sub && (string) $sub['status'] === 'past_due') {
         $cta = 'contact';
     }
@@ -143,6 +145,7 @@ $activeNav = 'billing';
         }
         .b-status.b-trial     { background: #fef3c7; color: #92400e; }
         .b-status.b-active    { background: #d1fae5; color: #065f46; }
+        .b-status.b-pending   { background: #fef3c7; color: #92400e; }
         .b-status.b-past_due  { background: #fed7aa; color: #9a3412; }
         .b-status.b-cancelled { background: #fee2e2; color: #991b1b; }
         .b-status.b-expired   { background: var(--border); color: var(--text-secondary); }
@@ -286,6 +289,8 @@ $activeNav = 'billing';
                                 <span class="b-status b-comp">🎁 Comp'd</span>
                             <?php elseif ($subActive): ?>
                                 <span class="b-status b-active">Active</span>
+                            <?php elseif ($sub && (string) $sub['status'] === 'pending'): ?>
+                                <span class="b-status b-pending">Activating</span>
                             <?php elseif ($sub && (string) $sub['status'] === 'past_due'): ?>
                                 <span class="b-status b-past_due">Past due</span>
                             <?php elseif ($sub && (string) $sub['status'] === 'cancelled'): ?>
@@ -368,6 +373,11 @@ $activeNav = 'billing';
                                         Trial keeps running until you subscribe — no overlap, no double-charging.
                                     </div>
                                 <?php endif; ?>
+
+                            <?php elseif ($cta === 'pending'): ?>
+                                <span style="color:#92400e;font-size:0.875rem">
+                                    ⏳ Approved — PayPal is activating this now. Refresh in a few seconds.
+                                </span>
 
                             <?php elseif ($cta === 'contact'): ?>
                                 <span style="color:#9a3412;font-size:0.875rem">

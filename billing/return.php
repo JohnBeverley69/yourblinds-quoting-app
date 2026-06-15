@@ -117,48 +117,10 @@ $pdo->prepare(
 )->execute([$clientId, $planCode, $localStatus, $subId, $periodEnd]);
 
 // Once the new tier is live, enforce one-tier-at-a-time and stamp any
-// minimum-term commitment. Only when PayPal says it's active.
+// minimum-term commitment. Only when PayPal says it's active — if it's still
+// 'pending' (approved, not yet activated) the webhook runs this when it flips.
 if ($localStatus === 'active') {
-    // Minimum-term contract (Platinum = 12 months): stamp the earliest
-    // cancellable date if not already set. Don't shorten an existing one.
-    $termMonths = billing_plan_term_months($planCode);
-    if ($termMonths !== null) {
-        $endDate = date('Y-m-d', strtotime('+' . $termMonths . ' months'));
-        $pdo->prepare(
-            'UPDATE tenant_subscriptions
-                SET commitment_end_at = ?
-              WHERE client_id = ? AND plan_code = ? AND commitment_end_at IS NULL'
-        )->execute([$endDate, $clientId, $planCode]);
-    }
-
-    // Cancel any OTHER active tier subscription — a tenant is on one tier at
-    // a time, so switching tier supersedes the old one. (Read directly, not
-    // via the request cache, since we just mutated the rows.)
-    $others = $pdo->prepare(
-        "SELECT plan_code, external_subscription_id
-           FROM tenant_subscriptions
-          WHERE client_id = ? AND plan_code <> ? AND status IN ('active', 'trial')"
-    );
-    $others->execute([$clientId, $planCode]);
-    foreach ($others->fetchAll(PDO::FETCH_ASSOC) as $o) {
-        $oldId = (string) ($o['external_subscription_id'] ?? '');
-        if ($oldId !== '' && paypal_is_configured()) {
-            try {
-                paypal_request(
-                    'POST',
-                    '/v1/billing/subscriptions/' . rawurlencode($oldId) . '/cancel',
-                    ['reason' => 'Superseded by ' . $planCode . ' tier']
-                );
-            } catch (Throwable $e) {
-                error_log('PayPal cancel of superseded tier failed (continuing): ' . $e->getMessage());
-            }
-        }
-        $pdo->prepare(
-            "UPDATE tenant_subscriptions
-                SET status = 'cancelled', cancelled_at = NOW()
-              WHERE client_id = ? AND plan_code = ?"
-        )->execute([$clientId, (string) $o['plan_code']]);
-    }
+    billing_on_tier_activated($clientId, $planCode);
 }
 
 billing_sync_feature_flags_force($clientId);
@@ -166,7 +128,11 @@ billing_sync_feature_flags_force($clientId);
 $planName = (string) (billing_plan($planCode)['name'] ?? $planCode);
 if ($localStatus === 'active') {
     $_SESSION['flash_success'] =
-        '✓ Subscription active — the ' . $planName . ' is now enabled. Thanks!';
+        "✓ You're now on the {$planName} plan — it's live. Thanks!";
+} elseif ($localStatus === 'pending') {
+    $_SESSION['flash_success'] =
+        "Subscription to {$planName} approved — PayPal is activating it now. "
+        . "Refresh in a few seconds and it'll be live.";
 } else {
     $_SESSION['flash_error'] =
         'Subscription saved but PayPal reports status "' . $paypalStatus . '". '
