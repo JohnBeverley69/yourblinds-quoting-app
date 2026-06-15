@@ -8,9 +8,10 @@ declare(strict_types=1);
  *
  * Scope (deliberate): it imports the WIDTH × DROP band GRIDS only — the heavy,
  * error-prone part. Each worksheet becomes a product named "<prefix> <sheet>",
- * and each band becomes a price_table (system_id NULL) full of price cells.
- * Systems and fabrics are NOT in a price sheet, so they stay a manual finishing
- * step in Products afterwards.
+ * gets an auto-created default "Standard" system (price tables are system-
+ * scoped), and each band becomes a price_table full of price cells. Fabrics
+ * aren't in a price sheet, so adding them (and renaming/splitting the system)
+ * stays a manual finishing step in Products afterwards.
  *
  * Idempotent: products are matched by name, price tables by (product, band),
  * cells upserted by (table, width, drop) — re-importing an updated sheet
@@ -53,6 +54,15 @@ function supplier_import_to_catalogue(PDO $pdo, int $masterClientId, string $pre
             ? $sheetName
             : trim($prefix . ' ' . $sheetName);
 
+        // Snapshot the running counters so a rolled-back product doesn't leave
+        // its half-applied increments behind (they're bumped inside the txn).
+        $countersBefore = [
+            'products_added'     => $summary['products_added'],
+            'products_updated'   => $summary['products_updated'],
+            'products_skipped'   => $summary['products_skipped'],
+            'price_tables_added' => $summary['price_tables_added'],
+            'cells_written'      => $summary['cells_written'],
+        ];
         try {
             $pdo->beginTransaction();
             $detail = sciw_write_one_product(
@@ -62,6 +72,7 @@ function supplier_import_to_catalogue(PDO $pdo, int $masterClientId, string $pre
             $summary['per_product'][] = ['product' => $productName] + $detail;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
+            foreach ($countersBefore as $k => $v) $summary[$k] = $v;   // undo stale increments
             $summary['errors'][] = ['product' => $productName, 'message' => $e->getMessage()];
         }
     }
@@ -101,22 +112,20 @@ function sciw_write_one_product(
     } else {
         $pid = (int) $pid;
 
-        // Safety: if this existing product is already structured with SYSTEMS
-        // (it has system-scoped price tables), the importer's system_id-NULL
-        // grids don't belong to it — writing them would create parallel,
-        // never-matched tables. Skip it and tell the user to import per-system
-        // in Products instead.
-        $sysChk = $pdo->prepare(
-            'SELECT COUNT(*) FROM price_tables
-              WHERE client_id = ? AND product_id = ? AND system_id IS NOT NULL'
+        // Safety: never touch an existing product that already has price tables
+        // — it's an established catalogue product (possibly multi-system). The
+        // importer is for loading NEW or empty products; established ones are
+        // managed in Products. Skip with a clear note.
+        $ptChk = $pdo->prepare(
+            'SELECT COUNT(*) FROM price_tables WHERE client_id = ? AND product_id = ?'
         );
-        $sysChk->execute([$masterClientId, $pid]);
-        if ((int) $sysChk->fetchColumn() > 0) {
+        $ptChk->execute([$masterClientId, $pid]);
+        if ((int) $ptChk->fetchColumn() > 0) {
             $summary['products_skipped']++;
             return [
                 'new'     => false,
                 'skipped' => true,
-                'reason'  => 'already set up with systems — import this one per-system in Products',
+                'reason'  => 'already has price tables — manage this one in Products',
                 'bands'   => 0,
                 'cells'   => 0,
             ];
@@ -124,14 +133,37 @@ function sciw_write_one_product(
         $summary['products_updated']++;
     }
 
-    // ---- Price tables (one per band, system_id NULL) + cells ----
+    // ---- System: price tables are system-scoped (system_id is NOT NULL), so
+    //      every product needs at least one. Reuse the product's existing
+    //      default/first system, or create a "Standard" one. ----
+    $sysFind = $pdo->prepare(
+        'SELECT id FROM product_systems
+          WHERE client_id = ? AND product_id = ?
+          ORDER BY is_default DESC, id LIMIT 1'
+    );
+    $sysFind->execute([$masterClientId, $pid]);
+    $systemId = $sysFind->fetchColumn();
+    if ($systemId === false) {
+        $sysSort = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM product_systems WHERE product_id = ?');
+        $sysSort->execute([$pid]);
+        $nextSysSort = (int) $sysSort->fetchColumn();
+        $pdo->prepare(
+            'INSERT INTO product_systems (client_id, product_id, name, sort_order, active, is_default)
+             VALUES (?, ?, ?, ?, 1, 1)'
+        )->execute([$masterClientId, $pid, 'Standard', $nextSysSort]);
+        $systemId = (int) $pdo->lastInsertId();
+    } else {
+        $systemId = (int) $systemId;
+    }
+
+    // ---- Price tables (one per band, on $systemId) + cells ----
     $findPt = $pdo->prepare(
         'SELECT id FROM price_tables
-          WHERE client_id = ? AND product_id = ? AND system_id IS NULL AND band_code = ? LIMIT 1'
+          WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ? LIMIT 1'
     );
     $insPt = $pdo->prepare(
         'INSERT INTO price_tables (client_id, product_id, system_id, band_code, name, notes, active)
-         VALUES (?, ?, NULL, ?, ?, NULL, 1)'
+         VALUES (?, ?, ?, ?, ?, NULL, 1)'
     );
     $cellUpsert = null;
     try {
@@ -152,10 +184,10 @@ function sciw_write_one_product(
         $cells = (array) ($band['cells'] ?? []);
         if (!$cells) continue;
 
-        $findPt->execute([$masterClientId, $pid, $code]);
+        $findPt->execute([$masterClientId, $pid, $systemId, $code]);
         $ptId = $findPt->fetchColumn();
         if ($ptId === false) {
-            $insPt->execute([$masterClientId, $pid, $code, $code]);
+            $insPt->execute([$masterClientId, $pid, $systemId, $code, $code]);
             $ptId = (int) $pdo->lastInsertId();
             $summary['price_tables_added']++;
         } else {
