@@ -69,6 +69,12 @@ $quoteStatuses = ['draft', 'sent', 'declined'];
 $scope = (($_GET['scope'] ?? '') === 'quotes') ? 'quotes' : 'orders';
 $scopeStatuses = $scope === 'quotes' ? $quoteStatuses : $orderStatuses;
 
+// Soft-archive (migrate_quote_archive.php). Default view hides archived rows;
+// ?view=archived shows only archived ones (to review / restore).
+$hasArchive = false;
+try { db()->query('SELECT archived_at FROM quotes LIMIT 0'); $hasArchive = true; } catch (Throwable $e) {}
+$view = ($hasArchive && ($_GET['view'] ?? '') === 'archived') ? 'archived' : 'active';
+
 // Filter chips per scope. Quotes scope mirrors the pipeline: draft + sent are
 // one "Quote" group (a draft is just a quote that's not sent yet). Each chip is
 // key => [label, statuses[]].
@@ -95,6 +101,11 @@ $params = [$clientId];
 $scopePlace = implode(',', array_fill(0, count($scopeStatuses), '?'));
 $where[]    = "q.status IN ($scopePlace)";
 foreach ($scopeStatuses as $ss) { $params[] = $ss; }
+
+// Active vs archived.
+if ($hasArchive) {
+    $where[] = $view === 'archived' ? 'q.archived_at IS NOT NULL' : 'q.archived_at IS NULL';
+}
 
 // A chip narrows further to its status group, within this scope.
 if ($status !== '' && isset($chipDefs[$status])) {
@@ -152,6 +163,10 @@ if ($restrictToMine) {
     $countWhere[]   = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
     $countParams[]  = (int) $user['user_id'];
 }
+// Chip counts reflect the current (active/archived) view.
+if ($hasArchive) {
+    $countWhere[] = $view === 'archived' ? 'archived_at IS NOT NULL' : 'archived_at IS NULL';
+}
 $countSt = db()->prepare(
     'SELECT status, COUNT(*) AS n
        FROM quotes
@@ -168,6 +183,20 @@ foreach ($countSt->fetchAll() as $r) {
 // Total within the current scope (for the "All" chip).
 $scopeTotal = 0;
 foreach ($scopeStatuses as $ss) { $scopeTotal += $counts[$ss] ?? 0; }
+
+// Count of archived jobs in this scope (for the Archived toggle label).
+$archivedCount = 0;
+if ($hasArchive) {
+    $azWhere  = ['client_id = ?', 'archived_at IS NOT NULL', "status IN ($scopePlace)"];
+    $azParams = array_merge([$clientId], $scopeStatuses);
+    if ($restrictToMine) {
+        $azWhere[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+        $azParams[] = (int) $user['user_id'];
+    }
+    $azSt = db()->prepare('SELECT COUNT(*) FROM quotes WHERE ' . implode(' AND ', $azWhere));
+    $azSt->execute($azParams);
+    $archivedCount = (int) $azSt->fetchColumn();
+}
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -284,6 +313,13 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                         <?= e($chipLabel) ?> (<?= $chipCount ?>)
                     </a>
                 <?php endforeach; ?>
+                <?php if ($hasArchive): ?>
+                    <?php if ($view === 'archived'): ?>
+                        <a href="/orders/index.php?scope=<?= e($scope) ?>" style="margin-left:auto" class="active">&larr; Back to active</a>
+                    <?php elseif ($archivedCount > 0): ?>
+                        <a href="/orders/index.php?scope=<?= e($scope) ?>&view=archived" style="margin-left:auto">🗄 Archived (<?= $archivedCount ?>)</a>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
 
             <form method="get" action="/orders/index.php" class="search-form">
@@ -318,8 +354,23 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                     <?= csrf_field() ?>
                     <input type="hidden" name="return_status" value="<?= e($status) ?>">
                     <input type="hidden" name="return_q"      value="<?= e($q) ?>">
+                    <input type="hidden" name="return_scope"  value="<?= e($scope) ?>">
+                    <input type="hidden" name="return_view"   value="<?= e($view) ?>">
 
                     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.625rem;">
+                        <?php if ($hasArchive && $view === 'archived'): ?>
+                            <button type="submit" class="btn btn-secondary" id="bulk-archive-btn"
+                                    formaction="/orders/archive.php" name="do" value="unarchive"
+                                    style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>
+                                Restore selected
+                            </button>
+                        <?php elseif ($hasArchive): ?>
+                            <button type="submit" class="btn btn-secondary" id="bulk-archive-btn"
+                                    formaction="/orders/archive.php" name="do" value="archive"
+                                    style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>
+                                🗄 Archive selected
+                            </button>
+                        <?php endif; ?>
                         <button type="submit" class="btn btn-danger"
                                 id="bulk-delete-btn"
                                 style="padding:0.3125rem 0.875rem;font-size:0.875rem"
@@ -460,6 +511,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                     var form    = document.getElementById('bulk-delete-form');
                     var allBox  = document.getElementById('bulk-all');
                     var btn     = document.getElementById('bulk-delete-btn');
+                    var archBtn = document.getElementById('bulk-archive-btn');
                     var counter = document.getElementById('bulk-count');
                     if (!form || !allBox || !btn || !counter) return;
 
@@ -470,6 +522,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                         var checked = form.querySelectorAll('input.bulk-row:checked').length;
                         var total   = rows().length;
                         btn.disabled = checked === 0;
+                        if (archBtn) archBtn.disabled = checked === 0;
                         counter.textContent = checked === 0
                             ? '(none selected)'
                             : '(' + checked + ' of ' + total + ' selected)';
@@ -484,6 +537,8 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                         if (e.target && e.target.classList.contains('bulk-row')) refresh();
                     });
                     form.addEventListener('submit', function (e) {
+                        // Archive/Restore don't need the destructive delete confirm.
+                        if (e.submitter && e.submitter.id === 'bulk-archive-btn') return;
                         var msg = form.getAttribute('data-confirm-submit');
                         if (msg && !window.confirm(msg)) {
                             e.preventDefault();
