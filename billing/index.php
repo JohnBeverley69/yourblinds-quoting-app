@@ -252,8 +252,8 @@ $activeNav = 'billing';
                     </span>
                 <?php endif; ?>
                 <span style="color:var(--text-faint);font-size:0.875rem;flex:1 1 100%">
-                    Billed monthly in GBP through PayPal. Cancellations turn off
-                    paid features immediately — no future charges.
+                    Billed monthly in GBP through PayPal. Cancel Silver or Gold any time;
+                    Platinum is a 12-month contract.
                 </span>
             </div>
         </section>
