@@ -81,27 +81,18 @@ try {
                 ->execute([$catId, $clientId]);
             $_SESSION['flash_success'] = 'Category removed. Its products are now ungrouped.';
         }
-    } elseif ($action === 'move') {
-        // Reorder a category up/down. Normalise sort_order to a clean sequence
-        // and swap the target with its neighbour — robust even if existing
-        // sort_order values are all 0/equal.
-        $catId = (int) ($_POST['category_id'] ?? 0);
-        $dir   = ((string) ($_POST['dir'] ?? '')) === 'up' ? 'up' : 'down';
-        if ($catId > 0) {
-            $st = $pdo->prepare('SELECT id FROM product_categories WHERE client_id = ? ORDER BY sort_order, name');
-            $st->execute([$clientId]);
-            $ids = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
-            $pos = array_search($catId, $ids, true);
-            if ($pos !== false) {
-                $swap = $dir === 'up' ? $pos - 1 : $pos + 1;
-                if ($swap >= 0 && $swap < count($ids)) {
-                    [$ids[$pos], $ids[$swap]] = [$ids[$swap], $ids[$pos]];
-                }
-                $upd = $pdo->prepare('UPDATE product_categories SET sort_order = ? WHERE id = ? AND client_id = ?');
-                foreach ($ids as $i => $id) $upd->execute([$i, $id, $clientId]);
-            }
-            $_SESSION['flash_success'] = 'Group order updated.';
+    } elseif ($action === 'reorder_groups') {
+        // Drag-reorder: write sort_order from the posted id sequence. Only
+        // touches categories belonging to this tenant.
+        $order = $_POST['order'] ?? [];
+        if (!is_array($order)) $order = [];
+        $upd = $pdo->prepare('UPDATE product_categories SET sort_order = ? WHERE id = ? AND client_id = ?');
+        $i = 0;
+        foreach ($order as $cid) {
+            $cid = (int) $cid;
+            if ($cid > 0) { $upd->execute([$i, $cid, $clientId]); $i++; }
         }
+        $_SESSION['flash_success'] = 'Group order updated.';
     } else { // assign
         $pid   = (int) ($_POST['product_id']  ?? 0);
         $catId = (int) ($_POST['category_id'] ?? 0);   // 0 = ungroup

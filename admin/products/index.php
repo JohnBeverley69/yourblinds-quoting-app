@@ -202,13 +202,10 @@ $activeNav = 'products';
             cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0;
         }
         .cat-del:hover { color: #b91c1c; }
-        .cat-move-wrap { display: inline-flex; gap: 0.125rem; }
-        .cat-move {
-            background: var(--bg-subtle-2); border: 1px solid var(--border); color: var(--text-secondary);
-            cursor: pointer; font-size: 0.625rem; line-height: 1; border-radius: 5px;
-            padding: 0.1875rem 0.375rem;
-        }
-        .cat-move:hover { background: var(--bg-subtle); color: var(--text-primary); }
+        .cat-draggable { cursor: grab; }
+        .cat-draggable:active { cursor: grabbing; }
+        .cat-heading.dragging { opacity: 0.5; }
+        .cat-grip { color: var(--text-faint); font-size: 0.9rem; margin-right: 0.1rem; }
         .group-select {
             padding: 0.25rem 0.4rem; font: inherit; font-size: 0.8125rem;
             border: 1px solid var(--border-strong); border-radius: 6px;
@@ -357,32 +354,12 @@ $activeNav = 'products';
                     <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
                         Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
                     </p>
-                    <?php $catTotal = count($categories); ?>
-                    <?php foreach ($categories as $catIdx => $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
+                    <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
                         <div class="drop-zone" data-cat="<?= $cidd ?>">
-                            <h2 class="cat-heading">
+                            <h2 class="cat-heading cat-draggable" draggable="true" data-cat="<?= $cidd ?>" title="Drag to reorder groups">
+                                <span class="cat-grip" aria-hidden="true">⠿</span>
                                 <?= e((string) $c['name']) ?>
                                 <span class="cat-count"><?= count($gRows) ?></span>
-                                <span class="cat-move-wrap">
-                                    <?php if ($catIdx > 0): ?>
-                                        <form method="post" action="/admin/products/set-category.php" style="display:inline">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="_action" value="move">
-                                            <input type="hidden" name="category_id" value="<?= $cidd ?>">
-                                            <input type="hidden" name="dir" value="up">
-                                            <button type="submit" class="cat-move" title="Move up">▲</button>
-                                        </form>
-                                    <?php endif; ?>
-                                    <?php if ($catIdx < $catTotal - 1): ?>
-                                        <form method="post" action="/admin/products/set-category.php" style="display:inline">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="_action" value="move">
-                                            <input type="hidden" name="category_id" value="<?= $cidd ?>">
-                                            <input type="hidden" name="dir" value="down">
-                                            <button type="submit" class="cat-move" title="Move down">▼</button>
-                                        </form>
-                                    <?php endif; ?>
-                                </span>
                                 <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
                                       data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
                                     <?= csrf_field() ?>
@@ -413,30 +390,46 @@ $activeNav = 'products';
 </div>
 
 <?php if ($products && $hasCategories): ?>
-    <!-- Hidden form the drop handler submits to file a product into a group. -->
+    <!-- Hidden forms the drop handlers submit: file a product, or reorder groups. -->
     <form id="dnd-form" method="post" action="/admin/products/set-category.php" style="display:none">
         <?= csrf_field() ?>
         <input type="hidden" name="_action" value="assign">
         <input type="hidden" name="product_id" value="">
         <input type="hidden" name="category_id" value="">
     </form>
+    <form id="group-order-form" method="post" action="/admin/products/set-category.php" style="display:none">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="reorder_groups">
+    </form>
     <script>
     (function () {
-        var form  = document.getElementById('dnd-form');
-        var zones = document.querySelectorAll('.drop-zone');
-        var dragId = null;
+        var dndForm   = document.getElementById('dnd-form');
+        var orderForm = document.getElementById('group-order-form');
+        var zones = Array.prototype.slice.call(document.querySelectorAll('.drop-zone'));
+        var dragType = null, dragId = null;
 
+        function clearHover() { zones.forEach(function (z) { z.classList.remove('drop-hover'); }); }
+
+        // Drag a PRODUCT row → file it into a group.
         document.querySelectorAll('tr[draggable="true"]').forEach(function (tr) {
             tr.addEventListener('dragstart', function (e) {
-                dragId = tr.getAttribute('data-id');
+                dragType = 'product'; dragId = tr.getAttribute('data-id');
                 e.dataTransfer.effectAllowed = 'move';
                 try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
                 tr.classList.add('dragging');
             });
-            tr.addEventListener('dragend', function () {
-                tr.classList.remove('dragging');
-                zones.forEach(function (z) { z.classList.remove('drop-hover'); });
+            tr.addEventListener('dragend', function () { tr.classList.remove('dragging'); clearHover(); });
+        });
+
+        // Drag a GROUP heading → reorder the groups.
+        document.querySelectorAll('.cat-draggable').forEach(function (h) {
+            h.addEventListener('dragstart', function (e) {
+                dragType = 'group'; dragId = h.getAttribute('data-cat');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', 'g' + dragId); } catch (err) {}
+                h.classList.add('dragging');
             });
+            h.addEventListener('dragend', function () { h.classList.remove('dragging'); clearHover(); });
         });
 
         zones.forEach(function (z) {
@@ -450,15 +443,38 @@ $activeNav = 'products';
             });
             z.addEventListener('drop', function (e) {
                 e.preventDefault();
-                var id  = (e.dataTransfer && e.dataTransfer.getData('text/plain')) || dragId;
+                clearHover();
                 var cat = z.getAttribute('data-cat');
-                if (!id) return;
-                // No-op if dropped back into the same group it's already in.
-                var row = document.querySelector('tr[data-id="' + id + '"]');
-                if (row && row.closest('.drop-zone') === z) return;
-                form.querySelector('[name=product_id]').value = id;
-                form.querySelector('[name=category_id]').value = cat;
-                form.submit();
+
+                if (dragType === 'group') {
+                    if (!dragId || dragId === cat) return;
+                    // Build the new order of category groups (skip the '0' Ungrouped zone).
+                    var order = zones.map(function (zz) { return zz.getAttribute('data-cat'); })
+                                     .filter(function (c) { return c !== '0'; })
+                                     .filter(function (c) { return c !== dragId; });
+                    if (cat === '0') {
+                        order.push(dragId);                       // dropped on Ungrouped → bottom
+                    } else {
+                        var ti = order.indexOf(cat);
+                        if (ti < 0) order.push(dragId); else order.splice(ti, 0, dragId);
+                    }
+                    orderForm.querySelectorAll('input[name="order[]"]').forEach(function (n) { n.remove(); });
+                    order.forEach(function (id) {
+                        var inp = document.createElement('input');
+                        inp.type = 'hidden'; inp.name = 'order[]'; inp.value = id;
+                        orderForm.appendChild(inp);
+                    });
+                    orderForm.submit();
+                    return;
+                }
+
+                // Product assign (default).
+                if (!dragId) return;
+                var row = document.querySelector('tr[data-id="' + dragId + '"]');
+                if (row && row.closest('.drop-zone') === z) return;   // same group → no-op
+                dndForm.querySelector('[name=product_id]').value = dragId;
+                dndForm.querySelector('[name=category_id]').value = cat;
+                dndForm.submit();
             });
         });
     })();
