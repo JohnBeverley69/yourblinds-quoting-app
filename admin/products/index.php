@@ -110,7 +110,8 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
         : '/admin/products/systems.php?product_id='     . (int) $p['id'];
     $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
     ?>
-    <tr data-id="<?= (int) $p['id'] ?>">
+    <tr data-id="<?= (int) $p['id'] ?>" draggable="true">
+        <td class="drag-col" title="Drag onto a group">⋮⋮</td>
         <td>
             <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>" class="product-name" style="text-decoration:none">
                 <?= e((string) $p['name']) ?>
@@ -205,6 +206,15 @@ $activeNav = 'products';
             padding: 0.25rem 0.4rem; font: inherit; font-size: 0.8125rem;
             border: 1px solid var(--border-strong); border-radius: 6px;
             background: var(--bg-input); color: var(--text-body); max-width: 11rem;
+        }
+        .drag-col { cursor: grab; color: var(--text-faint); width: 1.5rem; text-align: center; user-select: none; }
+        .drag-col:active { cursor: grabbing; }
+        tr.dragging { opacity: 0.45; }
+        .drop-zone { border-radius: 10px; padding: 0.25rem 0.5rem; margin: 0 -0.5rem; transition: background 80ms; }
+        .drop-zone.drop-hover { background: rgba(37, 99, 235, 0.07); outline: 2px dashed #2563eb; outline-offset: -2px; }
+        .drop-empty {
+            color: var(--text-faint); font-size: 0.875rem; margin: 0 0 1rem;
+            padding: 0.75rem; border: 1px dashed var(--border); border-radius: 8px;
         }
     </style>
 </head>
@@ -315,6 +325,7 @@ $activeNav = 'products';
                             <table class="table">
                                 <thead>
                                     <tr>
+                                        <th class="drag-col"></th>
                                         <th>Name</th>
                                         <th>Status</th>
                                         <th class="num">Fabrics</th>
@@ -336,29 +347,35 @@ $activeNav = 'products';
                 ?>
 
                 <?php if ($hasCategories && $categories): ?>
+                    <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
+                        Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
+                    </p>
                     <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
-                        <h2 class="cat-heading">
-                            <?= e((string) $c['name']) ?>
-                            <span class="cat-count"><?= count($gRows) ?></span>
-                            <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
-                                  data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="_action" value="delete">
-                                <input type="hidden" name="category_id" value="<?= $cidd ?>">
-                                <button type="submit" class="cat-del">remove group</button>
-                            </form>
-                        </h2>
-                        <?php if ($gRows): $renderTable($gRows); else: ?>
-                            <p style="color:var(--text-faint);font-size:.875rem;margin:0 0 1.25rem">
-                                No products here yet — pick this group from a product's <strong>Group</strong> dropdown.
-                            </p>
-                        <?php endif; ?>
+                        <div class="drop-zone" data-cat="<?= $cidd ?>">
+                            <h2 class="cat-heading">
+                                <?= e((string) $c['name']) ?>
+                                <span class="cat-count"><?= count($gRows) ?></span>
+                                <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
+                                      data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="_action" value="delete">
+                                    <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                    <button type="submit" class="cat-del">remove group</button>
+                                </form>
+                            </h2>
+                            <?php if ($gRows): $renderTable($gRows); else: ?>
+                                <p class="drop-empty">Empty — drag a product's <strong>⋮⋮</strong> handle here, or pick this group from its <strong>Group</strong> dropdown.</p>
+                            <?php endif; ?>
+                        </div>
                     <?php endforeach; ?>
 
-                    <?php $ung = $grouped[0] ?? []; if ($ung): ?>
+                    <?php $ung = $grouped[0] ?? []; ?>
+                    <div class="drop-zone" data-cat="0">
                         <h2 class="cat-heading">Ungrouped <span class="cat-count"><?= count($ung) ?></span></h2>
-                        <?php $renderTable($ung); ?>
-                    <?php endif; ?>
+                        <?php if ($ung): $renderTable($ung); else: ?>
+                            <p class="drop-empty">Nothing ungrouped — drag a product's <strong>⋮⋮</strong> handle here to remove it from its group.</p>
+                        <?php endif; ?>
+                    </div>
                 <?php else: ?>
                     <?php $renderTable($products); ?>
                 <?php endif; ?>
@@ -367,6 +384,58 @@ $activeNav = 'products';
     </main>
 </div>
 
+<?php if ($products && $hasCategories): ?>
+    <!-- Hidden form the drop handler submits to file a product into a group. -->
+    <form id="dnd-form" method="post" action="/admin/products/set-category.php" style="display:none">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="assign">
+        <input type="hidden" name="product_id" value="">
+        <input type="hidden" name="category_id" value="">
+    </form>
+    <script>
+    (function () {
+        var form  = document.getElementById('dnd-form');
+        var zones = document.querySelectorAll('.drop-zone');
+        var dragId = null;
+
+        document.querySelectorAll('tr[draggable="true"]').forEach(function (tr) {
+            tr.addEventListener('dragstart', function (e) {
+                dragId = tr.getAttribute('data-id');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
+                tr.classList.add('dragging');
+            });
+            tr.addEventListener('dragend', function () {
+                tr.classList.remove('dragging');
+                zones.forEach(function (z) { z.classList.remove('drop-hover'); });
+            });
+        });
+
+        zones.forEach(function (z) {
+            z.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                z.classList.add('drop-hover');
+            });
+            z.addEventListener('dragleave', function (e) {
+                if (!z.contains(e.relatedTarget)) z.classList.remove('drop-hover');
+            });
+            z.addEventListener('drop', function (e) {
+                e.preventDefault();
+                var id  = (e.dataTransfer && e.dataTransfer.getData('text/plain')) || dragId;
+                var cat = z.getAttribute('data-cat');
+                if (!id) return;
+                // No-op if dropped back into the same group it's already in.
+                var row = document.querySelector('tr[data-id="' + id + '"]');
+                if (row && row.closest('.drop-zone') === z) return;
+                form.querySelector('[name=product_id]').value = id;
+                form.querySelector('[name=category_id]').value = cat;
+                form.submit();
+            });
+        });
+    })();
+    </script>
+<?php endif; ?>
 <?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>
