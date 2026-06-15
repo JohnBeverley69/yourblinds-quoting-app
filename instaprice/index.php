@@ -171,14 +171,26 @@ $activeNav = 'instaprice';
 
                 <div class="ip-field" style="margin-top:1rem">
                     <label><span id="ip-dim-label">Dimensions</span> &amp; quantity</label>
+                    <?php /* QA #007: persistent per-field labels, not placeholder-only,
+                             so the field's meaning stays visible while typing (and for
+                             screen readers). */ ?>
                     <div class="ip-dims">
-                        <input id="ip-width" type="text" inputmode="numeric"
-                               autocomplete="off" autocorrect="off" autocapitalize="off"
-                               data-lpignore="true" data-1p-ignore="true" placeholder="Width">
-                        <input id="ip-drop"  type="text" inputmode="numeric"
-                               autocomplete="off" autocorrect="off" autocapitalize="off"
-                               data-lpignore="true" data-1p-ignore="true" placeholder="Drop">
-                        <input id="ip-qty"   type="number" min="1" value="1" autocomplete="off">
+                        <div style="flex:1 1 0;min-width:0">
+                            <label for="ip-width" class="ip-dim-cap">Width</label>
+                            <input id="ip-width" type="text" inputmode="numeric" style="width:100%;box-sizing:border-box"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off"
+                                   data-lpignore="true" data-1p-ignore="true" placeholder="Width">
+                        </div>
+                        <div style="flex:1 1 0;min-width:0">
+                            <label for="ip-drop" class="ip-dim-cap">Drop</label>
+                            <input id="ip-drop"  type="text" inputmode="numeric" style="width:100%;box-sizing:border-box"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off"
+                                   data-lpignore="true" data-1p-ignore="true" placeholder="Drop">
+                        </div>
+                        <div style="flex:0 0 5rem">
+                            <label for="ip-qty" class="ip-dim-cap">Qty</label>
+                            <input id="ip-qty"   type="number" min="1" value="1" autocomplete="off" style="width:100%;box-sizing:border-box">
+                        </div>
                     </div>
                     <div id="ip-dim-echo" hidden
                          style="margin-top:0.4rem;font-size:0.8125rem;color:var(--text-faint)"></div>

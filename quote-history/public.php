@@ -298,6 +298,15 @@ if ($depositStored !== null) {
         @media (max-width: 600px) {
             .head { flex-direction: column; }
             .quote-meta { text-align: left; }
+            /* QA #006: stop the items table overflowing / slicing the
+               description into single-character columns on phones. Drop the row
+               number, tighten padding/font, and let the numeric columns shrink
+               to content so the Description gets the room it needs. */
+            table.items { font-size: 0.8125rem; }
+            table.items th, table.items td { padding: 0.4rem 0.3rem; }
+            table.items th:first-child, table.items td:first-child { display: none; }
+            table.items th.num { width: auto !important; }
+            table.items .desc, table.items .room, table.items .extras { overflow-wrap: anywhere; }
         }
     </style>
 </head>
@@ -481,20 +490,22 @@ if ($depositStored !== null) {
                 <input type="hidden" name="token" value="<?= e($token) ?>">
                 <label for="signature_name">Your full name</label>
                 <input id="signature_name" name="signature_name" type="text"
-                       required maxlength="150" autocomplete="name"
+                       maxlength="150" autocomplete="name"
                        value="<?= e((string) $quote['end_customer_name']) ?>">
                 <?php if ($tcText !== ''): ?>
                 <label for="agree_terms"
                        style="display:flex;align-items:flex-start;gap:0.5rem;margin:0.875rem 0 0.25rem;
                               font-weight:400;cursor:pointer;line-height:1.5">
                     <input id="agree_terms" name="agree_terms" type="checkbox" value="1"
-                           required style="margin-top:0.2rem">
+                           style="margin-top:0.2rem">
                     <span>I agree to the
                         <a href="/quote-history/terms.php?token=<?= e($token) ?>"
                            target="_blank" rel="noopener" style="color:#2563eb">Terms &amp; Conditions</a>
                         of <?= e((string) ($quote['trade_company_name'] ?? 'the supplier')) ?>.</span>
                 </label>
                 <?php endif; ?>
+                <div id="accept-error" role="alert"
+                     style="display:none;color:#b91c1c;font-size:0.875rem;font-weight:600;margin-top:0.625rem"></div>
                 <div class="actions">
                     <button type="submit" name="action" value="accept" class="btn-primary">
                         Accept quote
@@ -528,5 +539,35 @@ if ($depositStored !== null) {
 
 </main>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
+<script>
+// QA #005: validate the accept form with a clean inline message instead of the
+// native browser tooltip, which on mobile pops up over the Accept button.
+(function () {
+    var form = document.querySelector('.accept-card form');
+    if (!form) return;
+    var accept = form.querySelector('button[value="accept"]');
+    var name   = document.getElementById('signature_name');
+    var terms  = document.getElementById('agree_terms');
+    var err    = document.getElementById('accept-error');
+    if (!accept || !err) return;
+
+    accept.addEventListener('click', function (e) {
+        var msgs = [];
+        if (name && name.value.trim() === '')  msgs.push('Please type your full name.');
+        if (terms && !terms.checked)           msgs.push('Please tick the box to agree to the Terms & Conditions.');
+        if (msgs.length) {
+            e.preventDefault();
+            err.textContent = msgs.join(' ');
+            err.style.display = 'block';
+        }
+    });
+    [name, terms].forEach(function (el) {
+        if (!el) return;
+        var clear = function () { err.style.display = 'none'; };
+        el.addEventListener('input', clear);
+        el.addEventListener('change', clear);
+    });
+})();
+</script>
 </body>
 </html>
