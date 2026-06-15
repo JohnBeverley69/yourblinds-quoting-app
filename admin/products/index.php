@@ -22,8 +22,25 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // active system — used to deep-link the Price tables column straight
 // into that system's tables. NULL when 0 or 2+ systems, in which
 // case we fall back to the systems list page.
+// Category grouping is optional (migrate_product_categories.php). Probe so the
+// page works before and after the migration.
+$hasCategories = false;
+try {
+    db()->query('SELECT 1 FROM product_categories LIMIT 0');
+    $colChk = db()->query(
+        "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'
+            AND COLUMN_NAME = 'category_id' LIMIT 1"
+    );
+    $hasCategories = $colChk->fetchColumn() !== false;
+} catch (Throwable $e) {
+    $hasCategories = false;
+}
+
+$catSelect = $hasCategories ? 'p.category_id,' : 'NULL AS category_id,';
 $rows = db()->prepare(
     'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at, p.requires_option,
+            ' . $catSelect . '
             (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id AND o.active = 1) AS option_count,
             (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id AND e.active = 1) AS extra_count,
             (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) AS system_count,
@@ -40,6 +57,22 @@ $rows = db()->prepare(
 $rows->execute([$clientId]);
 $products = $rows->fetchAll();
 
+// Categories for this tenant, and products grouped by them (0 = ungrouped).
+$categories  = [];
+$catNameById = [];
+if ($hasCategories) {
+    $cs = db()->prepare('SELECT id, name FROM product_categories WHERE client_id = ? ORDER BY sort_order, name');
+    $cs->execute([$clientId]);
+    $categories = $cs->fetchAll();
+    foreach ($categories as $c) $catNameById[(int) $c['id']] = (string) $c['name'];
+}
+$grouped = [];
+foreach ($products as $p) {
+    $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
+    if ($cid > 0 && !isset($catNameById[$cid])) $cid = 0;   // stale id → ungrouped
+    $grouped[$cid][] = $p;
+}
+
 // "Ready to quote" = has at least one fabric AND at least one price
 // table. Systems and Options are nice-to-have but not strictly
 // required. The same check feeds the status pill on each row.
@@ -55,6 +88,78 @@ $isQuoteReady = static function (array $p): bool {
 // Friendly relative-time formatter — shared partial used by every
 // admin/products grid that has an Updated column.
 require_once __DIR__ . '/../../_partials/time_ago.php';
+
+// Render one product row. Shared across category groups so the markup stays
+// in one place. Captures the quote-ready check + the category list.
+$renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories): void {
+    $ready = $isQuoteReady($p);
+    if ((int) $p['active'] !== 1) {
+        $statusBg = 'var(--border)'; $statusFg = 'var(--text-secondary)'; $statusLabel = 'Inactive';
+    } elseif ($ready) {
+        $statusBg = '#d1fae5'; $statusFg = '#065f46'; $statusLabel = '✓ Ready';
+    } else {
+        $statusBg = '#fef3c7'; $statusFg = '#78350f';
+        $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
+        $missing = [];
+        if ($needsFabric && (int) $p['option_count'] === 0) $missing[] = 'fabric';
+        if ((int) $p['price_table_count'] === 0) $missing[] = 'price table';
+        $statusLabel = 'Needs ' . implode(' + ', $missing);
+    }
+    $ptHref = !empty($p['solo_system_id'])
+        ? '/admin/products/price-tables.php?system_id=' . (int) $p['solo_system_id']
+        : '/admin/products/systems.php?product_id='     . (int) $p['id'];
+    $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
+    ?>
+    <tr data-id="<?= (int) $p['id'] ?>">
+        <td>
+            <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>" class="product-name" style="text-decoration:none">
+                <?= e((string) $p['name']) ?>
+            </a>
+        </td>
+        <td>
+            <span style="display:inline-block;padding:0.1875rem 0.625rem;background:<?= $statusBg ?>;color:<?= $statusFg ?>;border-radius:999px;font-size:0.75rem;font-weight:600;white-space:nowrap">
+                <?= e($statusLabel) ?>
+            </span>
+        </td>
+        <td class="num"><a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['option_count'] ?></a></td>
+        <td class="num"><a href="/admin/products/systems.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['system_count'] ?></a></td>
+        <td class="num"><a href="/admin/products/extras.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['extra_count'] ?></a></td>
+        <td class="num"><a href="<?= e($ptHref) ?>"><?= (int) $p['price_table_count'] ?></a></td>
+        <?php if ($hasCategories): ?>
+            <td>
+                <form method="post" action="/admin/products/set-category.php" style="margin:0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="assign">
+                    <input type="hidden" name="product_id" value="<?= (int) $p['id'] ?>">
+                    <select name="category_id" onchange="this.form.submit()" class="group-select">
+                        <option value="0"<?= $cid === 0 ? ' selected' : '' ?>>— Ungrouped —</option>
+                        <?php foreach ($categories as $c): ?>
+                            <option value="<?= (int) $c['id'] ?>"<?= $cid === (int) $c['id'] ? ' selected' : '' ?>>
+                                <?= e((string) $c['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            </td>
+        <?php endif; ?>
+        <td class="meta-cell" title="<?= e((string) $p['updated_at']) ?>"><?= e(time_ago((string) $p['updated_at'])) ?></td>
+        <td class="row-actions">
+            <form method="post" action="/admin/products/duplicate.php" style="display:inline"
+                  data-confirm="Duplicate <?= e((string) $p['name']) ?>? Creates a full copy (systems, fabrics, options, choices, price tables) with '(copy)' appended to the name.">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                <button type="submit" style="color:#1f3b5b">Duplicate</button>
+            </form>
+            <form method="post" action="/admin/products/delete.php" style="display:inline"
+                  data-confirm="Delete <?= e((string) $p['name']) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                <button type="submit">Delete</button>
+            </form>
+        </td>
+    </tr>
+    <?php
+};
 
 $activeNav = 'products';
 ?><!doctype html>
@@ -81,6 +186,25 @@ $activeNav = 'products';
             font-size: 0.6875rem; font-weight: 600; color: var(--text-faint);
             background: var(--bg-subtle-2); border-radius: 999px; margin-left: 0.5rem;
             text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .cat-heading {
+            font-size: 1rem; color: var(--text-primary); margin: 1.25rem 0 0.5rem;
+            display: flex; align-items: center; gap: 0.4rem;
+        }
+        .cat-heading:first-of-type { margin-top: 0.25rem; }
+        .cat-count {
+            font-size: 0.75rem; font-weight: 600; color: var(--text-faint);
+            background: var(--bg-subtle-2); border-radius: 999px; padding: 0.0625rem 0.5rem;
+        }
+        .cat-del {
+            background: transparent; border: 0; color: var(--text-faint);
+            cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0;
+        }
+        .cat-del:hover { color: #b91c1c; }
+        .group-select {
+            padding: 0.25rem 0.4rem; font: inherit; font-size: 0.8125rem;
+            border: 1px solid var(--border-strong); border-radius: 6px;
+            background: var(--bg-input); color: var(--text-body); max-width: 11rem;
         }
     </style>
 </head>
@@ -163,134 +287,86 @@ $activeNav = 'products';
                     </div>
                 </div>
             <?php else: ?>
-                <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.5rem">
-                    Drag the <strong>⋮⋮</strong> handle on the left of any row to reorder.
-                    The <strong>Status</strong> column tells you if a product is ready to quote yet.
-                    <span class="reorder-status" id="reorder-status">Saving…</span>
-                </p>
-                <div class="table-wrap">
-                    <table class="table sortable-list" data-reorder-type="products">
-                        <thead>
-                            <tr>
-                                <th class="drag-col"></th>
-                                <th>Name</th>
-                                <th>Status</th>
-                                <th class="num">Fabrics</th>
-                                <th class="num">Systems</th>
-                                <th class="num">Options</th>
-                                <th class="num">Price tables</th>
-                                <th>Updated</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($products as $p):
-                                $ready = $isQuoteReady($p);
-                                if ((int) $p['active'] !== 1) {
-                                    $statusBg    = 'var(--border)'; $statusFg = 'var(--text-secondary)';
-                                    $statusLabel = 'Inactive';
-                                } elseif ($ready) {
-                                    $statusBg    = '#d1fae5'; $statusFg = '#065f46';
-                                    $statusLabel = '✓ Ready';
-                                } else {
-                                    $statusBg    = '#fef3c7'; $statusFg = '#78350f';
-                                    // Spell out what's missing so they don't have
-                                    // to click in to find out.
-                                    $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
-                                    $missing = [];
-                                    if ($needsFabric && (int) $p['option_count'] === 0) $missing[] = 'fabric';
-                                    if ((int) $p['price_table_count'] === 0) $missing[] = 'price table';
-                                    $statusLabel = 'Needs ' . implode(' + ', $missing);
-                                }
-                            ?>
-                                <tr data-id="<?= (int) $p['id'] ?>">
-                                    <td class="drag-col" title="Drag to reorder">⋮⋮</td>
-                                    <td>
-                                        <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>"
-                                           class="product-name"
-                                           style="text-decoration:none">
-                                            <?= e((string) $p['name']) ?>
-                                        </a>
-                                    </td>
-                                    <td>
-                                        <span style="display:inline-block;padding:0.1875rem 0.625rem;
-                                                     background:<?= $statusBg ?>;color:<?= $statusFg ?>;
-                                                     border-radius:999px;font-size:0.75rem;font-weight:600;
-                                                     white-space:nowrap">
-                                            <?= e($statusLabel) ?>
-                                        </span>
-                                    </td>
-                                    <td class="num">
-                                        <a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>">
-                                            <?= (int) $p['option_count'] ?>
-                                        </a>
-                                    </td>
-                                    <td class="num">
-                                        <a href="/admin/products/systems.php?product_id=<?= (int) $p['id'] ?>">
-                                            <?= (int) $p['system_count'] ?>
-                                        </a>
-                                    </td>
-                                    <td class="num">
-                                        <a href="/admin/products/extras.php?product_id=<?= (int) $p['id'] ?>">
-                                            <?= (int) $p['extra_count']  ?>
-                                        </a>
-                                    </td>
-                                    <td class="num">
-                                        <?php
-                                            // price-tables.php is system-scoped — go direct
-                                            // if there's exactly one system, else route
-                                            // through the systems list so the user can pick.
-                                            $ptHref = !empty($p['solo_system_id'])
-                                                ? '/admin/products/price-tables.php?system_id=' . (int) $p['solo_system_id']
-                                                : '/admin/products/systems.php?product_id='     . (int) $p['id'];
-                                        ?>
-                                        <a href="<?= e($ptHref) ?>">
-                                            <?= (int) $p['price_table_count'] ?>
-                                        </a>
-                                    </td>
-                                    <td class="meta-cell"
-                                        title="<?= e((string) $p['updated_at']) ?>">
-                                        <?= e(time_ago((string) $p['updated_at'])) ?>
-                                    </td>
-                                    <td class="row-actions">
-                                        <!--
-                                            Duplicate spawns a deep-copy of every
-                                            row tied to this product (systems,
-                                            fabrics, options, choices, price
-                                            tables, markups, discounts) and
-                                            drops the user on the new product's
-                                            edit page. Most useful when adding
-                                            a variant of an existing product —
-                                            e.g. "Premium" from "Standard".
-                                        -->
-                                        <form method="post"
-                                              action="/admin/products/duplicate.php"
-                                              style="display:inline"
-                                              data-confirm="Duplicate <?= e((string) $p['name']) ?>? Creates a full copy (systems, fabrics, options, choices, price tables) with '(copy)' appended to the name.">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                            <button type="submit" style="color:#1f3b5b">Duplicate</button>
-                                        </form>
-                                        <form method="post"
-                                              action="/admin/products/delete.php"
-                                              style="display:inline"
-                                              data-confirm="Delete <?= e((string) $p['name']) ?>? This removes all options, extras, and price tables linked to it. Cannot be undone.">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                            <button type="submit">Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
+                <?php if (!$hasCategories): ?>
+                    <div class="alert alert-error" role="alert">
+                        Product grouping isn't enabled yet — run
+                        <a href="/migrate_product_categories.php"><code>/migrate_product_categories.php</code></a>
+                        (super-admin) to file products under headings like "Woods".
+                    </div>
+                <?php else: ?>
+                    <form method="post" action="/admin/products/set-category.php"
+                          style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="create">
+                        <input type="text" name="name" class="form-control" maxlength="120"
+                               placeholder="New group name (e.g. Woods)" style="max-width:18rem">
+                        <button type="submit" class="btn btn-secondary">+ Add group</button>
+                        <span style="color:var(--text-faint);font-size:0.8125rem">
+                            Then use the <strong>Group</strong> dropdown on each row to file it. Products keep everything they have.
+                        </span>
+                    </form>
+                <?php endif; ?>
+
+                <?php
+                    // Shared table renderer for a set of product rows.
+                    $renderTable = function (array $rowsToShow) use ($renderRow, $hasCategories): void {
+                        ?>
+                        <div class="table-wrap">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th class="num">Fabrics</th>
+                                        <th class="num">Systems</th>
+                                        <th class="num">Options</th>
+                                        <th class="num">Price tables</th>
+                                        <?php if ($hasCategories): ?><th>Group</th><?php endif; ?>
+                                        <th>Updated</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($rowsToShow as $p) $renderRow($p); ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <?php
+                    };
+                ?>
+
+                <?php if ($hasCategories && $categories): ?>
+                    <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
+                        <h2 class="cat-heading">
+                            <?= e((string) $c['name']) ?>
+                            <span class="cat-count"><?= count($gRows) ?></span>
+                            <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
+                                  data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="_action" value="delete">
+                                <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                <button type="submit" class="cat-del">remove group</button>
+                            </form>
+                        </h2>
+                        <?php if ($gRows): $renderTable($gRows); else: ?>
+                            <p style="color:var(--text-faint);font-size:.875rem;margin:0 0 1.25rem">
+                                No products here yet — pick this group from a product's <strong>Group</strong> dropdown.
+                            </p>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+
+                    <?php $ung = $grouped[0] ?? []; if ($ung): ?>
+                        <h2 class="cat-heading">Ungrouped <span class="cat-count"><?= count($ung) ?></span></h2>
+                        <?php $renderTable($ung); ?>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <?php $renderTable($products); ?>
+                <?php endif; ?>
             <?php endif; ?>
         </section>
     </main>
 </div>
 
-<?php if ($products): require __DIR__ . '/../../_partials/sortable_init.php'; endif; ?>
 <?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
 </html>
