@@ -167,8 +167,9 @@ $activeNav = 'supplier-import';
                 <?php if ($masterId > 0): ?>
                     <strong><?= e($masterName !== '' ? $masterName : ('client #' . $masterId)) ?></strong>
                 <?php else: ?>the master account<?php endif; ?>
-                as products + price tables. It imports the <em>price grids only</em> — add systems and
-                fabrics to each product in <a href="/admin/products/index.php">Products</a> afterwards.
+                as products + price tables (each on an auto-created “Standard” system). It imports the
+                <em>price grids only</em> — add <strong>fabrics</strong> to each product in
+                <a href="/admin/products/index.php">Products</a> afterwards (and rename/split the system if needed).
                 Re-importing an updated file refreshes prices without creating duplicates.
             </p>
         </section>
