@@ -161,6 +161,7 @@ $navSections = [
         'collapsible' => true,
         'items'       => [
             'master-admin'  => ['/master-admin/index.php',          'Master Admin',     $isSuperAdmin],
+            'monitor'       => ['/master-admin/monitor.php',        'Monitor',          $isSuperAdmin],
             'master-catalogue' => ['/master-admin/master-catalogue.php', 'Master Catalogue', $isSuperAdmin],
             'library-suppliers' => ['/master-admin/library-suppliers.php', 'Library suppliers', $isSuperAdmin],
             'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups', $isSuperAdmin],
