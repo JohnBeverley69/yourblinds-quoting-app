@@ -202,6 +202,13 @@ $activeNav = 'products';
             cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0;
         }
         .cat-del:hover { color: #b91c1c; }
+        .cat-move-wrap { display: inline-flex; gap: 0.125rem; }
+        .cat-move {
+            background: var(--bg-subtle-2); border: 1px solid var(--border); color: var(--text-secondary);
+            cursor: pointer; font-size: 0.625rem; line-height: 1; border-radius: 5px;
+            padding: 0.1875rem 0.375rem;
+        }
+        .cat-move:hover { background: var(--bg-subtle); color: var(--text-primary); }
         .group-select {
             padding: 0.25rem 0.4rem; font: inherit; font-size: 0.8125rem;
             border: 1px solid var(--border-strong); border-radius: 6px;
@@ -350,11 +357,32 @@ $activeNav = 'products';
                     <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
                         Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
                     </p>
-                    <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
+                    <?php $catTotal = count($categories); ?>
+                    <?php foreach ($categories as $catIdx => $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
                         <div class="drop-zone" data-cat="<?= $cidd ?>">
                             <h2 class="cat-heading">
                                 <?= e((string) $c['name']) ?>
                                 <span class="cat-count"><?= count($gRows) ?></span>
+                                <span class="cat-move-wrap">
+                                    <?php if ($catIdx > 0): ?>
+                                        <form method="post" action="/admin/products/set-category.php" style="display:inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="move">
+                                            <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                            <input type="hidden" name="dir" value="up">
+                                            <button type="submit" class="cat-move" title="Move up">▲</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($catIdx < $catTotal - 1): ?>
+                                        <form method="post" action="/admin/products/set-category.php" style="display:inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="move">
+                                            <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                            <input type="hidden" name="dir" value="down">
+                                            <button type="submit" class="cat-move" title="Move down">▼</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </span>
                                 <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
                                       data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
                                     <?= csrf_field() ?>
