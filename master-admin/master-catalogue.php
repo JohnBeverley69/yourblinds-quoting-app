@@ -40,6 +40,52 @@ if ($masterId > 0) {
     } catch (Throwable $e) { /* leave blank */ }
 }
 
+// ── Deletes (only when logged in AS the master tenant). The DB cascades a
+//    product's systems / fabrics / extras / price tables; quotes survive
+//    because they snapshot their own data. ──────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    if (!$onMaster) {
+        $_SESSION['flash_error'] = 'Log in as the master account to delete catalogue products.';
+        header('Location: /master-admin/master-catalogue.php');
+        exit;
+    }
+    $act = (string) ($_POST['_action'] ?? '');
+    try {
+        if ($act === 'delete_product') {
+            $pid = (int) ($_POST['product_id'] ?? 0);
+            if ($pid > 0) {
+                $st = db()->prepare('DELETE FROM products WHERE id = ? AND client_id = ?');
+                $st->execute([$pid, $masterId]);
+                $_SESSION['flash_success'] = $st->rowCount() > 0 ? 'Product deleted.' : 'Nothing to delete.';
+            }
+        } elseif ($act === 'delete_supplier') {
+            $key = (string) ($_POST['supplier_key'] ?? '');
+            $sup = $suppliers[$key] ?? null;
+            $prefix = $sup ? (string) ($sup['prefix'] ?? '') : '';
+            if ($prefix !== '') {
+                // Escape LIKE wildcards in the prefix so it matches literally.
+                $likePrefix = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $prefix) . '%';
+                $st = db()->prepare('DELETE FROM products WHERE client_id = ? AND name LIKE ?');
+                $st->execute([$masterId, $likePrefix]);
+                $n = $st->rowCount();
+                $_SESSION['flash_success'] = 'Deleted ' . $n . ' product' . ($n === 1 ? '' : 's')
+                    . ' under ' . ((string) ($sup['name'] ?? $key)) . '.';
+            } else {
+                $_SESSION['flash_error'] = 'Unknown supplier — nothing deleted.';
+            }
+        }
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = 'Could not delete: ' . $e->getMessage();
+    }
+    header('Location: /master-admin/master-catalogue.php');
+    exit;
+}
+
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 // Pull every product on the master tenant with its child counts. Scalar
 // subqueries keep it to one round-trip; the tables are all core so this is
 // safe on any live schema.
@@ -115,6 +161,17 @@ $renderRows = function (array $rows) use ($onMaster): void {
             <td style="text-align:right"><?= (int) $p['fabrics'] ?></td>
             <td style="text-align:right"><?= (int) $p['extras'] ?></td>
             <td style="text-align:right"><?= number_format((int) $p['cells']) ?></td>
+            <?php if ($onMaster): ?>
+                <td style="text-align:right;white-space:nowrap">
+                    <form method="post" action="/master-admin/master-catalogue.php" style="margin:0;display:inline"
+                          data-confirm="Delete &quot;<?= e((string) $p['name']) ?>&quot; and all its systems, fabrics and price tables? Quotes already raised keep working. No undo.">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="delete_product">
+                        <input type="hidden" name="product_id" value="<?= $pid ?>">
+                        <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:.8125rem;padding:0">Delete</button>
+                    </form>
+                </td>
+            <?php endif; ?>
         </tr>
         <?php
     endforeach;
@@ -139,7 +196,7 @@ $activeNav = 'master-catalogue';
                 <h1 class="page-title">Master Catalogue</h1>
                 <p class="page-subtitle">
                     Every supplier price list held on the master account — the source the
-                    Price-List Library copies into subscribing clients. Read-only.
+                    Price-List Library copies into subscribing clients. Review, open or delete.
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -151,6 +208,13 @@ $activeNav = 'master-catalogue';
                 <?php endif; ?>
             </div>
         </div>
+
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
 
         <!-- Where the catalogue lives -->
         <section class="section">
@@ -209,10 +273,21 @@ $activeNav = 'master-catalogue';
                                 · <?= !empty($sup['free']) ? 'free' : 'paid' ?>
                             </span>
                         </h2>
-                        <div style="color:var(--text-muted);font-size:.8125rem">
-                            <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?>
-                            · <?= number_format($g['fabrics']) ?> fabrics
-                            · <?= number_format($g['cells']) ?> price cells
+                        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+                            <span style="color:var(--text-muted);font-size:.8125rem">
+                                <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?>
+                                · <?= number_format($g['fabrics']) ?> fabrics
+                                · <?= number_format($g['cells']) ?> price cells
+                            </span>
+                            <?php if ($onMaster && $rows): ?>
+                                <form method="post" action="/master-admin/master-catalogue.php" style="margin:0"
+                                      data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="_action" value="delete_supplier">
+                                    <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
+                                    <button type="submit" class="btn btn-secondary" style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete all</button>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <?php if (!$rows): ?>
@@ -228,7 +303,7 @@ $activeNav = 'master-catalogue';
                                         <th style="text-align:right">Systems</th>
                                         <th style="text-align:right">Fabrics</th>
                                         <th style="text-align:right">Options</th>
-                                        <th style="text-align:right">Price cells</th>
+                                        <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
                                     </tr>
                                 </thead>
                                 <tbody><?php $renderRows($rows); ?></tbody>
@@ -264,7 +339,7 @@ $activeNav = 'master-catalogue';
                                     <th style="text-align:right">Systems</th>
                                     <th style="text-align:right">Fabrics</th>
                                     <th style="text-align:right">Options</th>
-                                    <th style="text-align:right">Price cells</th>
+                                    <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
                                 </tr>
                             </thead>
                             <tbody><?php $renderRows($unassigned['rows']); ?></tbody>
@@ -275,5 +350,6 @@ $activeNav = 'master-catalogue';
         <?php endif; ?>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
