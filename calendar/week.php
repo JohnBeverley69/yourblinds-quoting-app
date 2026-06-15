@@ -442,6 +442,16 @@ $activeNav = 'calendar';
         .wk-card .wc-progress span.is-on {
             background: var(--prog-clr, #10b981);
         }
+        /* Solid-fill cards (parity with the month view). Inner text reads off
+           the luminance-aware --card-fg so it stays legible on any colour. */
+        .wk-card { color: var(--card-fg, var(--text-primary)); }
+        .wk-card .wc-title { color: var(--card-fg); }
+        .wk-card .wc-time,
+        .wk-card .wc-assignee { color: var(--card-fg); opacity: 0.82; }
+        .wk-card .wc-placeholder { color: var(--card-fg); opacity: 0.7; }
+        .wk-card .wc-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+        .wk-card .wc-progress span { background: var(--card-fg); opacity: 0.3; }
+        .wk-card .wc-progress span.is-on { background: var(--card-fg); opacity: 1; }
     </style>
 </head>
 <body>
@@ -530,7 +540,7 @@ $activeNav = 'calendar';
                             $height = $dayPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                             $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                             $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
-                            $stageTint = job_status_tint($stageClr, 0.22);
+                            $stageFg   = job_status_text_colour($stageClr);   // readable text on the solid fill
                             $title    = trim((string) ($appt['title'] ?? ''));
                             $custName = trim((string) ($appt['customer_name'] ?? ''));
                             $heading  = $custName !== ''
@@ -554,9 +564,10 @@ $activeNav = 'calendar';
                                title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                style="top:<?= $top ?>px;
                                       height:<?= $height ?>px;
-                                      background:<?= e($stageTint) ?>;
+                                      background:<?= e($stageClr) ?>;
                                       border-left-color:<?= e($stageClr) ?>;
-                                      color:var(--text-primary);
+                                      color:<?= e($stageFg) ?>;
+                                      --card-fg:<?= e($stageFg) ?>;
                                       --prog-clr:<?= e($prog['colour']) ?><?= e($outline) ?>;">
                                 <div class="wc-time">
                                     <?= e($timeLabel) ?>
