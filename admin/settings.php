@@ -377,6 +377,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'map_provider') {
+        // Which navigation app the address links open in (migrate_map_provider.php).
+        $prov = ((string) ($_POST['map_provider'] ?? 'google')) === 'waze' ? 'waze' : 'google';
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, map_provider)
+                 VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE map_provider = VALUES(map_provider)'
+            )->execute([$clientId, $prov]);
+            $_SESSION['flash_success'] = $prov === 'waze'
+                ? 'Address links will now open in Waze.'
+                : 'Address links will now open in Google Maps.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_map_provider.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'suppliers') {
         // Master suppliers list: add / rename / set email / remove, plus the
         // delivery address. Rows keyed by suppliers.id (empty id = a new row);
@@ -780,6 +800,36 @@ $activeNav = 'settings';
                             order value, amount received (deposit + payments) and outstanding balance —
                             with a PAID badge once it's settled. Leave unticked to keep figures off the
                             calendar (e.g. if fitters share the view).
+                        </p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+
+            <?php $mapProvider = (($settings['map_provider'] ?? 'google') === 'waze') ? 'waze' : 'google'; ?>
+            <form method="post" action="/admin/settings.php" class="form" novalidate
+                  style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="map_provider">
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:block;font-weight:600;margin-bottom:0.5rem;">🧭 Navigation app</label>
+                        <label style="display:inline-flex;align-items:center;gap:.5rem;margin-right:1.5rem;">
+                            <input type="radio" name="map_provider" value="google"
+                                   <?= $mapProvider === 'google' ? 'checked' : '' ?>>
+                            Google Maps
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:.5rem;">
+                            <input type="radio" name="map_provider" value="waze"
+                                   <?= $mapProvider === 'waze' ? 'checked' : '' ?>>
+                            Waze
+                        </label>
+                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                            When you tap an address on My Schedule or the day calendar, it opens in
+                            the app you choose here. Google Maps is the default; pick Waze if your
+                            fitters prefer it for live traffic and routing.
                         </p>
                     </div>
                 </div>

@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/maps.php';
 
 requireLogin();
 
@@ -119,8 +120,9 @@ $fmtAddress = static function (array $r): string {
     return implode(', ', $parts);
 };
 
-$mapsLink = static function (string $address): string {
-    return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($address);
+$mapProvider = map_provider_for($clientId);
+$mapsLink = static function (string $address) use ($mapProvider): string {
+    return map_nav_url($address, $mapProvider);
 };
 
 $telLink = static function (?string $phone): string {
