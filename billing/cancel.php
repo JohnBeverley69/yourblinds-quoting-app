@@ -46,6 +46,17 @@ if (!$plan || $planCode === 'free') {
 
 $sub    = billing_subscription_for_plan($clientId, $planCode);
 $subId  = (string) ($sub['external_subscription_id'] ?? '');
+
+// Minimum-term contract guard (Platinum is a 12-month contract). Refuse the
+// in-app cancel until the commitment date.
+$commitEnd = billing_commitment_end($clientId, $planCode);
+if ($commitEnd !== null) {
+    $_SESSION['flash_error'] = ($plan['name'] ?? $planCode)
+        . ' is a 12-month contract and can\'t be cancelled until '
+        . date('j M Y', strtotime($commitEnd)) . '.';
+    header('Location: /billing/index.php');
+    exit;
+}
 $reason = trim((string) ($_POST['reason'] ?? '')) ?: 'Cancelled from YourBlinds billing page';
 
 // If there's a PayPal subscription on record, ask PayPal to cancel it.

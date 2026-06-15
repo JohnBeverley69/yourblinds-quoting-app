@@ -2,60 +2,66 @@
 declare(strict_types=1);
 
 /**
- * Single source of truth for billing plans.
+ * Single source of truth for billing plans — a TIER LADDER.
+ *
+ * Bronze (free) → Silver → Gold → Platinum. Each tier is CUMULATIVE: it lists
+ * every feature flag it includes, so a Gold subscriber automatically gets
+ * Silver's features too (the grant engine in billing_helpers.php switches on a
+ * flag if ANY active plan lists it — so listing them on each tier "just works").
+ *
+ * A tenant is on exactly ONE paid tier at a time. Switching tier creates a new
+ * PayPal subscription and the old tier's subscription is cancelled on activation
+ * (see billing/return.php). The 'free' plan is the implicit baseline, always
+ * granted, no subscription needed.
  *
  * Each plan has:
- *   name          — short label shown to users.
- *   description   — one-line summary for the Billing page.
- *   price_gbp_monthly — DEFAULT, overridden by the plan_pricing DB
- *                       table once migrate_plan_pricing.php has run.
- *                       The DB row is what /master-admin/pricing.php
- *                       edits.
- *   features      — array of feature-flag column names (matches
- *                   _partials/feature_flags.php keys). When a tenant
- *                   has an active subscription (or comp) on this plan,
- *                   those flags are set to 1. When the subscription
- *                   lapses and there's no comp they're set back to 0.
+ *   name              — short label.
+ *   description       — one-line summary for the Billing page.
+ *   price_gbp_monthly — DEFAULT; the live figure is plan_pricing.price_gbp_monthly
+ *                       (edited on /master-admin/pricing.php).
+ *   features          — feature-flag column names this tier grants (cumulative).
+ *   tier              — ladder position (0 = Bronze/free, higher = more).
+ *   term_months       — minimum contract length in months (null = none). Platinum
+ *                       is a 12-month contract billed monthly: the PayPal plan is
+ *                       an ordinary monthly plan, and the commitment is enforced
+ *                       app-side (commitment_end_at + a cancel guard).
  *
- * Tenants can subscribe to any number of add-on plans independently —
- * one PayPal subscription per plan. The 'free' plan is the implicit
- * baseline and is always granted; it doesn't need a subscription.
- *
- * To add a new paid plan:
- *   1. Add an entry here.
- *   2. (Optional) Add new feature flag columns via SQL + the
- *      _partials/feature_flags.php registry.
- *   3. Re-run /migrate_plan_pricing.php so the plan_pricing table
- *      picks up the new code with its registry default price.
- *   4. From /master-admin/pricing.php, click "Create on PayPal" to
- *      create the matching PayPal Product + Plan. That's it — the
- *      add-on becomes subscribable from the tenant Billing page
- *      immediately.
+ * To change a tier's price: edit it on /master-admin/pricing.php, then click
+ * "Create on PayPal" (or update the PayPal plan). To add a tier: add an entry
+ * here, run /migrate_billing_tiers.php to seed its price, create its PayPal plan.
  */
 
 return [
     'free' => [
-        'name'              => 'Free',
-        'description'       => 'Calendar, quotes, customers, orders, products — the core platform.',
+        'name'              => 'Bronze',
+        'description'       => 'Create and send quotes, plus the core platform — calendar, customers, orders and products. Free, forever.',
         'price_gbp_monthly' => 0,
         'features'          => [],
+        'tier'              => 0,
+        'term_months'       => null,
     ],
-    'maps' => [
-        'name'              => 'Maps add-on',
-        'description'       => 'Drag-to-reorder run optimiser, customer-pin map view, "Let\'s go" link to Google Maps for each appointment.',
-        'price_gbp_monthly' => 3,
-        'features'          => ['feature_maps'],
+    'silver' => [
+        'name'              => 'Silver',
+        'description'       => 'Everything in Bronze, plus Maps (run optimiser, customer-pin map, "Let\'s go" links) and Postcode lookup.',
+        'price_gbp_monthly' => 20,
+        'features'          => ['feature_maps', 'feature_postcode_lookup'],
+        'tier'              => 1,
+        'term_months'       => null,
     ],
-    'postcode_lookup' => [
-        'name'              => 'Postcode lookup add-on',
-        'description'       => 'Auto-fill address from postcode when adding customers and creating quotes — fewer typos, faster data entry.',
-        'price_gbp_monthly' => 2,
-        'features'          => ['feature_postcode_lookup'],
+    'gold' => [
+        'name'              => 'Gold',
+        'description'       => 'Everything in Silver, plus Accounts — payment tracking, outstanding balances and the account summary.',
+        'price_gbp_monthly' => 40,
+        'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_accounts'],
+        'tier'              => 2,
+        'term_months'       => null,
     ],
-    'accounts' => [
-        'name'              => 'Accounts add-on',
-        'description'       => 'Payment tracking — record balance payments at install, see outstanding per order, account summary dashboard.',
-        'price_gbp_monthly' => 10,
-        'features'          => ['feature_accounts'],
+    'platinum' => [
+        'name'              => 'Platinum',
+        'description'       => 'Everything in Gold, plus Price updates — the Supplier Price-List Library. 12-month contract, billed monthly.',
+        'price_gbp_monthly' => 60,
+        'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_accounts', 'feature_price_library'],
+        'tier'              => 3,
+        'term_months'       => 12,
     ],
 ];
