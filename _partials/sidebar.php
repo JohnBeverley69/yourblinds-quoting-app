@@ -163,6 +163,7 @@ $navSections = [
             'master-admin'  => ['/master-admin/index.php',          'Master Admin',     $isSuperAdmin],
             'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups', $isSuperAdmin],
             'supplier-import' => ['/master-admin/supplier-import.php', 'Supplier import',  $isSuperAdmin],
+            'spell-check'   => ['/master-admin/spell-check.php',    'Spell-check',       $isSuperAdmin],
             'pricing'       => ['/master-admin/pricing.php',        'Pricing',          $isSuperAdmin],
             'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
             'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
