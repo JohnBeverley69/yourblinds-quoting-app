@@ -43,11 +43,46 @@ function library_master_client_id(): int
 }
 
 /**
- * The suppliers in the library. v1 is a curated config list (the master
- * registry / DB-backed version comes later). Each: key, name, the master-side
- * product-name prefix to copy, and whether it's free.
+ * The suppliers in the library, keyed by supplier_key. Each entry:
+ *   key, name, prefix (master-side product-name prefix to copy), free, blurb,
+ *   active.
+ *
+ * DB-backed (library_suppliers table) via migrate_library_registry.php. If that
+ * table isn't there yet we fall back to the built-in default so the site keeps
+ * working before the migration runs.
+ *
+ * @param bool $activeOnly true = only suppliers shown in the library (default);
+ *                         false = every row, for the management screen.
  */
-function library_suppliers(): array
+function library_suppliers(bool $activeOnly = true): array
+{
+    try {
+        $sql = 'SELECT supplier_key, name, prefix, is_free, blurb, active
+                  FROM library_suppliers';
+        if ($activeOnly) $sql .= ' WHERE active = 1';
+        $sql .= ' ORDER BY sort_order, name';
+
+        $out = [];
+        foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $key = (string) $r['supplier_key'];
+            $out[$key] = [
+                'key'    => $key,
+                'name'   => (string) $r['name'],
+                'prefix' => (string) $r['prefix'],
+                'free'   => ((int) $r['is_free']) === 1,
+                'blurb'  => (string) ($r['blurb'] ?? ''),
+                'active' => ((int) $r['active']) === 1,
+            ];
+        }
+        return $out;   // table present — its contents are authoritative (may be empty)
+    } catch (Throwable $e) {
+        // table absent (migration not run) — use the built-in default
+        return library_suppliers_default();
+    }
+}
+
+/** The pre-registry default — one free supplier. Used only before the migration runs. */
+function library_suppliers_default(): array
 {
     return [
         'beverley' => [
@@ -56,9 +91,8 @@ function library_suppliers(): array
             'prefix' => 'Bev',
             'free'   => true,
             'blurb'  => 'Our own trade range — free to every account. The quickest way to a full, priced catalogue.',
+            'active' => true,
         ],
-        // Further suppliers (Decora, Galaxy, …) get added here (or a DB registry)
-        // once their master catalogues are loaded. They'll have 'free' => false.
     ];
 }
 
