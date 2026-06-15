@@ -160,14 +160,10 @@ if ($items) {
 }
 
 // Active products for the line-item form (cascading dropdowns load the rest
-// via /quote-builder/api/product-data.php).
-$prodSt = db()->prepare(
-    'SELECT id, name FROM products
-      WHERE client_id = ? AND active = 1
-   ORDER BY sort_order, name'
-);
-$prodSt->execute([$clientId]);
-$products = $prodSt->fetchAll();
+// via /quote-builder/api/product-data.php). Grouped by category via the shared
+// product-picker helper.
+require_once __DIR__ . '/../_partials/product_picker.php';
+$products = product_picker_products($clientId);
 
 // Postcode lookup feature flag — gates the "Find by postcode" widget.
 $pcFlag = db()->prepare(
@@ -1014,12 +1010,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <label for="item-product">Product <span class="required">*</span></label>
                         <select id="item-product" name="product_id" required>
                             <option value="">Choose product...</option>
-                            <?php foreach ($products as $p): ?>
-                                <option value="<?= (int) $p['id'] ?>"
-                                    <?= ($editingItem && (int) $editingItem['product_id'] === (int) $p['id']) ? 'selected' : '' ?>>
-                                    <?= e((string) $p['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
+                            <?= product_picker_options_html($products, $editingItem ? (int) $editingItem['product_id'] : 0) ?>
                         </select>
                     </div>
                     <div class="form-group">

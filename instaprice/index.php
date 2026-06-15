@@ -31,12 +31,9 @@ $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
 
-// Active products for the picker.
-$prodStmt = db()->prepare(
-    'SELECT id, name FROM products WHERE client_id = ? AND active = 1 ORDER BY name'
-);
-$prodStmt->execute([$clientId]);
-$products = $prodStmt->fetchAll();
+// Active products for the picker, grouped by category via the shared helper.
+require_once __DIR__ . '/../_partials/product_picker.php';
+$products = product_picker_products($clientId);
 
 $activeNav = 'instaprice';
 ?><!doctype html>
@@ -127,9 +124,7 @@ $activeNav = 'instaprice';
                         <label for="ip-product">Product</label>
                         <select id="ip-product">
                             <option value="">Choose product…</option>
-                            <?php foreach ($products as $p): ?>
-                                <option value="<?= (int) $p['id'] ?>"><?= e((string) $p['name']) ?></option>
-                            <?php endforeach; ?>
+                            <?= product_picker_options_html($products, 0) ?>
                         </select>
                     </div>
                     <div class="ip-field">
