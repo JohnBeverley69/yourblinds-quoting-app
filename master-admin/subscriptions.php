@@ -30,6 +30,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/billing_helpers.php';
+require __DIR__ . '/../_partials/paypal.php';
 
 requireSuperAdmin();
 
@@ -51,6 +52,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $pdo = db();
+
+        // Re-sync one subscription's TRUE state from PayPal (handles webhook
+        // misses, and shows the real PayPal status). If it comes back active,
+        // run the tier-activation side-effects (commitment + supersede).
+        if ($action === 'resync') {
+            $targetClient = (int)    ($_POST['client_id'] ?? 0);
+            $plan         = (string) ($_POST['plan_code'] ?? '');
+            if ($targetClient <= 0 || $plan === '') throw new RuntimeException('Missing client/plan.');
+
+            $row = $pdo->prepare(
+                'SELECT external_subscription_id FROM tenant_subscriptions
+                  WHERE client_id = ? AND plan_code = ? LIMIT 1'
+            );
+            $row->execute([$targetClient, $plan]);
+            $extId = (string) ($row->fetchColumn() ?: '');
+            if ($extId === '') throw new RuntimeException('No PayPal subscription id on this row to re-sync.');
+            if (!paypal_is_configured()) throw new RuntimeException('PayPal is not configured on this server.');
+
+            $r = paypal_request('GET', '/v1/billing/subscriptions/' . rawurlencode($extId));
+            $full = $r['data'];
+            $ppStatus    = strtoupper((string) ($full['status'] ?? ''));
+            $localStatus = paypal_map_status($ppStatus);
+            $nbt = $full['billing_info']['next_billing_time'] ?? null;
+            $pe  = (is_string($nbt) && strlen($nbt) >= 10) ? substr($nbt, 0, 10) : null;
+
+            $pdo->prepare(
+                "UPDATE tenant_subscriptions
+                    SET status = ?, current_period_end = ?,
+                        cancelled_at = CASE WHEN ? = 'active' THEN NULL ELSE cancelled_at END
+                  WHERE client_id = ? AND plan_code = ?"
+            )->execute([$localStatus, $pe, $localStatus, $targetClient, $plan]);
+
+            if ($localStatus === 'active') billing_on_tier_activated($targetClient, $plan);
+            billing_sync_feature_flags_force($targetClient);
+
+            $_SESSION['flash_success'] = 'Re-synced ' . ((string) (billing_plan($plan)['name'] ?? $plan))
+                . ' from PayPal — PayPal says "' . $ppStatus . '" (recorded as ' . $localStatus . ').';
+            header('Location: /master-admin/subscriptions.php');
+            exit;
+        }
 
         if ($action === 'delete') {
             $targetClient = (int)    ($_POST['client_id'] ?? 0);
@@ -728,6 +769,13 @@ $activeNav = 'subscriptions';
                                         <?php if (!empty($r['cancelled_at'])): ?>
                                             &middot; cancelled <?= e(date('j M Y', strtotime((string) $r['cancelled_at']))) ?>
                                         <?php endif; ?>
+                                        <form method="post" action="/master-admin/subscriptions.php" style="display:inline;margin:0 0 0 0.5rem">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="action" value="resync">
+                                            <input type="hidden" name="client_id" value="<?= $cid ?>">
+                                            <input type="hidden" name="plan_code" value="<?= e($plan) ?>">
+                                            <button type="submit" style="background:transparent;border:0;color:#2563eb;cursor:pointer;font-size:0.75rem;padding:0;text-decoration:underline">↻ Re-sync from PayPal</button>
+                                        </form>
                                     </div>
                                 <?php endif; ?>
                             </div>
