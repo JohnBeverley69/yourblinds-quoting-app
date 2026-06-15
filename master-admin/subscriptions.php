@@ -93,6 +93,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        // Admin "Cancel on PayPal" — the ONLY in-app path that actually tells
+        // PayPal to stop billing (the tenant-side cancel is blocked for the
+        // Platinum 12-month contract; editing/deleting here is local-only).
+        // This is an admin override: it cancels on PayPal AND marks local.
+        if ($action === 'cancel_paypal') {
+            $targetClient = (int)    ($_POST['client_id'] ?? 0);
+            $plan         = (string) ($_POST['plan_code'] ?? '');
+            if ($targetClient <= 0 || $plan === '') throw new RuntimeException('Missing client/plan.');
+
+            $row = $pdo->prepare(
+                'SELECT external_subscription_id FROM tenant_subscriptions
+                  WHERE client_id = ? AND plan_code = ? LIMIT 1'
+            );
+            $row->execute([$targetClient, $plan]);
+            $extId = (string) ($row->fetchColumn() ?: '');
+
+            $cancelledOnPaypal = false;
+            $paypalNote = '';
+            if ($extId === '') {
+                $paypalNote = ' (no PayPal subscription id on record — nothing to cancel on PayPal).';
+            } elseif (!paypal_is_configured()) {
+                $paypalNote = ' (PayPal not configured on this server — cancel it in the PayPal dashboard).';
+            } else {
+                try {
+                    paypal_request(
+                        'POST',
+                        '/v1/billing/subscriptions/' . rawurlencode($extId) . '/cancel',
+                        ['reason' => 'Cancelled by administrator']
+                    );
+                    $cancelledOnPaypal = true;
+                } catch (Throwable $e) {
+                    error_log('Admin PayPal cancel failed: ' . $e->getMessage());
+                    $paypalNote = ' — but the PayPal cancel call did NOT confirm ('
+                        . $e->getMessage() . '). Check PayPal directly to be sure billing stopped.';
+                }
+            }
+
+            $pdo->prepare(
+                "UPDATE tenant_subscriptions
+                    SET status = 'cancelled', cancelled_at = NOW()
+                  WHERE client_id = ? AND plan_code = ?"
+            )->execute([$targetClient, $plan]);
+            billing_sync_feature_flags_force($targetClient);
+
+            $name = (string) (billing_plan($plan)['name'] ?? $plan);
+            $_SESSION['flash_success'] = $cancelledOnPaypal
+                ? 'Cancelled ' . $name . ' on PayPal and locally — billing stops, features off.'
+                : 'Marked ' . $name . ' cancelled locally' . $paypalNote;
+            header('Location: /master-admin/subscriptions.php');
+            exit;
+        }
+
         if ($action === 'delete') {
             $targetClient = (int)    ($_POST['client_id'] ?? 0);
             $plan         = (string) ($_POST['plan_code'] ?? '');
@@ -776,6 +828,16 @@ $activeNav = 'subscriptions';
                                             <input type="hidden" name="plan_code" value="<?= e($plan) ?>">
                                             <button type="submit" style="background:transparent;border:0;color:#2563eb;cursor:pointer;font-size:0.75rem;padding:0;text-decoration:underline">↻ Re-sync from PayPal</button>
                                         </form>
+                                        <?php if ($status !== 'cancelled'): ?>
+                                            <form method="post" action="/master-admin/subscriptions.php" style="display:inline;margin:0 0 0 0.5rem"
+                                                  data-confirm="Cancel the <?= e($plans[$plan]['name'] ?? $plan) ?> subscription for <?= e((string) $c['company_name']) ?> ON PAYPAL? This stops their billing immediately and turns the paid features off. Overrides any minimum-term contract.">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="action" value="cancel_paypal">
+                                                <input type="hidden" name="client_id" value="<?= $cid ?>">
+                                                <input type="hidden" name="plan_code" value="<?= e($plan) ?>">
+                                                <button type="submit" style="background:transparent;border:0;color:#b91c1c;cursor:pointer;font-size:0.75rem;padding:0;text-decoration:underline">✕ Cancel on PayPal</button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                             </div>
