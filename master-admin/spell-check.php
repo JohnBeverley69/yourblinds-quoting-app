@@ -15,8 +15,9 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireSuperAdmin();
 
-$user = current_user();
-$pdo  = db();
+$user     = current_user();
+$pdo      = db();
+$clientId = (int) $user['client_id'];   // scope to THIS tenant's catalogue so the edit links work
 
 // Common misspellings to scan for by default (includes the QA-reported four).
 $commonTypos = ['Venetain', 'Reccess', 'Controll', 'Wheight', 'Recieve', 'Seperate', 'Accessor', 'Aluminuim'];
@@ -37,13 +38,17 @@ $targets = [
 $hits = [];
 foreach ($terms as $term) {
     foreach ($targets as [$table, $col, $join, $label, $hint]) {
+        // For the products table the row IS the product (alias t); the other
+        // tables reach it via the JOIN (alias p). Pick the right alias for the
+        // id/name we link to and for the tenant scope.
+        $pa = ($join === '') ? 't' : 'p';
         try {
-            $sql = "SELECT t.$col AS value, p.id AS product_id, p.name AS product_name
+            $sql = "SELECT t.$col AS value, $pa.id AS product_id, $pa.name AS product_name
                       FROM $table t $join
-                     WHERE t.$col LIKE ?
+                     WHERE t.$col LIKE ? AND $pa.client_id = ?
                      LIMIT 50";
             $st = $pdo->prepare($sql);
-            $st->execute(['%' . $term . '%']);
+            $st->execute(['%' . $term . '%', $clientId]);
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $hits[] = [
                     'term'    => $term,
