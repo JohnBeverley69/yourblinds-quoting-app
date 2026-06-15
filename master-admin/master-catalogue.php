@@ -143,6 +143,7 @@ $activeNav = 'master-catalogue';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/master-admin/library-suppliers.php" class="btn btn-secondary">Library suppliers</a>
                 <a href="/master-admin/supplier-import.php" class="btn btn-secondary">Supplier import</a>
                 <a href="/master-admin/push-updates.php" class="btn btn-secondary">Push updates</a>
                 <?php if ($onMaster): ?>
