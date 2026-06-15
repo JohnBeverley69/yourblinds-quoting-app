@@ -1742,17 +1742,46 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             💬 Send via WhatsApp
                         </a>
                     <?php endif; ?>
-                    <a href="<?= e($publicUrl) ?>"
-                       class="btn btn-secondary" target="_blank" rel="noopener"
-                       title="Public URL — share manually if needed">
+                    <button type="button" id="copy-public-link"
+                            class="btn btn-secondary"
+                            data-url="<?= e($publicUrl) ?>"
+                            title="Copy the public URL to your clipboard">
                         🔗 Copy public link
-                    </a>
+                    </button>
                 </div>
                 <small style="display:block;color:var(--text-faint);font-size:0.8125rem;margin-top:0.625rem">
                     Public link: <code style="font-size:0.8125rem"><?= e($publicUrl) ?></code>
                 </small>
             </form>
         </section>
+
+        <script>
+        (function () {
+            var btn = document.getElementById('copy-public-link');
+            if (!btn) return;
+            var original = btn.textContent;
+            function flash() {
+                btn.textContent = '✓ Link copied!';
+                setTimeout(function () { btn.textContent = original; }, 1800);
+            }
+            function fallback(u) {
+                try {
+                    var ta = document.createElement('textarea');
+                    ta.value = u; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+                    document.body.appendChild(ta); ta.select();
+                    document.execCommand('copy'); document.body.removeChild(ta);
+                } catch (e) { /* last resort: the URL is shown below the button to copy by hand */ }
+            }
+            btn.addEventListener('click', function () {
+                var url = btn.getAttribute('data-url') || '';
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(flash, function () { fallback(url); flash(); });
+                } else {
+                    fallback(url); flash();
+                }
+            });
+        })();
+        </script>
 
         <!-- ============== DANGER ZONE ==============
              Status transitions / PDF buttons now live at the TOP of
@@ -1825,7 +1854,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             f.method = 'post';
             f.action = '/quote-builder/set_unit.php';
             f.innerHTML =
-                '<input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">'
+                '<input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">'
               + '<input type="hidden" name="quote_id" value="<?= (int) $id ?>">'
               + '<input type="hidden" name="unit" value="' + unitSel.value + '">';
             document.body.appendChild(f);

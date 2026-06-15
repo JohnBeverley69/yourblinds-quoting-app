@@ -792,12 +792,13 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                 'UPDATE appointments SET quote_id = ?
                   WHERE id = ? AND client_id = ? AND quote_id IS NULL'
             )->execute([$newId, $appointmentId, $clientId]);
-        } else {
-            // No prior appointment — walk-up / on-site quote. Give it a measure
-            // entry (today, assigned to the creator) so it appears on the
-            // consoles as a new customer with a chain to follow.
-            qb_create_measure_from_quote($pdo, $newId, $userId);
         }
+        // NB: previously a quote with no linked appointment auto-created a
+        // "completed today" measure appointment (the walk-up case). That fired
+        // for EVERY office-desk quote too, injecting fake completed events that
+        // polluted the calendar + job metrics (QA #003). Removed — a genuine
+        // walk-up can book an appointment explicitly. qb_create_measure_from_quote()
+        // is kept for a future opt-in "this was an on-site quote" tickbox.
 
         $pdo->commit();
         return ['id' => $newId, 'number' => $quoteNumber];
