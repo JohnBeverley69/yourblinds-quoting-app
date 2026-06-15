@@ -38,6 +38,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require __DIR__ . '/../_partials/calendar_money.php';
+require __DIR__ . '/../_partials/maps.php';
 
 requireLogin();
 
@@ -724,12 +725,10 @@ $activeNav = 'calendar';
                                 $phone = (string) ($appt['customer_phone'] ?? '');
                                 $email = (string) ($appt['customer_email'] ?? '');
 
-                                // Maps deep-link — Google's universal cross-platform
-                                // URL. Works on iOS / Android / desktop. If the
-                                // address is empty we just skip the icon.
-                                $mapsUrl = $addr !== ''
-                                    ? 'https://www.google.com/maps/search/?api=1&query=' . urlencode($addr)
-                                    : '';
+                                // Maps deep-link — opens in the tenant's chosen
+                                // app (Google Maps or Waze). Works on iOS /
+                                // Android / desktop. Blank address → no icon.
+                                $mapsUrl = map_nav_url($addr, map_provider_for($clientId));
 
                                 $title = trim((string) ($appt['title'] ?? ''));
                                 $custName = trim((string) ($appt['customer_name'] ?? ''));
