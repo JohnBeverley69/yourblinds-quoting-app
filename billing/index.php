@@ -71,8 +71,13 @@ foreach ($paidPlans as $code => $_p) {
         'trial'     => $trial,
         'subActive' => $subActive,
         'cta'       => $cta,
+        'commitEnd' => billing_commitment_end($clientId, $code),   // term contract: earliest cancel date (or null)
     ];
 }
+
+// Current tier (highest active rung) for the header strip.
+$currentTierCode = billing_current_tier_code($clientId);
+$currentTierName = (string) (billing_plan($currentTierCode)['name'] ?? 'Bronze');
 
 // Summary numbers for the header strip.
 //   $activeCount  = anything granting features right now (sub/comp/trial)
@@ -211,7 +216,7 @@ $activeNav = 'billing';
         <div class="page-header">
             <div>
                 <h1 class="page-title">Billing</h1>
-                <p class="page-subtitle">Add-ons for your account — subscribe or cancel any time.</p>
+                <p class="page-subtitle">Your plan tier — Bronze, Silver, Gold or Platinum. Upgrade or downgrade any time.</p>
             </div>
         </div>
 
@@ -225,13 +230,7 @@ $activeNav = 'billing';
         <section class="section">
             <div class="bill-summary">
                 <span class="bs-count">
-                    <?php if ($activeCount === 0): ?>
-                        Free plan only
-                    <?php elseif ($activeCount === 1): ?>
-                        1 add-on active
-                    <?php else: ?>
-                        <?= $activeCount ?> add-ons active
-                    <?php endif; ?>
+                    Your plan: <?= e($currentTierName) ?>
                 </span>
                 <?php if ($monthlyTotal > 0): ?>
                     <span class="bs-total">
@@ -258,7 +257,7 @@ $activeNav = 'billing';
 
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Available add-ons</h2>
+                <h2 class="section-title">Plans</h2>
             </div>
 
             <div class="plan-grid">
@@ -335,15 +334,22 @@ $activeNav = 'billing';
                                 <span class="p-comp">✓ Active — no charge</span>
 
                             <?php elseif ($cta === 'cancel'): ?>
-                                <form method="post" action="/billing/cancel.php"
-                                      style="margin:0"
-                                      data-confirm="Cancel <?= e($p['name']) ?>? Paid features for this add-on will turn off straight away.">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="plan_code" value="<?= e($code) ?>">
-                                    <button type="submit" class="btn-cancel">
-                                        Cancel subscription
-                                    </button>
-                                </form>
+                                <?php if ($st['commitEnd'] !== null): ?>
+                                    <span style="color:var(--text-secondary);font-size:0.8125rem">
+                                        🔒 12-month contract — earliest cancellation
+                                        <strong><?= e(date('j M Y', strtotime((string) $st['commitEnd']))) ?></strong>.
+                                    </span>
+                                <?php else: ?>
+                                    <form method="post" action="/billing/cancel.php"
+                                          style="margin:0"
+                                          data-confirm="Cancel <?= e($p['name']) ?> and drop back to Bronze (free)? Paid features turn off straight away.">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="plan_code" value="<?= e($code) ?>">
+                                        <button type="submit" class="btn-cancel">
+                                            Cancel subscription
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
 
                             <?php elseif ($cta === 'trial'): ?>
                                 <?php if (!$paypalReady || ($p['paypal_plan_id'] ?? '') === ''): ?>

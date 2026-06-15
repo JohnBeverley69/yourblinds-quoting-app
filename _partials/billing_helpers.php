@@ -310,6 +310,55 @@ function billing_plan_active_for(int $clientId, string $planCode): bool
         || billing_client_has_comp($clientId, $planCode);
 }
 
+/** Ladder position of a plan (0 = Bronze/free). */
+function billing_tier_order(string $planCode): int
+{
+    return (int) (billing_plan($planCode)['tier'] ?? 0);
+}
+
+/** Minimum-term length of a plan in months, or null if no contract. */
+function billing_plan_term_months(string $planCode): ?int
+{
+    $t = billing_plan($planCode)['term_months'] ?? null;
+    return $t === null ? null : (int) $t;
+}
+
+/**
+ * The tenant's current tier code — the HIGHEST-ladder plan that's active for
+ * them (by subscription or comp). 'free' (Bronze) if nothing paid is active.
+ */
+function billing_current_tier_code(int $clientId): string
+{
+    $best = 'free';
+    $bestOrder = 0;
+    foreach (billing_plans() as $code => $plan) {
+        $order = (int) ($plan['tier'] ?? 0);
+        if ($order <= $bestOrder) continue;
+        if (billing_plan_active_for($clientId, $code)) {
+            $best = $code;
+            $bestOrder = $order;
+        }
+    }
+    return $best;
+}
+
+/**
+ * Is this tenant inside a minimum-term commitment for this plan? (i.e. a
+ * term plan with commitment_end_at today or later — can't cancel in-app yet.)
+ * Returns the commitment end date (Y-m-d) if so, else null.
+ */
+function billing_commitment_end(int $clientId, string $planCode): ?string
+{
+    if (billing_plan_term_months($planCode) === null) return null;
+    $sub = billing_subscription_for_plan($clientId, $planCode);
+    $end = $sub ? (string) ($sub['commitment_end_at'] ?? '') : '';
+    if ($end === '') return null;
+    $endTs = strtotime($end);
+    $today = strtotime('today');
+    if ($endTs === false || $today === false) return null;
+    return $endTs >= $today ? substr($end, 0, 10) : null;
+}
+
 /**
  * "Does this tenant get this feature flag right now?"
  *
