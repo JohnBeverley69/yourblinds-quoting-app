@@ -39,24 +39,29 @@ $hits = [];
 foreach ($terms as $term) {
     foreach ($targets as [$table, $col, $join, $label, $hint]) {
         // For the products table the row IS the product (alias t); the other
-        // tables reach it via the JOIN (alias p). Pick the right alias for the
-        // id/name we link to and for the tenant scope.
+        // tables reach it via the JOIN (alias p). Super-admin tool → search
+        // EVERY tenant and report which business each match is in (the master
+        // catalogue may live in a different tenant than the one you're browsing).
         $pa = ($join === '') ? 't' : 'p';
         try {
-            $sql = "SELECT t.$col AS value, $pa.id AS product_id, $pa.name AS product_name
+            $sql = "SELECT t.$col AS value, $pa.id AS product_id, $pa.name AS product_name,
+                           $pa.client_id AS owner_id, c.company_name AS owner_name
                       FROM $table t $join
-                     WHERE t.$col LIKE ? AND $pa.client_id = ?
-                     LIMIT 50";
+                      JOIN clients c ON c.id = $pa.client_id
+                     WHERE t.$col LIKE ?
+                     LIMIT 100";
             $st = $pdo->prepare($sql);
-            $st->execute(['%' . $term . '%', $clientId]);
+            $st->execute(['%' . $term . '%']);
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $hits[] = [
-                    'term'    => $term,
-                    'kind'    => $label,
-                    'value'   => (string) ($r['value'] ?? ''),
-                    'product' => (string) ($r['product_name'] ?? ''),
-                    'pid'     => (int) ($r['product_id'] ?? 0),
-                    'hint'    => $hint,
+                    'term'       => $term,
+                    'kind'       => $label,
+                    'value'      => (string) ($r['value'] ?? ''),
+                    'product'    => (string) ($r['product_name'] ?? ''),
+                    'pid'        => (int) ($r['product_id'] ?? 0),
+                    'owner_id'   => (int) ($r['owner_id'] ?? 0),
+                    'owner_name' => (string) ($r['owner_name'] ?? ''),
+                    'hint'       => $hint,
                 ];
             }
         } catch (Throwable $e) {
@@ -119,21 +124,25 @@ $activeNav = 'spell-check';
                 <div class="table-wrap">
                     <table class="table">
                         <thead>
-                            <tr><th>Found</th><th>Where</th><th>In product</th><th>How to fix</th></tr>
+                            <tr><th>Found</th><th>Where</th><th>In product</th><th>Business</th><th>How to fix</th></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($hits as $h): ?>
+                                <?php $canEdit = ($h['owner_id'] === $clientId && $h['pid'] > 0); ?>
                                 <tr>
                                     <td><strong><?= e($h['value']) ?></strong></td>
                                     <td><?= e($h['kind']) ?></td>
                                     <td>
-                                        <?php if ($h['product'] !== ''): ?>
-                                            <?php if ($h['pid'] > 0): ?>
-                                                <a href="/admin/products/edit.php?id=<?= (int) $h['pid'] ?>"><?= e($h['product']) ?></a>
-                                            <?php else: ?><?= e($h['product']) ?><?php endif; ?>
-                                        <?php else: ?>&mdash;<?php endif; ?>
+                                        <?php if ($h['product'] === ''): ?>&mdash;
+                                        <?php elseif ($canEdit): ?>
+                                            <a href="/admin/products/edit.php?id=<?= (int) $h['pid'] ?>"><?= e($h['product']) ?></a>
+                                        <?php else: ?><?= e($h['product']) ?><?php endif; ?>
                                     </td>
-                                    <td style="color:var(--text-muted);font-size:0.8125rem"><?= e($h['hint']) ?></td>
+                                    <td><?= e($h['owner_name'] !== '' ? $h['owner_name'] : ('client #' . $h['owner_id'])) ?></td>
+                                    <td style="color:var(--text-muted);font-size:0.8125rem">
+                                        <?php if ($canEdit): ?><?= e($h['hint']) ?>
+                                        <?php else: ?>Log in as <strong><?= e($h['owner_name']) ?></strong>, then: <?= e($h['hint']) ?><?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
