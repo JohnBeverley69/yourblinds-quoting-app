@@ -7,6 +7,35 @@ declare(strict_types=1);
 require_once __DIR__ . '/../_partials/payments_ledger.php';
 
 /**
+ * The deposit that WOULD be due on acceptance, from the tenant's default deposit
+ * rule (percentage of total, or a flat amount, capped at the total). 0 if no
+ * rule / columns missing. Used to show "Deposit due on acceptance" on the admin
+ * side before a quote is accepted, mirroring the customer-facing prediction so
+ * office staff aren't left guessing (QA #002). Same maths as the public page.
+ */
+function qb_predicted_deposit(PDO $pdo, int $clientId, float $total): float
+{
+    if ($total <= 0) return 0.0;
+    try {
+        $st = $pdo->prepare(
+            'SELECT default_deposit_mode, default_deposit_percent, default_deposit_flat
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $st->execute([$clientId]);
+        $dp = $st->fetch();
+        if (!$dp) return 0.0;
+        if (((string) ($dp['default_deposit_mode'] ?? 'percent')) === 'flat') {
+            $amt = min((float) ($dp['default_deposit_flat'] ?? 0), $total);
+        } else {
+            $amt = $total * ((float) ($dp['default_deposit_percent'] ?? 50)) / 100;
+        }
+        return round(max(0.0, $amt), 2);
+    } catch (Throwable $e) {
+        return 0.0;
+    }
+}
+
+/**
  * Load a quote scoped to the given client. 404s if not found / wrong tenant.
  */
 function qb_load_quote_or_404(int $quoteId, int $clientId): array

@@ -1372,6 +1372,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
                                 <?php if ($editable): ?><td></td><?php endif; ?>
                             </tr>
+                            <?php
+                                // QA #002: before a quote is accepted (no deposit stored yet)
+                                // show the deposit that WILL be due, so office staff aren't left
+                                // guessing — mirrors the customer-facing "Deposit on acceptance".
+                                // Once accepted, deposit_amount is set and the Deposit panel
+                                // below takes over, so this row disappears.
+                                $predDep = (empty($quote['deposit_amount'])
+                                            && !in_array((string) $quote['status'], ['declined', 'paid'], true))
+                                    ? qb_predicted_deposit(db(), (int) $quote['client_id'], (float) $quote['total'])
+                                    : 0.0;
+                            ?>
+                            <?php if ($predDep > 0): ?>
+                            <tr class="totals-row">
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;color:var(--text-faint);font-size:0.875rem">Deposit due on acceptance</td>
+                                <td class="num" style="color:var(--text-faint);font-size:0.875rem"><?= e(qb_fmt_money($predDep)) ?></td>
+                                <?php if ($editable): ?><td></td><?php endif; ?>
+                            </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
