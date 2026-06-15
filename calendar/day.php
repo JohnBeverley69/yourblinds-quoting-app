@@ -589,6 +589,19 @@ $activeNav = 'calendar';
                 grid-template-columns: 3rem repeat(var(--cols, 1), 14rem);
             }
         }
+        /* Solid-fill cards (parity with the month view). Inner text reads off
+           the luminance-aware --card-fg set inline, so it stays legible on any
+           stage colour (light or dark). */
+        .appt-card { color: var(--card-fg, var(--text-primary)); }
+        .appt-card .ac-title { color: var(--card-fg); }
+        .appt-card .ac-time,
+        .appt-card .ac-desc,
+        .appt-card .ac-addr,
+        .appt-card .ac-phone { color: var(--card-fg); opacity: 0.82; }
+        .appt-card .ac-placeholder { color: var(--card-fg); opacity: 0.7; }
+        .appt-card .ac-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+        .appt-card .ac-progress span { background: var(--card-fg); opacity: 0.3; }
+        .appt-card .ac-progress span.is-on { background: var(--card-fg); opacity: 1; }
     </style>
 </head>
 <body>
@@ -700,7 +713,7 @@ $activeNav = 'calendar';
                                 $height = $colPos[$rowIdx]['height'] ?? $durationToHeight((int) ($appt['duration_minutes'] ?? 60));
                                 $apptKind  = (string) ($appt['appt_kind'] ?? 'measure');
                                 $stageClr  = job_stage_colour((string) ($appt['status'] ?? ''), $appt['quote_status'] ?? null, $stagePalette, $apptKind);
-                                $stageTint = job_status_tint($stageClr, 0.22);
+                                $stageFg   = job_status_text_colour($stageClr);   // readable text on the solid fill
                                 $isIssue   = !empty($appt['has_issue']);
                                 $issueTxt  = trim((string) ($appt['issue_note'] ?? ''));
                                 $dayOutline = $isIssue ? ';outline:2px solid ' . $issueColour . ';outline-offset:-2px'
@@ -772,9 +785,10 @@ $activeNav = 'calendar';
                                      title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                      style="top:<?= $top ?>px;
                                             height:<?= $height ?>px;
-                                            background:<?= e($stageTint) ?>;
+                                            background:<?= e($stageClr) ?>;
                                             border-left-color:<?= e($stageClr) ?>;
-                                            color:var(--text-primary);
+                                            color:<?= e($stageFg) ?>;
+                                            --card-fg:<?= e($stageFg) ?>;
                                             --prog-clr:<?= e($prog['colour']) ?><?= e($dayOutline) ?>;">
                                     <div class="ac-time">
                                         <?= e($timeLabel) ?>
