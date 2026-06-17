@@ -145,6 +145,15 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
         <?php endif; ?>
         <td class="meta-cell" title="<?= e((string) $p['updated_at']) ?>"><?= e(time_ago((string) $p['updated_at'])) ?></td>
         <td class="row-actions">
+            <?php $isActive = (int) $p['active'] === 1; ?>
+            <form method="post" action="/admin/products/set-active.php" style="display:inline">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                <input type="hidden" name="active" value="<?= $isActive ? 0 : 1 ?>">
+                <button type="submit" style="color:<?= $isActive ? '#92400e' : '#15803d' ?>">
+                    <?= $isActive ? 'Deactivate' : 'Activate' ?>
+                </button>
+            </form>
             <form method="post" action="/admin/products/duplicate.php" style="display:inline"
                   data-confirm="Duplicate <?= e((string) $p['name']) ?>? Creates a full copy (systems, fabrics, options, choices, price tables) with '(copy)' appended to the name.">
                 <?= csrf_field() ?>
