@@ -49,50 +49,73 @@ $matchField = static function (string $h): ?string {
 $readFabrics = static function (string $path) use ($matchField): array {
     $reader = IOFactory::createReaderForFile($path);
     $reader->setReadDataOnly(true);
-    $ws = $reader->load($path)->getActiveSheet();
+    $ss = $reader->load($path);
 
-    $maxRow = min((int) $ws->getHighestDataRow(), 5000);
-    $maxCol = Coordinate::columnIndexFromString($ws->getHighestDataColumn());
-    $maxCol = min($maxCol, 30);
+    $fabrics = []; $sheets = []; $skipped = 0;
 
-    // Find the header row: first of the top rows that maps a 'name' column plus
-    // at least one more recognised field.
-    $headerRow = 0; $mapped = [];
-    for ($r = 1; $r <= min($maxRow, 12); $r++) {
-        $cand = [];
-        for ($c = 1; $c <= $maxCol; $c++) {
-            $field = $matchField((string) $ws->getCell([$c, $r])->getValue());
-            if ($field !== null && !isset($cand[$field])) {
-                $cand[$field] = Coordinate::stringFromColumnIndex($c);
+    // Scan EVERY sheet — pick the fabric-list ones (header has a name column +
+    // colour or code) and skip price grids / chrome sheets automatically.
+    foreach ($ss->getSheetNames() as $sn) {
+        $ws = $ss->getSheetByName($sn);
+        if ($ws === null) continue;
+        $maxRow = min((int) $ws->getHighestDataRow(), 6000);
+        $maxCol = min(Coordinate::columnIndexFromString($ws->getHighestDataColumn()), 30);
+
+        $headerRow = 0; $mapped = [];
+        for ($r = 1; $r <= min($maxRow, 15); $r++) {
+            $cand = [];
+            for ($c = 1; $c <= $maxCol; $c++) {
+                $field = $matchField((string) $ws->getCell([$c, $r])->getValue());
+                if ($field !== null && !isset($cand[$field])) $cand[$field] = $c;
+            }
+            if (isset($cand['name']) && (isset($cand['colour']) || isset($cand['code']))) {
+                $headerRow = $r; $mapped = $cand; break;
             }
         }
-        if (isset($cand['name']) && count($cand) >= 2) { $headerRow = $r; $mapped = $cand; break; }
-    }
+        if ($headerRow === 0) continue;   // not a fabric sheet
 
-    $fabrics = []; $skipped = 0;
-    if ($headerRow > 0) {
-        $colIdx = [];
-        foreach ($mapped as $field => $letter) $colIdx[$field] = Coordinate::columnIndexFromString($letter);
+        // Blind type from the sheet name (e.g. "FB Roller Fabric" → "FB Roller").
+        $sheetType = trim((string) preg_replace('/\bfabrics?\b/i', '', $sn));
+        if ($sheetType === '') $sheetType = $sn;
+        $hasTypeCol = isset($mapped['blind_type']);
+
+        // Decora-style grouped layout: the fabric NAME + BAND appear once on the
+        // first row of a fabric; rows below are more COLOURS with name/band
+        // blank. Carry name + band down until the next named fabric.
+        $lastName = ''; $lastBand = ''; $count = 0;
         for ($r = $headerRow + 1; $r <= $maxRow; $r++) {
-            $get = static function (string $field) use ($ws, $colIdx, $r): string {
-                if (!isset($colIdx[$field])) return '';
-                return trim((string) $ws->getCell([$colIdx[$field], $r])->getValue());
+            $cell = static function (string $field) use ($ws, $mapped, $r): string {
+                return isset($mapped[$field]) ? trim((string) $ws->getCell([$mapped[$field], $r])->getValue()) : '';
             };
-            $name = $get('name');
-            if ($name === '') { continue; }                 // blank row
-            // Skip a repeated header / section divider.
-            if (strtolower($name) === 'name' || strtolower($name) === 'fabric') { $skipped++; continue; }
-            $band = $get('suggested_band');
+            $nm = $cell('name'); $col = $cell('colour'); $cd = $cell('code');
+            $bd = $cell('suggested_band'); $ty = $cell('blind_type');
+
+            if ($nm !== '') {
+                if (in_array(strtolower($nm), ['name', 'fabric'], true)) { $skipped++; continue; }  // repeated header
+                $lastName = $nm; $lastBand = $bd;   // a new fabric resets the carried band
+            }
+            $name = $lastName;
+            $band = $bd !== '' ? $bd : $lastBand;
+
+            if ($name === '') { if ($col !== '' || $cd !== '') $skipped++; continue; }  // colour before any named fabric
+            if ($col === '' && $cd === '' && $nm === '') continue;                       // blank row
+
             $fabrics[] = [
                 'name'           => mb_substr($name, 0, 160),
-                'colour'         => mb_substr($get('colour'), 0, 120) ?: null,
-                'code'           => mb_substr($get('code'), 0, 80) ?: null,
+                'colour'         => $col !== '' ? mb_substr($col, 0, 120) : null,
+                'code'           => $cd  !== '' ? mb_substr($cd, 0, 80)   : null,
                 'suggested_band' => $band !== '' ? strtoupper(mb_substr($band, 0, 20)) : null,
-                'blind_type'     => mb_substr($get('blind_type'), 0, 60) ?: null,
+                'blind_type'     => ($hasTypeCol && $ty !== '') ? mb_substr($ty, 0, 60) : mb_substr($sheetType, 0, 60),
             ];
+            $count++;
         }
+        $sheets[] = [
+            'name'   => $sn,
+            'count'  => $count,
+            'mapped' => array_map(fn ($c) => Coordinate::stringFromColumnIndex($c), $mapped),
+        ];
     }
-    return ['fabrics' => $fabrics, 'mapped' => $mapped, 'skipped' => $skipped, 'header_row' => $headerRow];
+    return ['fabrics' => $fabrics, 'sheets' => $sheets, 'skipped' => $skipped];
 };
 
 $result    = null;
@@ -248,17 +271,24 @@ $activeNav = 'fabric-library';
             <section class="section">
                 <?php if (!$result['fabrics']): ?>
                     <div class="alert alert-error" role="alert">
-                        Couldn't find a fabric table in that file. It needs a header row with at least a
-                        <strong>name</strong> column plus one of colour / code / band.
-                        <?php if (($result['header_row'] ?? 0) === 0): ?>(No header row was recognised.)<?php endif; ?>
+                        Couldn't find a fabric list in that file. A fabric sheet needs a header row
+                        with a <strong>name</strong> column plus a <strong>colour</strong> or
+                        <strong>code</strong> column. (Price-grid sheets are skipped automatically.)
                     </div>
                 <?php else: ?>
                     <div class="alert alert-success" style="margin-bottom:1rem">
                         Read <strong><?= count($result['fabrics']) ?></strong> fabric<?= count($result['fabrics']) === 1 ? '' : 's' ?>
+                        from <strong><?= count($result['sheets']) ?></strong> sheet<?= count($result['sheets']) === 1 ? '' : 's' ?>
                         <?php if ((int) $result['skipped'] > 0): ?>&middot; <?= (int) $result['skipped'] ?> rows skipped<?php endif; ?>
-                        &middot; columns mapped:
-                        <code><?= e(implode(', ', array_map(fn ($f, $c) => "$f→$c", array_keys($result['mapped']), array_values($result['mapped'])))) ?></code>
                         <?php if ($fileLabel !== ''): ?> &middot; <span style="color:var(--text-faint)"><?= e($fileLabel) ?></span><?php endif; ?>
+                        <div style="margin-top:.4rem;font-size:.8125rem;color:var(--text-muted)">
+                            <?php foreach ($result['sheets'] as $sh): ?>
+                                <span style="display:inline-block;margin-right:1.25rem">
+                                    <strong><?= e((string) $sh['name']) ?></strong>: <?= (int) $sh['count'] ?>
+                                    <span style="color:var(--text-faint)">[<?= e(implode(', ', array_map(fn ($f, $c) => "$f→$c", array_keys($sh['mapped']), array_values($sh['mapped'])))) ?>]</span>
+                                </span>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                     <div class="table-wrap">
                         <table class="table">
