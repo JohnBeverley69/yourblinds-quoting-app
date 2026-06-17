@@ -225,6 +225,17 @@ $activeNav = 'products';
         .cat-del:hover { color: #b91c1c; }
         .cat-bulk { background: transparent; border: 0; cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0; }
         .cat-bulk:hover { opacity: 0.8; }
+        .cat-toggle {
+            background: transparent; border: 0; cursor: pointer; color: var(--text-faint);
+            font-size: 0.7rem; padding: 0; margin-right: 0.1rem; transition: transform 120ms; transform-origin: center;
+        }
+        .cat-toggle.expanded { transform: rotate(90deg); }
+        .group-body.collapsed { display: none; }
+        .grp-tools { display: flex; gap: 0.5rem; margin: 0 0 0.5rem; }
+        .grp-tools button {
+            background: transparent; border: 0; color: var(--link); cursor: pointer;
+            font-size: 0.8125rem; text-decoration: underline; padding: 0;
+        }
         .cat-draggable { cursor: grab; }
         .cat-draggable:active { cursor: grabbing; }
         .cat-heading.dragging { opacity: 0.5; }
@@ -374,12 +385,18 @@ $activeNav = 'products';
                 ?>
 
                 <?php if ($hasCategories && $categories): ?>
+                    <div class="grp-tools">
+                        <button type="button" id="grp-expand-all">Expand all</button>
+                        <span style="color:var(--text-faint)">·</span>
+                        <button type="button" id="grp-collapse-all">Collapse all</button>
+                    </div>
                     <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
-                        Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
+                        Click a group's <strong>&#9654;</strong> to show its products. Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
                     </p>
                     <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>
                         <div class="drop-zone" data-cat="<?= $cidd ?>">
                             <h2 class="cat-heading cat-draggable" draggable="true" data-cat="<?= $cidd ?>" title="Drag to reorder groups">
+                                <button type="button" class="cat-toggle" data-target="gb-<?= $cidd ?>" draggable="false" aria-label="Show or hide products">&#9654;</button>
                                 <span class="cat-grip" aria-hidden="true">⠿</span>
                                 <?= e((string) $c['name']) ?>
                                 <span class="cat-count"><?= count($gRows) ?></span>
@@ -408,18 +425,25 @@ $activeNav = 'products';
                                     <button type="submit" class="cat-del">remove group</button>
                                 </form>
                             </h2>
-                            <?php if ($gRows): $renderTable($gRows); else: ?>
-                                <p class="drop-empty">Empty — drag a product's <strong>⋮⋮</strong> handle here, or pick this group from its <strong>Group</strong> dropdown.</p>
-                            <?php endif; ?>
+                            <div class="group-body collapsed" id="gb-<?= $cidd ?>">
+                                <?php if ($gRows): $renderTable($gRows); else: ?>
+                                    <p class="drop-empty">Empty — drag a product's <strong>⋮⋮</strong> handle here, or pick this group from its <strong>Group</strong> dropdown.</p>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
 
                     <?php $ung = $grouped[0] ?? []; ?>
                     <div class="drop-zone" data-cat="0">
-                        <h2 class="cat-heading">Ungrouped <span class="cat-count"><?= count($ung) ?></span></h2>
-                        <?php if ($ung): $renderTable($ung); else: ?>
-                            <p class="drop-empty">Nothing ungrouped — drag a product's <strong>⋮⋮</strong> handle here to remove it from its group.</p>
-                        <?php endif; ?>
+                        <h2 class="cat-heading">
+                            <button type="button" class="cat-toggle expanded" data-target="gb-0" draggable="false" aria-label="Show or hide products">&#9654;</button>
+                            Ungrouped <span class="cat-count"><?= count($ung) ?></span>
+                        </h2>
+                        <div class="group-body" id="gb-0">
+                            <?php if ($ung): $renderTable($ung); else: ?>
+                                <p class="drop-empty">Nothing ungrouped — drag a product's <strong>⋮⋮</strong> handle here to remove it from its group.</p>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 <?php else: ?>
                     <?php $renderTable($products); ?>
@@ -517,6 +541,44 @@ $activeNav = 'products';
                 dndForm.submit();
             });
         });
+    })();
+    </script>
+<?php endif; ?>
+<?php if ($hasCategories): ?>
+    <script>
+    (function () {
+        function setState(btn, body, open) {
+            body.classList.toggle('collapsed', !open);
+            btn.classList.toggle('expanded', open);
+        }
+        document.querySelectorAll('.cat-toggle').forEach(function (btn) {
+            var body = document.getElementById(btn.dataset.target);
+            if (!body) return;
+            var key = 'pg-' + btn.dataset.target;
+            var stored = localStorage.getItem(key);
+            if (stored === 'open')   setState(btn, body, true);
+            if (stored === 'closed') setState(btn, body, false);
+            // Don't let interacting with the caret start a group drag.
+            btn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation(); e.preventDefault();
+                var opening = body.classList.contains('collapsed');
+                setState(btn, body, opening);
+                localStorage.setItem(key, opening ? 'open' : 'closed');
+            });
+        });
+        function applyAll(open) {
+            document.querySelectorAll('.cat-toggle').forEach(function (btn) {
+                var body = document.getElementById(btn.dataset.target);
+                if (!body) return;
+                setState(btn, body, open);
+                localStorage.setItem('pg-' + btn.dataset.target, open ? 'open' : 'closed');
+            });
+        }
+        var ex = document.getElementById('grp-expand-all');
+        var col = document.getElementById('grp-collapse-all');
+        if (ex)  ex.addEventListener('click',  function () { applyAll(true); });
+        if (col) col.addEventListener('click', function () { applyAll(false); });
     })();
     </script>
 <?php endif; ?>
