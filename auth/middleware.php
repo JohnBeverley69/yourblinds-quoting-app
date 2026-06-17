@@ -280,8 +280,25 @@ function client_ip(): string
     return '0.0.0.0';
 }
 
-function rate_limited(string $ip, int $maxAttempts = 5, int $windowSeconds = 600): bool
+function rate_limited(string $ip, string $identifier = '', int $maxAttempts = 5, int $windowSeconds = 600): bool
 {
+    // Primary lock: N failed tries for THIS account from this IP. So fumbling
+    // one account's password locks only that account from this connection —
+    // not every account on the same network/router.
+    if ($identifier !== '') {
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM login_attempts
+              WHERE ip_address = ? AND identifier = ?
+                AND successful = 0
+                AND created_at > (NOW() - INTERVAL ? SECOND)'
+        );
+        $stmt->execute([$ip, $identifier, $windowSeconds]);
+        if ((int) $stmt->fetchColumn() >= $maxAttempts) return true;
+    }
+
+    // Backstop: a much higher IP-wide ceiling still stops one IP hammering
+    // lots of different accounts (rotating identifiers to dodge the per-
+    // account lock).
     $stmt = db()->prepare(
         'SELECT COUNT(*) FROM login_attempts
           WHERE ip_address = ?
@@ -289,7 +306,7 @@ function rate_limited(string $ip, int $maxAttempts = 5, int $windowSeconds = 600
             AND created_at > (NOW() - INTERVAL ? SECOND)'
     );
     $stmt->execute([$ip, $windowSeconds]);
-    return (int) $stmt->fetchColumn() >= $maxAttempts;
+    return (int) $stmt->fetchColumn() >= ($maxAttempts * 4);
 }
 
 function record_login_attempt(string $ip, string $identifier, bool $success): void
