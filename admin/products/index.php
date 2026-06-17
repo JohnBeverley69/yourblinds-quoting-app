@@ -92,7 +92,11 @@ require_once __DIR__ . '/../../_partials/time_ago.php';
 // Render one product row. Shared across category groups so the markup stays
 // in one place. Captures the quote-ready check + the category list.
 $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories): void {
-    $ready = $isQuoteReady($p);
+    $ready  = $isQuoteReady($p);
+    $ptHref = !empty($p['solo_system_id'])
+        ? '/admin/products/price-tables.php?system_id=' . (int) $p['solo_system_id']
+        : '/admin/products/systems.php?product_id='     . (int) $p['id'];
+    $fixHref = null;   // when not ready, where clicking the status takes you
     if ((int) $p['active'] !== 1) {
         $statusBg = 'var(--border)'; $statusFg = 'var(--text-secondary)'; $statusLabel = 'Inactive';
     } elseif ($ready) {
@@ -104,10 +108,11 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
         if ($needsFabric && (int) $p['option_count'] === 0) $missing[] = 'fabric';
         if ((int) $p['price_table_count'] === 0) $missing[] = 'price table';
         $statusLabel = 'Needs ' . implode(' + ', $missing);
+        // Click the pill to jump straight to what's missing: fabrics first, else price tables.
+        $fixHref = ($needsFabric && (int) $p['option_count'] === 0)
+            ? '/admin/products/options.php?product_id=' . (int) $p['id']
+            : $ptHref;
     }
-    $ptHref = !empty($p['solo_system_id'])
-        ? '/admin/products/price-tables.php?system_id=' . (int) $p['solo_system_id']
-        : '/admin/products/systems.php?product_id='     . (int) $p['id'];
     $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
     ?>
     <tr data-id="<?= (int) $p['id'] ?>" draggable="true">
@@ -118,9 +123,16 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
             </a>
         </td>
         <td>
-            <span style="display:inline-block;padding:0.1875rem 0.625rem;background:<?= $statusBg ?>;color:<?= $statusFg ?>;border-radius:999px;font-size:0.75rem;font-weight:600;white-space:nowrap">
-                <?= e($statusLabel) ?>
-            </span>
+            <?php if ($fixHref !== null): ?>
+                <a href="<?= e($fixHref) ?>" title="Click to add what's missing"
+                   style="display:inline-block;padding:0.1875rem 0.625rem;background:<?= $statusBg ?>;color:<?= $statusFg ?>;border-radius:999px;font-size:0.75rem;font-weight:600;white-space:nowrap;text-decoration:none">
+                    <?= e($statusLabel) ?> &rarr;
+                </a>
+            <?php else: ?>
+                <span style="display:inline-block;padding:0.1875rem 0.625rem;background:<?= $statusBg ?>;color:<?= $statusFg ?>;border-radius:999px;font-size:0.75rem;font-weight:600;white-space:nowrap">
+                    <?= e($statusLabel) ?>
+                </span>
+            <?php endif; ?>
         </td>
         <td class="num"><a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['option_count'] ?></a></td>
         <td class="num"><a href="/admin/products/systems.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['system_count'] ?></a></td>
