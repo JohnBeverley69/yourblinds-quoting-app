@@ -503,6 +503,8 @@ $activeNav = 'products';
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>"
                    class="btn btn-secondary">&larr; Back to setup wizard</a>
+                <a href="/admin/products/options-from-library.php?product_id=<?= (int) $productId ?>"
+                   class="btn btn-secondary">Add from fabric library</a>
                 <a href="/admin/products/options-copy.php?product_id=<?= (int) $productId ?>"
                    class="btn btn-secondary">Copy from another product</a>
                 <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>"
