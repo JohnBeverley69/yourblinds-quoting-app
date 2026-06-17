@@ -81,6 +81,18 @@ try {
                 ->execute([$catId, $clientId]);
             $_SESSION['flash_success'] = 'Category removed. Its products are now ungrouped.';
         }
+    } elseif ($action === 'set_group_active') {
+        // Activate / deactivate every product in a group at once. Tenant-scoped:
+        // only this client's products carrying this client's category id match.
+        $catId  = (int) ($_POST['category_id'] ?? 0);
+        $active = !empty($_POST['active']) ? 1 : 0;
+        if ($catId > 0) {
+            $st = $pdo->prepare('UPDATE products SET active = ? WHERE category_id = ? AND client_id = ?');
+            $st->execute([$active, $catId, $clientId]);
+            $n = $st->rowCount();
+            $_SESSION['flash_success'] = $n . ' product' . ($n === 1 ? '' : 's') . ' '
+                . ($active ? 'activated' : 'deactivated') . '.';
+        }
     } elseif ($action === 'reorder_groups') {
         // Drag-reorder: write sort_order from the posted id sequence. Only
         // touches categories belonging to this tenant.
