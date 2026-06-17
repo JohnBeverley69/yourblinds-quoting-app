@@ -154,6 +154,7 @@ $activeNav = 'fabric-library';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a href="/master-admin/fabric-import.php" class="btn btn-primary">Import fabrics</a>
                 <a href="/master-admin/master-catalogue.php" class="btn btn-secondary">Master Catalogue</a>
             </div>
         </div>
