@@ -223,6 +223,8 @@ $activeNav = 'products';
             cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0;
         }
         .cat-del:hover { color: #b91c1c; }
+        .cat-bulk { background: transparent; border: 0; cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0; }
+        .cat-bulk:hover { opacity: 0.8; }
         .cat-draggable { cursor: grab; }
         .cat-draggable:active { cursor: grabbing; }
         .cat-heading.dragging { opacity: 0.5; }
@@ -381,6 +383,23 @@ $activeNav = 'products';
                                 <span class="cat-grip" aria-hidden="true">⠿</span>
                                 <?= e((string) $c['name']) ?>
                                 <span class="cat-count"><?= count($gRows) ?></span>
+                                <?php if ($gRows): ?>
+                                    <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
+                                          data-confirm="Deactivate all <?= count($gRows) ?> products in &quot;<?= e((string) $c['name']) ?>&quot;? They'll be hidden from new quotes (reversible).">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="_action" value="set_group_active">
+                                        <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                        <input type="hidden" name="active" value="0">
+                                        <button type="submit" class="cat-bulk" style="color:#92400e">Deactivate all</button>
+                                    </form>
+                                    <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.35rem">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="_action" value="set_group_active">
+                                        <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                        <input type="hidden" name="active" value="1">
+                                        <button type="submit" class="cat-bulk" style="color:#15803d">Activate all</button>
+                                    </form>
+                                <?php endif; ?>
                                 <form method="post" action="/admin/products/set-category.php" style="display:inline;margin-left:.5rem"
                                       data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its products are NOT deleted — they just become ungrouped.">
                                     <?= csrf_field() ?>
