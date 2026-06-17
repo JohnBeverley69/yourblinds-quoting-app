@@ -26,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ip         = client_ip();
 
     // Rate limit BEFORE we touch the DB — defends against enumeration timing.
-    if (rate_limited($ip)) {
+    // Keyed on (ip, identifier) so a fumbled password on one account doesn't
+    // lock out every account on the same connection.
+    if (rate_limited($ip, $identifier)) {
         $error = 'Too many failed attempts. Please wait a few minutes and try again.';
     } elseif ($identifier === '' || $password === '') {
         $error = 'Please enter your username or email and password.';
