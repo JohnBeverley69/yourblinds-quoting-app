@@ -733,6 +733,12 @@ $activeNav = 'products';
                             class="btn btn-secondary btn-sm" disabled>
                         Delete selected
                     </button>
+                    <span style="color:var(--text-faint)">&middot;</span>
+                    <input type="text" id="setband-input" maxlength="20" placeholder="band"
+                           style="width:4rem;padding:.25rem .4rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input);text-transform:uppercase">
+                    <button type="button" id="setband-btn" class="btn btn-secondary btn-sm" disabled>
+                        Set band on selected
+                    </button>
                     <span class="selected-count" id="bulk-count">No rows selected</span>
                 </div>
                 <form id="bulk-form" method="post" action="/admin/products/option-delete.php">
@@ -849,6 +855,8 @@ $activeNav = 'products';
     var allRows  = form.querySelectorAll('tbody tr[data-search]');
     var btn      = document.getElementById('bulk-delete-btn');
     var counter  = document.getElementById('bulk-count');
+    var setBtn   = document.getElementById('setband-btn');
+    var setInput = document.getElementById('setband-input');
 
     // ── Filter search ───────────────────────────────────────────
     //
@@ -929,6 +937,7 @@ $activeNav = 'products';
         var n   = ids.length;
         var visBoxes = visibleRowBoxes();
         btn.disabled = n === 0;
+        if (setBtn) setBtn.disabled = n === 0;
         if (n === 0) {
             counter.textContent = 'No rows selected';
         } else {
@@ -954,6 +963,19 @@ $activeNav = 'products';
         if (confirm('Delete ' + n + ' selected row' + (n === 1 ? '' : 's') + '? This cannot be undone.')) {
             form.submit();
         }
+    });
+
+    // Bulk re-band: post the same selected ids to option-set-band.php with a band.
+    if (setBtn) setBtn.addEventListener('click', function () {
+        var ids = checkedIds();
+        if (!ids.length) { alert('Tick the fabrics you want to re-band first.'); return; }
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'band_code';
+        hidden.value = setInput ? setInput.value.trim() : '';
+        form.appendChild(hidden);
+        form.action = '/admin/products/option-set-band.php';
+        form.submit();
     });
 
     // Per-row Delete buttons reuse the same bulk form: clear all checkboxes,
