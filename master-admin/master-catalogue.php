@@ -185,6 +185,29 @@ $activeNav = 'master-catalogue';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Master Catalogue &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+    <style>
+        details.cat-supplier { margin: 0; }
+        details.cat-supplier > summary {
+            list-style: none; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: baseline;
+            gap: 1rem; flex-wrap: wrap; padding: 0.25rem 0;
+        }
+        details.cat-supplier > summary::-webkit-details-marker { display: none; }
+        details.cat-supplier .tw {
+            display: inline-block; color: var(--text-faint); font-size: 0.75rem;
+            transition: transform 120ms; transform-origin: center;
+        }
+        details.cat-supplier[open] > summary .tw { transform: rotate(90deg); }
+        details.cat-supplier .sup-name { font-weight: 700; font-size: 1.05rem; color: var(--text-primary); }
+        details.cat-supplier .sup-meta { font-size: 0.75rem; color: var(--text-faint); font-weight: 500; }
+        details.cat-supplier .sup-counts { color: var(--text-muted); font-size: 0.8125rem; }
+        details.cat-supplier .sup-body { margin-top: 0.75rem; }
+        .cat-tools { display: flex; gap: 0.5rem; margin: 0 0 0.5rem; }
+        .cat-tools button {
+            background: transparent; border: 0; color: var(--link); cursor: pointer;
+            font-size: 0.8125rem; text-decoration: underline; padding: 0;
+        }
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -259,97 +282,117 @@ $activeNav = 'master-catalogue';
         <?php endif; ?>
 
         <?php if ($masterId > 0 && $loadError === null): ?>
-            <!-- One section per supplier -->
+            <div class="cat-tools">
+                <button type="button" id="cat-expand">Expand all</button>
+                <span style="color:var(--text-faint)">·</span>
+                <button type="button" id="cat-collapse">Collapse all</button>
+            </div>
+            <!-- One collapsible section per supplier (collapsed by default) -->
             <?php foreach ($groups as $key => $g):
                 $sup  = $g['supplier'];
                 $rows = $g['rows'];
             ?>
                 <section class="section">
-                    <div class="section-header" style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
-                        <h2 class="section-title" style="margin:0">
-                            <?= e((string) $sup['name']) ?>
-                            <span style="font-size:.75rem;color:var(--text-faint);font-weight:500">
-                                prefix “<?= e((string) ($sup['prefix'] ?? '')) ?>”
-                                · <?= !empty($sup['free']) ? 'free' : 'paid' ?>
+                    <details class="cat-supplier">
+                        <summary>
+                            <span style="display:flex;align-items:baseline;gap:.4rem">
+                                <span class="tw">&#9654;</span>
+                                <span class="sup-name">
+                                    <?= e((string) $sup['name']) ?>
+                                    <span class="sup-meta">prefix “<?= e((string) ($sup['prefix'] ?? '')) ?>” · <?= !empty($sup['free']) ? 'free' : 'paid' ?></span>
+                                </span>
                             </span>
-                        </h2>
-                        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-                            <span style="color:var(--text-muted);font-size:.8125rem">
+                            <span class="sup-counts">
                                 <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?>
                                 · <?= number_format($g['fabrics']) ?> fabrics
                                 · <?= number_format($g['cells']) ?> price cells
                             </span>
-                            <?php if ($onMaster && $rows): ?>
-                                <form method="post" action="/master-admin/master-catalogue.php" style="margin:0"
-                                      data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="_action" value="delete_supplier">
-                                    <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
-                                    <button type="submit" class="btn btn-secondary" style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete all</button>
-                                </form>
+                        </summary>
+                        <div class="sup-body">
+                            <?php if (!$rows): ?>
+                                <p style="color:var(--text-faint);margin:0">
+                                    No products carry the “<?= e((string) ($sup['prefix'] ?? '')) ?>” prefix yet.
+                                </p>
+                            <?php else: ?>
+                                <?php if ($onMaster): ?>
+                                    <form method="post" action="/master-admin/master-catalogue.php" style="margin:0 0 .625rem"
+                                          data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="_action" value="delete_supplier">
+                                        <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
+                                        <button type="submit" class="btn btn-secondary" style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete all</button>
+                                    </form>
+                                <?php endif; ?>
+                                <div class="table-wrap">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th style="text-align:right">Systems</th>
+                                                <th style="text-align:right">Fabrics</th>
+                                                <th style="text-align:right">Options</th>
+                                                <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
+                                            </tr>
+                                        </thead>
+                                        <tbody><?php $renderRows($rows); ?></tbody>
+                                    </table>
+                                </div>
                             <?php endif; ?>
                         </div>
-                    </div>
-                    <?php if (!$rows): ?>
-                        <p style="color:var(--text-faint);margin:.5rem 0 0">
-                            No products carry the “<?= e((string) ($sup['prefix'] ?? '')) ?>” prefix yet.
-                        </p>
-                    <?php else: ?>
-                        <div class="table-wrap">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th style="text-align:right">Systems</th>
-                                        <th style="text-align:right">Fabrics</th>
-                                        <th style="text-align:right">Options</th>
-                                        <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
-                                    </tr>
-                                </thead>
-                                <tbody><?php $renderRows($rows); ?></tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
+                    </details>
                 </section>
             <?php endforeach; ?>
 
             <!-- Unassigned products (no supplier prefix) -->
             <?php if ($unassigned['rows']): ?>
                 <section class="section">
-                    <div class="section-header" style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
-                        <h2 class="section-title" style="margin:0">
-                            Unassigned
-                            <span style="font-size:.75rem;color:var(--text-faint);font-weight:500">no supplier prefix</span>
-                        </h2>
-                        <div style="color:var(--text-muted);font-size:.8125rem">
-                            <?= count($unassigned['rows']) ?> product<?= count($unassigned['rows']) === 1 ? '' : 's' ?>
-                            · <?= number_format($unassigned['cells']) ?> price cells
+                    <details class="cat-supplier">
+                        <summary>
+                            <span style="display:flex;align-items:baseline;gap:.4rem">
+                                <span class="tw">&#9654;</span>
+                                <span class="sup-name">Unassigned <span class="sup-meta">no supplier prefix</span></span>
+                            </span>
+                            <span class="sup-counts">
+                                <?= count($unassigned['rows']) ?> product<?= count($unassigned['rows']) === 1 ? '' : 's' ?>
+                                · <?= number_format($unassigned['cells']) ?> price cells
+                            </span>
+                        </summary>
+                        <div class="sup-body">
+                            <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem;line-height:1.5">
+                                These products don't start with any supplier prefix, so the library
+                                won't copy them to clients. Rename them with a supplier prefix to
+                                include them, or leave them as the master account's own products.
+                            </p>
+                            <div class="table-wrap">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th style="text-align:right">Systems</th>
+                                            <th style="text-align:right">Fabrics</th>
+                                            <th style="text-align:right">Options</th>
+                                            <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
+                                        </tr>
+                                    </thead>
+                                    <tbody><?php $renderRows($unassigned['rows']); ?></tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                    <p style="color:var(--text-faint);font-size:.8125rem;margin:.25rem 0 .75rem;line-height:1.5">
-                        These products don't start with any supplier prefix, so the library
-                        won't copy them to clients. Rename them with a supplier prefix to
-                        include them, or leave them as the master account's own products.
-                    </p>
-                    <div class="table-wrap">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th style="text-align:right">Systems</th>
-                                    <th style="text-align:right">Fabrics</th>
-                                    <th style="text-align:right">Options</th>
-                                    <th style="text-align:right">Price cells</th><?php if ($onMaster): ?><th></th><?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody><?php $renderRows($unassigned['rows']); ?></tbody>
-                        </table>
-                    </div>
+                    </details>
                 </section>
             <?php endif; ?>
         <?php endif; ?>
     </main>
 </div>
+<script>
+(function () {
+    var all = function () { return document.querySelectorAll('details.cat-supplier'); };
+    var ex  = document.getElementById('cat-expand');
+    var col = document.getElementById('cat-collapse');
+    if (ex)  ex.addEventListener('click',  function () { all().forEach(function (d) { d.open = true; }); });
+    if (col) col.addEventListener('click', function () { all().forEach(function (d) { d.open = false; }); });
+})();
+</script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
