@@ -42,7 +42,24 @@ $supplier    = $suppliers[$supplierKey] ?? null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
+    if ($mode === 'import_session') {
+        // Import the JUST-PREVIEWED grids — no need to re-select the file (the
+        // browser can't keep it in the upload box across a reload).
+        $pv = $_SESSION['supplier_preview'] ?? null;
+        if (!$pv) {
+            $error = 'That preview has expired — please choose the file and preview again.';
+        } elseif ($supplier === null) {
+            $error = 'Choose which supplier to import into.';
+        } elseif ($masterId <= 0) {
+            $error = 'No master tenant could be resolved to import into.';
+        } else {
+            $result    = $pv['data'];
+            $fileLabel = (string) ($pv['file'] ?? '');
+            require_once __DIR__ . '/../_partials/supplier_catalogue_writer.php';
+            $importSummary = supplier_import_to_catalogue(db(), $masterId, (string) $supplier['prefix'], $result);
+            unset($_SESSION['supplier_preview']);
+        }
+    } elseif (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
         $error = 'Please choose a file.';
     } elseif ($mode === 'import' && $supplier === null) {
         $error = 'Choose which supplier to import into before importing.';
@@ -70,13 +87,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $result = supplier_read_catalogue($dest);
 
-                // Import: write the parsed grids into the master catalogue under
-                // the chosen supplier's prefix.
                 if ($mode === 'import' && $result !== null && $supplier !== null) {
                     require_once __DIR__ . '/../_partials/supplier_catalogue_writer.php';
                     $importSummary = supplier_import_to_catalogue(
                         db(), $masterId, (string) $supplier['prefix'], $result
                     );
+                    unset($_SESSION['supplier_preview']);
+                } elseif ($mode === 'preview' && $result !== null) {
+                    // Stash so the user can import without re-uploading.
+                    $_SESSION['supplier_preview'] = ['master' => $masterId, 'data' => $result, 'file' => $fileLabel];
                 }
             } catch (Throwable $e) {
                 error_log('[YourBlinds] supplier-import failed: ' . $e->getMessage());
@@ -295,11 +314,23 @@ $activeNav = 'supplier-import';
                     </details>
                 <?php endif; ?>
 
-                <?php if ($importSummary === null): ?>
-                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0">
-                        This was a preview &mdash; nothing has been changed. Happy with it? Choose a supplier
-                        above and click <strong>Import into catalogue</strong> to write these grids in.
-                    </p>
+                <?php if ($importSummary === null && $result['products']): ?>
+                    <form method="post" action="/master-admin/supplier-import.php"
+                          style="margin:1.25rem 0 0;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="mode" value="import_session">
+                        <span style="color:var(--text-muted);font-size:.875rem">Happy with it? Import into:</span>
+                        <select name="supplier_key" class="form-control" style="max-width:18rem">
+                            <option value="">— choose supplier —</option>
+                            <?php foreach ($suppliers as $key => $sup): ?>
+                                <option value="<?= e($key) ?>" <?= $key === $supplierKey ? 'selected' : '' ?>>
+                                    <?= e((string) $sup['name']) ?> (prefix “<?= e((string) ($sup['prefix'] ?? '')) ?>”)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Import into catalogue</button>
+                        <span style="color:var(--text-faint);font-size:.8125rem">No need to choose the file again.</span>
+                    </form>
                 <?php endif; ?>
             </section>
         <?php endif; ?>
