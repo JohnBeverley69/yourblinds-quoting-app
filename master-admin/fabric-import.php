@@ -118,6 +118,30 @@ $readFabrics = static function (string $path) use ($matchField): array {
     return ['fabrics' => $fabrics, 'sheets' => $sheets, 'skipped' => $skipped];
 };
 
+/** Write parsed fabrics into the library for a manufacturer, skipping dups by name+colour. */
+$doImport = static function (int $supId, array $fabrics) use ($pdo): array {
+    $existing = [];
+    $ex = $pdo->prepare('SELECT LOWER(name) AS n, LOWER(COALESCE(colour, "")) AS c FROM library_fabrics WHERE fabric_supplier_id = ?');
+    $ex->execute([$supId]);
+    foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $row) $existing[$row['n'] . '|' . $row['c']] = true;
+
+    $sortStart = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM library_fabrics WHERE fabric_supplier_id = ' . (int) $supId)->fetchColumn();
+    $ins = $pdo->prepare(
+        'INSERT INTO library_fabrics
+            (fabric_supplier_id, name, colour, code, suggested_band, blind_type, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    $added = 0; $dups = 0;
+    foreach ($fabrics as $f) {
+        $key = strtolower((string) $f['name']) . '|' . strtolower((string) ($f['colour'] ?? ''));
+        if (isset($existing[$key])) { $dups++; continue; }
+        $existing[$key] = true;
+        $ins->execute([$supId, $f['name'], $f['colour'] ?? null, $f['code'] ?? null, $f['suggested_band'] ?? null, $f['blind_type'] ?? null, $sortStart++]);
+        $added++;
+    }
+    return ['added' => $added, 'dups' => $dups];
+};
+
 $result    = null;
 $error     = null;
 $fileLabel = '';
@@ -129,7 +153,23 @@ foreach ($suppliers as $s) { if ((int) $s['id'] === $supId) $supName = (string) 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
     csrf_check();
-    if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
+
+    if ($mode === 'import_session') {
+        // Import the JUST-PREVIEWED data — no need to re-select the file (the
+        // browser can't keep it in the upload box across a reload).
+        $pv = $_SESSION['fab_preview'] ?? null;
+        if (!$pv || (int) ($pv['sid'] ?? 0) !== $supId || $supId <= 0) {
+            $error = 'That preview has expired — please choose the file and preview again.';
+        } else {
+            $result    = $pv['data'];
+            $supName   = (string) $pv['sname'];
+            $fileLabel = (string) $pv['file'];
+            if (!empty($result['fabrics'])) {
+                $importSummary = $doImport($supId, $result['fabrics']);
+            }
+            unset($_SESSION['fab_preview']);
+        }
+    } elseif (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
         $error = 'Please choose a file.';
     } elseif ($supId <= 0 || $supName === '') {
         $error = 'Choose which manufacturer these fabrics belong to.';
@@ -149,28 +189,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 if (!@move_uploaded_file($_FILES['file']['tmp_name'], $dest)) $dest = $_FILES['file']['tmp_name'];
                 $result = $readFabrics($dest);
 
-                if ($mode === 'import' && $result['fabrics']) {
-                    // Skip exact dups already in the library for this manufacturer.
-                    $existing = [];
-                    $ex = $pdo->prepare('SELECT LOWER(name) AS n, LOWER(COALESCE(colour, "")) AS c FROM library_fabrics WHERE fabric_supplier_id = ?');
-                    $ex->execute([$supId]);
-                    foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $row) $existing[$row['n'] . '|' . $row['c']] = true;
-
-                    $sortStart = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM library_fabrics WHERE fabric_supplier_id = ' . $supId)->fetchColumn();
-                    $ins = $pdo->prepare(
-                        'INSERT INTO library_fabrics
-                            (fabric_supplier_id, name, colour, code, suggested_band, blind_type, sort_order)
-                         VALUES (?, ?, ?, ?, ?, ?, ?)'
-                    );
-                    $added = 0; $dups = 0;
-                    foreach ($result['fabrics'] as $f) {
-                        $key = strtolower($f['name']) . '|' . strtolower((string) ($f['colour'] ?? ''));
-                        if (isset($existing[$key])) { $dups++; continue; }
-                        $existing[$key] = true;
-                        $ins->execute([$supId, $f['name'], $f['colour'], $f['code'], $f['suggested_band'], $f['blind_type'], $sortStart++]);
-                        $added++;
-                    }
-                    $importSummary = ['added' => $added, 'dups' => $dups];
+                if ($mode === 'import' && !empty($result['fabrics'])) {
+                    $importSummary = $doImport($supId, $result['fabrics']);
+                    unset($_SESSION['fab_preview']);
+                } elseif ($mode === 'preview') {
+                    // Stash so the user can import without re-uploading.
+                    $_SESSION['fab_preview'] = ['sid' => $supId, 'sname' => $supName, 'file' => $fileLabel, 'data' => $result];
                 }
             } catch (Throwable $e) {
                 error_log('[YourBlinds] fabric-import failed: ' . $e->getMessage());
@@ -310,9 +334,15 @@ $activeNav = 'fabric-library';
                         <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.5rem 0 0">Showing the first 100 of <?= count($result['fabrics']) ?>.</p>
                     <?php endif; ?>
                     <?php if ($importSummary === null): ?>
-                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:1rem 0 0">
-                            Preview only — nothing imported. Happy with the mapping? Click <strong>Import into library</strong>.
-                        </p>
+                        <form method="post" action="/master-admin/fabric-import.php" style="margin:1rem 0 0;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="mode" value="import_session">
+                            <input type="hidden" name="fabric_supplier_id" value="<?= $supId ?>">
+                            <button type="submit" class="btn btn-primary">
+                                Import these <?= count($result['fabrics']) ?> fabrics into <?= e($supName) ?>
+                            </button>
+                            <span style="color:var(--text-faint);font-size:0.8125rem">No need to choose the file again.</span>
+                        </form>
                     <?php endif; ?>
                 <?php endif; ?>
             </section>
