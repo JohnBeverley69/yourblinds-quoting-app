@@ -84,6 +84,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 $pdo->prepare('DELETE FROM library_fabrics WHERE id = ?')->execute([$id]);
                 $_SESSION['flash_success'] = 'Fabric removed.';
             }
+        } elseif ($action === 'update_fabric_band') {
+            $id   = (int) ($_POST['id'] ?? 0);
+            $band = trim((string) ($_POST['suggested_band'] ?? ''));
+            if ($id > 0) {
+                $pdo->prepare('UPDATE library_fabrics SET suggested_band = ? WHERE id = ?')
+                    ->execute([$band !== '' ? strtoupper($band) : null, $id]);
+                $_SESSION['flash_success'] = 'Band updated.';
+            }
+        } elseif ($action === 'set_band_bulk') {
+            // Re-band a whole list at once (e.g. "all of these are Band D for us").
+            $band = trim((string) ($_POST['suggested_band'] ?? ''));
+            $ids  = array_values(array_filter(array_map('intval', (array) ($_POST['fab_ids'] ?? [])), fn ($n) => $n > 0));
+            if ($ids) {
+                $place = implode(',', array_fill(0, count($ids), '?'));
+                $pdo->prepare("UPDATE library_fabrics SET suggested_band = ? WHERE id IN ($place)")
+                    ->execute(array_merge([$band !== '' ? strtoupper($band) : null], $ids));
+                $_SESSION['flash_success'] = count($ids) . ' fabric' . (count($ids) === 1 ? '' : 's') . ' set to band ' . ($band !== '' ? strtoupper($band) : '(none)') . '.';
+            } else {
+                $_SESSION['flash_error'] = 'Tick the fabrics you want to re-band first.';
+            }
         }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
@@ -232,16 +252,39 @@ $activeNav = 'fabric-library';
 
                         <!-- Fabric list -->
                         <?php if ($fabrics): ?>
+                            <!-- Bulk re-band: ticked rows (associated via form=) + a band → Set. -->
+                            <form id="bulk-band-<?= $sid ?>" method="post" action="/master-admin/fabric-library.php"
+                                  style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:0 0 .5rem">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="_action" value="set_band_bulk">
+                                <span style="color:var(--text-muted);font-size:.8125rem">Re-band ticked rows to</span>
+                                <input type="text" name="suggested_band" maxlength="20" placeholder="band"
+                                       style="width:4rem;padding:.2rem .4rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;background:var(--bg-input);text-transform:uppercase">
+                                <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem">Set band on ticked</button>
+                            </form>
                             <div class="table-wrap">
                                 <table class="table">
-                                    <thead><tr><th>Fabric</th><th>Colour</th><th>Code</th><th>Sugg. band</th><th>Type</th><th></th></tr></thead>
+                                    <thead><tr>
+                                        <th style="width:1.5rem;text-align:center"><input type="checkbox" class="fab-all" data-sid="<?= $sid ?>" aria-label="Select all"></th>
+                                        <th>Fabric</th><th>Colour</th><th>Code</th><th>Sugg. band</th><th>Type</th><th></th>
+                                    </tr></thead>
                                     <tbody>
                                         <?php foreach ($fabrics as $f): ?>
                                             <tr>
+                                                <td style="text-align:center"><input type="checkbox" class="fab-cb-<?= $sid ?>" name="fab_ids[]" value="<?= (int) $f['id'] ?>" form="bulk-band-<?= $sid ?>"></td>
                                                 <td><strong><?= e((string) $f['name']) ?></strong></td>
                                                 <td><?= e((string) ($f['colour'] ?? '')) ?></td>
                                                 <td><?= e((string) ($f['code'] ?? '')) ?></td>
-                                                <td><?= e((string) ($f['suggested_band'] ?? '')) ?></td>
+                                                <td>
+                                                    <form method="post" action="/master-admin/fabric-library.php" style="display:flex;gap:.25rem;align-items:center;margin:0">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="update_fabric_band">
+                                                        <input type="hidden" name="id" value="<?= (int) $f['id'] ?>">
+                                                        <input type="text" name="suggested_band" maxlength="20" value="<?= e((string) ($f['suggested_band'] ?? '')) ?>"
+                                                               style="width:3rem;padding:.15rem .3rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;background:var(--bg-input);text-transform:uppercase">
+                                                        <button type="submit" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:.75rem" title="Save band">Save</button>
+                                                    </form>
+                                                </td>
                                                 <td><?= e((string) ($f['blind_type'] ?? '')) ?></td>
                                                 <td style="text-align:right">
                                                     <form method="post" action="/master-admin/fabric-library.php" style="margin:0"
@@ -281,6 +324,13 @@ $activeNav = 'fabric-library';
         <?php endif; /* ready */ ?>
     </main>
 </div>
+<script>
+document.querySelectorAll('.fab-all').forEach(function (all) {
+    all.addEventListener('change', function () {
+        document.querySelectorAll('.fab-cb-' + all.dataset.sid).forEach(function (cb) { cb.checked = all.checked; });
+    });
+});
+</script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
