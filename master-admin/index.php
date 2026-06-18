@@ -35,6 +35,7 @@ foreach ($flags as $col => $_label) {
         $flagPricing[$col] = [
             'plan'  => $planCode,
             'price' => (float) ($plan['price_gbp_monthly'] ?? 0),
+            'name'  => (string) ($plan['name'] ?? $planCode),
         ];
         break;
     }
@@ -181,21 +182,28 @@ $activeNav = 'master-admin';
         </section>
 
         <section class="section">
+            <?php
+                // Tier ladder (live prices from plan_pricing where available).
+                $tierBits = [];
+                foreach (billing_plans() as $tCode => $tPlan) {
+                    $tPrice = function_exists('billing_plan_price')
+                        ? billing_plan_price($tCode)
+                        : (float) ($tPlan['price_gbp_monthly'] ?? 0);
+                    $tierBits[] = ($tPlan['name'] ?? $tCode)
+                        . ($tPrice > 0 ? ' £' . rtrim(rtrim(number_format($tPrice, 2), '0'), '.') : ' (free)');
+                }
+            ?>
             <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5">
-                Each column is a paid feature. The
-                <strong>£/mo</strong> figure under the heading is the
-                advertised price — edit it on the
-                <a href="/master-admin/pricing.php" style="color:#1f3b5b">Pricing</a> page
-                (price changes propagate to existing PayPal subscribers
-                automatically). Tenants self-subscribe to each add-on independently
-                via PayPal on their <a href="/billing/index.php" style="color:#1f3b5b">Billing</a> page;
-                subscription state is then managed on the
-                <a href="/master-admin/subscriptions.php" style="color:#1f3b5b">Subscriptions</a> page.
-                For <strong>free access</strong>, use
-                <a href="/master-admin/pricing.php#comps" style="color:#1f3b5b">Pricing → Comp overrides</a>
-                — preferred over ticking the boxes below, because it survives
-                subscription cancellations and is the documented audit trail.
-                The checkboxes here remain as an emergency manual override.
+                Billing is now <strong>tiers</strong>: <?= e(implode(' → ', $tierBits)) ?> — each tier
+                includes the ones below. The label under each feature shows the <strong>tier that unlocks it</strong>.
+                Tenants subscribe to a tier on their
+                <a href="/billing/index.php" style="color:#1f3b5b">Billing</a> page; manage state on
+                <a href="/master-admin/subscriptions.php" style="color:#1f3b5b">Subscriptions</a> and prices on
+                <a href="/master-admin/pricing.php" style="color:#1f3b5b">Pricing</a>.
+                For <strong>free access</strong>, use a
+                <a href="/master-admin/pricing.php#comps" style="color:#1f3b5b">comp override</a>
+                — it survives cancellations and is the documented audit trail. The checkboxes below are a
+                manual per-feature override only.
             </p>
             <!--
                 The feature-flags form is a sibling of the table, not its
@@ -217,10 +225,8 @@ $activeNav = 'master-admin';
                                 <th class="toggle">
                                     <?= e($label) ?>
                                     <div class="feature-price">
-                                        <?php if ($p && $p['price'] > 0): ?>
-                                            £<?= number_format($p['price'], 2) ?><span class="unit">/mo</span>
-                                        <?php elseif ($p): ?>
-                                            Free
+                                        <?php if ($p): ?>
+                                            <span class="unit">in</span> <?= e($p['name']) ?>
                                         <?php else: ?>
                                             <span class="manual">Manual</span>
                                         <?php endif; ?>
