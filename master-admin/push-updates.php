@@ -23,6 +23,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/catalogue_push.php';
+require_once __DIR__ . '/../_partials/library.php';
 
 requireSuperAdmin();
 
@@ -37,6 +38,10 @@ $masterClientId = (int) $user['client_id'];
 $DEFAULT_PREFIX = 'Bev';
 $prefix         = trim((string) ($_GET['prefix'] ?? $DEFAULT_PREFIX));
 if ($prefix === '') $prefix = $DEFAULT_PREFIX;
+
+// Library suppliers drive the prefix picker (a dropdown beats typing a prefix
+// once there are several). Falls back to the built-in default if not migrated.
+$librarySuppliers = library_suppliers();
 
 // Push can be a long, memory-heavy operation when the master tenant
 // has many products with large price grids (10k+ cells). Default PHP
@@ -346,16 +351,28 @@ $activeNav = 'push-updates';
             <form method="get" action="/master-admin/push-updates.php"
                   style="float:right;margin:0 0 0.5rem 0.75rem;display:inline-flex;gap:0.375rem;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:0.3125rem 0.5rem">
                 <label for="prefix-input" style="font-size:0.75rem;color:var(--text-faint);font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
-                    Prefix
+                    Supplier
                 </label>
-                <input id="prefix-input" name="prefix" type="text"
-                       value="<?= e($prefix) ?>"
-                       maxlength="40"
-                       style="padding:0.25rem 0.4375rem;border:1px solid var(--border-strong);border-radius:4px;font:inherit;font-size:0.8125rem;background:var(--bg-input);color:var(--text-body);width:7rem">
+                <select id="prefix-input" name="prefix" onchange="this.form.submit()"
+                        style="padding:0.25rem 0.4375rem;border:1px solid var(--border-strong);border-radius:4px;font:inherit;font-size:0.8125rem;background:var(--bg-input);color:var(--text-body)">
+                    <?php
+                        $prefixFound = false;
+                        foreach ($librarySuppliers as $sup):
+                            $pfx = trim((string) ($sup['prefix'] ?? ''));
+                            if ($pfx === '') continue;
+                            $sel = ($pfx === $prefix);
+                            if ($sel) $prefixFound = true;
+                    ?>
+                        <option value="<?= e($pfx) ?>"<?= $sel ? ' selected' : '' ?>>
+                            <?= e((string) ($sup['name'] ?? $pfx)) ?> (<?= e($pfx) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if (!$prefixFound && $prefix !== ''): ?>
+                        <option value="<?= e($prefix) ?>" selected><?= e($prefix) ?> (current)</option>
+                    <?php endif; ?>
+                </select>
                 <button type="submit" class="btn btn-sm btn-secondary"
-                        style="padding:0.25rem 0.5rem;font-size:0.75rem">
-                    Apply
-                </button>
+                        style="padding:0.25rem 0.5rem;font-size:0.75rem">Go</button>
             </form>
             <p style="margin:0 0 0.5rem">
                 Pushes <strong>your prefixed products</strong> (any product whose name starts
