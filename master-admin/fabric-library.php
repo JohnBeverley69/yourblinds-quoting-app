@@ -18,7 +18,8 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireSuperAdmin();
 
-$pdo = db();
+$user = current_user();   // sidebar derives admin/super-admin from this
+$pdo  = db();
 
 $ready = true;
 try { $pdo->query('SELECT 1 FROM library_fabrics LIMIT 0'); }
