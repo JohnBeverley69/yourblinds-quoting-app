@@ -167,6 +167,7 @@ $navSections = [
             'fabric-library' => ['/master-admin/fabric-library.php', 'Fabric Library', $isSuperAdmin],
             'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups', $isSuperAdmin],
             'supplier-import' => ['/master-admin/supplier-import.php', 'Supplier import',  $isSuperAdmin],
+            'supplier-requests' => ['/master-admin/supplier-requests.php', 'Supplier requests', $isSuperAdmin],
             'spell-check'   => ['/master-admin/spell-check.php',    'Spell-check',       $isSuperAdmin],
             'pricing'       => ['/master-admin/pricing.php',        'Pricing',          $isSuperAdmin],
             'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
