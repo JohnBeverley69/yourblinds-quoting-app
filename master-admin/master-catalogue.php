@@ -74,9 +74,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $_SESSION['flash_error'] = 'Unknown supplier — nothing deleted.';
             }
+        } elseif ($act === 'bump_product') {
+            // Apply a % price change to one product's price grids (nearest penny).
+            $pid = (int) ($_POST['product_id'] ?? 0);
+            $pct = (float) ($_POST['pct'] ?? 0);
+            if ($pid > 0 && $pct !== 0.0 && $pct > -100) {
+                $factor = 1 + ($pct / 100);
+                $st = db()->prepare(
+                    'UPDATE price_table_rows r
+                       JOIN price_tables t ON t.id = r.price_table_id
+                        SET r.price = ROUND(r.price * ?, 2)
+                      WHERE t.product_id = ? AND t.client_id = ?'
+                );
+                $st->execute([$factor, $pid, $masterId]);
+                $_SESSION['flash_success'] = 'Adjusted ' . number_format($st->rowCount())
+                    . ' prices by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
+            } else {
+                $_SESSION['flash_error'] = 'Enter a percentage (e.g. 4 or -2).';
+            }
+        } elseif ($act === 'bump_supplier') {
+            // Apply one % across every product under a supplier's prefix.
+            $key = (string) ($_POST['supplier_key'] ?? '');
+            $pct = (float) ($_POST['pct'] ?? 0);
+            $sup = $suppliers[$key] ?? null;
+            $prefix = $sup ? (string) ($sup['prefix'] ?? '') : '';
+            if ($prefix !== '' && $pct !== 0.0 && $pct > -100) {
+                $likePrefix = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $prefix) . '%';
+                $factor = 1 + ($pct / 100);
+                $st = db()->prepare(
+                    'UPDATE price_table_rows r
+                       JOIN price_tables t ON t.id = r.price_table_id
+                       JOIN products     p ON p.id = t.product_id
+                        SET r.price = ROUND(r.price * ?, 2)
+                      WHERE p.client_id = ? AND p.name LIKE ?'
+                );
+                $st->execute([$factor, $masterId, $likePrefix]);
+                $_SESSION['flash_success'] = 'Adjusted ' . number_format($st->rowCount())
+                    . ' prices across ' . ((string) ($sup['name'] ?? $key))
+                    . ' by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
+            } else {
+                $_SESSION['flash_error'] = 'Pick a supplier and enter a percentage.';
+            }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not delete: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
     }
     header('Location: /master-admin/master-catalogue.php');
     exit;
@@ -163,6 +204,15 @@ $renderRows = function (array $rows) use ($onMaster): void {
             <td style="text-align:right"><?= number_format((int) $p['cells']) ?></td>
             <?php if ($onMaster): ?>
                 <td style="text-align:right;white-space:nowrap">
+                    <form method="post" action="/master-admin/master-catalogue.php" style="margin:0 .5rem 0 0;display:inline-flex;gap:.2rem;align-items:center"
+                          data-confirm="Change ALL prices for &quot;<?= e((string) $p['name']) ?>&quot; by the % entered? Rounds to the nearest penny. No undo.">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="bump_product">
+                        <input type="hidden" name="product_id" value="<?= $pid ?>">
+                        <input type="number" name="pct" step="0.01" placeholder="%" title="e.g. 4 or -2"
+                               style="width:3.2rem;padding:.1rem .25rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;font-size:.8125rem;background:var(--bg-input)">
+                        <button type="submit" style="background:none;border:0;color:#1f3b5b;cursor:pointer;font-size:.8125rem;padding:0">Apply %</button>
+                    </form>
                     <form method="post" action="/master-admin/master-catalogue.php" style="margin:0;display:inline"
                           data-confirm="Delete &quot;<?= e((string) $p['name']) ?>&quot; and all its systems, fabrics and price tables? Quotes already raised keep working. No undo.">
                         <?= csrf_field() ?>
@@ -315,13 +365,25 @@ $activeNav = 'master-catalogue';
                                 </p>
                             <?php else: ?>
                                 <?php if ($onMaster): ?>
-                                    <form method="post" action="/master-admin/master-catalogue.php" style="margin:0 0 .625rem"
-                                          data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="_action" value="delete_supplier">
-                                        <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
-                                        <button type="submit" class="btn btn-secondary" style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete all</button>
-                                    </form>
+                                    <div style="display:flex;gap:.9rem;align-items:center;flex-wrap:wrap;margin:0 0 .625rem">
+                                        <form method="post" action="/master-admin/master-catalogue.php" style="display:flex;gap:.35rem;align-items:center;margin:0"
+                                              data-confirm="Change ALL prices across &quot;<?= e((string) $sup['name']) ?>&quot; by the % entered? It applies to every product under this supplier, rounded to the nearest penny. No undo.">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="bump_supplier">
+                                            <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
+                                            <span style="color:var(--text-muted);font-size:.8125rem">Price change</span>
+                                            <input type="number" name="pct" step="0.01" placeholder="%" title="e.g. 4 or -2"
+                                                   style="width:4rem;padding:.2rem .4rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;background:var(--bg-input)">
+                                            <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem">Apply to all</button>
+                                        </form>
+                                        <form method="post" action="/master-admin/master-catalogue.php" style="margin:0"
+                                              data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="delete_supplier">
+                                            <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
+                                            <button type="submit" class="btn btn-secondary" style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete all</button>
+                                        </form>
+                                    </div>
                                 <?php endif; ?>
                                 <div class="table-wrap">
                                     <table class="table">
