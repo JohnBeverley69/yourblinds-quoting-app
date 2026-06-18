@@ -20,7 +20,8 @@ require_once __DIR__ . '/../_partials/library.php';
 
 requireSuperAdmin();
 
-$pdo = db();
+$user = current_user();   // sidebar derives admin/super-admin from this
+$pdo  = db();
 
 /** Slugify a name into a supplier_key (lowercase, dashes). */
 $slugify = static function (string $s): string {
