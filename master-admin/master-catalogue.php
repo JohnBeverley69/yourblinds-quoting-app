@@ -40,6 +40,19 @@ if ($masterId > 0) {
     } catch (Throwable $e) { /* leave blank */ }
 }
 
+// Record a price-change history entry (best-effort — never breaks the bump).
+$logPriceChange = function (string $scope, string $target, float $pct, int $cells) use ($masterId, $user): void {
+    try {
+        db()->prepare(
+            'INSERT INTO price_change_log (client_id, scope, target, pct, cells_changed, changed_by)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $masterId, $scope, mb_substr($target, 0, 160), $pct, $cells,
+            mb_substr((string) ($user['full_name'] ?? ''), 0, 120),
+        ]);
+    } catch (Throwable $e) { /* table absent / log failure — ignore */ }
+};
+
 // ── Deletes (only when logged in AS the master tenant). The DB cascades a
 //    product's systems / fabrics / extras / price tables; quotes survive
 //    because they snapshot their own data. ──────────────────────────────
@@ -87,7 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE t.product_id = ? AND t.client_id = ?'
                 );
                 $st->execute([$factor, $pid, $masterId]);
-                $_SESSION['flash_success'] = 'Adjusted ' . number_format($st->rowCount())
+                $cells = $st->rowCount();
+                $pn = db()->prepare('SELECT name FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+                $pn->execute([$pid, $masterId]);
+                $logPriceChange('product', (string) ($pn->fetchColumn() ?: ('product #' . $pid)), $pct, $cells);
+                $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells)
                     . ' prices by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
             } else {
                 $_SESSION['flash_error'] = 'Enter a percentage (e.g. 4 or -2).';
@@ -109,7 +126,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE p.client_id = ? AND p.name LIKE ?'
                 );
                 $st->execute([$factor, $masterId, $likePrefix]);
-                $_SESSION['flash_success'] = 'Adjusted ' . number_format($st->rowCount())
+                $cells = $st->rowCount();
+                $logPriceChange('supplier', (string) ($sup['name'] ?? $key), $pct, $cells);
+                $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells)
                     . ' prices across ' . ((string) ($sup['name'] ?? $key))
                     . ' by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
             } else {
@@ -126,6 +145,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+// Price-change history (most recent first). Absent table = empty.
+$priceHistory = [];
+if ($masterId > 0) {
+    try {
+        $h = db()->prepare(
+            'SELECT scope, target, pct, cells_changed, changed_by, created_at
+               FROM price_change_log WHERE client_id = ? ORDER BY id DESC LIMIT 60'
+        );
+        $h->execute([$masterId]);
+        $priceHistory = $h->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* table not migrated yet */ }
+}
 
 // Pull every product on the master tenant with its child counts. Scalar
 // subqueries keep it to one round-trip; the tables are all core so this is
@@ -439,6 +471,33 @@ $activeNav = 'master-catalogue';
                                     <tbody><?php $renderRows($unassigned['rows']); ?></tbody>
                                 </table>
                             </div>
+                        </div>
+                    </details>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($priceHistory): ?>
+                <section class="section">
+                    <details>
+                        <summary style="cursor:pointer;font-weight:700;font-size:1.05rem;color:var(--text-primary)">
+                            Price change history
+                            <span style="font-weight:500;color:var(--text-faint);font-size:.8125rem">(last <?= count($priceHistory) ?>)</span>
+                        </summary>
+                        <div class="table-wrap" style="margin-top:.75rem">
+                            <table class="table">
+                                <thead><tr><th>When</th><th>Who</th><th>What</th><th style="text-align:right">Change</th><th style="text-align:right">Prices</th></tr></thead>
+                                <tbody>
+                                    <?php foreach ($priceHistory as $h): $pc = (float) $h['pct']; ?>
+                                        <tr>
+                                            <td style="white-space:nowrap;color:var(--text-muted);font-size:.8125rem"><?= e(date('j M Y, g:ia', strtotime((string) $h['created_at']))) ?></td>
+                                            <td><?= e((string) ($h['changed_by'] ?? '')) ?></td>
+                                            <td><?= e(ucfirst((string) $h['scope'])) ?>: <strong><?= e((string) $h['target']) ?></strong></td>
+                                            <td style="text-align:right;font-weight:600;color:<?= $pc >= 0 ? '#92400e' : '#15803d' ?>"><?= ($pc > 0 ? '+' : '') . rtrim(rtrim(number_format($pc, 2), '0'), '.') ?>%</td>
+                                            <td style="text-align:right"><?= number_format((int) $h['cells_changed']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </details>
                 </section>
