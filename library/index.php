@@ -163,6 +163,46 @@ $activeNav = 'price-library';
                 More suppliers are added to the library over time. Adding a supplier never touches the
                 products you've built yourself, and only ever updates prices &mdash; your markup stays as you set it.
             </p>
+
+            <!-- Request a supplier (demand-driven). Optional price-list upload speeds it up. -->
+            <section class="section" style="margin-top:1rem;background:var(--bg-subtle);">
+                <h2 class="section-title" style="margin:0 0 0.25rem">Don't see your supplier?</h2>
+                <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.875rem;max-width:46rem">
+                    Request it and we'll look at adding it to the library. If you have their current
+                    price list, attach it &mdash; that helps us add it faster.
+                </p>
+                <form method="post" action="/library/request-supplier.php" enctype="multipart/form-data" class="form" style="max-width:40rem">
+                    <?= csrf_field() ?>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Supplier name <span class="required">*</span></label>
+                            <input type="text" name="supplier_name" class="form-control" maxlength="160" required
+                                   placeholder="e.g. Louvolite">
+                        </div>
+                        <div class="form-group">
+                            <label>Website <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                            <input type="text" name="website" class="form-control" maxlength="255"
+                                   placeholder="e.g. louvolite.com">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label>Notes <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                            <input type="text" name="notes" class="form-control" maxlength="500"
+                                   placeholder="Which products / ranges you'd like, anything useful">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label>Price list <span style="color:var(--text-faint);font-weight:400">(optional &mdash; Excel, CSV or PDF)</span></label>
+                            <input type="file" name="price_list" class="form-control" accept=".xlsx,.xlsm,.xls,.csv,.ods,.pdf" style="max-width:24rem">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Request supplier</button>
+                    </div>
+                </form>
+            </section>
         <?php endif; ?>
     </main>
 </div>
