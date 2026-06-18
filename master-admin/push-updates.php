@@ -39,9 +39,37 @@ $DEFAULT_PREFIX = 'Bev';
 $prefix         = trim((string) ($_GET['prefix'] ?? $DEFAULT_PREFIX));
 if ($prefix === '') $prefix = $DEFAULT_PREFIX;
 
-// Library suppliers drive the prefix picker (a dropdown beats typing a prefix
-// once there are several). Falls back to the built-in default if not migrated.
+// Library suppliers drive the picker — a checkbox list so several can be pushed
+// at once. Falls back to the built-in default if not migrated.
 $librarySuppliers = library_suppliers();
+$validPrefixes    = [];
+foreach ($librarySuppliers as $sup) {
+    $pfx = trim((string) ($sup['prefix'] ?? ''));
+    if ($pfx !== '') $validPrefixes[] = $pfx;
+}
+$validPrefixes = array_values(array_unique($validPrefixes));
+
+/** Blank push-summary skeleton (same keys push_catalogue_to_client returns). */
+function pu_blank_summary(): array {
+    return [
+        'products_added' => 0, 'products_updated' => 0, 'systems_added' => 0,
+        'fabrics_added' => 0, 'fabrics_updated' => 0, 'extras_added' => 0,
+        'extras_updated' => 0, 'choices_added' => 0, 'choices_updated' => 0,
+        'price_tables_added' => 0, 'price_table_cells' => 0, 'width_table_cells' => 0,
+        'errors' => [],
+    ];
+}
+/** Add summary $b into $a (sum counts, concat errors) so a tenant's multi-supplier push reads as one. */
+function pu_merge_summary(array $a, array $b): array {
+    foreach ($a as $k => $v) {
+        if ($k === 'errors') {
+            $a['errors'] = array_merge($a['errors'], is_array($b['errors'] ?? null) ? $b['errors'] : []);
+        } else {
+            $a[$k] = (int) $v + (int) ($b[$k] ?? 0);
+        }
+    }
+    return $a;
+}
 
 // Push can be a long, memory-heavy operation when the master tenant
 // has many products with large price grids (10k+ cells). Default PHP
@@ -115,6 +143,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $tid = $rawIds[0];
 
+            // Which suppliers (prefixes) to push — only ones we know about.
+            $prefixes = is_array($_POST['prefixes'] ?? null) ? $_POST['prefixes'] : [];
+            $prefixes = array_values(array_intersect(array_map('strval', $prefixes), $validPrefixes));
+            if (!$prefixes) {
+                echo json_encode(['ok' => false, 'tenant_id' => $tid, 'error' => 'No suppliers selected.']);
+                exit;
+            }
+
             $pdo = db();
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -124,28 +160,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $st->execute([$tid]);
             $name = (string) ($st->fetchColumn() ?: ('client #' . $tid));
 
-            try {
-                $summary = push_catalogue_to_client($pdo, $masterClientId, $tid, $prefix);
-                echo json_encode([
-                    'ok'        => true,
-                    'tenant_id' => $tid,
-                    'name'      => $name,
-                    'summary'   => $summary,
-                ]);
-                exit;
-            } catch (Throwable $e) {
-                error_log(
-                    'push-updates JSON: tenant=' . $tid . ' FAILED: '
-                    . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()
-                );
-                echo json_encode([
-                    'ok'        => false,
-                    'tenant_id' => $tid,
-                    'name'      => $name,
-                    'error'     => $e->getMessage(),
-                ]);
-                exit;
+            // Push every selected supplier into this tenant, aggregating the
+            // result. A per-supplier failure is recorded but doesn't abort.
+            $agg = pu_blank_summary();
+            foreach ($prefixes as $pfx) {
+                try {
+                    $agg = pu_merge_summary($agg, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx));
+                } catch (Throwable $e) {
+                    error_log('push-updates JSON: tenant=' . $tid . ' prefix=' . $pfx . ' FAILED: ' . $e->getMessage());
+                    $agg['errors'][] = ['product' => '(' . $pfx . ')', 'message' => $e->getMessage()];
+                }
             }
+            echo json_encode(['ok' => true, 'tenant_id' => $tid, 'name' => $name, 'summary' => $agg]);
+            exit;
         } catch (Throwable $outer) {
             error_log(
                 'push-updates JSON: top-level failure: '
@@ -181,6 +208,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        $prefixes = is_array($_POST['prefixes'] ?? null) ? $_POST['prefixes'] : [];
+        $prefixes = array_values(array_intersect(array_map('strval', $prefixes), $validPrefixes));
+        if (!$prefixes) {
+            $_SESSION['flash_error'] = 'Pick at least one supplier to push.';
+            header('Location: /master-admin/push-updates.php');
+            exit;
+        }
+
         $pdo = db();
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -196,7 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $results = [];
         foreach ($targetIds as $tid) {
             try {
-                $summary = push_catalogue_to_client($pdo, $masterClientId, $tid, $prefix);
+                $summary = pu_blank_summary();
+                foreach ($prefixes as $pfx) {
+                    $summary = pu_merge_summary($summary, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx));
+                }
                 $results[$tid] = ['name' => $names[$tid] ?? ('client #' . $tid), 'summary' => $summary, 'failed' => false];
             } catch (Throwable $e) {
                 // Per-tenant failure — log AND record on the summary so
@@ -235,19 +273,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // GET — list master's prefixed products + other tenants.
 $pdo = db();
 
-$srcProductsSt = $pdo->prepare(
-    'SELECT id, name, active,
-            (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id AND o.active = 1) AS fab_count,
-            (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) AS sys_count,
-            (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id AND e.active = 1) AS ext_count,
-            (SELECT COUNT(*) FROM price_tables   t WHERE t.product_id = p.id AND t.active = 1) AS pt_count
-       FROM products p
-      WHERE p.client_id = ?
-        AND p.name LIKE ?
-   ORDER BY p.name'
-);
-$srcProductsSt->execute([$masterClientId, $prefix . '%']);
-$srcProducts = $srcProductsSt->fetchAll();
+// Per-supplier product counts on the master, for the supplier checkbox list.
+$supplierRows     = [];
+$totalSrcProducts = 0;
+$cntSt = $pdo->prepare('SELECT COUNT(*) FROM products WHERE client_id = ? AND name LIKE ?');
+foreach ($librarySuppliers as $sup) {
+    $pfx = trim((string) ($sup['prefix'] ?? ''));
+    if ($pfx === '') continue;
+    $like = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $pfx) . '%';
+    $cntSt->execute([$masterClientId, $like]);
+    $cnt = (int) $cntSt->fetchColumn();
+    $supplierRows[]    = ['name' => (string) ($sup['name'] ?? $pfx), 'prefix' => $pfx, 'count' => $cnt];
+    $totalSrcProducts += $cnt;
+}
 
 // Other tenants. Exclude the master.
 $tenantsSt = $pdo->prepare(
@@ -348,36 +386,10 @@ $activeNav = 'push-updates';
         <?php endif; ?>
 
         <section class="info-panel">
-            <form method="get" action="/master-admin/push-updates.php"
-                  style="float:right;margin:0 0 0.5rem 0.75rem;display:inline-flex;gap:0.375rem;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:0.3125rem 0.5rem">
-                <label for="prefix-input" style="font-size:0.75rem;color:var(--text-faint);font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
-                    Supplier
-                </label>
-                <select id="prefix-input" name="prefix" onchange="this.form.submit()"
-                        style="padding:0.25rem 0.4375rem;border:1px solid var(--border-strong);border-radius:4px;font:inherit;font-size:0.8125rem;background:var(--bg-input);color:var(--text-body)">
-                    <?php
-                        $prefixFound = false;
-                        foreach ($librarySuppliers as $sup):
-                            $pfx = trim((string) ($sup['prefix'] ?? ''));
-                            if ($pfx === '') continue;
-                            $sel = ($pfx === $prefix);
-                            if ($sel) $prefixFound = true;
-                    ?>
-                        <option value="<?= e($pfx) ?>"<?= $sel ? ' selected' : '' ?>>
-                            <?= e((string) ($sup['name'] ?? $pfx)) ?> (<?= e($pfx) ?>)
-                        </option>
-                    <?php endforeach; ?>
-                    <?php if (!$prefixFound && $prefix !== ''): ?>
-                        <option value="<?= e($prefix) ?>" selected><?= e($prefix) ?> (current)</option>
-                    <?php endif; ?>
-                </select>
-                <button type="submit" class="btn btn-sm btn-secondary"
-                        style="padding:0.25rem 0.5rem;font-size:0.75rem">Go</button>
-            </form>
             <p style="margin:0 0 0.5rem">
-                Pushes <strong>your prefixed products</strong> (any product whose name starts
-                with <code><?= e($prefix) ?></code>) into the selected tenants. Each tenant's
-                own non-prefixed products are <em>not touched</em>.
+                Pushes the products of the <strong>suppliers you tick below</strong> into the
+                <strong>tenants you tick</strong>. Each tenant's own non-prefixed products are
+                <em>not touched</em>.
             </p>
             <p style="margin:0">
                 <strong>What gets synced:</strong> products, systems, fabrics, options (extras),
@@ -440,45 +452,10 @@ $activeNav = 'push-updates';
             </section>
         <?php endif; ?>
 
-        <section class="section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    Your "<?= e($prefix) ?>"-prefixed products (<?= count($srcProducts) ?>)
-                </h2>
-            </div>
-            <?php if (!$srcProducts): ?>
-                <p style="color:var(--text-faint);font-style:italic">
-                    None yet. Create a product with a name starting with <code><?= e($prefix) ?></code>
-                    in your own catalogue, then come back here to push it to your tenants.
-                </p>
-            <?php else: ?>
-                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.625rem">
-                    These are what will be pushed. Tenants either get them added or get matched
-                    items updated.
-                </p>
-                <div class="src-grid">
-                    <?php foreach ($srcProducts as $p): ?>
-                        <div class="src-row">
-                            <span class="src-name"><?= e((string) $p['name']) ?></span>
-                            <span class="src-bits">
-                                <?= (int) $p['sys_count'] ?> system<?= (int) $p['sys_count'] === 1 ? '' : 's' ?>,
-                                <?= (int) $p['fab_count'] ?> fabric<?= (int) $p['fab_count'] === 1 ? '' : 's' ?>,
-                                <?= (int) $p['ext_count'] ?> option<?= (int) $p['ext_count'] === 1 ? '' : 's' ?>,
-                                <?= (int) $p['pt_count']  ?> price table<?= (int) $p['pt_count']  === 1 ? '' : 's' ?>
-                            </span>
-                            <?php if ((int) $p['active'] !== 1): ?>
-                                <span style="font-size:0.6875rem;color:var(--text-faint);background:var(--bg-subtle-2);padding:0.0625rem 0.4375rem;border-radius:999px;text-transform:uppercase;letter-spacing:0.05em">Inactive</span>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        <?php if ($srcProducts && $tenants): ?>
+        <?php if ($totalSrcProducts > 0 && $tenants): ?>
             <section class="section">
                 <div class="section-header">
-                    <h2 class="section-title">Push to which tenants?</h2>
+                    <h2 class="section-title">Push updates</h2>
                 </div>
                 <!--
                     No data-confirm on the form — the confirm-modal
@@ -490,9 +467,28 @@ $activeNav = 'push-updates';
                 <form method="post" action="/master-admin/push-updates.php"
                       id="push-form">
                     <?= csrf_field() ?>
-                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.625rem">
-                        Tick the tenants who should receive these products.
-                    </p>
+
+                    <h3 style="font-size:0.8125rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:700;margin:0 0 0.5rem">1. Suppliers to push</h3>
+                    <div style="margin-bottom:0.5rem">
+                        <label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;color:#1f3b5b;font-weight:600">
+                            <input type="checkbox" id="select-all-suppliers" style="width:18px;height:18px">
+                            Select all suppliers
+                        </label>
+                    </div>
+                    <?php foreach ($supplierRows as $sr): $has = (int) $sr['count'] > 0; ?>
+                        <div class="tenant-row"<?= $has ? '' : ' style="opacity:.6"' ?>>
+                            <label>
+                                <input type="checkbox" name="prefixes[]" value="<?= e((string) $sr['prefix']) ?>"
+                                       class="supplier-cb" <?= $has ? '' : 'disabled' ?>>
+                                <strong><?= e((string) $sr['name']) ?></strong>
+                                <span style="color:var(--text-faint);font-size:0.875rem">
+                                    (<?= e((string) $sr['prefix']) ?>) · <?= (int) $sr['count'] ?> product<?= (int) $sr['count'] === 1 ? '' : 's' ?>
+                                </span>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <h3 style="font-size:0.8125rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-faint);font-weight:700;margin:1rem 0 0.5rem">2. Tenants to push to</h3>
                     <div style="margin-bottom:0.625rem">
                         <label style="display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;color:#1f3b5b;font-weight:600">
                             <input type="checkbox" id="select-all-tenants" style="width:18px;height:18px">
@@ -548,6 +544,17 @@ $activeNav = 'push-updates';
                                 cb.checked = all.checked;
                             });
                         });
+                    }
+                    var allSup = document.getElementById('select-all-suppliers');
+                    if (allSup) {
+                        allSup.addEventListener('change', function () {
+                            document.querySelectorAll('.supplier-cb:not(:disabled)').forEach(function (cb) {
+                                cb.checked = allSup.checked;
+                            });
+                        });
+                    }
+                    function selectedPrefixes() {
+                        return Array.from(document.querySelectorAll('.supplier-cb:checked')).map(function (cb) { return cb.value; });
                     }
 
                     // ── Sequential push controller ────────────────────
@@ -635,10 +642,11 @@ $activeNav = 'push-updates';
                              + '</div>';
                     }
 
-                    async function pushOne(tenantId) {
+                    async function pushOne(tenantId, prefixes) {
                         var fd = new FormData();
                         fd.append('_format', 'json');
                         fd.append('target_ids[]', String(tenantId));
+                        (prefixes || []).forEach(function (p) { fd.append('prefixes[]', p); });
                         if (csrfInput) fd.append(csrfInput.name, csrfInput.value);
                         try {
                             var resp = await fetch('/master-admin/push-updates.php', {
@@ -665,14 +673,17 @@ $activeNav = 'push-updates';
                     }
 
                     form.addEventListener('submit', function (ev) {
-                        // Collect ticked tenants. If none, let the form's
-                        // server-side path handle it (cleaner error).
-                        var ticked = Array.from(form.querySelectorAll('.tenant-cb:checked'));
-                        if (!ticked.length) return;
+                        // Collect ticked tenants + suppliers.
+                        var ticked   = Array.from(form.querySelectorAll('.tenant-cb:checked'));
+                        var prefixes = selectedPrefixes();
+                        if (!ticked.length && !prefixes.length) return;   // let the server give the error
 
                         // Intercept and drive the push from JS.
                         ev.preventDefault();
                         ev.stopImmediatePropagation();
+
+                        if (!prefixes.length) { alert('Tick at least one supplier to push.'); return; }
+                        if (!ticked.length)   { alert('Tick at least one tenant to push to.'); return; }
 
                         var queue = ticked.map(function (cb) {
                             return { id: parseInt(cb.value, 10), name: cb.dataset.tenantName || ('client #' + cb.value) };
@@ -682,8 +693,8 @@ $activeNav = 'push-updates';
                         // modal which can't be used here (see HTML
                         // comment above the form for why).
                         var names = queue.map(function (q) { return q.name; }).join(', ');
-                        var msg = 'Push to ' + queue.length + ' tenant'
-                                + (queue.length === 1 ? '' : 's') + '?'
+                        var msg = 'Push ' + prefixes.length + ' supplier' + (prefixes.length === 1 ? '' : 's')
+                                + ' to ' + queue.length + ' tenant' + (queue.length === 1 ? '' : 's') + '?'
                                 + '\n\n' + names + '\n\n'
                                 + 'Matched items will be updated, missing ones added. '
                                 + 'Tenant markups, discounts, and non-prefixed products are not touched.';
@@ -706,7 +717,7 @@ $activeNav = 'push-updates';
                                 nameEl.textContent = '— ' + t.name;
                                 barEl.style.width = (((i) / queue.length) * 100).toFixed(1) + '%';
 
-                                var r = await pushOne(t.id);
+                                var r = await pushOne(t.id, prefixes);
                                 // Ensure name is populated even on
                                 // top-level failures where the server
                                 // didn't get a chance to look it up.
@@ -725,7 +736,7 @@ $activeNav = 'push-updates';
             </section>
         <?php endif; ?>
 
-        <?php if ($srcProducts && !$tenants): ?>
+        <?php if ($totalSrcProducts > 0 && !$tenants): ?>
             <!-- Source products exist but there's nowhere to send them. Without
                  this note the whole "Push to which tenants?" section just
                  vanished, which reads as broken rather than "no targets". -->
