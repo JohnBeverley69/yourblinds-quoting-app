@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             require_once __DIR__ . '/../_partials/catalogue_push.php';
             try {
-                $summary = push_catalogue_to_client(db(), $master, $clientId, (string) $sup['prefix']);
+                $summary = push_catalogue_to_client(db(), $master, $clientId, (string) $sup['prefix'], (string) ($sup['name'] ?? ''));
                 db()->prepare(
                     'INSERT INTO client_library_suppliers (client_id, supplier_key, last_imported_at)
                      VALUES (?, ?, NOW())

@@ -49,6 +49,15 @@ foreach ($librarySuppliers as $sup) {
 }
 $validPrefixes = array_values(array_unique($validPrefixes));
 
+// Prefix → supplier display name, so pushed products land in a category
+// named after the supplier on the client (matching how the Master
+// Catalogue groups them). Falls back to the prefix if a name is missing.
+$prefixToName = [];
+foreach ($librarySuppliers as $sup) {
+    $pfx = trim((string) ($sup['prefix'] ?? ''));
+    if ($pfx !== '') $prefixToName[$pfx] = (string) ($sup['name'] ?? $pfx);
+}
+
 /** Blank push-summary skeleton (same keys push_catalogue_to_client returns). */
 function pu_blank_summary(): array {
     return [
@@ -165,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $agg = pu_blank_summary();
             foreach ($prefixes as $pfx) {
                 try {
-                    $agg = pu_merge_summary($agg, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx));
+                    $agg = pu_merge_summary($agg, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx, $prefixToName[$pfx] ?? $pfx));
                 } catch (Throwable $e) {
                     error_log('push-updates JSON: tenant=' . $tid . ' prefix=' . $pfx . ' FAILED: ' . $e->getMessage());
                     $agg['errors'][] = ['product' => '(' . $pfx . ')', 'message' => $e->getMessage()];
@@ -233,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $summary = pu_blank_summary();
                 foreach ($prefixes as $pfx) {
-                    $summary = pu_merge_summary($summary, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx));
+                    $summary = pu_merge_summary($summary, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx, $prefixToName[$pfx] ?? $pfx));
                 }
                 $results[$tid] = ['name' => $names[$tid] ?? ('client #' . $tid), 'summary' => $summary, 'failed' => false];
             } catch (Throwable $e) {
@@ -393,7 +402,8 @@ $activeNav = 'push-updates';
             </p>
             <p style="margin:0">
                 <strong>What gets synced:</strong> products, systems, fabrics, options (extras),
-                choices, and price tables.
+                choices, and price tables. New products are filed into a group named after the
+                supplier (matching the Master Catalogue) &mdash; a tenant's own grouping is never changed.
                 <strong>What does NOT get changed:</strong> any tenant's markup or discount %,
                 or any non-prefixed product they've set up themselves.
                 <br>

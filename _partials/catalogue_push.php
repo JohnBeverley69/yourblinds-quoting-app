@@ -43,7 +43,8 @@ function push_catalogue_to_client(
     PDO $pdo,
     int $sourceClientId,
     int $targetClientId,
-    string $prefix = 'Beverley'
+    string $prefix = 'Beverley',
+    ?string $categoryName = null
 ): array {
     if ($sourceClientId <= 0 || $targetClientId <= 0 || $sourceClientId === $targetClientId) {
         throw new InvalidArgumentException('push_catalogue_to_client: invalid client ids.');
@@ -100,7 +101,7 @@ function push_catalogue_to_client(
     foreach ($sourceProducts as $sp) {
         try {
             $pdo->beginTransaction();
-            push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $targetClientId, $summary, $flagCols);
+            push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $targetClientId, $summary, $flagCols, $categoryName);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -125,7 +126,8 @@ function push_one_product(
     int $sourceClientId,
     int $targetClientId,
     array &$summary,
-    array $flagCols = []
+    array $flagCols = [],
+    ?string $categoryName = null
 ): void {
     // Behaviour flags present on the source row (subset of $flagCols that
     // actually came back in the SELECT). Carried onto the target so a
@@ -209,6 +211,68 @@ function push_one_product(
 
     // ---- 5. Price tables + cells (merge by width × drop) ----
     pp_sync_price_tables($pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid, $systemMap, $summary);
+
+    // ---- 6. File the product into a supplier-named category, so pushed
+    //         products arrive GROUPED the same way the Master Catalogue
+    //         groups them (by supplier) instead of landing loose and
+    //         forcing the tenant to group them by hand.
+    //
+    //         Only ever set it when the target product has NO category
+    //         yet — never overwrite a tenant's own re-grouping. That also
+    //         means an existing client's loose products get tidied into
+    //         the group on their next "update from library".
+    if ($categoryName !== null && trim($categoryName) !== ''
+        && pp_column_exists($pdo, 'products', 'category_id')) {
+        $cur = $pdo->prepare('SELECT category_id FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+        $cur->execute([$tgtPid, $targetClientId]);
+        $curCat = $cur->fetchColumn();   // null = ungrouped, int = already filed
+        if ($curCat === null) {
+            $catId = pp_ensure_category($pdo, $targetClientId, $categoryName);
+            if ($catId !== null) {
+                $pdo->prepare('UPDATE products SET category_id = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$catId, $tgtPid, $targetClientId]);
+            }
+        }
+    }
+}
+
+/**
+ * Find (case-insensitive) or create a product category for a tenant and
+ * return its id. Mirrors the INSERT shape in admin/products/set-category.php
+ * (client_id, name, sort_order). Schema-tolerant: returns null if the
+ * categories feature isn't present on this install, so the push degrades
+ * to its old ungrouped behaviour rather than erroring.
+ */
+function pp_ensure_category(PDO $pdo, int $clientId, string $name): ?int
+{
+    $name = trim($name);
+    if ($name === '') return null;
+
+    // Need the table; the products.category_id column is checked by the
+    // caller. Probe the table once per request.
+    static $hasTable = null;
+    if ($hasTable === null) {
+        try { $pdo->query('SELECT 1 FROM product_categories LIMIT 0'); $hasTable = true; }
+        catch (Throwable $e) { $hasTable = false; }
+    }
+    if (!$hasTable) return null;
+
+    $find = $pdo->prepare(
+        'SELECT id FROM product_categories WHERE client_id = ? AND LOWER(name) = LOWER(?) LIMIT 1'
+    );
+    $find->execute([$clientId, $name]);
+    $id = $find->fetchColumn();
+    if ($id !== false) return (int) $id;
+
+    $sortStmt = $pdo->prepare(
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 FROM product_categories WHERE client_id = ?'
+    );
+    $sortStmt->execute([$clientId]);
+    $nextSort = (int) $sortStmt->fetchColumn();
+
+    $pdo->prepare('INSERT INTO product_categories (client_id, name, sort_order) VALUES (?, ?, ?)')
+        ->execute([$clientId, mb_substr($name, 0, 120), $nextSort]);
+    return (int) $pdo->lastInsertId();
 }
 
 // ---------------------------------------------------------------------
