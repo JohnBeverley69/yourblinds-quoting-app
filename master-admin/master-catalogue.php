@@ -271,12 +271,19 @@ $activeNav = 'master-catalogue';
         details.cat-supplier { margin: 0; }
         details.cat-supplier > summary {
             list-style: none; cursor: pointer;
-            display: flex; justify-content: space-between; align-items: baseline;
-            gap: 1rem; flex-wrap: wrap; padding: 0.25rem 0;
+            -webkit-user-select: none; user-select: none;   /* a click toggles, never selects the heading text */
+            padding: 0.55rem 0.5rem; border-radius: 6px;     /* bigger, easier hit area */
         }
+        details.cat-supplier > summary:hover { background: var(--bg-subtle-2); }
         details.cat-supplier > summary::-webkit-details-marker { display: none; }
+        /* Flex lives on an inner wrapper, NOT the <summary> itself — that keeps
+           the native click-to-toggle reliable across browsers. */
+        details.cat-supplier > summary > .sum-row {
+            display: flex; justify-content: space-between; align-items: baseline;
+            gap: 1rem; flex-wrap: wrap;
+        }
         details.cat-supplier .tw {
-            display: inline-block; color: var(--text-faint); font-size: 0.75rem;
+            display: inline-block; color: var(--text-faint); font-size: 0.8125rem;
             transition: transform 120ms; transform-origin: center;
         }
         details.cat-supplier[open] > summary .tw { transform: rotate(90deg); }
@@ -377,18 +384,20 @@ $activeNav = 'master-catalogue';
                 <section class="section">
                     <details class="cat-supplier">
                         <summary>
-                            <span style="display:flex;align-items:baseline;gap:.4rem">
-                                <span class="tw">&#9654;</span>
-                                <span class="sup-name">
-                                    <?= e((string) $sup['name']) ?>
-                                    <span class="sup-meta">prefix “<?= e((string) ($sup['prefix'] ?? '')) ?>” · <?= !empty($sup['free']) ? 'free' : 'paid' ?></span>
+                            <div class="sum-row">
+                                <span style="display:flex;align-items:baseline;gap:.4rem">
+                                    <span class="tw">&#9654;</span>
+                                    <span class="sup-name">
+                                        <?= e((string) $sup['name']) ?>
+                                        <span class="sup-meta">prefix “<?= e((string) ($sup['prefix'] ?? '')) ?>” · <?= !empty($sup['free']) ? 'free' : 'paid' ?></span>
+                                    </span>
                                 </span>
-                            </span>
-                            <span class="sup-counts">
-                                <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?>
-                                · <?= number_format($g['fabrics']) ?> fabrics
-                                · <?= number_format($g['cells']) ?> price cells
-                            </span>
+                                <span class="sup-counts">
+                                    <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?>
+                                    · <?= number_format($g['fabrics']) ?> fabrics
+                                    · <?= number_format($g['cells']) ?> price cells
+                                </span>
+                            </div>
                         </summary>
                         <div class="sup-body">
                             <?php if (!$rows): ?>
@@ -442,14 +451,16 @@ $activeNav = 'master-catalogue';
                 <section class="section">
                     <details class="cat-supplier">
                         <summary>
-                            <span style="display:flex;align-items:baseline;gap:.4rem">
-                                <span class="tw">&#9654;</span>
-                                <span class="sup-name">Unassigned <span class="sup-meta">no supplier prefix</span></span>
-                            </span>
-                            <span class="sup-counts">
-                                <?= count($unassigned['rows']) ?> product<?= count($unassigned['rows']) === 1 ? '' : 's' ?>
-                                · <?= number_format($unassigned['cells']) ?> price cells
-                            </span>
+                            <div class="sum-row">
+                                <span style="display:flex;align-items:baseline;gap:.4rem">
+                                    <span class="tw">&#9654;</span>
+                                    <span class="sup-name">Unassigned <span class="sup-meta">no supplier prefix</span></span>
+                                </span>
+                                <span class="sup-counts">
+                                    <?= count($unassigned['rows']) ?> product<?= count($unassigned['rows']) === 1 ? '' : 's' ?>
+                                    · <?= number_format($unassigned['cells']) ?> price cells
+                                </span>
+                            </div>
                         </summary>
                         <div class="sup-body">
                             <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem;line-height:1.5">
