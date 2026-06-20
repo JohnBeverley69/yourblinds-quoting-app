@@ -136,8 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     if ($band === '') {
         $error = 'Band code is required.';
-    } elseif (strlen($band) > 20) {
-        $error = 'Band code too long (max 20).';
+    } elseif (strlen($band) > 60) {
+        $error = 'Band code too long (max 60).';
     } else {
         if ($sysId !== null && $hasSystemIdCol) {
             $check = db()->prepare(
@@ -221,8 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     if ($f['band_code'] === '') {
         $error = 'Band code is required (e.g. A, B, C).';
-    } elseif (strlen($f['band_code']) > 20) {
-        $error = 'Band code is too long (max 20 chars).';
+    } elseif (strlen($f['band_code']) > 60) {
+        $error = 'Band code is too long (max 60 chars).';
     } elseif ($f['name'] === '') {
         $error = ucfirst($labelL) . ' name is required.';
     } elseif (strlen($f['name']) > 150) {
@@ -588,7 +588,7 @@ $activeNav = 'products';
                         <div class="form-group">
                             <label for="bulk_band">Band <span class="required">*</span></label>
                             <input id="bulk_band" name="bulk_band" type="text"
-                                   required maxlength="20"
+                                   required maxlength="60"
                                    list="known-bands"
                                    value="<?= e((string) $lastBand) ?>" placeholder="A">
                         </div>
@@ -667,7 +667,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label for="band_code">Band <span class="required">*</span></label>
                         <input id="band_code" name="band_code" type="text"
-                               required maxlength="20"
+                               required maxlength="60"
                                list="known-bands"
                                value="<?= e((string) $f['band_code']) ?>" placeholder="A">
                     </div>
@@ -748,7 +748,7 @@ $activeNav = 'products';
                         Delete selected
                     </button>
                     <span style="color:var(--text-faint)">&middot;</span>
-                    <input type="text" id="setband-input" maxlength="20" placeholder="band"
+                    <input type="text" id="setband-input" maxlength="60" placeholder="band"
                            style="width:4rem;padding:.25rem .4rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input);text-transform:uppercase">
                     <button type="button" id="setband-btn" class="btn btn-secondary btn-sm" disabled>
                         Set band on selected

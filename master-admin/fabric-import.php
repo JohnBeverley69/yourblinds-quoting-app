@@ -105,7 +105,7 @@ $readFabrics = static function (string $path) use ($matchField): array {
                 'name'           => mb_substr($name, 0, 160),
                 'colour'         => $col !== '' ? mb_substr($col, 0, 120) : null,
                 'code'           => $cd  !== '' ? mb_substr($cd, 0, 80)   : null,
-                'suggested_band' => $band !== '' ? strtoupper(mb_substr($band, 0, 20)) : null,
+                'suggested_band' => $band !== '' ? strtoupper(mb_substr($band, 0, 60)) : null,
                 'blind_type'     => ($hasTypeCol && $ty !== '') ? mb_substr($ty, 0, 60) : mb_substr($sheetType, 0, 60),
             ];
             $count++;
