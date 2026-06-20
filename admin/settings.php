@@ -274,6 +274,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: /admin/settings.php');
                 exit;
             }
+            // Per-blind price visibility on customer-facing quote/PDF.
+            // Separate guarded write so a pre-migration DB (column absent)
+            // still saves the rest of the quote settings. The INSERT above
+            // guarantees the row exists by now. An unchecked checkbox sends
+            // no field, so absence = hide.
+            try {
+                db()->prepare('UPDATE client_settings SET show_line_prices = ? WHERE client_id = ?')
+                    ->execute([isset($_POST['show_line_prices']) ? 1 : 0, $clientId]);
+            } catch (Throwable $e) {
+                error_log('settings: show_line_prices not saved (run migrate_show_line_prices.php): ' . $e->getMessage());
+            }
             $_SESSION['flash_success'] = 'Quote settings saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save settings: ' . $e->getMessage();
@@ -502,6 +513,7 @@ $settings = $settingsStmt->fetch() ?: [
     'reply_to_email'           => '',
     'quote_footer'             => '',
     'default_measurement_unit' => 'mm',
+    'show_line_prices'         => 1,
 ];
 // May be absent if the row exists but the migration hasn't run.
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
@@ -1041,6 +1053,36 @@ $activeNav = 'settings';
                     (<a href="/admin/products/index.php" style="color:#1f3b5b">Products</a>
                     → Edit → Pricing overrides).
                 </p>
+
+                <?php
+                // Column absent (pre-migration) ⇒ treat as ON, matching the
+                // historic always-show-prices behaviour.
+                $showLinePrices = !isset($settings['show_line_prices'])
+                    || (int) $settings['show_line_prices'] === 1;
+                ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Prices on the customer quote
+                    </legend>
+                    <label style="display:flex;align-items:flex-start;gap:0.55rem;
+                                  font-size:0.9375rem;cursor:pointer">
+                        <input type="checkbox" name="show_line_prices" value="1"
+                               <?= $showLinePrices ? 'checked' : '' ?>
+                               style="margin-top:0.2rem">
+                        <span>
+                            Show the price of each blind
+                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
+                                Ticked: the quote PDF and the customer's online quote list a
+                                unit price and line total for every blind. Unticked: those
+                                per-blind prices are hidden and the customer only sees the
+                                quote total.
+                            </span>
+                        </span>
+                    </label>
+                </fieldset>
 
                 <div class="form-row">
                     <div class="form-group">
