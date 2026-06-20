@@ -168,8 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($f['band_code'] === '') {
         $error = 'Band code is required.';
-    } elseif (strlen($f['band_code']) > 20) {
-        $error = 'Band code is too long (max 20 chars).';
+    } elseif (strlen($f['band_code']) > 60) {
+        $error = 'Band code is too long (max 60 chars).';
     } elseif ($f['name'] === '') {
         $error = ucfirst($labelL) . ' name is required.';
     } elseif (strlen($f['name']) > 150) {
@@ -294,7 +294,7 @@ $activeNav = 'products';
                     <div class="form-group">
                         <label for="band_code">Band <span class="required">*</span></label>
                         <input id="band_code" name="band_code" type="text"
-                               required maxlength="20" value="<?= e((string) $f['band_code']) ?>">
+                               required maxlength="60" value="<?= e((string) $f['band_code']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="supplier_name">Supplier</label>

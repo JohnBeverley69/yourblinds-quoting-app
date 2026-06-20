@@ -305,7 +305,7 @@ $activeNav = 'products';
                                             <td><?= e((string) ($f['colour'] ?? '')) ?></td>
                                             <td><?= e((string) ($f['code'] ?? '')) ?></td>
                                             <td>
-                                                <input type="text" name="bands[<?= (int) $f['id'] ?>]" maxlength="20"
+                                                <input type="text" name="bands[<?= (int) $f['id'] ?>]" maxlength="60"
                                                        value="<?= e((string) ($f['suggested_band'] ?? '')) ?>"
                                                        style="width:3rem;padding:.15rem .3rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;background:var(--bg-input);text-transform:uppercase">
                                             </td>

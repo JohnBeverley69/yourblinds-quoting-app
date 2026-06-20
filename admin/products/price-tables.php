@@ -66,18 +66,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $raw   = (string) ($_POST['bulk_bands'] ?? '');
     $lines = preg_split('/\r\n|\r|\n/', $raw) ?: [];
     $bands = [];
+    $tooLong = 0;
     foreach ($lines as $line) {
         // Allow comma-separated on a single line too — saves users
         // having to reformat their paste if they have "A, B, C, D".
         foreach (preg_split('/,/', $line) ?: [] as $piece) {
             $b = trim((string) preg_replace('/^band\s+/i', '', $piece));
-            if ($b === '' || strlen($b) > 20) continue;
+            if ($b === '') continue;
+            if (strlen($b) > 60) { $tooLong++; continue; }   // report, don't drop silently
             $bands[] = $b;
         }
     }
 
     if (!$bands) {
-        $error = 'Paste at least one band code (one per line, or comma-separated).';
+        $error = $tooLong > 0
+            ? 'Those band codes are too long (max 60 characters) — shorten them and try again.'
+            : 'Paste at least one band code (one per line, or comma-separated).';
     } else {
         require_once __DIR__ . '/../../_partials/catalogue_audit.php';
 
@@ -133,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
         $msg = "Created $added empty price table" . ($added === 1 ? '' : 's') . '.';
         if ($skipped > 0) $msg .= " Skipped $skipped (likely already existed).";
+        if ($tooLong > 0) $msg .= " Skipped $tooLong (too long — max 60 chars).";
         $_SESSION['flash_success'] = $msg;
         header('Location: /admin/products/price-tables.php?system_id=' . $systemId);
         exit;
@@ -149,8 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     if ($f['band_code'] === '') {
         $error = 'Band code is required (e.g. A, B, C).';
-    } elseif (strlen($f['band_code']) > 20) {
-        $error = 'Band code is too long (max 20 chars).';
+    } elseif (strlen($f['band_code']) > 60) {
+        $error = 'Band code is too long (max 60 chars).';
     } else {
         try {
             $stmt = db()->prepare(
@@ -395,7 +400,7 @@ $activeNav = 'products';
                         <div class="form-group">
                             <label for="band_code">Band <span class="required">*</span></label>
                             <input id="band_code" name="band_code" type="text"
-                                   required maxlength="20"
+                                   required maxlength="60"
                                    value="<?= e((string) $f['band_code']) ?>" placeholder="A">
                         </div>
                         <div class="form-group">

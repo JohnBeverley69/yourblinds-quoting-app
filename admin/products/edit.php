@@ -1655,7 +1655,7 @@ $activeNav = 'products';
                             <div>
                                 <label for="qa-bulk-band" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);font-weight:600;margin-bottom:0.1875rem">Band *</label>
                                 <input id="qa-bulk-band" name="bulk_band" type="text"
-                                       required maxlength="20" placeholder="A"
+                                       required maxlength="60" placeholder="A"
                                        list="known-bands"
                                        style="width:100%;padding:0.4375rem 0.5625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
                             </div>
@@ -1700,7 +1700,7 @@ $activeNav = 'products';
                     <input type="hidden" name="return_to" value="/admin/products/edit.php?id=<?= (int) $id ?>">
                     <div style="flex:0 0 4rem">
                         <label for="qa-fab-band">Band *</label>
-                        <input id="qa-fab-band" name="band_code" type="text" required maxlength="20"
+                        <input id="qa-fab-band" name="band_code" type="text" required maxlength="60"
                                placeholder="A" list="known-bands" style="width:100%">
                     </div>
                     <div style="flex:1 1 12rem">

@@ -482,8 +482,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
 
     if ($newBand === '') {
         $_SESSION['flash_error'] = 'Band code is required.';
-    } elseif (strlen($newBand) > 20) {
-        $_SESSION['flash_error'] = 'Band code too long (max 20 chars).';
+    } elseif (strlen($newBand) > 60) {
+        $_SESSION['flash_error'] = 'Band code too long (max 60 chars).';
     } elseif (strlen($newName) > 150) {
         $_SESSION['flash_error'] = 'Name too long (max 150 chars).';
     } elseif (strlen($newNotes) > 255) {
@@ -1791,7 +1791,7 @@ $activeNav = 'products';
                             Band *
                         </label>
                         <input id="meta-band" name="band_code" type="text"
-                               required maxlength="20"
+                               required maxlength="60"
                                value="<?= e((string) $table['band_code']) ?>"
                                style="width:100%;padding:0.5rem 0.625rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
                     </div>

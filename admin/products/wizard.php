@@ -354,7 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sysId    = ($sysIdRaw === '' || $sysIdRaw === '0') ? null : (int) $sysIdRaw;
 
                 if ($band === '')          throw new RuntimeException('Band code is required (e.g. A, B, C, or Standard, Special).');
-                if (strlen($band) > 20)    throw new RuntimeException('Band code too long (max 20).');
+                if (strlen($band) > 60)    throw new RuntimeException('Band code too long (max 60).');
                 if ($fab === '')           throw new RuntimeException('Fabric name is required.');
                 if (strlen($fab) > 150)    throw new RuntimeException('Fabric name too long (max 150).');
                 if ($sysId !== null) {
@@ -389,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sysId    = ($sysIdRaw === '' || $sysIdRaw === '0') ? null : (int) $sysIdRaw;
 
                 if ($band === '')         throw new RuntimeException('Band code is required.');
-                if (strlen($band) > 20)   throw new RuntimeException('Band code too long (max 20).');
+                if (strlen($band) > 60)   throw new RuntimeException('Band code too long (max 60).');
                 if ($sysId !== null) {
                     $check = $pdo->prepare(
                         'SELECT 1 FROM product_systems
@@ -1336,7 +1336,7 @@ $activeNav = 'wizard';
                             <div>
                                 <label for="bulk_band">Band *</label>
                                 <input id="bulk_band" name="bulk_band" type="text"
-                                       required maxlength="20"
+                                       required maxlength="60"
                                        placeholder="A"
                                        list="known-bands"
                                        value="">

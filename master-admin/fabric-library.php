@@ -411,7 +411,7 @@ $activeNav = 'fabric-library';
                             <div><label>Fabric name</label><input type="text" name="name" maxlength="160" required></div>
                             <div><label>Colour</label><input type="text" name="colour" maxlength="120"></div>
                             <div><label>Code</label><input type="text" name="code" maxlength="80"></div>
-                            <div><label>Band</label><input type="text" name="suggested_band" maxlength="20" placeholder="A"></div>
+                            <div><label>Band</label><input type="text" name="suggested_band" maxlength="60" placeholder="A"></div>
                             <div><label>Blind type</label><input type="text" name="blind_type" maxlength="60" placeholder="Roller"></div>
                             <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.4rem .75rem">+ Add</button>
                         </form>
