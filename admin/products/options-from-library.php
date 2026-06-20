@@ -53,8 +53,18 @@ $hasCol = static function (string $col) use ($pdo): bool {
         return $st->fetchColumn() !== false;
     } catch (Throwable $e) { return false; }
 };
-$hasSystemId = $hasCol('system_id');
-$hasCode     = $hasCol('code');
+$hasSystemId    = $hasCol('system_id');
+$hasCode        = $hasCol('code');
+$hasFabricGroup = $hasCol('fabric_group');
+
+// Does the library carry groups? (migrate_fabric_library_categories.php).
+// When it does, a pulled fabric's group name rides along onto the product.
+$libHasCats = false;
+try {
+    $pdo->query('SELECT 1 FROM library_fabric_categories LIMIT 0');
+    $pdo->query('SELECT category_id FROM library_fabrics LIMIT 0');
+    $libHasCats = true;
+} catch (Throwable $e) { $libHasCats = false; }
 
 // This product's systems (for the scope picker).
 $sysStmt = $pdo->prepare('SELECT id, name FROM product_systems WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name');
@@ -104,17 +114,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pull'
             $existing[$dupKey($r['band_code'], $r['supplier_name'], $r['name'], $r['colour'])] = true;
         }
 
-        // Load the chosen fabrics from the library.
+        // Load the chosen fabrics from the library, with their group name when
+        // the library has grouping (LEFT JOIN so ungrouped fabrics still load).
         $idPh = implode(',', array_fill(0, count($wantIds), '?'));
-        $fStmt = $pdo->prepare("SELECT id, name, colour, code, suggested_band FROM library_fabrics
-                                 WHERE fabric_supplier_id = ? AND id IN ($idPh)");
+        if ($libHasCats) {
+            $fStmt = $pdo->prepare(
+                "SELECT f.id, f.name, f.colour, f.code, f.suggested_band, c.name AS group_name
+                   FROM library_fabrics f
+                   LEFT JOIN library_fabric_categories c ON c.id = f.category_id
+                  WHERE f.fabric_supplier_id = ? AND f.id IN ($idPh)"
+            );
+        } else {
+            $fStmt = $pdo->prepare(
+                "SELECT id, name, colour, code, suggested_band, NULL AS group_name
+                   FROM library_fabrics WHERE fabric_supplier_id = ? AND id IN ($idPh)"
+            );
+        }
         $fStmt->execute(array_merge([$supplierId], $wantIds));
         $fabRows = $fStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Insert columns (system_id / code only if present).
+        // Insert columns (system_id / code / fabric_group only if present).
         $cols = ['client_id', 'product_id', 'band_code', 'supplier_name', 'name', 'colour', 'sort_order', 'active'];
-        if ($hasCode)     $cols[] = 'code';
-        if ($hasSystemId) $cols[] = 'system_id';
+        if ($hasCode)        $cols[] = 'code';
+        if ($hasSystemId)    $cols[] = 'system_id';
+        if ($hasFabricGroup) $cols[] = 'fabric_group';
 
         $added = 0; $skipped = 0; $noBand = 0;
         $pdo->beginTransaction();
@@ -139,6 +162,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pull'
                 ];
                 if ($hasCode)     $vals[] = ($f['code'] !== null && $f['code'] !== '') ? (string) $f['code'] : null;
                 if ($hasSystemId) $vals[] = ($sysId > 0 ? $sysId : null);
+                if ($hasFabricGroup) {
+                    $grp     = trim((string) ($f['group_name'] ?? ''));
+                    $vals[]  = $grp !== '' ? $grp : null;
+                }
                 $batch[] = $vals;
                 $added++;
             }
