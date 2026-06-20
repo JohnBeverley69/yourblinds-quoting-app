@@ -933,6 +933,18 @@ $activeNav = 'wizard';
                 ($systems ?? []),
                 static fn ($s) => isset($needImportNames[(string) ($s['name'] ?? '')])
             ));
+
+            // "Price tables first" path: with no fabrics/bands yet there are no
+            // (system, band) combos to flag, so the list above comes back empty
+            // and the import card would hide — a dead end ("go add a band" with
+            // nowhere to do it). When there are no price tables at all yet, offer
+            // the bulk import for every system: the importer CREATES the bands
+            // from the file. Normal grid products only — width-only / per-slat /
+            // per-sqm already have their own always-on import cards.
+            if (!$systemsNeedingImport && (int) ($totalTables ?? 0) === 0
+                && !$widthOnly && !$pricePerDrop && empty($perSqm)) {
+                $systemsNeedingImport = array_values($systems ?? []);
+            }
             ?>
             <!-- Stepper -->
             <ol class="wiz-stepper">
@@ -1463,6 +1475,14 @@ $activeNav = 'wizard';
                                 This is a no-fabric product, so it needs one price
                                 grid per system. Create them below, then fill in the
                                 width × drop prices.
+                            <?php elseif ($totalTables === 0 && empty($missingCombos) && $systemsNeedingImport): ?>
+                                No bands yet — that's fine. Import your price
+                                spreadsheet below (one file per system, all its
+                                bands) and it'll create the bands and tables for
+                                you. Add your
+                                <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s
+                                afterwards — the band box will suggest the bands
+                                you just imported.
                             <?php elseif ($totalTables === 0 && empty($missingCombos)): ?>
                                 Your fabrics don't have band codes yet — go back
                                 to step 3 and add at least one band (A, B, C…).
