@@ -121,6 +121,15 @@ $readFabrics = static function (string $path) use ($matchField): array {
 
 /** Write parsed fabrics into the library for a manufacturer, skipping dups by name+colour. */
 $doImport = static function (int $supId, array $fabrics) use ($pdo): array {
+    // A big range (thousands of rows) must be fast AND all-or-nothing on a
+    // 30s execution cap: per-row autocommit fsyncs on every INSERT (slow),
+    // and a timeout mid-loop would leave a half-finished import that muddies
+    // the dup count on a retry. One transaction fixes both — far faster and
+    // atomic. Raising the limits here covers BOTH call sites (direct import
+    // and the post-preview "Import these N" button, which had no raise).
+    @set_time_limit(300);
+    @ini_set('memory_limit', '1024M');
+
     $existing = [];
     $ex = $pdo->prepare('SELECT LOWER(name) AS n, LOWER(COALESCE(colour, "")) AS c FROM library_fabrics WHERE fabric_supplier_id = ?');
     $ex->execute([$supId]);
@@ -133,12 +142,19 @@ $doImport = static function (int $supId, array $fabrics) use ($pdo): array {
          VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
     $added = 0; $dups = 0;
-    foreach ($fabrics as $f) {
-        $key = strtolower((string) $f['name']) . '|' . strtolower((string) ($f['colour'] ?? ''));
-        if (isset($existing[$key])) { $dups++; continue; }
-        $existing[$key] = true;
-        $ins->execute([$supId, $f['name'], $f['colour'] ?? null, $f['code'] ?? null, $f['suggested_band'] ?? null, $f['blind_type'] ?? null, $sortStart++]);
-        $added++;
+    $pdo->beginTransaction();
+    try {
+        foreach ($fabrics as $f) {
+            $key = strtolower((string) $f['name']) . '|' . strtolower((string) ($f['colour'] ?? ''));
+            if (isset($existing[$key])) { $dups++; continue; }
+            $existing[$key] = true;
+            $ins->execute([$supId, $f['name'], $f['colour'] ?? null, $f['code'] ?? null, $f['suggested_band'] ?? null, $f['blind_type'] ?? null, $sortStart++]);
+            $added++;
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;   // surfaced to the caller, which keeps the preview for retry
     }
     return ['added' => $added, 'dups' => $dups];
 };
@@ -166,9 +182,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
             $supName   = (string) $pv['sname'];
             $fileLabel = (string) $pv['file'];
             if (!empty($result['fabrics'])) {
-                $importSummary = $doImport($supId, $result['fabrics']);
+                try {
+                    $importSummary = $doImport($supId, $result['fabrics']);
+                    unset($_SESSION['fab_preview']);   // clear only once it's safely in
+                } catch (Throwable $e) {
+                    error_log('[YourBlinds] fabric-import (session) failed: ' . $e->getMessage());
+                    // Atomic rollback means nothing was saved. Keep the preview
+                    // so the user can just click Import again — no re-upload.
+                    $error = 'The import did not finish, so nothing was saved. Please click Import again.';
+                }
+            } else {
+                unset($_SESSION['fab_preview']);
             }
-            unset($_SESSION['fab_preview']);
         }
     } elseif (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
         $error = 'Please choose a file.';
