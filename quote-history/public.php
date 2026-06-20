@@ -76,6 +76,16 @@ try {
 $tcText = $legalAvailable ? trim(legal_effective_terms($quote['terms_conditions'] ?? null)) : '';
 $ppText = $legalAvailable ? trim(legal_effective_privacy($quote['privacy_policy'] ?? null)) : '';
 
+// Per-blind price visibility (Settings → Quoting). Guarded so a pre-migration
+// DB (column absent) defaults to SHOWING prices — the historic behaviour.
+$showLinePrices = true;
+try {
+    $sp = db()->prepare('SELECT show_line_prices FROM client_settings WHERE client_id = ? LIMIT 1');
+    $sp->execute([(int) $quote['client_id']]);
+    $spVal = $sp->fetchColumn();
+    if ($spVal !== false && $spVal !== null) $showLinePrices = ((int) $spVal) === 1;
+} catch (Throwable $e) { /* column not migrated yet — show */ }
+
 // First-view auto-promote: if the trade user shared the link via WhatsApp
 // or copy-paste (i.e. without going through email_pdf.php which already
 // promotes), the quote is still "draft" — but the customer has the link in
@@ -363,19 +373,22 @@ if ($depositStored !== null) {
         <?php endif; ?>
     </div>
 
+    <?php $colCount = $showLinePrices ? 5 : 3; ?>
     <table class="items">
         <thead>
             <tr>
                 <th style="width:2.5rem">#</th>
                 <th>Description</th>
                 <th class="num" style="width:3rem">Qty</th>
+                <?php if ($showLinePrices): ?>
                 <th class="num" style="width:5rem">Unit</th>
                 <th class="num" style="width:5.5rem">Total</th>
+                <?php endif; ?>
             </tr>
         </thead>
         <tbody>
             <?php if (!$items): ?>
-                <tr><td colspan="5" style="text-align:center; padding:2rem; color:#9ca3af;">
+                <tr><td colspan="<?= $colCount ?>" style="text-align:center; padding:2rem; color:#9ca3af;">
                     No items on this quote.
                 </td></tr>
             <?php else: foreach ($items as $i => $item):
@@ -416,17 +429,20 @@ if ($depositStored !== null) {
                         <?php endif; ?>
                     </td>
                     <td class="num"><?= (int) $item['quantity'] ?></td>
+                    <?php if ($showLinePrices): ?>
                     <td class="num"><?= e($money($item['sell_price'])) ?></td>
                     <td class="num"><?= e($money($item['line_total'])) ?></td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; endif; ?>
         </tbody>
         <tfoot>
+            <?php $spacer = $colCount - 2; ?>
             <?php if ((float) $quote['vat_percent'] > 0): ?>
-                <tr><td colspan="3"></td><td class="lbl">Subtotal</td><td class="val"><?= e($money($quote['subtotal'])) ?></td></tr>
-                <tr><td colspan="3"></td><td class="lbl">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= e($money($quote['vat'])) ?></td></tr>
+                <tr><td colspan="<?= $spacer ?>"></td><td class="lbl">Subtotal</td><td class="val"><?= e($money($quote['subtotal'])) ?></td></tr>
+                <tr><td colspan="<?= $spacer ?>"></td><td class="lbl">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= e($money($quote['vat'])) ?></td></tr>
             <?php endif; ?>
-            <tr class="grand"><td colspan="3"></td><td class="lbl">Total</td><td class="val"><?= e($money($quote['total'])) ?></td></tr>
+            <tr class="grand"><td colspan="<?= $spacer ?>"></td><td class="lbl">Total</td><td class="val"><?= e($money($quote['total'])) ?></td></tr>
         </tfoot>
     </table>
 

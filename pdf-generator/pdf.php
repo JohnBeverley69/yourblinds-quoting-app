@@ -76,6 +76,17 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
         $quote['privacy_policy']   = legal_effective_privacy($quote['privacy_policy'] ?? null);
     }
 
+    // Per-blind price visibility (Settings → Quoting). Carried on $quote so the
+    // HTML builder can read it. Guarded so a pre-migration DB (column absent)
+    // defaults to SHOWING prices — the historic behaviour.
+    $quote['show_line_prices'] = 1;
+    try {
+        $spstmt = $pdo->prepare('SELECT show_line_prices FROM client_settings WHERE client_id = ? LIMIT 1');
+        $spstmt->execute([$clientId]);
+        $spVal = $spstmt->fetchColumn();
+        if ($spVal !== false && $spVal !== null) $quote['show_line_prices'] = (int) $spVal;
+    } catch (Throwable $e) { /* column not migrated yet — show */ }
+
     // Items, in line-no order. We use the snapshot fields (frozen at quote
     // time) rather than current product names, so re-rendering an old quote
     // shows what was sold then, not what the catalogue says now.
@@ -398,19 +409,25 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <?php endif; ?>
 </div>
 
+<?php
+$showLinePrices = ((int) ($quote['show_line_prices'] ?? 1)) === 1;
+$colCount = $showLinePrices ? 5 : 3;
+?>
 <table class="items">
 <thead>
 <tr>
 <th width="30">#</th>
 <th>Description</th>
 <th class="num" width="40">Qty</th>
+<?php if ($showLinePrices): ?>
 <th class="num" width="75">Unit</th>
 <th class="num" width="80">Total</th>
+<?php endif; ?>
 </tr>
 </thead>
 <tbody>
 <?php if (empty($items)): ?>
-<tr><td colspan="5" style="text-align:center; padding:24px; color:#9ca3af;">No line items.</td></tr>
+<tr><td colspan="<?= $colCount ?>" style="text-align:center; padding:24px; color:#9ca3af;">No line items.</td></tr>
 <?php else: foreach ($items as $i => $item):
     // Build the description block from snapshot fields. We deliberately
     // do NOT render width_mm / drop_mm / matrix_* anywhere — that's the
@@ -452,17 +469,20 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <?php endif; ?>
 </td>
 <td class="num"><?= (int) $item['quantity'] ?></td>
+<?php if ($showLinePrices): ?>
 <td class="num"><?= $money($item['sell_price']) ?></td>
 <td class="num"><?= $money($item['line_total']) ?></td>
+<?php endif; ?>
 </tr>
 <?php endforeach; endif; ?>
 </tbody>
 <tfoot>
+<?php $spacer = $colCount - 2; ?>
 <?php if ((float) ($quote['vat_percent'] ?? 0) > 0): ?>
-<tr><td colspan="3"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
-<tr><td colspan="3"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
+<tr><td colspan="<?= $spacer ?>"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
+<tr><td colspan="<?= $spacer ?>"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
 <?php endif; ?>
-<tr class="grand"><td colspan="3"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
+<tr class="grand"><td colspan="<?= $spacer ?>"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
 </tfoot>
 </table>
 
