@@ -336,11 +336,15 @@ if (!function_exists('ptp_parse_band_blocks')) {
                 foreach (preg_split('#[/,]#', $m[1]) ?: [] as $tok) {
                     // Collapse internal whitespace so "VFM  BO" -> "VFM BO".
                     $tok = strtoupper(trim(preg_replace('/\s+/', ' ', $tok)));
-                    // Band codes are short alphanumerics, but suppliers do use
-                    // spaces ("VFM BO") and digits — not just 1-4 letters.
-                    // Still bounded (<=12 chars, must start alphanumeric) so a
-                    // descriptive "Band widths in mm" row isn't mistaken for one.
-                    if (preg_match('/^[A-Z0-9][A-Z0-9 ]{0,11}$/', $tok)) $codes[] = $tok;
+                    // Band codes can be long, descriptive names — suppliers use
+                    // spaces, digits, "&", and tape/finish words ("50mm Bamboo &
+                    // Gloss String", "35mm Herringbone Tapes"). Allow up to 60
+                    // chars (matches the band_code column) plus & . - ( ). The
+                    // old 12-char cap silently dropped these headers, stacking
+                    // their grids onto the previous band and colliding on the
+                    // unique cell key. Must still start alphanumeric so a
+                    // descriptive "Band widths in mm" prose row isn't a code.
+                    if (preg_match('/^[A-Z0-9][A-Z0-9 &.()-]{0,59}$/', $tok)) $codes[] = $tok;
                 }
                 if ($codes) {
                     $finalise();
