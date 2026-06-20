@@ -745,6 +745,37 @@ $activeNav = 'fabric-library';
 </script>
 <?php endif; ?>
 
+<?php if ($ready && ($hasSupplierGroups || $hasFabricCats)): ?>
+<!--
+    Remember which supplier groups / fabric groups are collapsed across the
+    full-page reloads that every drag-assign triggers. Without this, dropping a
+    range re-expands everything you'd just collapsed (the "ping-pong"). Keyed by
+    the body element's stable id, so each group keeps its own open/closed state.
+-->
+<script>
+(function () {
+    function key(id) { return 'yb-fl-collapse:' + id; }
+    document.querySelectorAll('.sg-toggle, .fcat-toggle').forEach(function (btn) {
+        var id   = btn.getAttribute('data-target');
+        var body = id && document.getElementById(id);
+        if (!body) return;
+
+        // Restore the saved state (overrides the server-rendered default).
+        var saved = null;
+        try { saved = localStorage.getItem(key(id)); } catch (e) {}
+        if (saved === '1')      { body.classList.add('collapsed');    btn.classList.remove('expanded'); }
+        else if (saved === '0') { body.classList.remove('collapsed'); btn.classList.add('expanded'); }
+
+        // Persist on every toggle. Runs after the existing toggle handler
+        // (registered earlier), so it reads the post-toggle state.
+        btn.addEventListener('click', function () {
+            try { localStorage.setItem(key(id), body.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+        });
+    });
+})();
+</script>
+<?php endif; ?>
+
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
