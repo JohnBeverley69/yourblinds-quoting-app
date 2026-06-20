@@ -115,6 +115,29 @@ if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.gc_maxlifetime',  (string) $sessionLifetime);
     ini_set('session.cookie_lifetime', (string) $sessionLifetime);
 
+    // The lifetime above only governs PHP's OWN garbage collector. On
+    // managed hosts (Cloudways) PHP's GC is usually disabled
+    // (gc_probability = 0) and an EXTERNAL cron/systemd cleaner deletes
+    // session files from the shared default folder using the SERVER's
+    // (much shorter) gc_maxlifetime — so users got logged out after ~an
+    // hour despite the 12h ask. Fix: keep our sessions in our OWN folder
+    // the external cleaner doesn't scan, and run our own GC so the 12h
+    // lifetime is what actually applies. The folder is in the system temp
+    // dir — OUTSIDE the web docroot — so session files are never
+    // web-served. Degrades safely: if the folder can't be created or
+    // written (e.g. open_basedir blocks it), we leave the host default
+    // untouched and behave exactly as before. See perf-check.php
+    // "Sessions" to verify the live values.
+    $ownSessionDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'yb_sessions';
+    if (!is_dir($ownSessionDir)) {
+        @mkdir($ownSessionDir, 0700, true);
+    }
+    if (is_dir($ownSessionDir) && is_writable($ownSessionDir)) {
+        session_save_path($ownSessionDir);
+        ini_set('session.gc_probability', '1');
+        ini_set('session.gc_divisor',     '100');
+    }
+
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     if ($isHttps) {

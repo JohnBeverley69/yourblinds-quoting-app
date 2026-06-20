@@ -31,6 +31,29 @@ echo "  version:            " . PHP_VERSION . "\n";
 echo "  memory_limit:       " . ini_get('memory_limit') . "\n";
 echo "  max_execution_time: " . ini_get('max_execution_time') . "\n\n";
 
+// ── Sessions (why people get logged out early) ─────────────────────
+// bootstrap.php asks for a 12h (43200s) lifetime via ini_set, but that
+// only governs PHP's OWN garbage collector. If gc_probability is 0 the
+// host runs an EXTERNAL cleaner (cron/systemd) that deletes session
+// files using the SERVER's gc_maxlifetime, ignoring our ini_set — the
+// usual cause of "I got logged out after ~an hour" despite the 12h
+// setting. The save_path tells us whether our files sit in the shared
+// default folder that external cleaner scans.
+echo "Sessions\n";
+$savePath = session_save_path();
+echo "  save_path:          " . ($savePath !== '' ? $savePath : '(host default — e.g. /var/lib/php/sessions or /tmp)') . "\n";
+echo "  gc_maxlifetime:     " . ini_get('session.gc_maxlifetime') . " s  (bootstrap asks for " . (12 * 60 * 60) . ")\n";
+echo "  gc_probability:     " . ini_get('session.gc_probability') . "\n";
+echo "  gc_divisor:         " . ini_get('session.gc_divisor') . "\n";
+$gcOn = (int) ini_get('session.gc_probability') > 0;
+echo "  → PHP's own GC is " . ($gcOn ? "ON (we control cleanup)"
+        : "OFF — an EXTERNAL host cleaner deletes sessions, ignoring our 12h ask") . "\n";
+echo "  cookie_lifetime:    " . ini_get('session.cookie_lifetime') . " s\n";
+echo "  open_basedir:       " . (ini_get('open_basedir') ?: '(none)') . "\n";
+$scanPath = $savePath !== '' ? $savePath : sys_get_temp_dir();
+echo "  writable:           " . (is_dir($scanPath) && is_writable($scanPath) ? "yes ($scanPath)" : "NO ($scanPath)") . "\n";
+echo "\n";
+
 // ── OPcache (biggest single lever) ─────────────────────────────────
 echo "OPcache\n";
 if (function_exists('opcache_get_status')) {
