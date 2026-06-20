@@ -86,77 +86,110 @@ try {
     }
 } catch (Throwable $e) { /* keep the safe fallback (show all) */ }
 
-$summary = null;
-$error   = null;
+$summary    = null;
+$error      = null;
+$stage      = 'upload';   // 'upload' | 'pick'
+$pickSheets = null;       // [['name'=>, 'bands'=>[...], 'cells'=>int], ...] for the pick step
+
+/**
+ * Write a set of parsed bands into this product/system. Replaces each band's
+ * existing rows. All-or-nothing (one transaction). Returns the per-band summary.
+ */
+$bpi_import = function (array $bands) use ($clientId, $productId, $systemId): array {
+    $pdo = db();
+    $insertedBands = [];
+    $pdo->beginTransaction();
+    try {
+        foreach ($bands as $band) {
+            $code  = strtoupper((string) ($band['code'] ?? ''));
+            $cells = is_array($band['cells'] ?? null) ? $band['cells'] : [];
+            if ($code === '') continue;
+
+            $find = $pdo->prepare(
+                'SELECT id FROM price_tables
+                  WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ?'
+            );
+            $find->execute([$clientId, $productId, $systemId, $code]);
+            $tableId = (int) ($find->fetchColumn() ?: 0);
+            if ($tableId === 0) {
+                $pdo->prepare(
+                    'INSERT INTO price_tables
+                       (client_id, product_id, system_id, band_code, name, active)
+                     VALUES (?, ?, ?, ?, ?, 1)'
+                )->execute([$clientId, $productId, $systemId, $code, 'Imported ' . date('Y-m-d')]);
+                $tableId = (int) $pdo->lastInsertId();
+            }
+            $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
+            $cellIns = $pdo->prepare(
+                'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, ?, ?)'
+            );
+            foreach ($cells as $cell) {
+                [$w, $d, $p] = array_values($cell);
+                $cellIns->execute([$tableId, (int) $w, (int) $d, (float) $p]);
+            }
+            $insertedBands[] = ['code' => $code, 'cells' => count($cells)];
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+    return $insertedBands;
+};
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    $action = (string) ($_POST['action'] ?? 'upload');
+    require __DIR__ . '/../../vendor/autoload.php';
+    require __DIR__ . '/../../_partials/price_table_parser.php';
 
-    if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    if ($action === 'import') {
+        // Second step: import the worksheet the user picked. The parsed bands
+        // round-trip through the form as JSON, so there's no re-upload.
+        $all = json_decode((string) ($_POST['payloads'] ?? ''), true);
+        $idx = (int) ($_POST['sheet_idx'] ?? -1);
+        $bands = (is_array($all) && isset($all[$idx]['bands']) && is_array($all[$idx]['bands']))
+            ? $all[$idx]['bands'] : null;
+        if (!$bands) {
+            $error = 'That selection expired — please upload the file again.';
+        } else {
+            try { $summary = ['bands' => $bpi_import($bands)]; }
+            catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
+        }
+    } elseif (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';
     } elseif (filesize($_FILES['file']['tmp_name']) > 10 * 1024 * 1024) {
         $error = 'File too large (10 MB max).';
     } else {
-        require __DIR__ . '/../../vendor/autoload.php';
-        require __DIR__ . '/../../_partials/price_table_parser.php';
         try {
-            $ss     = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
-            $bands  = [];
+            $ss = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
 
+            // Parse each sheet separately so a multi-sheet workbook (e.g. one
+            // sheet per slat size) can be imported one sheet at a time into the
+            // right system, instead of merging every sheet's bands together.
+            $sheetsWithBands = [];
             foreach ($ss->getAllSheets() as $sheet) {
-                $rows = $sheet->toArray(null, true, true, true);
-                $bands = array_merge($bands, ptp_parse_band_blocks($rows));
+                $b = ptp_parse_band_blocks($sheet->toArray(null, true, true, true));
+                if ($b) {
+                    $sheetsWithBands[] = [
+                        'name'  => $sheet->getTitle(),
+                        'bands' => $b,
+                        'cells' => array_sum(array_map(static fn ($x) => count($x['cells']), $b)),
+                    ];
+                }
             }
 
-            if (!$bands) {
+            if (!$sheetsWithBands) {
                 $error = 'No band sections detected. Each band block should start with a row containing "Band X" in column A.';
+            } elseif (count($sheetsWithBands) === 1) {
+                // Single usable sheet — import straight away (unchanged behaviour).
+                try { $summary = ['bands' => $bpi_import($sheetsWithBands[0]['bands'])]; }
+                catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
             } else {
-                $pdo = db();
-                $pdo->beginTransaction();
-                try {
-                    $insertedBands = [];
-                    foreach ($bands as $band) {
-                        $code = strtoupper($band['code']);
-                        // Find or create the price_table for this product+system+band.
-                        $find = $pdo->prepare(
-                            'SELECT id FROM price_tables
-                              WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ?'
-                        );
-                        $find->execute([$clientId, $productId, $systemId, $code]);
-                        $tableId = (int) ($find->fetchColumn() ?: 0);
-                        if ($tableId === 0) {
-                            $ins = $pdo->prepare(
-                                'INSERT INTO price_tables
-                                   (client_id, product_id, system_id, band_code, name, active)
-                                 VALUES (?, ?, ?, ?, ?, 1)'
-                            );
-                            $ins->execute([
-                                $clientId,
-                                $productId,
-                                $systemId,
-                                $code,
-                                'Imported ' . date('Y-m-d'),
-                            ]);
-                            $tableId = (int) $pdo->lastInsertId();
-                        }
-                        $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
-                        $del->execute([$tableId]);
-                        $cellIns = $pdo->prepare(
-                            'INSERT INTO price_table_rows
-                               (price_table_id, width_mm, drop_mm, price)
-                             VALUES (?, ?, ?, ?)'
-                        );
-                        foreach ($band['cells'] as [$w, $d, $p]) {
-                            $cellIns->execute([$tableId, $w, $d, $p]);
-                        }
-                        $insertedBands[] = ['code' => $code, 'cells' => count($band['cells'])];
-                    }
-                    $pdo->commit();
-                    $summary = ['bands' => $insertedBands];
-                } catch (Throwable $e) {
-                    $pdo->rollBack();
-                    $error = 'Database error: ' . $e->getMessage();
-                }
+                // Several sheets have bands — let the user pick which one goes
+                // into THIS system.
+                $stage      = 'pick';
+                $pickSheets = $sheetsWithBands;
             }
         } catch (Throwable $e) {
             $error = 'Could not read the file: ' . $e->getMessage();
@@ -263,11 +296,57 @@ $activeNav = 'products';
                     <li>Optional label rows (<code>DROP</code>, <code>WIDTH</code>, <code>Metric</code>, inches reference) get skipped</li>
                     <li>Data rows: drop in column A, prices in £ across the width columns; currency symbols / commas are stripped automatically</li>
                 </ul>
-                Multiple band blocks can be stacked vertically in one sheet, or spread across multiple sheets — both work.
+                Multiple band blocks can be stacked vertically in one sheet. If the file has
+                <strong>several worksheets</strong> with bands (e.g. one per slat size), you'll
+                pick which worksheet goes into this system.
                 <strong>Re-importing replaces</strong> any existing rows for each band <em>within this system</em>.
             </div>
         </section>
 
+        <?php if ($stage === 'pick' && $pickSheets): ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Which worksheet?</h2>
+            </div>
+            <p style="color:var(--text-muted);font-size:0.9375rem;margin:0 0 0.75rem">
+                This file has more than one worksheet with bands — common when one
+                file holds several slat sizes. Pick the one to import into
+                <strong><?= e((string) $system['system_name']) ?></strong>.
+            </p>
+            <form method="post" action="/admin/products/price-tables-bulk-import.php">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="import">
+                <input type="hidden" name="system_id" value="<?= (int) $systemId ?>">
+                <input type="hidden" name="payloads"
+                       value="<?= e((string) json_encode(
+                           array_map(static fn ($s) => ['bands' => $s['bands']], $pickSheets),
+                           JSON_UNESCAPED_UNICODE
+                       )) ?>">
+                <div style="display:flex;flex-direction:column;gap:0.5rem;margin:0 0 1rem">
+                    <?php foreach ($pickSheets as $i => $sh): ?>
+                        <label style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.75rem;
+                                      border:1px solid var(--border-strong);border-radius:8px;cursor:pointer">
+                            <input type="radio" name="sheet_idx" value="<?= (int) $i ?>" <?= $i === 0 ? 'checked' : '' ?>>
+                            <span>
+                                <strong><?= e((string) $sh['name']) ?></strong>
+                                <span style="color:var(--text-faint);font-size:0.8125rem">
+                                    &mdash; <?= count($sh['bands']) ?> band<?= count($sh['bands']) === 1 ? '' : 's' ?>,
+                                    <?= (int) $sh['cells'] ?> cells
+                                </span>
+                            </span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Import selected sheet into <?= e((string) $system['system_name']) ?> &rarr;
+                    </button>
+                    <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
+                       class="btn btn-secondary">Start over</a>
+                </div>
+            </form>
+        </section>
+        <?php else: ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Upload</h2>
@@ -276,6 +355,7 @@ $activeNav = 'products';
                   action="/admin/products/price-tables-bulk-import.php"
                   enctype="multipart/form-data">
                 <?= csrf_field() ?>
+                <input type="hidden" name="action" value="upload">
                 <input type="hidden" name="system_id" value="<?= (int) $systemId ?>">
 
                 <div class="form-row full">
@@ -288,12 +368,13 @@ $activeNav = 'products';
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Upload &amp; import all bands</button>
+                    <button type="submit" class="btn btn-primary">Upload &amp; import &rarr;</button>
                     <a href="/admin/products/price-tables.php?system_id=<?= (int) $systemId ?>"
                        class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 </body>
