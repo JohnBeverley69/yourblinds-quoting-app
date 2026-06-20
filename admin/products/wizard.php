@@ -1232,6 +1232,25 @@ $activeNav = 'wizard';
                            class="btn btn-secondary">Copy from another product &rarr;</a>
                     </div>
 
+                    <!-- Pricing-first path. Bands live on the price tables; once
+                         they exist the band box above auto-suggests them. So you
+                         can set up pricing now (bulk-import the grid) and come
+                         back to add slats, picking the band instead of retyping
+                         it. Keeps this a normal fabric product (unlike the
+                         no-fabric skip below). -->
+                    <div class="helper" style="display:flex;align-items:center;
+                                justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                        <span>
+                            <strong>Rather set up pricing first?</strong>
+                            Do the price tables now — bulk-import your grid — then
+                            come back here and add each <?= e($labelL) ?>: the band
+                            box will auto-suggest the bands you imported, so you
+                            pick rather than retype.
+                        </span>
+                        <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=4"
+                           class="btn btn-secondary">Price tables first &rarr;</a>
+                    </div>
+
                     <?php if ($hasRequiresOption): ?>
                         <!-- Escape hatch for headrail-only / track / spares
                              products that have no fabric axis at all. Flips
