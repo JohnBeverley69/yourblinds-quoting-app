@@ -93,25 +93,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
     exit;
 }
 
-$suppliers     = [];
-$fabricsBySup  = [];
-$catsBySup     = [];
-$hasFabricCats = false;
+$suppliers         = [];
+$fabricsBySup      = [];
+$catsBySup         = [];
+$hasFabricCats     = false;
+$supplierGroups    = [];
+$hasSupplierGroups = false;
 if ($ready) {
-    // Grouping is live once BOTH the categories table and the
-    // library_fabrics.category_id column exist (migrate_fabric_library_categories.php).
+    // Within-range fabric grouping (migrate_fabric_library_categories.php).
     try {
         $pdo->query('SELECT 1 FROM library_fabric_categories LIMIT 0');
         $pdo->query('SELECT category_id FROM library_fabrics LIMIT 0');
         $hasFabricCats = true;
     } catch (Throwable $e) { $hasFabricCats = false; }
 
+    // Supplier-level grouping (migrate_fabric_supplier_groups.php) — files the
+    // range rows under a real supplier (Decora, Eclipse…).
+    try {
+        $pdo->query('SELECT 1 FROM fabric_supplier_groups LIMIT 0');
+        $pdo->query('SELECT group_id FROM fabric_suppliers LIMIT 0');
+        $hasSupplierGroups = true;
+    } catch (Throwable $e) { $hasSupplierGroups = false; }
+
+    $supCols = 's.id, s.name, s.active' . ($hasSupplierGroups ? ', s.group_id' : '');
     $suppliers = $pdo->query(
-        'SELECT s.id, s.name, s.active,
+        "SELECT $supCols,
                 (SELECT COUNT(*) FROM library_fabrics f WHERE f.fabric_supplier_id = s.id) AS fabric_count
            FROM fabric_suppliers s
-          ORDER BY s.sort_order, s.name'
+          ORDER BY s.sort_order, s.name"
     )->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($hasSupplierGroups) {
+        $supplierGroups = $pdo->query(
+            'SELECT id, name FROM fabric_supplier_groups ORDER BY sort_order, name'
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     if ($hasFabricCats) {
         foreach ($pdo->query(
@@ -190,6 +206,154 @@ $renderFabricTable = function (array $rows, array $cats, bool $hasFabricCats) us
     <?php
 };
 
+/** Render one range (fabric_supplier) as a collapsible card. */
+$renderManufacturer = function (array $s) use (
+    $fabricsBySup, $catsBySup, $hasFabricCats,
+    $hasSupplierGroups, $supplierGroups, $renderFabricTable
+): void {
+    $sid     = (int) $s['id'];
+    $fabrics = $fabricsBySup[$sid] ?? [];
+    $curGrp  = (int) ($s['group_id'] ?? 0);
+    ?>
+    <section class="section <?= ((int) $s['active']) === 1 ? '' : 'retired' ?>">
+        <details class="fab-sup">
+            <summary>
+                <span style="display:flex;align-items:baseline;gap:.4rem">
+                    <?php if ($hasSupplierGroups): ?>
+                        <span class="man-grip" draggable="true" data-sid="<?= $sid ?>"
+                              title="Drag into a supplier group" onclick="event.stopPropagation()">⠿</span>
+                    <?php endif; ?>
+                    <span class="tw">&#9654;</span>
+                    <span class="s-name"><?= e((string) $s['name']) ?><?= ((int) $s['active']) !== 1 ? ' <span style="font-size:.6875rem;color:var(--text-faint);text-transform:uppercase">retired</span>' : '' ?></span>
+                </span>
+                <span class="s-count"><?= (int) $s['fabric_count'] ?> fabric<?= (int) $s['fabric_count'] === 1 ? '' : 's' ?></span>
+            </summary>
+            <div style="margin-top:0.75rem">
+                <?php if ($hasSupplierGroups): ?>
+                    <!-- Supplier group (fallback to dragging the grip) -->
+                    <form method="post" action="/master-admin/fabric-supplier-group.php"
+                          style="display:flex;gap:.4rem;align-items:center;margin:0 0 .75rem">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="assign">
+                        <input type="hidden" name="supplier_id" value="<?= $sid ?>">
+                        <label style="font-size:.8125rem;color:var(--text-muted)">Supplier group</label>
+                        <select name="group_id" onchange="this.form.submit()" class="group-select">
+                            <option value="0"<?= $curGrp === 0 ? ' selected' : '' ?>>— Ungrouped —</option>
+                            <?php foreach ($supplierGroups as $g): $gid = (int) $g['id']; ?>
+                                <option value="<?= $gid ?>"<?= $curGrp === $gid ? ' selected' : '' ?>><?= e((string) $g['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </form>
+                <?php endif; ?>
+
+                <!-- Manufacturer settings -->
+                <form method="post" action="/master-admin/fabric-library.php"
+                      style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.75rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="update_supplier">
+                    <input type="hidden" name="id" value="<?= $sid ?>">
+                    <input type="text" name="name" class="form-control" maxlength="120"
+                           value="<?= e((string) $s['name']) ?>" style="max-width:16rem">
+                    <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem">
+                        <input type="checkbox" name="active" value="1" <?= ((int) $s['active']) === 1 ? 'checked' : '' ?>> Active
+                    </label>
+                    <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem">Save</button>
+                    <span style="flex:1"></span>
+                    <button type="submit" class="btn btn-secondary" form="del-sup-<?= $sid ?>"
+                            style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete range</button>
+                </form>
+                <form id="del-sup-<?= $sid ?>" method="post" action="/master-admin/fabric-library.php" style="display:none"
+                      data-confirm="Delete “<?= e((string) $s['name']) ?>” and ALL <?= (int) $s['fabric_count'] ?> of its library fabrics? Products that already pulled fabrics in keep them. No undo.">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="delete_supplier">
+                    <input type="hidden" name="id" value="<?= $sid ?>">
+                </form>
+
+                <!-- Fabric list -->
+                <?php if ($fabrics): ?>
+                    <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .5rem">
+                        “Sugg. band” is the supplier's suggested band (from the import). Each client sets
+                        their own band when they add a fabric to a product — on the product's Fabrics page.
+                    </p>
+                <?php endif; ?>
+
+                <?php if (!$hasFabricCats): ?>
+                    <?php if ($fabrics): $renderFabricTable($fabrics, [], false); else: ?>
+                        <p style="color:var(--text-faint);font-size:.875rem;margin:0 0 .5rem">No fabrics yet — add one below, or import them.</p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <?php
+                        $cats = $catsBySup[$sid] ?? [];
+                        $byCat = [];
+                        foreach ($fabrics as $f) { $byCat[(int) ($f['category_id'] ?? 0)][] = $f; }
+                    ?>
+                    <!-- Add a group within this range -->
+                    <form method="post" action="/master-admin/fabric-category.php"
+                          style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 .75rem">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="create">
+                        <input type="hidden" name="fabric_supplier_id" value="<?= $sid ?>">
+                        <input type="text" name="name" class="form-control" maxlength="120"
+                               placeholder="New group (e.g. Blackout)" style="max-width:16rem">
+                        <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.3rem .75rem">+ Add group</button>
+                        <span style="color:var(--text-faint);font-size:.8125rem">Drag the ⋮⋮ handle onto a group, or use the Group dropdown.</span>
+                    </form>
+
+                    <?php foreach ($cats as $c): $cidd = (int) $c['id']; $gRows = $byCat[$cidd] ?? []; $bodyId = 'fgb-' . $sid . '-' . $cidd; ?>
+                        <div class="fdz drop-zone" data-sid="<?= $sid ?>" data-cat="<?= $cidd ?>">
+                            <h3 class="fcat-heading fcat-draggable" draggable="true" data-sid="<?= $sid ?>" data-cat="<?= $cidd ?>" title="Drag to reorder groups">
+                                <button type="button" class="fcat-toggle" data-target="<?= $bodyId ?>" draggable="false" aria-label="Show or hide fabrics">&#9654;</button>
+                                <span class="fcat-grip" aria-hidden="true">⠿</span>
+                                <?= e((string) $c['name']) ?>
+                                <span class="fcat-count"><?= count($gRows) ?></span>
+                                <form method="post" action="/master-admin/fabric-category.php" style="display:inline;margin-left:.5rem"
+                                      data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its fabrics are NOT deleted — they just become ungrouped.">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="_action" value="delete">
+                                    <input type="hidden" name="category_id" value="<?= $cidd ?>">
+                                    <button type="submit" class="fcat-del">remove group</button>
+                                </form>
+                            </h3>
+                            <div class="fcat-body collapsed" id="<?= $bodyId ?>">
+                                <?php if ($gRows): $renderFabricTable($gRows, $cats, true); else: ?>
+                                    <p class="drop-empty">Empty — drag a fabric's ⋮⋮ handle here, or pick this group from its Group dropdown.</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <?php $ung = $byCat[0] ?? []; ?>
+                    <div class="fdz drop-zone" data-sid="<?= $sid ?>" data-cat="0">
+                        <h3 class="fcat-heading">
+                            <button type="button" class="fcat-toggle expanded" data-target="fgb-<?= $sid ?>-0" draggable="false" aria-label="Show or hide fabrics">&#9654;</button>
+                            Ungrouped <span class="fcat-count"><?= count($ung) ?></span>
+                        </h3>
+                        <div class="fcat-body" id="fgb-<?= $sid ?>-0">
+                            <?php if ($ung): $renderFabricTable($ung, $cats, true); else: ?>
+                                <p class="drop-empty">Nothing ungrouped — drag a fabric's ⋮⋮ handle here to remove it from its group.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Add a fabric -->
+                <form method="post" action="/master-admin/fabric-library.php" class="fab-add">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="add_fabric">
+                    <input type="hidden" name="fabric_supplier_id" value="<?= $sid ?>">
+                    <div><label>Fabric name</label><input type="text" name="name" maxlength="160" required></div>
+                    <div><label>Colour</label><input type="text" name="colour" maxlength="120"></div>
+                    <div><label>Code</label><input type="text" name="code" maxlength="80"></div>
+                    <div><label>Band</label><input type="text" name="suggested_band" maxlength="60" placeholder="A"></div>
+                    <div><label>Blind type</label><input type="text" name="blind_type" maxlength="60" placeholder="Roller"></div>
+                    <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.4rem .75rem">+ Add</button>
+                </form>
+            </div>
+        </details>
+    </section>
+    <?php
+};
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -236,7 +400,22 @@ $activeNav = 'fabric-library';
         .fcat-del { background: none; border: 0; color: #b91c1c; cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0; }
         .fcat-body.collapsed { display: none; }
         .drop-empty { color: var(--text-faint); font-size: 0.8125rem; padding: 0.5rem 0.25rem; margin: 0; }
-        .group-select { padding: 0.2rem 0.3rem; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 0.8125rem; background: var(--bg-input); max-width: 11rem; }
+        .group-select { padding: 0.2rem 0.3rem; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 0.8125rem; background: var(--bg-input); max-width: 13rem; }
+
+        /* Supplier-level grouping (the layer above ranges) */
+        .man-grip { color: var(--text-faint); cursor: grab; font-size: 0.9rem; }
+        .man-grip:active { cursor: grabbing; }
+        .sg-zone { border: 1px solid var(--border-strong); border-radius: 12px; padding: 0.25rem 0.85rem 0.6rem; margin: 0 0 0.85rem; transition: background 80ms; }
+        .sg-zone.drop-hover { background: rgba(37, 99, 235, 0.06); outline: 2px dashed #2563eb; outline-offset: -2px; }
+        .sg-heading { display: flex; align-items: center; gap: 0.45rem; font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin: 0.5rem 0; }
+        .sg-heading.dragging { opacity: 0.5; }
+        .sg-draggable { cursor: grab; }
+        .sg-draggable:active { cursor: grabbing; }
+        .sg-grip { color: var(--text-faint); cursor: grab; font-size: 0.95rem; }
+        .sg-toggle { background: none; border: 0; cursor: pointer; color: var(--text-faint); font-size: 0.8125rem; padding: 0; transition: transform 120ms; }
+        .sg-toggle.expanded { transform: rotate(90deg); }
+        .sg-count { background: var(--bg-subtle-2); color: var(--text-muted); font-size: 0.75rem; font-weight: 600; border-radius: 999px; padding: 0.05rem 0.5rem; }
+        .sg-body.collapsed { display: none; }
     </style>
 </head>
 <body>
@@ -248,8 +427,8 @@ $activeNav = 'fabric-library';
             <div>
                 <h1 class="page-title">Fabric Library</h1>
                 <p class="page-subtitle">
-                    Fabrics grouped by manufacturer — the second library that feeds products
-                    (the Master Catalogue holds price tables; this holds the cloth).
+                    The cloth library that feeds products — file each range under its supplier
+                    (Decora, Eclipse…). The Master Catalogue holds price tables; this holds the cloth.
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -292,133 +471,74 @@ $activeNav = 'fabric-library';
         <!-- Manufacturers (collapsible) -->
         <?php if (!$suppliers): ?>
             <section class="section"><p style="color:var(--text-faint);margin:0">No manufacturers yet — add one above.</p></section>
-        <?php else: foreach ($suppliers as $s):
-            $sid     = (int) $s['id'];
-            $fabrics = $fabricsBySup[$sid] ?? [];
-        ?>
-            <section class="section <?= ((int) $s['active']) === 1 ? '' : 'retired' ?>">
-                <details class="fab-sup">
-                    <summary>
-                        <span style="display:flex;align-items:baseline;gap:.4rem">
-                            <span class="tw">&#9654;</span>
-                            <span class="s-name"><?= e((string) $s['name']) ?><?= ((int) $s['active']) !== 1 ? ' <span style="font-size:.6875rem;color:var(--text-faint);text-transform:uppercase">retired</span>' : '' ?></span>
-                        </span>
-                        <span class="s-count"><?= (int) $s['fabric_count'] ?> fabric<?= (int) $s['fabric_count'] === 1 ? '' : 's' ?></span>
-                    </summary>
-                    <div style="margin-top:0.75rem">
-                        <!-- Manufacturer settings -->
-                        <form method="post" action="/master-admin/fabric-library.php"
-                              style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.75rem">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="_action" value="update_supplier">
-                            <input type="hidden" name="id" value="<?= $sid ?>">
-                            <input type="text" name="name" class="form-control" maxlength="120"
-                                   value="<?= e((string) $s['name']) ?>" style="max-width:16rem">
-                            <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem">
-                                <input type="checkbox" name="active" value="1" <?= ((int) $s['active']) === 1 ? 'checked' : '' ?>> Active
-                            </label>
-                            <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem">Save</button>
-                            <span style="flex:1"></span>
-                            <button type="submit" class="btn btn-secondary" form="del-sup-<?= $sid ?>"
-                                    style="color:#b91c1c;font-size:.8125rem;padding:.25rem .625rem">Delete manufacturer</button>
-                        </form>
-                        <form id="del-sup-<?= $sid ?>" method="post" action="/master-admin/fabric-library.php" style="display:none"
-                              data-confirm="Delete “<?= e((string) $s['name']) ?>” and ALL <?= (int) $s['fabric_count'] ?> of its library fabrics? Products that already pulled fabrics in keep them. No undo.">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="_action" value="delete_supplier">
-                            <input type="hidden" name="id" value="<?= $sid ?>">
-                        </form>
+        <?php else: ?>
+            <?php if (!$hasSupplierGroups): ?>
+                <!-- Supplier grouping not migrated yet: flat list of ranges + a hint. -->
+                <section class="section">
+                    <p style="color:var(--text-faint);font-size:.8125rem;margin:0">
+                        Want to file these ranges under a supplier (Decora, Eclipse…)? Run
+                        <a href="/migrate_fabric_supplier_groups.php"><code>/migrate_fabric_supplier_groups.php</code></a>
+                        (super-admin) to switch on supplier groups.
+                    </p>
+                </section>
+                <?php foreach ($suppliers as $s) $renderManufacturer($s); ?>
+            <?php else: ?>
+                <!-- Add a supplier group -->
+                <section class="section" style="padding-top:.75rem;padding-bottom:.75rem">
+                    <form method="post" action="/master-admin/fabric-supplier-group.php"
+                          style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="create">
+                        <input type="text" name="name" class="form-control" maxlength="120"
+                               placeholder="New supplier group (e.g. Decora)" style="max-width:20rem">
+                        <button type="submit" class="btn btn-primary">+ Add supplier group</button>
+                        <span style="color:var(--text-faint);font-size:.8125rem">Then drag each range's ⠿ grip into it (or use the Supplier group dropdown inside a range).</span>
+                    </form>
+                </section>
 
-                        <!-- Fabric list -->
-                        <?php if ($fabrics): ?>
-                            <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .5rem">
-                                “Sugg. band” is the supplier's suggested band (from the import). Each client sets
-                                their own band when they add a fabric to a product — on the product's Fabrics page.
-                            </p>
-                        <?php endif; ?>
+                <?php
+                    // Bucket ranges by supplier group (0 = ungrouped).
+                    $bySupGroup = [];
+                    foreach ($suppliers as $s) { $bySupGroup[(int) ($s['group_id'] ?? 0)][] = $s; }
+                ?>
 
-                        <?php if (!$hasFabricCats): ?>
-                            <!-- Grouping not migrated yet: flat list (+ a hint). -->
-                            <?php if ($fabrics): $renderFabricTable($fabrics, [], false); else: ?>
-                                <p style="color:var(--text-faint);font-size:.875rem;margin:0 0 .5rem">No fabrics yet — add one below, or import them.</p>
-                            <?php endif; ?>
-                            <p style="color:var(--text-faint);font-size:.8125rem;margin:.5rem 0 0">
-                                Want to file these under headings? Run
-                                <a href="/migrate_fabric_library_categories.php"><code>/migrate_fabric_library_categories.php</code></a>
-                                (super-admin) to switch on groups.
-                            </p>
-                        <?php else: ?>
-                            <?php
-                                $cats = $catsBySup[$sid] ?? [];
-                                // Bucket this manufacturer's fabrics by group (0 = ungrouped).
-                                $byCat = [];
-                                foreach ($fabrics as $f) { $byCat[(int) ($f['category_id'] ?? 0)][] = $f; }
-                            ?>
-                            <!-- Add a group for this manufacturer -->
-                            <form method="post" action="/master-admin/fabric-category.php"
-                                  style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 .75rem">
+                <?php foreach ($supplierGroups as $g): $gid = (int) $g['id']; $gRanges = $bySupGroup[$gid] ?? []; $sgBody = 'sgb-' . $gid; ?>
+                    <div class="sg-zone" data-grp="<?= $gid ?>">
+                        <h2 class="sg-heading sg-draggable" draggable="true" data-grp="<?= $gid ?>" title="Drag to reorder supplier groups">
+                            <button type="button" class="sg-toggle expanded" data-target="<?= $sgBody ?>" draggable="false" aria-label="Show or hide ranges">&#9654;</button>
+                            <span class="sg-grip" aria-hidden="true">⠿</span>
+                            <?= e((string) $g['name']) ?>
+                            <span class="sg-count"><?= count($gRanges) ?> range<?= count($gRanges) === 1 ? '' : 's' ?></span>
+                            <form method="post" action="/master-admin/fabric-supplier-group.php" style="display:inline;margin-left:.5rem"
+                                  data-confirm="Delete the supplier group &quot;<?= e((string) $g['name']) ?>&quot;? Its ranges are NOT deleted — they just become ungrouped.">
                                 <?= csrf_field() ?>
-                                <input type="hidden" name="_action" value="create">
-                                <input type="hidden" name="fabric_supplier_id" value="<?= $sid ?>">
-                                <input type="text" name="name" class="form-control" maxlength="120"
-                                       placeholder="New group (e.g. Blackout)" style="max-width:16rem">
-                                <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.3rem .75rem">+ Add group</button>
-                                <span style="color:var(--text-faint);font-size:.8125rem">Drag the ⋮⋮ handle onto a group, or use the Group dropdown.</span>
+                                <input type="hidden" name="_action" value="delete">
+                                <input type="hidden" name="group_id" value="<?= $gid ?>">
+                                <button type="submit" class="fcat-del">remove group</button>
                             </form>
-
-                            <?php foreach ($cats as $c): $cidd = (int) $c['id']; $gRows = $byCat[$cidd] ?? []; $bodyId = 'fgb-' . $sid . '-' . $cidd; ?>
-                                <div class="fdz drop-zone" data-sid="<?= $sid ?>" data-cat="<?= $cidd ?>">
-                                    <h3 class="fcat-heading fcat-draggable" draggable="true" data-sid="<?= $sid ?>" data-cat="<?= $cidd ?>" title="Drag to reorder groups">
-                                        <button type="button" class="fcat-toggle" data-target="<?= $bodyId ?>" draggable="false" aria-label="Show or hide fabrics">&#9654;</button>
-                                        <span class="fcat-grip" aria-hidden="true">⠿</span>
-                                        <?= e((string) $c['name']) ?>
-                                        <span class="fcat-count"><?= count($gRows) ?></span>
-                                        <form method="post" action="/master-admin/fabric-category.php" style="display:inline;margin-left:.5rem"
-                                              data-confirm="Delete the group &quot;<?= e((string) $c['name']) ?>&quot;? Its fabrics are NOT deleted — they just become ungrouped.">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="_action" value="delete">
-                                            <input type="hidden" name="category_id" value="<?= $cidd ?>">
-                                            <button type="submit" class="fcat-del">remove group</button>
-                                        </form>
-                                    </h3>
-                                    <div class="fcat-body collapsed" id="<?= $bodyId ?>">
-                                        <?php if ($gRows): $renderFabricTable($gRows, $cats, true); else: ?>
-                                            <p class="drop-empty">Empty — drag a fabric's ⋮⋮ handle here, or pick this group from its Group dropdown.</p>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-
-                            <?php $ung = $byCat[0] ?? []; ?>
-                            <div class="fdz drop-zone" data-sid="<?= $sid ?>" data-cat="0">
-                                <h3 class="fcat-heading">
-                                    <button type="button" class="fcat-toggle expanded" data-target="fgb-<?= $sid ?>-0" draggable="false" aria-label="Show or hide fabrics">&#9654;</button>
-                                    Ungrouped <span class="fcat-count"><?= count($ung) ?></span>
-                                </h3>
-                                <div class="fcat-body" id="fgb-<?= $sid ?>-0">
-                                    <?php if ($ung): $renderFabricTable($ung, $cats, true); else: ?>
-                                        <p class="drop-empty">Nothing ungrouped — drag a fabric's ⋮⋮ handle here to remove it from its group.</p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
-                        <!-- Add a fabric -->
-                        <form method="post" action="/master-admin/fabric-library.php" class="fab-add">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="_action" value="add_fabric">
-                            <input type="hidden" name="fabric_supplier_id" value="<?= $sid ?>">
-                            <div><label>Fabric name</label><input type="text" name="name" maxlength="160" required></div>
-                            <div><label>Colour</label><input type="text" name="colour" maxlength="120"></div>
-                            <div><label>Code</label><input type="text" name="code" maxlength="80"></div>
-                            <div><label>Band</label><input type="text" name="suggested_band" maxlength="60" placeholder="A"></div>
-                            <div><label>Blind type</label><input type="text" name="blind_type" maxlength="60" placeholder="Roller"></div>
-                            <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.4rem .75rem">+ Add</button>
-                        </form>
+                        </h2>
+                        <div class="sg-body" id="<?= $sgBody ?>">
+                            <?php if ($gRanges): foreach ($gRanges as $s) $renderManufacturer($s); else: ?>
+                                <p class="drop-empty">Empty — drag a range's ⠿ grip here.</p>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                </details>
-            </section>
-        <?php endforeach; endif; ?>
+                <?php endforeach; ?>
+
+                <?php $ungR = $bySupGroup[0] ?? []; ?>
+                <div class="sg-zone" data-grp="0">
+                    <h2 class="sg-heading">
+                        <button type="button" class="sg-toggle expanded" data-target="sgb-0" draggable="false" aria-label="Show or hide ranges">&#9654;</button>
+                        Ungrouped <span class="sg-count"><?= count($ungR) ?> range<?= count($ungR) === 1 ? '' : 's' ?></span>
+                    </h2>
+                    <div class="sg-body" id="sgb-0">
+                        <?php if ($ungR): foreach ($ungR as $s) $renderManufacturer($s); else: ?>
+                            <p class="drop-empty">Nothing ungrouped — every range is filed under a supplier.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
 
         <?php endif; /* ready */ ?>
     </main>
@@ -516,6 +636,104 @@ $activeNav = 'fabric-library';
 
     // Collapse / expand a group's fabrics.
     document.querySelectorAll('.fcat-toggle').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var body = document.getElementById(btn.getAttribute('data-target'));
+            if (!body) return;
+            body.classList.toggle('collapsed');
+            btn.classList.toggle('expanded', !body.classList.contains('collapsed'));
+        });
+    });
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($ready && $hasSupplierGroups): ?>
+<!-- Supplier-level drag handlers (separate from the fabric-level ones above). -->
+<form id="sg-assign-form" method="post" action="/master-admin/fabric-supplier-group.php" style="display:none">
+    <?= csrf_field() ?>
+    <input type="hidden" name="_action" value="assign">
+    <input type="hidden" name="supplier_id" value="">
+    <input type="hidden" name="group_id" value="">
+</form>
+<form id="sg-order-form" method="post" action="/master-admin/fabric-supplier-group.php" style="display:none">
+    <?= csrf_field() ?>
+    <input type="hidden" name="_action" value="reorder_groups">
+</form>
+<script>
+(function () {
+    var assignForm = document.getElementById('sg-assign-form');
+    var orderForm  = document.getElementById('sg-order-form');
+    var zones = Array.prototype.slice.call(document.querySelectorAll('.sg-zone'));
+    var active = false, dragType = null, dragId = null;
+
+    function clearHover() { zones.forEach(function (z) { z.classList.remove('drop-hover'); }); }
+
+    // Drag a RANGE grip → file it into a supplier group.
+    document.querySelectorAll('.man-grip').forEach(function (h) {
+        h.addEventListener('dragstart', function (e) {
+            active = true; dragType = 'range'; dragId = h.getAttribute('data-sid');
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
+        });
+        h.addEventListener('dragend', function () { active = false; clearHover(); });
+    });
+
+    // Drag a GROUP heading → reorder supplier groups.
+    document.querySelectorAll('.sg-draggable').forEach(function (hh) {
+        hh.addEventListener('dragstart', function (e) {
+            active = true; dragType = 'group'; dragId = hh.getAttribute('data-grp');
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', 'g' + dragId); } catch (err) {}
+            hh.classList.add('dragging');
+        });
+        hh.addEventListener('dragend', function () { active = false; hh.classList.remove('dragging'); clearHover(); });
+    });
+
+    zones.forEach(function (z) {
+        z.addEventListener('dragover', function (e) {
+            if (!active) return;   // ignore the fabric-level drags handled above
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            z.classList.add('drop-hover');
+        });
+        z.addEventListener('dragleave', function (e) {
+            if (!z.contains(e.relatedTarget)) z.classList.remove('drop-hover');
+        });
+        z.addEventListener('drop', function (e) {
+            if (!active) return;
+            e.preventDefault();
+            clearHover();
+            var grp = z.getAttribute('data-grp');
+
+            if (dragType === 'group') {
+                if (!dragId || dragId === grp) return;
+                var order = zones
+                    .map(function (zz) { return zz.getAttribute('data-grp'); })
+                    .filter(function (c) { return c !== '0' && c !== dragId; });
+                if (grp === '0') { order.push(dragId); }
+                else { var ti = order.indexOf(grp); if (ti < 0) order.push(dragId); else order.splice(ti, 0, dragId); }
+                orderForm.querySelectorAll('input[name="order[]"]').forEach(function (n) { n.remove(); });
+                order.forEach(function (id) {
+                    var inp = document.createElement('input');
+                    inp.type = 'hidden'; inp.name = 'order[]'; inp.value = id;
+                    orderForm.appendChild(inp);
+                });
+                orderForm.submit();
+                return;
+            }
+
+            // Range assign (default).
+            if (!dragId) return;
+            var grip = document.querySelector('.man-grip[data-sid="' + dragId + '"]');
+            if (grip && grip.closest('.sg-zone') === z) return;   // already in this group
+            assignForm.querySelector('[name=supplier_id]').value = dragId;
+            assignForm.querySelector('[name=group_id]').value = grp;
+            assignForm.submit();
+        });
+    });
+
+    // Collapse / expand a supplier group.
+    document.querySelectorAll('.sg-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var body = document.getElementById(btn.getAttribute('data-target'));
             if (!body) return;
