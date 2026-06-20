@@ -311,11 +311,25 @@ try {
     )->fetchColumn();
 } catch (Throwable $e) { /* keep false */ }
 
+// fabric_group is an optional column (migrate_option_fabric_group.php) — the
+// Fabric Library group a pulled fabric came from. Probe once; show a Group
+// column only when it's present.
+$hasFabricGroupCol = false;
+try {
+    $hasFabricGroupCol = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_options'
+            AND COLUMN_NAME  = 'fabric_group'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
 // List existing options. Custom band sort: AAA → AA → A → B → C → ...
 // (premium "A" tiers in descending length, then alphabetical for the rest).
 $rows = db()->prepare(
     "SELECT id, band_code, supplier_name, name, colour, code, sort_order, active"
-    . ($hasSystemIdCol ? ', system_id' : '') . "
+    . ($hasSystemIdCol ? ', system_id' : '')
+    . ($hasFabricGroupCol ? ', fabric_group' : '') . "
        FROM product_options
       WHERE product_id = ? AND client_id = ?
    ORDER BY
@@ -762,6 +776,7 @@ $activeNav = 'products';
                                     <?php endif; ?>
                                     <th>Supplier</th>
                                     <th>Code</th>
+                                    <?php if ($hasFabricGroupCol): ?><th>Group</th><?php endif; ?>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -785,7 +800,8 @@ $activeNav = 'products';
                                         (string) ($o['colour']        ?? ''),
                                         (string) ($o['supplier_name'] ?? ''),
                                         (string) ($o['code']          ?? ''),
-                                        $showSystemCol ? $rowSysName : '',
+                                        $showSystemCol     ? $rowSysName : '',
+                                        $hasFabricGroupCol ? (string) ($o['fabric_group'] ?? '') : '',
                                     ])));
                                 ?>
                                     <tr data-search="<?= e($searchBlob) ?>">
@@ -815,6 +831,16 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                         <td><?= e((string) ($o['supplier_name'] ?? '')) ?></td>
                                         <td><?= e((string) ($o['code'] ?? '')) ?></td>
+                                        <?php if ($hasFabricGroupCol): ?>
+                                            <td>
+                                                <?php $grpVal = trim((string) ($o['fabric_group'] ?? '')); ?>
+                                                <?php if ($grpVal !== ''): ?>
+                                                    <span class="band-pill" style="background:var(--bg-subtle-2)"><?= e($grpVal) ?></span>
+                                                <?php else: ?>
+                                                    <span style="color:var(--text-faint);font-size:0.8125rem">—</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        <?php endif; ?>
                                         <td class="row-actions">
                                             <a href="/admin/products/option-edit.php?id=<?= (int) $o['id'] ?>">Edit</a>
                                             <button type="button" class="row-delete"

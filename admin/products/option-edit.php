@@ -82,6 +82,26 @@ if ($hasSystemIdCol) {
     $currentSystemId = ($sidVal === null || $sidVal === false) ? null : (int) $sidVal;
 }
 
+// fabric_group is an optional column (migrate_option_fabric_group.php) — the
+// Fabric Library group this fabric was pulled from. Organisational only.
+$hasFabricGroupCol = false;
+try {
+    $hasFabricGroupCol = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_options'
+            AND COLUMN_NAME  = 'fabric_group'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$currentFabricGroup = '';
+if ($hasFabricGroupCol) {
+    $fgStmt = db()->prepare('SELECT fabric_group FROM product_options WHERE id = ? AND client_id = ?');
+    $fgStmt->execute([$id, $clientId]);
+    $fgVal = $fgStmt->fetchColumn();
+    $currentFabricGroup = ($fgVal === null || $fgVal === false) ? '' : (string) $fgVal;
+}
+
 // Product's systems for the scope dropdown (sort_order optional).
 $systems = [];
 try {
@@ -126,6 +146,7 @@ $f = [
                           ? (string) $option['cost_price']
                           : '',
     'system_id'     => $currentSystemId,
+    'fabric_group'  => $currentFabricGroup,
 ];
 $error = null;
 
@@ -135,9 +156,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (['band_code','supplier_name','name','colour','code'] as $k) {
         $f[$k] = trim((string) ($_POST[$k] ?? ''));
     }
-    $f['sort_order'] = (int) ($_POST['sort_order'] ?? 0);
-    $f['active']     = !empty($_POST['active']) ? 1 : 0;
-    $f['cost_price'] = trim((string) ($_POST['cost_price'] ?? ''));
+    $f['sort_order']   = (int) ($_POST['sort_order'] ?? 0);
+    $f['active']       = !empty($_POST['active']) ? 1 : 0;
+    $f['cost_price']   = trim((string) ($_POST['cost_price'] ?? ''));
+    $f['fabric_group'] = trim((string) ($_POST['fabric_group'] ?? ''));
     // System scope — '' / '0' = "all systems" (stored NULL).
     if ($hasSystemIdCol) {
         $sysRaw = (string) ($_POST['system_id'] ?? '');
@@ -188,6 +210,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasSystemIdCol) {
                 $set[]    = 'system_id = ?';
                 $params[] = $f['system_id'];
+            }
+            if ($hasFabricGroupCol) {
+                $set[]    = 'fabric_group = ?';
+                $params[] = $f['fabric_group'] !== '' ? $f['fabric_group'] : null;
             }
             $params[] = $id;
             $params[] = $clientId;
@@ -327,6 +353,21 @@ $activeNav = 'products';
                                value="<?= (int) $f['sort_order'] ?>">
                     </div>
                 </div>
+
+                <?php if ($hasFabricGroupCol): ?>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="fabric_group">Group</label>
+                            <input id="fabric_group" name="fabric_group" type="text" maxlength="120"
+                                   value="<?= e((string) $f['fabric_group']) ?>" placeholder="e.g. Blackout">
+                            <small style="display:block;margin-top:0.35rem;color:var(--text-faint);font-size:0.8125rem">
+                                The Fabric Library group this <?= e($labelL) ?> came from — carried over
+                                automatically when pulled from the library. Edit or clear it here; it's
+                                organisational only and doesn't affect pricing.
+                            </small>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <?php /* Per-option wholesale cost field removed — cost is
                          captured by the price tables (band-priced cells
