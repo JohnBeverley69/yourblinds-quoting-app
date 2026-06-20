@@ -35,11 +35,19 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/library.php';
 
 requireSuperAdmin();
 
 $user = current_user();
 $pdo  = db();
+
+// The MASTER tenant holds the source catalogue every other tenant is built
+// from — wiping it (which is what just happened once) takes the whole library
+// down. Never let it be wiped by accident: it's not pre-ticked, it's flagged
+// in red, and it's stripped from the delete unless a separate "include master"
+// box is explicitly ticked.
+$masterId = library_master_client_id();
 
 // ── GET: read filter, build preview ──────────────────────────────────
 $filter = trim((string) ($_GET['filter'] ?? $_POST['filter'] ?? ''));
@@ -91,12 +99,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         static fn ($n) => $n > 0
     )));
 
+    // Guard the master tenant: drop it from the selection unless the operator
+    // explicitly opted in. This is the safety net behind the un-ticked box.
+    $includeMaster   = (string) ($_POST['include_master'] ?? '') === 'yes';
+    $masterRequested = $masterId > 0 && in_array($masterId, $tenantIds, true);
+    $masterBlocked   = false;
+    if ($masterId > 0 && !$includeMaster) {
+        $before      = count($tenantIds);
+        $tenantIds   = array_values(array_filter($tenantIds, static fn ($id) => $id !== $masterId));
+        $masterBlocked = $before !== count($tenantIds);
+    }
+
     if ($filter === '') {
         $flashErr = 'Name filter required — refuse to wipe every product.';
     } elseif (strtoupper($confirm) !== 'WIPE') {
         $flashErr = 'Type the word WIPE in the confirmation field.';
     } elseif (!$tenantIds) {
-        $flashErr = 'No tenants selected.';
+        $flashErr = $masterBlocked
+            ? 'Only the master catalogue was selected. To wipe it you must tick "Include the master catalogue" — but you almost never want to.'
+            : 'No tenants selected.';
     } else {
         $like = '%' . $filter . '%';
         $ph   = implode(',', array_fill(0, count($tenantIds), '?'));
@@ -110,7 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                . ($deleted === 1 ? '' : 's')
                . " across " . count($tenantIds) . " tenant"
                . (count($tenantIds) === 1 ? '' : 's')
-               . ". Cascade dropped systems / fabrics / price tables / extras for each.";
+               . ". Cascade dropped systems / fabrics / price tables / extras for each."
+               . ($masterBlocked ? ' Your master catalogue was left untouched (it was not included).' : '');
 
         // Reset the preview so the page re-renders with the wipe done.
         $preview = [];
@@ -241,13 +263,13 @@ $activeNav = 'master-admin';
                         </button>
                     </p>
                     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg-card)">
-                        <?php foreach ($preview as $p): ?>
-                            <div class="tenant-row">
+                        <?php foreach ($preview as $p): $isMaster = $masterId > 0 && (int) $p['client_id'] === $masterId; ?>
+                            <div class="tenant-row"<?= $isMaster ? ' style="background:#fef2f2"' : '' ?>>
                                 <div>
                                     <input type="checkbox" name="tenants[]"
                                            class="tenant-cb"
                                            value="<?= (int) $p['client_id'] ?>"
-                                           id="t<?= (int) $p['client_id'] ?>" checked
+                                           id="t<?= (int) $p['client_id'] ?>" <?= $isMaster ? '' : 'checked' ?>
                                            style="width:18px;height:18px;cursor:pointer">
                                 </div>
                                 <div>
@@ -257,6 +279,9 @@ $activeNav = 'master-admin';
                                             <span style="color:var(--text-faint);font-weight:400;font-size:0.8125rem">
                                                 (client #<?= (int) $p['client_id'] ?>)
                                             </span>
+                                            <?php if ($isMaster): ?>
+                                                <span style="color:#b91c1c;font-weight:700;font-size:0.75rem;text-transform:uppercase;margin-left:0.4rem">★ Master catalogue — leave unticked</span>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="products">
                                             <?php
@@ -278,6 +303,12 @@ $activeNav = 'master-admin';
                         Cascade-delete is immediate and unrecoverable
                         without a backup restore.
                     </p>
+                    <?php if ($masterId > 0 && isset($preview[$masterId])): ?>
+                        <label class="check-row" style="color:#b91c1c;font-weight:600;margin:0 0 0.625rem">
+                            <input type="checkbox" name="include_master" value="yes">
+                            <span>Include the <strong>master catalogue</strong> (client #<?= $masterId ?>) in the wipe — this destroys your source catalogue. Leave this off unless you truly mean it.</span>
+                        </label>
+                    <?php endif; ?>
                     <div style="display:flex;gap:0.625rem;align-items:center;flex-wrap:wrap">
                         <input type="text" name="confirm" class="confirm-input"
                                autocomplete="off" placeholder="Type WIPE">
