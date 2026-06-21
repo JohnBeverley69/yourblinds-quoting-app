@@ -1245,6 +1245,11 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Suppliers</h2>
             </div>
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+                Who you <strong>order stock from</strong> — these fill a product's
+                <em>Order supplier</em> field and go on purchase orders. Tick a row's delete box
+                to remove a stray (they get added automatically when you save a product).
+            </p>
             <form method="post" action="/admin/settings.php" class="form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="suppliers">

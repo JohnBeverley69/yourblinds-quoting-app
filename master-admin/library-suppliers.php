@@ -148,7 +148,9 @@ $activeNav = 'library-suppliers';
                 <h1 class="page-title">Library suppliers</h1>
                 <p class="page-subtitle">
                     The suppliers offered by the Price-List Library. Each one's products live
-                    on the master account under its prefix.
+                    on the master account under its prefix &mdash; products are filed under a
+                    supplier by their <strong>name prefix</strong>, not by a product's order-supplier
+                    field. (Different from the per-tenant <em>order suppliers</em> in Settings.)
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
