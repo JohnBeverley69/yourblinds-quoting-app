@@ -729,6 +729,22 @@ $activeNav = 'accounts';
                         <span>To</span>
                         <input type="date" name="to" value="<?= e($to) ?>">
                     </label>
+                    <?php
+                        // Month quick-picks — preserve the text search + method,
+                        // override the date window. Highlight the one in effect.
+                        $thisFrom = (new DateTimeImmutable('first day of this month'))->format('Y-m-d');
+                        $thisTo   = (new DateTimeImmutable('last day of this month'))->format('Y-m-d');
+                        $lastFrom = (new DateTimeImmutable('first day of last month'))->format('Y-m-d');
+                        $lastTo   = (new DateTimeImmutable('last day of last month'))->format('Y-m-d');
+                        $keepQs   = ($q !== '' ? '&q=' . urlencode($q) : '')
+                                  . ($method !== '' ? '&method=' . urlencode($method) : '');
+                        $isThis   = ($from === $thisFrom && $to === $thisTo);
+                        $isLast   = ($from === $lastFrom && $to === $lastTo);
+                    ?>
+                    <a class="btn <?= $isThis ? 'btn-primary' : 'btn-secondary' ?>"
+                       href="/accounts/index.php?from=<?= $thisFrom ?>&to=<?= $thisTo ?><?= $keepQs ?>">This month</a>
+                    <a class="btn <?= $isLast ? 'btn-primary' : 'btn-secondary' ?>"
+                       href="/accounts/index.php?from=<?= $lastFrom ?>&to=<?= $lastTo ?><?= $keepQs ?>">Last month</a>
                     <select name="method">
                         <option value="">All methods</option>
                         <?php foreach (acct_methods() as $k => $lbl): ?>
