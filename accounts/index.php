@@ -413,12 +413,28 @@ $activeNav = 'accounts';
                 <h1 class="page-title">Payments</h1>
                 <p class="page-subtitle">Payments received against your orders.</p>
             </div>
-            <button type="button"
-                    onclick="ybNewPayment()"
-                    class="btn btn-primary">
-                + Record payment
-            </button>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                <?php if ($isAdmin):
+                    // Carry the current date window onto the export links.
+                    $expQs = ($from !== '' ? '&from=' . urlencode($from) : '')
+                           . ($to   !== '' ? '&to='   . urlencode($to)   : '');
+                ?>
+                    <a href="/accounts/export.php?type=invoices<?= $expQs ?>" class="btn btn-secondary"
+                       title="One row per order line — import as sales invoices">Export invoices (CSV)</a>
+                    <a href="/accounts/export.php?type=payments<?= $expQs ?>" class="btn btn-secondary"
+                       title="Payments received — for your bookkeeper / accounting software">Export payments (CSV)</a>
+                <?php endif; ?>
+                <button type="button" onclick="ybNewPayment()" class="btn btn-primary">+ Record payment</button>
+            </div>
         </div>
+        <?php if ($isAdmin): ?>
+            <p style="color:var(--text-faint);font-size:0.8125rem;margin:-0.25rem 0 1rem;max-width:46rem;line-height:1.5">
+                CSV for <strong>Xero / QuickBooks / Sage</strong>. Respects the date filter below.
+                Invoices export the line items (net of VAT) so the package recomputes tax;
+                they default to account code <strong>200 (Sales)</strong> and <strong>20% VAT</strong> —
+                remap on import if your chart of accounts differs.
+            </p>
+        <?php endif; ?>
 
         <?php if ($flashMsg): ?>
             <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
