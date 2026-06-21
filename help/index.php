@@ -19,6 +19,60 @@ $user    = current_user();
 $isAdmin = ($user['role'] ?? '') === 'admin';
 $isSuper = function_exists('is_super_admin') && is_super_admin();
 
+// Support contact shown on the page.
+$SUPPORT_EMAIL = 'hello@yourblinds.uk';
+
+// ── Video tutorials — super-admin curates, everyone sees ────────────────────
+$pdo = db();
+$videoTableOk = true;
+try { $pdo->query('SELECT 1 FROM help_videos LIMIT 0'); }
+catch (Throwable $e) { $videoTableOk = false; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuper && $videoTableOk) {
+    csrf_check();
+    $act = (string) ($_POST['_action'] ?? '');
+    try {
+        if ($act === 'add_video' || $act === 'update_video') {
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $url   = trim((string) ($_POST['url'] ?? ''));
+            if ($url !== '' && !preg_match('#^https?://#i', $url)) $url = 'https://' . $url;
+            if ($title === '' || $url === '') {
+                $_SESSION['flash_error'] = 'A video needs a title and a link.';
+            } elseif ($act === 'add_video') {
+                $next = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM help_videos')->fetchColumn();
+                $pdo->prepare('INSERT INTO help_videos (title, url, sort_order) VALUES (?, ?, ?)')
+                    ->execute([mb_substr($title, 0, 160), mb_substr($url, 0, 500), $next]);
+                $_SESSION['flash_success'] = 'Video added.';
+            } else {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id > 0) {
+                    $pdo->prepare('UPDATE help_videos SET title = ?, url = ? WHERE id = ?')
+                        ->execute([mb_substr($title, 0, 160), mb_substr($url, 0, 500), $id]);
+                    $_SESSION['flash_success'] = 'Video updated.';
+                }
+            }
+        } elseif ($act === 'delete_video') {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id > 0) {
+                $pdo->prepare('DELETE FROM help_videos WHERE id = ?')->execute([$id]);
+                $_SESSION['flash_success'] = 'Video removed.';
+            }
+        }
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+    }
+    header('Location: /help/index.php');
+    exit;
+}
+
+$videos = $videoTableOk
+    ? $pdo->query('SELECT id, title, url FROM help_videos ORDER BY sort_order, id')->fetchAll(PDO::FETCH_ASSOC)
+    : [];
+
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 /** can the current user use a topic of this audience? */
 $canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
     if ($aud === 'super') return $isSuper;
@@ -201,6 +255,22 @@ $activeNav = 'help';
         .help-empty { color: var(--text-faint); padding: 1rem 0; }
         .help-tools { display: flex; gap: 0.75rem; margin: 0 0 1rem; font-size: 0.8125rem; }
         .help-tools button { background: none; border: 0; color: var(--link); cursor: pointer; text-decoration: underline; padding: 0; font: inherit; }
+
+        .help-contact { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; margin: 0 0 1rem; font-size: 0.9375rem; color: var(--text-muted); }
+        .help-vid-title { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.6rem; }
+        .vid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.6rem; }
+        .vid-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.85rem; background: var(--bg-card); }
+        .vid-card .vid-title { font-weight: 600; color: var(--text-primary); margin-bottom: 0.3rem; }
+        .vid-watch { color: var(--link); font-weight: 600; text-decoration: none; }
+        .vid-watch:hover { text-decoration: underline; }
+        .vid-edit { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem; }
+        .vid-edit input { padding: 0.25rem 0.4rem; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 0.8125rem; background: var(--bg-input); flex: 1 1 8rem; }
+        .vid-del-form { display: inline; }
+        .vid-del { background: none; border: 0; color: #b91c1c; cursor: pointer; font-size: 0.75rem; text-decoration: underline; padding: 0.1rem 0; margin-top: 0.25rem; }
+        .vid-add { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.85rem; }
+        .vid-add input { padding: 0.4rem 0.55rem; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; background: var(--bg-input); }
+        .vid-add input[name="title"] { flex: 1 1 16rem; }
+        .vid-add input[name="url"] { flex: 2 1 20rem; }
     </style>
 </head>
 <body>
@@ -214,6 +284,72 @@ $activeNav = 'help';
                 <p class="page-subtitle">How to use YourBlinds. Search, or click a topic to open it.</p>
             </div>
         </div>
+
+        <?php if ($flashMsg): ?><div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div><?php endif; ?>
+        <?php if ($flashErr): ?><div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
+
+        <!-- Support contact -->
+        <div class="help-contact">
+            Need a hand? Email <a href="mailto:<?= e($SUPPORT_EMAIL) ?>"><strong><?= e($SUPPORT_EMAIL) ?></strong></a>
+            and we'll help you out.
+        </div>
+
+        <!-- Video tutorials -->
+        <?php if ($videos || $isSuper): ?>
+            <section class="section">
+                <h2 class="help-vid-title">Video tutorials</h2>
+                <?php if (!$videos): ?>
+                    <p class="help-empty" style="padding:0.25rem 0 0.75rem">No videos yet.<?= $isSuper ? ' Add the first one below.' : '' ?></p>
+                <?php else: ?>
+                    <div class="vid-grid">
+                        <?php foreach ($videos as $v): $vUrl = (string) $v['url']; $safe = (bool) preg_match('#^https?://#i', $vUrl); ?>
+                            <div class="vid-card">
+                                <div class="vid-title"><?= e((string) $v['title']) ?></div>
+                                <?php if ($safe): ?>
+                                    <a class="vid-watch" href="<?= e($vUrl) ?>" target="_blank" rel="noopener noreferrer">Watch &rsaquo;</a>
+                                <?php else: ?>
+                                    <span style="color:var(--text-faint);font-size:0.8125rem"><?= e($vUrl) ?></span>
+                                <?php endif; ?>
+                                <?php if ($isSuper): ?>
+                                    <form method="post" action="/help/index.php" class="vid-edit">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="_action" value="update_video">
+                                        <input type="hidden" name="id" value="<?= (int) $v['id'] ?>">
+                                        <input type="text" name="title" value="<?= e((string) $v['title']) ?>" maxlength="160" placeholder="Title">
+                                        <input type="url" name="url" value="<?= e($vUrl) ?>" maxlength="500" placeholder="https://…">
+                                        <button type="submit" class="btn btn-secondary" style="font-size:.75rem;padding:.2rem .5rem">Save</button>
+                                    </form>
+                                    <form method="post" action="/help/index.php" class="vid-del-form"
+                                          data-confirm="Remove &quot;<?= e((string) $v['title']) ?>&quot;?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="_action" value="delete_video">
+                                        <input type="hidden" name="id" value="<?= (int) $v['id'] ?>">
+                                        <button type="submit" class="vid-del">Delete</button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($isSuper): ?>
+                    <?php if (!$videoTableOk): ?>
+                        <p class="help-empty" style="padding:0.5rem 0 0">
+                            Run <a href="/migrate_help_videos.php"><code>/migrate_help_videos.php</code></a> (super-admin) to enable the video list.
+                        </p>
+                    <?php else: ?>
+                        <form method="post" action="/help/index.php" class="vid-add">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_action" value="add_video">
+                            <input type="text" name="title" maxlength="160" placeholder="Video title (e.g. Building your first quote)" required>
+                            <input type="url" name="url" maxlength="500" placeholder="Paste the link (YouTube / Vimeo / Loom…)" required>
+                            <button type="submit" class="btn btn-primary" style="font-size:.8125rem;padding:.35rem .8rem">+ Add video</button>
+                        </form>
+                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:.4rem 0 0">You're the only one who sees these add/edit controls; everyone sees the videos.</p>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
 
         <div class="help-search">
             <input type="search" id="help-search" placeholder="Search help — e.g. band, import, export, supplier, deposit…" autofocus>
@@ -288,5 +424,6 @@ $activeNav = 'help';
     apply();
 })();
 </script>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
