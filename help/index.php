@@ -138,6 +138,10 @@ $TOPICS = [
      '<p>The host takes an automatic <strong>daily database backup</strong> — the lifeline if data is lost.
       <strong>Master Admin → Backup</strong> also downloads a manual SQL copy (and per-tenant exports). Recovery from a
       host backup is a full restore, so do a manual backup first.</p>'],
+    ['super', 'Backups & safety', 'Go-live checklist', 'launch go live readiness paypal sandbox test data checklist',
+     '<p><strong>Master Admin → Go-live checklist</strong> shows pre-launch readiness: it auto-checks PayPal mode
+      (sandbox vs live), app environment, API keys, terms, VAT and backup age; scans this account for left-over
+      <em>test/demo</em> products, suppliers and customers; and lists the manual steps (incl. switching PayPal to live).</p>'],
     ['super', 'Backups & safety', 'Wipe products (handle with care)', 'wipe products delete bulk master protect',
      '<p><strong>Wipe products</strong> bulk-deletes matching products across tenants. The <strong>master catalogue</strong>
       is protected — it’s never pre-ticked and is excluded unless you explicitly tick “include the master catalogue”.</p>'],
