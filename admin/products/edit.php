@@ -101,23 +101,23 @@ if ($hasSupplierCol) {
     } catch (Throwable $e) { /* keep '' */ }
 }
 
-// Known supplier names for the picker's datalist: those already on products
-// PLUS any in the suppliers table, with "In House" always offered. Two simple
-// per-table queries merged in PHP (collation-safe — no cross-table compare).
+// Known supplier names for the picker's datalist come from the managed
+// suppliers table ONLY (Settings › Suppliers), with "In House" always offered.
+// That makes Settings the single source of truth — delete a supplier there and
+// it disappears here too. We deliberately DON'T also scrape products.supplier_name:
+// saving a product already auto-adds its supplier to this table (INSERT IGNORE,
+// further down), so every in-use name is present anyway — and scraping products
+// would resurrect a name you'd just deleted, as long as one product still
+// referenced it.
 $knownSuppliers = [];
-foreach ([
-    'SELECT DISTINCT supplier_name AS n FROM products  WHERE client_id = ? AND supplier_name IS NOT NULL AND supplier_name <> \'\'',
-    'SELECT name          AS n FROM suppliers WHERE client_id = ?',
-] as $sql) {
-    try {
-        $ks = db()->prepare($sql);
-        $ks->execute([$clientId]);
-        foreach ($ks->fetchAll(PDO::FETCH_COLUMN) as $n) {
-            $n = trim((string) $n);
-            if ($n !== '') $knownSuppliers[$n] = true;
-        }
-    } catch (Throwable $e) { /* table/column may not exist yet */ }
-}
+try {
+    $ks = db()->prepare('SELECT name FROM suppliers WHERE client_id = ?');
+    $ks->execute([$clientId]);
+    foreach ($ks->fetchAll(PDO::FETCH_COLUMN) as $n) {
+        $n = trim((string) $n);
+        if ($n !== '') $knownSuppliers[$n] = true;
+    }
+} catch (Throwable $e) { /* suppliers table may not exist yet */ }
 $knownSuppliers = array_keys($knownSuppliers);
 sort($knownSuppliers);
 if (!in_array('In House', $knownSuppliers, true)) $knownSuppliers[] = 'In House';
