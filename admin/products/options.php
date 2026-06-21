@@ -754,6 +754,9 @@ $activeNav = 'products';
                         Set band on selected
                     </button>
                     <span class="selected-count" id="bulk-count">No rows selected</span>
+                    <span style="color:var(--text-faint);font-size:0.8125rem">
+                        &middot; Tip: tick one, then <strong>Shift</strong>-click another to select everything between.
+                    </span>
                 </div>
                 <form id="bulk-form" method="post" action="/admin/products/option-delete.php">
                     <?= csrf_field() ?>
@@ -982,6 +985,29 @@ $activeNav = 'products';
         });
     }
     rowBoxes.forEach(function (cb) { cb.addEventListener('change', refresh); });
+
+    // ── Shift-click range select ────────────────────────────────
+    // Tick one row, hold Shift and click another, and every row
+    // BETWEEN them takes the second click's state — so selecting a
+    // long run (e.g. 40 of 81 filtered rows) is two clicks, not 40.
+    // Range is computed over the VISIBLE rows only, so it respects
+    // the search filter.
+    var lastChecked = null;
+    rowBoxes.forEach(function (cb) {
+        cb.addEventListener('click', function (e) {
+            if (e.shiftKey && lastChecked && lastChecked !== cb) {
+                var vis   = visibleRowBoxes();
+                var start = vis.indexOf(lastChecked);
+                var end   = vis.indexOf(cb);
+                if (start !== -1 && end !== -1) {
+                    if (start > end) { var t = start; start = end; end = t; }
+                    for (var i = start; i <= end; i++) vis[i].checked = cb.checked;
+                }
+            }
+            lastChecked = cb;
+            refresh();
+        });
+    });
 
     btn.addEventListener('click', function () {
         var n = checkedIds().length;
