@@ -461,7 +461,7 @@ $activeNav = 'pricing';
             </p>
 
             <?php foreach ($plans as $code => $plan):
-                if ($code === 'free') continue;   // free plan has no price to edit
+                $isFree  = ($code === 'free');   // Bronze — the free base tier every account has
                 $row     = $priceRows[$code] ?? null;
                 $price   = (float) ($row['price_gbp_monthly'] ?? ($plan['price_gbp_monthly'] ?? 0));
                 $ppId    = (string) ($row['paypal_plan_id']    ?? '');
@@ -469,8 +469,15 @@ $activeNav = 'pricing';
                 $updated = (string) ($row['updated_at']        ?? '');
             ?>
                 <div class="price-card">
-                    <h3><?= e($plan['name']) ?></h3>
+                    <h3><?= e($plan['name']) ?><?php if ($isFree): ?> <span style="font-weight:400;font-size:0.8125rem;color:var(--text-faint)">— free base tier</span><?php endif; ?></h3>
                     <div class="pc-desc"><?= e($plan['description']) ?></div>
+                    <?php if ($isFree): ?>
+                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.25rem 0 0.5rem;line-height:1.5">
+                            Every account has Bronze. It's <strong>free</strong> and isn't billed through PayPal, so you can
+                            record a price here for future use &mdash; but it won't charge anyone until Bronze is wired up
+                            for billing.
+                        </p>
+                    <?php endif; ?>
 
                     <form method="post" action="/master-admin/pricing.php">
                         <?= csrf_field() ?>
@@ -484,12 +491,14 @@ $activeNav = 'pricing';
                                    value="<?= e(number_format($price, 2, '.', '')) ?>">
                         </div>
 
+                        <?php if (!$isFree): ?>
                         <div class="pc-field">
                             <label for="ppid-<?= e($code) ?>">PayPal Plan ID</label>
                             <input id="ppid-<?= e($code) ?>" name="paypal_plan_id" type="text"
                                    value="<?= e($ppId) ?>"
                                    placeholder="P-XXXXXXXXX (auto-filled if you create below)">
                         </div>
+                        <?php endif; ?>
 
                         <div class="pc-field">
                             <label for="notes-<?= e($code) ?>">Internal notes</label>
@@ -506,7 +515,7 @@ $activeNav = 'pricing';
                         </div>
                     </form>
 
-                    <?php if ($ppId === '' && $paypalReady): ?>
+                    <?php if (!$isFree && $ppId === '' && $paypalReady): ?>
                         <div class="pc-create">
                             <span>
                                 No PayPal Plan attached. Tenants can't subscribe to this plan via PayPal yet.
