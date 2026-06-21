@@ -209,6 +209,33 @@ $activeNav = 'billing';
             font-size: 0.75rem; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.05em;
         }
+        /* Tier colours. A metal-coloured top bar (box-shadow, so the active/
+           trial border-colour can't override it) always marks the tier; the
+           faint background tint shows only when the card isn't in an active/
+           trial STATE (those keep their green/amber so state stays legible).
+           Dark-mode tints are low-alpha so text stays readable. */
+        .plan-card.tier-free     { box-shadow: inset 0 4px 0 #b87333; }
+        .plan-card.tier-silver   { box-shadow: inset 0 4px 0 #9aa0a6; }
+        .plan-card.tier-gold     { box-shadow: inset 0 4px 0 #d4af37; }
+        .plan-card.tier-platinum { box-shadow: inset 0 4px 0 #6b7c93; }
+        .plan-card.tier-free:not(.is-active):not(.is-trial)     { background: #fbf3ea; }
+        .plan-card.tier-silver:not(.is-active):not(.is-trial)   { background: #f5f6f8; }
+        .plan-card.tier-gold:not(.is-active):not(.is-trial)     { background: #fdf8e9; }
+        .plan-card.tier-platinum:not(.is-active):not(.is-trial) { background: #eef1f6; }
+        [data-theme="dark"] .plan-card.tier-free:not(.is-active):not(.is-trial)     { background: rgba(184,115,51,0.12); }
+        [data-theme="dark"] .plan-card.tier-silver:not(.is-active):not(.is-trial)   { background: rgba(154,160,166,0.12); }
+        [data-theme="dark"] .plan-card.tier-gold:not(.is-active):not(.is-trial)     { background: rgba(212,175,55,0.12); }
+        [data-theme="dark"] .plan-card.tier-platinum:not(.is-active):not(.is-trial) { background: rgba(107,124,147,0.16); }
+
+        /* "Your plan" summary tinted by the current tier. */
+        .bill-summary.tier-free     { background: #fbf3ea; border-left: 4px solid #b87333; }
+        .bill-summary.tier-silver   { background: #f5f6f8; border-left: 4px solid #9aa0a6; }
+        .bill-summary.tier-gold     { background: #fdf8e9; border-left: 4px solid #d4af37; }
+        .bill-summary.tier-platinum { background: #eef1f6; border-left: 4px solid #6b7c93; }
+        [data-theme="dark"] .bill-summary.tier-free     { background: rgba(184,115,51,0.12); }
+        [data-theme="dark"] .bill-summary.tier-silver   { background: rgba(154,160,166,0.12); }
+        [data-theme="dark"] .bill-summary.tier-gold     { background: rgba(212,175,55,0.12); }
+        [data-theme="dark"] .bill-summary.tier-platinum { background: rgba(107,124,147,0.16); }
     </style>
 </head>
 <body>
@@ -231,7 +258,7 @@ $activeNav = 'billing';
         <?php endif; ?>
 
         <section class="section">
-            <div class="bill-summary">
+            <div class="bill-summary tier-<?= e($currentTierCode) ?>">
                 <span class="bs-count">
                     Your plan: <?= e($currentTierName) ?>
                 </span>
@@ -252,8 +279,13 @@ $activeNav = 'billing';
                     </span>
                 <?php endif; ?>
                 <span style="color:var(--text-faint);font-size:0.875rem;flex:1 1 100%">
-                    Billed monthly in GBP through PayPal. Cancel Silver or Gold any time;
-                    Platinum is a 12-month contract.
+                    <?php if ($monthlyTotal > 0): ?>
+                        Billed monthly in GBP through PayPal. Cancel Silver or Gold any time;
+                        Platinum is a 12-month contract.
+                    <?php else: ?>
+                        You're on the free <strong>Bronze</strong> plan. Add a paid tier below any time —
+                        billed monthly in GBP through PayPal.
+                    <?php endif; ?>
                 </span>
             </div>
         </section>
@@ -278,7 +310,7 @@ $activeNav = 'billing';
                     $trialDaysLeft = $trial['days_left'] ?? null;
                     $trialUrgent   = $trialDaysLeft !== null && $trialDaysLeft <= 7;
                 ?>
-                    <div class="plan-card <?= $isActive ? 'is-active' : '' ?> <?= $hasTrial ? 'is-trial' : '' ?>">
+                    <div class="plan-card tier-<?= e($code) ?> <?= $isActive ? 'is-active' : '' ?> <?= $hasTrial ? 'is-trial' : '' ?>">
                         <div class="p-head">
                             <span class="p-name"><?= e($p['name']) ?></span>
                             <?php if ($hasTrial): ?>
