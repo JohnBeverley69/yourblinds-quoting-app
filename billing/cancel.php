@@ -12,8 +12,9 @@ declare(strict_types=1);
  *
  * Note on timing: PayPal's cancellation is immediate (no future
  * billing), but the tenant has PAID THROUGH current_period_end, so we
- * keep their features until that date — billing_subscription_is_active()
- * grants a 'cancelled' sub while its period_end is in the future, and
+ * keep their features until that date — billing_subscription_grants_access()
+ * counts a 'cancelled' sub as entitled while its period_end is in the future
+ * (the Billing total still uses the strict is_active, so it isn't billed), and
  * billing_reconcile_if_due() flips the flags off once it passes.
  */
 

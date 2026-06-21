@@ -281,26 +281,36 @@ function billing_subscription_is_active(?array $sub): bool
 {
     if (!$sub) return false;
     $status = (string) ($sub['status'] ?? '');
-    $today  = strtotime('today');
-    $end    = !empty($sub['current_period_end']) ? strtotime((string) $sub['current_period_end']) : false;
-
-    // Live plans grant now — but a period_end in the past = expired, whatever
-    // the stored status says (defensive against forgotten manual entries).
-    if (in_array($status, ['trial', 'active'], true)) {
+    if (!in_array($status, ['trial', 'active'], true)) return false;
+    if (!empty($sub['current_period_end'])) {
+        $end   = strtotime((string) $sub['current_period_end']);
+        $today = strtotime('today');
         if ($end !== false && $today !== false && $end < $today) return false;
-        return true;
     }
+    return true;
+}
 
-    // Cancelled but PAID THROUGH the current period: keep access until that
-    // date — a customer shouldn't lose features the instant they cancel, only
-    // at the end of the period they've paid for (standard SaaS grace). PayPal
-    // sends no event when that date arrives, so billing_reconcile_if_due()
-    // flips the flags off on the next visit after it passes.
-    if ($status === 'cancelled' && $end !== false && $today !== false && $end >= $today) {
-        return true;
-    }
-
-    return false;
+/**
+ * "Is the tenant still ENTITLED to this plan's features right now?" — being
+ * billed (active/trial), OR cancelled but PAID THROUGH the current period
+ * (standard grace: keep features until the end of the period already paid for,
+ * even though billing has stopped).
+ *
+ * Deliberately DISTINCT from billing_subscription_is_active(), which is strictly
+ * "currently billing" — that one drives the Billing page's ACTIVE badge and the
+ * monthly total, so a cancelled plan must NOT count there (or the total double-
+ * counts a plan that's no longer billed). Grace is feature-entitlement only.
+ * PayPal fires no event when the paid period ends, so billing_reconcile_if_due()
+ * flips the flags off on the next visit after it passes.
+ */
+function billing_subscription_grants_access(?array $sub): bool
+{
+    if (billing_subscription_is_active($sub)) return true;
+    if (!$sub || (string) ($sub['status'] ?? '') !== 'cancelled') return false;
+    if (empty($sub['current_period_end'])) return false;
+    $end   = strtotime((string) $sub['current_period_end']);
+    $today = strtotime('today');
+    return $end !== false && $today !== false && $end >= $today;
 }
 
 /**
@@ -321,12 +331,14 @@ function billing_reconcile_if_due(int $clientId): void
 }
 
 /**
- * Does this tenant currently have an active subscription for this
- * specific plan? (Subscription only — does NOT include comp.)
+ * Is the tenant ENTITLED to this plan via its subscription right now — being
+ * billed OR within the paid-through grace after a cancel? (Subscription only —
+ * does NOT include comp.) Drives feature entitlement; use
+ * billing_subscription_is_active() for "currently billing" (billing display).
  */
 function billing_has_active_subscription_for(int $clientId, string $planCode): bool
 {
-    return billing_subscription_is_active(billing_subscription_for_plan($clientId, $planCode));
+    return billing_subscription_grants_access(billing_subscription_for_plan($clientId, $planCode));
 }
 
 /**
@@ -364,7 +376,14 @@ function billing_current_tier_code(int $clientId): string
     foreach (billing_plans() as $code => $plan) {
         $order = (int) ($plan['tier'] ?? 0);
         if ($order <= $bestOrder) continue;
-        if (billing_plan_active_for($clientId, $code)) {
+        // The tier a tenant is actually ON = currently BILLED (strict) OR
+        // comped. Deliberately NOT billing_plan_active_for(), which counts the
+        // paid-through grace on a cancelled plan — that retains features
+        // transitionally, but the tenant's tier (and bill) is the lower one, so
+        // grace must not inflate "Your plan" / the monthly total.
+        $onIt = billing_subscription_is_active(billing_subscription_for_plan($clientId, $code))
+             || billing_client_has_comp($clientId, $code);
+        if ($onIt) {
             $best = $code;
             $bestOrder = $order;
         }
@@ -540,7 +559,7 @@ function billing_sync_feature_flags_force(int $clientId): void
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
     }
     foreach ($subs as $sub) {
-        if (!billing_subscription_is_active($sub)) continue;
+        if (!billing_subscription_grants_access($sub)) continue;   // incl. paid-through grace
         $p = billing_plan((string) $sub['plan_code']);
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
     }
