@@ -141,6 +141,7 @@ $navSections = [
             // click here first to create employee logins (Tyler). The nav
             // key + route stay 'accounts' to avoid churn.
             'accounts'      => ['/accounts/index.php',         'Payments',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+            'help'          => ['/help/index.php',             'Help & guide',  true],
         ],
     ],
     [
