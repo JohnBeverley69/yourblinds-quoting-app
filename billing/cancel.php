@@ -11,10 +11,10 @@ declare(strict_types=1);
  * not still granted by other subs/comps).
  *
  * Note on timing: PayPal's cancellation is immediate (no future
- * billing). The tenant technically has paid through
- * current_period_end. For now we revoke features immediately on
- * cancel — a future tweak could keep them active until the period
- * actually ends.
+ * billing), but the tenant has PAID THROUGH current_period_end, so we
+ * keep their features until that date — billing_subscription_is_active()
+ * grants a 'cancelled' sub while its period_end is in the future, and
+ * billing_reconcile_if_due() flips the flags off once it passes.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -83,7 +83,15 @@ db()->prepare(
 
 billing_sync_feature_flags_force($clientId);
 
-$_SESSION['flash_success'] = 'Cancelled ' . ($plan['name'] ?? $planCode) . '. '
-    . 'Paid features for that add-on have been turned off.';
+$periodEnd = (string) ($sub['current_period_end'] ?? '');
+$pe        = $periodEnd !== '' ? strtotime($periodEnd) : false;
+if ($pe !== false && $pe >= strtotime('today')) {
+    $_SESSION['flash_success'] = 'Cancelled ' . ($plan['name'] ?? $planCode)
+        . '. You keep its features until ' . date('j M Y', $pe)
+        . " (the end of the period you've already paid for) — no further billing.";
+} else {
+    $_SESSION['flash_success'] = 'Cancelled ' . ($plan['name'] ?? $planCode)
+        . '. Paid features for that add-on have been turned off.';
+}
 header('Location: /billing/index.php');
 exit;

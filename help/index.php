@@ -129,9 +129,11 @@ $TOPICS = [
     ['admin', 'Settings', 'Quote defaults & suppliers', 'settings vat deposit prefix supplier email terms legal',
      '<p><strong>Settings</strong> holds your quote prefix, VAT %, default deposit, measurement unit, the
       <em>Order suppliers</em> list (with their order emails) and your Terms / Privacy text.</p>'],
-    ['admin', 'Settings', 'Plans & billing', 'billing tier bronze silver gold platinum plan subscription add-on',
+    ['admin', 'Settings', 'Plans & billing', 'billing tier bronze silver gold platinum plan subscription add-on cancel',
      '<p><strong>Billing</strong> shows your plan: Bronze (core) → Silver (+Maps/Postcode) → Gold (+Accounts) →
-      Platinum (+price-library). Each tier includes everything below it.</p>'],
+      Platinum (+price-library). Each tier includes everything below it.</p>
+      <p>If you <strong>cancel</strong>, billing stops but you keep that plan\'s features until the end of the
+      period you\'ve already paid for — they switch off on that date, not immediately.</p>'],
 
     // ---- Safety (super) ----
     ['super', 'Backups & safety', 'Backups and recovery', 'backup restore cloudways recover data loss snapshot',
