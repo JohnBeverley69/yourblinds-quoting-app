@@ -293,6 +293,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'payment_details') {
+        // Bank details printed on the customer's quote / invoice so they can
+        // pay by transfer. Separate UPSERT so a pre-migration DB (columns
+        // absent) flashes a clear message instead of breaking other settings.
+        $bAccName = trim((string) ($_POST['bank_account_name']    ?? '')) ?: null;
+        $bSort    = trim((string) ($_POST['bank_sort_code']       ?? '')) ?: null;
+        $bAcc     = trim((string) ($_POST['bank_account_number']  ?? '')) ?: null;
+        $bInstr   = trim((string) ($_POST['payment_instructions'] ?? '')) ?: null;
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings
+                   (client_id, bank_account_name, bank_sort_code, bank_account_number, payment_instructions)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                   bank_account_name    = VALUES(bank_account_name),
+                   bank_sort_code       = VALUES(bank_sort_code),
+                   bank_account_number  = VALUES(bank_account_number),
+                   payment_instructions = VALUES(payment_instructions)'
+            )->execute([$clientId, $bAccName, $bSort, $bAcc, $bInstr]);
+            $_SESSION['flash_success'] = 'Bank / payment details saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save bank details — run /migrate_bank_details.php first.';
+            error_log('settings: bank details not saved: ' . $e->getMessage());
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'legal') {
         // Terms & Conditions + Privacy Policy — free text, stored per client.
         // Saved separately from the quote-defaults block so it can never
@@ -514,6 +542,10 @@ $settings = $settingsStmt->fetch() ?: [
     'quote_footer'             => '',
     'default_measurement_unit' => 'mm',
     'show_line_prices'         => 1,
+    'bank_account_name'        => '',
+    'bank_sort_code'           => '',
+    'bank_account_number'      => '',
+    'payment_instructions'     => '',
 ];
 // May be absent if the row exists but the migration hasn't run.
 $currentUnit = $settings['default_measurement_unit'] ?? 'mm';
@@ -1106,6 +1138,53 @@ $activeNav = 'settings';
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save quote defaults</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Bank details for customer payments</h2>
+            </div>
+            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                Printed on the customer's quote / invoice so they can pay by bank transfer.
+                Leave blank to hide the "How to pay" block entirely.
+            </p>
+            <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="payment_details">
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="bank_account_name">Account name</label>
+                        <input id="bank_account_name" name="bank_account_name" type="text" maxlength="120"
+                               value="<?= e((string) ($settings['bank_account_name'] ?? '')) ?>"
+                               placeholder="e.g. Beverley Blinds Ltd">
+                    </div>
+                </div>
+                <div class="form-row cols-2">
+                    <div class="form-group">
+                        <label for="bank_sort_code">Sort code</label>
+                        <input id="bank_sort_code" name="bank_sort_code" type="text" maxlength="12"
+                               value="<?= e((string) ($settings['bank_sort_code'] ?? '')) ?>"
+                               placeholder="00-00-00">
+                    </div>
+                    <div class="form-group">
+                        <label for="bank_account_number">Account number</label>
+                        <input id="bank_account_number" name="bank_account_number" type="text" maxlength="40"
+                               value="<?= e((string) ($settings['bank_account_number'] ?? '')) ?>"
+                               placeholder="12345678">
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="payment_instructions">Payment note (optional)</label>
+                        <input id="payment_instructions" name="payment_instructions" type="text" maxlength="500"
+                               value="<?= e((string) ($settings['payment_instructions'] ?? '')) ?>"
+                               placeholder="e.g. Please use your quote number as the reference">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save bank details</button>
                 </div>
             </form>
         </section>
