@@ -53,6 +53,11 @@ $TOPICS = [
     ['admin', 'Quoting', 'Measurement units', 'mm cm metres inches measurement unit',
      '<p>Set your company default in <strong>Settings → Quoting</strong> (mm / cm / m / in). Sizes are always stored
       in millimetres; the unit only changes how you type and read them. You can override the unit per quote.</p>'],
+    ['admin', 'Quoting', 'Bank details on quotes (how customers pay)', 'bank transfer sort code account number payment details pay invoice',
+     '<p>In <strong>Settings → Quoting → “Bank details for customer payments”</strong>, enter your account name,
+      sort code and account number (plus an optional note). They then print a <strong>“How to pay — bank transfer”</strong>
+      block on the customer’s quote / invoice (PDF + online), with the quote number as the suggested reference.
+      Leave the fields blank to hide the block.</p>'],
 
     // ---- Calendar / customers ----
     ['all', 'Calendar & customers', 'Booking jobs on the calendar', 'calendar appointment booking fit day week maps waze',

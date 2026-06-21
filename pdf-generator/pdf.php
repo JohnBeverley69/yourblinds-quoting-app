@@ -87,6 +87,24 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
         if ($spVal !== false && $spVal !== null) $quote['show_line_prices'] = (int) $spVal;
     } catch (Throwable $e) { /* column not migrated yet — show */ }
 
+    // Bank details for the "How to pay" block. Carried on $quote; guarded so a
+    // pre-migration DB (columns absent) simply omits the block.
+    $quote['bank_account_name'] = $quote['bank_sort_code'] = '';
+    $quote['bank_account_number'] = $quote['payment_instructions'] = '';
+    try {
+        $bkstmt = $pdo->prepare(
+            'SELECT bank_account_name, bank_sort_code, bank_account_number, payment_instructions
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $bkstmt->execute([$clientId]);
+        if ($bkRow = $bkstmt->fetch(PDO::FETCH_ASSOC)) {
+            $quote['bank_account_name']    = trim((string) ($bkRow['bank_account_name']    ?? ''));
+            $quote['bank_sort_code']       = trim((string) ($bkRow['bank_sort_code']       ?? ''));
+            $quote['bank_account_number']  = trim((string) ($bkRow['bank_account_number']  ?? ''));
+            $quote['payment_instructions'] = trim((string) ($bkRow['payment_instructions'] ?? ''));
+        }
+    } catch (Throwable $e) { /* columns not migrated yet — no block */ }
+
     // Items, in line-no order. We use the snapshot fields (frozen at quote
     // time) rather than current product names, so re-rendering an old quote
     // shows what was sold then, not what the catalogue says now.
@@ -490,6 +508,23 @@ $colCount = $showLinePrices ? 5 : 3;
 <div class="notes">
 <h3>Notes</h3>
 <p><?= e((string) $quote['notes']) ?></p>
+</div>
+<?php endif; ?>
+
+<?php
+$bName  = trim((string) ($quote['bank_account_name']    ?? ''));
+$bSort  = trim((string) ($quote['bank_sort_code']       ?? ''));
+$bAcc   = trim((string) ($quote['bank_account_number']  ?? ''));
+$bInstr = trim((string) ($quote['payment_instructions'] ?? ''));
+?>
+<?php if ($bName !== '' || $bAcc !== ''): ?>
+<div style="margin-top:12px;border:1px solid #d1d5db;border-radius:6px;padding:8px 12px;background:#f9fafb;font-size:11px">
+<strong>How to pay &mdash; bank transfer</strong><br>
+<?php if ($bName !== ''): ?>Account name: <strong><?= e($bName) ?></strong><br><?php endif; ?>
+<?php if ($bSort !== ''): ?>Sort code: <strong><?= e($bSort) ?></strong><br><?php endif; ?>
+<?php if ($bAcc !== ''): ?>Account number: <strong><?= e($bAcc) ?></strong><br><?php endif; ?>
+<?php if ($bInstr !== ''): ?><span style="color:#6b7280"><?= e($bInstr) ?></span><br><?php endif; ?>
+<span style="color:#6b7280">Please use <strong><?= e((string) ($quote['quote_number'] ?? '')) ?></strong> as your payment reference.</span>
 </div>
 <?php endif; ?>
 

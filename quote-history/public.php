@@ -86,6 +86,26 @@ try {
     if ($spVal !== false && $spVal !== null) $showLinePrices = ((int) $spVal) === 1;
 } catch (Throwable $e) { /* column not migrated yet — show */ }
 
+// Bank details for "How to pay" (Settings → Quoting). Guarded so a pre-migration
+// DB (columns absent) simply omits the block.
+$bank = ['name' => '', 'sort' => '', 'acc' => '', 'instr' => ''];
+try {
+    $bk = db()->prepare(
+        'SELECT bank_account_name, bank_sort_code, bank_account_number, payment_instructions
+           FROM client_settings WHERE client_id = ? LIMIT 1'
+    );
+    $bk->execute([(int) $quote['client_id']]);
+    if ($bkRow = $bk->fetch(PDO::FETCH_ASSOC)) {
+        $bank = [
+            'name'  => trim((string) ($bkRow['bank_account_name']    ?? '')),
+            'sort'  => trim((string) ($bkRow['bank_sort_code']       ?? '')),
+            'acc'   => trim((string) ($bkRow['bank_account_number']  ?? '')),
+            'instr' => trim((string) ($bkRow['payment_instructions'] ?? '')),
+        ];
+    }
+} catch (Throwable $e) { /* columns not migrated yet — no block */ }
+$hasBank = $bank['name'] !== '' || $bank['acc'] !== '';
+
 // First-view auto-promote: if the trade user shared the link via WhatsApp
 // or copy-paste (i.e. without going through email_pdf.php which already
 // promotes), the quote is still "draft" — but the customer has the link in
@@ -474,6 +494,19 @@ if ($depositStored !== null) {
                 will be in touch about payment.
             </div>
         <?php endif; ?>
+    <?php endif; ?>
+
+    <?php if ($hasBank): ?>
+        <div style="margin-top:1rem;border:1px solid #d1d5db;border-radius:8px;padding:0.75rem 1rem;background:#f9fafb">
+            <strong style="display:block;margin-bottom:0.35rem">How to pay — bank transfer</strong>
+            <div style="line-height:1.6;font-size:0.9375rem">
+                <?php if ($bank['name'] !== ''): ?>Account name: <strong><?= e($bank['name']) ?></strong><br><?php endif; ?>
+                <?php if ($bank['sort'] !== ''): ?>Sort code: <strong><?= e($bank['sort']) ?></strong><br><?php endif; ?>
+                <?php if ($bank['acc'] !== ''): ?>Account number: <strong><?= e($bank['acc']) ?></strong><br><?php endif; ?>
+                <?php if ($bank['instr'] !== ''): ?><span style="color:#6b7280"><?= e($bank['instr']) ?></span><br><?php endif; ?>
+                <span style="color:#6b7280">Please use <strong><?= e((string) $quote['quote_number']) ?></strong> as your payment reference.</span>
+            </div>
+        </div>
     <?php endif; ?>
 
     <?php if ($alreadyDone && (string) $quote['status'] === 'accepted'): ?>
