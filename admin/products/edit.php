@@ -1040,7 +1040,7 @@ $activeNav = 'products';
                 <?php if ($hasSupplierCol): ?>
                     <div class="form-row full">
                         <div class="form-group">
-                            <label for="supplier_name">Supplier</label>
+                            <label for="supplier_name">Order supplier</label>
                             <input id="supplier_name" name="supplier_name" type="text"
                                    maxlength="150" list="supplier-options"
                                    value="<?= e((string) $f['supplier_name']) ?>"
@@ -1051,9 +1051,15 @@ $activeNav = 'products';
                                 <?php endforeach; ?>
                             </datalist>
                             <small style="color:var(--text-faint);font-size:0.8125rem">
-                                Who supplies this product. Pick an existing supplier or type a new one &mdash;
-                                new names appear under <strong>Settings &rsaquo; Suppliers</strong> where you
-                                add their order email. Use <em>In House</em> for products you make yourself.
+                                Who you <strong>order this product from</strong> &mdash; used on purchase orders.
+                                Pick an existing supplier or type a new one (new names appear under
+                                <strong>Settings &rsaquo; Suppliers</strong>, where you add their order email).
+                                Use <em>In House</em> for products you make yourself.
+                                <?php if (function_exists('is_super_admin') && is_super_admin()): ?>
+                                    <br><span style="color:#92400e">Note:</span> this is the <em>order</em> supplier,
+                                    not a master-catalogue <strong>Library supplier</strong> &mdash; those are matched
+                                    by the product's <strong>name prefix</strong> in Master Admin, not by this field.
+                                <?php endif; ?>
                             </small>
                         </div>
                     </div>
