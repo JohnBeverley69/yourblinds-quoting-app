@@ -43,6 +43,16 @@ $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
+// Lazy daily reconcile of paid-feature flags (once/day per session) — so a
+// cancelled plan's features fall away when its paid period ends, which fires
+// no billing event. Runs before the feature reads below so the nav reflects it.
+if (!empty($user['client_id'])) {
+    require_once __DIR__ . '/billing_helpers.php';
+    if (function_exists('billing_reconcile_if_due')) {
+        billing_reconcile_if_due((int) $user['client_id']);
+    }
+}
+
 // Per-user permission flags from client_users. Used to gate menu
 // entries for non-admin users — admins always pass via $isAdmin.
 $_perms = function_exists('current_user_permissions')

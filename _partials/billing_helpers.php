@@ -281,13 +281,43 @@ function billing_subscription_is_active(?array $sub): bool
 {
     if (!$sub) return false;
     $status = (string) ($sub['status'] ?? '');
-    if (!in_array($status, ['trial', 'active'], true)) return false;
-    if (!empty($sub['current_period_end'])) {
-        $end = strtotime((string) $sub['current_period_end']);
-        $today = strtotime('today');
+    $today  = strtotime('today');
+    $end    = !empty($sub['current_period_end']) ? strtotime((string) $sub['current_period_end']) : false;
+
+    // Live plans grant now — but a period_end in the past = expired, whatever
+    // the stored status says (defensive against forgotten manual entries).
+    if (in_array($status, ['trial', 'active'], true)) {
         if ($end !== false && $today !== false && $end < $today) return false;
+        return true;
     }
-    return true;
+
+    // Cancelled but PAID THROUGH the current period: keep access until that
+    // date — a customer shouldn't lose features the instant they cancel, only
+    // at the end of the period they've paid for (standard SaaS grace). PayPal
+    // sends no event when that date arrives, so billing_reconcile_if_due()
+    // flips the flags off on the next visit after it passes.
+    if ($status === 'cancelled' && $end !== false && $today !== false && $end >= $today) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Lazy daily reconcile of a tenant's paid-feature flags. The flags live in
+ * client_settings and are normally only re-synced on billing EVENTS — but a
+ * cancelled plan's grace ends on a DATE with no event, so without this its
+ * features would linger. Throttled to once per calendar day per session; the
+ * sync is idempotent and respects comps/trials, so it's a no-op for healthy
+ * tenants and never strips comp-granted access. Never breaks the page.
+ */
+function billing_reconcile_if_due(int $clientId): void
+{
+    if ($clientId <= 0) return;
+    $today = date('Y-m-d');
+    if (($_SESSION['_feat_reconcile'] ?? '') === $today) return;
+    $_SESSION['_feat_reconcile'] = $today;
+    try { billing_sync_feature_flags_force($clientId); } catch (Throwable $e) { /* never break the page */ }
 }
 
 /**
