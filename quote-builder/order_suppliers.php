@@ -320,12 +320,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Placing the supplier order moves an accepted job along to "Ordered" —
+    // so it advances in the pipeline AND recolours on the calendar (both read
+    // quotes.status). Guarded in SQL to ONLY step accepted → ordered: it never
+    // rewinds a job that's already ordered / fitted / invoiced / paid. The user
+    // already cleared the can_create_orders gate above, which is exactly what
+    // an 'ordered' transition requires.
+    $advancedToOrdered = false;
+    if ($sentTo) {
+        try {
+            $adv = db()->prepare(
+                "UPDATE quotes SET status = 'ordered'
+                  WHERE id = ? AND client_id = ? AND status = 'accepted'"
+            );
+            $adv->execute([$quoteId, $clientId]);
+            $advancedToOrdered = $adv->rowCount() > 0;
+        } catch (Throwable $e) {
+            error_log('Auto-advance to ordered failed: ' . $e->getMessage());
+        }
+    }
+    $orderedNote = $advancedToOrdered ? ' Moved on to "Ordered".' : '';
+
     if ($sentTo && !$failed) {
         qb_flash_redirect($backToQuote, 'success',
-            'Order sent to ' . implode(', ', $sentTo) . '.');
+            'Order sent to ' . implode(', ', $sentTo) . '.' . $orderedNote);
     } elseif ($sentTo && $failed) {
         qb_flash_redirect($backToQuote, 'error',
-            'Sent to ' . implode(', ', $sentTo) . '; FAILED for ' . implode(', ', $failed) . ' — try again.');
+            'Sent to ' . implode(', ', $sentTo) . '; FAILED for ' . implode(', ', $failed) . ' — try again.' . $orderedNote);
     } else {
         qb_flash_redirect($backToQuote, 'error',
             'Nothing was sent' . ($failed ? ' (failed for ' . implode(', ', $failed) . ')' : '') . '.');
