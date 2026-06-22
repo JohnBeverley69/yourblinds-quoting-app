@@ -100,6 +100,21 @@ if ($dateRaw !== '') {
     $newDate = $d->format('Y-m-d');
 }
 
+// Optional time — sent when scheduling a PENDING job from the tray so the
+// drop can set a time in one go (the month grid has no time axis). HH:MM,
+// stored as HH:MM:00. Absent = leave the appointment's existing time alone
+// (a plain date drag never touches the time).
+$timeRaw = trim((string) ($_POST['appointment_time'] ?? ''));
+$newTime = null;
+if ($timeRaw !== '') {
+    if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $timeRaw)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Invalid time. Expected HH:MM.']);
+        exit;
+    }
+    $newTime = $timeRaw . ':00';
+}
+
 $pdo = db();
 
 // Double-booking guard — dragging onto a date can't put an assigned person
@@ -117,7 +132,7 @@ if ($newDate !== null && empty($_POST['override'])) {
     if ($selfRow && $selfRow['client_user_id'] !== null) {
         $clash = appointment_find_conflict(
             $pdo, $clientId, (int) $selfRow['client_user_id'],
-            $newDate, (string) $selfRow['appointment_time'],
+            $newDate, $newTime ?? (string) $selfRow['appointment_time'],
             (int) ($selfRow['duration_minutes'] ?? 60), $apptId
         );
         if ($clash !== null) {
@@ -138,14 +153,26 @@ if ($newDate !== null && empty($_POST['override'])) {
 }
 
 try {
-    // Tenant scope check + only-touch-it-if-it-belongs-to-us.
-    $u = $pdo->prepare(
-        'UPDATE appointments
-            SET appointment_date = ?
-          WHERE id = ? AND client_id = ?
-          LIMIT 1'
-    );
-    $u->execute([$newDate, $apptId, $clientId]);
+    // Tenant scope check + only-touch-it-if-it-belongs-to-us. Set the time
+    // too when one was supplied (scheduling a pending job); otherwise only
+    // the date moves, exactly as before.
+    if ($newTime !== null) {
+        $u = $pdo->prepare(
+            'UPDATE appointments
+                SET appointment_date = ?, appointment_time = ?
+              WHERE id = ? AND client_id = ?
+              LIMIT 1'
+        );
+        $u->execute([$newDate, $newTime, $apptId, $clientId]);
+    } else {
+        $u = $pdo->prepare(
+            'UPDATE appointments
+                SET appointment_date = ?
+              WHERE id = ? AND client_id = ?
+              LIMIT 1'
+        );
+        $u->execute([$newDate, $apptId, $clientId]);
+    }
     if ($u->rowCount() === 0) {
         // Either the row doesn't belong to this client OR the date
         // was already that value. Re-check existence to disambiguate.
