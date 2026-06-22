@@ -157,6 +157,13 @@ $TOPICS = [
       <li><strong>Library supplier</strong> (master catalogue) = the catalogue grouping, matched by the product’s
       <strong>name prefix</strong>, not by the Order supplier field.</li></ul>
       <p>Settings → Suppliers is the single source for the Order-supplier dropdown — delete a stray there and it’s gone.</p>'],
+    ['admin', 'Products & pricing', 'Sending the order to your suppliers', 'send order suppliers purchase order po email materials ordered pipeline status moved colour',
+     '<p>Once a quote is <strong>accepted</strong>, open it and use <strong>“Send to suppliers”</strong>. It splits the
+      job by each product’s <strong>Order supplier</strong>, emails every supplier only their own lines with a spec PDF
+      (sizes, no customer prices), shipped to your delivery address from <strong>Settings → Suppliers</strong>.</p>
+      <p>Sending also moves the job on to <strong>“Ordered”</strong>, so it steps along in the <strong>Pipeline</strong>
+      and changes colour on the <strong>Calendar</strong> automatically. It only ever steps Accepted&nbsp;→&nbsp;Ordered —
+      a job already further along (fitted / invoiced / paid) is never pulled back.</p>'],
     ['admin', 'Products & pricing', 'Markup vs margin (how you enter your profit)', 'markup margin profit basis pricing settings convert default',
      '<p>You can enter your profit as <strong>markup</strong> or <strong>margin</strong> — set which on
       <strong>Settings → Quoting → Default margins</strong> (“Enter your margins as”).</p>
