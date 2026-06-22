@@ -499,8 +499,7 @@ $activeNav = 'calendar';
            dominate the appointment card. */
         .cal-appt-open-order {
             position: absolute;
-            right: 0.25rem; top: 50%;
-            transform: translateY(-50%);
+            right: 0.25rem; bottom: 0.25rem;
             min-width: 1.25rem; min-height: 1.25rem;
             padding: 0 0.25rem;
             display: inline-flex; align-items: center; justify-content: center;
