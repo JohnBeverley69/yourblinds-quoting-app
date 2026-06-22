@@ -33,11 +33,13 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/pie_chart.php';
 require __DIR__ . '/../_partials/joke_of_the_day.php';
+require __DIR__ . '/../_partials/pricing_basis.php';
 
 requireLogin();
 
 $user      = current_user();
 $clientId  = (int) $user['client_id'];
+$pricingBasis = pricing_basis_for(db(), $clientId); // markup vs margin wording
 $myUserId  = (int) ($user['user_id'] ?? $user['id'] ?? 0);
 $isAdmin   = ($user['role'] ?? '') === 'admin';
 
@@ -1132,7 +1134,7 @@ $activeNav = 'dashboard';
                 <h2>Gross profit</h2>
                 <p class="panel-sub">
                     Sell price minus the price-table cost basis (material + extras).
-                    Equivalent to your markup &amp; discount turned into pounds.
+                    Equivalent to your <?= e(strtolower(pricing_basis_label($pricingBasis))) ?> &amp; discount turned into pounds.
                 </p>
                 <div class="margin-grid">
                     <div class="margin-cell">

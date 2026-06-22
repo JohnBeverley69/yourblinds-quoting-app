@@ -4,11 +4,16 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require __DIR__ . '/../../_partials/units.php';
+require __DIR__ . '/../../_partials/pricing_basis.php';
 
 requireAdmin();
 
 $user     = current_user();
 $clientId = $user['client_id'];
+// Markup vs margin — only changes how the markup column is labelled / entered
+// on this page; the stored value + the engine stay markup (pricing_basis.php).
+$pricingBasis = pricing_basis_for(db(), (int) $clientId);
+$basisWord    = strtolower(pricing_basis_label($pricingBasis));
 // Company default unit — drives the live-preview drawer's size entry so it
 // matches what a salesperson sees. Sizes stay stored in mm.
 $previewUnit = client_default_unit(db(), (int) $clientId);
@@ -539,7 +544,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Product name is too long (max 150 characters).';
     } else {
         foreach ($validKeys as $k) {
-            $error = $validateNum($f['markup'][$k],   'Markup %');
+            $error = $validateNum($f['markup'][$k],   pricing_basis_label($pricingBasis) . ' %');
             if ($error) break;
             $error = $validateNum($f['discount'][$k], 'Discount %');
             if ($error) break;
@@ -660,7 +665,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($validKeys as $k) {
                 $sysId = $k === '' ? null : (int) $k;
 
-                $mp = (float) $f['markup'][$k];
+                // A 'margin' tenant typed a margin %; convert to the markup the
+                // engine expects before storing. 0 stays 0 (= inherit default).
+                $mp = display_to_markup((float) $f['markup'][$k], $pricingBasis);
                 if ($mp > 0) {
                     $insMarkup->execute([$clientId, $id, $sysId, $mp]);
                 } else {
@@ -1260,13 +1267,15 @@ $activeNav = 'products';
                             $_dmSt->execute([$clientId]);
                             $_tenantDefaultMarkup = (float) ($_dmSt->fetchColumn() ?: 0);
                         } catch (Throwable $e) { /* migration not yet run */ }
+                        // Show the default in the tenant's basis (markup or margin).
+                        $_tenantDefaultShown = markup_to_display($_tenantDefaultMarkup, $pricingBasis);
                     ?>
                     <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
-                        Margin and discount can be tuned per system (premium / motorised /
-                        standard are usually priced differently). Markup is applied on top
+                        <?= e(ucfirst($basisWord)) ?> and discount can be tuned per system (premium / motorised /
+                        standard are usually priced differently). Your <?= e($basisWord) ?> is applied on top
                         of the price-table base; discount comes off after that.
-                        <strong>Set markup to 0 to inherit the tenant default
-                        (<?= number_format($_tenantDefaultMarkup, 2) ?>%
+                        <strong>Set <?= e($basisWord) ?> to 0 to inherit the tenant default
+                        (<?= number_format($_tenantDefaultShown, 2) ?>%
                         — change on
                         <a href="/admin/settings.php#default_price_table_markup_pct"
                            style="color:var(--brand)">Settings</a>).</strong>
@@ -1283,7 +1292,7 @@ $activeNav = 'products';
                             <thead>
                                 <tr>
                                     <th>System</th>
-                                    <th style="width:7rem">Markup %</th>
+                                    <th style="width:7rem"><?= e(pricing_basis_label($pricingBasis)) ?> %</th>
                                     <th style="width:7rem">Discount %</th>
                                 </tr>
                             </thead>
@@ -1297,7 +1306,7 @@ $activeNav = 'products';
                                     $isMarkupDefault = $markupVal === 0.0;
                                     $markupDisplay   = $isMarkupDefault
                                         ? ''
-                                        : (string) ($f['markup'][$key] ?? '');
+                                        : number_format(markup_to_display($markupVal, $pricingBasis), 2, '.', '');
                                 ?>
                                     <tr>
                                         <td class="system-name"><?= e((string) $s['name']) ?></td>
@@ -1305,14 +1314,14 @@ $activeNav = 'products';
                                             <input type="number" step="0.01" min="0"
                                                    name="markup[<?= (int) $s['id'] ?>]"
                                                    value="<?= e($markupDisplay) ?>"
-                                                   placeholder="<?= e(number_format($_tenantDefaultMarkup, 2)) ?>"
+                                                   placeholder="<?= e(number_format($_tenantDefaultShown, 2)) ?>"
                                                    title="<?= $isMarkupDefault
                                                        ? 'Inheriting tenant default — leave empty / 0 to keep using it.'
                                                        : 'Override of the tenant default. Clear or set 0 to revert.' ?>">
                                             <?php if ($isMarkupDefault): ?>
                                                 <div style="font-size:0.6875rem;color:var(--text-faint);margin-top:0.125rem;line-height:1.2">
                                                     using default
-                                                    (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
+                                                    (<?= number_format($_tenantDefaultShown, 2) ?>%)
                                                 </div>
                                             <?php else: ?>
                                                 <div style="font-size:0.6875rem;color:#9333ea;margin-top:0.125rem;line-height:1.2;font-weight:600">
@@ -1335,18 +1344,18 @@ $activeNav = 'products';
                         // → explicit override.
                         $nsMarkupVal = (float) ($f['markup'][''] ?? 0);
                         $nsIsDefault = $nsMarkupVal === 0.0;
-                        $nsMarkupDisplay = $nsIsDefault ? '' : (string) ($f['markup'][''] ?? '');
+                        $nsMarkupDisplay = $nsIsDefault ? '' : number_format(markup_to_display($nsMarkupVal, $pricingBasis), 2, '.', '');
                     ?>
                         <div class="form-row cols-2">
                             <div class="form-group">
-                                <label for="markup_no_sys">Markup %</label>
+                                <label for="markup_no_sys"><?= e(pricing_basis_label($pricingBasis)) ?> %</label>
                                 <input id="markup_no_sys" name="markup" type="number"
                                        step="0.01" min="0"
                                        value="<?= e($nsMarkupDisplay) ?>"
-                                       placeholder="<?= e(number_format($_tenantDefaultMarkup, 2)) ?>">
+                                       placeholder="<?= e(number_format($_tenantDefaultShown, 2)) ?>">
                                 <?php if ($nsIsDefault): ?>
                                     <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.1875rem">
-                                        Using default (<?= number_format($_tenantDefaultMarkup, 2) ?>%)
+                                        Using default (<?= number_format($_tenantDefaultShown, 2) ?>%)
                                     </small>
                                 <?php else: ?>
                                     <small style="color:#9333ea;font-size:0.75rem;font-weight:600;display:block;margin-top:0.1875rem">
@@ -2967,7 +2976,7 @@ $activeNav = 'products';
             html += '<div style="margin-top:0.1875rem;color:var(--text-secondary);font-size:0.75rem">'
                   + 'Base £' + Number(data.base_price).toFixed(2)
                   + (data.extras_total ? ' + extras £' + Number(data.extras_total).toFixed(2) : '')
-                  + (Number(data.markup_percent) ? ' · markup ' + data.markup_percent + '%' : '')
+                  + (Number(data.markup_percent) ? ' · <?= e($basisWord) ?> ' + (function(k){ k = Number(k); <?php if ($pricingBasis === 'margin'): ?>return (k <= 0 ? 0 : k * 100 / (100 + k)).toFixed(2);<?php else: ?>return k.toFixed(2);<?php endif; ?> })(data.markup_percent) + '%' : '')
                   + (Number(data.discount_percent) ? ' · discount ' + data.discount_percent + '%' : '')
                   + '</div>';
             setResult('is-ok', html);

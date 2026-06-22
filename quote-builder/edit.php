@@ -5,11 +5,14 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
 require __DIR__ . '/../_partials/units.php';
+require __DIR__ . '/../_partials/pricing_basis.php';
 
 requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+// Markup vs margin — only relabels the admin internal-cost hint below.
+$pricingBasis = pricing_basis_for(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 
@@ -2774,7 +2777,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // Internal-cost breakdown (markup % / discount %) — visible
             // only to admins and users with can_view_costs. Hidden from
             // fitters etc. who would otherwise see the trade margin.
-            if (data.markup_percent > 0)   bits.push('markup ' + Number(data.markup_percent).toFixed(2) + '%');
+            if (data.markup_percent > 0) {
+                // Show in the tenant's basis (markup stored; margin = k·100/(100+k)).
+                var _mk = Number(data.markup_percent);
+                <?php if ($pricingBasis === 'margin'): ?>
+                bits.push('margin ' + (_mk <= 0 ? 0 : _mk * 100 / (100 + _mk)).toFixed(2) + '%');
+                <?php else: ?>
+                bits.push('markup ' + _mk.toFixed(2) + '%');
+                <?php endif; ?>
+            }
             if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
             <?php endif; ?>
             // Rounded-up cell size used to be shown here ("rounded up
