@@ -5,11 +5,16 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/legal_text.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
+require __DIR__ . '/../_partials/pricing_basis.php';
 
 requireAdmin();
 
 $user     = current_user();
 $clientId = $user['client_id'];
+
+// Markup vs margin. Affects only how the default-margins fields below are
+// labelled / entered — the engine still works in markup (see pricing_basis.php).
+$pricingBasis = pricing_basis_for(db(), (int) $clientId);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -147,13 +152,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // added by migrate_default_margins.php. Defensive against the
         // columns not existing — the UI shouldn't have rendered the
         // form in that case, but a manual POST could still arrive.
-        $ptMarkup  = (float) ($_POST['default_price_table_markup_pct'] ?? 0);
-        $optMarkup = (float) ($_POST['default_options_markup_pct']     ?? 0);
+        // The basis decides how to read the two numbers the tenant typed.
+        // 'margin' → convert to the equivalent markup BEFORE storing, so the
+        // engine (which only knows markup) is untouched. Default 'markup' is
+        // a straight pass-through.
+        $basisIn = ($_POST['pricing_basis'] ?? '') === 'margin' ? 'margin' : 'markup';
+        $ptMarkup  = display_to_markup((float) ($_POST['default_price_table_markup_pct'] ?? 0), $basisIn);
+        $optMarkup = display_to_markup((float) ($_POST['default_options_markup_pct']     ?? 0), $basisIn);
         // Bound 0–999 — sky-high markups are presumably typos rather
         // than legitimate. (We don't bound negatively because we let
         // them set 0 to "turn off".)
         $ptMarkup  = max(0, min(999, $ptMarkup));
         $optMarkup = max(0, min(999, $optMarkup));
+
+        // Persist the basis separately + defensively — if the pricing_basis
+        // column isn't migrated yet this must not block saving the margins.
+        try {
+            db()->prepare('UPDATE client_settings SET pricing_basis = ? WHERE client_id = ?')
+                ->execute([$basisIn, $clientId]);
+        } catch (Throwable $e) {
+            // column missing → silently stay on markup; margins still save below
+        }
 
         try {
             db()->prepare(
@@ -934,33 +953,68 @@ $activeNav = 'settings';
                     or option choice. You can still override at the
                     product / option level when needed.
                 </p>
-                <form method="post" action="/admin/settings.php" class="form" novalidate>
+                <?php
+                    // Show the stored markup back in the tenant's chosen basis.
+                    $ptShown  = markup_to_display($defaultPtMarkup,  $pricingBasis);
+                    $optShown = markup_to_display($defaultOptMarkup, $pricingBasis);
+                    $basisWord = strtolower(pricing_basis_label($pricingBasis));
+                ?>
+                <form method="post" action="/admin/settings.php" class="form" novalidate id="marginsForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="_action" value="margins">
 
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label style="display:block;margin-bottom:0.35rem">Enter your margins as</label>
+                        <label style="margin-right:1.5rem;font-weight:400">
+                            <input type="radio" name="pricing_basis" value="markup"
+                                   <?= $pricingBasis === 'markup' ? 'checked' : '' ?>> Markup&nbsp;%
+                        </label>
+                        <label style="font-weight:400">
+                            <input type="radio" name="pricing_basis" value="margin"
+                                   <?= $pricingBasis === 'margin' ? 'checked' : '' ?>> Margin&nbsp;%
+                        </label>
+                        <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.4rem">
+                            <strong>Markup</strong> is added on top of your cost
+                            (cost&nbsp;+&nbsp;50%&nbsp;=&nbsp;sell). <strong>Margin</strong> is the
+                            profit slice of the sell price (50%&nbsp;margin&nbsp;=&nbsp;cost is half the
+                            sell). The customer price is identical either way &mdash; this only sets
+                            which number you type. You can switch any time without re-pricing anything.
+                        </small>
+                    </div>
+
                     <div class="form-row cols-2">
                         <div class="form-group">
-                            <label for="default_price_table_markup_pct">
-                                Default price-table markup %
+                            <label for="default_price_table_markup_pct"
+                                   id="lbl_pt_basis"
+                                   data-prefix="Default price-table ">
+                                Default price-table <?= e($basisWord) ?> %
                             </label>
                             <input id="default_price_table_markup_pct"
                                    name="default_price_table_markup_pct"
                                    type="number" step="0.01" min="0" max="999"
-                                   value="<?= e(number_format($defaultPtMarkup, 2, '.', '')) ?>">
+                                   data-markup="<?= e(number_format($defaultPtMarkup, 4, '.', '')) ?>"
+                                   value="<?= e(number_format($ptShown, 2, '.', '')) ?>">
+                            <span id="hint_pt" class="basis-hint"
+                                  style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
                             <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
                                 Applied to every (product, system) that
-                                doesn't have an explicit markup set on the
+                                doesn't have an explicit value set on the
                                 product edit page.
                             </small>
                         </div>
                         <div class="form-group">
-                            <label for="default_options_markup_pct">
-                                Default options &amp; extras markup %
+                            <label for="default_options_markup_pct"
+                                   id="lbl_opt_basis"
+                                   data-prefix="Default options &amp; extras ">
+                                Default options &amp; extras <?= e($basisWord) ?> %
                             </label>
                             <input id="default_options_markup_pct"
                                    name="default_options_markup_pct"
                                    type="number" step="0.01" min="0" max="999"
-                                   value="<?= e(number_format($defaultOptMarkup, 2, '.', '')) ?>">
+                                   data-markup="<?= e(number_format($defaultOptMarkup, 4, '.', '')) ?>"
+                                   value="<?= e(number_format($optShown, 2, '.', '')) ?>">
+                            <span id="hint_opt" class="basis-hint"
+                                  style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
                             <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
                                 Uniform uplift on every option choice's
                                 price &mdash; fixed-£, per-metre, and
@@ -976,6 +1030,57 @@ $activeNav = 'settings';
                         <button type="submit" class="btn btn-primary">Save margins</button>
                     </div>
                 </form>
+                <script>
+                (function () {
+                    // Mirror of pricing_basis.php. The form stores MARKUP; these
+                    // helpers only convert what the tenant sees / types.
+                    function m2k(m){ m = Math.min(Math.max(m, 0), 99.99); return m <= 0 ? 0 : m * 100 / (100 - m); }
+                    function k2m(k){ k = Math.max(k, 0);                  return k <= 0 ? 0 : k * 100 / (100 + k); }
+                    function r2(n){ return Math.round(n * 100) / 100; }
+
+                    var form = document.getElementById('marginsForm');
+                    if (!form) return;
+                    var fields = [
+                        { input: 'default_price_table_markup_pct', label: 'lbl_pt_basis',  hint: 'hint_pt'  },
+                        { input: 'default_options_markup_pct',     label: 'lbl_opt_basis', hint: 'hint_opt' }
+                    ];
+                    function basis(){ var r = form.querySelector('input[name="pricing_basis"]:checked'); return r ? r.value : 'markup'; }
+
+                    function syncOne(f, repaintValue) {
+                        var inp = document.getElementById(f.input),
+                            lab = document.getElementById(f.label),
+                            hint = document.getElementById(f.hint);
+                        if (!inp) return;
+                        var b = basis();
+                        if (repaintValue) {
+                            // Re-show the stored markup in the (possibly new) basis.
+                            var markup = parseFloat(inp.getAttribute('data-markup') || '0') || 0;
+                            inp.value = (b === 'margin' ? r2(k2m(markup)) : r2(markup)).toFixed(2);
+                        } else {
+                            // User typed → recompute the stored markup from what they typed.
+                            var typed = parseFloat(inp.value || '0') || 0;
+                            inp.setAttribute('data-markup', String(b === 'margin' ? m2k(typed) : typed));
+                        }
+                        if (lab) lab.textContent = (lab.getAttribute('data-prefix') || '') + (b === 'margin' ? 'margin' : 'markup') + ' %';
+                        if (hint) {
+                            var k = parseFloat(inp.getAttribute('data-markup') || '0') || 0;
+                            if (k <= 0) { hint.textContent = ''; }
+                            else if (b === 'margin') { hint.textContent = '≈ ' + r2(k).toFixed(2) + '% markup (what the engine uses)'; }
+                            else { hint.textContent = '≈ ' + r2(k2m(k)).toFixed(2) + '% margin'; }
+                        }
+                    }
+                    function syncAll(repaintValue){ fields.forEach(function (f) { syncOne(f, repaintValue); }); }
+
+                    form.querySelectorAll('input[name="pricing_basis"]').forEach(function (r) {
+                        r.addEventListener('change', function () { syncAll(true); });
+                    });
+                    fields.forEach(function (f) {
+                        var inp = document.getElementById(f.input);
+                        if (inp) inp.addEventListener('input', function () { syncOne(f, false); });
+                    });
+                    syncAll(false); // paint the hints on load (values already correct from PHP)
+                })();
+                </script>
             <?php endif; ?>
         </section>
 
@@ -1081,7 +1186,7 @@ $activeNav = 'settings';
                 </fieldset>
 
                 <p style="color:#6b7280;font-size:0.8125rem;margin:-0.25rem 0 0.75rem">
-                    Markup and discount are set per product
+                    <?= e(pricing_basis_label($pricingBasis)) ?> and discount are set per product
                     (<a href="/admin/products/index.php" style="color:#1f3b5b">Products</a>
                     → Edit → Pricing overrides).
                 </p>

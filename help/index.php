@@ -157,6 +157,15 @@ $TOPICS = [
       <li><strong>Library supplier</strong> (master catalogue) = the catalogue grouping, matched by the product’s
       <strong>name prefix</strong>, not by the Order supplier field.</li></ul>
       <p>Settings → Suppliers is the single source for the Order-supplier dropdown — delete a stray there and it’s gone.</p>'],
+    ['admin', 'Products & pricing', 'Markup vs margin (how you enter your profit)', 'markup margin profit basis pricing settings convert default',
+     '<p>You can enter your profit as <strong>markup</strong> or <strong>margin</strong> — set which on
+      <strong>Settings → Quoting → Default margins</strong> (“Enter your margins as”).</p>
+      <ul><li><strong>Markup</strong> is added on top of your cost — cost&nbsp;+&nbsp;50% = sell.</li>
+      <li><strong>Margin</strong> is the profit slice of the <em>sell</em> price — a 50% margin means cost is half the sell.</li></ul>
+      <p>The customer price is identical either way; this only changes which number you type. Whatever you pick is used
+      everywhere you set a rate — the default margins, per-product overrides, and InstaPrice. As you type, a small
+      “≈ … markup” line shows the equivalent so you can sense-check it. You can switch basis any time
+      <strong>without re-pricing anything</strong> — nothing already saved changes.</p>'],
 
     // ---- Fabric Library (super) ----
     ['super', 'Fabric Library', 'Fabric Library structure', 'fabric library supplier range fabrics group manufacturer',

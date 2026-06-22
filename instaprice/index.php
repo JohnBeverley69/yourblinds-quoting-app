@@ -19,11 +19,15 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/units.php';
+require __DIR__ . '/../_partials/pricing_basis.php';
 
 requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+// Markup vs margin. The breakdown panel still computes in markup; this only
+// changes how the editable rate is labelled / typed (pricing_basis.php).
+$pricingBasis = pricing_basis_for(db(), $clientId);
 // Company default measurement unit — InstaPrice has no quote of its own,
 // so it starts on the company default with a local switcher.
 $defaultUnit = client_default_unit(db(), $clientId);
@@ -230,6 +234,17 @@ $activeNav = 'instaprice';
 <script>
 (function () {
     'use strict';
+
+    // Markup vs margin. The breakdown still computes in MARKUP; these only
+    // convert the editable rate the tenant sees / types. Mirror of
+    // pricing_basis.php — keep the two formulas in lockstep.
+    var IP_BASIS = <?= json_encode($pricingBasis) ?>;
+    function m2k(m){ m = Math.min(Math.max(m, 0), 99.99); return m <= 0 ? 0 : m * 100 / (100 - m); }
+    function k2m(k){ k = Math.max(k, 0);                  return k <= 0 ? 0 : k * 100 / (100 + k); }
+    function rateLabel(){ return IP_BASIS === 'margin' ? 'Margin %' : 'Mark up %'; }
+    // stored markup → shown in basis; typed-in-basis → markup for the formula
+    function markupToShown(k){ return IP_BASIS === 'margin' ? k2m(k) : k; }
+    function shownToMarkup(v){ return IP_BASIS === 'margin' ? m2k(v) : v; }
 
     var productSel = document.getElementById('ip-product');
     var systemSel  = document.getElementById('ip-system');
@@ -753,8 +768,8 @@ $activeNav = 'instaprice';
           + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
-          + '<div class="ip-row editable"><span class="lbl">Mark up %</span>'
-          +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupDefault.toFixed(2) + '"></div>'
+          + '<div class="ip-row editable"><span class="lbl">' + rateLabel() + '</span>'
+          +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupToShown(markupDefault).toFixed(2) + '"></div>'
           + '<div class="ip-row ip-sell"><span class="lbl">Sell price</span><span class="val" id="ip-sell">—</span></div>'
           + '<div class="ip-total" id="ip-total"></div>';
         curDisc = discDefault; curMarkup = markupDefault;
@@ -762,7 +777,8 @@ $activeNav = 'instaprice';
             var v = parseFloat(this.value); curDisc = isNaN(v) ? 0 : v; recompute();
         });
         document.getElementById('ip-markup').addEventListener('input', function () {
-            var v = parseFloat(this.value); curMarkup = isNaN(v) ? 0 : v; recompute();
+            // The field is in the tenant's basis; curMarkup is always MARKUP.
+            var v = parseFloat(this.value); curMarkup = isNaN(v) ? 0 : shownToMarkup(v); recompute();
         });
         recompute();
     }
@@ -773,7 +789,9 @@ $activeNav = 'instaprice';
         var markEl = document.getElementById('ip-markup');
         if (!discEl || !markEl) return;
         var disc = parseFloat(discEl.value); if (isNaN(disc)) disc = 0;
+        // The markup field shows the tenant's basis — convert to markup for the formula.
         var markup = parseFloat(markEl.value); if (isNaN(markup)) markup = 0;
+        markup = shownToMarkup(markup);
         var qty = Math.max(1, parseInt(qtyIn.value, 10) || 1);
 
         var discountedBase = lastBase * (1 - disc / 100);
