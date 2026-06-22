@@ -94,8 +94,12 @@ if (!function_exists('calendar_money_for_quotes')) {
 
         if (!empty($m['paid'])) {
             $clr = $onDark ? '#ffffff' : '#047857';
+            // Show "· bal £0.00" too, so a settled job reads consistently with
+            // the unpaid / part-paid cards that always show a balance.
+            $bal = max(0.0, (float) ($m['balance'] ?? 0));
             return '<div class="cal-money" style="margin-top:.1875rem;font-size:.6875rem;'
-                 . 'font-weight:700;color:' . $clr . '">✓ PAID ' . $e($fmt($m['total'])) . '</div>';
+                 . 'font-weight:700;color:' . $clr . '">✓ PAID ' . $e($fmt($m['total']))
+                 . ' &middot; bal ' . $e($fmt($bal)) . '</div>';
         }
 
         $base   = $onDark ? 'rgba(255,255,255,0.90)' : 'var(--text-secondary)';
