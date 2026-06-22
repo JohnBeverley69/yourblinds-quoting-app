@@ -13,9 +13,9 @@ declare(strict_types=1);
  * Optional scope (sensible defaults applied if missing):
  *   $isAdmin    bool   defaults to ($user['role'] === 'admin')
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
- *   $activeNav  string one of: calendar, dashboard, order-history,
- *                      customers, accounts, products, users, settings,
- *                      billing, master-admin, pricing, subscriptions,
+ *   $activeNav  string one of: calendar, dashboard, pipeline, order-history,
+ *                      quote-history, customers, accounts, products, users,
+ *                      settings, billing, master-admin, pricing, subscriptions,
  *                      paypal-health, push-updates, backup.
  *                      Empty = no highlight.
  *
@@ -30,9 +30,6 @@ declare(strict_types=1);
  *   - "My Schedule"  — duplicated Calendar with ?mine=1. Use the
  *                      Everyone / Just me toggle on the Calendar
  *                      header instead.
- *   - "Pipeline"     — same data as Order history, different view.
- *                      Reachable via the "Pipeline view →" link in
- *                      the Order-history filter chip row.
  *   - "Setup wizard" — discoverable from the Products page (empty
  *                      state + header CTA). A third sidebar entry
  *                      was menu noise.
@@ -143,6 +140,11 @@ $navSections = [
         'items' => [
             'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
             'calendar'      => ['/calendar/index.php',         'Calendar',      true],
+            // Pipeline — the Kanban funnel view of every quote/order. Promoted
+            // to its own sidebar entry (it had been reachable only via a link
+            // on the Order-history page); gated like the rest of the orders
+            // module. Sits high in Work as a daily at-a-glance overview.
+            'pipeline'      => ['/orders/pipeline.php',        'Pipeline',      $hasQuotes && $isStaff],
             'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
             'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
