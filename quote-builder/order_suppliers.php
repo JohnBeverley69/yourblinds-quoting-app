@@ -372,6 +372,12 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
         .sup-head .sup-email { color: var(--text-secondary); font-size: 0.875rem; }
         .sup-head .sup-pick { margin-left: auto; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; }
         .sup-warn { color: #9a3412; background: #fff7ed; font-size: 0.8125rem; padding: 0.5rem 1rem; }
+        .sup-sent-badge { display: inline-flex; align-items: center; gap: 0.3rem;
+                          color: #9a3412; background: #ffedd5; border: 1px solid #fdba74;
+                          border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; font-weight: 700; }
+        [data-theme="dark"] .sup-sent-badge { color: #fdba74; background: #3a2008; border-color: #7c4710; }
+        .sup-resend-note { color: #9a3412; font-size: 0.8125rem; padding: 0.4rem 1rem 0; }
+        [data-theme="dark"] .sup-resend-note { color: #fdba74; }
         .sup-items { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         .sup-items th { text-align: left; padding: 0.4rem 1rem; color: var(--text-faint); font-size: 0.75rem; text-transform: uppercase; }
         .sup-items td { padding: 0.4rem 1rem; border-top: 1px solid var(--border-faint); vertical-align: top; }
@@ -400,7 +406,7 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
             </div>
         <?php endif; ?>
 
-        <form method="post" action="/quote-builder/order_suppliers.php">
+        <form method="post" action="/quote-builder/order_suppliers.php" id="supOrderForm">
             <?= csrf_field() ?>
             <input type="hidden" name="quote_id" value="<?= (int) $quoteId ?>">
 
@@ -415,10 +421,11 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                 <?php endif; ?>
 
                 <?php foreach ($groups as $name => $g):
-                    $name      = (string) $name;
-                    $items     = $g['items'];
-                    $sendable  = $isSendable($name);
-                    $email     = $emailFor($name);
+                    $name        = (string) $name;
+                    $items       = $g['items'];
+                    $sendable    = $isSendable($name);
+                    $email       = $emailFor($name);
+                    $alreadySent = !empty($lastSent[$name]);
                 ?>
                     <div class="sup-group">
                         <div class="sup-head">
@@ -429,17 +436,26 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                                     <span class="sup-meta">· acct <?= e($acct) ?></span>
                                 <?php endif; ?>
                             <?php endif; ?>
-                            <?php if (!empty($lastSent[$name])): ?>
-                                <span class="sup-meta">· last sent <?= e(date('j M Y, H:i', strtotime((string) $lastSent[$name]))) ?></span>
+                            <?php if ($alreadySent): ?>
+                                <span class="sup-sent-badge">
+                                    ⚠️ Already sent <?= e(date('j M Y, H:i', strtotime((string) $lastSent[$name]))) ?>
+                                </span>
                             <?php endif; ?>
                             <?php if ($sendable): ?>
                                 <label class="sup-pick">
-                                    <input type="checkbox" name="send[]" value="<?= e($name) ?>" checked
+                                    <input type="checkbox" name="send[]" value="<?= e($name) ?>"
+                                           <?= $alreadySent ? 'data-resend="1"' : 'checked' ?>
                                            style="width:18px;height:18px">
-                                    Send <?= count($items) ?> line<?= count($items) === 1 ? '' : 's' ?>
+                                    <?= $alreadySent ? 'Re-send' : 'Send' ?> <?= count($items) ?> line<?= count($items) === 1 ? '' : 's' ?>
                                 </label>
                             <?php endif; ?>
                         </div>
+                        <?php if ($alreadySent && $sendable): ?>
+                            <div class="sup-resend-note">
+                                Already ordered from <strong><?= e($name) ?></strong> for this quote —
+                                left unticked so you don't double-order. Tick it only if you really mean to re-send.
+                            </div>
+                        <?php endif; ?>
 
                         <?php if ($name === ''): ?>
                             <div class="sup-warn">
@@ -499,5 +515,25 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
         </form>
     </main>
 </div>
+<script>
+(function () {
+    // Guard against accidental double-ordering: if any supplier that was
+    // already sent for this quote is (re-)ticked, make the user confirm.
+    var form = document.getElementById('supOrderForm');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        var resent = Array.prototype.filter.call(
+            form.querySelectorAll('input[name="send[]"][data-resend="1"]'),
+            function (cb) { return cb.checked; }
+        ).map(function (cb) { return cb.value; });
+        if (resent.length && !window.confirm(
+            'This order was already sent to:\n\n  ' + resent.join('\n  ') +
+            '\n\nSend again? This will place a second order.'
+        )) {
+            e.preventDefault();
+        }
+    });
+})();
+</script>
 </body>
 </html>
