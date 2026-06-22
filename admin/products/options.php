@@ -151,7 +151,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         }
 
         if ($error === null) {
-            $lines = preg_split('/\r\n|\r|\n/', $namesRaw) ?: [];
+            // Split on newlines AND commas, so a pasted comma-separated list
+            // ("Aluminium, Anthracite, Apache") works just like one-per-line.
+            // Colour / fabric names never contain commas, so this is safe; the
+            // per-name trim mops up the space after each comma, and runs of
+            // delimiters (", " or a trailing comma) collapse to nothing.
+            $lines = preg_split('/[\r\n,]+/', $namesRaw) ?: [];
             $names = [];
             foreach ($lines as $line) {
                 $name = trim($line);
@@ -566,7 +571,8 @@ $activeNav = 'products';
                     Bulk add <?= e($labelL) ?>s &mdash; paste a list
                 </summary>
                 <p style="margin:0.5rem 0 0.875rem;font-size:0.875rem;color:var(--text-faint)">
-                    One name per line. They all go in under the same band
+                    One name per line <strong>or comma-separated</strong> &mdash;
+                    paste either way. They all go in under the same band
                     <?= $systems ? '(and optionally one system)' : '' ?>.
                     Duplicates are skipped silently.
                 </p>
@@ -606,7 +612,7 @@ $activeNav = 'products';
                     </div>
 
                     <div class="form-group">
-                        <label for="bulk_names"><?= e(ucfirst($labelL)) ?> names &mdash; one per line <span class="required">*</span></label>
+                        <label for="bulk_names"><?= e(ucfirst($labelL)) ?> names &mdash; one per line or comma-separated <span class="required">*</span></label>
                         <textarea id="bulk_names" name="bulk_names" rows="10"
                                   style="width:100%;font:inherit;padding:0.5625rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-input);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.9375rem"
                                   placeholder="<?= e($labelL === 'slat' ? "Cream\nWalnut\nOak\nWhite Gloss" : "Cream\nStone\nBlack\nPolaris White") ?>"></textarea>
