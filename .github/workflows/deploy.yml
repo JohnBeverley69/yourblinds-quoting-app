@@ -19,6 +19,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Backstop so a hung API call can never sit there burning minutes — the
+    # individual curls have their own timeouts well under this.
+    timeout-minutes: 5
     steps:
       - name: Trigger Cloudways git pull
         env:
@@ -37,33 +40,61 @@ jobs:
             fi
           done
 
+          # The Cloudways auth endpoint occasionally blips / hangs. Try a few
+          # times with a hard per-attempt timeout so a transient failure
+          # auto-recovers instead of going red and needing a manual re-run.
           echo "Requesting Cloudways access token..."
-          TOKEN=$(curl -sS -X POST https://api.cloudways.com/api/v1/oauth/access_token \
-            -d "email=${CW_EMAIL}" \
-            -d "api_key=${CW_API_KEY}" | jq -r '.access_token // empty')
+          TOKEN=""
+          AUTH_RESP=""
+          for attempt in 1 2 3; do
+            AUTH_RESP=$(curl -sS --connect-timeout 15 --max-time 30 \
+              -X POST https://api.cloudways.com/api/v1/oauth/access_token \
+              -d "email=${CW_EMAIL}" \
+              -d "api_key=${CW_API_KEY}" || true)
+            TOKEN=$(printf '%s' "$AUTH_RESP" | jq -r '.access_token // empty' 2>/dev/null || true)
+            if [ -n "$TOKEN" ]; then
+              echo "Got access token on attempt $attempt."
+              break
+            fi
+            echo "Auth attempt $attempt got no token. Response: ${AUTH_RESP:-<empty/timeout>}"
+            [ "$attempt" -lt 3 ] && sleep 5 || true
+          done
 
           if [ -z "$TOKEN" ]; then
-            echo "::error::Could not get a Cloudways access token. Check CLOUDWAYS_EMAIL and CLOUDWAYS_API_KEY."
+            # Safe to print the response here — auth failed, so there's no token
+            # to leak (and the api_key is never echoed back by the endpoint).
+            echo "::error::Could not get a Cloudways access token after 3 tries. If CLOUDWAYS_EMAIL / CLOUDWAYS_API_KEY are correct this is usually a transient Cloudways API blip — Re-run the job. Last response: ${AUTH_RESP:-<empty/timeout>}"
             exit 1
           fi
 
+          # Same treatment for the git-pull trigger.
           echo "Triggering git pull of 'main' into the live app..."
-          HTTP=$(curl -sS -o /tmp/cw_resp.json -w '%{http_code}' \
-            -X POST https://api.cloudways.com/api/v1/git/pull \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -d "server_id=${CW_SERVER_ID}" \
-            -d "app_id=${CW_APP_ID}" \
-            -d "branch_name=main" \
-            -d "deploy_path=")
+          HTTP="000"
+          for attempt in 1 2 3; do
+            HTTP=$(curl -sS --connect-timeout 15 --max-time 60 -o /tmp/cw_resp.json -w '%{http_code}' \
+              -X POST https://api.cloudways.com/api/v1/git/pull \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -d "server_id=${CW_SERVER_ID}" \
+              -d "app_id=${CW_APP_ID}" \
+              -d "branch_name=main" \
+              -d "deploy_path=" || echo "000")
+            if [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ]; then
+              break
+            fi
+            echo "git/pull attempt $attempt returned HTTP ${HTTP:-000}:"
+            cat /tmp/cw_resp.json 2>/dev/null || true
+            echo ""
+            [ "$attempt" -lt 3 ] && sleep 5 || true
+          done
 
           echo "Cloudways HTTP status: $HTTP"
           echo "Cloudways response:"
-          cat /tmp/cw_resp.json || true
+          cat /tmp/cw_resp.json 2>/dev/null || true
           echo ""
 
-          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
+          if [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ]; then
             echo "Deploy triggered successfully. Confirm in Cloudways -> Deployment Via Git -> logs."
           else
-            echo "::error::Cloudways returned HTTP $HTTP — deploy not triggered. See response above."
+            echo "::error::Cloudways returned HTTP $HTTP after 3 tries — deploy not triggered. See response above."
             exit 1
           fi
