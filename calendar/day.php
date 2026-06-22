@@ -177,17 +177,37 @@ try {
     $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
 } catch (Throwable $e) { /* column not migrated — figures stay off */ }
 
-// Hour range. 7am → 10pm covers early starts, normal daytime, and
-// evening fittings (some tenants quote installs after the homeowner
-// gets in from work). Vertical scroll handles the height.
-$startHour = 7;
-$endHour   = 22;
+// Auto-fit the visible hour window to THIS day's bookings — an empty or
+// lightly-booked day shouldn't sprawl across 07:00–22:00. Pad ~1h either
+// side, keep it wide enough to read, and never clip a real booking.
+$MIN_SPAN = 9; // always show at least this many hours
+$earliestMin = null;
+$latestMin   = null;
+foreach ($apRows as $r) {
+    $t = (string) ($r['appointment_time'] ?? '');
+    if ($t === '' || strpos($t, ':') === false) continue;
+    [$hh, $mm] = array_pad(explode(':', $t), 2, '0');
+    $s = (int) $hh * 60 + (int) $mm;
+    $e = $s + max(15, (int) ($r['duration_minutes'] ?? 60));
+    $earliestMin = $earliestMin === null ? $s : min($earliestMin, $s);
+    $latestMin   = $latestMin   === null ? $e : max($latestMin, $e);
+}
+if ($earliestMin === null) {
+    $startHour = 8;
+    $endHour   = 17;
+} else {
+    $eH = intdiv($earliestMin, 60);
+    $lH = (int) ceil($latestMin / 60);
+    $startHour = min($eH, max(6, $eH - 1));
+    $endHour   = max($lH, min(21, $lH + 1));
+    if ($endHour - $startHour < $MIN_SPAN) {
+        $endHour = min(21, $endHour + ($MIN_SPAN - ($endHour - $startHour)));
+        if ($endHour - $startHour < $MIN_SPAN) $startHour = max(0, $endHour - $MIN_SPAN);
+    }
+}
 $totalHours = $endHour - $startHour;
-// Pixels per hour. Tall enough that a normal (~1h) appointment's card — money
-// line included — fills its own hour slot, so the axis stays a TRUE linear
-// ruler and only genuinely-overlapping bookings stretch it (and it recovers
-// afterwards). Compact when money figures are off.
-$pxPerHour  = $showMoney ? 90 : 60;
+// Tighter rows than before (was 90/60) so a normal day reads as a neat strip.
+$pxPerHour = $showMoney ? 72 : 52;
 $gridHeight = $totalHours * $pxPerHour;
 
 // Status → colour. yellow = pending/scheduled, green = confirmed,

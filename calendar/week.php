@@ -130,12 +130,37 @@ try {
     $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
 } catch (Throwable $e) { /* column not migrated — figures stay off */ }
 
-// Hour range — match day view. pxPerHour is tall enough that a normal (~1h)
-// appointment's card (money line included) fills its slot, so the axis stays a
-// true linear ruler and only genuinely-overlapping bookings stretch it.
-$startHour = 7;
-$endHour   = 22;
-$pxPerHour = $showMoney ? 90 : 60;
+// Auto-fit the visible hour window to the week's bookings — a quiet week
+// shouldn't sprawl across 07:00–22:00 of mostly-empty grid. Pad ~1h either
+// side, keep the window wide enough to read, and never clip a real booking.
+$MIN_SPAN = 9; // always show at least this many hours
+$earliestMin = null;
+$latestMin   = null;
+foreach ($apRows as $r) {
+    $t = (string) ($r['appointment_time'] ?? '');
+    if ($t === '' || strpos($t, ':') === false) continue;
+    [$hh, $mm] = array_pad(explode(':', $t), 2, '0');
+    $s = (int) $hh * 60 + (int) $mm;
+    $e = $s + max(15, (int) ($r['duration_minutes'] ?? 60));
+    $earliestMin = $earliestMin === null ? $s : min($earliestMin, $s);
+    $latestMin   = $latestMin   === null ? $e : max($latestMin, $e);
+}
+if ($earliestMin === null) {
+    // Nothing booked → a tidy default business window.
+    $startHour = 8;
+    $endHour   = 17;
+} else {
+    $eH = intdiv($earliestMin, 60);
+    $lH = (int) ceil($latestMin / 60);
+    $startHour = min($eH, max(6, $eH - 1));   // pad 1h, soft-clamp 06:00, never clip
+    $endHour   = max($lH, min(21, $lH + 1));  // pad 1h, soft-clamp 21:00, never clip
+    if ($endHour - $startHour < $MIN_SPAN) {
+        $endHour = min(21, $endHour + ($MIN_SPAN - ($endHour - $startHour)));
+        if ($endHour - $startHour < $MIN_SPAN) $startHour = max(0, $endHour - $MIN_SPAN);
+    }
+}
+// Tighter rows than before (was 90/60) so a normal day reads as a neat strip.
+$pxPerHour = $showMoney ? 72 : 52;
 $gridHeight = ($endHour - $startHour) * $pxPerHour;
 
 // Same traffic-light palette as the calendar + Settings, so a job's hue is
@@ -320,7 +345,9 @@ $activeNav = 'calendar';
         }
         .wk-board-head, .wk-board-body {
             display: grid;
-            grid-template-columns: 4rem repeat(7, minmax(9rem, 1fr));
+            /* minmax(0,1fr) lets the 7 day columns shrink to share the width
+               so the whole week always fits — no clipped Sat/Sun. */
+            grid-template-columns: 3rem repeat(7, minmax(0, 1fr));
         }
         .wk-board-head {
             background: var(--bg-subtle); border-bottom: 1px solid var(--border);
