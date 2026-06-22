@@ -491,7 +491,7 @@ $activeNav = 'calendar';
            inside the card on the right; one-tap goes straight to the
            order page. Bigger min-size than its visible content so
            thumbs can hit it on touch screens. */
-        .cal-appt.from-quote { padding-right: 1.5rem; position: relative; }
+        .cal-appt.from-quote { padding-right: 1.85rem; position: relative; }
         /* "Open order" tap target. Previously rendered as white-on-
            translucent-white which fell off most card colours. Now a
            solid white pill with a dark arrow — readable on any
@@ -501,15 +501,15 @@ $activeNav = 'calendar';
             position: absolute;
             right: 0.25rem; top: 50%;
             transform: translateY(-50%);
-            min-width: 1.5rem; min-height: 1.5rem;
-            padding: 0 0.375rem;
+            min-width: 1.25rem; min-height: 1.25rem;
+            padding: 0 0.25rem;
             display: inline-flex; align-items: center; justify-content: center;
             background: #fff;
             color: #1f3b5b;
             border-radius: 4px;
             border: 1px solid rgba(0, 0, 0, 0.1);
             font-weight: 700;
-            font-size: 0.9375rem;
+            font-size: 0.8125rem;
             line-height: 1;
             cursor: pointer;
             user-select: none;
