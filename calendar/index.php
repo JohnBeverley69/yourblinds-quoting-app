@@ -147,6 +147,7 @@ if ($mineOnly) {
                 a.duration_minutes, a.status, a.quote_id,
                 {$apptOptSql}a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
+                q.quote_number AS quote_number,
                 q.status AS quote_status
            FROM appointments a
       LEFT JOIN customers c ON c.id = a.customer_id
@@ -168,6 +169,7 @@ if ($mineOnly) {
                 a.duration_minutes, a.status, a.quote_id,
                 {$apptOptSql}a.installation_town, a.installation_postcode,
                 c.name AS customer_name,
+                q.quote_number AS quote_number,
                 q.status AS quote_status
            FROM appointments a
       LEFT JOIN customers c ON c.id = a.customer_id
@@ -966,6 +968,13 @@ $activeNav = 'calendar';
                                         $isFit    = $apptKind === 'fitting';
                                         $isIssue  = !empty($a['has_issue']);
                                         $issueTxt = trim((string) ($a['issue_note'] ?? ''));
+                                        // Prefix the job reference (ABC-2026-xxxx) onto the title so
+                                        // order/fitting cards are easy to cross-reference — unless the
+                                        // title already contains it (some auto-created titles do).
+                                        $qref = trim((string) ($a['quote_number'] ?? ''));
+                                        $displayTitle = ($qref !== '' && stripos((string) $a['title'], $qref) === false)
+                                            ? $qref . ' — ' . (string) $a['title']
+                                            : (string) $a['title'];
                                     ?>
                                     <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?><?= $isFit ? ' is-fitting' : ' is-measure' ?><?= $isIssue ? ' is-issue' : '' ?>"
                                        style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind)) ?><?= $isIssue ? ';--issue-clr:' . e($issueColour) : '' ?>"
@@ -977,7 +986,7 @@ $activeNav = 'calendar';
                                        <?php endif; ?>
                                        title="<?= $isFit ? 'Fitting' : 'Measure' ?>: <?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $isIssue ? ' &mdash; ⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
                                         <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
-                                        <span class="cal-appt-title"><?= e((string) $a['title']) ?></span>
+                                        <span class="cal-appt-title"><?= e($displayTitle) ?></span>
                                         <span class="cal-appt-issue" role="button" tabindex="0"
                                               data-id="<?= (int) $a['id'] ?>"
                                               data-issue="<?= $isIssue ? '1' : '0' ?>"
@@ -1284,6 +1293,11 @@ $activeNav = 'calendar';
                     : '';
                 var note       = a.access_note || '';
                 var hasNoteCls = note ? ' has-note' : '';
+                // Prefix the job reference onto the title (unless already in it)
+                // so it stays visible after a poll refresh — mirrors the PHP render.
+                var qref       = (a.quote_number || '').trim();
+                var dispTitle  = (qref && a.title.toLowerCase().indexOf(qref.toLowerCase()) === -1)
+                                 ? qref + ' — ' + a.title : a.title;
                 var kind       = a.appt_kind || 'measure';
                 var kindCls    = kind === 'fitting' ? ' is-fitting' : ' is-measure';
                 var kindLabel  = kind === 'fitting' ? 'Fitting' : 'Measure';
@@ -1309,7 +1323,7 @@ $activeNav = 'calendar';
                      +  quoteAttr
                      +  ' title="' + escapeAttr(kindLabel + ': ' + a.title + ' — ' + a.status + (isIssue ? ' — ⚠ ISSUE' + (issueNote ? ': ' + issueNote : '') : '') + (note ? ' — ' + note : '')) + '">'
                      +    '<span class="cal-appt-time">'  + escapeHtml(a.time)  + '</span>'
-                     +    '<span class="cal-appt-title">' + escapeHtml(a.title) + '</span>'
+                     +    '<span class="cal-appt-title">' + escapeHtml(dispTitle) + '</span>'
                      +    issueHtml
                      +    noteHtml
                      +    openOrderHtml

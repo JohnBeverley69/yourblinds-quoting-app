@@ -125,6 +125,7 @@ if ($first !== null && $last !== null) {
                   a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name,
+                  q.quote_number AS quote_number,
                   q.status AS quote_status
              FROM appointments a
         LEFT JOIN customers c ON c.id = a.customer_id
@@ -138,6 +139,7 @@ if ($first !== null && $last !== null) {
                   a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
                   c.name AS customer_name,
+                  q.quote_number AS quote_number,
                   q.status AS quote_status
              FROM appointments a
         LEFT JOIN customers c ON c.id = a.customer_id
@@ -175,6 +177,7 @@ if ($first !== null && $last !== null) {
             'has_issue'     => !empty($r['has_issue']) ? 1 : 0,
             'issue_note'    => (string) ($r['issue_note'] ?? ''),
             'quote_status'  => $r['quote_status'] !== null ? (string) $r['quote_status'] : null,
+            'quote_number'  => (string) ($r['quote_number'] ?? ''),
             'quote_id'      => $r['quote_id'] !== null ? (int) $r['quote_id'] : null,
             'access_note'   => (string) ($r['access_note']           ?? ''),
             'town'          => (string) ($r['installation_town']     ?? ''),
