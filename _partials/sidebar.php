@@ -237,6 +237,18 @@ $_ybEmailPaused = function_exists('app_setting_on') && app_setting_on('email_pau
     } catch (e) { /* swallow — defaults to light */ }
 })();
 </script>
+<script>
+// Back/forward-cache guard. Chromium browsers (notably Brave) can restore a
+// page from the bfcache even when it was served Cache-Control: no-store — so
+// hitting "Back" to a list (e.g. the Pipeline) after changing a job's status
+// would show the STALE snapshot until a manual refresh. e.persisted is true
+// only on a bfcache restore, so this forces a fresh load exactly then, and
+// never on a normal navigation. (Chrome/Firefox already evict these pages;
+// this makes every browser behave the same.)
+window.addEventListener('pageshow', function (e) {
+    if (e.persisted) window.location.reload();
+});
+</script>
     <input type="checkbox" id="navToggle" class="nav-toggle-input">
     <label class="nav-fab" for="navToggle" aria-label="Open menu" tabindex="0">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
