@@ -428,6 +428,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                // Split one line into colour names on commas, so a pasted
+                // comma list ("Aluminium, Anthracite") works just like
+                // one-per-line. Names never contain commas; trim mops up the
+                // space after each. [System] headers are matched per-line
+                // BEFORE this runs, so they're never comma-split.
+                $splitNames = static function (string $line): array {
+                    $out = [];
+                    foreach (preg_split('/,+/', $line) as $part) {
+                        $n = trim($part);
+                        if ($n !== '' && strlen($n) <= 150) $out[] = $n;
+                    }
+                    return $out;
+                };
+
                 $ins = $pdo->prepare(
                     'INSERT INTO product_options
                       (client_id, product_id, system_id, band_code, name, sort_order, active)
@@ -459,28 +473,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                             continue;
                         }
-                        $name = trim($line);
-                        if ($name === '' || strlen($name) > 150) continue;
-                        if ($currentSysId === null) {
-                            $skipped++;
-                            continue;
-                        }
-                        try {
-                            $ins->execute([$clientId, $productId, $currentSysId, $band, $name]);
-                            $added++;
-                            $touchedSystems[$currentSysId] = true;
-                        } catch (Throwable $e) {
-                            $skipped++;
+                        foreach ($splitNames($line) as $name) {
+                            if ($currentSysId === null) {
+                                $skipped++;
+                                continue;
+                            }
+                            try {
+                                $ins->execute([$clientId, $productId, $currentSysId, $band, $name]);
+                                $added++;
+                                $touchedSystems[$currentSysId] = true;
+                            } catch (Throwable $e) {
+                                $skipped++;
+                            }
                         }
                     }
                 } else {
-                    // Single-section — original behaviour.
+                    // Single-section — original behaviour, now also
+                    // splitting each line on commas.
                     $names = [];
                     foreach ($lines as $line) {
-                        $name = trim($line);
-                        if ($name === '')          continue;
-                        if (strlen($name) > 150)   continue;
-                        $names[] = $name;
+                        foreach ($splitNames($line) as $name) $names[] = $name;
                     }
                     if (!$names) {
                         throw new RuntimeException('No names to add — paste at least one name into the box.');
@@ -1400,7 +1412,7 @@ $activeNav = 'wizard';
                             <?php endif; ?>
                             <div>
                                 <label for="bulk_names">
-                                    <?= e(ucfirst($labelL)) ?>s (one per line — paste from Excel or type)
+                                    <?= e(ucfirst($labelL)) ?>s (one per line or comma-separated — paste from Excel or type)
                                 </label>
                                 <textarea id="bulk_names" name="bulk_names"
                                           rows="10"
@@ -1412,7 +1424,7 @@ $activeNav = 'wizard';
                         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
                             <button type="submit" class="btn btn-secondary">+ Add</button>
                             <span style="color:var(--text-faint);font-size:0.8125rem">
-                                One line = one <?= e($labelL) ?>.
+                                One line <strong>or comma</strong> = one <?= e($labelL) ?>.
                                 <?php if (count($systems) >= 2): ?>
                                     Or use <code>[System Name]</code> headers in the textarea to
                                     add to many systems in one go.
