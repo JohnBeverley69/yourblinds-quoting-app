@@ -715,6 +715,23 @@ $activeNav = 'calendar';
         .pending-empty {
             color: #92400e; font-size: 0.8125rem; font-style: italic;
         }
+
+        /* Quick time picker shown when a pending fitting is dropped onto a
+           day — the month grid has no time axis, so this sets one inline. */
+        .time-pop {
+            position: fixed; z-index: 10000;
+            background: var(--bg-card); border: 1px solid var(--border-strong);
+            border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+            padding: 0.625rem 0.75rem; min-width: 11rem;
+        }
+        .time-pop-title { font-size: 0.8125rem; font-weight: 700; color: var(--text-body); margin-bottom: 0.375rem; }
+        .time-pop input[type="time"] {
+            width: 100%; padding: 0.375rem 0.5rem; font: inherit;
+            border: 1px solid var(--border-strong); border-radius: 6px;
+            background: var(--bg-input); color: var(--text-body);
+        }
+        .time-pop-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
+        .time-pop .btn { padding: 0.25rem 0.625rem; font-size: 0.8125rem; }
     </style>
 </head>
 <body>
@@ -1120,10 +1137,20 @@ $activeNav = 'calendar';
         });
     }
 
-    // Each calendar cell drops to its own date.
+    // Each calendar cell drops to its own date. Dropping a PENDING fitting
+    // (from the tray) onto a day has no time yet — the month grid is per-day —
+    // so pop a quick time picker and schedule date + time in one go. Moving an
+    // already-scheduled card just changes its date and keeps its time.
     document.querySelectorAll('.cal-cell[data-date]').forEach(function (cell) {
         bindDropTarget(cell, function (id, target) {
-            reschedule(id, target.dataset.date);
+            var fromTray = dragNode && dragNode.classList.contains('pending-card');
+            if (fromTray) {
+                askTime(target, '09:00', function (time) {
+                    reschedule(id, target.dataset.date, false, time);
+                });
+            } else {
+                reschedule(id, target.dataset.date);
+            }
         });
     });
 
@@ -1330,11 +1357,57 @@ $activeNav = 'calendar';
     if (!document.hidden) startPolling();
 
     // -- AJAX --------------------------------------------------------
-    function reschedule(id, date, override) {
+    // Quick inline time picker — shown when a pending fitting is dropped onto
+    // a day. cb(time) fires with "HH:MM" on Schedule; Cancel/empty/Escape
+    // leaves the card untouched in the tray.
+    function askTime(cell, defaultTime, cb) {
+        var ex = document.getElementById('time-pop');
+        if (ex && ex.parentNode) ex.parentNode.removeChild(ex);
+        var pop = document.createElement('div');
+        pop.id = 'time-pop';
+        pop.className = 'time-pop';
+        pop.innerHTML =
+            '<div class="time-pop-title">Set fitting time</div>'
+          + '<input type="time" id="time-pop-input" step="900" value="' + defaultTime + '">'
+          + '<div class="time-pop-actions">'
+          +   '<button type="button" class="btn btn-secondary" id="time-pop-cancel">Cancel</button>'
+          +   '<button type="button" class="btn btn-primary" id="time-pop-ok">Schedule</button>'
+          + '</div>';
+        document.body.appendChild(pop);
+
+        var r  = cell.getBoundingClientRect();
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        pop.style.left = Math.max(8, Math.min(r.left, vw - pop.offsetWidth - 12)) + 'px';
+        pop.style.top  = Math.max(8, Math.min(r.bottom + 6, vh - pop.offsetHeight - 12)) + 'px';
+
+        var input = document.getElementById('time-pop-input');
+        try { input.focus(); } catch (e) {}
+
+        function close() {
+            if (pop.parentNode) pop.parentNode.removeChild(pop);
+            document.removeEventListener('keydown', onKey, true);
+        }
+        function ok() {
+            var t = (input.value || '').trim();
+            close();
+            if (t) cb(t);   // empty = treat as cancel (card stays in the tray)
+        }
+        function onKey(e) {
+            if (e.key === 'Escape') { e.preventDefault(); close(); }
+            else if (e.key === 'Enter') { e.preventDefault(); ok(); }
+        }
+        document.getElementById('time-pop-ok').addEventListener('click', ok);
+        document.getElementById('time-pop-cancel').addEventListener('click', close);
+        document.addEventListener('keydown', onKey, true);
+    }
+
+    function reschedule(id, date, override, time) {
         var fd = new FormData();
         fd.append('appointment_id',  id);
         fd.append('appointment_date', date);
         if (override) fd.append('override', '1');
+        if (time) fd.append('appointment_time', time);
 
         fetch(endpoint, {
             method: 'POST',
@@ -1355,7 +1428,7 @@ $activeNav = 'calendar';
             // Overridable double-booking warning — confirm, then retry.
             if (data.conflict && !override) {
                 if (confirm((data.error || 'Double-booking.') + '\n\nBook anyway?')) {
-                    reschedule(id, date, true);
+                    reschedule(id, date, true, time);
                 } else {
                     refreshAll();   // user declined — snap the card back to truth
                 }
