@@ -13,8 +13,9 @@ declare(strict_types=1);
  *   &q=string             (optional — empty returns first 200 alphabetical)
  *   &limit=N              (optional, default 200, max 200)
  *
- * Match is OR across name / colour / supplier_name / band_code / code,
- * substring, case-insensitive (MySQL collation default).
+ * Match is across the fabric's own fields — name / colour / band_code / code
+ * (NOT supplier_name; the supplier is shown but not searched), substring,
+ * case-insensitive (MySQL collation default).
  *
  * Returns: { "fabrics": [ {id, band, supplier, name, colour, code, label}, ... ] }
  */
@@ -96,11 +97,12 @@ if ($q === '') {
 } else {
     // Multi-word search — each whitespace-separated word in the
     // query must appear in AT LEAST ONE of (name, colour,
-    // supplier_name, band_code, code). The query as a whole ANDs
-    // the per-word clauses together, so "polaris cream" returns
-    // ONLY fabrics where both "polaris" AND "cream" appear (across
-    // any of the searched fields), instead of the old OR-only
-    // behaviour that matched anything containing either word.
+    // band_code, code) — supplier_name is intentionally excluded.
+    // The query as a whole ANDs the per-word clauses together, so
+    // "polaris cream" returns ONLY fabrics where both "polaris" AND
+    // "cream" appear (across any of the searched fields), instead of
+    // the old OR-only behaviour that matched anything containing
+    // either word.
     //
     // Empty words (from double-spaces) are skipped. We also cap at
     // 10 words so a malicious 1000-word query can't blow up the
@@ -114,9 +116,13 @@ if ($q === '') {
     $params  = [$productId, $clientId];
     foreach ($words as $w) {
         $like = '%' . $w . '%';
-        $clauses[] = '(name LIKE ? OR colour LIKE ? OR supplier_name LIKE ? '
+        // Search the FABRIC's own fields only — name / colour / band / code.
+        // supplier_name is deliberately NOT searched: a salesperson types the
+        // fabric name, and folding the supplier in pulled up every fabric from
+        // that supplier as noise. The supplier is still shown in the result.
+        $clauses[] = '(name LIKE ? OR colour LIKE ? '
                    . 'OR band_code LIKE ? OR code LIKE ?)';
-        for ($i = 0; $i < 5; $i++) $params[] = $like;
+        for ($i = 0; $i < 4; $i++) $params[] = $like;
     }
     $whereWords = $clauses
         ? ' AND ' . implode(' AND ', $clauses)

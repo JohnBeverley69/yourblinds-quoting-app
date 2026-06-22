@@ -470,9 +470,9 @@ $activeNav = 'products';
         .bulk-bar .selected-count { font-size: 0.875rem; color: var(--text-faint); }
         .row-check { width: 1%; text-align: center; }
         .row-check input { width: 18px; height: 18px; cursor: pointer; }
-        /* Filter search above the table — finds fabrics by any field
-           (name, colour, supplier, band, code). Multi-word ANDs:
-           "polaris cream" returns only Polaris fabrics in Cream. */
+        /* Filter search above the table — finds fabrics by their own
+           fields (name, colour, band, code; NOT supplier). Multi-word
+           ANDs: "polaris cream" returns only Polaris fabrics in Cream. */
         .fabric-search-bar {
             display: flex; gap: 0.625rem; align-items: center;
             margin-bottom: 0.75rem; flex-wrap: wrap;
@@ -725,9 +725,9 @@ $activeNav = 'products';
                     Filter search — client-side because all rows are
                     already on the page. Whitespace-separated terms ALL
                     have to appear in the row's combined text (name +
-                    colour + supplier + band + code), so "polaris cream"
-                    narrows to just Polaris in Cream. Survives sort
-                    order and lives on across keystrokes without a
+                    colour + band + code — NOT supplier), so "polaris
+                    cream" narrows to just Polaris in Cream. Survives
+                    sort order and lives on across keystrokes without a
                     server round-trip.
                 -->
                 <div class="fabric-search-bar">
@@ -797,11 +797,14 @@ $activeNav = 'products';
                                     $rowSysName = $rowSysId === null
                                                 ? 'All systems'
                                                 : ($systemNameById[$rowSysId] ?? ('#' . $rowSysId));
+                                    // supplier_name is deliberately left OUT of
+                                    // the search blob — the filter matches the
+                                    // fabric's own fields, not its supplier
+                                    // (supplier is still shown in its column).
                                     $searchBlob = strtolower(implode(' ', array_filter([
                                         (string) ($o['band_code']     ?? ''),
                                         (string) ($o['name']          ?? ''),
                                         (string) ($o['colour']        ?? ''),
-                                        (string) ($o['supplier_name'] ?? ''),
                                         (string) ($o['code']          ?? ''),
                                         $showSystemCol     ? $rowSysName : '',
                                         $hasFabricGroupCol ? (string) ($o['fabric_group'] ?? '') : '',
