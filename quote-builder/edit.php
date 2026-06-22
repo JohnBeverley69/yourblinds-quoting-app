@@ -1205,6 +1205,48 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
 
+                <?php if ($isAdmin || $_perms['can_view_costs']):
+                    // Per-blind pricing override. The rate field is in the
+                    // tenant's basis; a hidden field carries the MARKUP the
+                    // server stores. Blank = use the product's set rate.
+                    $rateLabel  = pricing_basis_label($pricingBasis);
+                    $basisWord  = strtolower($rateLabel);
+                    $ovMarkupK  = ($editingItem && $editingItem['markup_percent'] !== null)
+                        ? (float) $editingItem['markup_percent'] : null;
+                    $ovMarkupShown = $ovMarkupK !== null
+                        ? number_format(markup_to_display($ovMarkupK, $pricingBasis), 2, '.', '') : '';
+                    $ovDiscShown = ($editingItem && $editingItem['discount_percent'] !== null)
+                        ? number_format((float) $editingItem['discount_percent'], 2, '.', '') : '';
+                ?>
+                <details class="item-override" id="item-override" <?= $ovMarkupShown !== '' || $ovDiscShown !== '' ? 'open' : '' ?>
+                         style="margin:0.25rem 0 0.5rem;border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem">
+                    <summary style="cursor:pointer;font-size:0.8125rem;color:var(--text-secondary)">
+                        Adjust price for this blind
+                    </summary>
+                    <div class="form-row cols-2" style="margin-top:0.5rem">
+                        <div class="form-group">
+                            <label for="item-disc-override">Discount % (this blind)</label>
+                            <input id="item-disc-override" name="discount_override" type="number"
+                                   step="0.01" min="0" autocomplete="off"
+                                   value="<?= e($ovDiscShown) ?>" placeholder="product default">
+                        </div>
+                        <div class="form-group">
+                            <label for="item-rate-override" id="item-rate-override-label"><?= e($rateLabel) ?> % (this blind)</label>
+                            <input id="item-rate-override" type="number"
+                                   step="0.01" min="0" autocomplete="off"
+                                   value="<?= e($ovMarkupShown) ?>" placeholder="product default">
+                            <input type="hidden" name="markup_override" id="item-markup-override-hidden"
+                                   value="<?= $ovMarkupK !== null ? e(number_format($ovMarkupK, 4, '.', '')) : '' ?>">
+                            <span id="item-rate-hint" style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
+                        </div>
+                    </div>
+                    <small style="color:var(--text-faint);font-size:0.72rem;line-height:1.4;display:block">
+                        Leave blank to use the product's set <?= e($basisWord) ?> / discount.
+                        This only changes <strong>this blind</strong> on this quote.
+                    </small>
+                </details>
+                <?php endif; ?>
+
                 <div id="item-extras-wrap" style="display:none">
                     <div class="section-header" style="margin-top:0.5rem">
                         <h3 class="section-title" style="font-size:1rem">Options</h3>
@@ -1857,6 +1899,35 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // The quote's measurement unit. Sent to the preview API so a bare
     // number is read in this unit (the server parses the same way).
     var measureUnit = <?= json_encode($measureUnit) ?>;
+
+    // Markup vs margin for the per-blind override field. The override field is
+    // shown / typed in this basis; the form + preview always send MARKUP.
+    // Mirror of pricing_basis.php — keep the two formulas in lockstep.
+    var QB_BASIS = <?= json_encode($pricingBasis) ?>;
+    function qbM2K(m){ m = Math.min(Math.max(m, 0), 99.99); return m <= 0 ? 0 : m * 100 / (100 - m); }
+    function qbK2M(k){ k = Math.max(k, 0);                  return k <= 0 ? 0 : k * 100 / (100 + k); }
+    var rateOverrideIn  = document.getElementById('item-rate-override');       // basis-facing
+    var rateOverrideHid = document.getElementById('item-markup-override-hidden'); // markup posted
+    var discOverrideIn  = document.getElementById('item-disc-override');
+    var rateOverrideHint = document.getElementById('item-rate-hint');
+    // Keep the hidden markup field + hint in sync with the basis-facing input.
+    function syncRateOverride() {
+        if (!rateOverrideIn || !rateOverrideHid) return;
+        var raw = rateOverrideIn.value.trim();
+        if (raw === '' || isNaN(parseFloat(raw))) {
+            rateOverrideHid.value = '';
+            if (rateOverrideHint) rateOverrideHint.textContent = '';
+            return;
+        }
+        var typed = parseFloat(raw);
+        var markup = QB_BASIS === 'margin' ? qbM2K(typed) : typed;
+        rateOverrideHid.value = String(Math.round(markup * 100) / 100);
+        if (rateOverrideHint) {
+            rateOverrideHint.textContent = QB_BASIS === 'margin'
+                ? '≈ ' + (Math.round(markup * 100) / 100).toFixed(2) + '% markup'
+                : '≈ ' + (Math.round(qbK2M(markup) * 100) / 100).toFixed(2) + '% margin';
+        }
+    }
 
     // Changing the unit persists it to the quote and reloads so every
     // already-listed size re-renders in the new unit consistently.
@@ -2729,6 +2800,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             round_up:   '1',
             unit:       measureUnit
         });
+        // Per-blind override (cost-viewers only — fields absent otherwise).
+        // markup_override is the hidden, already-converted MARKUP value;
+        // discount needs no conversion. Sent only when non-empty so a blank
+        // field falls through to the product's resolved rate.
+        if (rateOverrideHid && rateOverrideHid.value !== '') {
+            params.append('markup_override', rateOverrideHid.value);
+        }
+        if (discOverrideIn && discOverrideIn.value.trim() !== '') {
+            params.append('discount_override', discOverrideIn.value.trim());
+        }
         collectExtras().forEach(function (ex, i) {
             params.append('extras[' + i + '][extra_id]',  ex.extra_id);
             // choice_id is omitted for number-only options (no choices) so
@@ -2838,6 +2919,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     [widthIn, dropIn].forEach(function (el) {
         el.addEventListener('input', schedulePreview);
     });
+    // Per-blind pricing override (cost-viewers only). Keep the hidden markup
+    // field in sync with the basis-facing input, then re-price live.
+    if (rateOverrideIn) {
+        rateOverrideIn.addEventListener('input', function () { syncRateOverride(); schedulePreview(); });
+    }
+    if (discOverrideIn) {
+        discOverrideIn.addEventListener('input', schedulePreview);
+    }
+    syncRateOverride(); // paint hint + hidden value from any pre-filled override
 
     // Fabric typeahead listeners.
     fabricSearch.addEventListener('focus', function () {

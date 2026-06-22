@@ -990,6 +990,20 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $markup   = pe_markup_for_system  ($pdo, $clientId, $productId, $systemId);
     $discount = pe_discount_for_system($pdo, $clientId, $productId, $systemId);
 
+    // Per-line override (quote-builder "tune this line"): when the caller
+    // passes an explicit, numeric markup / discount, it replaces the resolved
+    // rate for THIS line only. Absent / blank / non-numeric leaves the normal
+    // resolution untouched — so callers that don't opt in price exactly as
+    // before. The value is always a MARKUP % (margin tenants convert before
+    // it reaches the engine), and is reported back in markup_percent so the
+    // saved line stores what was actually used.
+    if (isset($input['markup_override']) && is_numeric($input['markup_override'])) {
+        $markup = max(0.0, (float) $input['markup_override']);
+    }
+    if (isset($input['discount_override']) && is_numeric($input['discount_override'])) {
+        $discount = max(0.0, (float) $input['discount_override']);
+    }
+
     // 8. Sell price + line total.
     //
     //    Order matches how the tenant thinks about it:

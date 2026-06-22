@@ -163,9 +163,14 @@ $TOPICS = [
       <ul><li><strong>Markup</strong> is added on top of your cost — cost&nbsp;+&nbsp;50% = sell.</li>
       <li><strong>Margin</strong> is the profit slice of the <em>sell</em> price — a 50% margin means cost is half the sell.</li></ul>
       <p>The customer price is identical either way; this only changes which number you type. Whatever you pick is used
-      everywhere you set a rate — the default margins, per-product overrides, and InstaPrice. As you type, a small
-      “≈ … markup” line shows the equivalent so you can sense-check it. You can switch basis any time
-      <strong>without re-pricing anything</strong> — nothing already saved changes.</p>'],
+      everywhere you set a rate — the default margins, per-product overrides, InstaPrice, and the per-blind override
+      in the quote builder. As you type, a small “≈ … markup” line shows the equivalent so you can sense-check it.
+      You can switch basis any time <strong>without re-pricing anything</strong> — nothing already saved changes.</p>'],
+    ['admin', 'Quoting', 'Adjust the price of one blind on a quote', 'override markup margin discount per line quote builder tune adjust this blind',
+     '<p>In the quote builder, under a blind’s details, open <strong>“Adjust price for this blind”</strong> to set a
+      one-off <strong>markup/margin %</strong> or <strong>discount %</strong> just for that line — handy for matching a
+      price or giving a deal. Leave the boxes blank to use the product’s normal rate. The live price updates as you type,
+      and the figure is shown in your chosen basis (markup or margin). Only people who can see costs get these boxes.</p>'],
 
     // ---- Fabric Library (super) ----
     ['super', 'Fabric Library', 'Fabric Library structure', 'fabric library supplier range fabrics group manufacturer',

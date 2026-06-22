@@ -107,6 +107,11 @@ if (isset($_GET['extras']) && is_array($_GET['extras'])) {
     }
 }
 
+// Cost-viewers only: the per-line markup/discount override IS the trade
+// margin, so it's gated the same way the cost figures are.
+$isAdmin  = ($user['role'] ?? '') === 'admin';
+$canCosts = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
+
 $input = [
     'product_id' => (int) ($_GET['product_id'] ?? 0),
     'system_id'  => (int) ($_GET['system_id']  ?? 0),
@@ -117,6 +122,13 @@ $input = [
     'extras'     => $extras,
     'round_up'   => !empty($_GET['round_up']),
 ];
+// Override arrives already converted to MARKUP by the client (margin tenants
+// convert before sending). Only honoured for cost-viewers and only when a
+// numeric value is actually supplied — otherwise the engine resolves normally.
+if ($canCosts) {
+    if (isset($_GET['markup_override'])   && is_numeric($_GET['markup_override']))   $input['markup_override']   = (float) $_GET['markup_override'];
+    if (isset($_GET['discount_override']) && is_numeric($_GET['discount_override'])) $input['discount_override'] = (float) $_GET['discount_override'];
+}
 
 $result = pe_calculate_item(db(), $clientId, $input);
 if (isset($result['error'])) {
@@ -128,8 +140,6 @@ if (isset($result['error'])) {
 // per-extra cost_snapshot reveal what the business pays its suppliers), but
 // the raw API response carried them to anyone logged in. The front-end
 // doesn't read these fields, so removing them changes nothing it needs.
-$isAdmin   = ($user['role'] ?? '') === 'admin';
-$canCosts  = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
 if (!$canCosts && !isset($result['error'])) {
     unset($result['cost_price_per_blind'], $result['extras_cost_total']);
     if (!empty($result['extras_applied']) && is_array($result['extras_applied'])) {

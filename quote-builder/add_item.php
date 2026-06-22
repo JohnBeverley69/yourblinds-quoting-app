@@ -120,6 +120,13 @@ $input = [
     'extras'     => $extras,
     'round_up'   => !empty($_POST['round_up']),
 ];
+// Per-line markup/discount override (already converted to MARKUP by the
+// client). Cost-viewers only — it's the trade margin. Numeric-or-skip.
+$canCosts = ($user['role'] ?? '') === 'admin' || !empty(current_user_permissions()['can_view_costs']);
+if ($canCosts) {
+    if (isset($_POST['markup_override'])   && is_numeric($_POST['markup_override']))   $input['markup_override']   = (float) $_POST['markup_override'];
+    if (isset($_POST['discount_override']) && is_numeric($_POST['discount_override'])) $input['discount_override'] = (float) $_POST['discount_override'];
+}
 
 $pdo = db();
 $pdo->beginTransaction();
