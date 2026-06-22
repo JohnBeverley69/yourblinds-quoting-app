@@ -463,6 +463,14 @@ $activeNav = 'calendar';
             <div>
                 <h1 class="page-title">Week view</h1>
                 <p class="page-subtitle">7-day grid. Card colour = fitter; background = status.</p>
+                <!-- View switcher sits under the title (like the main Calendar
+                     page's Everyone/Just-me toggle) rather than pushed to the
+                     far right of the toolbar below. -->
+                <div class="view-switch" style="margin-top:0.625rem;margin-left:0">
+                    <a href="/calendar/index.php?month=<?= e($weekStart->format('Y-m')) ?>">Month</a>
+                    <a href="/calendar/week.php?date=<?= e($weekStart->format('Y-m-d')) ?>" class="is-active">Week</a>
+                    <a href="/calendar/day.php?date=<?= e($todayYmd) ?>">Day</a>
+                </div>
             </div>
         </div>
 
@@ -482,11 +490,6 @@ $activeNav = 'calendar';
                        onchange="this.form.submit()"
                        style="padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;font-size:0.875rem">
             </form>
-            <div class="view-switch">
-                <a href="/calendar/index.php?month=<?= e($weekStart->format('Y-m')) ?>">Month</a>
-                <a href="/calendar/week.php?date=<?= e($weekStart->format('Y-m-d')) ?>" class="is-active">Week</a>
-                <a href="/calendar/day.php?date=<?= e($todayYmd) ?>">Day</a>
-            </div>
         </div>
 
         <div class="wk-board">

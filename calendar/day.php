@@ -615,6 +615,16 @@ $activeNav = 'calendar';
                 <p class="page-subtitle">
                     Who's doing what today, with full address + tap-to-call.
                 </p>
+                <!-- View switcher sits under the title (like the main Calendar
+                     page) rather than pushed to the far right of the toolbar. -->
+                <div class="view-switch" style="margin-top:0.625rem;margin-left:0">
+                    <a href="/calendar/index.php?month=<?= e($date->format('Y-m')) ?>">Month</a>
+                    <a href="/calendar/week.php?date=<?= e($dateYmd) ?>">Week</a>
+                    <a href="/calendar/day.php?date=<?= e($dateYmd) ?>" class="is-active">Day</a>
+                    <?php if (!$canViewAll): ?>
+                        <a href="/calendar/schedule.php">List</a>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -636,14 +646,6 @@ $activeNav = 'calendar';
                 <input type="date" name="date" value="<?= e($dateYmd) ?>"
                        onchange="this.form.submit()">
             </form>
-            <div class="view-switch">
-                <a href="/calendar/index.php?month=<?= e($date->format('Y-m')) ?>">Month</a>
-                <a href="/calendar/week.php?date=<?= e($dateYmd) ?>">Week</a>
-                <a href="/calendar/day.php?date=<?= e($dateYmd) ?>" class="is-active">Day</a>
-                <?php if (!$canViewAll): ?>
-                    <a href="/calendar/schedule.php">List</a>
-                <?php endif; ?>
-            </div>
         </div>
 
         <?php if (empty($columns)): ?>
