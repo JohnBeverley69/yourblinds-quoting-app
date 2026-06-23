@@ -443,6 +443,10 @@ $activeNav = 'calendar';
         .wk-card .wc-assignee { color: var(--card-fg); opacity: 0.82; }
         .wk-card .wc-placeholder { color: var(--card-fg); opacity: 0.7; }
         .wk-card .wc-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+        /* Money line follows the card's readable text colour (overrides the
+           helper's fixed green/grey so it contrasts on any card background). */
+        .wk-card .cal-money,
+        .wk-card .cal-money * { color: var(--card-fg) !important; }
 
         /* One-tap "open order" arrow, bottom-right (same as the month view).
            Reserve right padding on quote-linked cards so content clears it. */
