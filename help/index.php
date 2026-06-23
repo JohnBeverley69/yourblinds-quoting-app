@@ -107,6 +107,13 @@ $TOPICS = [
     ['admin', 'Quoting', 'Measurement units', 'mm cm metres inches measurement unit',
      '<p>Set your company default in <strong>Settings → Quoting</strong> (mm / cm / m / in). Sizes are always stored
       in millimetres; the unit only changes how you type and read them. You can override the unit per quote.</p>'],
+    ['admin', 'Quoting', 'Paid-in-full receipt', 'receipt paid full balance zero thank you settled automatic email customer',
+     '<p>On by default (Settings → Quoting → “Paid-in-full receipt”). When a payment settles an order’s
+      <strong>balance to zero</strong>, the customer is automatically emailed a <strong>thank-you receipt</strong> —
+      the order PDF headed “Receipt”, showing it’s paid in full.</p>
+      <p>It’s sent <strong>once</strong> per order (it can never go twice), and only when the customer has a valid email
+      on their record. Recording the final payment on the order’s Payments panel is what triggers it. Untick the setting
+      to turn it off.</p>'],
     ['admin', 'Quoting', 'WT charge (internal surcharge)', 'wt charge surcharge wally tax internal hidden markup awkward customer fee',
      '<p>Turn it on in <strong>Settings → Quoting → “WT charge”</strong>. It adds a small <strong>WT</strong> box to the
       quote builder so you can add a discretionary amount to a quote &mdash; entirely <strong>internal</strong>.</p>
