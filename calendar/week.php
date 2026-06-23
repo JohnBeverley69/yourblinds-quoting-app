@@ -198,6 +198,15 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour, $minCardPx)
     $m = $minutes && $minutes > 0 ? $minutes : 60;
     return max($minCardPx, ($m / 60) * $pxPerHour);
 };
+// A card's CONTENT (time/ref, name, assignee, money) can be taller than its
+// time slot, so a short booking would clip. Estimate the content height and
+// use it as a floor — the axis stretches to fit instead of cropping it.
+$contentMinPx = static function (array $r) use ($showMoney): float {
+    $lines = 2;   // time + title (always)
+    if (trim((string) ($r['assignee_name'] ?? '')) !== '') $lines++;   // assignee
+    if ($showMoney && !empty($r['quote_id'])) $lines++;                 // money line
+    return 14.0 + $lines * 18.0;
+};
 
 // Expanding timeline — same approach as the day view, but here the columns are
 // the 7 days, all sharing the single left axis. So the axis stretches at any
@@ -223,7 +232,7 @@ foreach ($days as $d) {
     foreach (($byDate[$ymd] ?? []) as $rowIdx => $r) {
         $sMin = $timeToMin((string) ($r['appointment_time'] ?? '09:00:00'));
         $list[] = ['idx' => $rowIdx, 'min' => $sMin,
-                   'h'   => $durationToHeight((int) ($r['duration_minutes'] ?? 60))];
+                   'h'   => max($durationToHeight((int) ($r['duration_minutes'] ?? 60)), $contentMinPx($r))];
         $breakSet[$sMin] = true;
     }
     usort($list, static fn ($a, $b) => $a['min'] <=> $b['min']);
