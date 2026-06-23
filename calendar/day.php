@@ -570,6 +570,10 @@ $activeNav = 'calendar';
         .appt-card .ac-phone { color: var(--card-fg); opacity: 0.82; }
         .appt-card .ac-placeholder { color: var(--card-fg); opacity: 0.7; }
         .appt-card .ac-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+        /* Money line follows the card's readable text colour (overrides the
+           helper's fixed green/grey so it contrasts on any card background). */
+        .appt-card .cal-money,
+        .appt-card .cal-money * { color: var(--card-fg) !important; }
 
         /* One-tap "open order" arrow, bottom-right (same as the month view).
            Reserve right padding on quote-linked cards so content clears it. */
