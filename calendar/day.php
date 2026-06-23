@@ -177,6 +177,20 @@ try {
     $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
 } catch (Throwable $e) { /* column not migrated — figures stay off */ }
 
+// Pending fittings (no date yet) only get a drag-drop tray on the Month view.
+// Count them so this view can flag them and point the user there.
+$pendingCount = 0;
+try {
+    if ($canViewAll) {
+        $pcSt = $pdo->prepare('SELECT COUNT(*) FROM appointments WHERE client_id = ? AND appointment_date IS NULL');
+        $pcSt->execute([$clientId]);
+    } else {
+        $pcSt = $pdo->prepare('SELECT COUNT(*) FROM appointments WHERE client_id = ? AND appointment_date IS NULL AND client_user_id = ?');
+        $pcSt->execute([$clientId, $myUserId]);
+    }
+    $pendingCount = (int) $pcSt->fetchColumn();
+} catch (Throwable $e) { /* ignore — banner just won't show */ }
+
 // Auto-fit the visible hour window to THIS day's bookings — an empty or
 // lightly-booked day shouldn't sprawl across 07:00–22:00. Pad ~1h either
 // side, keep it wide enough to read, and never clip a real booking.
@@ -666,6 +680,18 @@ $activeNav = 'calendar';
         <?php if (empty($columns)): ?>
             <div class="day-empty">No bookable users on this account.</div>
         <?php else: ?>
+            <?php if ($pendingCount > 0): ?>
+                <a href="/calendar/index.php"
+                   style="display:flex;align-items:center;gap:0.5rem;margin:0 0 0.875rem;
+                          padding:0.625rem 0.875rem;border-radius:10px;
+                          background:#fffbeb;border:1px solid #fde68a;color:#92400e;
+                          font-size:0.9375rem;font-weight:600;text-decoration:none">
+                    <span aria-hidden="true">📌</span>
+                    <span><?= (int) $pendingCount ?> fitting<?= $pendingCount === 1 ? '' : 's' ?> pending —
+                        place <?= $pendingCount === 1 ? 'it' : 'them' ?> on the <strong>Month calendar</strong> to schedule.</span>
+                    <span style="margin-left:auto" aria-hidden="true">&rarr;</span>
+                </a>
+            <?php endif; ?>
             <div class="day-board" style="--cols: <?= count($columns) ?>;">
                 <!-- Header row: corner + one cell per user -->
                 <div class="day-board-head">
