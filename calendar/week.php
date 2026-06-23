@@ -443,6 +443,23 @@ $activeNav = 'calendar';
         .wk-card .wc-assignee { color: var(--card-fg); opacity: 0.82; }
         .wk-card .wc-placeholder { color: var(--card-fg); opacity: 0.7; }
         .wk-card .wc-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+
+        /* One-tap "open order" arrow, bottom-right (same as the month view).
+           Reserve right padding on quote-linked cards so content clears it. */
+        .wk-card.from-quote { padding-right: 1.85rem; }
+        .cal-appt-open-order {
+            position: absolute; right: 0.25rem; bottom: 0.25rem;
+            min-width: 1.25rem; min-height: 1.25rem; padding: 0 0.25rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: #fff; color: #1f3b5b; border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.1); font-weight: 700; font-size: 0.8125rem;
+            line-height: 1; cursor: pointer; user-select: none;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .cal-appt-open-order:hover, .cal-appt-open-order:focus {
+            background: #1f3b5b; color: #fff; outline: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+        }
     </style>
 </head>
 <body>
@@ -558,7 +575,7 @@ $activeNav = 'calendar';
                             $outline = $isIssue ? ';outline:2px solid ' . $issueColour . ';outline-offset:-2px'
                                      : ($apptKind === 'fitting' ? ';outline:2px solid #111827;outline-offset:-2px' : '');
                         ?>
-                            <a class="wk-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?>"
+                            <a class="wk-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?><?= !empty($appt['quote_id']) ? ' from-quote' : '' ?>"
                                href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                                title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                style="top:<?= $top ?>px;
@@ -583,6 +600,13 @@ $activeNav = 'calendar';
                                 <?php endif; ?>
                                 <?php if ($showMoney && !empty($appt['quote_id']) && isset($moneyByQuote[(int) $appt['quote_id']])): ?>
                                     <?= calendar_money_html($moneyByQuote[(int) $appt['quote_id']], false) ?>
+                                <?php endif; ?>
+                                <?php if (!empty($appt['quote_id'])): ?>
+                                    <!-- One-tap shortcut straight to the order. Stops the click
+                                         bubbling so the card's appointment link doesn't also fire. -->
+                                    <span class="cal-appt-open-order" role="link" tabindex="0"
+                                          data-quote-id="<?= (int) $appt['quote_id'] ?>"
+                                          title="Open order" aria-label="Open order">→</span>
                                 <?php endif; ?>
                             </a>
                         <?php endforeach; ?>
@@ -654,6 +678,25 @@ $activeNav = 'calendar';
                 hint.style.top = y + 'px';   // track the cursor (axis is non-linear)
             });
         }
+    });
+
+    // One-tap "open order" shortcut on quote-linked cards. Stops the click
+    // bubbling so the card's own appointment link doesn't also fire.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cal-appt-open-order');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var qid = btn.getAttribute('data-quote-id');
+        if (qid) window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(qid);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var btn = document.activeElement;
+        if (!btn || !btn.classList || !btn.classList.contains('cal-appt-open-order')) return;
+        e.preventDefault();
+        var qid = btn.getAttribute('data-quote-id');
+        if (qid) window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(qid);
     });
 })();
 </script>

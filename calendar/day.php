@@ -570,6 +570,23 @@ $activeNav = 'calendar';
         .appt-card .ac-phone { color: var(--card-fg); opacity: 0.82; }
         .appt-card .ac-placeholder { color: var(--card-fg); opacity: 0.7; }
         .appt-card .ac-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
+
+        /* One-tap "open order" arrow, bottom-right (same as the month view).
+           Reserve right padding on quote-linked cards so content clears it. */
+        .appt-card.from-quote { padding-right: 1.85rem; }
+        .cal-appt-open-order {
+            position: absolute; right: 0.25rem; bottom: 0.25rem;
+            min-width: 1.25rem; min-height: 1.25rem; padding: 0 0.25rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: #fff; color: #1f3b5b; border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.1); font-weight: 700; font-size: 0.8125rem;
+            line-height: 1; cursor: pointer; user-select: none;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .cal-appt-open-order:hover, .cal-appt-open-order:focus {
+            background: #1f3b5b; color: #fff; outline: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+        }
     </style>
 </head>
 <body>
@@ -756,7 +773,7 @@ $activeNav = 'calendar';
                                     gives us the navigate-on-click behaviour
                                     without the nesting trap.
                                 -->
-                                <div class="appt-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?>"
+                                <div class="appt-card<?= $apptKind === 'fitting' ? ' is-fitting' : '' ?><?= $isIssue ? ' is-issue' : '' ?><?= !empty($appt['quote_id']) ? ' from-quote' : '' ?>"
                                      data-href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                                      title="<?= $isIssue ? '⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?>"
                                      style="top:<?= $top ?>px;
@@ -786,6 +803,16 @@ $activeNav = 'calendar';
 
                                     <?php if ($showMoney && !empty($appt['quote_id']) && isset($moneyByQuote[(int) $appt['quote_id']])): ?>
                                         <?= calendar_money_html($moneyByQuote[(int) $appt['quote_id']], false) ?>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($appt['quote_id'])): ?>
+                                        <!-- One-tap shortcut straight to the order. Inline
+                                             stopPropagation so the card's own navigate-on-click
+                                             (data-href) doesn't also fire. -->
+                                        <span class="cal-appt-open-order" role="link" tabindex="0"
+                                              data-quote-id="<?= (int) $appt['quote_id'] ?>"
+                                              title="Open order" aria-label="Open order"
+                                              onclick="event.stopPropagation(); window.location.href='/quote-builder/edit.php?id=<?= (int) $appt['quote_id'] ?>';">→</span>
                                     <?php endif; ?>
 
                                     <!-- Action icons — tap on phone goes
@@ -893,6 +920,17 @@ $activeNav = 'calendar';
         card.addEventListener('click', function () {
             window.location.href = card.dataset.href;
         });
+    });
+
+    // Keyboard access for the "open order" arrow (click is handled inline so
+    // it can stopPropagation past the card's navigate-on-click).
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var btn = document.activeElement;
+        if (!btn || !btn.classList || !btn.classList.contains('cal-appt-open-order')) return;
+        e.preventDefault();
+        var qid = btn.getAttribute('data-quote-id');
+        if (qid) window.location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(qid);
     });
 
     document.querySelectorAll('.fitter-col').forEach(function (col) {
