@@ -74,6 +74,16 @@ $quoteIsOrder = in_array(
     true
 );
 
+// WT charge (internal surcharge) — tenant opt-in. Defensive: column may be
+// absent pre-migration. wt_amount lives on the quote (q.* in qb_load_*).
+$wtEnabled = false;
+try {
+    $wtStmt = db()->prepare('SELECT COALESCE(feature_wt, 0) FROM client_settings WHERE client_id = ? LIMIT 1');
+    $wtStmt->execute([$clientId]);
+    $wtEnabled = ((int) $wtStmt->fetchColumn()) === 1;
+} catch (Throwable $e) { /* not migrated → disabled */ }
+$wtAmount = round((float) ($quote['wt_amount'] ?? 0), 2);
+
 // Edit-blind mode: ?edit_item=N pre-populates the Add-blind form with this
 // item's values and switches its submit handler to update_item.php so saving
 // updates the row in place rather than creating a new one. Falls back to
@@ -1405,6 +1415,31 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 </tr>
                             <?php endforeach; ?>
 
+                            <?php if ($wtEnabled || $wtAmount > 0.0049): ?>
+                                <tr class="totals-row" style="color:#9333ea">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">
+                                        WT
+                                        <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(internal — never shown to the customer)</span>
+                                    </td>
+                                    <td class="num">
+                                        <?php if ($editable && $wtEnabled): ?>
+                                            <form method="post" action="/quote-builder/save_wt.php"
+                                                  style="display:inline-flex;gap:0.25rem;align-items:center;justify-content:flex-end;margin:0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                                <span>£</span>
+                                                <input type="number" name="wt_amount" step="0.01" min="0"
+                                                       value="<?= e(number_format($wtAmount, 2, '.', '')) ?>"
+                                                       style="width:5rem;padding:0.2rem 0.35rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:right">
+                                                <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.8125rem">Set</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <?= e(qb_fmt_money($wtAmount)) ?>
+                                        <?php endif; ?>
+                                    </td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
                             <?php if ((float) $quote['vat_percent'] > 0): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>

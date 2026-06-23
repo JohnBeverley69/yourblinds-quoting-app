@@ -438,6 +438,25 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <?php
 $showLinePrices = ((int) ($quote['show_line_prices'] ?? 1)) === 1;
 $colCount = $showLinePrices ? 5 : 3;
+
+// WT (internal surcharge) is folded into the stored subtotal. When per-blind
+// prices are shown, spread it proportionally across the line totals so the
+// lines still reconcile to the subtotal — it is NEVER shown as its own line.
+$wt = round((float) ($quote['wt_amount'] ?? 0), 2);
+$wtShare = [];   // item id => £ added to that line
+if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
+    $base = 0.0;
+    foreach ($items as $it) $base += (float) $it['line_total'];
+    if ($base > 0.0049) {
+        $acc = 0.0; $n = count($items); $k = 0;
+        foreach ($items as $it) {
+            $k++;
+            if ($k < $n) { $s = round($wt * (float) $it['line_total'] / $base, 2); $acc += $s; }
+            else         { $s = round($wt - $acc, 2); }   // remainder on the last line
+            $wtShare[(int) $it['id']] = $s;
+        }
+    }
+}
 ?>
 <table class="items">
 <thead>
@@ -496,8 +515,16 @@ $colCount = $showLinePrices ? 5 : 3;
 </td>
 <td class="num"><?= (int) $item['quantity'] ?></td>
 <?php if ($showLinePrices): ?>
+<?php $__share = $wtShare[(int) $item['id']] ?? 0.0; ?>
+<?php if ($__share > 0.0049): /* line bumped by its WT share; no separate line */
+    $__qty = max(1, (int) $item['quantity']);
+    $__lt  = (float) $item['line_total'] + $__share; ?>
+<td class="num"><?= $money(round($__lt / $__qty, 2)) ?></td>
+<td class="num"><?= $money($__lt) ?></td>
+<?php else: ?>
 <td class="num"><?= $money($item['sell_price']) ?></td>
 <td class="num"><?= $money($item['line_total']) ?></td>
+<?php endif; ?>
 <?php endif; ?>
 </tr>
 <?php endforeach; endif; ?>

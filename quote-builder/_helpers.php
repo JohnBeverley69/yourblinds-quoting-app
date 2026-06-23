@@ -107,14 +107,30 @@ function qb_recompute_totals(int $quoteId): void
         'SELECT COALESCE(SUM(line_total), 0) FROM quote_items WHERE quote_id = ?'
     );
     $sumSt->execute([$quoteId]);
-    $subtotal = round((float) $sumSt->fetchColumn(), 2);
+    $itemsTotal = round((float) $sumSt->fetchColumn(), 2);
 
-    $rateSt = $pdo->prepare('SELECT vat_percent FROM quotes WHERE id = ?');
-    $rateSt->execute([$quoteId]);
-    $vatPct = (float) ($rateSt->fetchColumn() ?: 0);
+    // vat_percent + the internal WT charge (added PRE-VAT, so it sits inside
+    // the price). wt_amount may be absent on pre-migration schemas → treat 0.
+    $rateSt = $pdo->prepare('SELECT vat_percent, wt_amount FROM quotes WHERE id = ?');
+    try {
+        $rateSt->execute([$quoteId]);
+        $row = $rateSt->fetch() ?: [];
+    } catch (Throwable $e) {
+        // wt_amount column missing — fall back to vat only.
+        $r2 = $pdo->prepare('SELECT vat_percent FROM quotes WHERE id = ?');
+        $r2->execute([$quoteId]);
+        $row = ['vat_percent' => $r2->fetchColumn(), 'wt_amount' => 0];
+    }
+    $vatPct = (float) ($row['vat_percent'] ?? 0);
+    $wt     = round((float) ($row['wt_amount'] ?? 0), 2);
 
-    $vat   = round($subtotal * $vatPct / 100, 2);
-    $total = round($subtotal + $vat, 2);
+    // Subtotal INCLUDES the WT so customer-facing Subtotal + VAT = Total always
+    // reconciles (and the per-blind prices, with WT spread across them, sum to
+    // it). The builder shows a separate internal WT line to explain the gap
+    // between the line items and this subtotal.
+    $subtotal = round($itemsTotal + $wt, 2);
+    $vat      = round($subtotal * $vatPct / 100, 2);
+    $total    = round($subtotal + $vat, 2);
 
     $pdo->prepare('UPDATE quotes SET subtotal = ?, vat = ?, total = ? WHERE id = ?')
         ->execute([$subtotal, $vat, $total, $quoteId]);
