@@ -18,12 +18,13 @@ require_once __DIR__ . '/../_partials/legal_text.php';
  * Dompdf to produce A4 PDF bytes. Returns null if the quote does not
  * exist or Dompdf is not installed (logged).
  */
-function pdf_render_quote(int $quoteId, int $clientId): ?string
+function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote'): ?string
 {
     if (!class_exists(Dompdf::class)) {
         error_log('[YourBlinds] Dompdf not installed — run "composer install" to enable PDF rendering.');
         return null;
     }
+    require_once __DIR__ . '/../_partials/calendar_money.php';
 
     $pdo = db();
 
@@ -52,6 +53,13 @@ function pdf_render_quote(int $quoteId, int $clientId): ?string
     if (!$quote) {
         return null;
     }
+
+    // Money received so far + balance, via the shared helper so these match
+    // the calendar / Payments panel exactly (deposit isn't double-counted).
+    $pdfMoney   = function_exists('calendar_money_for_quotes')
+        ? calendar_money_for_quotes($pdo, $clientId, [$quoteId]) : [];
+    $received   = isset($pdfMoney[$quoteId]) ? (float) $pdfMoney[$quoteId]['received'] : 0.0;
+    $balanceDue = isset($pdfMoney[$quoteId]) ? (float) $pdfMoney[$quoteId]['balance']  : (float) $quote['total'];
 
     // Terms & Conditions + Privacy Policy (optional columns). Loaded with a
     // separate guarded query — kept out of the main SELECT so the PDF still
@@ -403,7 +411,7 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 </div>
 </td>
 <td class="quote-block">
-<h2>Quote <?= e((string) $quote['quote_number']) ?></h2>
+<h2><?= e($docLabel) ?> <?= e((string) $quote['quote_number']) ?></h2>
 <div class="meta">
 <span class="lbl">Date</span> <span class="val"><?= $fmtDate($quote['created_at'] ?? null) ?></span><br>
 <span class="lbl">Status</span> <span class="val" style="text-transform:capitalize;"><?= e((string) $quote['status']) ?></span>
@@ -413,7 +421,7 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 </table>
 
 <div class="customer">
-<div class="label">Quote for</div>
+<div class="label"><?= e($docLabel) ?> for</div>
 <div class="name"><?= e((string) $quote['end_customer_name']) ?></div>
 <?php if ($custLines): ?>
 <div class="addr"><?= e(implode("\n", $custLines)) ?></div>
@@ -501,6 +509,10 @@ $colCount = $showLinePrices ? 5 : 3;
 <tr><td colspan="<?= $spacer ?>"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>
 <?php endif; ?>
 <tr class="grand"><td colspan="<?= $spacer ?>"></td><td class="label">Total</td><td class="val"><?= $money($quote['total']) ?></td></tr>
+<?php if ($received > 0.0049): ?>
+<tr><td colspan="<?= $spacer ?>"></td><td class="label">Paid</td><td class="val"><?= $money($received) ?></td></tr>
+<tr class="grand"><td colspan="<?= $spacer ?>"></td><td class="label">Balance due</td><td class="val"><?= $money($balanceDue) ?></td></tr>
+<?php endif; ?>
 </tfoot>
 </table>
 
@@ -547,7 +559,7 @@ $bInstr = trim((string) ($quote['payment_instructions'] ?? ''));
 <?php if (!empty($quote['quote_footer'])): ?>
 <div class="footer"><?= e((string) $quote['quote_footer']) ?></div>
 <?php else: ?>
-<div class="footer"><?= e((string) ($quote['trade_company_name'] ?? '')) ?> &middot; Quote <?= e((string) $quote['quote_number']) ?></div>
+<div class="footer"><?= e((string) ($quote['trade_company_name'] ?? '')) ?> &middot; <?= e($docLabel) ?> <?= e((string) $quote['quote_number']) ?></div>
 <?php endif; ?>
 
 </body>
