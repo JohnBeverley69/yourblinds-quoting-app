@@ -237,40 +237,6 @@ if ($showMoney) {
 }
 $issueColour  = $stagePalette['issue'] ?? '#e11d48';
 
-// Quote status → 5-segment progress bar. Mirrors what Once shows
-// as the stacked horizontal bars on each card: a glanceable
-// indicator of where the job is in the quote→ordered→fitted→paid
-// pipeline. Returns:
-//   filled (0–5): how many bars to colour
-//   colour: progress colour (green normal, grey for "done",
-//           red for declined/cancelled)
-//   label: short word for the title attribute hover tooltip
-// 6 segments now — one per lifecycle stage. Each status fills one
-// more bar than the last, so a glance at the bar count tells you
-// exactly where the job sits without reading the tooltip:
-//   1 bar  → DRAFT
-//   2 bars → SENT
-//   3 bars → ACCEPTED
-//   4 bars → ORDERED  (materials on the way)
-//   5 bars → FITTED   (installed, awaiting invoice)
-//   6 bars → INVOICED / PAID
-$quoteProgress = static function (?string $status): array {
-    if ($status === null || $status === '') {
-        return ['filled' => 0, 'colour' => 'var(--border-strong)', 'label' => 'No quote linked'];
-    }
-    return match ($status) {
-        'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
-        'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT to customer'],
-        'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED · ready to fit'],
-        'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED · materials inbound'],
-        'fitted'    => ['filled' => 5, 'colour' => '#0d9488', 'label' => 'FITTED · awaiting invoice'],
-        'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED · awaiting payment'],
-        'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID · job closed'],
-        'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'Quote DECLINED'],
-        default     => ['filled' => 0, 'colour' => 'var(--text-faint)', 'label' => (string) $status],
-    };
-};
-
 // Helpers: appointment_time "HH:MM:SS" → top offset in px from the
 // 7am baseline; duration_minutes → height in px (clamped to a
 // minimum so very short jobs are still readable).
@@ -439,6 +405,11 @@ $activeNav = 'calendar';
         .view-switch a.is-active { background: var(--bg-card); color: var(--text-primary);
                                     box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
+        /* Colour key — same model as the month view. */
+        .cal-legend { display: flex; gap: 0.875rem; font-size: 0.8125rem; color: var(--text-muted); flex-wrap: wrap; }
+        .cal-legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+        .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
         /* Grid layout. Time axis is fixed on the left; fitter columns
            scroll horizontally on narrow screens. Time markers + grid
            lines align with hour boundaries. */
@@ -558,27 +529,6 @@ $activeNav = 'calendar';
             padding: 0 0.25rem;
             margin-left: 0.25rem;
         }
-        /* Quote-progress bars — bottom-right of the card. 5 thin
-           horizontal lines, "filled" ones get the status colour,
-           rest stay light grey. Visible at a glance, doesn't compete
-           with the action icons up top. */
-        .appt-card .ac-progress {
-            position: absolute;
-            bottom: 0.3125rem; right: 0.375rem;
-            display: flex; flex-direction: column;
-            gap: 1px;
-            pointer-events: none;
-        }
-        .appt-card .ac-progress span {
-            display: block;
-            width: 1.625rem;
-            height: 2px;
-            background: rgba(0,0,0,0.12);
-            border-radius: 1px;
-        }
-        .appt-card .ac-progress span.is-on {
-            background: var(--prog-clr, #10b981);
-        }
         /* Action icons in a horizontal row at top-right of the
            card. Vertical stack ran out of room on short (60px)
            cards — 4 icons would overflow the bottom. Row layout
@@ -620,8 +570,6 @@ $activeNav = 'calendar';
         .appt-card .ac-phone { color: var(--card-fg); opacity: 0.82; }
         .appt-card .ac-placeholder { color: var(--card-fg); opacity: 0.7; }
         .appt-card .ac-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
-        .appt-card .ac-progress span { background: var(--card-fg); opacity: 0.3; }
-        .appt-card .ac-progress span.is-on { background: var(--card-fg); opacity: 1; }
     </style>
 </head>
 <body>
@@ -634,7 +582,17 @@ $activeNav = 'calendar';
                 <h1 class="page-title">Day view</h1>
                 <p class="page-subtitle">
                     Who's doing what today, with full address + tap-to-call.
+                    Card colour shows the job stage — see the key below.
                 </p>
+                <div class="cal-legend" aria-label="Status colours" style="margin-top:0.5rem">
+                    <?php foreach (job_status_labels() as $stageKey => $stageLbl):
+                        if ($stageKey === 'issue') continue; ?>
+                        <span><i style="background:<?= e($stagePalette[$stageKey] ?? '#2563eb') ?>"></i> <?= e($stageLbl) ?></span>
+                    <?php endforeach; ?>
+                    <span title="Fittings carry a dark outline; measures don't.">
+                        <i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting
+                    </span>
+                </div>
                 <!-- View switcher sits under the title (like the main Calendar
                      page) rather than pushed to the far right of the toolbar. -->
                 <div class="view-switch" style="margin-top:0.625rem;margin-left:0">
@@ -769,10 +727,6 @@ $activeNav = 'calendar';
                                 $custName = trim((string) ($appt['customer_name'] ?? ''));
                                 $durMin = (int) ($appt['duration_minutes'] ?? 60);
                                 $qref   = trim((string) ($appt['quote_number'] ?? ''));
-                                $prog   = $quoteProgress($appt['quote_status'] ?? null);
-                                // Progress-dot colour from the shared palette too.
-                                $dqs = (string) ($appt['quote_status'] ?? '');
-                                if ($dqs !== '' && isset($stagePalette[$dqs])) $prog['colour'] = $stagePalette[$dqs];
 
                                 // Time chip — always shown so the user can
                                 // glance at the card and read the booked
@@ -810,8 +764,7 @@ $activeNav = 'calendar';
                                             background:<?= e($stageClr) ?>;
                                             border-left-color:<?= e($stageClr) ?>;
                                             color:<?= e($stageFg) ?>;
-                                            --card-fg:<?= e($stageFg) ?>;
-                                            --prog-clr:<?= e($prog['colour']) ?><?= e($dayOutline) ?>;">
+                                            --card-fg:<?= e($stageFg) ?>;<?= e($dayOutline) ?>">
                                     <div class="ac-time">
                                         <?= e($timeLabel) ?>
                                         <?php if ($qref !== ''): ?>
@@ -833,17 +786,6 @@ $activeNav = 'calendar';
 
                                     <?php if ($showMoney && !empty($appt['quote_id']) && isset($moneyByQuote[(int) $appt['quote_id']])): ?>
                                         <?= calendar_money_html($moneyByQuote[(int) $appt['quote_id']], false) ?>
-                                    <?php endif; ?>
-
-                                    <?php if (!empty($appt['quote_status'])): ?>
-                                        <!-- Status-progress bars — 6 thin lines bottom-right,
-                                             one per lifecycle stage. Hover the card to see
-                                             the verbal label via title=. -->
-                                        <div class="ac-progress" title="<?= e($prog['label']) ?>">
-                                            <?php for ($i = 0; $i < 6; $i++): ?>
-                                                <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
-                                            <?php endfor; ?>
-                                        </div>
                                     <?php endif; ?>
 
                                     <!-- Action icons — tap on phone goes

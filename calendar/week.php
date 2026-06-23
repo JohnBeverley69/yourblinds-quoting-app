@@ -186,26 +186,6 @@ $statusColour = static function (string $s): array {
     };
 };
 
-// Quote-status → 6-segment progress indicator. Matches day.php
-// exactly so the same job shows the same bars across both views.
-// One bar per stage now that 'fitted' joins the lifecycle.
-$quoteProgress = static function (?string $status): array {
-    if ($status === null || $status === '') {
-        return ['filled' => 0, 'colour' => 'var(--border-strong)', 'label' => 'No quote linked'];
-    }
-    return match ($status) {
-        'draft'     => ['filled' => 1, 'colour' => '#a78bfa', 'label' => 'Quote · DRAFT'],
-        'sent'      => ['filled' => 2, 'colour' => '#fbbf24', 'label' => 'Quote · SENT'],
-        'accepted'  => ['filled' => 3, 'colour' => '#34d399', 'label' => 'ACCEPTED'],
-        'ordered'   => ['filled' => 4, 'colour' => '#10b981', 'label' => 'ORDERED'],
-        'fitted'    => ['filled' => 5, 'colour' => '#0d9488', 'label' => 'FITTED'],
-        'invoiced'  => ['filled' => 6, 'colour' => '#059669', 'label' => 'INVOICED'],
-        'paid'      => ['filled' => 6, 'colour' => '#065f46', 'label' => 'PAID'],
-        'declined'  => ['filled' => 0, 'colour' => '#dc2626', 'label' => 'DECLINED'],
-        default     => ['filled' => 0, 'colour' => 'var(--text-faint)', 'label' => (string) $status],
-    };
-};
-
 $timeToTop = static function (string $t) use ($startHour, $pxPerHour): float {
     [$h, $m] = array_pad(explode(':', $t), 2, 0);
     $minsFromStart = (((int) $h) - $startHour) * 60 + (int) $m;
@@ -339,6 +319,11 @@ $activeNav = 'calendar';
         .view-switch a.is-active { background: var(--bg-card); color: var(--text-body);
                                     box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
+        /* Colour key — same model as the month view. */
+        .cal-legend { display: flex; gap: 0.875rem; font-size: 0.8125rem; color: var(--text-muted); flex-wrap: wrap; }
+        .cal-legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+        .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
         .wk-board {
             background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 10px; overflow: hidden;
@@ -450,25 +435,6 @@ $activeNav = 'calendar';
             padding: 0 0.1875rem;
             margin-left: 0.25rem;
         }
-        /* Progress bars bottom-right of card. Slightly smaller than
-           day view's because week-card cells are tighter. */
-        .wk-card .wc-progress {
-            position: absolute;
-            bottom: 0.25rem; right: 0.3125rem;
-            display: flex; flex-direction: column;
-            gap: 1px;
-            pointer-events: none;
-        }
-        .wk-card .wc-progress span {
-            display: block;
-            width: 1.25rem;
-            height: 2px;
-            background: rgba(0,0,0,0.12);
-            border-radius: 1px;
-        }
-        .wk-card .wc-progress span.is-on {
-            background: var(--prog-clr, #10b981);
-        }
         /* Solid-fill cards (parity with the month view). Inner text reads off
            the luminance-aware --card-fg so it stays legible on any colour. */
         .wk-card { color: var(--card-fg, var(--text-primary)); }
@@ -477,8 +443,6 @@ $activeNav = 'calendar';
         .wk-card .wc-assignee { color: var(--card-fg); opacity: 0.82; }
         .wk-card .wc-placeholder { color: var(--card-fg); opacity: 0.7; }
         .wk-card .wc-qref { color: var(--card-fg); background: rgba(127,127,127,0.28); }
-        .wk-card .wc-progress span { background: var(--card-fg); opacity: 0.3; }
-        .wk-card .wc-progress span.is-on { background: var(--card-fg); opacity: 1; }
     </style>
 </head>
 <body>
@@ -489,7 +453,16 @@ $activeNav = 'calendar';
         <div class="page-header">
             <div>
                 <h1 class="page-title">Week view</h1>
-                <p class="page-subtitle">7-day grid. Card colour = fitter; background = status.</p>
+                <p class="page-subtitle">7-day grid. Card colour shows the job stage — see the key below.</p>
+                <div class="cal-legend" aria-label="Status colours" style="margin-top:0.5rem">
+                    <?php foreach (job_status_labels() as $stageKey => $stageLbl):
+                        if ($stageKey === 'issue') continue; ?>
+                        <span><i style="background:<?= e($stagePalette[$stageKey] ?? '#2563eb') ?>"></i> <?= e($stageLbl) ?></span>
+                    <?php endforeach; ?>
+                    <span title="Fittings carry a dark outline; measures don't.">
+                        <i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting
+                    </span>
+                </div>
                 <!-- View switcher sits under the title (like the main Calendar
                      page's Everyone/Just-me toggle) rather than pushed to the
                      far right of the toolbar below. -->
@@ -579,10 +552,6 @@ $activeNav = 'calendar';
                             $hasOnly  = $custName === '' && $title === '';
                             $timeLabel = substr($time, 0, 5);
                             $qref     = trim((string) ($appt['quote_number'] ?? ''));
-                            $prog     = $quoteProgress($appt['quote_status'] ?? null);
-                            // Progress-dot colour from the shared palette too.
-                            $wqs = (string) ($appt['quote_status'] ?? '');
-                            if ($wqs !== '' && isset($stagePalette[$wqs])) $prog['colour'] = $stagePalette[$wqs];
                             $isIssue  = !empty($appt['has_issue']);
                             $issueTxt = trim((string) ($appt['issue_note'] ?? ''));
                             // Outline: issue (red) wins over the fitting (dark) outline.
@@ -597,8 +566,7 @@ $activeNav = 'calendar';
                                       background:<?= e($stageClr) ?>;
                                       border-left-color:<?= e($stageClr) ?>;
                                       color:<?= e($stageFg) ?>;
-                                      --card-fg:<?= e($stageFg) ?>;
-                                      --prog-clr:<?= e($prog['colour']) ?><?= e($outline) ?>;">
+                                      --card-fg:<?= e($stageFg) ?>;<?= e($outline) ?>">
                                 <div class="wc-time">
                                     <?= e($timeLabel) ?>
                                     <?php if ($qref !== ''): ?>
@@ -615,13 +583,6 @@ $activeNav = 'calendar';
                                 <?php endif; ?>
                                 <?php if ($showMoney && !empty($appt['quote_id']) && isset($moneyByQuote[(int) $appt['quote_id']])): ?>
                                     <?= calendar_money_html($moneyByQuote[(int) $appt['quote_id']], false) ?>
-                                <?php endif; ?>
-                                <?php if (!empty($appt['quote_status'])): ?>
-                                    <div class="wc-progress" title="<?= e($prog['label']) ?>">
-                                        <?php for ($i = 0; $i < 6; $i++): ?>
-                                            <span class="<?= $i < (int) $prog['filled'] ? 'is-on' : '' ?>"></span>
-                                        <?php endfor; ?>
-                                    </div>
                                 <?php endif; ?>
                             </a>
                         <?php endforeach; ?>
