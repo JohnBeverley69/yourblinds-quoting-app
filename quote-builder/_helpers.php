@@ -620,6 +620,11 @@ function qb_settle_if_paid(PDO $pdo, int $quoteId, int $clientId): bool
                 $pdo->prepare("UPDATE quotes SET status = 'paid' WHERE id = ? AND client_id = ?")
                     ->execute([$quoteId, $clientId]);
             }
+            // Just settled in full → email the customer a thank-you receipt.
+            // Self-guarding (once only, needs an email, tenant opt-in), so a
+            // failure here never blocks the settle.
+            try { qb_send_receipt_if_due($pdo, $quoteId, $clientId); }
+            catch (Throwable $e) { error_log('receipt send skipped: ' . $e->getMessage()); }
             return true;
         }
         if (!$fullyPaid && $status === 'paid') {
@@ -646,6 +651,95 @@ function qb_settle_if_paid(PDO $pdo, int $quoteId, int $clientId): bool
         error_log('qb_settle_if_paid failed: ' . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * Email the customer a paid-in-full RECEIPT — once, automatically, when an
+ * order settles. Self-guarding so a caller can fire it after any payment with
+ * no checks of its own: it does nothing unless the tenant has receipts enabled
+ * (default on), the order is genuinely fully paid, no receipt has gone yet, and
+ * the customer has a valid email. Stamps quotes.receipt_sent_at so it can never
+ * send twice. Returns true only if a receipt was actually sent.
+ */
+function qb_send_receipt_if_due(PDO $pdo, int $quoteId, int $clientId): bool
+{
+    if ($quoteId <= 0 || $clientId <= 0) return false;
+
+    // Tenant opt-out (default on if the column / row is missing).
+    try {
+        $fs = $pdo->prepare('SELECT COALESCE(feature_auto_receipt, 1) FROM client_settings WHERE client_id = ? LIMIT 1');
+        $fs->execute([$clientId]);
+        if ((int) $fs->fetchColumn() !== 1) return false;
+    } catch (Throwable $e) { /* column absent → treat as on */ }
+
+    try {
+        $q = $pdo->prepare(
+            'SELECT total, deposit_amount, deposit_paid_at, status, receipt_sent_at,
+                    end_customer_email, end_customer_name, quote_number
+               FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
+        );
+        $q->execute([$quoteId, $clientId]);
+        $r = $q->fetch();
+    } catch (Throwable $e) {
+        return false;   // receipt_sent_at column absent (pre-migration) → skip
+    }
+    if (!$r) return false;
+    if (!empty($r['receipt_sent_at'])) return false;   // already sent — never twice
+
+    // Genuinely fully paid (deposit + recorded payments cover the total)?
+    $total = (float) $r['total'];
+    $dep   = deposit_extra_for($r['deposit_paid_at'] ?? null, $r['deposit_amount'] ?? null);
+    $pay   = 0.0;
+    try {
+        $ps = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE quote_id = ? AND client_id = ?');
+        $ps->execute([$quoteId, $clientId]);
+        $pay = (float) $ps->fetchColumn();
+    } catch (Throwable $e) { /* no payments table */ }
+    if (!($total > 0 && round($dep + $pay, 2) >= $total - 0.0049)) return false;
+
+    $email = trim((string) ($r['end_customer_email'] ?? ''));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;   // nowhere to send it
+
+    require_once __DIR__ . '/../mailer.php';
+    require_once __DIR__ . '/../pdf-generator/pdf.php';
+    if (!function_exists('pdf_render_quote') || !function_exists('mailer_send')) return false;
+
+    $pdf = pdf_render_quote($quoteId, $clientId, 'Receipt');   // headed "Receipt", Paid / Balance £0
+    if ($pdf === null) return false;
+
+    $company = '';
+    try {
+        $cs = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $cs->execute([$clientId]);
+        $company = (string) $cs->fetchColumn();
+    } catch (Throwable $e) { /* ignore */ }
+
+    $greeting = trim((string) ($r['end_customer_name'] ?? '')) !== ''
+        ? (string) $r['end_customer_name'] : 'there';
+    $num = (string) $r['quote_number'];
+
+    $subject = sprintf('Receipt %s — paid in full%s', $num, $company !== '' ? ' · ' . $company : '');
+    $body  = "Hello {$greeting},\n\n";
+    $body .= "Thank you — your payment for {$num} has been received in full, so your account is now settled. ";
+    $body .= "Your receipt is attached.\n\n";
+    $body .= "We really appreciate your business, and it was a pleasure working with you. If we can help with "
+           . "anything else, just reply to this email.\n\n";
+    $body .= "Kind regards,\n" . $company;
+
+    $filename = 'Receipt_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $num) . '.pdf';
+
+    $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $filename, 'mime' => 'application/pdf']);
+    if (!$ok) {
+        error_log("qb_send_receipt_if_due: email failed for quote $quoteId");
+        return false;
+    }
+
+    try {
+        $pdo->prepare('UPDATE quotes SET receipt_sent_at = NOW() WHERE id = ? AND client_id = ?')
+            ->execute([$quoteId, $clientId]);
+    } catch (Throwable $e) { /* couldn't stamp — log only */ }
+
+    return true;
 }
 
 /**

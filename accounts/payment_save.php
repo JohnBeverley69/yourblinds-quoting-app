@@ -166,6 +166,8 @@ $toSettle = [];
 if ($quoteId) $toSettle[(int) $quoteId] = true;
 if ($id > 0 && $checkQuoteId) $toSettle[(int) $checkQuoteId] = true;
 foreach (array_keys($toSettle) as $sq) {
+    // Marks paid when settled — and emails a thank-you receipt on that
+    // transition (handled inside; once only, fully-paid + email + enabled).
     qb_settle_if_paid($pdo, (int) $sq, $clientId);
 }
 

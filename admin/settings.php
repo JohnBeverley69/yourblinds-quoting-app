@@ -311,6 +311,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: feature_wt not saved (run migrate_wt_charge.php): ' . $e->getMessage());
             }
+            // Auto paid-in-full receipt on/off (migrate_auto_receipt.php).
+            try {
+                db()->prepare('UPDATE client_settings SET feature_auto_receipt = ? WHERE client_id = ?')
+                    ->execute([isset($_POST['feature_auto_receipt']) ? 1 : 0, $clientId]);
+            } catch (Throwable $e) {
+                error_log('settings: feature_auto_receipt not saved (run migrate_auto_receipt.php): ' . $e->getMessage());
+            }
             $_SESSION['flash_success'] = 'Quote settings saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save settings: ' . $e->getMessage();
@@ -1251,6 +1258,33 @@ $activeNav = 'settings';
                                 if “Show the price of each blind” is on, it's <strong>spread across the
                                 blind prices</strong> (proportionally) so the figures still add up, otherwise
                                 it simply lifts the total.
+                            </span>
+                        </span>
+                    </label>
+                </fieldset>
+
+                <?php $autoReceipt = !array_key_exists('feature_auto_receipt', $settings)
+                        || (int) $settings['feature_auto_receipt'] === 1; ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Paid-in-full receipt
+                    </legend>
+                    <label style="display:flex;align-items:flex-start;gap:0.55rem;
+                                  font-size:0.9375rem;cursor:pointer">
+                        <input type="checkbox" name="feature_auto_receipt" value="1"
+                               <?= $autoReceipt ? 'checked' : '' ?>
+                               style="margin-top:0.2rem">
+                        <span>
+                            Email a receipt when an order is paid in full
+                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                                When a payment settles an order's balance to zero, the customer is
+                                automatically emailed a <strong>thank-you receipt</strong> (the order,
+                                headed “Receipt”, showing paid in full). Sent <strong>once</strong> per
+                                order, and only when the customer has an email on file. Untick to turn
+                                it off.
                             </span>
                         </span>
                     </label>
