@@ -164,6 +164,13 @@ $TOPICS = [
       <p>Sending also moves the job on to <strong>“Ordered”</strong>, so it steps along in the <strong>Pipeline</strong>
       and changes colour on the <strong>Calendar</strong> automatically. It only ever steps Accepted&nbsp;→&nbsp;Ordered —
       a job already further along (fitted / invoiced / paid) is never pulled back.</p>'],
+    ['admin', 'Products & pricing', 'Invoicing the customer', 'invoice send invoice email balance due pipeline invoiced bill customer',
+     '<p>Once a job is an order (Ordered onward), open it and use <strong>“Send invoice”</strong> in the quote actions.
+      It emails the customer their <strong>invoice</strong> (the order PDF, headed “Invoice”, showing the total, anything
+      already paid, the <strong>balance due</strong>, and your bank details), with the balance also stated in the email.</p>
+      <p>Sending also moves the job on to <strong>“Invoiced”</strong> — so it advances in the Pipeline and recolours on the
+      Calendar. It only steps Ordered/Fitted&nbsp;→&nbsp;Invoiced, never backwards. The customer needs a valid email on
+      their record. Order-side action: admins and users who can create orders.</p>'],
     ['admin', 'Products & pricing', 'Markup vs margin (how you enter your profit)', 'markup margin profit basis pricing settings convert default',
      '<p>You can enter your profit as <strong>markup</strong> or <strong>margin</strong> — set which on
       <strong>Settings → Quoting → Default margins</strong> (“Enter your margins as”).</p>
