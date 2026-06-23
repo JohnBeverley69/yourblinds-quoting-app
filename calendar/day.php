@@ -252,6 +252,22 @@ $durationToHeight = static function (?int $minutes) use ($pxPerHour, $minCardPx)
     $m = $minutes && $minutes > 0 ? $minutes : 60;
     return max($minCardPx, ($m / 60) * $pxPerHour);
 };
+// A card's CONTENT (ref, name, description, address, phone, money) can be
+// taller than its time slot, so a short booking would clip. Estimate the
+// content height per card and use it as a floor — the axis then stretches to
+// fit, instead of cropping the bottom off.
+$contentMinPx = static function (array $r) use ($showMoney): float {
+    $lines = 2;   // time chip + heading (always)
+    $custName = trim((string) ($r['customer_name'] ?? ''));
+    $title    = trim((string) ($r['title'] ?? ''));
+    if ($custName !== '' && $title !== '') $lines++;                       // description
+    if (!empty($r['installation_town']) || !empty($r['installation_postcode'])
+        || !empty($r['customer_address1']) || !empty($r['customer_address2'])
+        || !empty($r['customer_town'])    || !empty($r['customer_postcode'])) $lines++;  // address
+    if (trim((string) ($r['customer_phone'] ?? '')) !== '') $lines++;     // phone
+    if ($showMoney && !empty($r['quote_id'])) $lines++;                   // money line
+    return 14.0 + $lines * 18.0;   // ~18px/line + padding
+};
 
 // Expanding timeline. Tightly-packed bookings need more vertical room than
 // their literal duration — but we want the TIME AXIS to stretch with them so
@@ -288,7 +304,7 @@ foreach ($columns as $col) {
     foreach (($byUser[$cid] ?? []) as $rowIdx => $r) {
         $sMin = $timeToMin((string) ($r['appointment_time'] ?? '09:00:00'));
         $list[] = ['idx' => $rowIdx, 'min' => $sMin,
-                   'h'   => $durationToHeight((int) ($r['duration_minutes'] ?? 60))];
+                   'h'   => max($durationToHeight((int) ($r['duration_minutes'] ?? 60)), $contentMinPx($r))];
         $breakSet[$sMin] = true;
     }
     usort($list, static fn ($a, $b) => $a['min'] <=> $b['min']);
