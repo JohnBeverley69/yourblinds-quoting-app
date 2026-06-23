@@ -107,6 +107,14 @@ $TOPICS = [
     ['admin', 'Quoting', 'Measurement units', 'mm cm metres inches measurement unit',
      '<p>Set your company default in <strong>Settings → Quoting</strong> (mm / cm / m / in). Sizes are always stored
       in millimetres; the unit only changes how you type and read them. You can override the unit per quote.</p>'],
+    ['admin', 'Quoting', 'WT charge (internal surcharge)', 'wt charge surcharge wally tax internal hidden markup awkward customer fee',
+     '<p>Turn it on in <strong>Settings → Quoting → “WT charge”</strong>. It adds a small <strong>WT</strong> box to the
+      quote builder so you can add a discretionary amount to a quote &mdash; entirely <strong>internal</strong>.</p>
+      <ul><li>The customer <strong>never</strong> sees the letters “WT”, or a separate line, anywhere on their quote or invoice.</li>
+      <li>It’s added <strong>before VAT</strong> (so a £30 WT adds £36 to a 20%-VAT total).</li>
+      <li>If <em>“Show the price of each blind”</em> is on, the WT is <strong>spread across the blind prices</strong>
+      (proportionally) so the figures still add up; if it’s off, it just lifts the total.</li>
+      <li>On the builder your totals show a WT line so you know it’s there &mdash; that line is stripped from anything the customer sees.</li></ul>'],
     ['admin', 'Quoting', 'Bank details on quotes (how customers pay)', 'bank transfer sort code account number payment details pay invoice',
      '<p>In <strong>Settings → Quoting → “Bank details for customer payments”</strong>, enter your account name,
       sort code and account number (plus an optional note). They then print a <strong>“How to pay — bank transfer”</strong>
