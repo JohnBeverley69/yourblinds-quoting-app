@@ -170,6 +170,33 @@ if ($hasQuotes) {
 $grandValue = array_sum($totals);
 $grandCount = array_sum($counts);
 
+// Live-sync signature: count + most-recent change across the quotes this user
+// can see (same permission/mine scope as the board; the date/search filters
+// are ignored so any relevant change still triggers a refresh). The poll
+// endpoint recomputes this the same way; the JS reloads when it differs — so
+// the board stays current without a manual refresh, and never reloads when
+// nothing changed.
+$pipelineSig = '';
+if ($hasQuotes) {
+    try {
+        $sw = ['client_id = ?'];
+        $sp = [$clientId];
+        if (!$canViewAll || $mineOnly) {
+            $sw[] = '(salesperson_id = ? OR EXISTS (
+                        SELECT 1 FROM appointments a
+                         WHERE a.quote_id = quotes.id AND a.client_user_id = ?))';
+            $sp[] = $myUserId;
+            $sp[] = $myUserId;
+        }
+        $sst = $pdo->prepare(
+            "SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), ''))
+               FROM quotes WHERE " . implode(' AND ', $sw)
+        );
+        $sst->execute($sp);
+        $pipelineSig = (string) $sst->fetchColumn();
+    } catch (Throwable $e) { /* sig unavailable → polling just won't fire */ }
+}
+
 $activeNav = 'pipeline';
 $dashTag   = $isAdmin ? 'Admin Console' : 'Trade Portal';
 
@@ -520,5 +547,32 @@ $ageOf = static function (?string $ts): string {
         <?php endif; ?>
     </main>
 </div>
+<script>
+(function () {
+    // Live sync — poll a tiny "state signature" and reload only when something
+    // actually changed, so the board stays current without a manual refresh
+    // and never reloads while nothing's moved. Visible-tab only (hosting-friendly).
+    var SIG = <?= json_encode($pipelineSig) ?>;
+    if (!SIG) return;
+    var url = '/orders/pipeline_poll.php' + (<?= $mineOnly ? 'true' : 'false' ?> ? '?mine=1' : '');
+    var ms = 20000, timer = null;
+
+    function check() {
+        if (document.hidden) return;
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.ok && d.sig && d.sig !== SIG) window.location.reload();
+            })
+            .catch(function () { /* network blip — try next tick */ });
+    }
+    function start() { if (timer === null) timer = setInterval(check, ms); }
+    function stop()  { if (timer !== null) { clearInterval(timer); timer = null; } }
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) stop(); else { check(); start(); }
+    });
+    if (!document.hidden) start();
+})();
+</script>
 </body>
 </html>
