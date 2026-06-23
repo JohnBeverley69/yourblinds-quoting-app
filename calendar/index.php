@@ -483,11 +483,17 @@ $activeNav = 'calendar';
             border-radius: 6px;
             font-size: 0.8125rem;
             line-height: 1.2;
-            color: #fff;
+            /* Luminance-aware text (set per-card via --card-fg) so a light
+               custom status colour reads in dark text, not white-on-light. */
+            color: var(--card-fg, #fff);
             text-decoration: none;
             border-left: 3px solid rgba(0, 0, 0, 0.18);
             min-height: 32px;
         }
+        /* Money line inherits the card's readable text colour too (its inline
+           colour is forced to follow --card-fg on any card background). */
+        .cal-appt .cal-money,
+        .cal-appt .cal-money * { color: var(--card-fg) !important; }
         .cal-appt:hover { filter: brightness(0.95); }
         /* "Open order" tap target on quote-linked appointments. Sits
            inside the card on the right; one-tap goes straight to the
@@ -975,9 +981,11 @@ $activeNav = 'calendar';
                                         $displayTitle = ($qref !== '' && stripos((string) $a['title'], $qref) === false)
                                             ? $qref . ' — ' . (string) $a['title']
                                             : (string) $a['title'];
+                                        $bg = job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind);
+                                        $fg = job_status_text_colour($bg);   // readable on light OR dark cards
                                     ?>
                                     <a class="cal-appt status-<?= e((string) $a['status']) ?><?= !empty($a['quote_id']) ? ' from-quote' : '' ?><?= $noteTxt !== '' ? ' has-note' : '' ?><?= $isFit ? ' is-fitting' : ' is-measure' ?><?= $isIssue ? ' is-issue' : '' ?>"
-                                       style="background:<?= e(job_stage_colour((string) $a['status'], isset($a['quote_status']) ? (string) $a['quote_status'] : null, $stagePalette, $apptKind)) ?><?= $isIssue ? ';--issue-clr:' . e($issueColour) : '' ?>"
+                                       style="background:<?= e($bg) ?>;color:<?= e($fg) ?>;--card-fg:<?= e($fg) ?><?= $isIssue ? ';--issue-clr:' . e($issueColour) : '' ?>"
                                        href="/calendar/view.php?id=<?= (int) $a['id'] ?>"
                                        draggable="true"
                                        data-id="<?= (int) $a['id'] ?>"
@@ -1080,6 +1088,15 @@ $activeNav = 'calendar';
     }
     function jobStageColour(apptStatus, quoteStatus, apptKind) {
         return STAGE_PALETTE[jobStage(apptStatus, quoteStatus, apptKind)] || '#2563eb';
+    }
+    // Mirror of job_status_text_colour() — readable text on light OR dark cards.
+    function textOn(hex) {
+        hex = String(hex || '').replace('#', '');
+        if (hex.length !== 6) return '#ffffff';
+        var r = parseInt(hex.substr(0, 2), 16),
+            g = parseInt(hex.substr(2, 2), 16),
+            b = parseInt(hex.substr(4, 2), 16);
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1f2937' : '#ffffff';
     }
 
     var pendingTray  = document.getElementById('pending-tray');
@@ -1316,8 +1333,10 @@ $activeNav = 'calendar';
                       + ' data-note="' + escapeAttr(note) + '"'
                       + ' title="' + escapeAttr(note || 'Add a note') + '"'
                       + ' aria-label="' + (note ? 'Edit note' : 'Add note') + '">📝</span>';
+                var bg = jobStageColour(a.status, a.quote_status, kind);
+                var fg = textOn(bg);
                 html += '<a class="cal-appt status-' + escapeAttr(a.status) + fromQuoteCls + hasNoteCls + kindCls + issueCls + '"'
-                     +  ' style="background:' + escapeAttr(jobStageColour(a.status, a.quote_status, kind)) + issueStyle + '"'
+                     +  ' style="background:' + escapeAttr(bg) + ';color:' + fg + ';--card-fg:' + fg + issueStyle + '"'
                      +  ' href="/calendar/view.php?id=' + a.id + '"'
                      +  ' draggable="true" data-id="' + a.id + '"'
                      +  quoteAttr
