@@ -468,6 +468,8 @@ $activeNav = 'pricing';
                 $ppId    = (string) ($row['paypal_plan_id']    ?? '');
                 $notes   = (string) ($row['notes']             ?? '');
                 $updated = (string) ($row['updated_at']        ?? '');
+                $vatPct  = defined('BILLING_VAT_PERCENT') ? (float) BILLING_VAT_PERCENT : 0.0;
+                $vatLbl  = $vatPct > 0 ? ' + VAT' : '';
             ?>
                 <div class="price-card">
                     <h3><?= e($plan['name']) ?><?php if ($isFree): ?> <span style="font-weight:400;font-size:0.8125rem;color:var(--text-faint)">— free base tier</span><?php endif; ?></h3>
@@ -522,11 +524,27 @@ $activeNav = 'pricing';
                                 No PayPal Plan attached. Tenants can't subscribe to this plan via PayPal yet.
                             </span>
                             <form method="post" action="/master-admin/pricing.php"
-                                  data-confirm="Create a new Product + Plan on PayPal for <?= e($plan['name']) ?> at £<?= number_format($price, 2) ?>/month?">
+                                  data-confirm="Create a new Product + Plan on PayPal for <?= e($plan['name']) ?> at £<?= number_format($price, 2) ?>/month<?= e($vatLbl) ?>?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="create_paypal_plan">
                                 <input type="hidden" name="plan_code" value="<?= e($code) ?>">
                                 <button type="submit">Create on PayPal &raquo;</button>
+                            </form>
+                        </div>
+                    <?php elseif (!$isFree && $ppId !== '' && $paypalReady): ?>
+                        <div class="pc-create">
+                            <span>
+                                Attached to PayPal Plan <code><?= e($ppId) ?></code>. Only re-create if the plan
+                                terms need to change &mdash; e.g. to <strong>add VAT</strong>. Re-creating builds a
+                                <strong>fresh</strong> PayPal plan and swaps in its new ID; the old plan is left
+                                untouched, so anyone already subscribed to it stays on their current terms.
+                            </span>
+                            <form method="post" action="/master-admin/pricing.php"
+                                  data-confirm="Re-create the PayPal plan for <?= e($plan['name']) ?> at £<?= number_format($price, 2) ?>/month<?= e($vatLbl) ?>? This makes a NEW plan and REPLACES the current Plan ID (<?= e($ppId) ?>). Existing subscribers are NOT moved — they stay on the old plan.">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="create_paypal_plan">
+                                <input type="hidden" name="plan_code" value="<?= e($code) ?>">
+                                <button type="submit">Re-create on PayPal<?= $vatPct > 0 ? ' (adds VAT)' : '' ?> &raquo;</button>
                             </form>
                         </div>
                     <?php endif; ?>
