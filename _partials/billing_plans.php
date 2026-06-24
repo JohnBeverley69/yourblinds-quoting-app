@@ -29,7 +29,14 @@ declare(strict_types=1);
  * To change a tier's price: edit it on /master-admin/pricing.php, then click
  * "Create on PayPal" (or update the PayPal plan). To add a tier: add an entry
  * here, run /migrate_billing_tiers.php to seed its price, create its PayPal plan.
+ *
+ * VAT: the tier prices below are NET (ex-VAT). BILLING_VAT_PERCENT is added on
+ * top — the PayPal plans carry it as an exclusive tax (so a £20 plan bills £24
+ * and PayPal itemises the VAT), and the Billing page shows "+ VAT" / the
+ * gross figure. Set to 0 to bill with no VAT.
  */
+
+if (!defined('BILLING_VAT_PERCENT')) define('BILLING_VAT_PERCENT', 20.0);
 
 return [
     'free' => [

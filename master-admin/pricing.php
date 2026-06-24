@@ -142,7 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $code,
                     (string) ($plan['name'] ?? $code),
                     (string) ($plan['description'] ?? ''),
-                    $price
+                    $price,
+                    defined('BILLING_VAT_PERCENT') ? (float) BILLING_VAT_PERCENT : 0.0
                 );
 
                 $pdo->prepare(

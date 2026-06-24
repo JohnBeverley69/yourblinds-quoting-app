@@ -105,6 +105,11 @@ foreach ($planState as $code => $st) {
     }
 }
 
+// Tier prices are NET — VAT is added on top (PayPal charges the gross). Used to
+// show "+ VAT" / the gross figure on the cards and the summary.
+$vatPct  = defined('BILLING_VAT_PERCENT') ? (float) BILLING_VAT_PERCENT : 0.0;
+$grossOf = static fn (float $net): float => round($net * (1 + $vatPct / 100), 2);
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -264,7 +269,10 @@ $activeNav = 'billing';
                 </span>
                 <?php if ($monthlyTotal > 0): ?>
                     <span class="bs-total">
-                        Monthly total: <strong>£<?= number_format($monthlyTotal, 2) ?></strong>
+                        Monthly total: <strong>£<?= number_format($monthlyTotal, 2) ?><?= $vatPct > 0 ? ' + VAT' : '' ?></strong>
+                        <?php if ($vatPct > 0): ?>
+                            <span style="color:var(--text-faint);font-weight:400">= £<?= number_format($grossOf($monthlyTotal), 2) ?> inc VAT</span>
+                        <?php endif; ?>
                     </span>
                 <?php endif; ?>
                 <?php if ($trialCount > 0 && $soonestTrialExpiry):
@@ -280,11 +288,11 @@ $activeNav = 'billing';
                 <?php endif; ?>
                 <span style="color:var(--text-faint);font-size:0.875rem;flex:1 1 100%">
                     <?php if ($monthlyTotal > 0): ?>
-                        Billed monthly in GBP through PayPal. Cancel Silver or Gold any time;
+                        Billed monthly in GBP through PayPal<?= $vatPct > 0 ? ', plus VAT' : '' ?>. Cancel Silver or Gold any time;
                         Platinum is a 12-month contract.
                     <?php else: ?>
                         You're on the free <strong>Bronze</strong> plan. Add a paid tier below any time —
-                        billed monthly in GBP through PayPal.
+                        billed monthly in GBP through PayPal<?= $vatPct > 0 ? ' (prices + VAT)' : '' ?>.
                     <?php endif; ?>
                 </span>
             </div>
@@ -335,10 +343,13 @@ $activeNav = 'billing';
                                 <small>(comp'd by your account manager)</small>
                             <?php elseif ($hasTrial): ?>
                                 <span style="color:#92400e">Free</span>
-                                <small>(then £<?= number_format((float) $p['price_gbp_monthly'], 2) ?>/mo)</small>
+                                <small>(then £<?= number_format((float) $p['price_gbp_monthly'], 2) ?>/mo<?= $vatPct > 0 ? ' + VAT' : '' ?>)</small>
                             <?php else: ?>
                                 £<?= number_format((float) $p['price_gbp_monthly'], 2) ?>
-                                <small>/month</small>
+                                <small>/month<?= $vatPct > 0 ? ' + VAT' : '' ?></small>
+                                <?php if ($vatPct > 0 && (float) $p['price_gbp_monthly'] > 0): ?>
+                                    <small style="display:block">£<?= number_format($grossOf((float) $p['price_gbp_monthly']), 2) ?> inc VAT</small>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                         <div class="p-desc"><?= e($p['description']) ?></div>

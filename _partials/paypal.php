@@ -292,7 +292,7 @@ function paypal_update_plan_price(string $planId, float $newPriceGbp): void
  *
  * Returns the new plan_id (e.g. "P-XXXXXXXXX").
  */
-function paypal_create_plan(string $planCode, string $name, string $description, float $priceGbp): string
+function paypal_create_plan(string $planCode, string $name, string $description, float $priceGbp, float $vatPercent = 0.0): string
 {
     if ($priceGbp <= 0) {
         throw new RuntimeException('Cannot create a PayPal plan with zero or negative price.');
@@ -309,8 +309,8 @@ function paypal_create_plan(string $planCode, string $name, string $description,
     ]);
     $productId = (string) ($r['data']['id'] ?? $prodId);
 
-    // 2. Plan — monthly billing, no trial, in GBP, fixed price, auto-renewing.
-    $r2 = paypal_request('POST', '/v1/billing/plans', [
+    // 2. Plan — monthly billing, no trial, in GBP, fixed NET price, auto-renewing.
+    $planPayload = [
         'product_id'   => $productId,
         'name'         => $name,
         'description'  => $description ?: $name,
@@ -335,7 +335,16 @@ function paypal_create_plan(string $planCode, string $name, string $description,
             'setup_fee_failure_action'  => 'CONTINUE',
             'payment_failure_threshold' => 3,
         ],
-    ]);
+    ];
+    // VAT — exclusive tax added on top of the net price (so a £20 plan bills
+    // £24 at 20% and PayPal shows the VAT as its own line on the invoice).
+    if ($vatPercent > 0) {
+        $planPayload['taxes'] = [
+            'percentage' => number_format($vatPercent, 2, '.', ''),
+            'inclusive'  => false,
+        ];
+    }
+    $r2 = paypal_request('POST', '/v1/billing/plans', $planPayload);
     $planId = (string) ($r2['data']['id'] ?? '');
     if ($planId === '') {
         throw new RuntimeException('PayPal created a plan but returned no id.');
