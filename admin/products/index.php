@@ -668,6 +668,26 @@ $activeNav = 'products';
             refresh();
         }
     });
+
+    // Shift-click range select: tick one, hold Shift and click another, and
+    // every row between takes the second click's state — so filing a long run
+    // is two clicks, not 72. Scoped to the clicked row's own table.
+    var lastChecked = null;
+    document.addEventListener('click', function (e) {
+        var cb = e.target;
+        if (!cb.classList || !cb.classList.contains('bulk-row')) return;
+        if (e.shiftKey && lastChecked && lastChecked !== cb) {
+            var tbl = cb.closest('table');
+            var boxes = tbl ? Array.prototype.slice.call(tbl.querySelectorAll('input.bulk-row')) : allRows();
+            var start = boxes.indexOf(lastChecked), end = boxes.indexOf(cb);
+            if (start !== -1 && end !== -1) {
+                if (start > end) { var t = start; start = end; end = t; }
+                for (var i = start; i <= end; i++) boxes[i].checked = cb.checked;
+            }
+        }
+        lastChecked = cb;
+        refresh();
+    });
     clear.addEventListener('click', function () { allRows().forEach(function (c) { c.checked = false; }); refresh(); });
     // Pick a group → move every ticked product into it (non-destructive, no confirm).
     if (moveSel) moveSel.addEventListener('change', function () {

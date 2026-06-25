@@ -142,7 +142,8 @@ $TOPICS = [
      '<p>On the <strong>Products</strong> page, drag a row’s <strong>⋮⋮</strong> handle to <strong>reorder</strong> products —
       the new order sticks and is the order they appear in quotes.</p>
       <p><strong>To move many products into a group at once</strong> (instead of dragging them one by one): <strong>tick</strong>
-      the ones you want — the checkbox in a table’s header selects them all — then choose the group from the
+      the ones you want — tick one then <strong>Shift-click</strong> another to grab everything in between, or use the
+      checkbox in a table’s header to select them all — then choose the group from the
       <strong>“Move selected to…”</strong> dropdown in the bar at the top. Pick “Ungrouped” there to pull them back out.</p>
       <p>The same selection works for <strong>Delete selected</strong> (it confirms and shows how many will go; deleting a
       product also removes its options, extras and price tables).</p>'],
