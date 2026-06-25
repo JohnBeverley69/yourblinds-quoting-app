@@ -105,23 +105,29 @@ try {
             if ($cid > 0) { $upd->execute([$i, $cid, $clientId]); $i++; }
         }
         $_SESSION['flash_success'] = 'Group order updated.';
-    } else { // assign
-        $pid   = (int) ($_POST['product_id']  ?? 0);
+    } else { // assign — one product (product_id) OR many (product_ids[])
         $catId = (int) ($_POST['category_id'] ?? 0);   // 0 = ungroup
-        if ($pid <= 0) throw new RuntimeException('Missing product.');
+        $pids  = is_array($_POST['product_ids'] ?? null) ? $_POST['product_ids'] : [];
+        if (($one = (int) ($_POST['product_id'] ?? 0)) > 0) $pids[] = $one;
+        $pids  = array_values(array_unique(array_filter(
+            array_map('intval', $pids), static fn ($n) => $n > 0
+        )));
+        if (!$pids) throw new RuntimeException('Missing product.');
 
+        $ph = implode(',', array_fill(0, count($pids), '?'));
         if ($catId > 0) {
             // Validate the category belongs to this tenant.
             $chk = $pdo->prepare('SELECT 1 FROM product_categories WHERE id = ? AND client_id = ? LIMIT 1');
             $chk->execute([$catId, $clientId]);
             if ($chk->fetchColumn() === false) throw new RuntimeException('Unknown category.');
-            $pdo->prepare('UPDATE products SET category_id = ? WHERE id = ? AND client_id = ?')
-                ->execute([$catId, $pid, $clientId]);
+            $pdo->prepare("UPDATE products SET category_id = ? WHERE id IN ($ph) AND client_id = ?")
+                ->execute(array_merge([$catId], $pids, [$clientId]));
         } else {
-            $pdo->prepare('UPDATE products SET category_id = NULL WHERE id = ? AND client_id = ?')
-                ->execute([$pid, $clientId]);
+            $pdo->prepare("UPDATE products SET category_id = NULL WHERE id IN ($ph) AND client_id = ?")
+                ->execute(array_merge($pids, [$clientId]));
         }
-        $_SESSION['flash_success'] = 'Product filed.';
+        $n = count($pids);
+        $_SESSION['flash_success'] = $n === 1 ? 'Product filed.' : "$n products moved.";
     }
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();

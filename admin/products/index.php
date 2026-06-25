@@ -391,17 +391,34 @@ $activeNav = 'products';
 
                 <!-- Bulk actions. The row checkboxes live inside the product
                      tables (which already contain per-row action forms, so we
-                     can't wrap them in this form); JS keeps this form's ids[]
-                     in sync with the ticked boxes. -->
-                <form method="post" action="/admin/products/delete.php" id="bulk-delete-form"
-                      class="bulk-bar" data-confirm="Delete the selected products?">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-danger" id="bulk-delete-btn"
-                            style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>Delete selected</button>
+                     can't wrap them in a form); JS keeps each bulk form's
+                     hidden ids in sync with the ticked boxes. -->
+                <div class="bulk-bar">
                     <span id="bulk-count" style="color:var(--text-faint);font-size:0.8125rem">(none selected)</span>
+                    <?php if ($hasCategories && $categories): ?>
+                        <form method="post" action="/admin/products/set-category.php" id="bulk-move-form"
+                              style="display:inline-flex;gap:0.4rem;align-items:center;margin:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_action" value="assign">
+                            <select name="category_id" id="bulk-move-select" class="group-select" disabled
+                                    aria-label="Move selected products to a group">
+                                <option value="">Move selected to&hellip;</option>
+                                <option value="0">&mdash; Ungrouped &mdash;</option>
+                                <?php foreach ($categories as $c): ?>
+                                    <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                    <?php endif; ?>
+                    <form method="post" action="/admin/products/delete.php" id="bulk-delete-form"
+                          data-confirm="Delete the selected products?" style="display:inline;margin:0">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-danger" id="bulk-delete-btn"
+                                style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>Delete selected</button>
+                    </form>
                     <button type="button" id="bulk-clear"
                             style="background:transparent;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0;display:none">Clear</button>
-                </form>
+                </div>
 
                 <?php if ($hasCategories && $categories): ?>
                     <div class="grp-tools">
@@ -609,17 +626,26 @@ $activeNav = 'products';
     var btn   = document.getElementById('bulk-delete-btn');
     var count = document.getElementById('bulk-count');
     var clear = document.getElementById('bulk-clear');
+    var moveForm = document.getElementById('bulk-move-form');
+    var moveSel  = document.getElementById('bulk-move-select');
     function allRows() { return Array.prototype.slice.call(document.querySelectorAll('input.bulk-row')); }
+    function syncIds(f, fieldName, sel) {
+        f.querySelectorAll('input[name="' + fieldName + '"]').forEach(function (n) { n.remove(); });
+        sel.forEach(function (c) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = fieldName; i.value = c.value;
+            f.appendChild(i);
+        });
+    }
 
     function refresh() {
         var sel = allRows().filter(function (c) { return c.checked; });
-        // Sync the hidden ids[] inside the (table-less) bulk form.
-        form.querySelectorAll('input[name="ids[]"]').forEach(function (n) { n.remove(); });
-        sel.forEach(function (c) {
-            var i = document.createElement('input');
-            i.type = 'hidden'; i.name = 'ids[]'; i.value = c.value;
-            form.appendChild(i);
-        });
+        syncIds(form, 'ids[]', sel);                 // delete form
+        if (moveForm) {                              // move-to-group form
+            syncIds(moveForm, 'product_ids[]', sel);
+            moveSel.disabled = sel.length === 0;
+            if (sel.length === 0) moveSel.value = '';
+        }
         btn.disabled = sel.length === 0;
         count.textContent = sel.length ? (sel.length + ' selected') : '(none selected)';
         clear.style.display = sel.length ? '' : 'none';
@@ -643,6 +669,10 @@ $activeNav = 'products';
         }
     });
     clear.addEventListener('click', function () { allRows().forEach(function (c) { c.checked = false; }); refresh(); });
+    // Pick a group → move every ticked product into it (non-destructive, no confirm).
+    if (moveSel) moveSel.addEventListener('change', function () {
+        if (moveSel.value !== '' && allRows().some(function (c) { return c.checked; })) moveForm.submit();
+    });
 
     // ---------- Drag-to-reorder products within a table ----------
     var CSRF = (document.querySelector('input[name="_csrf"]') || {}).value || '';
