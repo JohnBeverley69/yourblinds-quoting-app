@@ -118,26 +118,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $results = [];
             foreach ($payload as $idx => $sheet) {
-                $pid = (int) ($map[$idx] ?? 0);
-                if ($pid <= 0 || !isset($valid[$pid])) continue;
-                $ins = 0; $dup = 0;
-                foreach (($sheet['rows'] ?? []) as $r) {
-                    [$band, $name, $colour] = [$r[0] ?? '', $r[1] ?? '', $r[2] ?? ''];
-                    if ($band === '' || $name === '') continue;
-                    try {
-                        $insert->execute([$clientId, $pid, $band, $name, $colour !== '' ? $colour : null]);
-                        $ins++;
-                    } catch (PDOException $e) {
-                        if (str_contains($e->getMessage(), 'uniq_option_per_product')) $dup++;
-                        // else: swallow — one bad row shouldn't abort the batch.
+                // One sheet can feed SEVERAL products that share the fabric range.
+                $pids = $map[$idx] ?? [];
+                if (!is_array($pids)) $pids = [$pids];
+                foreach ($pids as $pidRaw) {
+                    $pid = (int) $pidRaw;
+                    if ($pid <= 0 || !isset($valid[$pid])) continue;
+                    $ins = 0; $dup = 0;
+                    foreach (($sheet['rows'] ?? []) as $r) {
+                        [$band, $name, $colour] = [$r[0] ?? '', $r[1] ?? '', $r[2] ?? ''];
+                        if ($band === '' || $name === '') continue;
+                        try {
+                            $insert->execute([$clientId, $pid, $band, $name, $colour !== '' ? $colour : null]);
+                            $ins++;
+                        } catch (PDOException $e) {
+                            if (str_contains($e->getMessage(), 'uniq_option_per_product')) $dup++;
+                            // else: swallow — one bad row shouldn't abort the batch.
+                        }
                     }
+                    $results[] = [
+                        'sheet'   => (string) ($sheet['name'] ?? ''),
+                        'product' => $valid[$pid],
+                        'ins'     => $ins,
+                        'dup'     => $dup,
+                    ];
                 }
-                $results[] = [
-                    'sheet'   => (string) ($sheet['name'] ?? ''),
-                    'product' => $valid[$pid],
-                    'ins'     => $ins,
-                    'dup'     => $dup,
-                ];
             }
             $summary = $results;
             $stage   = 'done';
@@ -234,10 +239,11 @@ $activeNav = 'products';
             <section class="section">
                 <div class="section-header"><h2 class="section-title">Check the matches, then import</h2></div>
                 <div class="tip-box">
-                    Each worksheet is matched to a product by name. Change any that are wrong, or set a sheet to
-                    <strong>Skip</strong>. A fabric range shared by several products (e.g. all your roller fabrics) can
-                    be imported here for one, then add it to the others from their own Fabrics page.
-                    Duplicate (band + name + colour) rows are skipped automatically.
+                    Each worksheet is matched to a product by name — but <strong>pick one or more products</strong> for each
+                    (Ctrl / Cmd-click to add more). That's the fix for a <strong>shared fabric range</strong>: one softshade
+                    range feeds all your softshade blinds, one roller range feeds the roller products, and so on — tick them all
+                    and they import together. Leave a sheet with nothing selected to skip it. Duplicate
+                    (band + name + colour) rows are skipped automatically.
                 </div>
                 <form method="post" action="/admin/products/options-bulk-import.php">
                     <?= csrf_field() ?>
@@ -249,7 +255,7 @@ $activeNav = 'products';
                            )) ?>">
                     <table class="map-table">
                         <thead>
-                            <tr><th>Worksheet</th><th>Fabrics</th><th>Import into product</th></tr>
+                            <tr><th>Worksheet</th><th>Fabrics</th><th>Import into product(s) — Ctrl/Cmd-click for several</th></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($sheets as $i => $s): ?>
@@ -257,8 +263,8 @@ $activeNav = 'products';
                                     <td><strong><?= e((string) $s['name']) ?></strong></td>
                                     <td><span class="pill"><?= count($s['rows']) ?></span></td>
                                     <td>
-                                        <select name="map[<?= (int) $i ?>]">
-                                            <option value="0"<?= $s['match'] === 0 ? ' selected' : '' ?>>— Skip —</option>
+                                        <select name="map[<?= (int) $i ?>][]" multiple size="5"
+                                                style="min-width:16rem;padding:0.25rem;font:inherit;font-size:0.85rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body)">
                                             <?php foreach ($products as $p): ?>
                                                 <option value="<?= (int) $p['id'] ?>"<?= (int) $p['id'] === $s['match'] ? ' selected' : '' ?>>
                                                     <?= e((string) $p['name']) ?>
