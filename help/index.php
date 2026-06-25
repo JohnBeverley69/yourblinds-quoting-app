@@ -223,9 +223,14 @@ $TOPICS = [
      '<p>The Fabric Library holds the cloth, structured as <strong>Supplier → Range → Fabrics</strong>.
       Create a <strong>supplier group</strong> (e.g. Decora) and drag each range’s ⠿ grip into it. Inside a range you can
       also group fabrics under headings. Everything is non-destructive — nothing merges.</p>'],
-    ['super', 'Fabric Library', 'Importing fabrics & groups carrying through', 'import fabrics excel pull into product carry group',
-     '<p><strong>Import fabrics</strong> loads a manufacturer’s range from a spreadsheet. When you pull library fabrics
-      into a product, their <strong>group rides along</strong> and shows as a Group column on the product’s Fabrics page.</p>'],
+    ['super', 'Fabric Library', 'Importing fabrics & groups carrying through', 'import fabrics excel pull into product carry group multi sheet workbook review type skip',
+     '<p><strong>Import fabrics</strong> loads a manufacturer’s range from a spreadsheet. It reads <strong>every worksheet</strong>
+      in one go, so a multi-sheet supplier workbook (one sheet per blind type) imports in a single pass. On <strong>Preview</strong>
+      you get a <strong>review-by-sheet</strong> table: each sheet imports under a <strong>type</strong> (taken from the sheet name —
+      edit it to tidy up, e.g. “Decora Roller” → “Roller”), and you can <strong>untick</strong> any sheet to skip it. Duplicates
+      (name + colour) are skipped automatically.</p>
+      <p>When you pull library fabrics into a product, their <strong>group rides along</strong> and shows as a Group column on
+      the product’s Fabrics page.</p>'],
 
     // ---- Master catalogue (super) ----
     ['super', 'Master catalogue', 'Catalogue & pushing to clients', 'master catalogue push prefix library suppliers tenants',

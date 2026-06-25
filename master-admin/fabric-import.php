@@ -107,12 +107,14 @@ $readFabrics = static function (string $path) use ($matchField): array {
                 'code'           => $cd  !== '' ? mb_substr($cd, 0, 80)   : null,
                 'suggested_band' => $band !== '' ? strtoupper(mb_substr($band, 0, 60)) : null,
                 'blind_type'     => ($hasTypeCol && $ty !== '') ? mb_substr($ty, 0, 60) : mb_substr($sheetType, 0, 60),
+                '_sheet'         => $sn,   // source sheet → lets the preview override type / skip per sheet
             ];
             $count++;
         }
         $sheets[] = [
             'name'   => $sn,
             'count'  => $count,
+            'type'   => mb_substr($sheetType, 0, 60),   // default type (from sheet name) the user can edit
             'mapped' => array_map(fn ($c) => Coordinate::stringFromColumnIndex($c), $mapped),
         ];
     }
@@ -181,9 +183,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
             $result    = $pv['data'];
             $supName   = (string) $pv['sname'];
             $fileLabel = (string) $pv['file'];
-            if (!empty($result['fabrics'])) {
+
+            // Per-sheet review: skip the sheets the admin unticked and apply any
+            // type they edited. Keyed by sheet name (hidden in the form). Empty
+            // override map = old behaviour (import everything as read).
+            $names = $_POST['sheetname'] ?? [];
+            $types = $_POST['type'] ?? [];
+            $incs  = $_POST['include'] ?? [];   // checked = import this sheet
+            $ovr   = [];
+            if (is_array($names)) {
+                foreach ($names as $i => $sn) {
+                    $ovr[(string) $sn] = ['skip' => empty($incs[$i]), 'type' => trim((string) ($types[$i] ?? ''))];
+                }
+            }
+            $toImport = [];
+            foreach (($result['fabrics'] ?? []) as $f) {
+                $o = $ovr[(string) ($f['_sheet'] ?? '')] ?? null;
+                if ($o && $o['skip']) continue;
+                if ($o && $o['type'] !== '') $f['blind_type'] = mb_substr($o['type'], 0, 60);
+                $toImport[] = $f;
+            }
+
+            if (!empty($toImport)) {
                 try {
-                    $importSummary = $doImport($supId, $result['fabrics']);
+                    $importSummary = $doImport($supId, $toImport);
                     unset($_SESSION['fab_preview']);   // clear only once it's safely in
                 } catch (Throwable $e) {
                     error_log('[YourBlinds] fabric-import (session) failed: ' . $e->getMessage());
@@ -192,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                     $error = 'The import did not finish, so nothing was saved. Please click Import again.';
                 }
             } else {
-                unset($_SESSION['fab_preview']);
+                $error = 'Every sheet was skipped — nothing to import.';
             }
         }
     } elseif (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
@@ -360,14 +383,42 @@ $activeNav = 'fabric-library';
                         <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.5rem 0 0">Showing the first 100 of <?= count($result['fabrics']) ?>.</p>
                     <?php endif; ?>
                     <?php if ($importSummary === null): ?>
-                        <form method="post" action="/master-admin/fabric-import.php" style="margin:1rem 0 0;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                        <form method="post" action="/master-admin/fabric-import.php" style="margin:1.25rem 0 0">
                             <?= csrf_field() ?>
                             <input type="hidden" name="mode" value="import_session">
                             <input type="hidden" name="fabric_supplier_id" value="<?= $supId ?>">
-                            <button type="submit" class="btn btn-primary">
-                                Import these <?= count($result['fabrics']) ?> fabrics into <?= e($supName) ?>
-                            </button>
-                            <span style="color:var(--text-faint);font-size:0.8125rem">No need to choose the file again.</span>
+                            <h3 style="margin:0 0 0.4rem;font-size:1rem">Review by sheet</h3>
+                            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 0.6rem;max-width:46rem">
+                                Each sheet imports under a <strong>type</strong>. Edit it to tidy up
+                                (e.g. “Decora Roller” → “Roller”), or <strong>untick</strong> a sheet to skip it.
+                            </p>
+                            <div class="table-wrap" style="margin-bottom:1rem">
+                                <table class="table">
+                                    <thead><tr><th style="width:2rem">Use</th><th>Sheet</th><th>Fabrics</th><th>Import as type</th></tr></thead>
+                                    <tbody>
+                                        <?php foreach ($result['sheets'] as $i => $sh): ?>
+                                            <tr>
+                                                <td style="text-align:center">
+                                                    <input type="checkbox" name="include[<?= (int) $i ?>]" value="1" checked
+                                                           aria-label="Import <?= e((string) $sh['name']) ?>">
+                                                </td>
+                                                <td><strong><?= e((string) $sh['name']) ?></strong></td>
+                                                <td><?= (int) $sh['count'] ?></td>
+                                                <td>
+                                                    <input type="hidden" name="sheetname[<?= (int) $i ?>]" value="<?= e((string) $sh['name']) ?>">
+                                                    <input type="text" name="type[<?= (int) $i ?>]" maxlength="60"
+                                                           value="<?= e((string) ($sh['type'] ?? '')) ?>"
+                                                           style="width:14rem;padding:0.3rem 0.4rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body)">
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                                <button type="submit" class="btn btn-primary">Import into <?= e($supName) ?> &rarr;</button>
+                                <span style="color:var(--text-faint);font-size:0.8125rem">No need to choose the file again.</span>
+                            </div>
                         </form>
                     <?php endif; ?>
                 <?php endif; ?>
