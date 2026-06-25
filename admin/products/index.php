@@ -116,7 +116,8 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
     $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
     ?>
     <tr data-id="<?= (int) $p['id'] ?>" draggable="true">
-        <td class="drag-col" title="Drag onto a group">⋮⋮</td>
+        <td class="check-col"><input type="checkbox" class="bulk-row" value="<?= (int) $p['id'] ?>" aria-label="Select <?= e((string) $p['name']) ?>"></td>
+        <td class="drag-col" title="Drag to reorder — or onto a group to file it">⋮⋮</td>
         <td>
             <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>" class="product-name" style="text-decoration:none">
                 <?= e((string) $p['name']) ?>
@@ -245,8 +246,11 @@ $activeNav = 'products';
             border: 1px solid var(--border-strong); border-radius: 6px;
             background: var(--bg-input); color: var(--text-body); max-width: 11rem;
         }
+        .check-col { width: 1.5rem; text-align: center; }
+        .check-col input { cursor: pointer; margin: 0; }
         .drag-col { cursor: grab; color: var(--text-faint); width: 1.5rem; text-align: center; user-select: none; }
         .drag-col:active { cursor: grabbing; }
+        .bulk-bar { display: flex; gap: 0.625rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.75rem; }
         tr.dragging { opacity: 0.45; }
         .drop-zone { border-radius: 10px; padding: 0.25rem 0.5rem; margin: 0 -0.5rem; transition: background 80ms; }
         .drop-zone.drop-hover { background: rgba(37, 99, 235, 0.07); outline: 2px dashed #2563eb; outline-offset: -2px; }
@@ -363,6 +367,7 @@ $activeNav = 'products';
                             <table class="table">
                                 <thead>
                                     <tr>
+                                        <th class="check-col"><input type="checkbox" class="bulk-all" aria-label="Select all in this table"></th>
                                         <th class="drag-col"></th>
                                         <th>Name</th>
                                         <th>Status</th>
@@ -383,6 +388,20 @@ $activeNav = 'products';
                         <?php
                     };
                 ?>
+
+                <!-- Bulk actions. The row checkboxes live inside the product
+                     tables (which already contain per-row action forms, so we
+                     can't wrap them in this form); JS keeps this form's ids[]
+                     in sync with the ticked boxes. -->
+                <form method="post" action="/admin/products/delete.php" id="bulk-delete-form"
+                      class="bulk-bar" data-confirm="Delete the selected products?">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-danger" id="bulk-delete-btn"
+                            style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>Delete selected</button>
+                    <span id="bulk-count" style="color:var(--text-faint);font-size:0.8125rem">(none selected)</span>
+                    <button type="button" id="bulk-clear"
+                            style="background:transparent;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0;display:none">Clear</button>
+                </form>
 
                 <?php if ($hasCategories && $categories): ?>
                     <div class="grp-tools">
@@ -581,6 +600,82 @@ $activeNav = 'products';
         if (col) col.addEventListener('click', function () { applyAll(false); });
     })();
     </script>
+<?php endif; ?>
+<?php if ($products): ?>
+<script>
+(function () {
+    // ---------- Bulk select + delete ----------
+    var form  = document.getElementById('bulk-delete-form');
+    var btn   = document.getElementById('bulk-delete-btn');
+    var count = document.getElementById('bulk-count');
+    var clear = document.getElementById('bulk-clear');
+    function allRows() { return Array.prototype.slice.call(document.querySelectorAll('input.bulk-row')); }
+
+    function refresh() {
+        var sel = allRows().filter(function (c) { return c.checked; });
+        // Sync the hidden ids[] inside the (table-less) bulk form.
+        form.querySelectorAll('input[name="ids[]"]').forEach(function (n) { n.remove(); });
+        sel.forEach(function (c) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = 'ids[]'; i.value = c.value;
+            form.appendChild(i);
+        });
+        btn.disabled = sel.length === 0;
+        count.textContent = sel.length ? (sel.length + ' selected') : '(none selected)';
+        clear.style.display = sel.length ? '' : 'none';
+        form.dataset.confirm = 'Delete ' + sel.length + ' selected product' + (sel.length === 1 ? '' : 's')
+            + '? This removes all options, extras and price tables linked to them. Cannot be undone.';
+        // Reflect each table's select-all state (checked / indeterminate).
+        document.querySelectorAll('input.bulk-all').forEach(function (a) {
+            var tbl = a.closest('table'); if (!tbl) return;
+            var cs = tbl.querySelectorAll('input.bulk-row');
+            var ck = tbl.querySelectorAll('input.bulk-row:checked');
+            a.checked = cs.length > 0 && cs.length === ck.length;
+            a.indeterminate = ck.length > 0 && ck.length < cs.length;
+        });
+    }
+    document.addEventListener('change', function (e) {
+        if (e.target.classList.contains('bulk-row')) refresh();
+        else if (e.target.classList.contains('bulk-all')) {
+            var tbl = e.target.closest('table');
+            if (tbl) tbl.querySelectorAll('input.bulk-row').forEach(function (c) { c.checked = e.target.checked; });
+            refresh();
+        }
+    });
+    clear.addEventListener('click', function () { allRows().forEach(function (c) { c.checked = false; }); refresh(); });
+
+    // ---------- Drag-to-reorder products within a table ----------
+    var CSRF = (document.querySelector('input[name="_csrf"]') || {}).value || '';
+    var dragRow = null;
+    document.querySelectorAll('table.table tbody').forEach(function (tbody) {
+        tbody.querySelectorAll('tr[data-id]').forEach(function (tr) {
+            tr.addEventListener('dragstart', function () { dragRow = tr; tr.classList.add('dragging'); });
+            tr.addEventListener('dragend', function () {
+                tr.classList.remove('dragging');
+                if (dragRow && dragRow.parentNode === tbody) persist(tbody);
+                dragRow = null;
+            });
+            tr.addEventListener('dragover', function (e) {
+                if (!dragRow || dragRow === tr || dragRow.parentNode !== tbody) return;  // cross-table → leave to group filing
+                e.preventDefault();
+                e.stopPropagation();   // same-table reorder: don't let the group drop-zone highlight
+                var r = tr.getBoundingClientRect();
+                tbody.insertBefore(dragRow, (e.clientY - r.top) > r.height / 2 ? tr.nextSibling : tr);
+            });
+        });
+    });
+    function persist(tbody) {
+        var ids = Array.prototype.map.call(tbody.querySelectorAll('tr[data-id]'),
+            function (tr) { return tr.getAttribute('data-id'); });
+        if (!ids.length) return;
+        var fd = new FormData();
+        fd.append('_csrf', CSRF); fd.append('type', 'products');
+        ids.forEach(function (id) { fd.append('ids[]', id); });
+        fetch('/admin/products/reorder.php?type=products', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); }).catch(function () {});
+    }
+})();
+</script>
 <?php endif; ?>
 <?php require __DIR__ . '/../../_partials/confirm_modal.php'; ?>
 </body>
