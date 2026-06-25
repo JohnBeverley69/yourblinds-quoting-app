@@ -138,6 +138,12 @@ $TOPICS = [
       finds the address for you (where enabled on your plan).</p>'],
 
     // ---- Products & pricing ----
+    ['admin', 'Products & pricing', 'Reordering and bulk-deleting products', 'reorder drag drop sort order products list multi select bulk delete checkbox tick all',
+     '<p>On the <strong>Products</strong> page, drag a row’s <strong>⋮⋮</strong> handle to <strong>reorder</strong> products —
+      the new order sticks and is the order they appear in quotes. (Dropping a row onto a different group instead files it there.)</p>
+      <p>To remove several at once, <strong>tick</strong> the products (the header checkbox selects the whole table), then
+      <strong>Delete selected</strong>. It asks you to confirm and shows how many will go; deleting a product also removes its
+      options, extras and price tables.</p>'],
     ['admin', 'Products & pricing', 'How pricing is structured', 'product system band price table grid model',
      '<p>The model is <strong>Product → System → Band → Price table</strong>. A <strong>system</strong> is a variant
       (e.g. a slat size or motorised). A <strong>band</strong> is a price tier. Each <strong>fabric/slat</strong> carries
