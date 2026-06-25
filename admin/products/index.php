@@ -286,6 +286,11 @@ $activeNav = 'products';
                     <span aria-hidden="true">✨</span>
                     Setup wizard
                 </a>
+                <a href="/admin/products/options-bulk-import.php" class="btn btn-secondary"
+                   style="display:inline-flex;align-items:center;gap:0.4375rem">
+                    <span aria-hidden="true">📥</span>
+                    Bulk import fabrics
+                </a>
                 <a href="/admin/products/new.php" class="btn btn-primary">+ New product</a>
             </div>
         </div>

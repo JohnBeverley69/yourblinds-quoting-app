@@ -170,6 +170,14 @@ $TOPICS = [
       each band block starts with a <code>Band X</code> row. If the file has <strong>several worksheets</strong> with
       bands (e.g. one per slat size), you’ll be asked <strong>which worksheet</strong> to import into this system.
       Re-importing replaces that band’s prices.</p>'],
+    ['admin', 'Products & pricing', 'Bulk-importing fabrics across products', 'bulk import fabrics colours one file per product sheet match supplier workbook distribute all at once',
+     '<p>Got a supplier workbook with <strong>one sheet per product</strong> (columns <code>Name</code>, <code>Colour</code>,
+      <code>Band</code>)? Use <strong>Bulk import fabrics</strong> (button on the Products page) instead of importing each
+      product one by one. Upload it once and every worksheet is <strong>matched to a product by name</strong> — you check
+      the suggested matches (change any, or set a sheet to <strong>Skip</strong>), then import them all in one click.</p>
+      <p>A fabric range shared by several products (e.g. one roller range used by a few roller products) can be imported
+      here for one, then added to the others from their own Fabrics page. Duplicate rows are skipped automatically. For a
+      single product, the per-product <em>Import</em> on its Fabrics page is still the simpler route.</p>'],
     ['admin', 'Products & pricing', 'Selecting many fabrics at once', 'shift click range select set band on selected bulk fabrics',
      '<p>On a product’s <strong>Fabrics</strong> page you can tick rows and use <em>Set band on selected</em> /
       <em>Delete selected</em>. To grab a run quickly: tick one row, then <strong>Shift-click</strong> another — every
