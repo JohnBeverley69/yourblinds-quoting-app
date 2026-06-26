@@ -121,7 +121,7 @@ if ($tableReady) {
         'SELECT s.id, s.supplier_key, s.name, s.prefix, s.is_free, s.blurb, s.active, s.sort_order,
                 (SELECT COUNT(*) FROM client_library_suppliers c WHERE c.supplier_key = s.supplier_key) AS subscribers
            FROM library_suppliers s
-          ORDER BY s.sort_order, s.name'
+          ORDER BY s.name'
     )->fetchAll(PDO::FETCH_ASSOC);
 }
 
