@@ -1434,11 +1434,20 @@ $activeNav = 'wizard';
                     </form>
 
                     <div class="helper" style="margin-top:1.25rem">
-                        <strong>Tip:</strong> The full
-                        <?= e($labelL) ?> editor on the edit page lets you
-                        bulk-import from an XLSX and add supplier / colour /
-                        code details too — useful when you already have a
-                        spreadsheet.
+                        <strong>Already have these <?= e($labelL) ?>s?</strong> Bring them in instead of typing:
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem">
+                            <a href="/admin/products/options-from-library.php?product_id=<?= (int) $productId ?>&amp;ret=wizard"
+                               class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.4rem">
+                                <span aria-hidden="true">📚</span> Import from Fabric Library
+                            </a>
+                            <a href="/admin/products/options-import.php?product_id=<?= (int) $productId ?>&amp;ret=wizard"
+                               class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:0.4rem">
+                                <span aria-hidden="true">📄</span> Import from spreadsheet
+                            </a>
+                        </div>
+                        <span style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.45rem">
+                            You'll come straight back here to carry on — the <?= e($labelL) ?>s show below as they're added.
+                        </span>
                     </div>
 
                     <form method="post" class="wiz-actions" style="margin:0">

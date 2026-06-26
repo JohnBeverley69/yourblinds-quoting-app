@@ -14,6 +14,8 @@ if ($productId <= 0) {
     header('Location: /admin/products/index.php');
     exit;
 }
+// Launched from the setup wizard? Offer a route straight back to it after import.
+$retWiz = (($_GET['ret'] ?? $_POST['ret'] ?? '') === 'wizard');
 
 $pStmt = db()->prepare(
     'SELECT id, name, option_label FROM products WHERE id = ? AND client_id = ?'
@@ -294,10 +296,19 @@ $activeNav = 'products';
                     </ul>
                 </div>
             <?php endif; ?>
-            <p>
-                <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-primary">
-                    View imported <?= e($labelL) ?>s
-                </a>
+            <p style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <?php if ($retWiz): ?>
+                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=3" class="btn btn-primary">
+                        Continue in setup wizard &rarr;
+                    </a>
+                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-secondary">
+                        View imported <?= e($labelL) ?>s
+                    </a>
+                <?php else: ?>
+                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-primary">
+                        View imported <?= e($labelL) ?>s
+                    </a>
+                <?php endif; ?>
             </p>
         <?php endif; ?>
 
@@ -344,6 +355,7 @@ $activeNav = 'products';
                   enctype="multipart/form-data">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="upload">
+                <?php if ($retWiz): ?><input type="hidden" name="ret" value="wizard"><?php endif; ?>
                 <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
 
                 <div class="form-row full">
