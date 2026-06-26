@@ -125,14 +125,14 @@ if ($ready) {
 
     if ($hasSupplierGroups) {
         $supplierGroups = $pdo->query(
-            'SELECT id, name FROM fabric_supplier_groups ORDER BY name'
+            'SELECT id, name FROM fabric_supplier_groups ORDER BY sort_order, name'
         )->fetchAll(PDO::FETCH_ASSOC);
     }
 
     if ($hasFabricCats) {
         foreach ($pdo->query(
             'SELECT id, fabric_supplier_id, name FROM library_fabric_categories
-              ORDER BY fabric_supplier_id, name'
+              ORDER BY fabric_supplier_id, sort_order, name'
         )->fetchAll(PDO::FETCH_ASSOC) as $c) {
             $catsBySup[(int) $c['fabric_supplier_id']][] = $c;
         }
