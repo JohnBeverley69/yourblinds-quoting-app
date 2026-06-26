@@ -129,6 +129,20 @@ $canSeeAnyDashPanel = $isAdmin
     || !empty($_perms['dash_view_profit'])
     || !empty($_perms['dash_view_recent']);
 
+// Count-badges on nav items (super-admin sees them). Open supplier requests
+// nudge the super-admin to deal with them without checking email. Defensive:
+// a missing table (pre-migration) simply reads as 0.
+$navBadges = [];
+if ($isSuperAdmin) {
+    try {
+        $n = (int) db()->query("SELECT COUNT(*) FROM supplier_requests WHERE status = 'open'")->fetchColumn();
+        if ($n > 0) $navBadges['supplier-requests'] = $n;
+    } catch (Throwable $e) { /* table absent → no badge */ }
+}
+$navBadgeStyle = 'display:inline-block;min-width:1.15rem;padding:0 .35rem;margin-left:.4rem;'
+    . 'background:#b91c1c;color:#fff;border-radius:999px;font-size:.6875rem;font-weight:700;'
+    . 'line-height:1.15rem;text-align:center;vertical-align:middle';
+
 // Grouped navigation. Each section emits a small heading; sections
 // with no visible items get suppressed entirely (so a pure fitter
 // doesn't see an empty "Setup" header).
@@ -320,14 +334,14 @@ window.addEventListener('pageshow', function (e) {
         <details class="nav-section nav-section-collapsible"<?= $isOpen ? ' open' : '' ?>>
             <summary class="nav-section-heading"><?= e($section['name']) ?></summary>
             <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
-                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?><?php if (isset($navBadges[$navKey])): ?><span style="<?= $navBadgeStyle ?>" aria-label="<?= (int) $navBadges[$navKey] ?> open"><?= (int) $navBadges[$navKey] ?></span><?php endif; ?></a>
             <?php endforeach; ?>
         </details>
     <?php else: ?>
         <div class="nav-section">
             <div class="nav-section-heading"><?= e($section['name']) ?></div>
             <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
-                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?><?php if (isset($navBadges[$navKey])): ?><span style="<?= $navBadgeStyle ?>" aria-label="<?= (int) $navBadges[$navKey] ?> open"><?= (int) $navBadges[$navKey] ?></span><?php endif; ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
