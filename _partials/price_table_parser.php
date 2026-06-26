@@ -367,7 +367,15 @@ if (!function_exists('ptp_parse_band_blocks')) {
                 foreach ($row as $col => $val) {
                     if ($col === 'A') continue;
                     $s = trim((string) ($val ?? ''));
-                    if ($s !== '' && preg_match('/\d/', $s) && !preg_match('/[a-z]{2,}/i', $s)) {
+                    if ($s === '' || !preg_match('/\d/', $s)) continue;   // a width must carry a number
+                    // Accept a dimension even with a unit suffix (25cm, 610mm,
+                    // 1.5m, 24"): strip the number + a known unit and require
+                    // nothing alphabetic left. Word labels ("Mtrs", "Metric",
+                    // "(ins)") have no digit (or letters remain) so are still
+                    // skipped — but "25cm"-style headers now parse instead of
+                    // being thrown out and the first price row grabbed instead.
+                    $probe = preg_replace('/[0-9.,\s]+|(?:mm|cm|inches|inch|ins|in|m)|["\x27]/i', '', $s);
+                    if ($probe === '') {
                         $rawWidths[$col] = $s;
                     }
                 }
