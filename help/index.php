@@ -156,7 +156,10 @@ $TOPICS = [
      '<p>The <strong>setup wizard</strong> walks you through Name → Systems → Fabrics → Price tables.</p>
       <p><strong>Tip — pricing first:</strong> on the Fabrics step there’s a <em>“Price tables first →”</em> button.
       Use it to import your price grids first; the bands you import then <strong>auto-suggest</strong> in the fabric’s
-      Band box, so you don’t type band names twice.</p>'],
+      Band box, so you don’t type band names twice.</p>
+      <p>On the <strong>Fabrics</strong> step you don’t have to type them all in — alongside the paste box there are
+      <strong>Import from Fabric Library</strong> and <strong>Import from spreadsheet</strong> buttons. Use either and
+      you’re brought straight back to the wizard to carry on.</p>'],
     ['admin', 'Products & pricing', 'Pricing modes', 'width only per slat per square metre sqm shutter venetian headrail',
      '<p>A product prices one of four ways: the normal <strong>width × drop grid</strong>; <strong>width only</strong>
       (headrails / tracks); <strong>per slat</strong> (vertical fabric replacement); or <strong>per m²</strong>

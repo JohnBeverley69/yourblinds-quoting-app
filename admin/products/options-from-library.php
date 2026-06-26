@@ -26,7 +26,13 @@ $pdo      = db();
 
 $productId  = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
 $supplierId = (int) ($_GET['supplier_id'] ?? $_POST['supplier_id'] ?? 0);
-$redirect   = '/admin/products/options.php?product_id=' . $productId;
+// When launched from the setup wizard (ret=wizard), bounce back there after
+// adding so the flow continues straight to price tables instead of dead-ending
+// on the Fabrics page.
+$ret        = (($_GET['ret'] ?? $_POST['ret'] ?? '') === 'wizard');
+$redirect   = $ret
+    ? '/admin/products/wizard.php?id=' . $productId . '&step=3'
+    : '/admin/products/options.php?product_id=' . $productId;
 $error      = null;
 
 // Validate the product belongs to this tenant.
@@ -249,7 +255,7 @@ $activeNav = 'products';
                                         <td style="text-align:right"><?= (int) $s['n'] ?></td>
                                         <td style="text-align:right">
                                             <a class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem"
-                                               href="/admin/products/options-from-library.php?product_id=<?= $productId ?>&supplier_id=<?= (int) $s['id'] ?>">Choose &rarr;</a>
+                                               href="/admin/products/options-from-library.php?product_id=<?= $productId ?>&supplier_id=<?= (int) $s['id'] ?><?= $ret ? '&ret=wizard' : '' ?>">Choose &rarr;</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -264,6 +270,7 @@ $activeNav = 'products';
             <form method="post" action="/admin/products/options-from-library.php">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="pull">
+                <?php if ($ret): ?><input type="hidden" name="ret" value="wizard"><?php endif; ?>
                 <input type="hidden" name="product_id" value="<?= $productId ?>">
                 <input type="hidden" name="supplier_id" value="<?= $supplierId ?>">
 
