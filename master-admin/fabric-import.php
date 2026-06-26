@@ -27,7 +27,7 @@ try { $pdo->query('SELECT 1 FROM library_fabrics LIMIT 0'); }
 catch (Throwable $e) { $ready = false; }
 
 $suppliers = $ready
-    ? $pdo->query('SELECT id, name FROM fabric_suppliers ORDER BY sort_order, name')->fetchAll(PDO::FETCH_ASSOC)
+    ? $pdo->query('SELECT id, name FROM fabric_suppliers ORDER BY name')->fetchAll(PDO::FETCH_ASSOC)
     : [];
 
 /** Map a header cell's wording to a library_fabrics field (or null). */

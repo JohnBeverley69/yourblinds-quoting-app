@@ -60,7 +60,7 @@ function library_suppliers(bool $activeOnly = true): array
         $sql = 'SELECT supplier_key, name, prefix, is_free, blurb, active
                   FROM library_suppliers';
         if ($activeOnly) $sql .= ' WHERE active = 1';
-        $sql .= ' ORDER BY sort_order, name';
+        $sql .= ' ORDER BY name';
 
         $out = [];
         foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) as $r) {

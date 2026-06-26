@@ -80,7 +80,7 @@ $systems = $sysStmt->fetchAll(PDO::FETCH_ASSOC);
 // Manufacturers + their fabric counts.
 $suppliers = $libReady
     ? $pdo->query('SELECT s.id, s.name, (SELECT COUNT(*) FROM library_fabrics f WHERE f.fabric_supplier_id = s.id) AS n
-                     FROM fabric_suppliers s WHERE s.active = 1 ORDER BY s.sort_order, s.name')->fetchAll(PDO::FETCH_ASSOC)
+                     FROM fabric_suppliers s WHERE s.active = 1 ORDER BY s.name')->fetchAll(PDO::FETCH_ASSOC)
     : [];
 $supplier  = null;
 foreach ($suppliers as $s) { if ((int) $s['id'] === $supplierId) $supplier = $s; }
@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pull'
 // Fabrics for the chosen manufacturer (step 2).
 $fabrics = [];
 if ($libReady && $supplier !== null) {
-    $fl = $pdo->prepare('SELECT id, name, colour, code, suggested_band, blind_type FROM library_fabrics WHERE fabric_supplier_id = ? ORDER BY blind_type, name, colour');
+    $fl = $pdo->prepare('SELECT id, name, colour, code, suggested_band, blind_type FROM library_fabrics WHERE fabric_supplier_id = ? ORDER BY name, colour');
     $fl->execute([$supplierId]);
     $fabrics = $fl->fetchAll(PDO::FETCH_ASSOC);
 }

@@ -120,19 +120,19 @@ if ($ready) {
         "SELECT $supCols,
                 (SELECT COUNT(*) FROM library_fabrics f WHERE f.fabric_supplier_id = s.id) AS fabric_count
            FROM fabric_suppliers s
-          ORDER BY s.sort_order, s.name"
+          ORDER BY s.name"
     )->fetchAll(PDO::FETCH_ASSOC);
 
     if ($hasSupplierGroups) {
         $supplierGroups = $pdo->query(
-            'SELECT id, name FROM fabric_supplier_groups ORDER BY sort_order, name'
+            'SELECT id, name FROM fabric_supplier_groups ORDER BY name'
         )->fetchAll(PDO::FETCH_ASSOC);
     }
 
     if ($hasFabricCats) {
         foreach ($pdo->query(
             'SELECT id, fabric_supplier_id, name FROM library_fabric_categories
-              ORDER BY fabric_supplier_id, sort_order, name'
+              ORDER BY fabric_supplier_id, name'
         )->fetchAll(PDO::FETCH_ASSOC) as $c) {
             $catsBySup[(int) $c['fabric_supplier_id']][] = $c;
         }
@@ -141,7 +141,7 @@ if ($ready) {
     $fabCols = 'id, fabric_supplier_id, name, colour, code, suggested_band, blind_type, active'
              . ($hasFabricCats ? ', category_id' : '');
     foreach ($pdo->query(
-        "SELECT $fabCols FROM library_fabrics ORDER BY blind_type, name, colour"
+        "SELECT $fabCols FROM library_fabrics ORDER BY name, colour"
     )->fetchAll(PDO::FETCH_ASSOC) as $f) {
         $fabricsBySup[(int) $f['fabric_supplier_id']][] = $f;
     }
