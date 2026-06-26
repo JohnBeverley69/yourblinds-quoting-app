@@ -51,9 +51,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
 $requests = [];
 $tally    = [];
 if ($ready) {
+    $hasEmail = false;
+    try {
+        $hasEmail = (bool) $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_requests'
+                AND COLUMN_NAME = 'email' LIMIT 1"
+        )->fetchColumn();
+    } catch (Throwable $e) { /* pre-migration → no email column */ }
+
     $requests = $pdo->query(
         'SELECT r.id, r.supplier_name, r.website, r.notes, r.file_name, r.file_path,
-                r.status, r.created_at, c.company_name
+                r.status, r.created_at, ' . ($hasEmail ? 'r.email,' : 'NULL AS email,') . ' c.company_name
            FROM supplier_requests r
       LEFT JOIN clients c ON c.id = r.client_id
        ORDER BY (r.status = "open") DESC, r.created_at DESC'
@@ -142,7 +151,12 @@ $activeNav = 'supplier-requests';
                                         <?php endif; ?>
                                         <?php if (!$open): ?><span style="font-size:.6875rem;color:var(--text-faint);text-transform:uppercase">handled</span><?php endif; ?>
                                     </td>
-                                    <td><?= e((string) ($r['company_name'] ?? ('client #' . 0))) ?></td>
+                                    <td>
+                                        <?= e((string) ($r['company_name'] ?? '—')) ?>
+                                        <?php if (!empty($r['email'])): ?>
+                                            <div style="font-size:.8125rem"><a href="mailto:<?= e((string) $r['email']) ?>"><?= e((string) $r['email']) ?></a></div>
+                                        <?php endif; ?>
+                                    </td>
                                     <td style="color:var(--text-muted);font-size:.875rem;max-width:18rem"><?= e((string) ($r['notes'] ?? '')) ?></td>
                                     <td>
                                         <?php if (!empty($r['file_path'])): ?>

@@ -61,16 +61,77 @@ if (!empty($_FILES['price_list']['tmp_name']) && is_uploaded_file($_FILES['price
     }
 }
 
+// current_user() doesn't carry the email — fetch the submitter's from users.
+$reqEmail = null;
 try {
-    db()->prepare(
-        'INSERT INTO supplier_requests (client_id, supplier_name, website, notes, file_name, file_path)
-         VALUES (?, ?, ?, ?, ?, ?)'
-    )->execute([$clientId, mb_substr($name, 0, 160), $website, $notes, $fileName, $filePath]);
+    $es = db()->prepare('SELECT email FROM users WHERE id = ? LIMIT 1');
+    $es->execute([(int) ($user['user_id'] ?? 0)]);
+    $reqEmail = trim((string) ($es->fetchColumn() ?: '')) ?: null;
+} catch (Throwable $e) { /* no email available — fine */ }
+
+// Store the requester's email only if the column is there (pre-migration safe).
+$hasEmailCol = false;
+try {
+    $c = db()->prepare("SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_requests' AND COLUMN_NAME = 'email' LIMIT 1");
+    $c->execute();
+    $hasEmailCol = (bool) $c->fetchColumn();
+} catch (Throwable $e) { /* probe failed → treat as absent */ }
+
+$logged = false;
+try {
+    if ($hasEmailCol) {
+        db()->prepare(
+            'INSERT INTO supplier_requests (client_id, email, supplier_name, website, notes, file_name, file_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$clientId, $reqEmail, mb_substr($name, 0, 160), $website, $notes, $fileName, $filePath]);
+    } else {
+        db()->prepare(
+            'INSERT INTO supplier_requests (client_id, supplier_name, website, notes, file_name, file_path)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$clientId, mb_substr($name, 0, 160), $website, $notes, $fileName, $filePath]);
+    }
     $_SESSION['flash_success'] = 'Thanks — your request for “' . $name . '” has been logged'
         . ($fileName !== null ? ' with the price list attached.' : '.');
+    $logged = true;
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = 'Could not log the request: ' . $e->getMessage()
         . ' — has migrate_supplier_requests.php been run?';
+}
+
+// Notify the team that a request came in. Best-effort: a mail failure must
+// never affect the client, who has already had their request logged.
+if ($logged) {
+    try {
+        require_once __DIR__ . '/../mailer.php';
+        if (function_exists('mailer_send')) {
+            $company = (string) ($user['company_name'] ?? '');
+            $to   = (string) (env('SUPPLIER_REQUEST_NOTIFY', '') ?: 'hello@yourblinds.uk');
+            $base = rtrim((string) (env('APP_URL', 'https://www.yourblinds.uk') ?? 'https://www.yourblinds.uk'), '/');
+            $body = implode("\n", [
+                'A client has requested a supplier be added to the library.',
+                '',
+                'Supplier: ' . $name,
+                'Website:  ' . ($website ?? '—'),
+                'From:     ' . ($company !== '' ? $company : 'client #' . $clientId)
+                             . ($reqEmail ? ' <' . $reqEmail . '>' : ''),
+                'Notes:    ' . ($notes ?? '—'),
+                'Price list attached: ' . ($fileName !== null ? 'yes' : 'no'),
+                '',
+                'Review: ' . $base . '/master-admin/supplier-requests.php',
+            ]);
+            mailer_send(
+                $to,
+                'New supplier request: ' . $name,
+                $body,
+                null,
+                null,
+                $reqEmail ? ['reply_to_email' => $reqEmail, 'reply_to_name' => ($company ?: $reqEmail)] : null
+            );
+        }
+    } catch (Throwable $e) {
+        error_log('[YourBlinds] supplier-request notify failed: ' . $e->getMessage());
+    }
 }
 
 header('Location: /library/index.php');
