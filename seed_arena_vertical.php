@@ -199,36 +199,59 @@ try {
     echo $ops[count($ops) - 1] . "\n";
 
     // --- Fabric options ----------------------------------------------------
-    // band_code / code / colour are NOT NULL on product_options, so:
-    //   Banded fabrics (A–E, Elements) → active, scoped to band + system.
-    //   Unbanded '?' fabrics → band_code 'TBC' + active = 0 (visible to the
-    //     admin, flagged, never quotable — avoids a £0 / "no price table"
-    //     quote-time error). When Arena publishes a band, set it + tick active.
+    // The UNIQUE key uniq_option_per_product is (client_id, product_id,
+    // band_code, supplier_name, name, colour) — it does NOT include
+    // system_id. So a fabric offered on BOTH louvre widths must be a SINGLE
+    // row scoped to all systems (system_id NULL = shown on every system, per
+    // fabrics-search.php), NOT one row per width. Collapse by (name, colour,
+    // band) and derive system_id from coverage:
+    //   in both widths  → system_id NULL (all systems)
+    //   in one width    → that system's id
+    // A fabric that's a different band per width naturally stays as two
+    // rows (distinct keys), each scoped to its width.
+    //
+    // band_code / code / colour are NOT NULL. Unbanded '?' fabrics → band
+    // 'TBC' + active = 0 (visible + flagged, never quotable; set a band and
+    // tick active once Arena publishes one).
+    $byKey = [];
+    foreach ($fabricRows as $f) {
+        $sysName = (string) $f['system'];
+        if (!isset($sysId[$sysName])) continue;
+        $band   = trim((string) $f['band']);
+        $band   = ($band === '' || $band === '?') ? 'TBC' : $band;
+        $name   = (string) $f['name'];
+        $colour = (string) $f['colour'];
+        $key = $name . '|' . $colour . '|' . $band;
+        if (!isset($byKey[$key])) {
+            $byKey[$key] = ['name' => $name, 'colour' => $colour, 'band' => $band, 'sys' => []];
+        }
+        $byKey[$key]['sys'][$sysName] = true;
+    }
+
     $optIns = $pdo->prepare(
         'INSERT INTO product_options
             (client_id, product_id, system_id, band_code, supplier_name, name, colour, code, sort_order, active)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $added = 0; $inactive = 0; $sortBy = [];
-    foreach ($fabricRows as $f) {
-        $sysName = (string) $f['system'];
-        if (!isset($sysId[$sysName])) continue;
-        $band   = trim((string) $f['band']);
-        $banded = $band !== '' && $band !== '?';
-        $bandCode = $banded ? $band : 'TBC';
-        $active   = $banded ? 1 : 0;
-        if (!$banded) $inactive++; else $added++;
-
-        $sortBy[$sysName] = ($sortBy[$sysName] ?? -1) + 1;
+    $added = 0; $inactive = 0; $allSystems = 0; $sort = 0;
+    foreach ($byKey as $o) {
+        $banded = $o['band'] !== 'TBC';
+        $active = $banded ? 1 : 0;
+        $coversAll = count($o['sys']) >= count($SYSTEMS);
+        $systemId  = $coversAll ? null : $sysId[array_key_first($o['sys'])];
+        if ($coversAll) $allSystems++;
         $optIns->execute([
-            $clientId, $productId, $sysId[$sysName], $bandCode, $SUPPLIER,
-            (string) $f['name'],
-            (string) $f['colour'],   // NOT NULL — '' if blank (none are here)
-            '',                      // code — Arena fabrics carry no separate code
-            $sortBy[$sysName], $active,
+            $clientId, $productId, $systemId, $o['band'], $SUPPLIER,
+            $o['name'],
+            $o['colour'],   // NOT NULL — '' if blank (none are here)
+            '',             // code — Arena fabrics carry no separate code
+            $sort++, $active,
         ]);
+        if ($banded) $added++; else $inactive++;
     }
-    $ops[] = "Imported fabrics: {$added} active (banded), {$inactive} inactive (no Arena band).";
+    $totalOpts = $added + $inactive;
+    $ops[] = "Imported {$totalOpts} fabric options: {$added} active (banded), "
+           . "{$inactive} inactive (no Arena band); {$allSystems} shared across both louvre widths.";
     echo $ops[count($ops) - 1] . "\n";
 
     $pdo->commit();
