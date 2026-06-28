@@ -45,17 +45,14 @@ $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null
                                 <summary style="font-size:0.75rem;color:#2563eb">Set all</summary>
                                 <div class="multi-opts">
                                     <label>
-                                        <input type="radio" class="setall-system-pick"
-                                               name="setall-system-<?= (int) $gridExtraId ?>"
-                                               value="" checked>
+                                        <input type="checkbox" class="setall-system-tick" data-system="" checked>
                                         <strong>All systems</strong>
                                     </label>
                                     <hr>
                                     <?php foreach ($systems as $s): ?>
                                         <label>
-                                            <input type="radio" class="setall-system-pick"
-                                                   name="setall-system-<?= (int) $gridExtraId ?>"
-                                                   value="<?= (int) $s['id'] ?>">
+                                            <input type="checkbox" class="setall-system-tick"
+                                                   data-system="<?= (int) $s['id'] ?>">
                                             <?= e((string) $s['name']) ?>
                                         </label>
                                     <?php endforeach; ?>

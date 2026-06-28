@@ -590,33 +590,95 @@ try {
         // "Available on" header.
         // -----------------------------------------------------------------
         case 'set_system_all':
-            $sysRaw   = (string) ($_POST['system_id'] ?? '');
-            $systemId = ($sysRaw === '' || $sysRaw === '0') ? null : (int) $sysRaw;
-            if ($systemId !== null) {
-                $sChk = $pdo->prepare(
-                    'SELECT 1 FROM product_systems
-                      WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1'
-                );
-                $sChk->execute([$systemId, $productId, $clientId]);
-                if (!$sChk->fetchColumn()) {
-                    throw new RuntimeException('That system does not belong to this product.');
-                }
+            // Multi-target: accept system_ids[] (each = a system every choice
+            // should be available on) or a single system_id (back-compat).
+            // Empty / "all" → collapse every choice to one "All systems" row.
+            // The model stores ONE system per row, so several target systems
+            // means each label is fanned out to one row per system.
+            $rawList = [];
+            if (isset($_POST['system_ids']) && is_array($_POST['system_ids'])) {
+                $rawList = $_POST['system_ids'];
+            } elseif (isset($_POST['system_id'])) {
+                $rawList = [$_POST['system_id']];
             }
-            $pdo->prepare(
-                'UPDATE product_extra_choices SET system_id = ? WHERE product_extra_id = ?'
-            )->execute([$systemId, $extraId]);
-            $cntSt = $pdo->prepare(
-                'SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?'
-            );
+            $targets = [];
+            $hasAll  = (count($rawList) === 0);
+            foreach ($rawList as $raw) {
+                $sid = $validateSystemId($raw);          // null = "all systems"
+                if ($sid === null) { $hasAll = true; continue; }
+                if (!in_array($sid, $targets, true)) $targets[] = $sid;
+            }
+            if ($hasAll || empty($targets)) $targets = [null];
+
+            $pdo->beginTransaction();
+            try {
+                if (count($targets) === 1) {
+                    // Single scope (incl. "All systems") — just repoint every row.
+                    $pdo->prepare('UPDATE product_extra_choices SET system_id = ? WHERE product_extra_id = ?')
+                        ->execute([$targets[0], $extraId]);
+                } else {
+                    // Fan each label out to exactly the target systems: reuse
+                    // existing rows where possible (lossless — keeps prices,
+                    // width tables, thumbnails) and clone the template for any
+                    // system not yet covered; drop rows for non-target systems.
+                    $clone = static function (array $tpl, int $sysId) use ($pdo): void {
+                        $tplId = (int) $tpl['id'];
+                        unset($tpl['id']);
+                        $tpl['system_id'] = $sysId;
+                        $cols = array_keys($tpl);
+                        $pdo->prepare(
+                            'INSERT INTO product_extra_choices (' . implode(',', $cols) . ') VALUES ('
+                            . implode(',', array_fill(0, count($cols), '?')) . ')'
+                        )->execute(array_values($tpl));
+                        $newId = (int) $pdo->lastInsertId();
+                        // Carry the choice's child data so the clone is faithful.
+                        foreach ([
+                            ['extra_choice_price_rows', 'product_extra_choice_id', 'width_mm, price'],
+                            ['product_extra_choice_bands', 'choice_id', 'band_code'],
+                        ] as [$tbl, $fk, $copyCols]) {
+                            try {
+                                $pdo->prepare("INSERT INTO $tbl ($fk, $copyCols) SELECT ?, $copyCols FROM $tbl WHERE $fk = ?")
+                                    ->execute([$newId, $tplId]);
+                            } catch (Throwable $e) { /* table absent / different shape — skip */ }
+                        }
+                    };
+
+                    $rowsStmt = $pdo->prepare('SELECT * FROM product_extra_choices WHERE product_extra_id = ? ORDER BY sort_order, id');
+                    $rowsStmt->execute([$extraId]);
+                    $byLabel = [];
+                    foreach ($rowsStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                        $byLabel[(string) $r['label']][] = $r;
+                    }
+                    $updSys = $pdo->prepare('UPDATE product_extra_choices SET system_id = ? WHERE id = ?');
+                    $delRow = $pdo->prepare('DELETE FROM product_extra_choices WHERE id = ?');
+                    foreach ($byLabel as $grp) {
+                        $needed = $targets;                 // systems still to cover for this label
+                        $spare  = [];                       // rows not already on a target system
+                        foreach ($grp as $r) {
+                            $sid = $r['system_id'] !== null ? (int) $r['system_id'] : null;
+                            $idx = array_search($sid, $needed, true);
+                            if ($idx !== false) { array_splice($needed, $idx, 1); }
+                            else                { $spare[] = $r; }
+                        }
+                        foreach ($needed as $sysId) {
+                            if ($spare) { $reuse = array_shift($spare); $updSys->execute([$sysId, (int) $reuse['id']]); }
+                            else        { $clone($grp[0], (int) $sysId); }
+                        }
+                        foreach ($spare as $r) { $delRow->execute([(int) $r['id']]); }
+                    }
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+
+            $cntSt = $pdo->prepare('SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ?');
             $cntSt->execute([$extraId]);
             $affected = (int) $cntSt->fetchColumn();
             catalogue_audit_log('extra', $extraId, 'update', null, null,
-                ['system_id' => $systemId], $productId, ['set' => 'system_all', 'affected' => $affected]);
-            echo json_encode([
-                'ok'        => true,
-                'system_id' => $systemId,
-                'affected'  => $affected,
-            ]);
+                ['system_ids' => $targets], $productId, ['set' => 'system_all', 'affected' => $affected]);
+            echo json_encode(['ok' => true, 'systems' => $targets, 'affected' => $affected]);
             break;
 
         // -----------------------------------------------------------------
