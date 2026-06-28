@@ -75,6 +75,10 @@ foreach ($products as $p) {
     $sysCount[(int) $p['id']] = (int) $cs->fetchColumn();
 }
 
+// The first selection may already BE a master (multiple systems) — in which
+// case the others are simply appended to it rather than starting fresh.
+$baseIsMaster = $sysCount[(int) $products[0]['id']] > 1;
+
 $error = null;
 $action = (string) ($_POST['_action'] ?? '');
 
@@ -88,10 +92,13 @@ if ($action === 'combine') {
     if ($masterName === '' || strlen($masterName) > 150) {
         $error = 'Give the combined product a valid name (1–150 chars).';
     }
-    foreach ($products as $p) {
+    // Each NEW system needs a name. The base keeps its own systems when it's
+    // already a master, so it isn't asked for one.
+    foreach ($products as $i => $p) {
+        if ($i === 0 && $baseIsMaster) continue;
         $nm = trim((string) ($sysNames[(int) $p['id']] ?? ''));
         if ($nm === '' || strlen($nm) > 150) {
-            $error = 'Each product needs a system name (1–150 chars).';
+            $error = 'Each new system needs a name (1–150 chars).';
         }
     }
     // All products must share the same pricing mode — a product is exactly one.
@@ -104,11 +111,12 @@ if ($action === 'combine') {
             }
         }
     }
-    // Combine needs single-system products so each maps cleanly to one new system.
-    foreach ($products as $p) {
+    // Only the FIRST product may already be a master; everything folded in must
+    // be a single-size product so it maps cleanly to one new system.
+    foreach (array_slice($products, 1) as $p) {
         if ($sysCount[(int) $p['id']] > 1) {
-            $error = '"' . $p['name'] . '" already has more than one system — '
-                   . 'combine only works on single-size products.';
+            $error = '"' . $p['name'] . '" already has more than one system — only '
+                   . 'the first (the master) may. Add single-size products to it.';
         }
     }
 
@@ -148,14 +156,21 @@ if ($action === 'combine') {
                 return $newId;
             };
 
-            // 2. The base keeps its own data; just (re)name its system.
-            $baseSysName = trim((string) ($sysNames[$baseId] ?? 'System 1'));
-            $baseSysId   = $ensureSystem($pdo, $baseId, $baseSysName, 0, 1);
+            // 2. Base. An existing master keeps its systems and the new ones
+            //    append after them; a single-size base becomes the master, its
+            //    one system taking the first name.
+            if ($baseIsMaster) {
+                $mx = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) FROM product_systems WHERE client_id = ? AND product_id = ?');
+                $mx->execute([$clientId, $baseId]);
+                $sort = (int) $mx->fetchColumn() + 1;
+            } else {
+                $ensureSystem($pdo, $baseId, trim((string) ($sysNames[$baseId] ?? 'System 1')), 0, 1);
+                $sort = 1;
+            }
 
             $movedTables = 0; $movedFabrics = 0; $foldedIn = 0;
 
             // 3. Fold each other product in as a new system under the base.
-            $sort = 1;
             foreach (array_slice($products, 1) as $src) {
                 $srcId   = (int) $src['id'];
                 $sysName = trim((string) ($sysNames[$srcId] ?? ('System ' . ($sort + 1))));
@@ -240,9 +255,11 @@ if ($action === 'combine') {
 
             $names = array_map(static fn ($p) => (string) $p['name'], array_slice($products, 1));
             $_SESSION['flash_success'] =
-                'Combined into "' . $masterName . '" with ' . ($foldedIn + 1) . ' systems. '
+                ($baseIsMaster
+                    ? 'Added ' . $foldedIn . ' system' . ($foldedIn === 1 ? '' : 's') . ' to "' . $masterName . '". '
+                    : 'Combined into "' . $masterName . '" with ' . ($foldedIn + 1) . ' systems. ')
                 . implode(', ', $names) . ' ' . (count($names) === 1 ? 'is' : 'are')
-                . ' now empty and deactivated — delete once you\'ve checked the new product.';
+                . ' now empty and deactivated — delete once you\'ve checked the result.';
             header('Location: /admin/products/edit.php?id=' . $baseId);
             exit;
         } catch (Throwable $e) {
@@ -292,9 +309,15 @@ $defaultSysName = static function (string $productName): string {
 
         <section class="section" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:0.875rem 1.125rem;margin-bottom:1rem">
             <p style="margin:0;color:#0c4a6e;font-size:0.9375rem;line-height:1.5">
-                The <strong>first</strong> product is reused as the master (it keeps its group and
-                settings). The others fold in as systems and are then deactivated &mdash; their data
-                isn't lost, it moves onto the master. You can delete the empty husks afterwards.
+                <?php if ($baseIsMaster): ?>
+                    <strong><?= e((string) $products[0]['name']) ?></strong> is already a master, so the others
+                    are <strong>added to it</strong> as extra systems. Their data moves across and they're
+                    then deactivated &mdash; nothing is lost. Delete the empty husks afterwards.
+                <?php else: ?>
+                    The <strong>first</strong> product is reused as the master (it keeps its group and
+                    settings). The others fold in as systems and are then deactivated &mdash; their data
+                    isn't lost, it moves onto the master. You can delete the empty husks afterwards.
+                <?php endif; ?>
             </p>
         </section>
 
@@ -308,8 +331,10 @@ $defaultSysName = static function (string $productName): string {
             <div class="form-row full">
                 <div class="form-group">
                     <label for="master_name">Master product name <span class="required">*</span></label>
+                    <?php $masterDefault = trim((string) ($_POST['master_name'] ?? ''));
+                          if ($masterDefault === '' && $baseIsMaster) $masterDefault = (string) $products[0]['name']; ?>
                     <input id="master_name" name="master_name" type="text" required maxlength="150"
-                           value="<?= e(trim((string) ($_POST['master_name'] ?? ''))) ?>"
+                           value="<?= e($masterDefault) ?>"
                            placeholder="e.g. Metal Venetian">
                 </div>
             </div>
@@ -331,8 +356,12 @@ $defaultSysName = static function (string $productName): string {
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <input type="text" name="system_name[<?= $pid ?>]" required maxlength="150"
-                                           value="<?= e($val) ?>" style="width:12rem">
+                                    <?php if ($i === 0 && $baseIsMaster): ?>
+                                        <span style="color:var(--text-faint)">keeps its <?= (int) $sysCount[$pid] ?> existing systems</span>
+                                    <?php else: ?>
+                                        <input type="text" name="system_name[<?= $pid ?>]" required maxlength="150"
+                                               value="<?= e($val) ?>" style="width:12rem">
+                                    <?php endif; ?>
                                 </td>
                                 <td class="num">
                                     <?php
