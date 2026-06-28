@@ -159,7 +159,9 @@ $TOPICS = [
       <p>The first ticked product becomes the master; the rest fold in as systems and are then
       <strong>deactivated</strong> (their fabrics, price tables and settings move across — nothing is lost).
       Each size’s slat colours are scoped to its own system, so the quote builder shows only the colours that size
-      offers. Delete the empty leftovers once you’ve checked the result.</p>'],
+      offers. Delete the empty leftovers once you’ve checked the result.</p>
+      <p><strong>Adding more later:</strong> tick the existing master <em>first</em>, then the new single-size
+      product(s), and Combine again — the new ones are appended as extra systems (the master keeps everything it has).</p>'],
     ['admin', 'Products & pricing', 'Setting up a product (wizard)', 'wizard new product setup steps systems fabrics price tables',
      '<p>The <strong>setup wizard</strong> walks you through Name → Systems → Fabrics → Price tables.</p>
       <p><strong>Tip — pricing first:</strong> on the Fabrics step there’s a <em>“Price tables first →”</em> button.
