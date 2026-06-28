@@ -829,27 +829,44 @@
     }
 
     // ============================================================
-    // "Set all" — header control that sets the "Available on" system
-    // for every choice in this grid at once (set_system_all). Single
-    // target (All systems, or one system), unlike the multi-band one.
+    // "Set all" — header control that sets the "Available on" systems
+    // for every choice in this grid at once (set_system_all). Multi-tick,
+    // like the bands one: "All systems" vs a set of specific systems.
     // ============================================================
     var sysSetAll = rootEl.querySelector('.system-set-all');
     if (sysSetAll) {
+        var sysAllTick   = sysSetAll.querySelector('.setall-system-tick[data-system=""]');
+        var sysSpecTicks = sysSetAll.querySelectorAll('.setall-system-tick[data-system]:not([data-system=""])');
         var sysSetAllApply = sysSetAll.querySelector('.setall-system-apply');
+
+        // "All systems" and specific systems are mutually exclusive.
+        sysSetAll.addEventListener('change', function (e) {
+            var t = e.target;
+            if (!t.classList || !t.classList.contains('setall-system-tick')) return;
+            if (t === sysAllTick) {
+                if (sysAllTick.checked) sysSpecTicks.forEach(function (cb) { cb.checked = false; });
+            } else if (t.checked) {
+                if (sysAllTick) sysAllTick.checked = false;
+            }
+            var any = false;
+            sysSpecTicks.forEach(function (cb) { if (cb.checked) any = true; });
+            if (!any && sysAllTick) sysAllTick.checked = true;
+        });
+
         if (sysSetAllApply) {
             sysSetAllApply.addEventListener('click', function () {
-                var picked = sysSetAll.querySelector('.setall-system-pick:checked');
-                var sysVal = picked ? picked.value : '';
-                var sysLabel = picked
-                    ? (picked.parentNode.textContent || '').trim()
-                    : 'All systems';
+                var picked = [];
+                sysSpecTicks.forEach(function (cb) { if (cb.checked) picked.push(cb.dataset.system); });
 
                 var rowCount = body.querySelectorAll('tr[data-id]').length;
                 if (rowCount === 0) { sysSetAll.open = false; return; }
 
+                var scopeText = picked.length === 0
+                    ? '“All systems”'
+                    : (picked.length === 1 ? '1 system' : picked.length + ' systems');
                 if (!confirm('Set "Available on" for all ' + rowCount + ' choice'
-                           + (rowCount === 1 ? '' : 's') + ' to ' + sysLabel
-                           + '? This replaces their current system.')) {
+                           + (rowCount === 1 ? '' : 's') + ' to ' + scopeText
+                           + '? This replaces their current systems.')) {
                     return;
                 }
 
@@ -857,9 +874,9 @@
                 setIndicatorState('saving');
 
                 var fd = new FormData();
-                fd.append('action',    'set_system_all');
-                fd.append('extra_id',  String(extraId));
-                fd.append('system_id', sysVal);
+                fd.append('action',   'set_system_all');
+                fd.append('extra_id', String(extraId));
+                picked.forEach(function (s) { fd.append('system_ids[]', s); });
 
                 fetch(endpoint, {
                     method: 'POST', body: fd,
@@ -872,8 +889,8 @@
                 }).then(function (data) {
                     if (!data.ok) throw new Error(data.error || 'Save failed');
                     setIndicatorState('saved');
-                    // Reload so each row's "Available on" widget reflects
-                    // the new system (matches the bands "Set all").
+                    // Reload — rows are added/removed when fanning out to several
+                    // systems, so a re-render is simplest (matches bulk-add/bands).
                     window.location.reload();
                 }).catch(function (err) {
                     setIndicatorState('error', err.message || 'Save failed');
