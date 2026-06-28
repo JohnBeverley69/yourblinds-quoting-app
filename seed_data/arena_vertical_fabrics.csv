@@ -1,0 +1,999 @@
+system,name,colour,band
+89mm,Ada,Blue,Elements
+89mm,Ada,Cherry,Elements
+89mm,Ada,Grass,Elements
+89mm,Ada,Mustard,Elements
+89mm,Ada,White,Elements
+89mm,Argent BO,Champagne,E
+89mm,Argent BO,Copper,E
+89mm,Argent BO,Gold,E
+89mm,Argent BO,Mercury,E
+89mm,Aspen,Platinum,B
+89mm,Aspen,Powder,B
+89mm,Aspen,Sand,B
+89mm,Aspen,Sky,B
+89mm,Astratto,Almond,A
+89mm,Astratto,Magnolia,A
+89mm,Astratto,Mid Grey,A
+89mm,Astratto,Slate,A
+89mm,Atlantex asc,Black,B
+89mm,Atlantex asc,Cream,B
+89mm,Atlantex asc,Dark Beige,B
+89mm,Atlantex asc,Dark Blue,B
+89mm,Atlantex asc,Grey,B
+89mm,Atlantex asc,Pewter,B
+89mm,Atlantex asc,Silver,B
+89mm,Atlantex asc,White,B
+89mm,Atlantex,Beige,A
+89mm,Atlantex,Black,A
+89mm,Atlantex,Blue,A
+89mm,Atlantex,Brown,A
+89mm,Atlantex,Cherry,A
+89mm,Atlantex,Cream,A
+89mm,Atlantex,Dark Beige,A
+89mm,Atlantex,Dark Blue,A
+89mm,Atlantex,Grey,A
+89mm,Atlantex,Hunter Green,A
+89mm,Atlantex,Navy,A
+89mm,Atlantex,Pewter,A
+89mm,Atlantex,Silver,A
+89mm,Atlantex,Stone,A
+89mm,Atlantex,Vanilla,A
+89mm,Atlantex,White,A
+89mm,Aveline,Iron,B
+89mm,Aveline,Mauve,B
+89mm,Aveline,Terracotta,B
+89mm,Aveline,Yellow,B
+89mm,Bamboo Louvolite,Pacific,Elements
+89mm,Bamboo,Black,Elements
+89mm,Bamboo,Ivory,Elements
+89mm,Bamboo,Silver,Elements
+89mm,Bamboo,White,Elements
+89mm,Banlight Duo FR,Anthracite,B
+89mm,Banlight Duo FR,Baby Lavender,B
+89mm,Banlight Duo FR,Biscotti,B
+89mm,Banlight Duo FR,Black,B
+89mm,Banlight Duo FR,Bright White,B
+89mm,Banlight Duo FR,Calico,B
+89mm,Banlight Duo FR,Charcoal,B
+89mm,Banlight Duo FR,Concrete,B
+89mm,Banlight Duo FR,Cream,B
+89mm,Banlight Duo FR,Desert Sage,B
+89mm,Banlight Duo FR,Dijon,B
+89mm,Banlight Duo FR,Glacier Blue,B
+89mm,Banlight Duo FR,Green,B
+89mm,Banlight Duo FR,Grey,B
+89mm,Banlight Duo FR,Iris,B
+89mm,Banlight Duo FR,Iron,B
+89mm,Banlight Duo FR,Lichen,B
+89mm,Banlight Duo FR,Linen,B
+89mm,Banlight Duo FR,Marina,B
+89mm,Banlight Duo FR,Navy,B
+89mm,Banlight Duo FR,Nude,B
+89mm,Banlight Duo FR,Ocean,B
+89mm,Banlight Duo FR,Old Gold,B
+89mm,Banlight Duo FR,Pale Grey,B
+89mm,Banlight Duo FR,Pearl,B
+89mm,Banlight Duo FR,Redcurrant,B
+89mm,Banlight Duo FR,Rose,B
+89mm,Banlight Duo FR,Sand,B
+89mm,Banlight Duo FR,Smokey Blue,B
+89mm,Banlight Duo FR,Stone Grey,B
+89mm,Banlight Duo FR,Taupe,B
+89mm,Banlight Duo FR,Teal,B
+89mm,Banlight Duo FR,Ultimate Grey,B
+89mm,Banlight Duo FR,Vanilla,B
+89mm,Banlight Duo FR,White,B
+89mm,Bliss,Atlantic,B
+89mm,Bliss,Mandarin,B
+89mm,Bora,Cream,A
+89mm,Bora,Grey,A
+89mm,Bora,Linen,A
+89mm,Bora,White,A
+89mm,Boston FR,Black,B
+89mm,Boston FR,Ecru,B
+89mm,Boston FR,Shadow,B
+89mm,Boston FR,Silk,B
+89mm,Bounce,Putty,D
+89mm,Burst,Citrus,D
+89mm,Burst,Coral,D
+89mm,Burst,Dusky Pink,D
+89mm,Burst,Graphite,D
+89mm,Burst,Teal,D
+89mm,Carnival BO,Anthracite,B
+89mm,Carnival BO,Birch,B
+89mm,Carnival BO,Bubblegum,B
+89mm,Carnival BO,China White,B
+89mm,Carnival BO,Cream,B
+89mm,Carnival BO,Ecru,B
+89mm,Carnival BO,Eden,B
+89mm,Carnival BO,Ivory,B
+89mm,Carnival BO,Kiwi,B
+89mm,Carnival BO,Lily,B
+89mm,Carnival BO,Luna,B
+89mm,Carnival BO,Malbec,B
+89mm,Carnival BO,Navy,B
+89mm,Carnival BO,Nougat,B
+89mm,Carnival BO,Ochre,B
+89mm,Carnival BO,Pacific,B
+89mm,Carnival BO,Papaya,B
+89mm,Carnival BO,Pink,B
+89mm,Carnival BO,Praline,B
+89mm,Carnival BO,Purple,B
+89mm,Carnival BO,Raven,B
+89mm,Carnival BO,Red,B
+89mm,Carnival BO,Sapphire,B
+89mm,Carnival BO,Shadow,B
+89mm,Carnival BO,Sky,B
+89mm,Carnival BO,Sunset,B
+89mm,Carnival BO,Taupe,B
+89mm,Carnival BO,Teal,B
+89mm,Carnival BO,Terracotta,B
+89mm,Carnival BO,Willow,B
+89mm,Carnival,Anthracite,A
+89mm,Carnival,Birch,A
+89mm,Carnival,Bubblegum,A
+89mm,Carnival,China White,A
+89mm,Carnival,Cream,A
+89mm,Carnival,Ecru,A
+89mm,Carnival,Eden,A
+89mm,Carnival,Ivory,A
+89mm,Carnival,Kiwi,A
+89mm,Carnival,Lily,A
+89mm,Carnival,Luna,A
+89mm,Carnival,Malbec,A
+89mm,Carnival,Navy,A
+89mm,Carnival,Nougat,A
+89mm,Carnival,Ochre,A
+89mm,Carnival,Pacific,A
+89mm,Carnival,Papaya,A
+89mm,Carnival,Pink,A
+89mm,Carnival,Praline,A
+89mm,Carnival,Purple,A
+89mm,Carnival,Raven,A
+89mm,Carnival,Red,A
+89mm,Carnival,Sapphire,A
+89mm,Carnival,Shadow,A
+89mm,Carnival,Sky,A
+89mm,Carnival,Sunset,A
+89mm,Carnival,Taupe,A
+89mm,Carnival,Teal,A
+89mm,Carnival,Terracotta,A
+89mm,Carnival,Willow,A
+89mm,Carter,Chilli,D
+89mm,Carter,Cinnamon,D
+89mm,Carter,Matcha,D
+89mm,Carter,Neutral,D
+89mm,Carter,Pewter,D
+89mm,Caspian,Beige,Elements
+89mm,Caspian,Cream,Elements
+89mm,Caspian,Iron,Elements
+89mm,Caspian,White,Elements
+89mm,Chatsworth,Grey,A
+89mm,Chatsworth,White,A
+89mm,Clarice,Azure,C
+89mm,Clarice,Fern,C
+89mm,Clarice,Pewter,C
+89mm,Clarice,Plum,C
+89mm,Collina BO,Champagne Fizz,E
+89mm,Collina BO,Diamond Dust,E
+89mm,Collina BO,Lilypad,E
+89mm,Collina BO,Moonlight Mink,E
+89mm,Como BO,Bella,C
+89mm,Como,Lago,B
+89mm,Como,Ocra,B
+89mm,Como,Verde,B
+89mm,Corsica,Cream,Elements
+89mm,Corsica,Grey,Elements
+89mm,Corsica,Ivory,Elements
+89mm,Corsica,White,Elements
+89mm,Cotton Flower,Blush,B
+89mm,Cotton Flower,Mineral,B
+89mm,Cotton Flower,Ochre,B
+89mm,Crush BO,Chateau Grey,E
+89mm,Crush BO,Cornish Blue,E
+89mm,Crush BO,London Slate,E
+89mm,Crush BO,Nordic Mist,E
+89mm,Crush BO,Whistler White,E
+89mm,Dapple Spc Plus,Chalk,B
+89mm,Dapple Spc Plus,Charcoal,B
+89mm,Dapple Spc Plus,Flint,B
+89mm,Dapple Spc Plus,Royal Blue,B
+89mm,Dapple Spc Plus,White,B
+89mm,Daybreak Louvolite,Alabaster,A
+89mm,Daybreak Louvolite,Ash,A
+89mm,Daybreak Louvolite,Black,A
+89mm,Daybreak Louvolite,Flint,A
+89mm,Daybreak Louvolite,Mink,A
+89mm,Daybreak Louvolite,Mocha,A
+89mm,Daybreak Louvolite,Mushroom,A
+89mm,Daybreak Louvolite,Stone,A
+89mm,Daybreak Louvolite,Storm,A
+89mm,Daybreak Louvolite,White,A
+89mm,Didsbury BO,Grey,C
+89mm,Didsbury BO,Navy,C
+89mm,Didsbury BO,Oatmeal,C
+89mm,Dune,Linen,B
+89mm,Easton,Cream,?
+89mm,Easton,Grey,?
+89mm,Easton,Lemon,?
+89mm,Easton,Pistachio,?
+89mm,Easton,Taupe,?
+89mm,Elegance,Gold,D
+89mm,Elegance,Pearl,D
+89mm,Elegance,Silver,D
+89mm,Evita,Linen,Elements
+89mm,Evita,White,Elements
+89mm,Ex-Lite BO,Anthracite,B
+89mm,Ex-Lite BO,Bisque,B
+89mm,Ex-Lite BO,Black,B
+89mm,Ex-Lite BO,Blue,B
+89mm,Ex-Lite BO,Canvas,B
+89mm,Ex-Lite BO,Cream,B
+89mm,Ex-Lite BO,Green,B
+89mm,Ex-Lite BO,Light Grey,B
+89mm,Ex-Lite BO,Navy,B
+89mm,Ex-Lite BO,Putty,B
+89mm,Ex-Lite BO,Slate,B
+89mm,Ex-Lite BO,Snow,B
+89mm,Ex-Lite BO,White,B
+89mm,Felix asc,Coffee,D
+89mm,Felix asc,Fire,D
+89mm,Felix asc,Fuchsia,D
+89mm,Felix asc,Silver,D
+89mm,Felix asc,Teal,D
+89mm,Fleur,Mist,Elements
+89mm,Fleur,White,Elements
+89mm,Flora,Ivory,?
+89mm,Flora,White,?
+89mm,Florence,Beige,A
+89mm,Florence,Green,A
+89mm,Florence,Peach,A
+89mm,Florence,Stone,A
+89mm,Florence,White,A
+89mm,Fuse,Gold,C
+89mm,Fuse,Silver,C
+89mm,Fuse,Tinsel,C
+89mm,Gingham,Evergreen,C
+89mm,Gingham,Marine,C
+89mm,Gingham,Natural,C
+89mm,Gingham,Ruby,C
+89mm,Glitz,Silver,D
+89mm,Glitz,White,D
+89mm,Gracie,Sunshine,D
+89mm,Grayson,Aqua,A
+89mm,Grayson,Pickle,A
+89mm,Grayson,Powder Pink,A
+89mm,Grayson,Silver,A
+89mm,Grayson,Snow,A
+89mm,Grayson,Vanilla,A
+89mm,Guardian,Chalk,A
+89mm,Guardian,Charcoal,A
+89mm,Guardian,Flint,A
+89mm,Guardian,Jet Black,A
+89mm,Guardian,Parchment,A
+89mm,Guardian,Royal Blue,A
+89mm,Guardian,Silver,A
+89mm,Guardian,White,A
+89mm,Hampton,Beach Cove,D
+89mm,Hampton,Boat House,D
+89mm,Hampton,Picket Fence,D
+89mm,Hampton,Sea Breeze,D
+89mm,Hampton,Silver Sand,D
+89mm,Haven BO,Oatmeal,D
+89mm,Haven,Oatmeal,B
+89mm,Ignite,Apricot,A
+89mm,Ignite,Lavender,A
+89mm,Ignite,Sea Foam,A
+89mm,Impasto,Charcoal,D
+89mm,Impasto,Denim,D
+89mm,Impasto,Kelp,D
+89mm,Impasto,Sunshine,D
+89mm,Jude,Aqua,A
+89mm,Jude,Malt,A
+89mm,Kona,Cream,A
+89mm,Kona,Denim,A
+89mm,Kona,Grey,A
+89mm,Kona,White,A
+89mm,Kookie,Burnt Orange,?
+89mm,Kumano BO,Duck Egg,E
+89mm,Kumano BO,Gold,E
+89mm,Lagan asc,Noir,B
+89mm,Lagan asc,Petrol,B
+89mm,Lagan asc,Ruby,B
+89mm,Lagan asc,Sahara,B
+89mm,Lagan asc,Sand,B
+89mm,Lagan asc,Teal,B
+89mm,Liberty,Ocean,D
+89mm,Linenweave,Charcoal,B
+89mm,Linenweave,Graphite,B
+89mm,Linenweave,Hessian,B
+89mm,Linenweave,Iron,B
+89mm,Linenweave,Moonstone,B
+89mm,Linenweave,Sand,B
+89mm,Livia asc,Coffee,C
+89mm,Livia asc,Cotton,C
+89mm,Livia asc,Emerald,C
+89mm,Livia asc,Mandarin,C
+89mm,Livia asc,Powder Pink,C
+89mm,Livia asc,Yellow,C
+89mm,Lotus,Vanilla,Elements
+89mm,Lotus,White,Elements
+89mm,Maggie,Marine,C
+89mm,Maggie,Natural,C
+89mm,Maggie,Ochre,C
+89mm,Maggie,Scarlett,C
+89mm,Marble BO,Silver,C
+89mm,Marea,Barley,A
+89mm,Marea,Black,A
+89mm,Marea,Cornsilk,A
+89mm,Marea,Latte,A
+89mm,Matrix BO,Calico,B
+89mm,Matrix BO,Flax,B
+89mm,Matrix BO,Hessian,B
+89mm,Matrix BO,Monochrome,B
+89mm,Matrix BO,Reed,B
+89mm,Maxwell,Beige,?
+89mm,Maxwell,Grey,?
+89mm,Mistral,Charcoal,A
+89mm,Mistral,Grey,A
+89mm,Mistral,Linen,A
+89mm,Mistral,White,A
+89mm,Miya,Coal,A
+89mm,Miya,Grass,A
+89mm,Monterey,Marble,B
+89mm,Monterey,Sand,B
+89mm,Monterey,Shale,B
+89mm,Nordic asc,Ice,B
+89mm,Nordic asc,Silver,B
+89mm,Nordic BO Louvolite,Duck Egg,D
+89mm,Nordic BO Louvolite,Oatmeal,D
+89mm,Nordic BO Louvolite,Pebble,D
+89mm,Nordic Louvolite,Duck Egg,B
+89mm,Nordic Louvolite,Oatmeal,B
+89mm,Nordic Louvolite,Pebble,B
+89mm,Oakley,Aqua,Elements
+89mm,Oakley,Cotton,Elements
+89mm,Oakley,Lilac,Elements
+89mm,Oakley,Natural,Elements
+89mm,Oakley,Pistachio,Elements
+89mm,Oakley,Steel,Elements
+89mm,Odessa,Angora,A
+89mm,Odessa,Iron,A
+89mm,Odessa,Nude,A
+89mm,Odessa,Snowdrop,A
+89mm,Odessa,Ultimate Grey,A
+89mm,Oslo,Birch,B
+89mm,Oslo,Graphite,B
+89mm,Oslo,Jasper,B
+89mm,Oslo,Maple,B
+89mm,Oslo,Silver,B
+89mm,Oxford BO,Denim,C
+89mm,Oxford BO,Grey Marl,C
+89mm,Oxford BO,Rust,C
+89mm,Oxford BO,Sandstone,C
+89mm,Oxford BO,Taupe,C
+89mm,Oxford Louvolite,Denim,B
+89mm,Oxford Louvolite,Grey Marl,B
+89mm,Oxford Louvolite,Rust,B
+89mm,Oxford Louvolite,Sandstone,B
+89mm,Oxford Louvolite,Taupe,B
+89mm,Palette,Anthracite,A
+89mm,Palette,Baby Lavender,A
+89mm,Palette,Biscotti,A
+89mm,Palette,Black,A
+89mm,Palette,Bright White,A
+89mm,Palette,Calico,A
+89mm,Palette,Charcoal,A
+89mm,Palette,Concrete,A
+89mm,Palette,Copper,A
+89mm,Palette,Cream,A
+89mm,Palette,Denim,A
+89mm,Palette,Desert Sage,A
+89mm,Palette,Dijon,A
+89mm,Palette,Glacier Blue,A
+89mm,Palette,Green,A
+89mm,Palette,Grey,A
+89mm,Palette,Iris,A
+89mm,Palette,Iron,A
+89mm,Palette,Linen,A
+89mm,Palette,Marina,A
+89mm,Palette,Navy,A
+89mm,Palette,Pale Grey,A
+89mm,Palette,Pearl,A
+89mm,Palette,Redcurrant,A
+89mm,Palette,Sand,A
+89mm,Palette,Sky,A
+89mm,Palette,Smokey Blue,A
+89mm,Palette,Spring,A
+89mm,Palette,Stone Grey,A
+89mm,Palette,Taupe,A
+89mm,Palette,Teal,A
+89mm,Palette,Ultimate Grey,A
+89mm,Palette,Vanilla,A
+89mm,Palette,White,A
+89mm,Panache,Charcoal,D
+89mm,Panache,Cornsilk,D
+89mm,Panier asc,Biscuit,B
+89mm,Panier asc,Slate,B
+89mm,Panier asc,Spice,B
+89mm,Paris,Gold,D
+89mm,Paris,Steel,D
+89mm,Perrie,Forest,Elements
+89mm,Perrie,Granola,Elements
+89mm,Perrie,Iron,Elements
+89mm,Perrie,Lemon,Elements
+89mm,Perrie,Milk,Elements
+89mm,Perrie,Oatmeal,Elements
+89mm,Perrie,Ocean,Elements
+89mm,Perrie,Raspberry,Elements
+89mm,Perrie,Snow,Elements
+89mm,Persimmon,Apple Green,?
+89mm,Persimmon,Mocha,?
+89mm,Perspective 1%,Beige,B
+89mm,Perspective 1%,Black,B
+89mm,Perspective 1%,Grey,B
+89mm,Perspective 1%,White,B
+89mm,Perspective 3%,Beige,B
+89mm,Perspective 3%,Black,B
+89mm,Perspective 3%,Grey,B
+89mm,Perspective 3%,White,B
+89mm,Perspective 3% WB,Beige,B
+89mm,Perspective 3% WB,Black,B
+89mm,Perspective 3% WB,Grey,B
+89mm,Perspective 3% WB,White,B
+89mm,Perspective 5%,Beige,B
+89mm,Perspective 5%,Black,B
+89mm,Perspective 5%,Grey,B
+89mm,Perspective 5%,White,B
+89mm,Perspective Aluview,Beige,D
+89mm,Perspective Aluview,Black,D
+89mm,Perspective Aluview,Grey,D
+89mm,Perspective Aluview,White,D
+89mm,Perspective BO,Beige,C
+89mm,Perspective BO,Black,C
+89mm,Perspective BO,Grey,C
+89mm,Perspective BO,White,C
+89mm,Perspective Pureview,White,C
+89mm,Petal BO,Terracotta Blush,C
+89mm,Petal,White,C
+89mm,Pinto,Honey,D
+89mm,Pinto,Monochrome,D
+89mm,Pinto,Orange,D
+89mm,Piper,Cloud,C
+89mm,Piper,Elephant,C
+89mm,Piper,Flamingo,C
+89mm,Piper,Ivory,C
+89mm,Piper,Mushroom,C
+89mm,Piper,Olive,C
+89mm,Piper,Parchment,C
+89mm,Piper,Poppy,C
+89mm,Piper,Sapphire,C
+89mm,Piper,Slate,C
+89mm,Polaris Blackout,Aqua,A
+89mm,Polaris Blackout,Baby Blue,A
+89mm,Polaris Blackout,Bark,A
+89mm,Polaris Blackout,Black,A
+89mm,Polaris Blackout,Bubblegum,A
+89mm,Polaris Blackout,Candyfloss,A
+89mm,Polaris Blackout,Chartreuse,A
+89mm,Polaris Blackout,Cloud,A
+89mm,Polaris Blackout,Cocoa,A
+89mm,Polaris Blackout,Coral,A
+89mm,Polaris Blackout,Cream,A
+89mm,Polaris Blackout,Emerald,A
+89mm,Polaris Blackout,Graphite,A
+89mm,Polaris Blackout,Green,A
+89mm,Polaris Blackout,Greige,A
+89mm,Polaris Blackout,Grey,A
+89mm,Polaris Blackout,Lilac,A
+89mm,Polaris Blackout,Midnight,A
+89mm,Polaris Blackout,Mint,A
+89mm,Polaris Blackout,Navy,A
+89mm,Polaris Blackout,Olive,A
+89mm,Polaris Blackout,Oyster,A
+89mm,Polaris Blackout,Pear,A
+89mm,Polaris Blackout,Pine,A
+89mm,Polaris Blackout,Poppy,A
+89mm,Polaris Blackout,Pure White,A
+89mm,Polaris Blackout,Rose,A
+89mm,Polaris Blackout,Royal Blue,A
+89mm,Polaris Blackout,Rust,A
+89mm,Polaris Blackout,Sand,A
+89mm,Polaris Blackout,Sesame,A
+89mm,Polaris Blackout,Sky,A
+89mm,Polaris Blackout,Smoke,A
+89mm,Polaris Blackout,Sunshine,A
+89mm,Polaris Blackout,Tangerine,A
+89mm,Polaris Blackout,Taupe,A
+89mm,Polaris Blackout,Teal,A
+89mm,Polaris Blackout,Violet,A
+89mm,Polaris Blackout,White,A
+89mm,Polaris Blackout,Wine,A
+89mm,Polaris,Aqua,A
+89mm,Polaris,Baby Blue,A
+89mm,Polaris,Bark,A
+89mm,Polaris,Black,A
+89mm,Polaris,Bubblegum,A
+89mm,Polaris,Candyfloss,A
+89mm,Polaris,Chartreuse,A
+89mm,Polaris,Cloud,A
+89mm,Polaris,Cocoa,A
+89mm,Polaris,Coral,A
+89mm,Polaris,Cream,A
+89mm,Polaris,Emerald,A
+89mm,Polaris,Graphite,A
+89mm,Polaris,Green,A
+89mm,Polaris,Greige,A
+89mm,Polaris,Grey,A
+89mm,Polaris,Lilac,A
+89mm,Polaris,Midnight,A
+89mm,Polaris,Mint,A
+89mm,Polaris,Navy,A
+89mm,Polaris,Olive,A
+89mm,Polaris,Oyster,A
+89mm,Polaris,Pear,A
+89mm,Polaris,Pine,A
+89mm,Polaris,Poppy,A
+89mm,Polaris,Pure White,A
+89mm,Polaris,Rose,A
+89mm,Polaris,Royal Blue,A
+89mm,Polaris,Rust,A
+89mm,Polaris,Sand,A
+89mm,Polaris,Sesame,A
+89mm,Polaris,Sky,A
+89mm,Polaris,Smoke,A
+89mm,Polaris,Sunshine,A
+89mm,Polaris,Tangerine,A
+89mm,Polaris,Taupe,A
+89mm,Polaris,Teal,A
+89mm,Polaris,Violet,A
+89mm,Polaris,White,A
+89mm,Polaris,Wine,A
+89mm,Pop BO,Alabaster,A
+89mm,Pop BO,Black,A
+89mm,Pop BO,Blush,A
+89mm,Pop BO,Breton Blue,A
+89mm,Pop BO,Burnt Orange,A
+89mm,Pop BO,Cobalt,A
+89mm,Pop BO,Dove,A
+89mm,Pop BO,Fern,A
+89mm,Pop BO,Flint,A
+89mm,Pop BO,Iris,A
+89mm,Pop BO,Ivy,A
+89mm,Pop BO,Lemon,A
+89mm,Pop BO,Lilac,A
+89mm,Pop BO,Linen,A
+89mm,Pop BO,Maritime,A
+89mm,Pop BO,Mocha,A
+89mm,Pop BO,Oatmeal,A
+89mm,Pop BO,Pebble,A
+89mm,Pop BO,Pink,A
+89mm,Pop BO,Quartz,A
+89mm,Pop BO,Regal,A
+89mm,Pop BO,Retro Teal,A
+89mm,Pop BO,Saffron,A
+89mm,Pop BO,Sage,A
+89mm,Pop BO,Scarlett,A
+89mm,Pop BO,Storm,A
+89mm,Pop BO,Terra,A
+89mm,Pop BO,Topaz,A
+89mm,Pop BO,Tutu,A
+89mm,Pop BO,White,A
+89mm,Pop,Alabaster,A
+89mm,Pop,Black,A
+89mm,Pop,Blush,A
+89mm,Pop,Breton Blue,A
+89mm,Pop,Burnt Orange,A
+89mm,Pop,Cobalt,A
+89mm,Pop,Dove,A
+89mm,Pop,Fern,A
+89mm,Pop,Flint,A
+89mm,Pop,Iris,A
+89mm,Pop,Ivy,A
+89mm,Pop,Lemon,A
+89mm,Pop,Lilac,A
+89mm,Pop,Linen,A
+89mm,Pop,Maritime,A
+89mm,Pop,Mocha,A
+89mm,Pop,Oatmeal,A
+89mm,Pop,Pebble,A
+89mm,Pop,Pink,A
+89mm,Pop,Quartz,A
+89mm,Pop,Regal,A
+89mm,Pop,Retro Teal,A
+89mm,Pop,Saffron,A
+89mm,Pop,Sage,A
+89mm,Pop,Scarlett,A
+89mm,Pop,Storm,A
+89mm,Pop,Terra,A
+89mm,Pop,Topaz,A
+89mm,Pop,Tutu,A
+89mm,Pop,White,A
+89mm,Quentin,Mink,?
+89mm,Radiance asc,Atlantic Blue,B
+89mm,Radiance asc,Bright White,B
+89mm,Radiance asc,Metallic Bronze,B
+89mm,Radiance asc,Pearl Grey,B
+89mm,Radiance asc,Silver Mist,B
+89mm,Reflection Fr,Ecru,B
+89mm,Reflection Fr,Silk,B
+89mm,Reverie BO,Basalt,C
+89mm,Rhapsody,Blush,Elements
+89mm,Rhapsody,Cream,Elements
+89mm,Rhapsody,Peach,Elements
+89mm,Rhapsody,Vanilla,Elements
+89mm,Rhapsody,Blush,Elements
+89mm,Rhapsody,Cream,Elements
+89mm,Rhapsody,Peach,Elements
+89mm,Rhapsody,Vanilla,Elements
+89mm,Ribble DO,Beige,B
+89mm,Ribble DO,Cream,B
+89mm,Ribble DO,Grey,B
+89mm,Ribble DO,White,B
+89mm,Ribble,Beige,B
+89mm,Ribble,Cream,B
+89mm,Ribble,Grey,B
+89mm,Ribble,White,B
+89mm,Ribbons asc,Fawn,B
+89mm,Ribbons asc,Pewter,B
+89mm,Ribbons asc,Silver,B
+89mm,Ribbons asc,White,B
+89mm,Ritz,Birch,A
+89mm,Ritz,Cotton,A
+89mm,Ritz,Jasmin,A
+89mm,Romany BO,Cream,E
+89mm,Romany BO,Light Grey,E
+89mm,Romany BO,Putty,E
+89mm,Romany BO,White,E
+89mm,Ronda,Barley,D
+89mm,Ronda,Bone,D
+89mm,Ronda,Dijon,D
+89mm,Ronda,Kale,D
+89mm,Ronda,Paprika,D
+89mm,Ronda,Petrol,D
+89mm,Ronda,Shadow,D
+89mm,Savanna DO,Grass,C
+89mm,Savanna DO,Stone,C
+89mm,Savanna DO,Zebra,C
+89mm,Scoria,Pink,D
+89mm,Scoria,Steel,D
+89mm,Shantung,Leaf,A
+89mm,Shantung,Silver,A
+89mm,Shantung,White,A
+89mm,Shona,Brick,D
+89mm,Shona,Cream,D
+89mm,Shona,Ecru,D
+89mm,Shona,Iron,D
+89mm,Shona,Liquorice,D
+89mm,Shona,Mauve,D
+89mm,Shona,Midnight,D
+89mm,Shona,Moss,D
+89mm,Shona,Mustard,D
+89mm,Shona,Rose,D
+89mm,Shona,Slate,D
+89mm,Shona,Taupe,D
+89mm,Shona,Teal,D
+89mm,Shot Silk BO,Ivory,E
+89mm,Shot Silk BO,Moonstone,E
+89mm,Shot Silk BO,Pannacotta,E
+89mm,Sian,Biscotti,A
+89mm,Sirocco,Charcoal,A
+89mm,Sirocco,Cream,A
+89mm,Sirocco,Grey,A
+89mm,Sirocco,White,A
+89mm,Sisi,Soft Grey,C
+89mm,Sprigs,Lilac,D
+89mm,Stella Fr,Ivory,B
+89mm,Stella Fr,Vanilla,B
+89mm,Stratford,Cream,A
+89mm,Stratford,Crimson,A
+89mm,Stratford,Taupe,A
+89mm,Sunset BO,Alabaster,B
+89mm,Sunset BO,Ash,B
+89mm,Sunset BO,Black,B
+89mm,Sunset BO,Flint,B
+89mm,Sunset BO,Mink,B
+89mm,Sunset BO,Mocha,B
+89mm,Sunset BO,Mushroom,B
+89mm,Sunset BO,Stone,B
+89mm,Sunset BO,Storm,B
+89mm,Sunset BO,White,B
+89mm,Tesselation,Light Sand,?
+89mm,Topaz,Graphite,A
+89mm,Topaz,Pearl,A
+89mm,Topaz,Quartz,A
+89mm,Topaz,Silver,A
+89mm,Traze,Arctic,A
+89mm,Traze,Beige,A
+89mm,Traze,Milk,A
+89mm,Traze,Turquoise,A
+89mm,Tree of life,Teal,A
+89mm,Urban Fr,Beige,B
+89mm,Urban Fr,Black,B
+89mm,Urban Fr,Blue,B
+89mm,Urban Fr,Bright White,B
+89mm,Urban Fr,Cream,B
+89mm,Urban Fr,Dark Grey,B
+89mm,Urban Fr,Ecru,B
+89mm,Urban Fr,Grey,B
+89mm,Vermont,Cotton,A
+89mm,Vermont,Feather,A
+89mm,Vermont,Hemp,A
+89mm,Vermont,Linen,A
+89mm,Vermont,Mist,A
+89mm,Vermont,Slate,A
+89mm,Vinnie,Blue,C
+89mm,Vinnie,Candy,C
+89mm,Vinnie,Carbon,C
+89mm,Vinnie,Ginger,C
+89mm,Voile,Cream,A
+89mm,Voile,Moondust,A
+89mm,Voile,Sandshell,A
+89mm,Voile,White,A
+89mm,Windsor DO,Blush,B
+89mm,Windsor DO,Navy,B
+89mm,Windsor DO,Oatmeal,B
+89mm,Windsor DO,Rust,B
+89mm,Windsor DO,Teal,B
+89mm,Windsor DO,Vine,B
+89mm,Zephyr,Cream,A
+89mm,Zephyr,Grey,A
+89mm,Zephyr,Linen,A
+89mm,Zephyr,White,A
+89mm,Vanilla,Vanilla,?
+127mm,Atlantex asc,Black,B
+127mm,Atlantex asc,Cream,B
+127mm,Atlantex asc,Dark Beige,B
+127mm,Atlantex asc,Dark Blue,B
+127mm,Atlantex asc,Grey,B
+127mm,Atlantex asc,Pewter,B
+127mm,Atlantex asc,Silver,B
+127mm,Atlantex asc,White,B
+127mm,Atlantex,Beige,A
+127mm,Atlantex,Black,A
+127mm,Atlantex,Blue,A
+127mm,Atlantex,Brown,A
+127mm,Atlantex,Cherry,A
+127mm,Atlantex,Cream,A
+127mm,Atlantex,Dark Beige,A
+127mm,Atlantex,Dark Blue,A
+127mm,Atlantex,Grey,A
+127mm,Atlantex,Hunter Green,A
+127mm,Atlantex,Navy,A
+127mm,Atlantex,Pewter,A
+127mm,Atlantex,Silver,A
+127mm,Atlantex,Stone,A
+127mm,Atlantex,Vanilla,A
+127mm,Atlantex,White,A
+127mm,Avensis,Beige,?
+127mm,Avensis,Ivory,?
+127mm,Avensis,White,?
+127mm,Banlight Duo FR,Anthracite,B
+127mm,Banlight Duo FR,Baby Lavender,B
+127mm,Banlight Duo FR,Biscotti,B
+127mm,Banlight Duo FR,Black,B
+127mm,Banlight Duo FR,Bright White,B
+127mm,Banlight Duo FR,Calico,B
+127mm,Banlight Duo FR,Charcoal,B
+127mm,Banlight Duo FR,Concrete,B
+127mm,Banlight Duo FR,Cream,B
+127mm,Banlight Duo FR,Desert Sage,B
+127mm,Banlight Duo FR,Dijon,B
+127mm,Banlight Duo FR,Glacier Blue,B
+127mm,Banlight Duo FR,Green,B
+127mm,Banlight Duo FR,Iris,B
+127mm,Banlight Duo FR,Iron,B
+127mm,Banlight Duo FR,Lichen,B
+127mm,Banlight Duo FR,Linen,B
+127mm,Banlight Duo FR,Marina,B
+127mm,Banlight Duo FR,Navy,B
+127mm,Banlight Duo FR,Nude,B
+127mm,Banlight Duo FR,Ocean,B
+127mm,Banlight Duo FR,Old Gold,B
+127mm,Banlight Duo FR,Pale Grey,B
+127mm,Banlight Duo FR,Pearl,B
+127mm,Banlight Duo FR,Redcurrant,B
+127mm,Banlight Duo FR,Rose,B
+127mm,Banlight Duo FR,Sand,B
+127mm,Banlight Duo FR,Smokey Blue,B
+127mm,Banlight Duo FR,Stone Grey,B
+127mm,Banlight Duo FR,Taupe,B
+127mm,Banlight Duo FR,Teal,B
+127mm,Banlight Duo FR,Ultimate Grey,B
+127mm,Banlight Duo FR,Vanilla,B
+127mm,Banlight Duo FR,White,B
+127mm,Carnival,Anthracite,A
+127mm,Carnival,Birch,A
+127mm,Carnival,Bubblegum,A
+127mm,Carnival,China White,A
+127mm,Carnival,Cream,A
+127mm,Carnival,Ecru,A
+127mm,Carnival,Eden,A
+127mm,Carnival,Ivory,A
+127mm,Carnival,Kiwi,A
+127mm,Carnival,Lily,A
+127mm,Carnival,Luna,A
+127mm,Carnival,Malbec,A
+127mm,Carnival,Navy,A
+127mm,Carnival,Nougat,A
+127mm,Carnival,Ochre,A
+127mm,Carnival,Pacific,A
+127mm,Carnival,Papaya,A
+127mm,Carnival,Pink,A
+127mm,Carnival,Praline,A
+127mm,Carnival,Purple,A
+127mm,Carnival,Raven,A
+127mm,Carnival,Red,A
+127mm,Carnival,Sapphire,A
+127mm,Carnival,Shadow,A
+127mm,Carnival,Sky,A
+127mm,Carnival,Sunset,A
+127mm,Carnival,Taupe,A
+127mm,Carnival,Teal,A
+127mm,Carnival,Terracotta,A
+127mm,Carnival,Willow,A
+127mm,Chatsworth,Grey,A
+127mm,Chatsworth,White,A
+127mm,Corsica,Cream,Elements
+127mm,Corsica,Grey,Elements
+127mm,Corsica,Ivory,Elements
+127mm,Corsica,White,Elements
+127mm,Dapple Spc Plus,Chalk,B
+127mm,Dapple Spc Plus,Charcoal,B
+127mm,Dapple Spc Plus,Flint,B
+127mm,Dapple Spc Plus,Royal Blue,B
+127mm,Dapple Spc Plus,White,B
+127mm,Daybreak Louvolite,Alabaster,A
+127mm,Daybreak Louvolite,Ash,A
+127mm,Daybreak Louvolite,Black,A
+127mm,Daybreak Louvolite,Flint,A
+127mm,Daybreak Louvolite,Mink,A
+127mm,Daybreak Louvolite,Mocha,A
+127mm,Daybreak Louvolite,Mushroom,A
+127mm,Daybreak Louvolite,Stone,A
+127mm,Daybreak Louvolite,Storm,A
+127mm,Daybreak Louvolite,White,A
+127mm,Elegance,Gold,D
+127mm,Elegance,Pearl,D
+127mm,Elegance,Silver,D
+127mm,Ex-Lite BO,Anthracite,B
+127mm,Ex-Lite BO,Bisque,B
+127mm,Ex-Lite BO,Black,B
+127mm,Ex-Lite BO,Blue,B
+127mm,Ex-Lite BO,Canvas,B
+127mm,Ex-Lite BO,Cream,B
+127mm,Ex-Lite BO,Green,B
+127mm,Ex-Lite BO,Light Grey,B
+127mm,Ex-Lite BO,Navy,B
+127mm,Ex-Lite BO,Putty,B
+127mm,Ex-Lite BO,Slate,B
+127mm,Ex-Lite BO,Snow,B
+127mm,Ex-Lite BO,White,B
+127mm,Florence,Green,A
+127mm,Florence,Peach,A
+127mm,Florence,Stone,A
+127mm,Florence,White,A
+127mm,Guardian,Chalk,A
+127mm,Guardian,Charcoal,A
+127mm,Guardian,Flint,A
+127mm,Guardian,Jet Black,A
+127mm,Guardian,Parchment,A
+127mm,Guardian,Royal Blue,A
+127mm,Guardian,Silver,A
+127mm,Guardian,White,A
+127mm,Hampton,Beach Cove,D
+127mm,Hampton,Boat House,D
+127mm,Hampton,Picket Fence,D
+127mm,Hampton,Sea Breeze,D
+127mm,Hampton,Silver Sand,D
+127mm,Linenweave,Charcoal,B
+127mm,Linenweave,Graphite,B
+127mm,Linenweave,Hessian,B
+127mm,Linenweave,Iron,B
+127mm,Linenweave,Moonstone,B
+127mm,Linenweave,Sand,B
+127mm,Mineral,Antique Gold,?
+127mm,Mineral,Copper,?
+127mm,Mineral,Pale Gold,?
+127mm,Mineral,Pearl,?
+127mm,Mineral,Pewter,?
+127mm,Mineral,Rose Gold,?
+127mm,Mineral,Silver,?
+127mm,Mineral,Verdigris,?
+127mm,Monroe,Ice,?
+127mm,Monroe,Mineral,?
+127mm,Monroe,Onyx,?
+127mm,Monroe,Opal,?
+127mm,Monterey,Marble,B
+127mm,Monterey,Sand,B
+127mm,Monterey,Shale,B
+127mm,Murray White,White,?
+127mm,Oslo,Birch,B
+127mm,Oslo,Graphite,B
+127mm,Oslo,Jasper,B
+127mm,Oslo,Maple,B
+127mm,Oslo,Silver,B
+127mm,Palette,Anthracite,A
+127mm,Palette,Baby Lavender,A
+127mm,Palette,Biscotti,A
+127mm,Palette,Black,A
+127mm,Palette,Bright White,A
+127mm,Palette,Calico,A
+127mm,Palette,Charcoal,A
+127mm,Palette,Concrete,A
+127mm,Palette,Copper,A
+127mm,Palette,Cream,A
+127mm,Palette,Denim,A
+127mm,Palette,Desert Sage,A
+127mm,Palette,Dijon,A
+127mm,Palette,Glacier Blue,A
+127mm,Palette,Green,A
+127mm,Palette,Grey,A
+127mm,Palette,Iris,A
+127mm,Palette,Iron,A
+127mm,Palette,Linen,A
+127mm,Palette,Marina,A
+127mm,Palette,Navy,A
+127mm,Palette,Pale Grey,A
+127mm,Palette,Pearl,A
+127mm,Palette,Redcurrant,A
+127mm,Palette,Sand,A
+127mm,Palette,Sky,A
+127mm,Palette,Smokey Blue,A
+127mm,Palette,Spring,A
+127mm,Palette,Stone Grey,A
+127mm,Palette,Taupe,A
+127mm,Palette,Teal,A
+127mm,Palette,Ultimate Grey,A
+127mm,Palette,Vanilla,A
+127mm,Palette,White,A
+127mm,Perspective 1%,Beige,B
+127mm,Perspective 1%,Black,B
+127mm,Perspective 1%,Grey,B
+127mm,Perspective 1%,White,B
+127mm,Perspective 3%,Beige,B
+127mm,Perspective 3%,Black,B
+127mm,Perspective 3%,Grey,B
+127mm,Perspective 3%,White,B
+127mm,Perspective 3% WB,Beige,B
+127mm,Perspective 3% WB,Black,B
+127mm,Perspective 3% WB,Grey,B
+127mm,Perspective 3% WB,White,B
+127mm,Perspective 5%,Beige,B
+127mm,Perspective 5%,Black,B
+127mm,Perspective 5%,Grey,B
+127mm,Perspective 5%,White,B
+127mm,Perspective Aluview,Beige,D
+127mm,Perspective Aluview,Black,D
+127mm,Perspective Aluview,Grey,D
+127mm,Perspective Aluview,White,D
+127mm,Perspective BO,Beige,C
+127mm,Perspective BO,Black,C
+127mm,Perspective BO,Grey,C
+127mm,Perspective BO,White,C
+127mm,Perspective Pureview,White,C
+127mm,Ritz,Birch,A
+127mm,Ritz,Cotton,A
+127mm,Ritz,Jasmin,A
+127mm,Romany BO,Cream,E
+127mm,Romany BO,Light Grey,E
+127mm,Romany BO,Putty,E
+127mm,Romany BO,White,E
+127mm,Shantung,Leaf,A
+127mm,Shantung,Silver,A
+127mm,Shantung,White,A
+127mm,Topaz,Graphite,A
+127mm,Topaz,Pearl,A
+127mm,Topaz,Quartz,A
+127mm,Topaz,Silver,A
+127mm,Vermont,Cotton,A
+127mm,Vermont,Feather,A
+127mm,Vermont,Hemp,A
+127mm,Vermont,Linen,A
+127mm,Vermont,Mist,A
+127mm,Vermont,Slate,A
+127mm,Voile,Cream,A
+127mm,Voile,Moondust,A
+127mm,Voile,Sandshell,A
+127mm,Voile,White,A
