@@ -415,6 +415,13 @@ $activeNav = 'products';
                             </select>
                         </form>
                     <?php endif; ?>
+                    <form method="post" action="/admin/products/combine.php" id="bulk-combine-form"
+                          style="display:inline;margin:0">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-secondary" id="bulk-combine-btn"
+                                title="Make these the systems (e.g. slat sizes) of one product"
+                                style="padding:0.3125rem 0.875rem;font-size:0.875rem" disabled>Combine into product&hellip;</button>
+                    </form>
                     <form method="post" action="/admin/products/delete.php" id="bulk-delete-form"
                           data-confirm="Delete the selected products?" style="display:inline;margin:0">
                         <?= csrf_field() ?>
@@ -643,6 +650,8 @@ $activeNav = 'products';
         });
     }
 
+    var combineForm = document.getElementById('bulk-combine-form');
+    var combineBtn  = document.getElementById('bulk-combine-btn');
     function refresh() {
         var sel = allRows().filter(function (c) { return c.checked; });
         syncIds(form, 'ids[]', sel);                 // delete form
@@ -650,6 +659,10 @@ $activeNav = 'products';
             syncIds(moveForm, 'product_ids[]', sel);
             moveSel.disabled = sel.length === 0;
             if (sel.length === 0) moveSel.value = '';
+        }
+        if (combineForm) {                           // combine-into-product form (needs ≥2)
+            syncIds(combineForm, 'product_ids[]', sel);
+            combineBtn.disabled = sel.length < 2;
         }
         btn.disabled = sel.length === 0;
         count.textContent = sel.length ? (sel.length + ' selected') : '(none selected)';
