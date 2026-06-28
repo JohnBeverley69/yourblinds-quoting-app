@@ -199,13 +199,15 @@ try {
     echo $ops[count($ops) - 1] . "\n";
 
     // --- Fabric options ----------------------------------------------------
-    // Banded fabrics (A–E, Elements) → active, scoped to band + system.
-    // Unbanded '?' fabrics → INACTIVE, band_code NULL (visible to admin,
-    // never quotable — avoids a £0 / "no price table" quote-time error).
+    // band_code / code / colour are NOT NULL on product_options, so:
+    //   Banded fabrics (A–E, Elements) → active, scoped to band + system.
+    //   Unbanded '?' fabrics → band_code 'TBC' + active = 0 (visible to the
+    //     admin, flagged, never quotable — avoids a £0 / "no price table"
+    //     quote-time error). When Arena publishes a band, set it + tick active.
     $optIns = $pdo->prepare(
         'INSERT INTO product_options
             (client_id, product_id, system_id, band_code, supplier_name, name, colour, code, sort_order, active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)'
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $added = 0; $inactive = 0; $sortBy = [];
     foreach ($fabricRows as $f) {
@@ -213,7 +215,7 @@ try {
         if (!isset($sysId[$sysName])) continue;
         $band   = trim((string) $f['band']);
         $banded = $band !== '' && $band !== '?';
-        $bandCode = $banded ? $band : null;
+        $bandCode = $banded ? $band : 'TBC';
         $active   = $banded ? 1 : 0;
         if (!$banded) $inactive++; else $added++;
 
@@ -221,7 +223,8 @@ try {
         $optIns->execute([
             $clientId, $productId, $sysId[$sysName], $bandCode, $SUPPLIER,
             (string) $f['name'],
-            ($f['colour'] !== '' ? (string) $f['colour'] : null),
+            (string) $f['colour'],   // NOT NULL — '' if blank (none are here)
+            '',                      // code — Arena fabrics carry no separate code
             $sortBy[$sysName], $active,
         ]);
     }
