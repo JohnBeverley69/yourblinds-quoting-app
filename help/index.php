@@ -152,6 +152,14 @@ $TOPICS = [
       (e.g. a slat size or motorised). A <strong>band</strong> is a price tier. Each <strong>fabric/slat</strong> carries
       a band, and each <strong>price table</strong> is a width × drop grid for one (system, band). The band code is the
       link between a fabric and its prices.</p>'],
+    ['admin', 'Products & pricing', 'Combine products into one (systems)', 'combine merge master product systems sizes slat 15mm 25mm fold together',
+     '<p>If you imported a family as separate products (e.g. <em>15/25/35/50mm Venetian</em>) and want them under
+      one product, tick them in the <strong>Products</strong> list and press <strong>“Combine into product…”</strong>.
+      Name the master (e.g. <em>Metal Venetian</em>) and each one’s <strong>system</strong> name (15mm, 25mm…).</p>
+      <p>The first ticked product becomes the master; the rest fold in as systems and are then
+      <strong>deactivated</strong> (their fabrics, price tables and settings move across — nothing is lost).
+      Each size’s slat colours are scoped to its own system, so the quote builder shows only the colours that size
+      offers. Delete the empty leftovers once you’ve checked the result.</p>'],
     ['admin', 'Products & pricing', 'Setting up a product (wizard)', 'wizard new product setup steps systems fabrics price tables',
      '<p>The <strong>setup wizard</strong> walks you through Name → Systems → Fabrics → Price tables.</p>
       <p><strong>Tip — pricing first:</strong> on the Fabrics step there’s a <em>“Price tables first →”</em> button.
