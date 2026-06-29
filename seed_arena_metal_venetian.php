@@ -144,7 +144,16 @@ try {
         $tblIns->execute([$clientId, $productId, $sysId[$sysName], $bandCode, "Arena {$bandCode}"]);
         $tableId = (int) $pdo->lastInsertId();
         $haveBand[$sysName . '|' . $bandCode] = true;
-        foreach ($cells as $c) { $rowIns->execute([$tableId, (int) $c['width_mm'], (int) $c['drop_mm'], (float) $c['price']]); $cellCount++; }
+        // Dedupe (width,drop) within a table — the Tabbed 25mm grid has a drop
+        // row that collapses onto another (price_table_rows has a uniq_cell key).
+        $cellSeen = [];
+        foreach ($cells as $c) {
+            $ck = (int) $c['width_mm'] . 'x' . (int) $c['drop_mm'];
+            if (isset($cellSeen[$ck])) continue;
+            $cellSeen[$ck] = true;
+            $rowIns->execute([$tableId, (int) $c['width_mm'], (int) $c['drop_mm'], (float) $c['price']]);
+            $cellCount++;
+        }
         $tableCount++;
     }
     $ops[] = "Built {$tableCount} price tables ({$cellCount} cells).";
