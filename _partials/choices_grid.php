@@ -25,6 +25,31 @@
  * indicator covers all of them.
  */
 $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null;
+
+// Width-table indicator: a choice can be priced by a per-width table
+// (extra_choice_price_rows) instead of / on top of the flat £ / % / £/m
+// columns. That table is invisible in this grid — you'd otherwise have to
+// open the choice's Edit page to know it's there. Batch-fetch the row counts
+// for the whole grid in ONE query (no N+1); guarded so an older schema
+// without the table simply shows no badge.
+$widthTableSizes = [];
+try {
+    $wtIds = [];
+    foreach ($gridChoices as $gc) { if (isset($gc['id'])) $wtIds[] = (int) $gc['id']; }
+    if ($wtIds) {
+        $wtPh   = implode(',', array_fill(0, count($wtIds), '?'));
+        $wtStmt = db()->prepare(
+            "SELECT product_extra_choice_id AS pid, COUNT(*) AS n
+               FROM extra_choice_price_rows
+              WHERE product_extra_choice_id IN ($wtPh)
+              GROUP BY product_extra_choice_id"
+        );
+        $wtStmt->execute($wtIds);
+        foreach ($wtStmt->fetchAll(PDO::FETCH_ASSOC) as $wtRow) {
+            $widthTableSizes[(int) $wtRow['pid']] = (int) $wtRow['n'];
+        }
+    }
+} catch (Throwable $e) { /* table absent on an older schema — just no badge */ }
 ?>
 <div class="choices-grid-wrap" data-extra-id="<?= (int) $gridExtraId ?>">
     <div class="table-wrap">
@@ -153,6 +178,16 @@ $showBandsCol = isset($renderBandMultiSelect) && $renderBandMultiSelect !== null
                                    data-form-type="other"
                                    data-lpignore="true"
                                    data-1p-ignore="true">
+                            <?php if (!empty($widthTableSizes[$cid])): ?>
+                                <div class="wt-badge"
+                                     title="Priced by a width table — per-width prices are set on this choice's Edit page (not the flat £ / % / £/m columns)."
+                                     style="display:inline-flex;align-items:center;gap:0.25rem;margin-top:0.25rem;
+                                            padding:0.0625rem 0.4rem;font-size:0.6875rem;font-weight:600;line-height:1.5;
+                                            color:var(--text-muted);background:var(--bg-subtle);
+                                            border:1px solid var(--border);border-radius:5px;white-space:nowrap">
+                                    &#9638; &pound; by width &middot; <?= (int) $widthTableSizes[$cid] ?> size<?= $widthTableSizes[$cid] === 1 ? '' : 's' ?>
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td class="col-system">
                             <?= $renderSystemMultiSelect($sysId) ?>
