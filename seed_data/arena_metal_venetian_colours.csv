@@ -1,0 +1,548 @@
+system,name,special_effects
+15mm,Brushed Copper,Yes
+15mm,Brushed Nickel,No
+15mm,Brushed Silver,No
+15mm,Buttercup,No
+15mm,Champagne,Yes
+15mm,Charcoal Grey,No
+15mm,Deep Ivy,No
+15mm,Dusty Grey,No
+15mm,Fresh Apple,No
+15mm,Fuchsia,No
+15mm,Glacier,Yes
+15mm,Golden Yellow,No
+15mm,Harvest,No
+15mm,Ice Blue,No
+15mm,Jet,No
+15mm,Khaki,No
+15mm,Latte,No
+15mm,Magnolia,No
+15mm,Melon,No
+15mm,Mid Grey,No
+15mm,Mint Cream,No
+15mm,Mushroom,No
+15mm,Oatmeal,No
+15mm,Polar,No
+15mm,Russet,No
+15mm,Sapphire,No
+15mm,Scarlet,No
+15mm,Sea Blue,No
+15mm,Silver,No
+15mm,Soft Orange,No
+15mm,White,No
+25mm,Almond,?
+25mm,Alpine,Yes
+25mm,American Elm,Yes
+25mm,Anthracite,?
+25mm,Antique Silver,No
+25mm,Ash,No
+25mm,Barely Black,Yes
+25mm,Black Gloss,No
+25mm,Blue Haze,Yes
+25mm,Brick,No
+25mm,Bronze,No
+25mm,Brushed Copper,Yes
+25mm,Brushed Nickel,No
+25mm,Brushed Silver,No
+25mm,Buttercup,No
+25mm,Calico,Yes
+25mm,Caramel,No
+25mm,Chalk White,No
+25mm,Champagne,Yes
+25mm,Charcoal Grey,No
+25mm,Cherry,Yes
+25mm,Chestnut,Yes
+25mm,Classic Stripe,Yes
+25mm,Classic White,No
+25mm,Conker,Yes
+25mm,Cool Aqua,No
+25mm,Cool Sky,Yes
+25mm,Copper,No
+25mm,Cream,No
+25mm,Creamy Apricot,Yes
+25mm,Crushed Snow,?
+25mm,Damson,No
+25mm,Deep Ivy,No
+25mm,Dorothy,No
+25mm,Dusty Grey,No
+25mm,Elderberry,Yes
+25mm,Electric Aqua,No
+25mm,Everglade,?
+25mm,Fern Green,Yes
+25mm,Filtra Black,Yes
+25mm,Filtra Magnolia,Yes
+25mm,Filtra Silver,Yes
+25mm,Filtra White,Yes
+25mm,Fresh Apple,No
+25mm,Frosted Silver,No
+25mm,Fruitwood,No
+25mm,Fuchsia,No
+25mm,Glacier,Yes
+25mm,Glistening Gold,No
+25mm,Gloss White,No
+25mm,Gold Copper,No
+25mm,Golden Yellow,No
+25mm,Graphite,No
+25mm,Harvest,No
+25mm,Hessian,No
+25mm,Honey,No
+25mm,Hornbeam,Yes
+25mm,Ice Blue,No
+25mm,Ice Pink,Yes
+25mm,Indian Yellow,No
+25mm,Ivory,?
+25mm,Jet,No
+25mm,Khaki,No
+25mm,Latte,No
+25mm,London Fog,?
+25mm,Magnolia,No
+25mm,Mahogany,Yes
+25mm,Marigold,No
+25mm,Melba,No
+25mm,Mellow Peach,No
+25mm,Melon,No
+25mm,Mercury,Yes
+25mm,Mid Grey,No
+25mm,Midnight Blue,Yes
+25mm,Mint Cream,No
+25mm,Mocha,No
+25mm,Moonstone,?
+25mm,Mushroom,No
+25mm,Natural Taupe,No
+25mm,Oatmeal,No
+25mm,Off White,No
+25mm,Orange,No
+25mm,Oriental Blue,No
+25mm,Oxford Blue,No
+25mm,Oyster White,No
+25mm,Peppermint,Yes
+25mm,Pink Blossom,No
+25mm,Pinstripe,Yes
+25mm,Pistachio,No
+25mm,Pitch Black,No
+25mm,Polar,No
+25mm,Praline,No
+25mm,Pretty Pink,No
+25mm,Russet,No
+25mm,Sand,No
+25mm,Sapphire,No
+25mm,Satin Silver,No
+25mm,Scarlet,No
+25mm,Scottish Pine,Yes
+25mm,Sea Blue,No
+25mm,Shiny Silver,Yes
+25mm,Silver Lustre,Yes
+25mm,Silver Pitch,No
+25mm,Silver,No
+25mm,Snowflake,Yes
+25mm,Soft Brown,No
+25mm,Soft Orange,No
+25mm,Soft Stone,Yes
+25mm,Solar Flare,?
+25mm,Sparkle Black,Yes
+25mm,Sparkle Blue,No
+25mm,Spring Blush,Yes
+25mm,Sugar Maple,Yes
+25mm,Sugar Pink,No
+25mm,Sunrise,Yes
+25mm,Tornado,?
+25mm,Twilight Grey,No
+25mm,Walnut,No
+25mm,White Shimmer,Yes
+25mm,White,No
+25mm,Wild Plum,No
+35mm,Buttercup,No
+35mm,Deep Ivy,No
+35mm,Dusty Grey,No
+35mm,Harvest,No
+35mm,Jet,No
+35mm,Khaki,No
+35mm,Latte,No
+35mm,Magnolia,No
+35mm,Melon,No
+35mm,Mid Grey,No
+35mm,Mint Cream,No
+35mm,Polar,No
+35mm,Sapphire,No
+35mm,Sea Blue,No
+35mm,Silver,No
+35mm,White,No
+50mm,Deep Ivy,No
+50mm,Buttercup,No
+50mm,Dusty Grey,No
+50mm,Harvest,No
+50mm,Jet,No
+50mm,Khaki,No
+50mm,Latte,No
+50mm,Magnolia,No
+50mm,Melon,No
+50mm,Mid Grey,No
+50mm,Mint Cream,No
+50mm,MM POLAR VENETIAN,?
+50mm,Sapphire,No
+50mm,Sea Blue,No
+50mm,Silver,No
+50mm,MM WHITE VENETIAN,?
+25mm Perfect Fit,Almond Perfect Fit,?
+25mm Perfect Fit,Alpine Perfect Fit,Yes
+25mm Perfect Fit,American Elm Perfect Fit,Yes
+25mm Perfect Fit,Anthracite Perfect Fit,?
+25mm Perfect Fit,Antique Silver Perfect Fit,No
+25mm Perfect Fit,Ash Perfect Fit,No
+25mm Perfect Fit,Barely Black Perfect Fit,Yes
+25mm Perfect Fit,Black Gloss Perfect Fit,No
+25mm Perfect Fit,Brick Perfect Fit,No
+25mm Perfect Fit,Bronze Perfect Fit,No
+25mm Perfect Fit,Brushed Copper Perfect Fit,Yes
+25mm Perfect Fit,Brushed Nickel Perfect Fit,No
+25mm Perfect Fit,Brushed Silver Perfect Fit,No
+25mm Perfect Fit,Buttercup Perfect Fit,No
+25mm Perfect Fit,Calico Perfect Fit,Yes
+25mm Perfect Fit,Chalk white Perfect Fit,No
+25mm Perfect Fit,Champagne Perfect Fit,Yes
+25mm Perfect Fit,Charcoal Grey Perfect Fit,No
+25mm Perfect Fit,Chestnut Perfect Fit,Yes
+25mm Perfect Fit,Classic Stripe Perfect Fit,Yes
+25mm Perfect Fit,Classic White Perfect Fit,No
+25mm Perfect Fit,Conker Perfect Fit,Yes
+25mm Perfect Fit,Cool Aqua Perfect Fit,No
+25mm Perfect Fit,Copper Perfect Fit,No
+25mm Perfect Fit,Cream Perfect Fit,No
+25mm Perfect Fit,Creamy Apricot Perfect Fit,Yes
+25mm Perfect Fit,Crushed Snow  Perfect Fit,?
+25mm Perfect Fit,Damson Perfect Fit,No
+25mm Perfect Fit,Deep Ivy Perfect Fit,No
+25mm Perfect Fit,Dusty Grey Perfect Fit,No
+25mm Perfect Fit,Elderberry Perfect Fit,Yes
+25mm Perfect Fit,Fern Green Perfect Fit,Yes
+25mm Perfect Fit,Filtra Black Perfect Fit,Yes
+25mm Perfect Fit,Filtra Magnolia PF,?
+25mm Perfect Fit,Filtra Silver Perfect Fit,Yes
+25mm Perfect Fit,Filtra White Perfect Fit,Yes
+25mm Perfect Fit,Frosted Silver Perfect Fit,No
+25mm Perfect Fit,Fruitwood Perfect Fit,No
+25mm Perfect Fit,Glacier Perfect Fit,Yes
+25mm Perfect Fit,Glistening Gold Perf Fit,?
+25mm Perfect Fit,Gloss White Perfect Fit,No
+25mm Perfect Fit,Gold Copper Perfect Fit,No
+25mm Perfect Fit,Graphite Perfect Fit,No
+25mm Perfect Fit,Harvest Perfect Fit,No
+25mm Perfect Fit,Hessian Perfect Fit,No
+25mm Perfect Fit,Honey Perfect Fit,No
+25mm Perfect Fit,Hornbeam Perfect Fit,Yes
+25mm Perfect Fit,Ice Blue Perfect Fit,No
+25mm Perfect Fit,Ice Pink Perfect Fit,Yes
+25mm Perfect Fit,Indian Yellow Perfect Fit,No
+25mm Perfect Fit,Jet Perfect Fit,No
+25mm Perfect Fit,Khaki Perfect Fit,No
+25mm Perfect Fit,Latte Perfect Fit,No
+25mm Perfect Fit,London Fog Perfect Fit,?
+25mm Perfect Fit,Magnolia Perfect Fit,No
+25mm Perfect Fit,Mahogany Perfect Fit,Yes
+25mm Perfect Fit,Melon Perfect Fit,No
+25mm Perfect Fit,Mercury Perfect Fit,Yes
+25mm Perfect Fit,Mid Grey Perfect Fit,No
+25mm Perfect Fit,Midnight Blue Perfect Fit,Yes
+25mm Perfect Fit,Mint Cream Perfect Fit,No
+25mm Perfect Fit,Mocha Perfect Fit,No
+25mm Perfect Fit,Moonstone Perfect Fit,?
+25mm Perfect Fit,Mushroom Perfect Fit,No
+25mm Perfect Fit,Natural Taupe Perfect Fit,No
+25mm Perfect Fit,Oatmeal Perfect Fit,No
+25mm Perfect Fit,Off White Perfect Fit,No
+25mm Perfect Fit,Orange Perfect Fit,No
+25mm Perfect Fit,Oriental Blue Perfect Fit,No
+25mm Perfect Fit,Oyster White Perfect Fit,No
+25mm Perfect Fit,Peppermint Perfect Fit,Yes
+25mm Perfect Fit,Pink Blossom Perfect Fit,No
+25mm Perfect Fit,Pinstripe Perfect Fit,Yes
+25mm Perfect Fit,Pistachio Perfect Fit,No
+25mm Perfect Fit,Pitch Black Perfect Fit,No
+25mm Perfect Fit,Polar Perfect Fit,No
+25mm Perfect Fit,Pretty Pink Perfect Fit,No
+25mm Perfect Fit,Russet Perfect Fit,No
+25mm Perfect Fit,Sand Perfect Fit,No
+25mm Perfect Fit,Sapphire Perfect Fit,No
+25mm Perfect Fit,Scottish Pine Perfect Fit,Yes
+25mm Perfect Fit,Sea Blue Perfect Fit,No
+25mm Perfect Fit,Shiny Silver Perfect Fit,Yes
+25mm Perfect Fit,Silver Lustre Perfect Fit,Yes
+25mm Perfect Fit,Silver Perfect Fit,No
+25mm Perfect Fit,Silver Pitch Perfect Fit,No
+25mm Perfect Fit,Snowflake Perfect Fit,Yes
+25mm Perfect Fit,Soft Orange Perfect Fit,No
+25mm Perfect Fit,Soft Stone Perfect Fit,Yes
+25mm Perfect Fit,Solar Flare Perfect Fit,?
+25mm Perfect Fit,Sparkle Black Perfect Fit,Yes
+25mm Perfect Fit,Sparkle Blue Perfect Fit,No
+25mm Perfect Fit,Spring Blush Perfect Fit,Yes
+25mm Perfect Fit,Sunrise Perfect Fit,Yes
+25mm Perfect Fit,Tornado Perfect Fit,?
+25mm Perfect Fit,Twilight Grey Perfect Fit,No
+25mm Perfect Fit,Walnut Perfect Fit,No
+25mm Perfect Fit,White Perfect Fit,No
+25mm Perfect Fit,White Shimmer Perfect Fit,Yes
+25mm Perfect Fit,Wild Plum Perfect Fit,No
+25mm Perfect Fit,Blue Haze Perfect Fit,Yes
+25mm Perfect Fit,Caramel Perfect Fit,No
+25mm Perfect Fit,Cherry Perfect Fit,Yes
+25mm Perfect Fit,Cool Sky Perfect Fit,Yes
+25mm Perfect Fit,Dorothy Perfect Fit,No
+25mm Perfect Fit,Electric Aqua Perfect Fit,No
+25mm Perfect Fit,Everglades Perfect Fit,No
+25mm Perfect Fit,Fresh Apple Perfect Fit,No
+25mm Perfect Fit,Fuchsia Perfect Fit,No
+25mm Perfect Fit,Gold Yellow Perfect Fit,?
+25mm Perfect Fit,Ivory Perfect Fit,?
+25mm Perfect Fit,Marigold Perfect Fit,No
+25mm Perfect Fit,Melba Perfect Fit,No
+25mm Perfect Fit,Mellow Peach Perfect Fit,No
+25mm Perfect Fit,Oxford Blue Perfect Fit,No
+25mm Perfect Fit,Praline Perfect Fit,No
+25mm Perfect Fit,Satin Silver Perfect Fit,No
+25mm Perfect Fit,Scarlet Perfect Fit,No
+25mm Perfect Fit,Soft Brown Perfect Fit,No
+25mm Perfect Fit,Sugar Maple Perfect Fit,Yes
+25mm Perfect Fit,Sugar Pink Perfect Fit,No
+Tabbed 25mm,Almond,?
+Tabbed 25mm,Alpine,Yes
+Tabbed 25mm,American Elm,Yes
+Tabbed 25mm,Anthracite,?
+Tabbed 25mm,Antique Silver,No
+Tabbed 25mm,Ash,No
+Tabbed 25mm,Barely Black,Yes
+Tabbed 25mm,Black Gloss,No
+Tabbed 25mm,Blue Haze,Yes
+Tabbed 25mm,Brick,No
+Tabbed 25mm,Bronze,No
+Tabbed 25mm,Brushed Copper,Yes
+Tabbed 25mm,Brushed Nickel,No
+Tabbed 25mm,Brushed Silver,No
+Tabbed 25mm,Buttercup,No
+Tabbed 25mm,Calico,Yes
+Tabbed 25mm,Caramel,No
+Tabbed 25mm,Chalk White,No
+Tabbed 25mm,Champagne,Yes
+Tabbed 25mm,Charcoal Grey,No
+Tabbed 25mm,Cherry,Yes
+Tabbed 25mm,Chestnut,Yes
+Tabbed 25mm,Classic Stripe,Yes
+Tabbed 25mm,Classic White,No
+Tabbed 25mm,Conker,Yes
+Tabbed 25mm,Cool Aqua,No
+Tabbed 25mm,Cool Sky,Yes
+Tabbed 25mm,Copper,No
+Tabbed 25mm,Cream,No
+Tabbed 25mm,Creamy Apricot,Yes
+Tabbed 25mm,Crushed Snow,?
+Tabbed 25mm,Damson,No
+Tabbed 25mm,Deep Ivy,No
+Tabbed 25mm,Dorothy,No
+Tabbed 25mm,Dusty Grey,No
+Tabbed 25mm,Elderberry,Yes
+Tabbed 25mm,Electric Aqua,No
+Tabbed 25mm,Everglade,?
+Tabbed 25mm,Fern Green,Yes
+Tabbed 25mm,Filtra Black,Yes
+Tabbed 25mm,Filtra Magnolia,Yes
+Tabbed 25mm,Filtra Silver,Yes
+Tabbed 25mm,Filtra White,Yes
+Tabbed 25mm,Fresh Apple,No
+Tabbed 25mm,Frosted Silver,No
+Tabbed 25mm,Fruitwood,No
+Tabbed 25mm,Fuchsia,No
+Tabbed 25mm,Glacier,Yes
+Tabbed 25mm,Glistening Gold,No
+Tabbed 25mm,Gloss White,No
+Tabbed 25mm,Gold Copper,No
+Tabbed 25mm,Golden Yellow,No
+Tabbed 25mm,Graphite,No
+Tabbed 25mm,Harvest,No
+Tabbed 25mm,Hessian,No
+Tabbed 25mm,Honey,No
+Tabbed 25mm,Hornbeam,Yes
+Tabbed 25mm,Ice Blue,No
+Tabbed 25mm,Ice Pink,Yes
+Tabbed 25mm,Indian Yellow,No
+Tabbed 25mm,Ivory,?
+Tabbed 25mm,Jet,No
+Tabbed 25mm,Khaki,No
+Tabbed 25mm,Latte,No
+Tabbed 25mm,London Fog,?
+Tabbed 25mm,Magnolia,No
+Tabbed 25mm,Mahogany,Yes
+Tabbed 25mm,Marigold,No
+Tabbed 25mm,Melba,No
+Tabbed 25mm,Mellow Peach,No
+Tabbed 25mm,Melon,No
+Tabbed 25mm,Mercury,Yes
+Tabbed 25mm,Mid Grey,No
+Tabbed 25mm,Midnight Blue,Yes
+Tabbed 25mm,Mint Cream,No
+Tabbed 25mm,Mocha,No
+Tabbed 25mm,Moonstone,?
+Tabbed 25mm,Mushroom,No
+Tabbed 25mm,Natural Taupe,No
+Tabbed 25mm,Oatmeal,No
+Tabbed 25mm,Off White,No
+Tabbed 25mm,Orange,No
+Tabbed 25mm,Oriental Blue,No
+Tabbed 25mm,Oxford Blue,No
+Tabbed 25mm,Oyster White,No
+Tabbed 25mm,Peppermint,Yes
+Tabbed 25mm,Pink Blossom,No
+Tabbed 25mm,Pinstripe,Yes
+Tabbed 25mm,Pistachio,No
+Tabbed 25mm,Pitch Black,No
+Tabbed 25mm,Polar,No
+Tabbed 25mm,Praline,No
+Tabbed 25mm,Pretty Pink,No
+Tabbed 25mm,Russet,No
+Tabbed 25mm,Sand,No
+Tabbed 25mm,Sapphire,No
+Tabbed 25mm,Satin Silver,No
+Tabbed 25mm,Scarlet,No
+Tabbed 25mm,Scottish Pine,Yes
+Tabbed 25mm,Sea Blue,No
+Tabbed 25mm,Shiny Silver,Yes
+Tabbed 25mm,Silver Lustre,Yes
+Tabbed 25mm,Silver Pitch,No
+Tabbed 25mm,Silver,No
+Tabbed 25mm,Snowflake,Yes
+Tabbed 25mm,Soft Brown,No
+Tabbed 25mm,Soft Orange,No
+Tabbed 25mm,Soft Stone,Yes
+Tabbed 25mm,Solar Flare,?
+Tabbed 25mm,Sparkle Black,Yes
+Tabbed 25mm,Sparkle Blue,No
+Tabbed 25mm,Spring Blush,Yes
+Tabbed 25mm,Sugar Maple,Yes
+Tabbed 25mm,Sugar Pink,No
+Tabbed 25mm,Sunrise,Yes
+Tabbed 25mm,Tornado,?
+Tabbed 25mm,Twilight Grey,No
+Tabbed 25mm,Walnut,No
+Tabbed 25mm,White Shimmer,Yes
+Tabbed 25mm,White,No
+Tabbed 25mm,Wild Plum,No
+25mm PF Golden Oak,Almond Perfect Fit,?
+25mm PF Golden Oak,Alpine Perfect Fit,Yes
+25mm PF Golden Oak,American Elm Perfect Fit,Yes
+25mm PF Golden Oak,Anthracite Perfect Fit,?
+25mm PF Golden Oak,Antique Silver Perfect Fit,No
+25mm PF Golden Oak,Ash Perfect Fit,No
+25mm PF Golden Oak,Barely Black Perfect Fit,Yes
+25mm PF Golden Oak,Black Gloss Perfect Fit,No
+25mm PF Golden Oak,Brick Perfect Fit,No
+25mm PF Golden Oak,Bronze Perfect Fit,No
+25mm PF Golden Oak,Brushed Copper Perfect Fit,Yes
+25mm PF Golden Oak,Brushed Nickel Perfect Fit,No
+25mm PF Golden Oak,Brushed Silver Perfect Fit,No
+25mm PF Golden Oak,Buttercup Perfect Fit,No
+25mm PF Golden Oak,Calico Perfect Fit,Yes
+25mm PF Golden Oak,Chalk white Perfect Fit,No
+25mm PF Golden Oak,Champagne Perfect Fit,Yes
+25mm PF Golden Oak,Charcoal Grey Perfect Fit,No
+25mm PF Golden Oak,Chestnut Perfect Fit,Yes
+25mm PF Golden Oak,Classic Stripe Perfect Fit,Yes
+25mm PF Golden Oak,Classic White Perfect Fit,No
+25mm PF Golden Oak,Conker Perfect Fit,Yes
+25mm PF Golden Oak,Cool Aqua Perfect Fit,No
+25mm PF Golden Oak,Copper Perfect Fit,No
+25mm PF Golden Oak,Cream Perfect Fit,No
+25mm PF Golden Oak,Creamy Apricot Perfect Fit,Yes
+25mm PF Golden Oak,Crushed Snow  Perfect Fit,?
+25mm PF Golden Oak,Damson Perfect Fit,No
+25mm PF Golden Oak,Deep Ivy Perfect Fit,No
+25mm PF Golden Oak,Dusty Grey Perfect Fit,No
+25mm PF Golden Oak,Elderberry Perfect Fit,Yes
+25mm PF Golden Oak,Fern Green Perfect Fit,Yes
+25mm PF Golden Oak,Filtra Black Perfect Fit,Yes
+25mm PF Golden Oak,Filtra Magnolia PF,?
+25mm PF Golden Oak,Filtra Silver Perfect Fit,Yes
+25mm PF Golden Oak,Filtra White Perfect Fit,Yes
+25mm PF Golden Oak,Frosted Silver Perfect Fit,No
+25mm PF Golden Oak,Fruitwood Perfect Fit,No
+25mm PF Golden Oak,Glacier Perfect Fit,Yes
+25mm PF Golden Oak,Glistening Gold Perf Fit,?
+25mm PF Golden Oak,Gloss White Perfect Fit,No
+25mm PF Golden Oak,Gold Copper Perfect Fit,No
+25mm PF Golden Oak,Graphite Perfect Fit,No
+25mm PF Golden Oak,Harvest Perfect Fit,No
+25mm PF Golden Oak,Hessian Perfect Fit,No
+25mm PF Golden Oak,Honey Perfect Fit,No
+25mm PF Golden Oak,Hornbeam Perfect Fit,Yes
+25mm PF Golden Oak,Ice Blue Perfect Fit,No
+25mm PF Golden Oak,Ice Pink Perfect Fit,Yes
+25mm PF Golden Oak,Indian Yellow Perfect Fit,No
+25mm PF Golden Oak,Jet Perfect Fit,No
+25mm PF Golden Oak,Khaki Perfect Fit,No
+25mm PF Golden Oak,Latte Perfect Fit,No
+25mm PF Golden Oak,London Fog Perfect Fit,?
+25mm PF Golden Oak,Magnolia Perfect Fit,No
+25mm PF Golden Oak,Mahogany Perfect Fit,Yes
+25mm PF Golden Oak,Melon Perfect Fit,No
+25mm PF Golden Oak,Mercury Perfect Fit,Yes
+25mm PF Golden Oak,Mid Grey Perfect Fit,No
+25mm PF Golden Oak,Midnight Blue Perfect Fit,Yes
+25mm PF Golden Oak,Mint Cream Perfect Fit,No
+25mm PF Golden Oak,Mocha Perfect Fit,No
+25mm PF Golden Oak,Moonstone Perfect Fit,?
+25mm PF Golden Oak,Mushroom Perfect Fit,No
+25mm PF Golden Oak,Natural Taupe Perfect Fit,No
+25mm PF Golden Oak,Oatmeal Perfect Fit,No
+25mm PF Golden Oak,Off White Perfect Fit,No
+25mm PF Golden Oak,Orange Perfect Fit,No
+25mm PF Golden Oak,Oriental Blue Perfect Fit,No
+25mm PF Golden Oak,Oyster White Perfect Fit,No
+25mm PF Golden Oak,Peppermint Perfect Fit,Yes
+25mm PF Golden Oak,Pink Blossom Perfect Fit,No
+25mm PF Golden Oak,Pinstripe Perfect Fit,Yes
+25mm PF Golden Oak,Pistachio Perfect Fit,No
+25mm PF Golden Oak,Pitch Black Perfect Fit,No
+25mm PF Golden Oak,Polar Perfect Fit,No
+25mm PF Golden Oak,Pretty Pink Perfect Fit,No
+25mm PF Golden Oak,Russet Perfect Fit,No
+25mm PF Golden Oak,Sand Perfect Fit,No
+25mm PF Golden Oak,Sapphire Perfect Fit,No
+25mm PF Golden Oak,Scottish Pine Perfect Fit,Yes
+25mm PF Golden Oak,Sea Blue Perfect Fit,No
+25mm PF Golden Oak,Shiny Silver Perfect Fit,Yes
+25mm PF Golden Oak,Silver Lustre Perfect Fit,Yes
+25mm PF Golden Oak,Silver Perfect Fit,No
+25mm PF Golden Oak,Silver Pitch Perfect Fit,No
+25mm PF Golden Oak,Snowflake Perfect Fit,Yes
+25mm PF Golden Oak,Soft Orange Perfect Fit,No
+25mm PF Golden Oak,Soft Stone Perfect Fit,Yes
+25mm PF Golden Oak,Solar Flare Perfect Fit,?
+25mm PF Golden Oak,Sparkle Black Perfect Fit,Yes
+25mm PF Golden Oak,Sparkle Blue Perfect Fit,No
+25mm PF Golden Oak,Spring Blush Perfect Fit,Yes
+25mm PF Golden Oak,Sunrise Perfect Fit,Yes
+25mm PF Golden Oak,Tornado Perfect Fit,?
+25mm PF Golden Oak,Twilight Grey Perfect Fit,No
+25mm PF Golden Oak,Walnut Perfect Fit,No
+25mm PF Golden Oak,White Perfect Fit,No
+25mm PF Golden Oak,White Shimmer Perfect Fit,Yes
+25mm PF Golden Oak,Wild Plum Perfect Fit,No
+25mm PF Golden Oak,Blue Haze Perfect Fit,Yes
+25mm PF Golden Oak,Caramel Perfect Fit,No
+25mm PF Golden Oak,Cherry Perfect Fit,Yes
+25mm PF Golden Oak,Cool Sky Perfect Fit,Yes
+25mm PF Golden Oak,Dorothy Perfect Fit,No
+25mm PF Golden Oak,Electric Aqua Perfect Fit,No
+25mm PF Golden Oak,Everglades Perfect Fit,No
+25mm PF Golden Oak,Fresh Apple Perfect Fit,No
+25mm PF Golden Oak,Fuchsia Perfect Fit,No
+25mm PF Golden Oak,Gold Yellow Perfect Fit,?
+25mm PF Golden Oak,Ivory Perfect Fit,?
+25mm PF Golden Oak,Marigold Perfect Fit,No
+25mm PF Golden Oak,Melba Perfect Fit,No
+25mm PF Golden Oak,Mellow Peach Perfect Fit,No
+25mm PF Golden Oak,Oxford Blue Perfect Fit,No
+25mm PF Golden Oak,Praline Perfect Fit,No
+25mm PF Golden Oak,Satin Silver Perfect Fit,No
+25mm PF Golden Oak,Scarlet Perfect Fit,No
+25mm PF Golden Oak,Soft Brown Perfect Fit,No
+25mm PF Golden Oak,Sugar Maple Perfect Fit,Yes
+25mm PF Golden Oak,Sugar Pink Perfect Fit,No
