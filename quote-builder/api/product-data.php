@@ -237,8 +237,14 @@ if ($extraIds) {
 $parentsByExtra = [];
 if ($extraIds) {
     $pph = implode(',', array_fill(0, count($extraIds), '?'));
+    // ORDER so each option's legacy parent_choice_id (its PRIMARY parent)
+    // comes first. The front-ends nest a sub-option under its FIRST parent,
+    // so this keeps a multi-parent option (e.g. "Wand Colour", gated on
+    // Control=Wand AND Headrail=type) under Control Type — the wand — rather
+    // than the Headrail it also depends on. Gating is set-based, so the order
+    // doesn't affect visibility. (array_unique below preserves this order.)
     $pSt = $pdo->prepare(
-        "SELECT DISTINCT pep.product_extra_id, sibling.id AS choice_id
+        "SELECT pep.product_extra_id, sibling.id AS choice_id
            FROM product_extra_parent_choices pep
            JOIN product_extra_choices anchor
                 ON anchor.id = pep.product_extra_choice_id
@@ -246,7 +252,11 @@ if ($extraIds) {
                 ON sibling.product_extra_id = anchor.product_extra_id
                AND sibling.label  = anchor.label
                AND sibling.active = 1
-          WHERE pep.product_extra_id IN ($pph)"
+           JOIN product_extras pe ON pe.id = pep.product_extra_id
+          WHERE pep.product_extra_id IN ($pph)
+          ORDER BY pep.product_extra_id,
+                   (sibling.id = pe.parent_choice_id) DESC,
+                   sibling.id"
     );
     $pSt->execute($extraIds);
     foreach ($pSt->fetchAll() as $r) {
