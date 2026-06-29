@@ -2695,14 +2695,29 @@ $activeNav = 'products';
         function isVisible(extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length) {
-                var match = false;
+                var selected = {};
                 extras.forEach(function (other) {
                     if (other.id === extra.id) return;
-                    effectiveChoiceIds(other).forEach(function (cid) {
-                        if (parents.indexOf(cid) !== -1) match = true;
-                    });
+                    effectiveChoiceIds(other).forEach(function (cid) { selected[cid] = true; });
                 });
-                if (!match) return false;
+                if (extra.parent_match_all) {
+                    // AND across DISTINCT parent options (OR within one) — keep
+                    // this preview in step with the quote builder / instaprice.
+                    var owner = {};
+                    extras.forEach(function (e) { (e.choices || []).forEach(function (c) { owner[c.id] = e.id; }); });
+                    var groups = {};
+                    parents.forEach(function (pid) {
+                        var o = owner[pid]; if (o === undefined) o = '_orphan';
+                        (groups[o] = groups[o] || []).push(pid);
+                    });
+                    var allOk = Object.keys(groups).every(function (o) {
+                        return groups[o].some(function (pid) { return selected[pid]; });
+                    });
+                    if (!allOk) return false;
+                } else {
+                    var anyOk = parents.some(function (pid) { return selected[pid]; });
+                    if (!anyOk) return false;
+                }
             }
             // Number-only option (a measurement input, no choices) stays
             // visible once any parent gate passes — there's no choice for
