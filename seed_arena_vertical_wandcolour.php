@@ -97,9 +97,23 @@ try {
         }
     }
 
-    $sortStmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order),-1)+1 FROM product_extras WHERE product_id = ? AND client_id = ?');
-    $sortStmt->execute([$productId, $clientId]);
-    $nextSort = (int) $sortStmt->fetchColumn();
+    // Sit the Wand Colour options just before "Wand Length" (both children of
+    // Control Type = Wand). Sharing Wand Length's sort_order makes the API's
+    // (sort_order, name) ordering place "Wand Colour" before "Wand Length"
+    // alphabetically. Fall back to append if Wand Length isn't present.
+    $wlStmt = $pdo->prepare(
+        "SELECT sort_order FROM product_extras
+          WHERE product_id = ? AND client_id = ? AND LOWER(name) = 'wand length' LIMIT 1"
+    );
+    $wlStmt->execute([$productId, $clientId]);
+    $wlSort = $wlStmt->fetchColumn();
+    if ($wlSort !== false) {
+        $wandSort = (int) $wlSort;
+    } else {
+        $mx = $pdo->prepare('SELECT COALESCE(MAX(sort_order),-1)+1 FROM product_extras WHERE product_id = ? AND client_id = ?');
+        $mx->execute([$productId, $clientId]);
+        $wandSort = (int) $mx->fetchColumn();
+    }
 
     $insSub = $pdo->prepare(
         'INSERT INTO product_extras
@@ -118,7 +132,7 @@ try {
         if ($apply) {
             // parent_choice_id = the Wand choice (legacy owner); junction holds
             // BOTH gating choices; parent_match_all = 1 makes it an AND.
-            $insSub->execute([$clientId, $productId, $wandChoiceId, 'Wand Colour', $nextSort++]);
+            $insSub->execute([$clientId, $productId, $wandChoiceId, 'Wand Colour', $wandSort]);
             $subId = (int) $pdo->lastInsertId();
             $insJunc->execute([$subId, $wandChoiceId]);
             $insJunc->execute([$subId, $typeChoiceId[$type]]);
