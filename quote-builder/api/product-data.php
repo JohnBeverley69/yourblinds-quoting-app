@@ -206,6 +206,22 @@ try {
 }
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
+// parent_match_all (migrate_parent_match_all.php) — optional column. When 1,
+// the extra's gate requires ALL distinct parent options to match (AND) rather
+// than ANY (OR). Probed separately so the cascade above stays untouched and
+// pre-migration tenants simply fall back to OR.
+$matchAllById = [];
+if ($extraIds) {
+    try {
+        $mph = implode(',', array_fill(0, count($extraIds), '?'));
+        $mSt = $pdo->prepare("SELECT id, parent_match_all FROM product_extras WHERE id IN ($mph)");
+        $mSt->execute($extraIds);
+        foreach ($mSt->fetchAll() as $mr) {
+            $matchAllById[(int) $mr['id']] = (int) $mr['parent_match_all'] === 1;
+        }
+    } catch (Throwable $e) { /* column absent — every extra stays OR */ }
+}
+
 // Parent-choice gating uses the junction table — an option can be
 // gated to MULTIPLE parents. We fold into [extra_id => [choice_id, ...]].
 //
@@ -318,16 +334,18 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra) {
+$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, $matchAllById) {
     $eid = (int) $r['id'];
     return [
         'id'                 => $eid,
         'name'               => (string) $r['name'],
         'is_required'        => (bool)   $r['is_required'],
         // parent_choice_ids — list of choice ids that gate this extra.
-        // Empty list = always visible. Any one match in the user's
-        // current selections is enough to show the extra.
+        // Empty list = always visible. With parent_match_all=false (default)
+        // ANY one match shows the extra (OR); with true, every DISTINCT
+        // parent option must have a selected match (AND).
         'parent_choice_ids'  => $parentsByExtra[$eid] ?? [],
+        'parent_match_all'   => $matchAllById[$eid] ?? false,
         // length_input_label — when non-empty, the quote builder JS
         // renders a number input next to this extra so the salesperson
         // can capture a spec value (e.g. "Wand length (mm)") alongside
