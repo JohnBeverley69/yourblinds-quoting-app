@@ -2412,18 +2412,32 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         function isVisible(extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length > 0) {
-                var ok = false;
+                // Which parent choice ids are currently selected anywhere?
+                var selected = {};
                 productData.extras.forEach(function (other) {
                     if (other.id === extra.id) return;
-                    // Multi-pick parents satisfy the gate if ANY of
-                    // their selected choices matches one of the
-                    // parent_choice_ids on this child.
-                    var ids = effectiveChoiceIds(other);
-                    for (var i = 0; i < ids.length; i++) {
-                        if (parents.indexOf(ids[i]) !== -1) { ok = true; break; }
-                    }
+                    effectiveChoiceIds(other).forEach(function (id) { selected[id] = true; });
                 });
-                if (!ok) return false;
+                if (extra.parent_match_all) {
+                    // AND across DISTINCT parent options (OR within one):
+                    // group parent ids by the option that owns them, and
+                    // require every group to have a selected member. Lets a
+                    // sub-option need e.g. Control = Wand AND Headrail = Vogue.
+                    var groups = {};
+                    parents.forEach(function (pid) {
+                        var owner = choiceToExtra[pid];
+                        if (owner === undefined) owner = '_orphan';
+                        (groups[owner] = groups[owner] || []).push(pid);
+                    });
+                    var allOk = Object.keys(groups).every(function (owner) {
+                        return groups[owner].some(function (pid) { return selected[pid]; });
+                    });
+                    if (!allOk) return false;
+                } else {
+                    // Default OR: any one selected parent choice is enough.
+                    var anyOk = parents.some(function (pid) { return selected[pid]; });
+                    if (!anyOk) return false;
+                }
             }
             // Number-only option (a measurement input, no choices): there's
             // nothing for choiceAvailable to match, but it should still show
