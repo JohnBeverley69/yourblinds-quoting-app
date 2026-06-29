@@ -527,13 +527,29 @@ $activeNav = 'instaprice';
         function isVisible(extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length) {
-                var ok = false;
+                var selected = {};
                 productData.extras.forEach(function (other) {
                     if (other.id === extra.id) return;
-                    var ids = effectiveChoiceIds(other);
-                    for (var i = 0; i < ids.length; i++) { if (parents.indexOf(ids[i]) !== -1) { ok = true; break; } }
+                    effectiveChoiceIds(other).forEach(function (id) { selected[id] = true; });
                 });
-                if (!ok) return false;
+                if (extra.parent_match_all) {
+                    // AND across DISTINCT parent options (OR within one):
+                    // group parent ids by owning option, require every group
+                    // to have a selected match (e.g. Control=Wand AND Headrail=Vogue).
+                    var groups = {};
+                    parents.forEach(function (pid) {
+                        var owner = choiceToExtra[pid];
+                        if (owner === undefined) owner = '_orphan';
+                        (groups[owner] = groups[owner] || []).push(pid);
+                    });
+                    var allOk = Object.keys(groups).every(function (owner) {
+                        return groups[owner].some(function (pid) { return selected[pid]; });
+                    });
+                    if (!allOk) return false;
+                } else {
+                    var anyOk = parents.some(function (pid) { return selected[pid]; });
+                    if (!anyOk) return false;
+                }
             }
             // Number-only option (a measurement input, no choices) is always
             // visible once any parent gate passes — nothing for choiceAvailable
