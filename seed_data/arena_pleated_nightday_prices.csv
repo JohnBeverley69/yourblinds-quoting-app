@@ -1,0 +1,199 @@
+system,band,width_mm,drop_mm,price
+Freehang,STD,250,200,123.0
+Freehang,STD,400,200,132.0
+Freehang,STD,550,200,141.0
+Freehang,STD,700,200,148.0
+Freehang,STD,850,200,155.0
+Freehang,STD,1000,200,164.0
+Freehang,STD,250,400,130.0
+Freehang,STD,400,400,146.0
+Freehang,STD,550,400,156.0
+Freehang,STD,700,400,170.0
+Freehang,STD,850,400,182.0
+Freehang,STD,1000,400,195.0
+Freehang,STD,250,600,141.0
+Freehang,STD,400,600,157.0
+Freehang,STD,550,600,175.0
+Freehang,STD,700,600,190.0
+Freehang,STD,850,600,208.0
+Freehang,STD,1000,600,227.0
+Freehang,STD,250,800,148.0
+Freehang,STD,400,800,170.0
+Freehang,STD,550,800,190.0
+Freehang,STD,700,800,213.0
+Freehang,STD,850,800,235.0
+Freehang,STD,1000,800,259.0
+Freehang,STD,250,1000,155.0
+Freehang,STD,400,1000,183.0
+Freehang,STD,550,1000,208.0
+Freehang,STD,700,1000,236.0
+Freehang,STD,850,1000,262.0
+Freehang,STD,1000,1000,289.0
+Freehang,STD,250,1200,162.0
+Freehang,STD,400,1200,195.0
+Freehang,STD,550,1200,226.0
+Freehang,STD,700,1200,258.0
+Freehang,STD,850,1200,288.0
+Freehang,STD,1000,1200,322.0
+Freehang,STD,250,1400,173.0
+Freehang,STD,400,1400,208.0
+Freehang,STD,550,1400,242.0
+Freehang,STD,700,1400,279.0
+Freehang,STD,850,1400,315.0
+Freehang,STD,1000,1400,354.0
+Freehang,STD,250,1600,180.0
+Freehang,STD,400,1600,221.0
+Freehang,STD,550,1600,262.0
+Freehang,STD,700,1600,303.0
+Freehang,STD,850,1600,343.0
+Freehang,STD,1000,1600,385.0
+Freehang,STD,250,1800,186.0
+Freehang,STD,400,1800,234.0
+Freehang,STD,550,1800,278.0
+Freehang,STD,700,1800,325.0
+Freehang,STD,850,1800,368.0
+Freehang,STD,1000,1800,417.0
+Freehang,STD,250,2000,195.0
+Freehang,STD,400,2000,245.0
+Freehang,STD,550,2000,297.0
+Freehang,STD,700,2000,347.0
+Freehang,STD,850,2000,394.0
+Freehang,STD,1000,2000,447.0
+Freehang,STD,250,2200,203.0
+Freehang,STD,400,2200,259.0
+Freehang,STD,550,2200,313.0
+Freehang,STD,700,2200,367.0
+Freehang,STD,850,2200,422.0
+Freehang,STD,1000,2200,478.0
+Perfect Fit,STD,250,200,143.0
+Perfect Fit,STD,400,200,150.0
+Perfect Fit,STD,550,200,160.0
+Perfect Fit,STD,700,200,170.0
+Perfect Fit,STD,850,200,181.0
+Perfect Fit,STD,1000,200,189.0
+Perfect Fit,STD,250,400,151.0
+Perfect Fit,STD,400,400,165.0
+Perfect Fit,STD,550,400,181.0
+Perfect Fit,STD,700,400,195.0
+Perfect Fit,STD,850,400,210.0
+Perfect Fit,STD,1000,400,225.0
+Perfect Fit,STD,250,600,161.0
+Perfect Fit,STD,400,600,182.0
+Perfect Fit,STD,550,600,201.0
+Perfect Fit,STD,700,600,221.0
+Perfect Fit,STD,850,600,239.0
+Perfect Fit,STD,1000,600,259.0
+Perfect Fit,STD,250,800,174.0
+Perfect Fit,STD,400,800,197.0
+Perfect Fit,STD,550,800,221.0
+Perfect Fit,STD,700,800,244.0
+Perfect Fit,STD,850,800,268.0
+Perfect Fit,STD,1000,800,292.0
+Perfect Fit,STD,250,1000,183.0
+Perfect Fit,STD,400,1000,212.0
+Perfect Fit,STD,550,1000,241.0
+Perfect Fit,STD,700,1000,271.0
+Perfect Fit,STD,850,1000,299.0
+Perfect Fit,STD,1000,1000,327.0
+Perfect Fit,STD,250,1200,194.0
+Perfect Fit,STD,400,1200,227.0
+Perfect Fit,STD,550,1200,262.0
+Perfect Fit,STD,700,1200,296.0
+Perfect Fit,STD,850,1200,328.0
+Perfect Fit,STD,1000,1200,361.0
+Perfect Fit,STD,250,1400,207.0
+Perfect Fit,STD,400,1400,244.0
+Perfect Fit,STD,550,1400,282.0
+Perfect Fit,STD,700,1400,322.0
+Perfect Fit,STD,850,1400,358.0
+Perfect Fit,STD,1000,1400,395.0
+Perfect Fit,STD,250,1600,218.0
+Perfect Fit,STD,400,1600,259.0
+Perfect Fit,STD,550,1600,304.0
+Perfect Fit,STD,700,1600,345.0
+Perfect Fit,STD,850,1600,388.0
+Perfect Fit,STD,1000,1600,430.0
+Perfect Fit,STD,250,1800,228.0
+Perfect Fit,STD,400,1800,275.0
+Perfect Fit,STD,550,1800,324.0
+Perfect Fit,STD,700,1800,369.0
+Perfect Fit,STD,850,1800,419.0
+Perfect Fit,STD,1000,1800,464.0
+Perfect Fit,STD,250,2000,239.0
+Perfect Fit,STD,400,2000,291.0
+Perfect Fit,STD,550,2000,344.0
+Perfect Fit,STD,700,2000,394.0
+Perfect Fit,STD,850,2000,447.0
+Perfect Fit,STD,1000,2000,499.0
+Perfect Fit,STD,250,2200,249.0
+Perfect Fit,STD,400,2200,306.0
+Perfect Fit,STD,550,2200,363.0
+Perfect Fit,STD,700,2200,420.0
+Perfect Fit,STD,850,2200,477.0
+Perfect Fit,STD,1000,2200,534.0
+Perfect Fit Golden Oak,STD,250,200,158.0
+Perfect Fit Golden Oak,STD,400,200,173.0
+Perfect Fit Golden Oak,STD,550,200,181.0
+Perfect Fit Golden Oak,STD,700,200,190.0
+Perfect Fit Golden Oak,STD,850,200,203.0
+Perfect Fit Golden Oak,STD,1000,200,212.0
+Perfect Fit Golden Oak,STD,250,400,174.0
+Perfect Fit Golden Oak,STD,400,400,185.0
+Perfect Fit Golden Oak,STD,550,400,203.0
+Perfect Fit Golden Oak,STD,700,400,218.0
+Perfect Fit Golden Oak,STD,850,400,230.0
+Perfect Fit Golden Oak,STD,1000,400,248.0
+Perfect Fit Golden Oak,STD,250,600,183.0
+Perfect Fit Golden Oak,STD,400,600,202.0
+Perfect Fit Golden Oak,STD,550,600,224.0
+Perfect Fit Golden Oak,STD,700,600,241.0
+Perfect Fit Golden Oak,STD,850,600,262.0
+Perfect Fit Golden Oak,STD,1000,600,283.0
+Perfect Fit Golden Oak,STD,250,800,195.0
+Perfect Fit Golden Oak,STD,400,800,220.0
+Perfect Fit Golden Oak,STD,550,800,245.0
+Perfect Fit Golden Oak,STD,700,800,268.0
+Perfect Fit Golden Oak,STD,850,800,296.0
+Perfect Fit Golden Oak,STD,1000,800,317.0
+Perfect Fit Golden Oak,STD,250,1000,206.0
+Perfect Fit Golden Oak,STD,400,1000,236.0
+Perfect Fit Golden Oak,STD,550,1000,265.0
+Perfect Fit Golden Oak,STD,700,1000,297.0
+Perfect Fit Golden Oak,STD,850,1000,325.0
+Perfect Fit Golden Oak,STD,1000,1000,355.0
+Perfect Fit Golden Oak,STD,250,1200,216.0
+Perfect Fit Golden Oak,STD,400,1200,250.0
+Perfect Fit Golden Oak,STD,550,1200,287.0
+Perfect Fit Golden Oak,STD,700,1200,324.0
+Perfect Fit Golden Oak,STD,850,1200,354.0
+Perfect Fit Golden Oak,STD,1000,1200,390.0
+Perfect Fit Golden Oak,STD,250,1400,228.0
+Perfect Fit Golden Oak,STD,400,1400,272.0
+Perfect Fit Golden Oak,STD,550,1400,309.0
+Perfect Fit Golden Oak,STD,700,1400,349.0
+Perfect Fit Golden Oak,STD,850,1400,389.0
+Perfect Fit Golden Oak,STD,1000,1400,428.0
+Perfect Fit Golden Oak,STD,250,1600,242.0
+Perfect Fit Golden Oak,STD,400,1600,288.0
+Perfect Fit Golden Oak,STD,550,1600,330.0
+Perfect Fit Golden Oak,STD,700,1600,378.0
+Perfect Fit Golden Oak,STD,850,1600,420.0
+Perfect Fit Golden Oak,STD,1000,1600,464.0
+Perfect Fit Golden Oak,STD,250,1800,258.0
+Perfect Fit Golden Oak,STD,400,1800,308.0
+Perfect Fit Golden Oak,STD,550,1800,357.0
+Perfect Fit Golden Oak,STD,700,1800,403.0
+Perfect Fit Golden Oak,STD,850,1800,453.0
+Perfect Fit Golden Oak,STD,1000,1800,502.0
+Perfect Fit Golden Oak,STD,250,2000,271.0
+Perfect Fit Golden Oak,STD,400,2000,325.0
+Perfect Fit Golden Oak,STD,550,2000,379.0
+Perfect Fit Golden Oak,STD,700,2000,428.0
+Perfect Fit Golden Oak,STD,850,2000,484.0
+Perfect Fit Golden Oak,STD,1000,2000,538.0
+Perfect Fit Golden Oak,STD,250,2200,282.0
+Perfect Fit Golden Oak,STD,400,2200,342.0
+Perfect Fit Golden Oak,STD,550,2200,402.0
+Perfect Fit Golden Oak,STD,700,2200,456.0
+Perfect Fit Golden Oak,STD,850,2200,518.0
+Perfect Fit Golden Oak,STD,1000,2200,574.0
