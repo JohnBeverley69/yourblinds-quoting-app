@@ -66,7 +66,7 @@ $PRODUCTS=[
     ['key'=>'fitheight','name'=>'Fit Height','req'=>false,'lenLabel'=>'mm','choices'=>[$mk('Fit Height')]],
  ]],
  ['name'=>'Arena Wood Venetian','journey'=>$woodJourney()],
- ['name'=>'Arena Sherwood','journey'=>$woodJourney()],
+ ['name'=>'Arena Sherwood Venetian','journey'=>$woodJourney()],
 ];
 
 echo ($apply?"APPLY":"DRY RUN (preview only)")." — Venetian Phase 2 options\n".str_repeat('=',60)."\n\n";
