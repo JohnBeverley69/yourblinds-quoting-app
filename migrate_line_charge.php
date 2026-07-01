@@ -39,12 +39,12 @@ echo "Louvres Only: ".($lid?"#{$lid}":'NOT FOUND')."\n";
 
 if(!$apply){ echo "\nWould: ".($hasCol?'':'ADD COLUMN line_charge DECIMAL(10,2) NOT NULL DEFAULT 0; ')."SET {$LOUVRES} = £{$AMOUNT}.\nPREVIEW ONLY — re-run with ?apply=1.\n"; exit; }
 
-$pdo->beginTransaction();
 try {
+    // DDL (ALTER) implicitly commits in MySQL, so it must run OUTSIDE a
+    // transaction — otherwise the later commit() has no active transaction.
     if(!$hasCol){ $pdo->exec("ALTER TABLE products ADD COLUMN line_charge DECIMAL(10,2) NOT NULL DEFAULT 0"); echo "Added column line_charge.\n"; }
     $u=$pdo->prepare('UPDATE products SET line_charge=? WHERE client_id=? AND name=?');
     $u->execute([$AMOUNT,$clientId,$LOUVRES]);
     echo "Set {$LOUVRES} line_charge = £{$AMOUNT} (".$u->rowCount()." row).\n";
-    $pdo->commit();
     echo "\nDone.\n";
-} catch(Throwable $e){ if($pdo->inTransaction())$pdo->rollBack(); echo "\nFAILED: ".$e->getMessage()."\n"; exit(1); }
+} catch(Throwable $e){ echo "\nFAILED: ".$e->getMessage()."\n"; exit(1); }
