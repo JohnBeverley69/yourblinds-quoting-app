@@ -780,6 +780,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    (absent column ⇒ treated as 1 = needs a fabric, the old default).
     $product = false;
     foreach ([
+        'id, name, cost_price, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2, line_charge',
         'id, name, cost_price, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2',
         'id, name, cost_price, requires_option, width_only, price_per_slat',
         'id, name, cost_price, requires_option, width_only',
@@ -1023,7 +1024,12 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     $discountedBase = $basePrice    * (1 - $discount / 100);
     $sellBase       = $discountedBase * (1 + $markup / 100);
     $sellPrice      = round($sellBase + $extrasTotal, 2);
-    $lineTotal      = round($sellPrice * $quantity, 2);
+    // Per-line flat charge (products.line_charge) — a fixed £ added ONCE per
+    // line, AFTER the × quantity step, so it is not multiplied by the slat
+    // count on per-slat products. E.g. Arena "Louvres Only" £6.98 per set.
+    // Pass-through like extras (not marked up); absent column ⇒ 0.
+    $lineCharge     = isset($product['line_charge']) ? (float) $product['line_charge'] : 0.0;
+    $lineTotal      = round($sellPrice * $quantity + $lineCharge, 2);
 
     // 9. Cost snapshot — per-blind cost = product + fabric (both NULL
     //    columns treated as 0). Extras' cost is summed separately so
@@ -1085,6 +1091,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         'discount_percent'   => round($discount, 2),
         'sell_price'         => $sellPrice,
         'quantity'           => $quantity,
+        'line_charge'        => round($lineCharge, 2),
         'line_total'         => $lineTotal,
 
         // Cost breakdown (per-blind). Stored on quote_items as the
