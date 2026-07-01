@@ -32,9 +32,10 @@ echo ($apply?"APPLY":"DRY RUN")." — products.line_charge\n".str_repeat('=',50)
 echo "Column exists: ".($hasCol?'yes':'no')."\n";
 
 $LOUVRES='Arena Vertical Louvres Only'; $AMOUNT=6.98;
-$f=$pdo->prepare('SELECT id,line_charge FROM products WHERE client_id=? AND name=? LIMIT 1');
-if($hasCol){ $f->execute([$clientId,$LOUVRES]); $row=$f->fetch(); echo "Louvres Only: ".($row?("#{$row['id']} current line_charge=".$row['line_charge']):'NOT FOUND')."\n"; }
-else echo "Louvres Only: (check after column add)\n";
+// find the product (without referencing line_charge, which may not exist yet)
+$f=$pdo->prepare('SELECT id FROM products WHERE client_id=? AND name=? LIMIT 1');
+$f->execute([$clientId,$LOUVRES]); $lid=(int)($f->fetchColumn()?:0);
+echo "Louvres Only: ".($lid?"#{$lid}":'NOT FOUND')."\n";
 
 if(!$apply){ echo "\nWould: ".($hasCol?'':'ADD COLUMN line_charge DECIMAL(10,2) NOT NULL DEFAULT 0; ')."SET {$LOUVRES} = £{$AMOUNT}.\nPREVIEW ONLY — re-run with ?apply=1.\n"; exit; }
 
