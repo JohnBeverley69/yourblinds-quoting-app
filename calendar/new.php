@@ -263,6 +263,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
 
+                // Phase 2: email the customer their window (AM/PM mode only,
+                // opt-out via the "Email the customer" checkbox, and only when
+                // an email address was entered). Best-effort — a send failure is
+                // logged inside the mailer and never blocks the booking.
+                if ($ampmOn && $slotWindow !== null
+                    && !empty($_POST['notify_customer'])
+                    && $f['email'] !== '') {
+                    require_once __DIR__ . '/../_partials/appointment_email.php';
+                    $addrLine = trim(implode(', ', array_filter([
+                        (string) $f['installation_address1'],
+                        (string) $f['installation_town'],
+                        (string) $f['installation_postcode'],
+                    ], static fn ($s) => trim($s) !== '')));
+                    send_appointment_slot_email(
+                        db(), (int) $clientId, (string) $f['email'], (string) $f['customer_name'],
+                        (string) $f['appointment_date'], $slotWindow,
+                        $addrLine !== '' ? $addrLine : null
+                    );
+                }
+
                 $monthParam = (new DateTimeImmutable($f['appointment_date']))->format('Y-m');
                 $_SESSION['flash_success'] = 'Appointment booked for '
                     . $f['customer_name'] . ' on '
@@ -577,6 +597,11 @@ $ampmAvail = $ampmOn
                                 The customer is given this window, never an exact time. Each window holds up to
                                 <?= (int) $ampmCap ?> quote visit<?= $ampmCap === 1 ? '' : 's' ?> per day.
                             </p>
+                            <label class="checkbox-row" for="notify_customer" style="margin-top:0.75rem">
+                                <input type="checkbox" id="notify_customer" name="notify_customer" value="1"
+                                       <?= ($_SERVER['REQUEST_METHOD'] === 'POST' ? !empty($_POST['notify_customer']) : true) ? 'checked' : '' ?>>
+                                Email the customer their appointment window (needs an email above)
+                            </label>
                         </div>
                     </div>
                     <?php else: ?>

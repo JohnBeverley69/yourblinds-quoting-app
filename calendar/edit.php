@@ -328,6 +328,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } catch (Throwable $e) { /* column not present yet — skip */ }
             }
 
+            // Phase 2: re-send the window confirmation to the customer, but only
+            // when the "Email the customer" box is ticked (default off on edit,
+            // so a routine save doesn't spam them). Best-effort.
+            if ($useAmpm && $slotWindow !== null && !empty($_POST['notify_customer'])) {
+                $custEmail = trim((string) ($appt['cust_email'] ?? ''));
+                if ($custEmail !== '') {
+                    require_once __DIR__ . '/../_partials/appointment_email.php';
+                    $addrLine = trim(implode(', ', array_filter([
+                        (string) $f['installation_address1'],
+                        (string) $f['installation_town'],
+                        (string) $f['installation_postcode'],
+                    ], static fn ($s) => trim($s) !== '')));
+                    send_appointment_slot_email(
+                        db(), (int) $clientId, $custEmail, (string) ($appt['cust_name'] ?? ''),
+                        (string) $f['appointment_date'], $slotWindow,
+                        $addrLine !== '' ? $addrLine : null
+                    );
+                }
+            }
+
             $_SESSION['flash_success'] = 'Appointment updated.';
             header('Location: /calendar/view.php?id=' . $id);
             exit;
@@ -598,6 +618,14 @@ $ampmAvail = $useAmpm
                                 The customer is given this window, never an exact time. Each window holds up to
                                 <?= (int) $ampmCap ?> quote visit<?= $ampmCap === 1 ? '' : 's' ?> per day.
                             </p>
+                            <?php if (!empty($appt['cust_email'])): ?>
+                            <label class="checkbox-row" for="notify_customer" style="margin-top:0.75rem">
+                                <input type="checkbox" id="notify_customer" name="notify_customer" value="1"
+                                       <?= !empty($_POST['notify_customer']) ? 'checked' : '' ?>>
+                                Email the customer their appointment window
+                                (to <?= e((string) $appt['cust_email']) ?>)
+                            </label>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <?php else: ?>
