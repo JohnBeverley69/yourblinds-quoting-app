@@ -5,6 +5,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
 require __DIR__ . '/../_partials/bookable_users.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -19,6 +20,13 @@ $pcStmt = db()->prepare(
 );
 $pcStmt->execute([$clientId]);
 $postcodeLookupEnabled = ((int) $pcStmt->fetchColumn()) === 1;
+
+// AM/PM booking-slot mode. When on, this measure booking picks a Morning/
+// Afternoon window (capacity-limited) instead of a clock time. Off tenants
+// (and any not yet migrated) keep the free-time picker unchanged.
+$ampm    = ampm_settings(db(), (int) $clientId);
+$ampmOn  = $ampm['on'];
+$ampmCap = $ampm['capacity'];
 
 // Accept ?date=YYYY-MM-DD from the calendar grid; fall back to today
 // if missing or malformed. Strict format check via createFromFormat('!Y-m-d')
@@ -74,6 +82,7 @@ $f = [
     'billing_postcode'          => '',
     'appointment_date'          => $defaultDate,
     'appointment_time'          => $defaultTime,
+    'slot_window'               => 'am',   // only used when $ampmOn
     'duration_minutes'          => 60,
     'assigned_to'               => $defaultAssigned,
     'notes'                     => '',
@@ -81,6 +90,7 @@ $f = [
 
 $error        = null;
 $conflictWarn = null;   // soft double-booking warning (overridable)
+$slotWindow   = null;   // 'am' | 'pm' when booked into a window, else null
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -104,12 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($f['appointment_date'] === ''
               || DateTimeImmutable::createFromFormat('!Y-m-d', $f['appointment_date']) === false) {
         $error = 'Please choose a valid appointment date.';
-    } elseif ($f['appointment_time'] === ''
+    } elseif ($ampmOn && !is_ampm_window($f['slot_window'])) {
+        $error = 'Please choose Morning or Afternoon.';
+    } elseif (!$ampmOn && ($f['appointment_time'] === ''
               || (DateTimeImmutable::createFromFormat('H:i', $f['appointment_time']) === false
                   && DateTimeImmutable::createFromFormat('G:i', $f['appointment_time']) === false
-                  && DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']) === false)) {
+                  && DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']) === false))) {
         $error = 'Please choose a valid appointment time.';
-    } elseif ($f['duration_minutes'] < 5 || $f['duration_minutes'] > 1440) {
+    } elseif (!$ampmOn && ($f['duration_minutes'] < 5 || $f['duration_minutes'] > 1440)) {
         $error = 'Duration must be between 5 and 1440 minutes.';
     } else {
         // assigned_to must be a real user belonging to this client (or 0/none).
@@ -129,22 +141,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($error === null) {
-            // Normalise time to HH:MM:SS for storage.
-            $timeObj = DateTimeImmutable::createFromFormat('H:i',   $f['appointment_time'])
-                    ?: DateTimeImmutable::createFromFormat('G:i',   $f['appointment_time'])
-                    ?: DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']);
-            $timeStored = $timeObj->format('H:i:s');
+            if ($ampmOn) {
+                // Window → canonical start time + duration, so every existing
+                // calendar view still renders it. Capacity is the only gate;
+                // the per-person overlap check is meaningless for half-day
+                // windows (they all overlap by design).
+                $win                   = ampm_windows()[$f['slot_window']];
+                $timeStored            = $win['time'];
+                $f['duration_minutes'] = $win['duration'];
+                $slotWindow            = $f['slot_window'];
 
-            // Double-booking guard — a salesperson can't be in two places at
-            // once. Only applies when an assignee is set.
-            $clash = appointment_find_conflict(
-                db(), (int) $clientId, $assignedId,
-                $f['appointment_date'], $timeStored, (int) $f['duration_minutes']
-            );
+                $taken = ampm_window_count(
+                    db(), (int) $clientId, $f['appointment_date'], $slotWindow
+                );
+                if ($taken >= $ampmCap) {
+                    $error = ampm_window_label($slotWindow)
+                        . ' is fully booked on '
+                        . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
+                        . '. Please choose the other window or another day.';
+                }
+            } else {
+                // Free-time mode — normalise to HH:MM:SS for storage.
+                $timeObj = DateTimeImmutable::createFromFormat('H:i',   $f['appointment_time'])
+                        ?: DateTimeImmutable::createFromFormat('G:i',   $f['appointment_time'])
+                        ?: DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']);
+                $timeStored = $timeObj->format('H:i:s');
+
+                // Double-booking guard — a salesperson can't be in two places at
+                // once. Only applies when an assignee is set.
+                $clash = appointment_find_conflict(
+                    db(), (int) $clientId, $assignedId,
+                    $f['appointment_date'], $timeStored, (int) $f['duration_minutes']
+                );
+            }
         }
 
-        // Soft double-booking warning — surfaced once; the user can override
-        // by re-submitting with "Book anyway" (override_conflict=1).
+        // Soft double-booking warning — free-time mode only; surfaced once, the
+        // user can override by re-submitting with "Book anyway".
         if ($error === null && isset($clash) && $clash !== null && empty($_POST['override_conflict'])) {
             $conflictWarn = appointment_conflict_message($clash, $assigneeName);
         }
@@ -179,6 +212,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // 2) Appointment record. Title defaults to customer name so it
                 //    reads cleanly in the calendar cards.
+                // slot_window is written only in AM/PM mode; the column is
+                // guaranteed to exist there (same migration as feature_ampm_slots),
+                // so unmigrated tenants never reference it.
+                $slotCol = $ampmOn ? ', slot_window' : '';
+                $slotVal = $ampmOn ? ', ?'           : '';
                 $astmt = $pdo->prepare(
                     'INSERT INTO appointments
                        (client_id, client_user_id, customer_id,
@@ -188,15 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         different_billing_address,
                         billing_address1, billing_address2,
                         billing_town, billing_county, billing_postcode,
-                        notes, status)
+                        notes, status' . $slotCol . ')
                      VALUES (?, ?, ?,
                              ?, ?, ?, ?,
                              ?, ?, ?, ?, ?,
                              ?,
                              ?, ?, ?, ?, ?,
-                             ?, ?)'
+                             ?, ?' . $slotVal . ')'
                 );
-                $astmt->execute([
+                $params = [
                     $clientId,
                     $assignedId,
                     $newCustomerId,
@@ -217,14 +255,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $billingDifferent && $f['billing_postcode'] !== '' ? $f['billing_postcode'] : null,
                     $f['notes'] !== '' ? $f['notes'] : null,
                     'booked',
-                ]);
+                ];
+                if ($ampmOn) {
+                    $params[] = $slotWindow;
+                }
+                $astmt->execute($params);
 
                 $pdo->commit();
+
+                // Phase 2: email the customer their window (AM/PM mode only,
+                // opt-out via the "Email the customer" checkbox, and only when
+                // an email address was entered). Best-effort — a send failure is
+                // logged inside the mailer and never blocks the booking.
+                if ($ampmOn && $slotWindow !== null
+                    && !empty($_POST['notify_customer'])
+                    && $f['email'] !== '') {
+                    require_once __DIR__ . '/../_partials/appointment_email.php';
+                    $addrLine = trim(implode(', ', array_filter([
+                        (string) $f['installation_address1'],
+                        (string) $f['installation_town'],
+                        (string) $f['installation_postcode'],
+                    ], static fn ($s) => trim($s) !== '')));
+                    send_appointment_slot_email(
+                        db(), (int) $clientId, (string) $f['email'], (string) $f['customer_name'],
+                        (string) $f['appointment_date'], $slotWindow,
+                        $addrLine !== '' ? $addrLine : null
+                    );
+                }
 
                 $monthParam = (new DateTimeImmutable($f['appointment_date']))->format('Y-m');
                 $_SESSION['flash_success'] = 'Appointment booked for '
                     . $f['customer_name'] . ' on '
                     . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
+                    . ($slotWindow !== null ? ', ' . ampm_window_label($slotWindow) : '')
                     . '.';
                 header('Location: /calendar/index.php?month=' . $monthParam);
                 exit;
@@ -238,6 +301,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $activeNav = 'calendar';
+
+// Live capacity for the currently-chosen date, so the window hints are correct
+// on first paint (and after a validation re-render). Refreshed via AJAX when the
+// user changes the date. Only needed in AM/PM mode.
+$ampmAvail = $ampmOn
+    ? ampm_availability(db(), (int) $clientId, (string) $f['appointment_date'], $ampmCap)
+    : null;
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -297,6 +367,22 @@ $activeNav = 'calendar';
         }
         .checkbox-row input { width: 18px; height: 18px; }
         #billing-block { display: <?= $f['different_billing_address'] === 1 ? 'block' : 'none' ?>; }
+        .ampm-windows { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .ampm-opt {
+            flex: 1 1 220px; display: flex; align-items: center; gap: 0.55rem;
+            border: 1px solid var(--border-strong); border-radius: 10px;
+            padding: 0.7rem 0.85rem; cursor: pointer; background: var(--bg-input);
+        }
+        .ampm-opt.is-selected { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+        .ampm-opt.is-full { opacity: 0.55; cursor: not-allowed; }
+        .ampm-opt input { width: 18px; height: 18px; }
+        .ampm-name { font-weight: 600; }
+        .ampm-range { font-weight: 400; color: var(--text-muted); }
+        .ampm-count {
+            margin-left: auto; font-size: 0.8125rem; color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .ampm-opt.is-full .ampm-count { color: #b45309; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -465,6 +551,60 @@ $activeNav = 'calendar';
                 <fieldset class="form-fieldset">
                     <legend>Appointment</legend>
 
+                    <?php if ($ampmOn): ?>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="appointment_date">Date <span class="required">*</span></label>
+                            <input id="appointment_date" name="appointment_date"
+                                   type="date" required
+                                   value="<?= e((string) $f['appointment_date']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="assigned_to">Assigned to</label>
+                            <select id="assigned_to" name="assigned_to">
+                                <option value="0">— Unassigned —</option>
+                                <?php foreach ($bookableUsers as $u): ?>
+                                    <option value="<?= (int) $u['id'] ?>"
+                                        <?= ((int) $u['id'] === (int) $f['assigned_to']) ? 'selected' : '' ?>>
+                                        <?= e((string) $u['full_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label>Time slot <span class="required">*</span></label>
+                            <div id="ampm-windows" class="ampm-windows">
+                                <?php foreach (ampm_windows() as $wk => $win):
+                                    $info    = $ampmAvail[$wk];
+                                    $checked = ($f['slot_window'] === $wk && !$info['full']);
+                                ?>
+                                <label class="ampm-opt<?= $info['full'] ? ' is-full' : '' ?><?= $checked ? ' is-selected' : '' ?>"
+                                       data-window="<?= e($wk) ?>">
+                                    <input type="radio" name="slot_window" value="<?= e($wk) ?>"
+                                           <?= $checked ? 'checked' : '' ?>
+                                           <?= $info['full'] ? 'disabled' : '' ?>>
+                                    <span class="ampm-name"><?= e($win['label']) ?>
+                                        <span class="ampm-range">(<?= e($win['range']) ?>)</span></span>
+                                    <span class="ampm-count" data-window="<?= e($wk) ?>">
+                                        <?= $info['full'] ? 'Full' : e($info['remaining'] . ' of ' . $ampmCap . ' left') ?>
+                                    </span>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p style="margin:0.4rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                                The customer is given this window, never an exact time. Each window holds up to
+                                <?= (int) $ampmCap ?> quote visit<?= $ampmCap === 1 ? '' : 's' ?> per day.
+                            </p>
+                            <label class="checkbox-row" for="notify_customer" style="margin-top:0.75rem">
+                                <input type="checkbox" id="notify_customer" name="notify_customer" value="1"
+                                       <?= ($_SERVER['REQUEST_METHOD'] === 'POST' ? !empty($_POST['notify_customer']) : true) ? 'checked' : '' ?>>
+                                Email the customer their appointment window (needs an email above)
+                            </label>
+                        </div>
+                    </div>
+                    <?php else: ?>
                     <div class="form-row cols-4">
                         <div class="form-group">
                             <label for="appointment_date">Date <span class="required">*</span></label>
@@ -498,6 +638,7 @@ $activeNav = 'calendar';
                             </select>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <div class="form-row full">
                         <div class="form-group">
@@ -527,6 +668,52 @@ $activeNav = 'calendar';
         };
         cb.addEventListener('change', sync);
         sync();
+    })();
+
+    // AM/PM slot mode: keep the selected-card highlight in sync, and refresh
+    // each window's remaining count when the date changes (server still enforces
+    // capacity on save — this is UX only).
+    (function () {
+        var wrap = document.getElementById('ampm-windows');
+        if (!wrap) return;
+        var dateInput = document.getElementById('appointment_date');
+
+        function syncSelected() {
+            wrap.querySelectorAll('.ampm-opt').forEach(function (opt) {
+                var input = opt.querySelector('input');
+                opt.classList.toggle('is-selected', !!(input && input.checked));
+            });
+        }
+        wrap.addEventListener('change', syncSelected);
+
+        function apply(data) {
+            if (!data || !data.ok || !data.enabled || !data.windows) return;
+            Object.keys(data.windows).forEach(function (wk) {
+                var info  = data.windows[wk];
+                var opt   = wrap.querySelector('.ampm-opt[data-window="' + wk + '"]');
+                if (!opt) return;
+                var input = opt.querySelector('input');
+                var count = opt.querySelector('.ampm-count');
+                if (input) {
+                    input.disabled = info.full;
+                    if (info.full && input.checked) input.checked = false;
+                }
+                opt.classList.toggle('is-full', info.full);
+                if (count) count.textContent = info.full ? 'Full' : (info.remaining + ' of ' + data.capacity + ' left');
+            });
+            syncSelected();
+        }
+
+        if (dateInput) {
+            dateInput.addEventListener('change', function () {
+                var d = dateInput.value;
+                if (!d) return;
+                fetch('/calendar/slot_availability.php?date=' + encodeURIComponent(d), {
+                    headers: { 'Accept': 'application/json' }
+                }).then(function (r) { return r.json(); }).then(apply).catch(function () {});
+            });
+        }
+        syncSelected();
     })();
 </script>
 </body>
