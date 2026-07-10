@@ -39,6 +39,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require __DIR__ . '/../_partials/calendar_money.php';
 require __DIR__ . '/../_partials/maps.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -46,6 +47,11 @@ $user        = current_user();
 $clientId    = (int) $user['client_id'];
 $myUserId    = (int) $user['user_id'];
 $isAdmin     = ($user['role'] ?? '') === 'admin';
+
+// AM/PM slot mode — when on, the slot_window column exists and cards show the
+// window label ("Morning"/"Afternoon") instead of a clock time.
+$ampmOn      = ampm_settings(db(), $clientId)['on'];
+$slotColSql  = $ampmOn ? 'a.slot_window, ' : '';
 
 $perms = function_exists('current_user_permissions')
     ? current_user_permissions()
@@ -132,7 +138,7 @@ try {
     // page still loads. Quote-info columns will just be NULL.
     error_log('day.php: quotes JOIN failed, falling back: ' . $e->getMessage());
     $fallback = $pdo->prepare(
-        "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
+        "SELECT {$slotColSql}a.id, a.title, a.appointment_time, a.duration_minutes,
                 a.status, a.quote_id, a.client_user_id,
                 a.has_issue, a.issue_note,
                 a.installation_town, a.installation_postcode,
@@ -794,9 +800,16 @@ $activeNav = 'calendar';
                                 // Time chip — always shown so the user can
                                 // glance at the card and read the booked
                                 // window without inferring from row position.
-                                $timeLabel = substr($time, 0, 5);
-                                if ($durMin > 0 && $durMin !== 60) {
-                                    $timeLabel .= ' · ' . $durMin . 'min';
+                                // In AM/PM mode a slot-booked visit shows its
+                                // window label ("Morning") instead of a clock time.
+                                $swShort = slot_window_short_label((string) ($appt['slot_window'] ?? ''));
+                                if ($swShort !== '') {
+                                    $timeLabel = $swShort;
+                                } else {
+                                    $timeLabel = substr($time, 0, 5);
+                                    if ($durMin > 0 && $durMin !== 60) {
+                                        $timeLabel .= ' · ' . $durMin . 'min';
+                                    }
                                 }
 
                                 // Heading — customer name if known, else

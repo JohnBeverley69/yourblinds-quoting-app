@@ -5,6 +5,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require __DIR__ . '/../_partials/calendar_money.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -126,15 +127,15 @@ if (!$canViewAll) {
 }
 
 // Optional appointment columns (added by later migrations: appt_kind,
-// access_note, has_issue, issue_note). Probe once so a tenant that hasn't
-// run those migrations doesn't fatally 500 the whole calendar — the render
-// code already null-coalesces each of these to a safe default.
+// access_note, has_issue, issue_note, slot_window). Probe once so a tenant
+// that hasn't run those migrations doesn't fatally 500 the whole calendar —
+// the render code already null-coalesces each of these to a safe default.
 $apptOptSql = '';
 try {
     $cSt = db()->query(
         "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments'
-            AND COLUMN_NAME IN ('appt_kind','access_note','has_issue','issue_note')"
+            AND COLUMN_NAME IN ('appt_kind','access_note','has_issue','issue_note','slot_window')"
     );
     foreach ($cSt->fetchAll(PDO::FETCH_COLUMN) as $col) {
         if (preg_match('/^[a-z_]+$/', (string) $col)) $apptOptSql .= 'a.' . $col . ', ';
@@ -993,7 +994,8 @@ $activeNav = 'calendar';
                                            data-quote-id="<?= (int) $a['quote_id'] ?>"
                                        <?php endif; ?>
                                        title="<?= $isFit ? 'Fitting' : 'Measure' ?>: <?= e((string) $a['title']) ?> &mdash; <?= e((string) $a['status']) ?><?= $isIssue ? ' &mdash; ⚠ ISSUE' . ($issueTxt !== '' ? ': ' . e($issueTxt) : '') : '' ?><?= $noteTxt !== '' ? ' &mdash; ' . e($noteTxt) : '' ?>">
-                                        <span class="cal-appt-time"><?= e($fmtTime((string) $a['appointment_time'])) ?></span>
+                                        <?php $swShort = slot_window_short_label((string) ($a['slot_window'] ?? '')); ?>
+                                        <span class="cal-appt-time"><?= e($swShort !== '' ? $swShort : $fmtTime((string) $a['appointment_time'])) ?></span>
                                         <span class="cal-appt-title"><?= e($displayTitle) ?></span>
                                         <span class="cal-appt-issue" role="button" tabindex="0"
                                               data-id="<?= (int) $a['id'] ?>"

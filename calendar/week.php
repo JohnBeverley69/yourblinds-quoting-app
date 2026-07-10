@@ -29,6 +29,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require __DIR__ . '/../_partials/calendar_money.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -36,6 +37,11 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 $myUserId = (int) $user['user_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
+
+// AM/PM slot mode — gate the slot_window column so non-feature tenants are
+// untouched; cards show the window label when it's set.
+$ampmOn      = ampm_settings(db(), $clientId)['on'];
+$slotColSql  = $ampmOn ? 'a.slot_window, ' : '';
 
 $perms = function_exists('current_user_permissions')
     ? current_user_permissions()
@@ -76,7 +82,7 @@ for ($i = 0; $i < 7; $i++) {
 // around the JOIN handles the Phase-2-schema case where quotes is
 // missing.
 $pdo = db();
-$sql = "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+$sql = "SELECT {$slotColSql}a.id, a.title, a.appointment_date, a.appointment_time,
                a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.client_user_id,
                a.has_issue, a.issue_note,
                a.installation_town, a.installation_postcode,
@@ -608,7 +614,8 @@ $activeNav = 'calendar';
                                 ? $custName
                                 : ($title !== '' ? $title : ('Appointment #' . (int) $appt['id']));
                             $hasOnly  = $custName === '' && $title === '';
-                            $timeLabel = substr($time, 0, 5);
+                            $swShort  = slot_window_short_label((string) ($appt['slot_window'] ?? ''));
+                            $timeLabel = $swShort !== '' ? $swShort : substr($time, 0, 5);
                             $qref     = trim((string) ($appt['quote_number'] ?? ''));
                             $isIssue  = !empty($appt['has_issue']);
                             $issueTxt = trim((string) ($appt['issue_note'] ?? ''));

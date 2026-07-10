@@ -27,6 +27,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -35,6 +36,11 @@ header('Cache-Control: no-store');
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+
+// AM/PM slot mode — gate the slot_window column; grid cards show the window
+// label in place of the clock time so the live refresh matches the page.
+$ampmOn     = ampm_settings(db(), $clientId)['on'];
+$slotColSql = $ampmOn ? 'a.slot_window,' : '';
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $mineOnly = isset($_GET['mine']) && (string) $_GET['mine'] === '1';
 
@@ -120,7 +126,7 @@ if ($startParam !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $startParam) === 1
 
 if ($first !== null && $last !== null) {
     $gridSql = $mineOnly
-        ? 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+        ? 'SELECT ' . $slotColSql . 'a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
                   a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
@@ -134,7 +140,7 @@ if ($first !== null && $last !== null) {
               AND a.client_user_id = ?
               AND a.appointment_date BETWEEN ? AND ?
          ORDER BY a.appointment_date, a.appointment_time'
-        : 'SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+        : 'SELECT ' . $slotColSql . 'a.id, a.title, a.appointment_date, a.appointment_time,
                   a.duration_minutes, a.status, a.appt_kind, a.quote_id, a.access_note,
                   a.has_issue, a.issue_note,
                   a.installation_town, a.installation_postcode,
@@ -168,10 +174,11 @@ if ($first !== null && $last !== null) {
         if ($fittingsOnly && (string) ($r['appt_kind'] ?? 'measure') !== 'fitting') continue;
         if ($issueOnly && empty($r['has_issue'])) continue;
         $date = (string) $r['appointment_date'];
+        $swShort = slot_window_short_label((string) ($r['slot_window'] ?? ''));
         $grid[$date][] = [
             'id'            => (int)    $r['id'],
             'title'         => (string) $r['title'],
-            'time'          => $fmt((string) $r['appointment_time']),
+            'time'          => $swShort !== '' ? $swShort : $fmt((string) $r['appointment_time']),
             'status'        => (string) $r['status'],
             'appt_kind'     => (string) ($r['appt_kind'] ?? 'measure'),
             'has_issue'     => !empty($r['has_issue']) ? 1 : 0,

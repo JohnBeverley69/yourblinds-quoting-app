@@ -20,12 +20,17 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/maps.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 $userId   = (int) $user['user_id'];
+
+// AM/PM slot mode — gate the slot_window column; cards show the window label.
+$ampmOn     = ampm_settings(db(), $clientId)['on'];
+$slotColSql = $ampmOn ? 'a.slot_window, ' : '';
 
 $today    = new DateTimeImmutable('today');
 $tomorrow = $today->modify('+1 day');
@@ -42,7 +47,7 @@ $endNextWeek    = $startNextWeek->modify('+6 days');
 // Pull every dated appointment from today through the end of next
 // week, time-ordered. One query, sliced into sections in PHP.
 $stmt = db()->prepare(
-    'SELECT a.id, a.title, a.status, a.quote_id,
+    "SELECT {$slotColSql}a.id, a.title, a.status, a.quote_id,
             a.appointment_date, a.appointment_time, a.duration_minutes,
             a.installation_address1, a.installation_address2,
             a.installation_town, a.installation_county, a.installation_postcode,
@@ -54,7 +59,7 @@ $stmt = db()->prepare(
         AND a.client_user_id = ?
         AND a.appointment_date IS NOT NULL
         AND a.appointment_date BETWEEN ? AND ?
-   ORDER BY a.appointment_date, a.appointment_time'
+   ORDER BY a.appointment_date, a.appointment_time"
 );
 $stmt->execute([
     $clientId, $userId,
@@ -269,7 +274,10 @@ $activeNav = 'my-schedule';
             ?>
             <div class="sched-card">
                 <div class="time">
-                    <?php if (!empty($r['appointment_time'])): ?>
+                    <?php $swShort = slot_window_short_label((string) ($r['slot_window'] ?? '')); ?>
+                    <?php if ($swShort !== ''): ?>
+                        <?= e($swShort) ?>
+                    <?php elseif (!empty($r['appointment_time'])): ?>
                         <?= e($fmtTime((string) $r['appointment_time'])) ?>
                         <?php if (!empty($r['duration_minutes'])): ?>
                             <small><?= (int) $r['duration_minutes'] ?>m</small>
