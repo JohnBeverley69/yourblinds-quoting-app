@@ -9,5 +9,4 @@ return [
     'feature_maps'            => 'Maps',
     'feature_postcode_lookup' => 'Postcode lookup',
     'feature_accounts'        => 'Accounts',
-    'feature_price_library'   => 'Price-list library',
 ];

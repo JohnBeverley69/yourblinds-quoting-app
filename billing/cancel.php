@@ -48,8 +48,9 @@ if (!$plan || $planCode === 'free') {
 $sub    = billing_subscription_for_plan($clientId, $planCode);
 $subId  = (string) ($sub['external_subscription_id'] ?? '');
 
-// Minimum-term contract guard (Platinum is a 12-month contract). Refuse the
-// in-app cancel until the commitment date.
+// Minimum-term contract guard (for any tier with a term_months commitment).
+// Refuse the in-app cancel until the commitment date. No current tier uses
+// one, but the mechanism is kept for future term plans.
 $commitEnd = billing_commitment_end($clientId, $planCode);
 if ($commitEnd !== null) {
     $_SESSION['flash_error'] = ($plan['name'] ?? $planCode)

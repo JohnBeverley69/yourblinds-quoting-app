@@ -11,6 +11,15 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireAdmin();
 
+// ── Feature retired ──────────────────────────────────────────────────────
+// Part of the withdrawn Supplier Price-List Library. Kept on disk but
+// disabled (see library/index.php). The Fabric Library is unaffected.
+http_response_code(410);
+$retiredHeading = 'Supplier catalogues unavailable';
+$retiredMessage = 'The Supplier Price-List Library has been retired and is no longer available.';
+require __DIR__ . '/../_partials/feature_retired.php';
+exit;
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     header('Allow: POST');
