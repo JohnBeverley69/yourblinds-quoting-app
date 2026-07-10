@@ -394,7 +394,7 @@ function billing_current_tier_code(int $clientId): string
 /**
  * Run once a tier subscription becomes ACTIVE (from billing/return.php OR the
  * PayPal webhook — activation can be async, so both call this). It:
- *   1. Stamps the minimum-term commitment (Platinum's 12 months) if unset.
+ *   1. Stamps the minimum-term commitment (for term plans) if unset.
  *   2. Supersedes any OTHER active tier — a tenant is on one tier at a time —
  *      cancelling its PayPal subscription and marking the local row cancelled.
  *

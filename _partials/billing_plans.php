@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * Single source of truth for billing plans — a TIER LADDER.
  *
- * Bronze (free) → Silver → Gold → Platinum. Each tier is CUMULATIVE: it lists
+ * Bronze (free) → Silver → Gold. Each tier is CUMULATIVE: it lists
  * every feature flag it includes, so a Gold subscriber automatically gets
  * Silver's features too (the grant engine in billing_helpers.php switches on a
  * flag if ANY active plan lists it — so listing them on each tier "just works").
@@ -21,10 +21,10 @@ declare(strict_types=1);
  *                       (edited on /master-admin/pricing.php).
  *   features          — feature-flag column names this tier grants (cumulative).
  *   tier              — ladder position (0 = Bronze/free, higher = more).
- *   term_months       — minimum contract length in months (null = none). Platinum
- *                       is a 12-month contract billed monthly: the PayPal plan is
- *                       an ordinary monthly plan, and the commitment is enforced
- *                       app-side (commitment_end_at + a cancel guard).
+ *   term_months       — minimum contract length in months (null = none). A term
+ *                       plan is an ordinary monthly PayPal plan whose commitment
+ *                       is enforced app-side (commitment_end_at + a cancel guard).
+ *                       No current tier uses one.
  *
  * To change a tier's price: edit it on /master-admin/pricing.php, then click
  * "Create on PayPal" (or update the PayPal plan). To add a tier: add an entry
@@ -62,13 +62,5 @@ return [
         'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_accounts'],
         'tier'              => 2,
         'term_months'       => null,
-    ],
-    'platinum' => [
-        'name'              => 'Platinum',
-        'description'       => 'Everything in Gold, plus Price updates — the Supplier Price-List Library. 12-month contract, billed monthly.',
-        'price_gbp_monthly' => 60,
-        'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_accounts', 'feature_price_library'],
-        'tier'              => 3,
-        'term_months'       => 12,
     ],
 ];

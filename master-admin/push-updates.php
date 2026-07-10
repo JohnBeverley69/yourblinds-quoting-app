@@ -27,6 +27,17 @@ require_once __DIR__ . '/../_partials/library.php';
 
 requireSuperAdmin();
 
+// ── Feature retired ──────────────────────────────────────────────────────
+// Catalogue push (Supplier Price-List Library distribution) has been
+// withdrawn. The page is kept on disk so the route doesn't 404 and the
+// change is easily reversible. The rest of Master Admin is unaffected,
+// as is the Fabric Library.
+http_response_code(410);
+$retiredHeading = 'Catalogue push unavailable';
+$retiredMessage = 'The supplier catalogue push feature has been retired and is no longer available.';
+require __DIR__ . '/../_partials/feature_retired.php';
+exit;
+
 $user           = current_user();
 $masterClientId = (int) $user['client_id'];
 

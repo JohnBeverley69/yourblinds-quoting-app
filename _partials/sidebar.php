@@ -160,7 +160,6 @@ $navSections = [
         'name'  => 'Setup',
         'items' => [
             'products' => ['/admin/products/index.php', 'Products', $isAdmin],
-            'price-library' => ['/library/index.php',   'Supplier catalogues', $isAdmin],
             'users'    => ['/admin/users.php',          'Users',    $isAdmin],
             'settings' => ['/admin/settings.php',       'Settings', $isAdmin],
             'billing'  => ['/billing/index.php',        'Billing',  $isAdmin],
@@ -187,7 +186,6 @@ $navSections = [
             'pricing'       => ['/master-admin/pricing.php',        'Pricing',          $isSuperAdmin],
             'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
             'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
-            'push-updates'  => ['/master-admin/push-updates.php',  'Push updates',  $isSuperAdmin],
             'wipe-products' => ['/master-admin/wipe-products.php', 'Wipe products', $isSuperAdmin],
             'backup'        => ['/master-admin/backup.php',        'Backup',        $isSuperAdmin],
         ],

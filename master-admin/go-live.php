@@ -182,7 +182,7 @@ $badge = static function (string $s): string {
                 <ol class="gl-manual" style="margin:0;padding-left:1.2rem;color:var(--text-muted)">
                     <li>In your <strong>live</strong> PayPal developer account, create an app → copy its <strong>Client ID</strong> and <strong>Secret</strong>.</li>
                     <li>On the server's <code>.env</code> set: <code>PAYPAL_ENV=live</code>, <code>PAYPAL_CLIENT_ID=…</code>, <code>PAYPAL_SECRET=…</code> (your live values).</li>
-                    <li>Recreate the plans on live: <strong>Master Admin → <a href="/master-admin/pricing.php">Pricing</a> → "Create on PayPal"</strong> for Silver / Gold / Platinum.</li>
+                    <li>Recreate the plans on live: <strong>Master Admin → <a href="/master-admin/pricing.php">Pricing</a> → "Create on PayPal"</strong> for Silver / Gold.</li>
                     <li>Register the live <strong>webhook</strong> in PayPal pointing at your billing return/webhook URL, then put its id in <code>.env</code> as <code>PAYPAL_WEBHOOK_ID</code>.</li>
                     <li>Reload this page — the PayPal check above should turn green.</li>
                 </ol>

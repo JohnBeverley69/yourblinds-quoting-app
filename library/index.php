@@ -16,6 +16,18 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireAdmin();
 
+// ── Feature retired ──────────────────────────────────────────────────────
+// The Supplier Price-List Library (catalogue distribution) has been
+// withdrawn. The page is kept on disk so the route doesn't 404 and the
+// change is easily reversible, but it no longer functions. This is a
+// DIFFERENT feature from the Fabric Library (master-admin), which is
+// unaffected.
+http_response_code(410);
+$retiredHeading = 'Supplier catalogues unavailable';
+$retiredMessage = 'The Supplier Price-List Library has been retired and is no longer available.';
+require __DIR__ . '/../_partials/feature_retired.php';
+exit;
+
 require_once __DIR__ . '/../_partials/library.php';
 
 $user     = current_user();

@@ -94,8 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Admin "Cancel on PayPal" — the ONLY in-app path that actually tells
-        // PayPal to stop billing (the tenant-side cancel is blocked for the
-        // Platinum 12-month contract; editing/deleting here is local-only).
+        // PayPal to stop billing (the tenant-side cancel is blocked for any
+        // minimum-term contract; editing/deleting here is local-only).
         // This is an admin override: it cancels on PayPal AND marks local.
         if ($action === 'cancel_paypal') {
             $targetClient = (int)    ($_POST['client_id'] ?? 0);
