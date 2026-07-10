@@ -48,6 +48,18 @@ if (!function_exists('ampm_window_label')) {
     }
 }
 
+if (!function_exists('slot_window_short_label')) {
+    /**
+     * Compact window label for calendar cards, e.g. "Morning" / "Afternoon".
+     * Returns '' for an unrecognised window so callers fall back to the time.
+     */
+    function slot_window_short_label(?string $w): string
+    {
+        $win = ampm_windows()[$w] ?? null;
+        return $win ? $win['label'] : '';
+    }
+}
+
 if (!function_exists('ampm_settings')) {
     /**
      * Read the tenant's slot settings, guarded so a tenant that hasn't run

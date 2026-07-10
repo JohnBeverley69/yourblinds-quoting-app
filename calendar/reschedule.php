@@ -27,6 +27,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
+require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
@@ -122,14 +123,35 @@ $pdo = db();
 // (unschedule → pending tray is always fine). Look up this appointment's
 // own assignee / time / duration, then check the target date for an overlap.
 // override=1 means the user already saw the warning and chose "Book anyway".
-if ($newDate !== null && empty($_POST['override'])) {
+$ampm = ampm_settings($pdo, $clientId);
+if ($newDate !== null) {
+    // Include slot_window only when the feature is on (column guaranteed then).
+    $selfCols = 'client_user_id, appointment_time, duration_minutes'
+              . ($ampm['on'] ? ', slot_window' : '');
     $self = $pdo->prepare(
-        'SELECT client_user_id, appointment_time, duration_minutes
-           FROM appointments WHERE id = ? AND client_id = ? LIMIT 1'
+        "SELECT {$selfCols} FROM appointments WHERE id = ? AND client_id = ? LIMIT 1"
     );
     $self->execute([$apptId, $clientId]);
     $selfRow = $self->fetch();
-    if ($selfRow && $selfRow['client_user_id'] !== null) {
+
+    $selfWindow = $ampm['on'] ? (string) ($selfRow['slot_window'] ?? '') : '';
+
+    if (is_ampm_window($selfWindow)) {
+        // Windowed (quote) visit: capacity on the target date is the gate, not
+        // per-person overlap (half-day windows always overlap). Hard limit —
+        // no override — so a drag can't push a window past its cap. The drag
+        // reverts on the client when ok is false.
+        $taken = ampm_window_count($pdo, $clientId, $newDate, $selfWindow, $apptId);
+        if ($taken >= $ampm['capacity']) {
+            echo json_encode([
+                'ok'    => false,
+                'error' => ampm_window_label($selfWindow) . ' is full on '
+                    . (new DateTimeImmutable($newDate))->format('j M Y')
+                    . '. Move it to another day or window.',
+            ]);
+            exit;
+        }
+    } elseif (empty($_POST['override']) && $selfRow && $selfRow['client_user_id'] !== null) {
         $clash = appointment_find_conflict(
             $pdo, $clientId, (int) $selfRow['client_user_id'],
             $newDate, $newTime ?? (string) $selfRow['appointment_time'],
