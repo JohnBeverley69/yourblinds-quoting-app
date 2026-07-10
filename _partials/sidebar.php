@@ -177,6 +177,7 @@ $navSections = [
             'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],
             'monitor'       => ['/master-admin/monitor.php',        'Monitor',          $isSuperAdmin],
             'master-catalogue' => ['/master-admin/master-catalogue.php', 'Master Catalogue', $isSuperAdmin],
+            'push-updates'  => ['/master-admin/push-updates.php',   'Push updates',      $isSuperAdmin],
             'library-suppliers' => ['/master-admin/library-suppliers.php', 'Library suppliers', $isSuperAdmin],
             'fabric-library' => ['/master-admin/fabric-library.php', 'Fabric Library', $isSuperAdmin],
             'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups', $isSuperAdmin],
