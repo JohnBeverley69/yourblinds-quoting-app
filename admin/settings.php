@@ -469,6 +469,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'ampm_slots') {
+        // Morning/afternoon booking slots for quote visits (migrate_ampm_slots.php).
+        $on  = !empty($_POST['feature_ampm_slots']) ? 1 : 0;
+        $cap = (int) ($_POST['ampm_slot_capacity'] ?? 4);
+        if ($cap < 1)   $cap = 1;
+        if ($cap > 99)  $cap = 99;
+        try {
+            db()->prepare(
+                'INSERT INTO client_settings (client_id, feature_ampm_slots, ampm_slot_capacity)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE feature_ampm_slots = VALUES(feature_ampm_slots),
+                                         ampm_slot_capacity = VALUES(ampm_slot_capacity)'
+            )->execute([$clientId, $on, $cap]);
+            $_SESSION['flash_success'] = $on
+                ? "Morning/afternoon booking slots are on ({$cap} per window per day)."
+                : 'Morning/afternoon booking slots are off.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_ampm_slots.php?';
+        }
+        header('Location: /admin/settings.php');
+        exit;
+    }
+
     if ($action === 'suppliers') {
         // Master suppliers list: add / rename / set email / remove, plus the
         // delivery address. Rows keyed by suppliers.id (empty id = a new row);
@@ -907,6 +931,46 @@ $activeNav = 'settings';
                             When you tap an address on My Schedule or the day calendar, it opens in
                             the app you choose here. Google Maps is the default; pick Waze if your
                             fitters prefer it for live traffic and routing.
+                        </p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+
+            <?php
+                $ampmOn  = ((int) ($settings['feature_ampm_slots'] ?? 0)) === 1;
+                $ampmCap = (int) ($settings['ampm_slot_capacity'] ?? 4);
+                if ($ampmCap < 1) $ampmCap = 4;
+            ?>
+            <form method="post" action="/admin/settings.php" class="form" novalidate
+                  style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="ampm_slots">
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:inline-flex;align-items:center;gap:.5rem;font-weight:600;">
+                            <input type="checkbox" name="feature_ampm_slots" value="1"
+                                   <?= $ampmOn ? 'checked' : '' ?>>
+                            🕘 Morning / afternoon booking slots
+                        </label>
+                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                            When booking a <strong>quote (measure) visit</strong>, offer
+                            <strong>Morning (9am–1pm)</strong> or <strong>Afternoon (1pm–5pm)</strong>
+                            instead of a specific time — so the customer is given a window, never an
+                            exact hour like 10am. Each window can hold the number of bookings below per
+                            day; once it's full it can't be booked. Fittings are unaffected.
+                        </p>
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group" style="max-width:16rem;">
+                        <label for="ampm_slot_capacity" style="font-weight:600;">Bookings per window, per day</label>
+                        <input id="ampm_slot_capacity" name="ampm_slot_capacity" type="number"
+                               min="1" max="99" step="1" value="<?= e((string) $ampmCap) ?>">
+                        <p style="margin:0.35rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                            e.g. 4 = up to four quote visits each morning and four each afternoon.
                         </p>
                     </div>
                 </div>
