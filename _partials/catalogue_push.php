@@ -137,6 +137,22 @@ function push_one_product(
         static fn ($c) => array_key_exists($c, $sourceProduct)
     ));
 
+    // Catalogue-source marker (migrate_catalogue_source.php). When present,
+    // stamp every pushed copy with its master origin so the manufacturing
+    // hand-off can route only Beverley-catalogue lines. Probed once.
+    static $hasSourceCols = null;
+    if ($hasSourceCols === null) {
+        try {
+            $hasSourceCols = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'
+                    AND COLUMN_NAME = 'source_client_id' LIMIT 1"
+            )->fetchColumn();
+        } catch (Throwable $e) {
+            $hasSourceCols = false;
+        }
+    }
+
     // ---- 1. The product itself ----
     $tgtPid = pp_find_product_by_name($pdo, $targetClientId, (string) $sourceProduct['name']);
     if ($tgtPid === null) {
@@ -159,6 +175,10 @@ function push_one_product(
             $insCols[] = $col;
             $insVals[] = $sourceProduct[$col];  // copy as-is
         }
+        if ($hasSourceCols) {
+            $insCols[] = 'source_client_id';  $insVals[] = $sourceClientId;
+            $insCols[] = 'source_product_id'; $insVals[] = $sourceProductId;
+        }
         $ins = $pdo->prepare(
             'INSERT INTO products (' . implode(', ', $insCols) . ')
              VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
@@ -178,6 +198,12 @@ function push_one_product(
         foreach ($flags as $col) {
             $setCols[] = "$col = ?";
             $setVals[] = $sourceProduct[$col];
+        }
+        if ($hasSourceCols) {
+            // Re-stamp on update too — this is what backfills the marker on
+            // existing copies when a price-list push is re-run.
+            $setCols[] = 'source_client_id = ?';  $setVals[] = $sourceClientId;
+            $setCols[] = 'source_product_id = ?'; $setVals[] = $sourceProductId;
         }
         $setVals[] = $tgtPid;
         $setVals[] = $targetClientId;
