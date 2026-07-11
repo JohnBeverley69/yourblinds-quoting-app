@@ -18,6 +18,7 @@ $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
+    'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
 ];
 ?><!doctype html>
 <html lang="en">
