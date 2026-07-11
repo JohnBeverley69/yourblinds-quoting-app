@@ -27,6 +27,20 @@ $orders    = [];
 $linesBy   = [];
 $loadError = null;
 
+// The factory status (received / into production) lives in factory_jobs. Probe
+// so the queue still renders if migrate_factory_jobs.php hasn't run yet — then
+// every order simply reads as "new".
+$hasFactoryJobs = false;
+try { $pdo->query('SELECT 1 FROM factory_jobs LIMIT 0'); $hasFactoryJobs = true; }
+catch (Throwable $e) { /* table not migrated yet */ }
+
+$fjSelect = $hasFactoryJobs
+    ? ', fj.status AS factory_status, fj.received_at'
+    : ', NULL AS factory_status, NULL AS received_at';
+$fjJoin  = $hasFactoryJobs ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id' : '';
+$fjGroup = $hasFactoryJobs ? ', fj.status, fj.received_at' : '';
+$fjOrder = $hasFactoryJobs ? '(fj.status IS NOT NULL) ASC, ' : '';
+
 try {
     $oStmt = $pdo->prepare(
         "SELECT q.id, q.client_id, c.company_name AS tenant,
@@ -35,16 +49,18 @@ try {
                 q.end_customer_name,
                 COUNT(qi.id)                  AS bev_lines,
                 COALESCE(SUM(qi.quantity), 0) AS bev_qty
+                $fjSelect
            FROM quotes q
            JOIN clients c      ON c.id = q.client_id
            JOIN quote_items qi ON qi.quote_id = q.id
            JOIN products p     ON p.id = qi.product_id
+           $fjJoin
           WHERE q.status IN ($inPlaced)
             AND p.source_client_id = ?
        GROUP BY q.id, q.client_id, c.company_name, q.quote_number, q.status,
                 q.created_at, q.customer_reference, q.additional_reference,
-                q.end_customer_name
-       ORDER BY q.created_at DESC
+                q.end_customer_name $fjGroup
+       ORDER BY {$fjOrder}q.created_at DESC
           LIMIT 300"
     );
     $oStmt->execute([$MASTER]);
@@ -75,8 +91,13 @@ try {
 
 $newCount = 0;
 foreach ($orders as $o) {
-    if (($o['status'] ?? '') === 'ordered') $newCount++;
+    if (($o['factory_status'] ?? null) !== 'received') $newCount++;
 }
+
+// One-shot flash from the mark-received action.
+$flashOk  = (string) ($_SESSION['flash_success'] ?? '');
+$flashErr = (string) ($_SESSION['flash_error'] ?? '');
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $fmtDate = static function (?string $ts): string {
     if (!$ts) return '';
@@ -107,6 +128,17 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-lines .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .io-lines .prod { font-weight: 600; }
     .io-empty { background: var(--bg-subtle, #f8fafc); border: 1px dashed var(--border, #e5e7eb); border-radius: 12px; padding: 1.75rem; color: var(--text-faint, #94a3b8); text-align: center; }
+    .io-flash { padding: 0.7rem 1rem; border-radius: 10px; margin: 0 0 1.2rem; font-size: 0.9375rem; }
+    .io-flash.ok  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .io-flash.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .io-actions { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; }
+    .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.38rem 0.85rem; }
+    .io-btn.receive { background: #166534; color: #fff; }
+    .io-btn.receive:hover { background: #14532d; }
+    .io-received { display: inline-flex; align-items: center; gap: 0.35rem; color: #166534; font-size: 0.8125rem; font-weight: 600; }
+    .io-undo { background: none; border: none; color: var(--text-muted, #667); font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
+    .io-order.is-received { opacity: 0.82; }
+    .io-order.is-received .io-head { background: #f0fdf4; }
 </style>
 
 <div class="io-head-row">
@@ -115,20 +147,25 @@ require __DIR__ . '/../_partials/factory_head.php';
 </div>
 <p class="io-sub">Placed orders from every trade customer that contain Beverley Blinds Trade lines. Only your lines are shown.</p>
 
+<?php if ($flashOk !== ''): ?><div class="io-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
+<?php if ($flashErr !== ''): ?><div class="io-flash err"><?= e($flashErr) ?></div><?php endif; ?>
+
 <?php if ($loadError !== null): ?>
     <div class="io-empty">Couldn't load orders: <?= e($loadError) ?></div>
 <?php elseif (!$orders): ?>
     <div class="io-empty">No incoming orders yet. Placed orders containing Beverley lines will appear here — nothing to re-key from Blind Matrix.</div>
 <?php else: ?>
     <?php foreach ($orders as $o):
-        $qid     = (int) $o['id'];
-        $lines   = $linesBy[$qid] ?? [];
-        $status  = (string) ($o['status'] ?? '');
-        $custRef = trim((string) ($o['customer_reference'] ?? ''));
-        $addRef  = trim((string) ($o['additional_reference'] ?? ''));
-        $endCust = trim((string) ($o['end_customer_name'] ?? ''));
+        $qid      = (int) $o['id'];
+        $lines    = $linesBy[$qid] ?? [];
+        $status   = (string) ($o['status'] ?? '');
+        $custRef  = trim((string) ($o['customer_reference'] ?? ''));
+        $addRef   = trim((string) ($o['additional_reference'] ?? ''));
+        $endCust  = trim((string) ($o['end_customer_name'] ?? ''));
+        $received = (string) ($o['factory_status'] ?? '') === 'received';
+        $recvAt   = $o['received_at'] ?? null;
     ?>
-        <section class="io-order">
+        <section class="io-order<?= $received ? ' is-received' : '' ?>">
             <div class="io-head">
                 <span class="ref"><?= e((string) ($o['quote_number'] ?? ('#' . $qid))) ?></span>
                 <span class="tenant"><?= e((string) ($o['tenant'] ?? 'Unknown account')) ?></span>
@@ -138,11 +175,27 @@ require __DIR__ . '/../_partials/factory_head.php';
                     &middot; <?= (int) $o['bev_qty'] ?> unit<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?>
                     &middot; placed <?= e($fmtDate($o['created_at'] ?? null)) ?>
                 </span>
-                <span class="meta" style="margin-left:auto">
+                <span class="meta">
                     <?php if ($custRef !== ''): ?>Ref: <strong><?= e($custRef) ?></strong><?php endif; ?>
                     <?php if ($addRef !== ''): ?> &middot; <?= e($addRef) ?><?php endif; ?>
                     <?php if ($endCust !== ''): ?> &middot; <?= e($endCust) ?><?php endif; ?>
                 </span>
+                <div class="io-actions">
+                    <?php if ($received): ?>
+                        <span class="io-received">&#10003; Received <?= e($fmtDate($recvAt)) ?></span>
+                        <form method="post" action="/factory/mark-received.php" style="margin:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                            <button type="submit" name="action" value="unreceive" class="io-undo">Undo</button>
+                        </form>
+                    <?php else: ?>
+                        <form method="post" action="/factory/mark-received.php" style="margin:0">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                            <button type="submit" name="action" value="receive" class="io-btn receive">Mark as received</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
             <?php if ($lines): ?>
             <table class="io-lines">
