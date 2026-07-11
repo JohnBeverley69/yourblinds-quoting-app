@@ -92,6 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($k === '') continue;
             $vars[$k] = is_numeric($val) ? (float) $val : $val;
         }
+        // Allowance tables, for LOOKUP(): name => (key_norm => value).
+        $allowances = [];
+        try {
+            foreach ($pdo->query('SELECT table_name, key_norm, value FROM allowance_rows') as $ar) {
+                $allowances[strtolower((string) $ar['table_name'])][(string) $ar['key_norm']] = (float) $ar['value'];
+            }
+        } catch (Throwable $e) { /* allowance_rows not migrated yet */ }
+
         // Evaluate the SAVED rules in seq order; each output feeds the next.
         $testResults = [];
         if ($hasBuildRules && $productId > 0) {
@@ -100,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($rs->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $var = (string) $r['variable'];
                 try {
-                    $val = formula_eval((string) $r['formula'], $vars);
+                    $val = formula_eval((string) $r['formula'], $vars, $allowances);
                     $vars[$var] = $val;
                     $testResults[] = ['var' => $var, 'ok' => true, 'value' => $val];
                 } catch (Throwable $e) {

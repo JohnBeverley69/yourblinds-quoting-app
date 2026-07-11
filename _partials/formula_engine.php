@@ -34,18 +34,29 @@ if (!class_exists('FormulaEngine')) {
         private int $pos = 0;
         /** @var array<string,mixed> lower-cased variable map */
         private array $vars;
+        /** @var array<string,array<string,float>> lower-cased allowance tables: name => (key_norm => value) */
+        private array $allowances;
 
-        private function __construct(string $expr, array $vars)
+        private function __construct(string $expr, array $vars, array $allowances)
         {
             $this->toks = self::tokenize($expr);
             $this->vars = [];
             foreach ($vars as $k => $v) {
                 $this->vars[strtolower((string) $k)] = $v;
             }
+            $this->allowances = [];
+            foreach ($allowances as $name => $rows) {
+                $this->allowances[strtolower((string) $name)] = $rows;
+            }
         }
 
-        /** Evaluate $expr against $vars. Returns float|string|bool. */
-        public static function evaluate(string $expr, array $vars = [])
+        /**
+         * Evaluate $expr against $vars. Returns float|string|bool.
+         *
+         * $allowances feeds LOOKUP(): a map of tableName => (key_norm => value),
+         * where key_norm is the lower-cased, "|"-joined key columns.
+         */
+        public static function evaluate(string $expr, array $vars = [], array $allowances = [])
         {
             $expr = trim($expr);
             if ($expr === '') {
@@ -55,7 +66,7 @@ if (!class_exists('FormulaEngine')) {
             if ($expr[0] === '=') {
                 $expr = ltrim(substr($expr, 1));
             }
-            $engine = new self($expr, $vars);
+            $engine = new self($expr, $vars, $allowances);
             $ast = $engine->parseExpr();
             if ($engine->pos < count($engine->toks)) {
                 $t = $engine->toks[$engine->pos];
@@ -310,6 +321,24 @@ if (!class_exists('FormulaEngine')) {
                 case 'min':
                     $vals = array_map(fn ($a) => self::num($this->ev($a)), $args);
                     return $vals ? (float) min($vals) : 0.0;
+                case 'lookup':
+                    // LOOKUP("table", key1, key2, ...) → the value whose key columns
+                    // match (case-insensitive). Shared allowance tables so a headrail
+                    // deduction is one lookup, not a 44-branch IF.
+                    if (count($args) < 2) throw new FormulaError('LOOKUP needs a table name and at least one key.');
+                    $name = strtolower(trim(self::str($this->ev($args[0]))));
+                    $keys = [];
+                    for ($i = 1, $c = count($args); $i < $c; $i++) {
+                        $keys[] = strtolower(trim(self::str($this->ev($args[$i]))));
+                    }
+                    $keyNorm = implode('|', $keys);
+                    if (!isset($this->allowances[$name])) {
+                        throw new FormulaError("Unknown allowance table: {$name}");
+                    }
+                    if (!array_key_exists($keyNorm, $this->allowances[$name])) {
+                        throw new FormulaError("No allowance in \"{$name}\" for: " . implode(', ', $keys));
+                    }
+                    return (float) $this->allowances[$name][$keyNorm];
             }
             throw new FormulaError("Unknown function: {$fn}()");
         }
@@ -369,8 +398,8 @@ if (!class_exists('FormulaEngine')) {
 
 if (!function_exists('formula_eval')) {
     /** Convenience wrapper. Returns float|string|bool, or throws FormulaError. */
-    function formula_eval(string $expr, array $vars = [])
+    function formula_eval(string $expr, array $vars = [], array $allowances = [])
     {
-        return FormulaEngine::evaluate($expr, $vars);
+        return FormulaEngine::evaluate($expr, $vars, $allowances);
     }
 }
