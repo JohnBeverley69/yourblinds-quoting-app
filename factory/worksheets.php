@@ -206,13 +206,17 @@ require __DIR__ . '/../_partials/factory_head.php';
     .add-fld select { min-width:14rem; }
     .empty { color:#94a3b8; font-size:0.88rem; padding:0.3rem 0; }
 
+    .size-ctl { margin-left:0.6rem; font-size:0.75rem; color:#64748b; display:inline-flex; align-items:center; gap:0.25rem; }
+    .size-ctl input { width:3.4rem; padding:0.25rem 0.35rem; }
     .ws-preview { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.25rem; margin-top:0.4rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
-    .pv-sheet { max-width:720px; margin:0 auto; font-family:ui-monospace,Consolas,monospace; font-size:0.72rem; color:#111; }
-    .pv-header { border-bottom:1px solid #cbd5e1; padding-bottom:0.5rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; gap:0.15rem 1.2rem; }
-    .pv-line { display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; padding:0.5rem 0; border-bottom:1px dashed #e5e7eb; }
-    .pv-label .pv-lt { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8; margin-bottom:0.25rem; }
-    .pv-row { line-height:1.5; }
-    .pv-badge { font-size:0.6rem; color:#94a3b8; text-align:center; margin:0.2rem 0; }
+    .pv-sheet { overflow-x:auto; }
+    .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
+    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.3 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; }
+    .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
+    .pv-labelbox span { display:inline; white-space:nowrap; margin-right:5px; }
+    .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
+    .pv-line2 { display:flex; gap:16px; padding:0.5rem 0; }
+    .pv-badge { font-size:0.62rem; color:#94a3b8; margin:0.35rem 0; }
 </style>
 
 <div class="ws-head">
@@ -290,7 +294,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 </div>
 
 <div class="ws-preview" id="preview-wrap" style="display:none;">
-    <div class="ws-hint" style="margin-bottom:0.6rem;">Preview · sample data (real orders wired later). Repeats once per blind on the order.</div>
+    <div class="ws-hint" style="margin-bottom:0.6rem;">Preview · sample data, drawn at real label size. Repeats once per blind on the order.</div>
+    <div class="pv-warn" id="pv-warn">⚠ Some labels are overflowing (outlined in red) — that content won't all fit at this size. Trim fields, shorten captions, or make the label bigger.</div>
     <div class="pv-sheet" id="preview"></div>
 </div>
 
@@ -320,7 +325,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     // Starter layout modelled on the real vertical worksheet.
     var STARTER = {
         stock: 'a4-diecut',
-        header: { fields: [
+        header: { w: 170, h: 22, fields: [
             { source: 'order:order_no',   caption: 'ONO',       show: 'always' },
             { source: 'order:order_date', caption: 'Date',      show: 'always' },
             { source: 'order:customer',   caption: 'Customer',  show: 'always' },
@@ -329,7 +334,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             { source: 'order:cust_ref',   caption: 'Cust Ref',  show: 'always' }
         ] },
         labels: [
-            { title: 'Cutting label', fields: [
+            { title: 'Cutting label', w: 80, h: 18, fields: [
                 { source: 'order:line_no',      caption: '',      show: 'always' },
                 { source: 'order:system',       caption: '',      show: 'always' },
                 { source: 'order:colour',       caption: '',      show: 'always' },
@@ -345,7 +350,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                 { source: 'order:fix',          caption: '',      show: 'always' },
                 { source: 'order:notes',        caption: 'Notes', show: 'always' }
             ] },
-            { title: 'Fabric label', fields: [
+            { title: 'Fabric label', w: 80, h: 18, fields: [
                 { source: 'order:line_no',      caption: '',        show: 'always' },
                 { source: 'order:fabric',       caption: '',        show: 'always' },
                 { source: 'order:location',     caption: 'Loc',     show: 'always' },
@@ -361,12 +366,27 @@ require __DIR__ . '/../_partials/factory_head.php';
     };
 
     var STATE = LAYOUT && LAYOUT.header ? LAYOUT
-              : { stock: 'a4-diecut', header: { fields: [] }, labels: [] };
+              : { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
 
     var editor = document.getElementById('editor');
 
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+    function num(v, d) { v = parseInt(v, 10); return (isFinite(v) && v > 0) ? v : d; }
+
+    // Older saved layouts (and blank ones) may lack label sizes — fill defaults.
+    function ensureSizes() {
+        if (!STATE.header) STATE.header = { fields: [] };
+        STATE.header.w = num(STATE.header.w, 170);
+        STATE.header.h = num(STATE.header.h, 22);
+        STATE.labels.forEach(function (l) { l.w = num(l.w, 80); l.h = num(l.h, 18); });
+    }
+
+    function sizeCtl(w, h) {
+        return '<span class="size-ctl"><input type="number" class="sw" value="' + w + '" min="10" max="210" title="width mm"> ×'
+             + '<input type="number" class="sh" value="' + h + '" min="5" max="297" title="height mm"> mm</span>';
+    }
 
     function srcSelect(source) {
         var groups = {}, order = [];
@@ -418,14 +438,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         var html = '';
         // Header section.
         html += '<div class="sec" data-sec="header">';
-        html += '<div class="sec-top"><span class="tag">Order header</span><span class="ws-hint">prints once at the top</span></div>';
+        html += '<div class="sec-top"><span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h) + '</div>';
         html += '<div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>';
         html += addFieldControl();
         html += '</div>';
         // Label sections.
         STATE.labels.forEach(function (lab, li) {
             html += '<div class="sec" data-sec="label" data-li="' + li + '">';
-            html += '<div class="sec-top"><span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label"><button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
+            html += '<div class="sec-top"><span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
             html += '<div class="flds">' + fieldsBlock(lab.fields) + '</div>';
             html += addFieldControl();
             html += '</div>';
@@ -441,7 +461,16 @@ require __DIR__ . '/../_partials/factory_head.php';
     function sync() {
         editor.querySelectorAll('.sec').forEach(function (sec) {
             var fields = sectionFields(sec);
-            if (sec.dataset.sec === 'label') STATE.labels[+sec.dataset.li].title = sec.querySelector('.title').value;
+            var sw = sec.querySelector('.sw'), sh = sec.querySelector('.sh');
+            if (sec.dataset.sec === 'header') {
+                if (sw) STATE.header.w = num(sw.value, 170);
+                if (sh) STATE.header.h = num(sh.value, 22);
+            } else {
+                var L = STATE.labels[+sec.dataset.li];
+                L.title = sec.querySelector('.title').value;
+                if (sw) L.w = num(sw.value, 80);
+                if (sh) L.h = num(sh.value, 18);
+            }
             var rows = sec.querySelectorAll('.flds .fld');
             var out = [];
             rows.forEach(function (r) {
@@ -484,7 +513,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     });
 
     document.getElementById('add-label').addEventListener('click', function () {
-        sync(); STATE.labels.push({ title: 'Label', fields: [] }); render();
+        sync(); STATE.labels.push({ title: 'Label', w: 80, h: 18, fields: [] }); render();
     });
 
     document.getElementById('load-starter').addEventListener('click', function () {
@@ -497,7 +526,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     document.getElementById('new-tpl').addEventListener('click', function () {
         document.getElementById('f-tid').value = '0';
         document.getElementById('tpl-name').value = 'New worksheet';
-        STATE = { stock: 'a4-diecut', header: { fields: [] }, labels: [] };
+        STATE = { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
         render();
         document.getElementById('preview-wrap').style.display = 'none';
     });
@@ -515,27 +544,41 @@ require __DIR__ . '/../_partials/factory_head.php';
         if (f.source === 'text') return esc(v);
         return esc(cap ? (cap + ' ' + v) : String(v));
     }
+    var SCALE = 4; // px per mm on screen — keeps labels at true proportion
+    function inlineFields(fields, ln) {
+        var out = '';
+        fields.forEach(function (f) {
+            var ff = f;
+            if (ln && f.source === 'order:line_no') ff = { source: 'text', caption: ln, show: 'always' };
+            var t = fieldText(ff);
+            if (t !== null) out += '<span>' + t + '</span> ';
+        });
+        return out || '<span style="color:#cbd5e1">(empty)</span>';
+    }
+    function labelBox(w, h, inner) {
+        return '<div class="pv-labelbox" style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px">' + inner + '</div>';
+    }
     function renderPreview() {
         sync();
         var pv = document.getElementById('preview');
-        var html = '<div class="pv-header">';
-        STATE.header.fields.forEach(function (f) { var t = fieldText(f); if (t !== null) html += '<span>' + t + '</span>'; });
-        html += '</div>';
+        var html = '';
+        html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
+        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields));
         html += '<div class="pv-badge">▼ one row per blind — sample shows two ▼</div>';
         [ '1/2', '2/2' ].forEach(function (ln) {
-            html += '<div class="pv-line">';
-            (STATE.labels.length ? STATE.labels : [{ title: '', fields: [] }]).forEach(function (lab) {
-                html += '<div class="pv-label"><div class="pv-lt">' + esc(lab.title || '') + '</div>';
-                lab.fields.forEach(function (f) {
-                    var ff = Object.assign({}, f);
-                    if (f.source === 'order:line_no') ff = { source: 'text', caption: ln, show: 'always' };
-                    var t = fieldText(ff); if (t !== null) html += '<div class="pv-row">' + t + '</div>';
-                });
-                html += '</div>';
+            html += '<div class="pv-line2">';
+            (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [] }]).forEach(function (lab) {
+                html += '<div><div class="pv-cap">' + esc(lab.title || 'Label') + ' · ' + lab.w + ' × ' + lab.h + ' mm</div>'
+                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln)) + '</div>';
             });
             html += '</div>';
         });
         pv.innerHTML = html;
+        var over = false;
+        pv.querySelectorAll('.pv-labelbox').forEach(function (b) {
+            if (b.scrollHeight > b.clientHeight + 1) { b.classList.add('over'); over = true; }
+        });
+        document.getElementById('pv-warn').style.display = over ? 'block' : 'none';
         document.getElementById('preview-wrap').style.display = 'block';
     }
     document.getElementById('preview-btn').addEventListener('click', renderPreview);
@@ -554,6 +597,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     });
     <?php endif; ?>
 
+    ensureSizes();
     render();
 })();
 </script>
