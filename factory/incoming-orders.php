@@ -33,13 +33,26 @@ $loadError = null;
 $hasFactoryJobs = false;
 try { $pdo->query('SELECT 1 FROM factory_jobs LIMIT 0'); $hasFactoryJobs = true; }
 catch (Throwable $e) { /* table not migrated yet */ }
+$hasStages = false;
+if ($hasFactoryJobs) {
+    try { $pdo->query('SELECT status_at FROM factory_jobs LIMIT 0'); $hasStages = true; }
+    catch (Throwable $e) { /* stage columns not migrated yet */ }
+}
 
+$statusAtSel = $hasStages ? 'fj.status_at' : 'NULL';
 $fjSelect = $hasFactoryJobs
-    ? ', fj.status AS factory_status, fj.received_at'
-    : ', NULL AS factory_status, NULL AS received_at';
+    ? ", fj.status AS factory_status, fj.received_at, $statusAtSel AS status_at"
+    : ', NULL AS factory_status, NULL AS received_at, NULL AS status_at';
 $fjJoin  = $hasFactoryJobs ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id' : '';
-$fjGroup = $hasFactoryJobs ? ', fj.status, fj.received_at' : '';
-$fjOrder = $hasFactoryJobs ? '(fj.status IS NOT NULL) ASC, ' : '';
+$fjGroup = $hasFactoryJobs
+    ? ($hasStages ? ', fj.status, fj.received_at, fj.status_at' : ', fj.status, fj.received_at')
+    : '';
+// New first, then received -> in production -> made -> dispatched.
+$fjOrder = $hasFactoryJobs
+    ? "CASE COALESCE(fj.status,'new')
+            WHEN 'new' THEN 0 WHEN 'received' THEN 1 WHEN 'in_production' THEN 2
+            WHEN 'made' THEN 3 WHEN 'dispatched' THEN 4 ELSE 5 END, "
+    : '';
 
 try {
     $oStmt = $pdo->prepare(
@@ -91,13 +104,34 @@ try {
 
 $newCount = 0;
 foreach ($orders as $o) {
-    if (($o['factory_status'] ?? null) !== 'received') $newCount++;
+    if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
 }
 
-// One-shot flash from the mark-received action.
+// One-shot flash from a status action.
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error'] ?? '');
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+// Production stages: pill [label, text colour, bg], the next action label, and
+// the previous stage (for a one-step rewind).
+$STAGE_META = [
+    'received'      => ['Received',     '#1e40af', '#dbeafe'],
+    'in_production' => ['In production', '#92600a', '#fef3c7'],
+    'made'          => ['Made',          '#166534', '#dcfce7'],
+    'dispatched'    => ['Dispatched',    '#334155', '#e2e8f0'],
+];
+$STAGE_NEXT = [
+    'new'           => ['received',      'Mark as received'],
+    'received'      => ['in_production', 'Start production'],
+    'in_production' => ['made',          'Mark made'],
+    'made'          => ['dispatched',    'Dispatch'],
+];
+$STAGE_PREV = [
+    'received'      => 'new',
+    'in_production' => 'received',
+    'made'          => 'in_production',
+    'dispatched'    => 'made',
+];
 
 $fmtDate = static function (?string $ts): string {
     if (!$ts) return '';
@@ -133,12 +167,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-flash.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .io-actions { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; }
     .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.38rem 0.85rem; }
-    .io-btn.receive { background: #166534; color: #fff; }
-    .io-btn.receive:hover { background: #14532d; }
-    .io-received { display: inline-flex; align-items: center; gap: 0.35rem; color: #166534; font-size: 0.8125rem; font-weight: 600; }
+    .io-btn.advance { background: #1f2a37; color: #fff; }
+    .io-btn.advance:hover { background: #111a24; }
+    .io-stage { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
     .io-undo { background: none; border: none; color: var(--text-muted, #667); font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
-    .io-order.is-received { opacity: 0.82; }
-    .io-order.is-received .io-head { background: #f0fdf4; }
+    .io-order.is-done { opacity: 0.72; }
 </style>
 
 <div class="io-head-row">
@@ -162,10 +195,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         $custRef  = trim((string) ($o['customer_reference'] ?? ''));
         $addRef   = trim((string) ($o['additional_reference'] ?? ''));
         $endCust  = trim((string) ($o['end_customer_name'] ?? ''));
-        $received = (string) ($o['factory_status'] ?? '') === 'received';
-        $recvAt   = $o['received_at'] ?? null;
+        $stage     = (string) ($o['factory_status'] ?? '');
+        if ($stage === '') $stage = 'new';
+        $stageAt   = $o['status_at'] ?? $o['received_at'] ?? null;
+        $stagePill = $STAGE_META[$stage] ?? null;
+        $next      = $STAGE_NEXT[$stage] ?? null;
+        $prev      = $STAGE_PREV[$stage] ?? null;
     ?>
-        <section class="io-order<?= $received ? ' is-received' : '' ?>">
+        <section class="io-order<?= $stage === 'dispatched' ? ' is-done' : '' ?>">
             <div class="io-head">
                 <span class="ref"><?= e((string) ($o['quote_number'] ?? ('#' . $qid))) ?></span>
                 <span class="tenant"><?= e((string) ($o['tenant'] ?? 'Unknown account')) ?></span>
@@ -181,18 +218,23 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <?php if ($endCust !== ''): ?> &middot; <?= e($endCust) ?><?php endif; ?>
                 </span>
                 <div class="io-actions">
-                    <?php if ($received): ?>
-                        <span class="io-received">&#10003; Received <?= e($fmtDate($recvAt)) ?></span>
-                        <form method="post" action="/factory/mark-received.php" style="margin:0">
+                    <?php if ($stagePill !== null): ?>
+                        <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>">
+                            <?= e($stagePill[0]) ?><?php if ($stageAt): ?> &middot; <?= e($fmtDate($stageAt)) ?><?php endif; ?>
+                        </span>
+                    <?php endif; ?>
+                    <?php if ($prev !== null): ?>
+                        <form method="post" action="/factory/set-status.php" style="margin:0">
                             <?= csrf_field() ?>
                             <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                            <button type="submit" name="action" value="unreceive" class="io-undo">Undo</button>
+                            <button type="submit" name="status" value="<?= e($prev) ?>" class="io-undo">&larr; back</button>
                         </form>
-                    <?php else: ?>
-                        <form method="post" action="/factory/mark-received.php" style="margin:0">
+                    <?php endif; ?>
+                    <?php if ($next !== null): ?>
+                        <form method="post" action="/factory/set-status.php" style="margin:0">
                             <?= csrf_field() ?>
                             <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                            <button type="submit" name="action" value="receive" class="io-btn receive">Mark as received</button>
+                            <button type="submit" name="status" value="<?= e($next[0]) ?>" class="io-btn advance"><?= e($next[1]) ?></button>
                         </form>
                     <?php endif; ?>
                 </div>
