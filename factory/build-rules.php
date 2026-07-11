@@ -290,7 +290,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .br-flash { padding:0.7rem 1rem; border-radius:10px; margin:0 0 1.2rem; font-size:0.9375rem; }
     .br-flash.ok  { background:#dcfce7; color:#166534; border:1px solid #86efac; }
     .br-flash.err { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
-    .br-grid { display:grid; grid-template-columns:minmax(0,2.3fr) minmax(0,1fr); gap:1.25rem; align-items:start; }
+    .br-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:1.25rem; align-items:start; }
     @media (max-width:1000px){ .br-grid{ grid-template-columns:1fr; } }
     .br-card { background:var(--bg-card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:1.1rem 1.25rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
     .br-card h2 { font-size:1rem; margin:0 0 0.9rem; }
@@ -317,7 +317,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     table.dt th.res { color:#166534; border-left:1px solid #e5e7eb; padding-left:12px; }
     table.dt td { padding:3px 7px; }
     table.dt td.res { border-left:1px solid #e5e7eb; padding-left:12px; }
-    table.dt select { min-width:9rem; }
+    table.dt select { min-width:6.75rem; }
     table.dt input.res { font-family:ui-monospace,Consolas,monospace; min-width:12rem; width:100%; }
     .col-rm, .row-rm { cursor:pointer; color:#cbd5e1; font-weight:700; border:none; background:none; padding:0 0.2rem; font-size:0.95rem; }
     .col-rm:hover, .row-rm:hover { color:#ef4444; }
