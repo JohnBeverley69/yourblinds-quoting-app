@@ -239,6 +239,36 @@ function requireSuperAdmin(): void
     }
 }
 
+/**
+ * The client account that owns the factory (Beverley's own "Your Blinds"
+ * master account, client #3). Overridable via env so it isn't hardcoded in
+ * more than one place. Factory staff are users of THIS account.
+ */
+function factory_client_id(): int
+{
+    return function_exists('env') ? (int) (env('FACTORY_CLIENT_ID', '3') ?? 3) : 3;
+}
+
+/**
+ * Guard for the factory back-office (factory.yourblinds.uk). Access is
+ * Beverley's own people only: the super-admin, OR a user on the factory
+ * account carrying the 'factory' role. Scoping to the factory account is
+ * what stops a tenant admin self-assigning a 'factory' role to get in.
+ */
+function requireFactory(): void
+{
+    requireLogin();
+    if (is_super_admin()) return;
+    $onFactoryAccount = (int) ($_SESSION['client_id'] ?? 0) === factory_client_id();
+    if ($onFactoryAccount && current_user_has_role('factory')) return;
+
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>403 Forbidden</h1><p>Factory access required.</p>';
+    exit;
+}
+
 // ---------------------------------------------------------------------------
 // CSRF
 // ---------------------------------------------------------------------------

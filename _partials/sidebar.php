@@ -173,7 +173,6 @@ $navSections = [
         'collapsible' => true,
         'items'       => [
             'master-admin'  => ['/master-admin/index.php',          'Master Admin',     $isSuperAdmin],
-            'incoming-orders' => ['/master-admin/incoming-orders.php', 'Incoming Orders', $isSuperAdmin],
             'client-emails' => ['/master-admin/client-emails.php',  'Client emails',    $isSuperAdmin],
             'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],
             'monitor'       => ['/master-admin/monitor.php',        'Monitor',          $isSuperAdmin],
