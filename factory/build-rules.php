@@ -440,6 +440,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 (function () {
     var SOURCES = <?= json_encode($optionSources, $jsonFlags) ?>;
     var STATE   = <?= json_encode($variables, $jsonFlags) ?>;
+    STATE.forEach(function (v) { v._orig = v.name; });   // baseline names, for rename-cascade
 
     var srcByRef = {};
     SOURCES.forEach(function (s) { srcByRef[s.ref] = s; });
@@ -528,6 +529,30 @@ require __DIR__ . '/../_partials/factory_head.php';
         });
     }
 
+    // If a variable was renamed, update every formula that references its old name
+    // (whole-identifier match), so references never dangle. Runs on save.
+    function cascadeRenames() {
+        var renames = [];
+        STATE.forEach(function (v) {
+            var nm = (v.name || '').trim();
+            if (v._orig && nm && v._orig !== nm) renames.push({ from: v._orig, to: nm });
+        });
+        if (renames.length) {
+            var reEsc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+            STATE.forEach(function (v) {
+                v.rows.forEach(function (row) {
+                    var r = row.result || '';
+                    renames.forEach(function (rn) {
+                        var re = new RegExp('(^|[^A-Za-z0-9_])' + reEsc(rn.from) + '(?![A-Za-z0-9_])', 'g');
+                        r = r.replace(re, function (m, p1) { return p1 + rn.to; });
+                    });
+                    row.result = r;
+                });
+            });
+        }
+        STATE.forEach(function (v) { v._orig = (v.name || '').trim(); });   // reset baseline
+    }
+
     editor.addEventListener('click', function (e) {
         var card = e.target.closest('.var-card');
         if (!card) return;
@@ -561,12 +586,13 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     document.getElementById('add-variable').addEventListener('click', function () {
         sync();
-        STATE.push({ name: '', columns: [], rows: [{ cells: [], result: '' }] });
+        STATE.push({ name: '', _orig: '', columns: [], rows: [{ cells: [], result: '' }] });
         render();
     });
 
     document.getElementById('save-form').addEventListener('submit', function () {
         sync();
+        cascadeRenames();
         document.getElementById('payload').value = JSON.stringify(STATE);
     });
 
