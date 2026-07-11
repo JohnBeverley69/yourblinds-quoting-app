@@ -11,7 +11,7 @@ declare(strict_types=1);
  * over a named-variable context.
  *
  * Supports: IF / AND / OR / NOT / ROUND / ROUN_UP(=ROUNDUP) / ROUNDDOWN /
- * FIND / EVN(=EVEN) / MAX / MIN; arithmetic (+ - * /), string concat (&),
+ * FIND / EVN(=EVEN) / MAX / MIN / LOOKUP / BESTFIT; arithmetic (+ - * /), string concat (&),
  * comparisons (= <> < > <= >=), numbers, "quoted strings", and variables
  * (case-insensitive). Rebuilds Blind Matrix's formula behaviour behind a
  * validating engine — unknown variables/functions and bad syntax throw a
@@ -339,6 +339,48 @@ if (!class_exists('FormulaEngine')) {
                         throw new FormulaError("No allowance in \"{$name}\" for: " . implode(', ', $keys));
                     }
                     return (float) $this->allowances[$name][$keyNorm];
+                case 'bestfit':
+                    // BESTFIT("table", value, part) → the best-fit row for a value:
+                    // the row with the SMALLEST table value that is still >= value,
+                    // returning its key component #part (1-based). Powers Louvolite's
+                    // truck tables, where each row's key is "count|size" and its value
+                    // is the max width covered — so BESTFIT("vogue_ow_cord", Width, 1)
+                    // is the truck count and part 2 is the truck size, both from the
+                    // one combination with least oversail. Ties break to the smaller
+                    // count, then the smaller size. No covering row throws (too wide).
+                    if (count($args) < 3) throw new FormulaError('BESTFIT needs a table name, a value, and a key position.');
+                    $name   = strtolower(trim(self::str($this->ev($args[0]))));
+                    $target = self::num($this->ev($args[1]));
+                    $part   = (int) self::num($this->ev($args[2]));
+                    if (!isset($this->allowances[$name])) {
+                        throw new FormulaError("Unknown allowance table: {$name}");
+                    }
+                    $bestKey = null; $bestVal = null;
+                    foreach ($this->allowances[$name] as $k => $v) {
+                        $v = (float) $v;
+                        if ($v < $target) continue;
+                        $better = false;
+                        if ($bestVal === null || $v < $bestVal) {
+                            $better = true;
+                        } elseif ($v == $bestVal) {
+                            $cur  = array_map('floatval', explode('|', (string) $k));
+                            $prev = array_map('floatval', explode('|', (string) $bestKey));
+                            for ($z = 0, $zc = min(count($cur), count($prev)); $z < $zc; $z++) {
+                                if ($cur[$z] < $prev[$z]) { $better = true; break; }
+                                if ($cur[$z] > $prev[$z]) break;
+                            }
+                        }
+                        if ($better) { $bestVal = $v; $bestKey = (string) $k; }
+                    }
+                    if ($bestKey === null) {
+                        throw new FormulaError("No best-fit in \"{$name}\" covers " . self::str($target) . ".");
+                    }
+                    $parts = explode('|', $bestKey);
+                    if ($part < 1 || $part > count($parts)) {
+                        throw new FormulaError("BESTFIT key position {$part} out of range for \"{$name}\".");
+                    }
+                    $val = $parts[$part - 1];
+                    return is_numeric($val) ? (float) $val : $val;
             }
             throw new FormulaError("Unknown function: {$fn}()");
         }
