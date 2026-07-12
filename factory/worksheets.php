@@ -223,6 +223,17 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
     .pv-line2 { display:flex; gap:16px; padding:0.5rem 0; }
     .pv-badge { font-size:0.62rem; color:#94a3b8; margin:0.35rem 0; }
+    .pv-fld[draggable="true"] { cursor:grab; border-radius:2px; }
+    .pv-fld[draggable="true"]:hover { background:#eef2ff; }
+    .pv-fld.pv-ghost { opacity:0.45; font-style:italic; }
+    .pv-fld.pv-dragging { opacity:0.35; }
+    .pv-fld.pv-drop-before { box-shadow:-2px 0 0 #166534; }
+    .pv-fld.pv-drop-after { box-shadow:2px 0 0 #166534; }
+    /* editor + live preview side by side */
+    .ws-layout { display:flex; gap:1rem; align-items:flex-start; }
+    .ws-layout > .ws-card { flex:1 1 520px; min-width:0; margin:0; }
+    .ws-layout > .ws-preview { flex:0 0 auto; width:44%; max-width:560px; position:sticky; top:0.6rem; margin:0; }
+    @media (max-width:1100px) { .ws-layout { flex-direction:column; } .ws-layout > .ws-preview { position:static; width:auto; max-width:none; } }
 </style>
 
 <div class="ws-head">
@@ -259,6 +270,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div class="ws-flash err">No Beverley master products found.</div>
 <?php else: ?>
 
+<div class="ws-layout">
 <div class="ws-card">
     <div style="display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:0.9rem;">
         <label style="font-size:0.8rem; color:#64748b; font-weight:600;">Template name</label>
@@ -272,7 +284,6 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.9rem;">
         <button type="button" class="btn ghost" id="add-label">+ Add label</button>
         <button type="button" class="btn ghost" id="load-starter">Load starter vertical layout</button>
-        <button type="button" class="btn dark" id="preview-btn">Preview</button>
     </div>
 
     <form method="post" action="/factory/worksheets.php?product_id=<?= $productId ?>" id="save-form" style="margin-top:1rem; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;">
@@ -299,10 +310,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php endif; ?>
 </div>
 
-<div class="ws-preview" id="preview-wrap" style="display:none;">
-    <div class="ws-hint" style="margin-bottom:0.6rem;">Preview · sample data, drawn at real label size. Repeats once per blind on the order.</div>
+<div class="ws-preview" id="preview-wrap">
+    <div class="ws-hint" style="margin-bottom:0.6rem;">Live preview · sample data, drawn at real label size. <strong>Drag a field on the label to reorder it.</strong> Faint italic fields only print when they have a value.</div>
     <div class="pv-warn" id="pv-warn">⚠ Some labels are overflowing (outlined in red) — that content won't all fit at this size. Trim fields, shorten captions, or make the label bigger.</div>
     <div class="pv-sheet" id="preview"></div>
+</div>
 </div>
 
 <script>
@@ -457,6 +469,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             html += '</div>';
         });
         editor.innerHTML = html;
+        renderPreview();
     }
 
     function sectionFields(sec) {
@@ -587,48 +600,55 @@ require __DIR__ . '/../_partials/factory_head.php';
         document.getElementById('tpl-name').value = 'New worksheet';
         STATE = { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
         render();
-        document.getElementById('preview-wrap').style.display = 'none';
     });
 
-    // ---- Preview (sample data) --------------------------------------------
+    // ---- Live preview (sample data) + drag-to-reorder on the label --------
     function valueFor(f) {
         if (f.source === 'text') return f.caption || '';
         if (f.source.indexOf('barcode:') === 0) return '▏▎▍▌▍▎▏ ' + (SAMPLES['order:' + f.source.slice(8)] || '');
         return SAMPLES[f.source] != null ? SAMPLES[f.source] : '';
     }
-    function fieldText(f) {
+    // One rendered field span. `i` is the field's index in its section array;
+    // `interactive` makes it draggable. Fields hidden by "if it has a value"
+    // are shown as faint ghosts so they stay visible and reorderable.
+    function fieldSpan(f, i, interactive) {
         var v = valueFor(f);
-        if (f.show === 'ifvalue' && (v === '' || v == null)) return null;
+        var hidden = (f.show === 'ifvalue' && (v === '' || v == null));
         var cap = (f.caption || '').trim();
-        if (f.source === 'text') return esc(v);
-        return esc(cap ? (cap + ' ' + v) : String(v));
+        var t;
+        if (f.source === 'text') t = esc(v || cap || '(text)');
+        else t = esc(cap ? (cap + ' ' + v) : String(v !== '' && v != null ? v : '·'));
+        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '');
+        var attr = interactive ? (' draggable="true" data-fi="' + i + '"') : '';
+        return '<span class="' + cls + '"' + attr + '>' + t + '</span>';
     }
     var SCALE = 4; // px per mm on screen — keeps labels at true proportion
-    function inlineFields(fields, ln) {
+    function inlineFields(fields, ln, interactive) {
         var out = '';
-        fields.forEach(function (f) {
+        fields.forEach(function (f, i) {
             var ff = f;
             if (ln && f.source === 'order:line_no') ff = { source: 'text', caption: ln, show: 'always' };
-            var t = fieldText(ff);
-            if (t !== null) out += '<span>' + t + '</span> ';
+            out += fieldSpan(ff, i, interactive);
         });
-        return out || '<span style="color:#cbd5e1">(empty)</span>';
+        return out || '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
     }
-    function labelBox(w, h, inner) {
-        return '<div class="pv-labelbox" style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px">' + inner + '</div>';
+    function labelBox(w, h, inner, secAttr) {
+        return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px">' + inner + '</div>';
     }
     function renderPreview() {
         sync();
         var pv = document.getElementById('preview');
         var html = '';
         html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
-        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields));
-        html += '<div class="pv-badge">▼ one row per blind — sample shows two ▼</div>';
-        [ '1/2', '2/2' ].forEach(function (ln) {
+        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"');
+        html += '<div class="pv-badge">▼ one row per blind — sample shows two (drag on the first row) ▼</div>';
+        [ '1/2', '2/2' ].forEach(function (ln, ri) {
+            var interactive = (ri === 0);   // only the first sample row is draggable
             html += '<div class="pv-line2">';
-            (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [] }]).forEach(function (lab) {
+            (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [] }]).forEach(function (lab, li) {
+                var sec = interactive ? ('data-sec="label" data-li="' + li + '"') : '';
                 html += '<div><div class="pv-cap">' + esc(lab.title || 'Label') + ' · ' + lab.w + ' × ' + lab.h + ' mm</div>'
-                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln)) + '</div>';
+                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln, interactive), sec) + '</div>';
             });
             html += '</div>';
         });
@@ -638,9 +658,69 @@ require __DIR__ . '/../_partials/factory_head.php';
             if (b.scrollHeight > b.clientHeight + 1) { b.classList.add('over'); over = true; }
         });
         document.getElementById('pv-warn').style.display = over ? 'block' : 'none';
-        document.getElementById('preview-wrap').style.display = 'block';
     }
-    document.getElementById('preview-btn').addEventListener('click', renderPreview);
+
+    // Drag a field span on the label to reorder within that label (or header).
+    var preview = document.getElementById('preview');
+    var pvDrag = null;   // { box, fromIdx }
+    function pvSectionArr(box) {
+        if (box.dataset.sec === 'header') return STATE.header.fields;
+        return STATE.labels[+box.dataset.li].fields;
+    }
+    function clearPvMarks() {
+        preview.querySelectorAll('.pv-drop-before,.pv-drop-after').forEach(function (x) {
+            x.classList.remove('pv-drop-before', 'pv-drop-after');
+        });
+    }
+    function pvAfter(e, span) {
+        var r = span.getBoundingClientRect();
+        return e.clientX > r.left + r.width / 2;   // fields flow left→right
+    }
+    preview.addEventListener('dragstart', function (e) {
+        var span = e.target.closest('.pv-fld[draggable="true"]'); if (!span) return;
+        var box = span.closest('.pv-labelbox'); if (!box) return;
+        pvDrag = { box: box, fromIdx: +span.dataset.fi };
+        span.classList.add('pv-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+    });
+    preview.addEventListener('dragover', function (e) {
+        if (!pvDrag) return;
+        var span = e.target.closest('.pv-fld[draggable="true"]');
+        if (!span || span.closest('.pv-labelbox') !== pvDrag.box) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        clearPvMarks();
+        span.classList.add(pvAfter(e, span) ? 'pv-drop-after' : 'pv-drop-before');
+    });
+    preview.addEventListener('drop', function (e) {
+        if (!pvDrag) return;
+        var span = e.target.closest('.pv-fld[draggable="true"]');
+        if (!span || span.closest('.pv-labelbox') !== pvDrag.box) { clearPvMarks(); pvDrag = null; return; }
+        e.preventDefault();
+        var toIdx = +span.dataset.fi;
+        var insertBefore = pvAfter(e, span) ? toIdx + 1 : toIdx;
+        sync();
+        var arr = pvSectionArr(pvDrag.box);
+        var from = pvDrag.fromIdx;
+        if (from >= 0 && from < arr.length && insertBefore !== from && insertBefore !== from + 1) {
+            var moved = arr.splice(from, 1)[0];
+            if (from < insertBefore) insertBefore--;
+            arr.splice(insertBefore, 0, moved);
+        }
+        clearPvMarks(); pvDrag = null;
+        render();
+    });
+    preview.addEventListener('dragend', function () {
+        clearPvMarks();
+        preview.querySelectorAll('.pv-dragging').forEach(function (x) { x.classList.remove('pv-dragging'); });
+        pvDrag = null;
+    });
+
+    // Keep the preview live as fields are added, edited, removed or reordered.
+    editor.addEventListener('input', function () { renderPreview(); });
+    editor.addEventListener('change', function (e) {
+        if (!e.target.classList.contains('add-src')) renderPreview();
+    });
 
     document.getElementById('save-form').addEventListener('submit', function (e) {
         sync();
