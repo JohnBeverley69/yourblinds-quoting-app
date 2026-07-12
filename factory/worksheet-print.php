@@ -95,6 +95,20 @@ if ($lines) {
     }
 }
 
+// TEMP debug: dump raw extras (name/label/user_value) to find where fields live.
+if (($_GET['debug'] ?? '') === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    foreach ($lines as $ln) {
+        echo "line {$ln['line_no']} — {$ln['product_name_snapshot']} / {$ln['system_name_snapshot']}\n";
+        foreach ($extrasBy[(int) $ln['id']] ?? [] as $r) {
+            echo sprintf("   %-22s = %-20s user_value=%s\n",
+                (string) $r['extra_name_snapshot'], (string) $r['choice_label_snapshot'],
+                var_export($r['user_value'] ?? null, true));
+        }
+    }
+    exit;
+}
+
 // ---- Worksheet template per product (default) ------------------------------
 $templateByProduct = [];
 $loadTemplate = static function (PDO $pdo, int $pid) use (&$templateByProduct) {
