@@ -19,6 +19,7 @@ $factoryNavItems = [
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
     'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
+    'labelsheet' => ['/factory/label-test-sheet.php', 'Label sheet'],
 ];
 ?><!doctype html>
 <html lang="en">

@@ -267,7 +267,6 @@ require __DIR__ . '/../_partials/factory_head.php';
         <button type="button" class="btn ghost" id="add-label">+ Add label</button>
         <button type="button" class="btn ghost" id="load-starter">Load starter vertical layout</button>
         <button type="button" class="btn dark" id="preview-btn">Preview</button>
-        <a class="btn ghost" href="/factory/label-test-sheet.php" target="_blank" rel="noopener" style="text-decoration:none; margin-left:auto;">Print label test sheet ↗</a>
     </div>
 
     <form method="post" action="/factory/worksheets.php?product_id=<?= $productId ?>" id="save-form" style="margin-top:1rem; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;">
