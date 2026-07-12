@@ -318,9 +318,19 @@ require __DIR__ . '/../_partials/factory_head.php';
     table.dt td { padding:3px 7px; }
     table.dt td.res { border-left:1px solid #e5e7eb; padding-left:12px; }
     table.dt select { min-width:6.75rem; }
-    table.dt input.res { font-family:ui-monospace,Consolas,monospace; min-width:12rem; width:100%; }
+    .res-wrap { display:flex; align-items:center; gap:2px; }
+    table.dt input.res { font-family:ui-monospace,Consolas,monospace; min-width:11rem; width:100%; }
+    .res-expand { cursor:pointer; border:none; background:none; color:#94a3b8; font-size:0.95rem; padding:0 0.15rem; line-height:1; }
+    .res-expand:hover { color:#166534; }
     .col-rm, .row-rm { cursor:pointer; color:#cbd5e1; font-weight:700; border:none; background:none; padding:0 0.2rem; font-size:0.95rem; }
     .col-rm:hover, .row-rm:hover { color:#ef4444; }
+    .fx-overlay { position:fixed; inset:0; background:rgba(15,23,36,0.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .fx-panel { background:#fff; border-radius:12px; padding:1.1rem 1.25rem; width:min(600px,92vw); box-shadow:0 12px 40px rgba(0,0,0,0.3); }
+    .fx-title { font-weight:700; font-size:1rem; margin:0 0 0.6rem; }
+    .fx-title .fx-sub { font-weight:400; color:#94a3b8; font-family:ui-monospace,Consolas,monospace; margin-left:0.4rem; font-size:0.85rem; }
+    .fx-text { width:100%; min-height:9rem; font-family:ui-monospace,Consolas,monospace; font-size:0.92rem; line-height:1.55; border:1px solid #cbd5e1; border-radius:8px; padding:0.6rem 0.7rem; resize:vertical; box-sizing:border-box; }
+    .fx-hint { font-size:0.78rem; color:#94a3b8; margin:0.5rem 0 0; line-height:1.5; }
+    .fx-actions { display:flex; justify-content:flex-end; gap:0.6rem; margin-top:0.9rem; }
     .var-actions { display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap; }
     .empty { color:#94a3b8; font-size:0.9rem; padding:0.4rem 0; }
 
@@ -436,6 +446,19 @@ require __DIR__ . '/../_partials/factory_head.php';
     </div>
 </div>
 
+<!-- Formula fly-out editor -->
+<div class="fx-overlay" id="fx-overlay" style="display:none">
+    <div class="fx-panel">
+        <p class="fx-title">Edit formula<span class="fx-sub" id="fx-sub"></span></p>
+        <textarea class="fx-text" id="fx-text" spellcheck="false"></textarea>
+        <p class="fx-hint">Excel-style: <code>IF</code> · <code>AND</code>/<code>OR</code> · <code>ROUNDUP</code>/<code>ROUNDDOWN</code> · <code>EVEN</code> · <code>MAX</code>/<code>MIN</code> · <code>LOOKUP("table", keys…)</code> · <code>BESTFIT("table", value, part)</code>. Reference other variables and inputs by name (<code>Width</code>, <code>Drop</code>, <code>Vanes</code>…).</p>
+        <div class="fx-actions">
+            <button type="button" class="btn ghost" id="fx-cancel">Cancel</button>
+            <button type="button" class="btn primary" id="fx-apply">Apply</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var SOURCES = <?= json_encode($optionSources, $jsonFlags) ?>;
@@ -492,7 +515,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                 v.columns.forEach(function (c, ci) {
                     html += '<td>' + cellSelect(c.ref, (row.cells && row.cells[ci]) || '') + '</td>';
                 });
-                html += '<td class="res"><input type="text" class="res" value="' + esc(row.result || '') + '" placeholder="Width - 12"></td>';
+                html += '<td class="res"><span class="res-wrap"><input type="text" class="res" value="' + esc(row.result || '') + '" placeholder="Width - 12"><button type="button" class="res-expand" title="Expand formula">⤢</button></span></td>';
                 html += '<td><button type="button" class="row-rm" title="Remove row">×</button></td>';
                 html += '</tr>';
             });
@@ -553,11 +576,39 @@ require __DIR__ . '/../_partials/factory_head.php';
         STATE.forEach(function (v) { v._orig = (v.name || '').trim(); });   // reset baseline
     }
 
+    // ---- Formula fly-out editor -------------------------------------------
+    var fxInput = null;   // the result input currently open in the fly-out
+    function openFlyout(btn, card) {
+        var wrap = btn.closest('.res-wrap');
+        fxInput = wrap ? wrap.querySelector('input.res') : null;
+        if (!fxInput) return;
+        var vname = card ? (card.querySelector('.vname').value || '') : '';
+        document.getElementById('fx-sub').textContent = vname ? '· ' + vname : '';
+        var t = document.getElementById('fx-text');
+        t.value = fxInput.value;
+        document.getElementById('fx-overlay').style.display = 'flex';
+        t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+    }
+    function closeFlyout() { document.getElementById('fx-overlay').style.display = 'none'; fxInput = null; }
+    document.getElementById('fx-apply').addEventListener('click', function () {
+        if (fxInput) fxInput.value = document.getElementById('fx-text').value.replace(/\s*\n\s*/g, ' ').trim();
+        closeFlyout();
+    });
+    document.getElementById('fx-cancel').addEventListener('click', closeFlyout);
+    document.getElementById('fx-overlay').addEventListener('click', function (e) { if (e.target === this) closeFlyout(); });
+    document.addEventListener('keydown', function (e) {
+        if (document.getElementById('fx-overlay').style.display === 'none') return;
+        if (e.key === 'Escape') closeFlyout();
+        else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) document.getElementById('fx-apply').click();
+    });
+
     editor.addEventListener('click', function (e) {
         var card = e.target.closest('.var-card');
         if (!card) return;
         var vi = +card.dataset.vi, v = STATE[vi];
-        if (e.target.classList.contains('rm-var')) {
+        if (e.target.classList.contains('res-expand')) {
+            openFlyout(e.target, card);
+        } else if (e.target.classList.contains('rm-var')) {
             sync(); STATE.splice(vi, 1); render();
         } else if (e.target.classList.contains('add-row')) {
             sync(); v.rows.push({ cells: v.columns.map(function () { return ''; }), result: '' }); render();
