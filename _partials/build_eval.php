@@ -73,8 +73,12 @@ if (!function_exists('build_evaluate')) {
                 foreach ($v['columns'] as $i => $col) {
                     $cell = trim((string) ($row['cells'][$i] ?? ''));
                     if ($cell === '') continue;   // — any —
-                    $sel = trim((string) ($optSelections[(string) ($col['ref'] ?? '')] ?? ''));
-                    if (mb_strtolower($cell) !== mb_strtolower($sel)) { $ok = false; break; }
+                    // Match by the column's ref (test panel, master ids) OR its group
+                    // name (real orders, whose tenant option-group ids differ).
+                    $ref = (string) ($col['ref'] ?? '');
+                    $lbl = strtolower(trim((string) ($col['label'] ?? '')));
+                    $sel = $optSelections[$ref] ?? ($lbl !== '' ? ($optSelections[$lbl] ?? '') : '');
+                    if (mb_strtolower($cell) !== mb_strtolower(trim((string) $sel))) { $ok = false; break; }
                 }
                 if ($ok) { $match = $row; break; }
             }
