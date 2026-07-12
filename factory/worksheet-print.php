@@ -166,6 +166,7 @@ foreach ($lines as $ln) {
         'qty'          => (string) (int) $ln['quantity'],
         'notes'        => (string) ($ln['notes'] ?? ''),
         'control'      => $pick($byName, ['control options', 'control']),
+        'chain'        => $pick($byName, ['chain', 'chain type']),
         'draw'         => $pick($byName, ['draw options', 'wand options', 'draw']),
         'wand_length'  => $wandLen,
         'bracket'      => $pick($byName, ['brackets', 'bracket']),
