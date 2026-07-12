@@ -119,6 +119,22 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fe-danger h3 { margin: 0 0 0.4rem; font-size: 0.95rem; color: #991b1b; }
     .fe-danger .fe-btn { background: #dc2626; color: #fff; }
     .fe-empty { background: var(--bg-subtle, #f8fafc); border: 1px dashed var(--border, #e5e7eb); border-radius: 12px; padding: 1.75rem; color: var(--text-faint, #94a3b8); text-align: center; }
+    .fe-fabric .fab-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .fe-fabric .fab-current { font-size: 0.92rem; font-weight: 600; }
+    .fe-fabric .fab-change { font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-strong, #cbd5e1); background: var(--bg-subtle, #f1f5f9); color: #334155; border-radius: 8px; padding: 0.3rem 0.75rem; }
+    .fe-fabric .fab-change:hover { background: #e2e8f0; }
+    .fe-fabric .fab-panel { margin-top: 0.5rem; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; padding: 0.6rem; background: var(--bg-subtle, #f8fafc); }
+    .fe-fabric .fab-controls { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .fe-fabric .fab-band { flex: 0 0 9rem; }
+    .fe-fabric .fab-q { flex: 1; }
+    .fe-fabric .fab-band, .fe-fabric .fab-q { font: inherit; padding: 0.4rem 0.55rem; border: 1px solid var(--border-strong, #cbd5e1); border-radius: 8px; background: var(--bg-input, #fff); color: inherit; box-sizing: border-box; }
+    .fe-fabric .fab-results { max-height: 260px; overflow-y: auto; background: var(--bg-card, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 8px; }
+    .fe-fabric .fab-opt { padding: 0.4rem 0.6rem; cursor: pointer; border-bottom: 1px solid var(--border, #f1f5f9); font-size: 0.9rem; }
+    .fe-fabric .fab-opt:hover { background: #eef2ff; }
+    .fe-fabric .fab-band-pill { display: inline-block; background: #1f3b5b; color: #fff; font-size: 0.62rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 999px; margin-right: 0.35rem; vertical-align: middle; }
+    .fe-fabric .fab-sup { color: var(--text-faint, #94a3b8); font-size: 0.8rem; }
+    .fe-fabric .fab-loading, .fe-fabric .fab-empty { padding: 0.6rem; color: var(--text-faint, #94a3b8); font-size: 0.85rem; }
+    .fe-fabric.changed .fab-current { color: #166534; }
 </style>
 
 <div class="fe-bar">
@@ -186,8 +202,30 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <div><label>Drop (mm)</label><input type="number" name="d[<?= $iid ?>]" value="<?= (int) $it['drop_mm'] ?>" step="1" min="1"></div>
                     <div><label>Qty</label><input type="number" name="qty[<?= $iid ?>]" value="<?= (int) $it['quantity'] ?>" step="1" min="1"></div>
                     <div><label>Room</label><input type="text" name="room[<?= $iid ?>]" value="<?= e((string) ($it['room_name'] ?? '')) ?>" maxlength="80"></div>
-                    <div><label>Fabric</label><input type="text" name="fabname[<?= $iid ?>]" value="<?= e((string) ($it['fabric_name_snapshot'] ?? '')) ?>" maxlength="150"></div>
-                    <div><label>Colour</label><input type="text" name="fabcol[<?= $iid ?>]" value="<?= e((string) ($it['fabric_colour_snapshot'] ?? '')) ?>" maxlength="150"></div>
+                    <?php
+                        $fabDisp = trim(
+                            ((string) ($it['fabric_band_snapshot'] ?? '') !== '' ? 'Band ' . $it['fabric_band_snapshot'] . ' — ' : '')
+                            . (string) ($it['fabric_name_snapshot'] ?? '')
+                            . ((string) ($it['fabric_colour_snapshot'] ?? '') !== '' ? ' / ' . $it['fabric_colour_snapshot'] : '')
+                        );
+                    ?>
+                    <div style="grid-column:1/-1">
+                        <label>Fabric</label>
+                        <div class="fe-fabric" data-pid="<?= (int) $it['product_id'] ?>" data-client="<?= (int) $clientId ?>" data-sys="<?= (int) ($it['system_id'] ?? 0) ?>">
+                            <div class="fab-row">
+                                <span class="fab-current"><?= e($fabDisp !== '' ? $fabDisp : '(no fabric set)') ?></span>
+                                <button type="button" class="fab-change">Change fabric</button>
+                            </div>
+                            <input type="hidden" name="opt_fabric[<?= $iid ?>]" value="<?= (int) ($it['option_id'] ?? 0) ?>" class="fab-optid">
+                            <div class="fab-panel" hidden>
+                                <div class="fab-controls">
+                                    <select class="fab-band"><option value="">All bands</option></select>
+                                    <input type="text" class="fab-q" placeholder="Search name, colour, code&hellip;" autocomplete="off">
+                                </div>
+                                <div class="fab-results"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <?php if ($exList): ?>
@@ -251,6 +289,61 @@ require __DIR__ . '/../_partials/factory_head.php';
     document.getElementById('fe-form').addEventListener('click', function (e) {
         var btn = e.target.closest('[data-confirm]');
         if (btn && !confirm(btn.getAttribute('data-confirm'))) e.preventDefault();
+    });
+
+    // Fabric picker per blind: search the order's own catalogue by band + text.
+    function feEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    document.querySelectorAll('.fe-fabric').forEach(function (fab) {
+        var optid = fab.querySelector('.fab-optid'), panel = fab.querySelector('.fab-panel');
+        var bandSel = fab.querySelector('.fab-band'), qInp = fab.querySelector('.fab-q');
+        var results = fab.querySelector('.fab-results'), current = fab.querySelector('.fab-current');
+        var pid = fab.dataset.pid, client = fab.dataset.client, loaded = false, t;
+        function sysId() {
+            var blind = fab.closest('.fe-blind');
+            var s = blind && blind.querySelector('select[name^="sys["]');
+            return (s && s.value) || fab.dataset.sys || '';
+        }
+        function url(extra) {
+            var p = new URLSearchParams({ product_id: pid, client_id: client });
+            var sid = sysId(); if (sid && sid !== '0') p.set('system_id', sid);
+            Object.keys(extra || {}).forEach(function (k) { p.set(k, extra[k]); });
+            return '/factory/fabrics-search.php?' + p.toString();
+        }
+        function loadBands() {
+            fetch(url({ bands: '1' })).then(function (r) { return r.json(); }).then(function (d) {
+                (d.bands || []).forEach(function (b) { var o = document.createElement('option'); o.value = b; o.textContent = 'Band ' + b; bandSel.appendChild(o); });
+            }).catch(function () {});
+        }
+        function search() {
+            clearTimeout(t);
+            t = setTimeout(function () {
+                results.innerHTML = '<div class="fab-loading">Searching&hellip;</div>';
+                fetch(url({ q: qInp.value.trim(), band: bandSel.value, limit: '100' })).then(function (r) { return r.json(); }).then(function (d) {
+                    var fs = d.fabrics || [];
+                    if (!fs.length) { results.innerHTML = '<div class="fab-empty">No fabrics match.</div>'; return; }
+                    results.innerHTML = fs.map(function (f) {
+                        var lbl = f.name + (f.colour ? ' / ' + f.colour : '');
+                        return '<div class="fab-opt" data-id="' + f.id + '" data-band="' + feEsc(f.band) + '" data-label="' + feEsc(lbl) + '">'
+                             + '<span class="fab-band-pill">' + feEsc(f.band) + '</span> <strong>' + feEsc(f.name) + '</strong>'
+                             + (f.colour ? ' &mdash; ' + feEsc(f.colour) : '')
+                             + (f.supplier ? ' <span class="fab-sup">' + feEsc(f.supplier) + '</span>' : '') + '</div>';
+                    }).join('');
+                }).catch(function () { results.innerHTML = '<div class="fab-empty">Search failed.</div>'; });
+            }, 200);
+        }
+        fab.querySelector('.fab-change').addEventListener('click', function () {
+            panel.hidden = !panel.hidden;
+            if (!panel.hidden && !loaded) { loaded = true; loadBands(); search(); qInp.focus(); }
+        });
+        bandSel.addEventListener('change', search);
+        qInp.addEventListener('input', search);
+        results.addEventListener('click', function (e) {
+            var opt = e.target.closest('.fab-opt'); if (!opt) return;
+            optid.value = opt.dataset.id;
+            current.textContent = 'Band ' + opt.dataset.band + ' — ' + opt.dataset.label + '  (unsaved)';
+            fab.classList.add('changed');
+            panel.hidden = true;
+        });
     });
     </script>
 <?php endif; ?>

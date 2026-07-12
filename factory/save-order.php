@@ -127,13 +127,19 @@ try {
             $qid,
         ]);
 
-    $sysName = $pdo->prepare('SELECT name FROM product_systems WHERE id = ? LIMIT 1');
-    $updItem = $pdo->prepare(
-        'UPDATE quote_items
-            SET width_mm = ?, drop_mm = ?, quantity = ?, room_name = ?, notes = ?,
-                fabric_name_snapshot = ?, fabric_colour_snapshot = ?, system_id = ?, system_name_snapshot = ?
-          WHERE id = ?'
-    );
+    // Item product ids — a picked fabric must belong to the item's own product.
+    $itemProduct = [];
+    if ($validItems) {
+        $ph2 = implode(',', array_fill(0, count($validItems), '?'));
+        $ips = $pdo->prepare("SELECT id, product_id FROM quote_items WHERE id IN ($ph2)");
+        $ips->execute($validItems);
+        foreach ($ips->fetchAll(PDO::FETCH_ASSOC) as $r) $itemProduct[(int) $r['id']] = (int) $r['product_id'];
+    }
+
+    $sysName   = $pdo->prepare('SELECT name FROM product_systems WHERE id = ? LIMIT 1');
+    $updItem   = $pdo->prepare('UPDATE quote_items SET width_mm = ?, drop_mm = ?, quantity = ?, room_name = ?, notes = ?, system_id = ?, system_name_snapshot = ? WHERE id = ?');
+    $fabLookup = $pdo->prepare('SELECT band_code, supplier_name, name, colour, code FROM product_options WHERE id = ? AND client_id = ? AND product_id = ? LIMIT 1');
+    $updFabric = $pdo->prepare('UPDATE quote_items SET option_id = ?, fabric_band_snapshot = ?, fabric_supplier_snapshot = ?, fabric_name_snapshot = ?, fabric_colour_snapshot = ?, fabric_code_snapshot = ? WHERE id = ?');
 
     foreach ($validItems as $iid) {
         $w   = max(1, (int) ($_POST['w'][$iid] ?? 0));
@@ -141,8 +147,6 @@ try {
         $qty = max(1, (int) ($_POST['qty'][$iid] ?? 1));
         $room = mb_substr(trim((string) ($_POST['room'][$iid] ?? '')), 0, 80);
         $note = mb_substr(trim((string) ($_POST['notes'][$iid] ?? '')), 0, 255);
-        $fabN = mb_substr(trim((string) ($_POST['fabname'][$iid] ?? '')), 0, 150);
-        $fabC = mb_substr(trim((string) ($_POST['fabcol'][$iid] ?? '')), 0, 150);
 
         // System: dropdown posts the system id; text fallback posts a name.
         $sid = isset($_POST['sys'][$iid]) ? (int) $_POST['sys'][$iid] : 0;
@@ -154,7 +158,17 @@ try {
             $sid   = 0;
         }
 
-        $updItem->execute([$w, $d, $qty, $room, $note, $fabN, $fabC, $sid > 0 ? $sid : null, $sname, $iid]);
+        $updItem->execute([$w, $d, $qty, $room, $note, $sid > 0 ? $sid : null, $sname, $iid]);
+
+        // Fabric: the picker posts the chosen product_options id; re-snapshot from it.
+        $optId = (int) ($_POST['opt_fabric'][$iid] ?? 0);
+        if ($optId > 0 && isset($itemProduct[$iid])) {
+            $fabLookup->execute([$optId, $clientId, $itemProduct[$iid]]);
+            $fab = $fabLookup->fetch(PDO::FETCH_ASSOC);
+            if ($fab) {
+                $updFabric->execute([$optId, $fab['band_code'], $fab['supplier_name'], $fab['name'], $fab['colour'], $fab['code'], $iid]);
+            }
+        }
     }
 
     // Options: opt[<extra_id>] = chosen label; uval[<extra_id>] = length number.
