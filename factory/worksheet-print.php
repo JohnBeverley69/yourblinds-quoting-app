@@ -174,6 +174,7 @@ foreach ($lines as $ln) {
         'recess_exact' => $pick($byName, ['exact or recess', 'recess or exact', 'recess']),
         'welded'       => $pick($byName, ['fabric finish', 'welded', 'weld', 'joint']),
         'bottom_weight' => $pick($byName, ['bottom weight option', 'bottom weight', 'weight']),
+        'weight_colour' => $pick($byName, ['colour', 'weight colour', 'bottom weight colour']),
     ];
 
     $rendered[] = [
