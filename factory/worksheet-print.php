@@ -204,6 +204,122 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
     return $cap !== '' ? ($cap . ' ' . $val) : $val;
 };
 
+// ---- Die-cut print layout (?diecut=1) --------------------------------------
+// Same A4 geometry as the Label Sheet page, but each box filled with the real
+// content, so a 100% print drops straight onto the die-cut label stock. Header
+// in both large labels; per line: cutting label (left col) + fabric (right).
+// Reuses the per-computer nudge (lblNudgeX/Y). Overridable dims via query.
+if ($order && ($_GET['diecut'] ?? '0') !== '0') {
+    $ff = static fn (string $k, float $d): float => isset($_GET[$k]) && is_numeric($_GET[$k]) ? (float) $_GET[$k] : $d;
+    $topPad = $ff('top', 15); $leftPad = $ff('left', 10); $labelW = $ff('w', 90); $largeH = $ff('large', 50);
+    $gap = $ff('gap', 7); $smallH = $ff('small', 20.9); $centreGap = $ff('centre', 10); $fs = $ff('fs', 6.5);
+    $linesOn = (($_GET['lines'] ?? '1') !== '0');   // draw thin label outlines (for the plain-paper test)
+    $cal     = (($_GET['cal'] ?? '1') !== '0');      // crop marks + 100mm ruler
+    $cols = [$leftPad, $leftPad + $labelW + $centreGap];
+    $firstSmallTop = $topPad + $largeH + $gap;
+    $rowCap = min($totalLines, 10);
+    $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+    $ol = $linesOn ? ' dc-outline' : '';
+
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText): string {
+        $out = '';
+        foreach ($fields as $f) {
+            if (($f['source'] ?? '') === '__break__') { $out .= '<span class="dcbr"></span>'; continue; }
+            $t = $fieldText($f, $ctx, $computed);
+            if ($t === null) continue;
+            $al = (string) ($f['align'] ?? '');
+            $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
+            $out .= '<span' . $c . '>' . e($t) . '</span>';
+        }
+        return $out;
+    };
+    header('Content-Type: text/html; charset=utf-8');
+    $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
+    ?><!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Worksheet die-cut · <?= $ono ?></title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#666; font-family:system-ui,sans-serif; }
+    .toolbar { position:fixed; top:0; left:0; right:0; background:#1f2a37; color:#e5edf5; padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:10; font-size:14px; }
+    .toolbar b { color:#fff; } .toolbar .note { color:#b9c6d3; flex:1; min-width:200px; }
+    .toolbar a { color:#7dd3fc; text-decoration:none; } .toolbar a:hover { text-decoration:underline; }
+    .toolbar > button { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:7px 16px; background:#38bdf8; color:#06263a; }
+    .nudge { display:flex; align-items:center; gap:4px; color:#b9c6d3; white-space:nowrap; }
+    .nudge input { width:3.4rem; font:inherit; border:none; border-radius:6px; padding:5px 6px; text-align:right; }
+    .nudge button { font:inherit; cursor:pointer; border:none; border-radius:6px; padding:5px 9px; background:#2c3a4a; color:#e5edf5; }
+    .nudge button:hover { background:#3a4d61; }
+    .sheet { position:relative; width:210mm; height:297mm; background:#fff; margin:60px auto 40px; box-shadow:0 4px 24px rgba(0,0,0,0.4); overflow:hidden; }
+    #sheet-inner { position:absolute; inset:0; }
+    .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
+    .dc-label .flds { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; line-height:1.12; }
+    .dc-label.dc-small .flds { font-size:<?= $mm($fs) ?>pt; }
+    .dc-label.dc-large .flds { font-size:<?= $mm($fs + 1.5) ?>pt; }
+    .dc-label .flds span { white-space:nowrap; }
+    .dc-label .flds .dcbr { flex:0 0 100%; height:0; }
+    .dc-label .flds .r { margin-left:auto; } .dc-label .flds .c { margin-left:auto; margin-right:auto; }
+    .dc-outline { border:0.2mm solid #c9c9c9; }
+    .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
+    .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
+    @media print {
+        body { background:#fff; } .toolbar { display:none; } .sheet { margin:0; box-shadow:none; }
+        @page { size:A4 portrait; margin:0; }
+    }
+</style></head>
+<body>
+<div class="toolbar">
+    <b>Die-cut label print</b>
+    <span class="note">Order <?= $ono ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b>, margins <b>None</b>. Lay the plain print over the label stock to check it lands right.</span>
+    <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
+    <span class="nudge"><span>Nudge&nbsp;mm</span>
+        <button type="button" data-nx="-0.5" title="left">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5" title="right">&#9654;</button>
+        <button type="button" data-ny="-0.5" title="up">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5" title="down">&#9660;</button>
+        <button type="button" id="nudge-reset" title="reset">&#8635;</button>
+    </span>
+    <button onclick="window.print()">Print</button>
+</div>
+<div class="sheet"><div id="sheet-inner">
+<?php foreach ($cols as $ci => $x): ?>
+    <div class="dc-label dc-large<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
+        <div class="flds"><?= $renderFields($headerFields, $orderVals, []) ?></div>
+    </div>
+    <?php for ($k = 0; $k < $rowCap; $k++): $r = $rendered[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
+        <div class="dc-label dc-small<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
+            <div class="flds"><?= $lab ? $renderFields($lab['fields'] ?? [], $r['ctx'], $r['computed']) : '' ?></div>
+        </div>
+    <?php endfor; ?>
+<?php endforeach; ?>
+<?php if ($cal): ?>
+    <?php foreach ([[5, 5], [205, 5], [5, 285], [205, 285]] as [$cx, $cy]): ?>
+        <div class="mk-h" style="left:<?= $cx - 4 ?>mm; top:<?= $cy ?>mm; width:8mm;"></div>
+        <div class="mk-v" style="left:<?= $cx ?>mm; top:<?= $cy - 4 ?>mm; height:8mm;"></div>
+    <?php endforeach; ?>
+    <div class="mk-h" style="left:50mm; top:10mm; width:100mm;"></div>
+    <div class="mk-v" style="left:50mm; top:8mm; height:4mm;"></div>
+    <div class="mk-v" style="left:150mm; top:8mm; height:4mm;"></div>
+    <div class="cal-txt" style="left:152mm; top:8.4mm;">= 100 mm</div>
+<?php endif; ?>
+</div></div>
+<?php if ($totalLines > $rowCap): ?><div style="position:fixed; bottom:6px; left:16px; color:#fbbf24; font-size:13px;">Note: <?= (int) $totalLines ?> lines on this order — only the first <?= (int) $rowCap ?> fit one sheet.</div><?php endif; ?>
+<script>
+(function () {
+    var inner = document.getElementById('sheet-inner');
+    var iox = document.getElementById('ox'), ioy = document.getElementById('oy');
+    var ox = parseFloat(localStorage.getItem('lblNudgeX') || '0') || 0;
+    var oy = parseFloat(localStorage.getItem('lblNudgeY') || '0') || 0;
+    function apply() { inner.style.transform = 'translate(' + ox + 'mm,' + oy + 'mm)'; iox.value = ox; ioy.value = oy; localStorage.setItem('lblNudgeX', ox); localStorage.setItem('lblNudgeY', oy); }
+    iox.addEventListener('input', function () { ox = parseFloat(iox.value) || 0; apply(); });
+    ioy.addEventListener('input', function () { oy = parseFloat(ioy.value) || 0; apply(); });
+    document.querySelectorAll('[data-nx]').forEach(function (b) { b.addEventListener('click', function () { ox = Math.round((ox + parseFloat(b.dataset.nx)) * 10) / 10; apply(); }); });
+    document.querySelectorAll('[data-ny]').forEach(function (b) { b.addEventListener('click', function () { oy = Math.round((oy + parseFloat(b.dataset.ny)) * 10) / 10; apply(); }); });
+    document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
+    apply();
+})();
+</script>
+</body></html>
+<?php
+    exit;
+}
+
 $factoryTitle = 'Worksheet';
 $factoryNav   = '';
 require __DIR__ . '/../_partials/factory_head.php';
@@ -236,6 +352,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if ($order): ?>
         <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e((string) ($order['company_name'] ?? '')) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
         <span style="flex:1"></span>
+        <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1" style="background:#0369a1; text-decoration:none;">Die-cut label print &#8599;</a>
         <button class="btn" onclick="window.print()">Print</button>
     <?php endif; ?>
 </div>
