@@ -213,6 +213,18 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld .free { font-size:0.7rem; color:#94a3b8; width:8.5rem; text-align:center; }
     .add-fld { margin-top:0.5rem; }
     .add-fld select { min-width:14rem; }
+    /* palette — drag a field onto a label */
+    .palette { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:0.55rem 0.75rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.9rem; }
+    .pal-hint { font-size:0.75rem; color:#64748b; font-weight:600; width:100%; }
+    .pal-group { display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem; }
+    .pal-glabel { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin-right:0.1rem; }
+    .pal-chip { cursor:grab; touch-action:none; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.15rem 0.5rem; font-size:0.78rem; color:#334155; user-select:none; white-space:nowrap; }
+    .pal-chip:hover { border-color:#94a3b8; background:#eef2ff; }
+    .pal-chip:active { cursor:grabbing; }
+    .pal-ghost { position:fixed; z-index:1000; pointer-events:none; background:#1f2a37; color:#fff; font-size:0.75rem; padding:0.2rem 0.55rem; border-radius:6px; opacity:0.92; box-shadow:0 4px 12px rgba(0,0,0,0.25); }
+    body.pal-dragging { cursor:grabbing; }
+    .flds.flds-drop { outline:2px dashed #166534; outline-offset:3px; border-radius:6px; }
+    .pv-labelbox.pv-box-drop { outline:2px dashed #166534; outline-offset:2px; }
     .empty { color:#94a3b8; font-size:0.88rem; padding:0.3rem 0; }
 
     .size-ctl { margin-left:0.6rem; font-size:0.75rem; color:#64748b; display:inline-flex; align-items:center; gap:0.25rem; }
@@ -293,6 +305,8 @@ require __DIR__ . '/../_partials/factory_head.php';
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;"><input type="checkbox" id="tpl-default" <?= $currentIsDef ? 'checked' : '' ?>> Default for printing</label>
         <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
     </div>
+
+    <div class="palette" id="palette"></div>
 
     <div id="editor"></div>
 
@@ -734,6 +748,110 @@ require __DIR__ . '/../_partials/factory_head.php';
             return box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+box.dataset.li].fields;
         }
     });
+
+    // ---- Palette: drag a field from the top strip onto a label -----------
+    var palette = document.getElementById('palette');
+    function renderPalette() {
+        var groups = {}, order = [];
+        SOURCES.forEach(function (s) { if (!groups[s.group]) { groups[s.group] = []; order.push(s.group); } groups[s.group].push(s); });
+        var html = '<span class="pal-hint">Drag a field onto a label to add it — or use the “+ Add field” menu inside a label.</span>';
+        order.forEach(function (g) {
+            html += '<span class="pal-group"><span class="pal-glabel">' + esc(g) + '</span>';
+            groups[g].forEach(function (s) { html += '<span class="pal-chip" data-src="' + esc(s.value) + '">' + esc(s.label) + '</span>'; });
+            html += '</span>';
+        });
+        html += '<span class="pal-group"><span class="pal-glabel">Layout</span><span class="pal-chip" data-src="__break__">↵ Line break</span></span>';
+        palette.innerHTML = html;
+    }
+    renderPalette();
+
+    (function paletteDrag() {
+        var drag = null, ghost = null;
+        function clearMarks() {
+            document.querySelectorAll('.fld.drop-above,.fld.drop-below,.flds.flds-drop,.pv-labelbox.pv-box-drop,.pv-fld.pv-drop-before,.pv-fld.pv-drop-after')
+                .forEach(function (x) { x.classList.remove('drop-above', 'drop-below', 'flds-drop', 'pv-box-drop', 'pv-drop-before', 'pv-drop-after'); });
+        }
+        // Find a drop target under (x,y): an editor .flds list, or a preview label.
+        function locate(x, y) {
+            var el = document.elementFromPoint(x, y); if (!el) return null;
+            var sec = el.closest('.sec');
+            var flds = el.closest('.flds') || (sec ? sec.querySelector('.flds') : null);
+            if (flds && sec) {
+                var rows = Array.prototype.slice.call(flds.querySelectorAll('.fld'));
+                var index = rows.length, mark = null, below = false;
+                for (var i = 0; i < rows.length; i++) {
+                    var r = rows[i].getBoundingClientRect();
+                    if (y < r.top + r.height / 2) { index = i; mark = rows[i]; break; }
+                }
+                if (mark === null && rows.length) { mark = rows[rows.length - 1]; below = true; }
+                return { kind: 'editor', flds: flds, sec: sec, index: index, mark: mark, below: below, empty: !rows.length };
+            }
+            var box = el.closest('.pv-labelbox[data-sec]');
+            if (box) {
+                var chips = Array.prototype.slice.call(box.querySelectorAll('.pv-drag'));
+                var idx = chips.length, cmark = null, after = false;
+                for (var j = 0; j < chips.length; j++) {
+                    var cr = chips[j].getBoundingClientRect();
+                    if (x < cr.left + cr.width / 2) { idx = j; cmark = chips[j]; break; }
+                }
+                if (cmark === null && chips.length) { cmark = chips[chips.length - 1]; after = true; }
+                return { kind: 'preview', box: box, index: idx, mark: cmark, after: after, empty: !chips.length };
+            }
+            return null;
+        }
+        palette.addEventListener('pointerdown', function (e) {
+            if (e.button != null && e.button !== 0) return;
+            var chip = e.target.closest('.pal-chip'); if (!chip) return;
+            drag = { src: chip.dataset.src, label: chip.textContent, startX: e.clientX, startY: e.clientY, pid: e.pointerId, moving: false };
+            e.preventDefault();
+        });
+        palette.addEventListener('pointermove', function (e) {
+            if (!drag || e.pointerId !== drag.pid) return;
+            if (!drag.moving) {
+                if (Math.abs(e.clientX - drag.startX) < 4 && Math.abs(e.clientY - drag.startY) < 4) return;
+                drag.moving = true;
+                document.body.classList.add('pal-dragging');
+                try { palette.setPointerCapture(drag.pid); } catch (err) {}
+                ghost = document.createElement('div'); ghost.className = 'pal-ghost'; ghost.textContent = drag.label;
+                document.body.appendChild(ghost);
+            }
+            ghost.style.left = (e.clientX + 12) + 'px'; ghost.style.top = (e.clientY + 12) + 'px';
+            clearMarks();
+            var loc = locate(e.clientX, e.clientY);
+            if (loc && loc.kind === 'editor') {
+                if (loc.empty) loc.flds.classList.add('flds-drop');
+                else if (loc.mark) loc.mark.classList.add(loc.below ? 'drop-below' : 'drop-above');
+            } else if (loc && loc.kind === 'preview') {
+                if (loc.empty) loc.box.classList.add('pv-box-drop');
+                else if (loc.mark) loc.mark.classList.add(loc.after ? 'pv-drop-after' : 'pv-drop-before');
+            }
+        });
+        function end(e) {
+            if (!drag) return;
+            var d = drag; drag = null;
+            document.body.classList.remove('pal-dragging');
+            if (ghost) { ghost.remove(); ghost = null; }
+            try { palette.releasePointerCapture(d.pid); } catch (err) {}
+            clearMarks();
+            if (!d.moving) return;   // was a click, not a drag
+            var loc = locate(e.clientX, e.clientY); if (!loc) return;
+            sync();
+            var field = d.src === '__break__' ? { source: '__break__' }
+                                              : { source: d.src, caption: defaultCaption(d.src), show: 'always' };
+            var arr = loc.kind === 'editor' ? sectionFields(loc.sec)
+                    : (loc.box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+loc.box.dataset.li].fields);
+            var at = Math.max(0, Math.min(loc.index, arr.length));
+            arr.splice(at, 0, field);
+            render();
+        }
+        palette.addEventListener('pointerup', end);
+        palette.addEventListener('pointercancel', function () {
+            if (!drag) return;
+            drag = null; document.body.classList.remove('pal-dragging');
+            if (ghost) { ghost.remove(); ghost = null; }
+            clearMarks();
+        });
+    })();
 
     // Keep the preview live as fields are added, edited, removed or reordered.
     editor.addEventListener('input', function () { renderPreview(); });
