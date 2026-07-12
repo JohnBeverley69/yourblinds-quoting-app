@@ -40,6 +40,7 @@ $ORDER_FIELDS = [
     'colour'       => ['Colour',       'White'],
     'hd_colour'    => ['Headrail colour', 'Black'],
     'control'      => ['Control',      'Corded'],
+    'chain'        => ['Chain',        'Plastic'],
     'draw'         => ['Draw',         'R/R'],
     'wand_length'  => ['Wand length',  '600'],
     'bracket'      => ['Bracket',      'Plastic'],
