@@ -210,6 +210,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld input.cap { width:9rem; }
     .fld select.src { min-width:12rem; }
     .fld select.show { width:8.5rem; }
+    .fld select.align { width:5.5rem; }
     .fld .free { font-size:0.7rem; color:#94a3b8; width:8.5rem; text-align:center; }
     .add-fld { margin-top:0.5rem; }
     .add-fld select { min-width:14rem; }
@@ -247,9 +248,12 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
     .pv-line2 { display:flex; gap:10px; padding:0.5rem 0; }
     .pv-badge { font-size:0.62rem; color:#94a3b8; margin:0.35rem 0; }
-    .pv-drag { cursor:grab; border-radius:2px; touch-action:none; }
+    .pv-drag { cursor:grab; border-radius:2px; touch-action:none; position:relative; }
     .pv-drag:hover { background:#eef2ff; }
     .pv-drag:active { cursor:grabbing; }
+    .pv-alignright { margin-left:auto; }
+    .pv-rm { display:none; position:absolute; top:50%; right:0; transform:translateY(-50%); width:13px; height:13px; padding:0; line-height:11px; text-align:center; border:none; border-radius:50%; background:#ef4444; color:#fff; font-size:11px; font-family:sans-serif; cursor:pointer; z-index:3; box-shadow:0 1px 2px rgba(0,0,0,0.3); }
+    .pv-drag:hover .pv-rm { display:block; }
     .pv-fld.pv-ghost { opacity:0.45; font-style:italic; }
     .pv-fld.pv-dragging { opacity:0.35; }
     .pv-fld.pv-drop-before { box-shadow:-2px 0 0 #166534; }
@@ -478,6 +482,10 @@ require __DIR__ . '/../_partials/factory_head.php';
             + '<option value="ifvalue"' + (f.show === 'ifvalue' ? ' selected' : '') + '>If it has a value</option>'
             + '<option value="never"' + (f.show === 'never' ? ' selected' : '') + '>Never</option>'
             + '</select>';
+        html += '<select class="align" title="Where it sits on the label line">'
+            + '<option value="left"' + (f.align === 'right' ? '' : ' selected') + '>⇤ Left</option>'
+            + '<option value="right"' + (f.align === 'right' ? ' selected' : '') + '>Right ⇥</option>'
+            + '</select>';
         html += '<button type="button" class="fld-rm" title="Remove field">×</button>';
         html += '</div>';
         return html;
@@ -544,11 +552,14 @@ require __DIR__ . '/../_partials/factory_head.php';
             rows.forEach(function (r) {
                 if (r.classList.contains('fld-break')) { out.push({ source: '__break__' }); return; }
                 var showSel = r.querySelector('select.show');
-                out.push({
+                var alignSel = r.querySelector('select.align');
+                var o = {
                     source: r.querySelector('select.src').value,
                     caption: r.querySelector('input.cap').value,
                     show: showSel ? showSel.value : 'always'
-                });
+                };
+                if (alignSel && alignSel.value === 'right') o.align = 'right';
+                out.push(o);
             });
             fields.length = 0; Array.prototype.push.apply(fields, out);
         });
@@ -593,6 +604,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         }
         root.addEventListener('pointerdown', function (e) {
             if (e.button != null && e.button !== 0) return;
+            if (opts.ignore && e.target.closest(opts.ignore)) return;   // let e.g. delete-× click through
             var handle = e.target.closest(opts.handle); if (!handle) return;
             var item = handle.closest(opts.item); if (!item) return;
             var container = item.closest(opts.container); if (!container) return;
@@ -684,8 +696,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     // `interactive` makes it draggable. Fields hidden by "if it has a value"
     // are shown as faint ghosts so they stay visible and reorderable.
     function fieldSpan(f, i, interactive) {
+        var rm = interactive ? '<button type="button" class="pv-rm" data-fi="' + i + '" title="Remove this field">×</button>' : '';
         if (f.source === '__break__') {
-            return '<span class="pv-fld pv-break' + (interactive ? ' pv-drag' : '') + '" title="line break">↵ new line</span>';
+            return '<span class="pv-fld pv-break' + (interactive ? ' pv-drag' : '') + '" data-fi="' + i + '" title="line break">↵ new line' + rm + '</span>';
         }
         var v = valueFor(f);
         var never = (f.show === 'never');
@@ -694,8 +707,9 @@ require __DIR__ . '/../_partials/factory_head.php';
         var t;
         if (f.source === 'text') t = esc(v || cap || '(text)');
         else t = esc(cap ? (cap + ' ' + v) : String(v !== '' && v != null ? v : '·'));
-        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (never ? ' pv-never' : '') + (interactive ? ' pv-drag' : '');
-        return '<span class="' + cls + '">' + t + '</span>';
+        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (never ? ' pv-never' : '')
+                + (f.align === 'right' ? ' pv-alignright' : '') + (interactive ? ' pv-drag' : '');
+        return '<span class="' + cls + '" data-fi="' + i + '">' + t + rm + '</span>';
     }
     // px per mm on screen. BASE = true label size (1:1 with the die-cut); the
     // zoom control scales it up/down for legibility (remembered per computer).
@@ -742,11 +756,21 @@ require __DIR__ . '/../_partials/factory_head.php';
     // Drag a chip on the label itself to reorder within that label (or header).
     var preview = document.getElementById('preview');
     makeSortable(preview, {
-        handle: '.pv-drag', item: '.pv-drag', container: '.pv-labelbox[data-sec]', axis: 'x',
+        handle: '.pv-drag', item: '.pv-drag', container: '.pv-labelbox[data-sec]', axis: 'x', ignore: '.pv-rm',
         dragging: 'pv-dragging', before: 'pv-drop-before', after: 'pv-drop-after',
         arrayFor: function (box) {
             return box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+box.dataset.li].fields;
         }
+    });
+    // Delete a field straight from the label (the × that appears on chip hover).
+    preview.addEventListener('click', function (e) {
+        var rm = e.target.closest('.pv-rm'); if (!rm) return;
+        var box = rm.closest('.pv-labelbox[data-sec]'); if (!box) return;
+        sync();
+        var arr = box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+box.dataset.li].fields;
+        var fi = +rm.dataset.fi;
+        if (fi >= 0 && fi < arr.length) arr.splice(fi, 1);
+        render();
     });
 
     // ---- Palette: drag a field from the top strip onto a label -----------
