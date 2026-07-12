@@ -157,6 +157,7 @@ foreach ($lines as $ln) {
         'line_no'      => $ln['line_no'] . '/' . $totalLines,
         'system'       => (string) ($ln['system_name_snapshot'] ?? ''),
         'colour'       => (string) ($ln['fabric_colour_snapshot'] ?? ''),
+        'hd_colour'    => $pick($byName, ['hd colour', 'headrail colour', 'head rail colour']),
         'fabric'       => (string) ($ln['fabric_name_snapshot'] ?? ''),
         'location'     => (string) ($ln['room_name'] ?? ''),
         'size'         => (int) $ln['width_mm'] . ' x ' . (int) $ln['drop_mm'],

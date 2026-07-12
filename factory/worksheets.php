@@ -38,6 +38,7 @@ $ORDER_FIELDS = [
     'line_no'      => ['Line no',      '1/2'],
     'system'       => ['System',       'SlimLine'],
     'colour'       => ['Colour',       'White'],
+    'hd_colour'    => ['Headrail colour', 'Black'],
     'control'      => ['Control',      'Corded'],
     'draw'         => ['Draw',         'R/R'],
     'wand_length'  => ['Wand length',  '600'],
