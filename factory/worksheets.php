@@ -195,8 +195,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .sec-top input.title { font-weight:600; width:14rem; }
     .sec-top .rm { margin-left:auto; }
     .fld { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0; border-top:2px solid transparent; border-bottom:2px solid transparent; }
-    .fld .grip { cursor:grab; color:#cbd5e1; font-size:1rem; line-height:1; padding:0 0.15rem; user-select:none; }
-    .fld .grip:hover { color:#475569; }
+    .fld .grip { cursor:grab; color:#94a3b8; font-size:1.15rem; line-height:1; padding:0 0.35rem; user-select:none; touch-action:none; align-self:stretch; display:flex; align-items:center; }
+    .fld .grip:hover { color:#334155; }
+    .fld .grip:active { cursor:grabbing; }
     .fld.dragging { opacity:0.4; }
     .fld.drop-above { border-top-color:#166534; }
     .fld.drop-below { border-bottom-color:#166534; }
@@ -221,18 +222,19 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
     .pv-labelbox span { display:inline; white-space:nowrap; margin-right:5px; }
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
-    .pv-line2 { display:flex; gap:16px; padding:0.5rem 0; }
+    .pv-line2 { display:flex; gap:10px; padding:0.5rem 0; }
     .pv-badge { font-size:0.62rem; color:#94a3b8; margin:0.35rem 0; }
-    .pv-fld[draggable="true"] { cursor:grab; border-radius:2px; }
-    .pv-fld[draggable="true"]:hover { background:#eef2ff; }
+    .pv-drag { cursor:grab; border-radius:2px; touch-action:none; }
+    .pv-drag:hover { background:#eef2ff; }
+    .pv-drag:active { cursor:grabbing; }
     .pv-fld.pv-ghost { opacity:0.45; font-style:italic; }
     .pv-fld.pv-dragging { opacity:0.35; }
     .pv-fld.pv-drop-before { box-shadow:-2px 0 0 #166534; }
     .pv-fld.pv-drop-after { box-shadow:2px 0 0 #166534; }
     /* editor + live preview side by side */
     .ws-layout { display:flex; gap:1rem; align-items:flex-start; }
-    .ws-layout > .ws-card { flex:1 1 520px; min-width:0; margin:0; }
-    .ws-layout > .ws-preview { flex:0 0 auto; width:44%; max-width:560px; position:sticky; top:0.6rem; margin:0; }
+    .ws-layout > .ws-card { flex:1 1 480px; min-width:0; margin:0; }
+    .ws-layout > .ws-preview { flex:0 0 auto; width:50%; max-width:900px; position:sticky; top:0.6rem; margin:0; }
     @media (max-width:1100px) { .ws-layout { flex-direction:column; } .ws-layout > .ws-preview { position:static; width:auto; max-width:none; } }
 </style>
 
@@ -425,7 +427,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     function fieldRow(f) {
         var isText = f.source === 'text';
         var html = '<div class="fld">';
-        html += '<span class="grip" draggable="true" title="Drag to reorder">⠿</span>';
+        html += '<span class="grip" title="Drag to reorder">⠿</span>';
         html += '<input type="text" class="cap" value="' + esc(f.caption || '') + '" placeholder="' + (isText ? 'text to print' : 'caption') + '">';
         html += srcSelect(f.source);
         if (isText) html += '<span class="free">prints the caption</span>';
@@ -516,62 +518,83 @@ require __DIR__ . '/../_partials/factory_head.php';
         }
     });
 
-    // ---- Drag-and-drop reordering of fields (within a section) ------------
-    var dragSrc = null;   // { sec, fromIdx }
-    function fldIndex(sec, fld) {
-        return Array.prototype.indexOf.call(sec.querySelectorAll('.flds .fld'), fld);
-    }
-    function clearDropMarks() {
-        editor.querySelectorAll('.fld.drop-above,.fld.drop-below').forEach(function (x) {
-            x.classList.remove('drop-above', 'drop-below');
+    // ---- Pointer-based drag reordering (works with mouse AND touch) -------
+    // Native HTML5 drag-and-drop is flaky and dead on touchscreens, so we drive
+    // it ourselves. Reused for the editor list (vertical) and the on-label
+    // preview chips (horizontal).
+    function makeSortable(root, opts) {
+        var drag = null;   // { container, item, fromIdx, startX, startY, pid, moving }
+        function items(container) {
+            return Array.prototype.slice.call(container.querySelectorAll(opts.item));
+        }
+        function clearMarks() {
+            root.querySelectorAll('.' + opts.before + ',.' + opts.after).forEach(function (x) {
+                x.classList.remove(opts.before, opts.after);
+            });
+        }
+        function targetIndex(container, ev, dragged) {
+            // Index (in the current item list, dragged included) to insert before.
+            var list = items(container), pos = opts.axis === 'x' ? ev.clientX : ev.clientY;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] === dragged) continue;
+                var r = list[i].getBoundingClientRect();
+                var mid = opts.axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2;
+                if (pos < mid) return i;
+            }
+            return list.length;
+        }
+        root.addEventListener('pointerdown', function (e) {
+            if (e.button != null && e.button !== 0) return;
+            var handle = e.target.closest(opts.handle); if (!handle) return;
+            var item = handle.closest(opts.item); if (!item) return;
+            var container = item.closest(opts.container); if (!container) return;
+            drag = { container: container, item: item, fromIdx: items(container).indexOf(item),
+                     startX: e.clientX, startY: e.clientY, pid: e.pointerId, moving: false };
+            e.preventDefault();   // stop text selection / native image drag
+        });
+        root.addEventListener('pointermove', function (e) {
+            if (!drag || e.pointerId !== drag.pid) return;
+            if (!drag.moving) {
+                if (Math.abs(e.clientX - drag.startX) < 4 && Math.abs(e.clientY - drag.startY) < 4) return;
+                drag.moving = true;
+                drag.item.classList.add(opts.dragging);
+                try { root.setPointerCapture(drag.pid); } catch (err) {}
+            }
+            var idx = targetIndex(drag.container, e, drag.item);
+            var list = items(drag.container);
+            clearMarks();
+            if (idx < list.length) list[idx].classList.add(opts.before);
+            else if (list.length) list[list.length - 1].classList.add(opts.after);
+        });
+        function finish(e) {
+            if (!drag) return;
+            var d = drag; drag = null;
+            d.item.classList.remove(opts.dragging);
+            try { root.releasePointerCapture(d.pid); } catch (err) {}
+            if (!d.moving) { clearMarks(); return; }   // was a click, not a drag
+            var insertBefore = targetIndex(d.container, e, d.item);
+            clearMarks();
+            sync();
+            var arr = opts.arrayFor(d.container), from = d.fromIdx;
+            if (from >= 0 && from < arr.length) {
+                var moved = arr.splice(from, 1)[0];
+                if (from < insertBefore) insertBefore--;
+                if (insertBefore < 0) insertBefore = 0;
+                if (insertBefore > arr.length) insertBefore = arr.length;
+                arr.splice(insertBefore, 0, moved);
+            }
+            render();
+        }
+        root.addEventListener('pointerup', finish);
+        root.addEventListener('pointercancel', function () {
+            if (drag) { drag.item.classList.remove(opts.dragging); clearMarks(); drag = null; }
         });
     }
-    editor.addEventListener('dragstart', function (e) {
-        var grip = e.target.closest('.grip'); if (!grip) return;   // drag only from the handle
-        var fld = grip.closest('.fld'); if (!fld) return;
-        var sec = fld.closest('.sec'); if (!sec) return;
-        dragSrc = { sec: sec, fromIdx: fldIndex(sec, fld) };
-        fld.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
-        if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(fld, 12, 12);
-    });
-    editor.addEventListener('dragover', function (e) {
-        if (!dragSrc) return;
-        var fld = e.target.closest('.fld'); if (!fld) return;
-        if (fld.closest('.sec') !== dragSrc.sec) return;   // reorder within one label only
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        var r = fld.getBoundingClientRect();
-        var below = e.clientY > r.top + r.height / 2;
-        clearDropMarks();
-        fld.classList.add(below ? 'drop-below' : 'drop-above');
-    });
-    editor.addEventListener('drop', function (e) {
-        if (!dragSrc) return;
-        var fld = e.target.closest('.fld');
-        var sec = fld ? fld.closest('.sec') : null;
-        if (!fld || sec !== dragSrc.sec) { clearDropMarks(); dragSrc = null; return; }
-        e.preventDefault();
-        var r = fld.getBoundingClientRect();
-        var below = e.clientY > r.top + r.height / 2;
-        var toIdx = fldIndex(sec, fld);
-        var insertBefore = below ? toIdx + 1 : toIdx;
-        sync();
-        var arr = sectionFields(sec);
-        var from = dragSrc.fromIdx;
-        if (from >= 0 && from < arr.length && insertBefore !== from && insertBefore !== from + 1) {
-            var moved = arr.splice(from, 1)[0];
-            if (from < insertBefore) insertBefore--;
-            arr.splice(insertBefore, 0, moved);
-        }
-        clearDropMarks(); dragSrc = null;
-        render();
-    });
-    editor.addEventListener('dragend', function () {
-        clearDropMarks();
-        editor.querySelectorAll('.fld.dragging').forEach(function (x) { x.classList.remove('dragging'); });
-        dragSrc = null;
+
+    makeSortable(editor, {
+        handle: '.grip', item: '.fld', container: '.flds', axis: 'y',
+        dragging: 'dragging', before: 'drop-above', after: 'drop-below',
+        arrayFor: function (container) { return sectionFields(container.closest('.sec')); }
     });
 
     editor.addEventListener('change', function (e) {
@@ -618,9 +641,8 @@ require __DIR__ . '/../_partials/factory_head.php';
         var t;
         if (f.source === 'text') t = esc(v || cap || '(text)');
         else t = esc(cap ? (cap + ' ' + v) : String(v !== '' && v != null ? v : '·'));
-        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '');
-        var attr = interactive ? (' draggable="true" data-fi="' + i + '"') : '';
-        return '<span class="' + cls + '"' + attr + '>' + t + '</span>';
+        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (interactive ? ' pv-drag' : '');
+        return '<span class="' + cls + '">' + t + '</span>';
     }
     var SCALE = 4; // px per mm on screen — keeps labels at true proportion
     function inlineFields(fields, ln, interactive) {
@@ -660,60 +682,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         document.getElementById('pv-warn').style.display = over ? 'block' : 'none';
     }
 
-    // Drag a field span on the label to reorder within that label (or header).
+    // Drag a chip on the label itself to reorder within that label (or header).
     var preview = document.getElementById('preview');
-    var pvDrag = null;   // { box, fromIdx }
-    function pvSectionArr(box) {
-        if (box.dataset.sec === 'header') return STATE.header.fields;
-        return STATE.labels[+box.dataset.li].fields;
-    }
-    function clearPvMarks() {
-        preview.querySelectorAll('.pv-drop-before,.pv-drop-after').forEach(function (x) {
-            x.classList.remove('pv-drop-before', 'pv-drop-after');
-        });
-    }
-    function pvAfter(e, span) {
-        var r = span.getBoundingClientRect();
-        return e.clientX > r.left + r.width / 2;   // fields flow left→right
-    }
-    preview.addEventListener('dragstart', function (e) {
-        var span = e.target.closest('.pv-fld[draggable="true"]'); if (!span) return;
-        var box = span.closest('.pv-labelbox'); if (!box) return;
-        pvDrag = { box: box, fromIdx: +span.dataset.fi };
-        span.classList.add('pv-dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
-    });
-    preview.addEventListener('dragover', function (e) {
-        if (!pvDrag) return;
-        var span = e.target.closest('.pv-fld[draggable="true"]');
-        if (!span || span.closest('.pv-labelbox') !== pvDrag.box) return;
-        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-        clearPvMarks();
-        span.classList.add(pvAfter(e, span) ? 'pv-drop-after' : 'pv-drop-before');
-    });
-    preview.addEventListener('drop', function (e) {
-        if (!pvDrag) return;
-        var span = e.target.closest('.pv-fld[draggable="true"]');
-        if (!span || span.closest('.pv-labelbox') !== pvDrag.box) { clearPvMarks(); pvDrag = null; return; }
-        e.preventDefault();
-        var toIdx = +span.dataset.fi;
-        var insertBefore = pvAfter(e, span) ? toIdx + 1 : toIdx;
-        sync();
-        var arr = pvSectionArr(pvDrag.box);
-        var from = pvDrag.fromIdx;
-        if (from >= 0 && from < arr.length && insertBefore !== from && insertBefore !== from + 1) {
-            var moved = arr.splice(from, 1)[0];
-            if (from < insertBefore) insertBefore--;
-            arr.splice(insertBefore, 0, moved);
+    makeSortable(preview, {
+        handle: '.pv-drag', item: '.pv-drag', container: '.pv-labelbox[data-sec]', axis: 'x',
+        dragging: 'pv-dragging', before: 'pv-drop-before', after: 'pv-drop-after',
+        arrayFor: function (box) {
+            return box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+box.dataset.li].fields;
         }
-        clearPvMarks(); pvDrag = null;
-        render();
-    });
-    preview.addEventListener('dragend', function () {
-        clearPvMarks();
-        preview.querySelectorAll('.pv-dragging').forEach(function (x) { x.classList.remove('pv-dragging'); });
-        pvDrag = null;
     });
 
     // Keep the preview live as fields are added, edited, removed or reordered.
