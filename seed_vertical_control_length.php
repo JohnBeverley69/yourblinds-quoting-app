@@ -8,11 +8,15 @@ declare(strict_types=1);
  * worksheet). Same calc across all systems. The chain depends on whether a
  * fit height was entered:
  *
- *   CH_L = IF(Fit_height > 0, (Fit_height - 2700) * 2, Drop * 1.5)
+ *   CH_L = IF(Fit_height > 0, (Fit_height - 1500) * 2, Drop * 1.5)
  *   C_L  = CH_L + 2 * Width
  *
- * Fit_height is the value the customer enters in the "Fit height" option
- * (0/blank when not given). Drop and Width are the blind dimensions.
+ * Fit_height is the floor-to-top-of-blind height the customer enters in the
+ * "Fit height" option (0/blank when not given); Drop and Width are the blind
+ * dimensions. When a fit height is given the looped tilt chain is cut so its
+ * loop ends 1.5m (1500mm) off the floor — the EN 13120 child-safety rule for
+ * pull cords/chains — hence (Fit_height - 1500) doubled for the loop. The
+ * draw cord follows the chain plus 2 x width.
  *
  * NB replaces Blind Matrix's cord/chain figures, which were wrong (its ON066564
  * printed C/L 7700, CH/L 2980 where this logic gives 6955 / 2235).
@@ -51,7 +55,7 @@ $cols = [['ref' => 'extra:' . $ctrlId, 'label' => 'Control Options']];
 
 $variables = [
     ['name' => 'CH_L', 'seq' => 11, 'rows' => [
-        ['cells' => ['Corded'], 'result' => 'IF(Fit_height > 0, (Fit_height - 2700) * 2, Drop * 1.5)'],
+        ['cells' => ['Corded'], 'result' => 'IF(Fit_height > 0, (Fit_height - 1500) * 2, Drop * 1.5)'],
     ]],
     ['name' => 'C_L', 'seq' => 12, 'rows' => [
         ['cells' => ['Corded'], 'result' => 'CH_L + 2 * Width'],
@@ -76,4 +80,4 @@ foreach ($variables as $v) {
 echo "\nSeeded CH_L + C_L on product {$productId} (Bev Vertical Blinds).\n";
 echo "CH_L runs before C_L (C_L = CH_L + 2*Width). Fit_height defaults to 0 when not given.\n";
 echo "Test (Corded): no fit height Drop=1490,Width=2360 → CH_L 2235, C_L 6955;\n";
-echo "fit height 3000,Width=2000 → CH_L 600, C_L 4600. Wand → no rule (blank).\n";
+echo "fit height 3000,Width=2000 → CH_L 3000 (loop ends 1.5m off floor), C_L 7000. Wand → no rule (blank).\n";
