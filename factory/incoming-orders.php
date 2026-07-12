@@ -180,6 +180,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-btn.advance:hover { background: #111a24; }
     .io-btn.worksheet { background: #2563eb; color: #fff; text-decoration: none; }
     .io-btn.worksheet:hover { background: #1d4ed8; }
+    .io-btn.edit { background: var(--bg-subtle, #f1f5f9); color: #334155; text-decoration: none; border: 1px solid var(--border, #e5e7eb); }
+    .io-btn.edit:hover { background: #e2e8f0; }
     .io-undo { background: none; border: none; color: var(--text-muted, #667); font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
 
     .io-detail { padding: 0.2rem 1rem 0.9rem; }
@@ -246,6 +248,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php endif; ?>
                     </span>
                     <span class="io-actions">
+                        <a class="io-btn edit" href="/factory/edit-order.php?order=<?= $qid ?>">Edit</a>
                         <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                         <?php if ($next !== null): ?>
                             <form method="post" action="/factory/set-status.php" style="margin:0">
