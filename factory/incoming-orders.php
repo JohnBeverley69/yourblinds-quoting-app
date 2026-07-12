@@ -169,6 +169,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.38rem 0.85rem; }
     .io-btn.advance { background: #1f2a37; color: #fff; }
     .io-btn.advance:hover { background: #111a24; }
+    .io-btn.worksheet { background: #2563eb; color: #fff; text-decoration: none; }
+    .io-btn.worksheet:hover { background: #1d4ed8; }
     .io-stage { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
     .io-undo { background: none; border: none; color: var(--text-muted, #667); font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
     .io-order.is-done { opacity: 0.72; }
@@ -218,6 +220,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <?php if ($endCust !== ''): ?> &middot; <?= e($endCust) ?><?php endif; ?>
                 </span>
                 <div class="io-actions">
+                    <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                     <?php if ($stagePill !== null): ?>
                         <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>">
                             <?= e($stagePill[0]) ?><?php if ($stageAt): ?> &middot; <?= e($fmtDate($stageAt)) ?><?php endif; ?>
