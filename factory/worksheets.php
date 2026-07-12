@@ -585,13 +585,19 @@ require __DIR__ . '/../_partials/factory_head.php';
         }
     });
 
+    // Remove just the one row from the DOM (no full editor rebuild), then let
+    // sync() re-read the remaining rows. Keeps deleting snappy on long lists.
+    function removeFieldRow(row) {
+        var fldsEl = row.closest('.flds');
+        row.remove();
+        if (fldsEl && !fldsEl.querySelector('.fld')) fldsEl.innerHTML = '<div class="empty">No fields yet — add one below.</div>';
+        renderPreview();   // renderPreview() re-reads the remaining rows via sync()
+    }
+
     editor.addEventListener('click', function (e) {
         var sec = e.target.closest('.sec'); if (!sec) return;
-        var fields = sectionFields(sec);
         if (e.target.classList.contains('fld-rm')) {
-            sync();
-            var idx = Array.prototype.indexOf.call(sec.querySelectorAll('.flds .fld'), e.target.closest('.fld'));
-            fields.splice(idx, 1); render();
+            var row = e.target.closest('.fld'); if (row) removeFieldRow(row);
         } else if (e.target.classList.contains('rm-label')) {
             sync(); STATE.labels.splice(+sec.dataset.li, 1); render();
         }
@@ -787,11 +793,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     preview.addEventListener('click', function (e) {
         var rm = e.target.closest('.pv-rm'); if (!rm) return;
         var box = rm.closest('.pv-labelbox[data-sec]'); if (!box) return;
-        sync();
-        var arr = box.dataset.sec === 'header' ? STATE.header.fields : STATE.labels[+box.dataset.li].fields;
         var fi = +rm.dataset.fi;
-        if (fi >= 0 && fi < arr.length) arr.splice(fi, 1);
-        render();
+        var secSel = box.dataset.sec === 'header'
+            ? '.sec[data-sec="header"]'
+            : '.sec[data-sec="label"][data-li="' + box.dataset.li + '"]';
+        var secEl = editor.querySelector(secSel);
+        var row = secEl ? secEl.querySelectorAll('.flds .fld')[fi] : null;
+        if (row) removeFieldRow(row);
     });
 
     // ---- Palette: drag a field from the top strip onto a label -----------
