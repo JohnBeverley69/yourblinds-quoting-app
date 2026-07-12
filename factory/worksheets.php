@@ -53,6 +53,7 @@ $ORDER_FIELDS = [
     'recess_exact' => ['Recess/Exact', 'Recess'],
     'fix'          => ['Fix',          'Top Fix'],
     'welded'       => ['Welded',       'Welded'],
+    'bottom_weight' => ['Bottom weight', 'Standard'],
     'qty'          => ['Qty',          '1'],
     'notes'        => ['Notes',        ''],
 ];
