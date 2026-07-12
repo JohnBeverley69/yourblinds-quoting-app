@@ -448,11 +448,12 @@ require __DIR__ . '/../_partials/factory_head.php';
              + '<input type="number" class="sh" value="' + h + '" min="5" max="297" step="any" title="height mm"> mm</span>';
     }
 
-    function srcSelect(source) {
+    // Full grouped option list for a source dropdown (built lazily on focus).
+    function srcOptions(source) {
         var groups = {}, order = [];
         SOURCES.forEach(function (s) { if (!groups[s.group]) { groups[s.group] = []; order.push(s.group); } groups[s.group].push(s); });
         var seen = SOURCES.some(function (s) { return s.value === source; });
-        var html = '<select class="src">';
+        var html = '';
         if (!seen && source) html += '<option value="' + esc(source) + '" selected>' + esc(source) + '</option>';
         order.forEach(function (g) {
             html += '<optgroup label="' + esc(g) + '">';
@@ -461,7 +462,13 @@ require __DIR__ . '/../_partials/factory_head.php';
             });
             html += '</optgroup>';
         });
-        return html + '</select>';
+        return html;
+    }
+    // Collapsed to the current value only — the full ~40-option list (× dozens of
+    // rows) is heavy to build/parse on every re-render, so populate it on focus.
+    function srcSelect(source) {
+        var label = srcLabel[source] || source || '';
+        return '<select class="src" data-full="0"><option value="' + esc(source) + '" selected>' + esc(label) + '</option></select>';
     }
 
     function fieldRow(f) {
@@ -566,6 +573,17 @@ require __DIR__ . '/../_partials/factory_head.php';
             fields.length = 0; Array.prototype.push.apply(fields, out);
         });
     }
+
+    // Populate a source dropdown's full option list the first time it's focused.
+    editor.addEventListener('focusin', function (e) {
+        var sel = e.target;
+        if (sel.tagName === 'SELECT' && sel.classList.contains('src') && sel.dataset.full === '0') {
+            var v = sel.value;
+            sel.innerHTML = srcOptions(v);
+            sel.value = v;
+            sel.dataset.full = '1';
+        }
+    });
 
     editor.addEventListener('click', function (e) {
         var sec = e.target.closest('.sec'); if (!sec) return;
