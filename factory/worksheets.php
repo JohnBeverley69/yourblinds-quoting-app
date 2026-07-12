@@ -373,7 +373,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-    function num(v, d) { v = parseInt(v, 10); return (isFinite(v) && v > 0) ? v : d; }
+    function num(v, d) { v = parseFloat(v); return (isFinite(v) && v > 0) ? v : d; }
 
     // Older saved layouts (and blank ones) may lack label sizes — fill defaults.
     function ensureSizes() {
@@ -384,8 +384,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     }
 
     function sizeCtl(w, h) {
-        return '<span class="size-ctl"><input type="number" class="sw" value="' + w + '" min="10" max="210" title="width mm"> ×'
-             + '<input type="number" class="sh" value="' + h + '" min="5" max="297" title="height mm"> mm</span>';
+        return '<span class="size-ctl"><input type="number" class="sw" value="' + w + '" min="10" max="210" step="any" title="width mm"> ×'
+             + '<input type="number" class="sh" value="' + h + '" min="5" max="297" step="any" title="height mm"> mm</span>';
     }
 
     function srcSelect(source) {
