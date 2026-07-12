@@ -170,9 +170,8 @@ foreach ($lines as $ln) {
         'draw'         => $pick($byName, ['draw options', 'wand options', 'draw']),
         'wand_length'  => $wandLen,
         'fit_height'   => $fitHeight > 0 ? $numTidy($fitHeight) : '',
-        'bracket'      => $pick($byName, ['brackets', 'bracket']),
+        'bracket'      => $pick($byName, ['brackets', 'bracket', 'fix', 'fixing', 'fitting', 'fit type']),
         'recess_exact' => $pick($byName, ['exact or recess', 'recess or exact', 'recess']),
-        'fix'          => $pick($byName, ['fix', 'fixing', 'fit type']),
         'welded'       => $pick($byName, ['fabric finish', 'welded', 'weld', 'joint']),
         'bottom_weight' => $pick($byName, ['bottom weight option', 'bottom weight', 'weight']),
     ];
