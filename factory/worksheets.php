@@ -44,14 +44,13 @@ $ORDER_FIELDS = [
     'draw'         => ['Draw',         'R/R'],
     'wand_length'  => ['Wand length',  '600'],
     'fit_height'   => ['Fit height',   '2100'],
-    'bracket'      => ['Bracket',      'Plastic'],
+    'bracket'      => ['Bracket',      'Top Fix'],
     'fabric'       => ['Fabric',       'Signature Sand'],
     'location'     => ['Location',     'LOUNGE'],
     'size'         => ['Size',         '2360 x 1490'],
     'width'        => ['Width',        '2360'],
     'drop'         => ['Drop',         '1490'],
     'recess_exact' => ['Recess/Exact', 'Recess'],
-    'fix'          => ['Fix',          'Top Fix'],
     'welded'       => ['Fabric finish', 'Welded'],
     'bottom_weight' => ['Bottom weight', 'Standard'],
     'qty'          => ['Qty',          '1'],
@@ -410,7 +409,6 @@ require __DIR__ . '/../_partials/factory_head.php';
                 { source: 'order:location',     caption: 'Loc',   show: 'always' },
                 { source: 'order:size',         caption: 'Size',  show: 'always' },
                 { source: 'order:recess_exact', caption: '',      show: 'always' },
-                { source: 'order:fix',          caption: '',      show: 'always' },
                 { source: 'order:notes',        caption: 'Notes', show: 'always' }
             ] },
             { title: 'Fabric label', w: 80, h: 18, fields: [
