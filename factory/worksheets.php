@@ -205,6 +205,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld .fld-rm:hover { color:#b91c1c; }
     .fld .fld-rm { font-size:1rem; }
     .fld .fld-rm:hover { color:#ef4444; }
+    .fld-break { background:#f8fafc; border-radius:6px; }
+    .fld-break .break-label { flex:1; font-size:0.78rem; color:#64748b; font-style:italic; padding:0.15rem 0; }
     .fld input.cap { width:9rem; }
     .fld select.src { min-width:12rem; }
     .fld select.show { width:8.5rem; }
@@ -225,9 +227,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
     .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
-    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.3 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; }
+    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.3 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
-    .pv-labelbox span { display:inline; white-space:nowrap; margin-right:5px; }
+    .pv-labelbox span { white-space:nowrap; }
+    .pv-break { flex:0 0 100%; display:flex; align-items:center; justify-content:center; height:0.85em; color:#94a3b8; border-top:1px dashed #cbd5e1; margin-top:1px; }
+    .pv-never { text-decoration:line-through; }
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
     .pv-line2 { display:flex; gap:10px; padding:0.5rem 0; }
     .pv-badge { font-size:0.62rem; color:#94a3b8; margin:0.35rem 0; }
@@ -442,13 +446,24 @@ require __DIR__ . '/../_partials/factory_head.php';
     }
 
     function fieldRow(f) {
+        if (f.source === '__break__') {
+            return '<div class="fld fld-break">'
+                 + '<span class="grip" title="Drag to reorder">⠿</span>'
+                 + '<span class="break-label">↵ line break — fields after this start on a new line</span>'
+                 + '<button type="button" class="fld-rm" title="Remove line break">×</button>'
+                 + '</div>';
+        }
         var isText = f.source === 'text';
         var html = '<div class="fld">';
         html += '<span class="grip" title="Drag to reorder">⠿</span>';
         html += '<input type="text" class="cap" value="' + esc(f.caption || '') + '" placeholder="' + (isText ? 'text to print' : 'caption') + '">';
         html += srcSelect(f.source);
         if (isText) html += '<span class="free">prints the caption</span>';
-        else html += '<select class="show"><option value="always"' + (f.show !== 'ifvalue' ? ' selected' : '') + '>Always</option><option value="ifvalue"' + (f.show === 'ifvalue' ? ' selected' : '') + '>If it has a value</option></select>';
+        else html += '<select class="show">'
+            + '<option value="always"' + (f.show !== 'ifvalue' && f.show !== 'never' ? ' selected' : '') + '>Always</option>'
+            + '<option value="ifvalue"' + (f.show === 'ifvalue' ? ' selected' : '') + '>If it has a value</option>'
+            + '<option value="never"' + (f.show === 'never' ? ' selected' : '') + '>Never</option>'
+            + '</select>';
         html += '<button type="button" class="fld-rm" title="Remove field">×</button>';
         html += '</div>';
         return html;
@@ -463,6 +478,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             groups[g].forEach(function (s) { html += '<option value="' + esc(s.value) + '">' + esc(s.label) + '</option>'; });
             html += '</optgroup>';
         });
+        html += '<optgroup label="Layout"><option value="__break__">↵ Line break</option></optgroup>';
         return html + '</select></div>';
     }
 
@@ -512,6 +528,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             var rows = sec.querySelectorAll('.flds .fld');
             var out = [];
             rows.forEach(function (r) {
+                if (r.classList.contains('fld-break')) { out.push({ source: '__break__' }); return; }
                 var showSel = r.querySelector('select.show');
                 out.push({
                     source: r.querySelector('select.src').value,
@@ -619,7 +636,8 @@ require __DIR__ . '/../_partials/factory_head.php';
             var src = e.target.value; if (!src) return;
             var sec = e.target.closest('.sec');
             sync();
-            sectionFields(sec).push({ source: src, caption: defaultCaption(src), show: 'always' });
+            sectionFields(sec).push(src === '__break__' ? { source: '__break__' }
+                                                        : { source: src, caption: defaultCaption(src), show: 'always' });
             render();
         }
     });
@@ -652,13 +670,17 @@ require __DIR__ . '/../_partials/factory_head.php';
     // `interactive` makes it draggable. Fields hidden by "if it has a value"
     // are shown as faint ghosts so they stay visible and reorderable.
     function fieldSpan(f, i, interactive) {
+        if (f.source === '__break__') {
+            return '<span class="pv-fld pv-break' + (interactive ? ' pv-drag' : '') + '" title="line break">↵ new line</span>';
+        }
         var v = valueFor(f);
-        var hidden = (f.show === 'ifvalue' && (v === '' || v == null));
+        var never = (f.show === 'never');
+        var hidden = never || (f.show === 'ifvalue' && (v === '' || v == null));
         var cap = (f.caption || '').trim();
         var t;
         if (f.source === 'text') t = esc(v || cap || '(text)');
         else t = esc(cap ? (cap + ' ' + v) : String(v !== '' && v != null ? v : '·'));
-        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (interactive ? ' pv-drag' : '');
+        var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (never ? ' pv-never' : '') + (interactive ? ' pv-drag' : '');
         return '<span class="' + cls + '">' + t + '</span>';
     }
     // px per mm on screen. BASE = true label size (1:1 with the die-cut); the

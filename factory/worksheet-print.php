@@ -196,6 +196,7 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
     elseif (strncmp($src, 'var:', 4) === 0) { $n = substr($src, 4); $val = array_key_exists($n, $computed) ? $fmtVal($computed[$n]) : ''; }
     elseif (strncmp($src, 'order:', 6) === 0) { $k = substr($src, 6); $val = (string) ($ctx[$k] ?? ''); }
     elseif (strncmp($src, 'barcode:', 8) === 0) { $k = substr($src, 8); $val = '▏▎▍▌▍▎▏ ' . (string) ($ctx[$k] ?? ''); }
+    if ($show === 'never') return null;
     if ($show === 'ifvalue' && trim($val) === '') return null;
     return $cap !== '' ? ($cap . ' ' . $val) : $val;
 };
@@ -215,6 +216,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .wp-label { border:1px solid #cbd5e1; border-radius:8px; padding:0.5rem 0.7rem; }
     .wp-label .lt { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8; margin-bottom:0.3rem; font-weight:600; }
     .wp-label .fields { font-family:ui-monospace,Consolas,monospace; font-size:0.82rem; line-height:1.6; display:flex; flex-wrap:wrap; gap:0.1rem 0.7rem; }
+    .wp-break { flex:0 0 100%; height:0; }
     .wp-flag { color:#b91c1c; }
     .wp-note { color:#94a3b8; font-size:0.85rem; }
     @media print {
@@ -240,9 +242,10 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php else: ?>
 <div class="wp-sheet">
     <div class="wp-header">
-        <?php foreach ($headerFields as $f): $t = $fieldText($f, $orderVals, []); if ($t !== null): ?>
-            <span><?= e($t) ?></span>
-        <?php endif; endforeach; ?>
+        <?php foreach ($headerFields as $f): ?>
+            <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
+            <?php $t = $fieldText($f, $orderVals, []); if ($t !== null): ?><span><?= e($t) ?></span><?php endif; ?>
+        <?php endforeach; ?>
         <?php if (!$headerFields): ?><span class="wp-note">No worksheet template for this product yet — build one in Worksheets.</span><?php endif; ?>
     </div>
 
@@ -253,9 +256,10 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <div class="wp-label">
                         <div class="lt"><?= e((string) ($lab['title'] ?? 'Label')) ?></div>
                         <div class="fields">
-                            <?php foreach (($lab['fields'] ?? []) as $f): $t = $fieldText($f, $r['ctx'], $r['computed']); if ($t !== null): ?>
-                                <span><?= e($t) ?></span>
-                            <?php endif; endforeach; ?>
+                            <?php foreach (($lab['fields'] ?? []) as $f): ?>
+                                <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
+                                <?php $t = $fieldText($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span><?= e($t) ?></span><?php endif; ?>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
