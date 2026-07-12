@@ -53,6 +53,7 @@ $ORDER_FIELDS = [
     'recess_exact' => ['Recess/Exact', 'Recess'],
     'welded'       => ['Fabric finish', 'Welded'],
     'bottom_weight' => ['Bottom weight', 'Standard'],
+    'weight_colour' => ['Weight colour', 'White'],
     'qty'          => ['Qty',          '1'],
     'notes'        => ['Notes',        ''],
 ];
