@@ -62,7 +62,8 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
              margin: 60px auto 40px; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
     .box { position: absolute; border: 0.3mm solid #111; }
     .box .tag { position: absolute; top: 0.4mm; left: 0.8mm; font-size: 6pt; color: #999; font-family: monospace; }
-    .mk { position: absolute; background: #111; }
+    .mk-h { position: absolute; border-top: 0.3mm solid #111; }   /* border prints; background does not */
+    .mk-v { position: absolute; border-left: 0.3mm solid #111; }
     .cal-txt { position: absolute; font-size: 6pt; color: #333; font-family: sans-serif; white-space: nowrap; }
     @media print {
         body { background: #fff; }
@@ -94,13 +95,13 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
     <?php if ($cal): ?>
         <?php /* Corner crop marks (crosses) at 5mm from top/left/right; 200mm across, 280mm down. */ ?>
         <?php foreach ([[5, 5], [205, 5], [5, 285], [205, 285]] as [$cx, $cy]): ?>
-            <div class="mk" style="left:<?= $cx - 4 ?>mm; top:<?= $cy ?>mm; width:8mm; height:0.25mm;"></div>
-            <div class="mk" style="left:<?= $cx ?>mm; top:<?= $cy - 4 ?>mm; width:0.25mm; height:8mm;"></div>
+            <div class="mk-h" style="left:<?= $cx - 4 ?>mm; top:<?= $cy ?>mm; width:8mm;"></div>
+            <div class="mk-v" style="left:<?= $cx ?>mm; top:<?= $cy - 4 ?>mm; height:8mm;"></div>
         <?php endforeach; ?>
         <?php /* 100mm reference ruler in the top margin, with end ticks. */ ?>
-        <div class="mk" style="left:50mm; top:10mm; width:100mm; height:0.25mm;"></div>
-        <div class="mk" style="left:50mm; top:8mm; width:0.25mm; height:4mm;"></div>
-        <div class="mk" style="left:150mm; top:8mm; width:0.25mm; height:4mm;"></div>
+        <div class="mk-h" style="left:50mm; top:10mm; width:100mm;"></div>
+        <div class="mk-v" style="left:50mm; top:8mm; height:4mm;"></div>
+        <div class="mk-v" style="left:150mm; top:8mm; height:4mm;"></div>
         <div class="cal-txt" style="left:152mm; top:8.4mm;">= 100 mm (should measure exactly 100mm)</div>
         <div class="cal-txt" style="left:8mm; top:291mm;">Crop marks: 5mm from each edge · 200mm across · 280mm down. Measure these to confirm true scale &amp; no offset.</div>
     <?php endif; ?>
