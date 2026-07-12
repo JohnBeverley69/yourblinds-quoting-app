@@ -169,6 +169,7 @@ foreach ($lines as $ln) {
         'chain'        => $pick($byName, ['chain', 'chain type']),
         'draw'         => $pick($byName, ['draw options', 'wand options', 'draw']),
         'wand_length'  => $wandLen,
+        'fit_height'   => $fitHeight > 0 ? $numTidy($fitHeight) : '',
         'bracket'      => $pick($byName, ['brackets', 'bracket']),
         'recess_exact' => $pick($byName, ['exact or recess', 'recess or exact', 'recess']),
         'fix'          => $pick($byName, ['fix', 'fixing', 'fit type']),

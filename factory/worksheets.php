@@ -43,6 +43,7 @@ $ORDER_FIELDS = [
     'chain'        => ['Chain',        'Plastic'],
     'draw'         => ['Draw',         'R/R'],
     'wand_length'  => ['Wand length',  '600'],
+    'fit_height'   => ['Fit height',   '2100'],
     'bracket'      => ['Bracket',      'Plastic'],
     'fabric'       => ['Fabric',       'Signature Sand'],
     'location'     => ['Location',     'LOUNGE'],
