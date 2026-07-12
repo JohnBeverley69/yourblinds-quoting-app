@@ -114,7 +114,35 @@ if (!$cordedSystems) $cordedSystems = $systems;
 
 // ---- Generate --------------------------------------------------------------
 $rooms   = ['Lounge', 'Bedroom', 'Kitchen', 'Bathroom', 'Hall', 'Office', 'Dining Room', 'Master Bedroom', 'Cloakroom', 'Study', 'Landing', 'Conservatory', 'Nursery', 'Utility'];
-$colours = ['White', 'Beige', 'Black', 'Grey', 'Cream', 'Silver'];
+
+// A REAL fabric valid for the blind's system (so colour/name are genuine combos,
+// never "SlimLine in Black"). Sampled + cached per system.
+$fabricCache = [];
+$pickFabric = static function (int $sysId) use ($pdo, $vertProductId, $clientId, &$fabricCache) {
+    if (!array_key_exists($sysId, $fabricCache)) {
+        $st = $pdo->prepare('SELECT id, band_code, supplier_name, name, colour, code FROM product_options
+                              WHERE product_id = ? AND client_id = ? AND active = 1 AND (system_id IS NULL OR system_id = ?)
+                           ORDER BY RAND() LIMIT 300');
+        $st->execute([$vertProductId, $clientId, $sysId]);
+        $fabricCache[$sysId] = $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $list = $fabricCache[$sysId];
+    return $list ? $list[array_rand($list)] : null;
+};
+
+// A choice valid for THIS system, for a given option group. Cached per (extra, system).
+$choiceCache = [];
+$pickChoice = static function (int $extraId, int $sysId) use ($pdo, &$choiceCache) {
+    $key = $extraId . '|' . $sysId;
+    if (!array_key_exists($key, $choiceCache)) {
+        $st = $pdo->prepare('SELECT id, label FROM product_extra_choices
+                              WHERE product_extra_id = ? AND active = 1 AND (system_id IS NULL OR system_id = ?) ORDER BY id');
+        $st->execute([$extraId, $sysId]);
+        $choiceCache[$key] = $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $list = $choiceCache[$key];
+    return $list ? $list[array_rand($list)] : null;
+};
 
 // Continue numbering from any existing dummies.
 $maxNum = 0;
@@ -150,13 +178,32 @@ try {
             $it['width_mm']              = mt_rand(60, 300) * 10;    // 600..3000
             $it['drop_mm']               = mt_rand(60, 260) * 10;    // 600..2600
             $it['room_name']             = $rooms[array_rand($rooms)];
-            $it['fabric_colour_snapshot'] = $colours[array_rand($colours)];
+            // Real fabric valid for this system.
+            $fab = $pickFabric((int) $sys['id']);
+            if ($fab) {
+                $it['option_id']                = (int) $fab['id'];
+                $it['fabric_band_snapshot']     = $fab['band_code'];
+                $it['fabric_supplier_snapshot'] = $fab['supplier_name'];
+                $it['fabric_name_snapshot']     = $fab['name'];
+                $it['fabric_colour_snapshot']   = $fab['colour'];
+                $it['fabric_code_snapshot']     = $fab['code'];
+            }
             $it = $freshTokens($it);
             $newItemId = $insertRow($pdo, 'quote_items', $it);
 
             foreach ($tpl['extras'] as $ex) {
                 $ex['quote_item_id'] = $newItemId;
                 $nm = strtolower(trim((string) $ex['extra_name_snapshot']));
+                // Re-pick a choice valid for THIS system (keeps combos real). Leave
+                // Control Options alone — it defines the wand/corded structure of
+                // the cloned line.
+                if ($nm !== 'control options') {
+                    $ch = $pickChoice((int) $ex['product_extra_id'], (int) $sys['id']);
+                    if ($ch) {
+                        $ex['product_extra_choice_id'] = (int) $ch['id'];
+                        $ex['choice_label_snapshot']   = (string) $ch['label'];
+                    }
+                }
                 if ($nm === 'fit height')   $ex['user_value'] = (string) (mt_rand(180, 240) * 10);   // 1800..2400
                 if ($nm === 'wand options') $ex['user_value'] = (string) (mt_rand(40, 90) * 10);      // 400..900 wand length
                 $insertRow($pdo, 'quote_item_extras', $ex);
