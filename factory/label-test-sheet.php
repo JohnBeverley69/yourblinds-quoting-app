@@ -44,6 +44,13 @@ $fromBottom    = 297 - $lastBottom;
 
 // mm number → tidy string.
 $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+
+// Representative sample content so the Font control has something to size —
+// mirrors a real vertical worksheet's fields, so you can judge legibility at
+// print scale while calibrating position + font together.
+$hdrSample = 'ONO ABC-2026-0001   Date 12/07/2026   Sample Trade Co.   1 Example Way, Town   AB1 2CD   Cust Ref';
+$cutSample = '1/1  SlimLine  White  Corded  Chain Steel  R/R  1200 x 1200  Recess  H_Cut 1170  C/L 5360  CH 1480  Top Fix  Notes';
+$fabSample = '1/1  Amaris  White  Hem 1145  Mtrs 23  Vanes 17  1200 x 1200  Recess  Welded  Weight Standard';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -51,6 +58,7 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
 <title>Label test sheet</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --fs-s: 8pt; --fs-l: 9.5pt; }
     body { background: #666; font-family: system-ui, sans-serif; }
     .toolbar { position: fixed; top: 0; left: 0; right: 0; background: #1f2a37; color: #e5edf5;
                padding: 10px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; z-index: 10; font-size: 14px; }
@@ -66,8 +74,12 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
     .sheet { position: relative; width: 210mm; height: 297mm; background: #fff;
              margin: 60px auto 40px; box-shadow: 0 4px 24px rgba(0,0,0,0.4); overflow: hidden; }
     #sheet-inner { position: absolute; inset: 0; }
-    .box { position: absolute; border: 0.3mm solid #111; }
-    .box .tag { position: absolute; top: 0.4mm; left: 0.8mm; font-size: 6pt; color: #999; font-family: monospace; }
+    .box { position: absolute; border: 0.3mm solid #111; overflow: hidden; }
+    .box .tag { position: absolute; top: 0.3mm; left: 0.8mm; font-size: 5pt; color: #c00; font-family: monospace; z-index: 2; }
+    .box .sample { position: absolute; top: 3mm; left: 1mm; right: 1mm; bottom: 0.6mm; overflow: hidden;
+                   font-family: ui-monospace, Consolas, monospace; line-height: 1.15; color: #111;
+                   font-size: var(--fs-s); word-break: break-word; }
+    .box.large .sample { top: 4.2mm; font-size: var(--fs-l); }
     .mk-h { position: absolute; border-top: 0.3mm solid #111; }   /* border prints; background does not */
     .mk-v { position: absolute; border-left: 0.3mm solid #111; }
     .cal-txt { position: absolute; font-size: 6pt; color: #333; font-family: sans-serif; white-space: nowrap; }
@@ -82,7 +94,7 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
 <body>
 <div class="toolbar">
     <b>Label test sheet</b>
-    <span class="note">Print at <b>100% / Actual size</b>, margins <b>None</b>. Small <?= $mm($labelW) ?>×<?= $mm($smallH) ?>mm. If your printer shifts label stock, <b>Nudge</b> to compensate — it's remembered for this computer.</span>
+    <span class="note">Print at <b>100% / Actual size</b>, margins <b>None</b>. Small <?= $mm($labelW) ?>×<?= $mm($smallH) ?>mm. <b>Nudge</b> to line up on your label stock and set the <b>Font</b> for legibility — both are saved for this computer and used by the real worksheet print.</span>
     <span class="nudge">
         <span class="lbl">Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5" title="left">◀</button>
@@ -93,17 +105,25 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
         <button type="button" data-ny="0.5" title="down">▼</button>
         <button type="button" id="nudge-reset" title="reset to 0">⟳</button>
     </span>
+    <span class="nudge">
+        <span class="lbl">Font&nbsp;pt</span>
+        <button type="button" id="fs-down" title="smaller">&#8722;</button>
+        <input id="fsv" type="number" step="0.5" value="8" title="label font (pt)">
+        <button type="button" id="fs-up" title="bigger">+</button>
+    </span>
     <button onclick="window.print()">Print</button>
 </div>
 <div class="sheet"><div id="sheet-inner">
     <?php foreach ($cols as $ci => $x): ?>
         <?php $side = $ci === 0 ? 'C' : 'F'; ?>
-        <div class="box" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
+        <div class="box large" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
             <span class="tag">HEADER</span>
+            <div class="sample"><?= e($hdrSample) ?></div>
         </div>
         <?php for ($k = 0; $k < $count; $k++): $t = $firstSmallTop + $k * $smallH; ?>
             <div class="box" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
                 <span class="tag"><?= $side . ($k + 1) ?></span>
+                <div class="sample"><?= e($ci === 0 ? $cutSample : $fabSample) ?></div>
             </div>
         <?php endfor; ?>
     <?php endforeach; ?>
@@ -143,6 +163,20 @@ $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''),
     });
     document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
     apply();
+
+    // Font size — same per-computer key (lblDiecutFs) the die-cut worksheet reads,
+    // so calibrating it here saves it for the real print too. Small = fs, large = fs + 1.5.
+    var fsv = document.getElementById('fsv');
+    var fs = parseFloat(localStorage.getItem('lblDiecutFs')) || 8;
+    function applyFs() {
+        document.documentElement.style.setProperty('--fs-s', fs + 'pt');
+        document.documentElement.style.setProperty('--fs-l', (fs + 1.5) + 'pt');
+        fsv.value = fs; localStorage.setItem('lblDiecutFs', fs);
+    }
+    fsv.addEventListener('input', function () { fs = parseFloat(fsv.value) || 8; applyFs(); });
+    document.getElementById('fs-up').addEventListener('click', function () { fs = Math.round((fs + 0.5) * 10) / 10; applyFs(); });
+    document.getElementById('fs-down').addEventListener('click', function () { fs = Math.max(4, Math.round((fs - 0.5) * 10) / 10); applyFs(); });
+    applyFs();
 })();
 </script>
 </body>
