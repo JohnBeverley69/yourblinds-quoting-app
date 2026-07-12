@@ -5,16 +5,16 @@ declare(strict_types=1);
  * Seed: Hem_To_Hem (fabric drop cut) build variable for Bev Vertical Blinds.
  *
  * The hem deduction depends on how the drop was measured, captured in the
- * "Exact or Recess" option:
+ * "Exact or Recess" option on the complete blind:
  *
  *   Recess       -> Drop - 55   (matches Blind Matrix ON066564: 1490 -> 1435, 2035 -> 1980)
  *   Exact        -> Drop - 45
- *   Hem to Hem   -> Drop        (customer gave the finished hem-to-hem length; no deduction)
  *   (anything else / not given) -> Drop - 55   (recess is the safe default)
  *
  * Column binds to the "Exact or Recess" group by id (test panel) and by name
- * (real orders, whose tenant group ids differ). NB "Hem to Hem" is not yet a
- * choice on that option, so that row stays dormant until the choice is added.
+ * (real orders, whose tenant group ids differ). Hem-to-Hem measuring is a
+ * separate product ("Bev Vertical Fabrics Only"), whose "Size" option offers
+ * Hem to Hem (= Drop, no deduction) — handled there, not here.
  *
  * Idempotent upsert into build_variables. Run: /seed_vertical_hem.php (super-admin).
  */
@@ -48,10 +48,9 @@ if ($measureId === 0) { exit("Missing 'Exact or Recess' option on product {$prod
 
 $columns = [['ref' => 'extra:' . $measureId, 'label' => 'Exact or Recess']];
 $rows = [
-    ['cells' => ['Recess'],     'result' => 'Drop - 55'],
-    ['cells' => ['Exact'],      'result' => 'Drop - 45'],
-    ['cells' => ['Hem to Hem'], 'result' => 'Drop'],
-    ['cells' => [''],           'result' => 'Drop - 55'],   // default: treat as recess
+    ['cells' => ['Recess'], 'result' => 'Drop - 55'],
+    ['cells' => ['Exact'],  'result' => 'Drop - 45'],
+    ['cells' => [''],       'result' => 'Drop - 55'],   // default: treat as recess
 ];
 
 $upsert = $pdo->prepare(
