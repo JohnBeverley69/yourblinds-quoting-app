@@ -39,6 +39,15 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $templateQid = isset($_GET['template']) && ctype_digit((string) $_GET['template']) ? (int) $_GET['template'] : 237;
 $n           = isset($_GET['n']) && ctype_digit((string) $_GET['n']) ? max(1, min(200, (int) $_GET['n'])) : 50;
 
+// Cloned rows carry the template's unique tokens (public_token etc.) — give
+// every token column a fresh value so the UNIQUE constraints don't collide.
+$freshTokens = static function (array $row): array {
+    foreach ($row as $k => $v) {
+        if ($v !== null && stripos((string) $k, 'token') !== false) $row[$k] = bin2hex(random_bytes(32));
+    }
+    return $row;
+};
+
 // Generic row clone/insert so we copy every column (incl. ones we don't name).
 $insertRow = static function (PDO $pdo, string $table, array $row): int {
     unset($row['id']);
@@ -124,6 +133,7 @@ try {
         $q['customer_reference'] = 'DUMMY';
         $q['created_at']         = date('Y-m-d H:i:s', time() - mt_rand(0, 14 * 86400));
         if (array_key_exists('updated_at', $q)) $q['updated_at'] = $q['created_at'];
+        $q = $freshTokens($q);
         $newQid = $insertRow($pdo, 'quotes', $q);
 
         $lineCount = ($i % 10) + 1;   // spread 1..10 across the batch
@@ -141,6 +151,7 @@ try {
             $it['drop_mm']               = mt_rand(60, 260) * 10;    // 600..2600
             $it['room_name']             = $rooms[array_rand($rooms)];
             $it['fabric_colour_snapshot'] = $colours[array_rand($colours)];
+            $it = $freshTokens($it);
             $newItemId = $insertRow($pdo, 'quote_items', $it);
 
             foreach ($tpl['extras'] as $ex) {
