@@ -194,10 +194,14 @@ require __DIR__ . '/../_partials/factory_head.php';
     .sec-top .tag { font-size:0.68rem; letter-spacing:0.05em; text-transform:uppercase; color:#64748b; font-weight:700; background:#eef2f7; padding:0.2rem 0.5rem; border-radius:6px; }
     .sec-top input.title { font-weight:600; width:14rem; }
     .sec-top .rm { margin-left:auto; }
-    .fld { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0; }
-    .fld .mv { display:flex; flex-direction:column; }
-    .fld .mv button, .fld .fld-rm { cursor:pointer; border:none; background:none; color:#cbd5e1; font-size:0.8rem; line-height:1; padding:0 0.15rem; }
-    .fld .mv button:hover, .fld .fld-rm:hover { color:#475569; }
+    .fld { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0; border-top:2px solid transparent; border-bottom:2px solid transparent; }
+    .fld .grip { cursor:grab; color:#cbd5e1; font-size:1rem; line-height:1; padding:0 0.15rem; user-select:none; }
+    .fld .grip:hover { color:#475569; }
+    .fld.dragging { opacity:0.4; }
+    .fld.drop-above { border-top-color:#166534; }
+    .fld.drop-below { border-bottom-color:#166534; }
+    .fld .fld-rm { cursor:pointer; border:none; background:none; color:#cbd5e1; font-size:0.9rem; line-height:1; padding:0 0.15rem; }
+    .fld .fld-rm:hover { color:#b91c1c; }
     .fld .fld-rm { font-size:1rem; }
     .fld .fld-rm:hover { color:#ef4444; }
     .fld input.cap { width:9rem; }
@@ -409,7 +413,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     function fieldRow(f) {
         var isText = f.source === 'text';
         var html = '<div class="fld">';
-        html += '<span class="mv"><button type="button" class="up" title="Move up">▲</button><button type="button" class="dn" title="Move down">▼</button></span>';
+        html += '<span class="grip" draggable="true" title="Drag to reorder">⠿</span>';
         html += '<input type="text" class="cap" value="' + esc(f.caption || '') + '" placeholder="' + (isText ? 'text to print' : 'caption') + '">';
         html += srcSelect(f.source);
         if (isText) html += '<span class="free">prints the caption</span>';
@@ -494,14 +498,67 @@ require __DIR__ . '/../_partials/factory_head.php';
             sync();
             var idx = Array.prototype.indexOf.call(sec.querySelectorAll('.flds .fld'), e.target.closest('.fld'));
             fields.splice(idx, 1); render();
-        } else if (e.target.classList.contains('up') || e.target.classList.contains('dn')) {
-            sync();
-            var i = Array.prototype.indexOf.call(sec.querySelectorAll('.flds .fld'), e.target.closest('.fld'));
-            var j = e.target.classList.contains('up') ? i - 1 : i + 1;
-            if (j >= 0 && j < fields.length) { var tmp = fields[i]; fields[i] = fields[j]; fields[j] = tmp; render(); }
         } else if (e.target.classList.contains('rm-label')) {
             sync(); STATE.labels.splice(+sec.dataset.li, 1); render();
         }
+    });
+
+    // ---- Drag-and-drop reordering of fields (within a section) ------------
+    var dragSrc = null;   // { sec, fromIdx }
+    function fldIndex(sec, fld) {
+        return Array.prototype.indexOf.call(sec.querySelectorAll('.flds .fld'), fld);
+    }
+    function clearDropMarks() {
+        editor.querySelectorAll('.fld.drop-above,.fld.drop-below').forEach(function (x) {
+            x.classList.remove('drop-above', 'drop-below');
+        });
+    }
+    editor.addEventListener('dragstart', function (e) {
+        var grip = e.target.closest('.grip'); if (!grip) return;   // drag only from the handle
+        var fld = grip.closest('.fld'); if (!fld) return;
+        var sec = fld.closest('.sec'); if (!sec) return;
+        dragSrc = { sec: sec, fromIdx: fldIndex(sec, fld) };
+        fld.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+        if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(fld, 12, 12);
+    });
+    editor.addEventListener('dragover', function (e) {
+        if (!dragSrc) return;
+        var fld = e.target.closest('.fld'); if (!fld) return;
+        if (fld.closest('.sec') !== dragSrc.sec) return;   // reorder within one label only
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        var r = fld.getBoundingClientRect();
+        var below = e.clientY > r.top + r.height / 2;
+        clearDropMarks();
+        fld.classList.add(below ? 'drop-below' : 'drop-above');
+    });
+    editor.addEventListener('drop', function (e) {
+        if (!dragSrc) return;
+        var fld = e.target.closest('.fld');
+        var sec = fld ? fld.closest('.sec') : null;
+        if (!fld || sec !== dragSrc.sec) { clearDropMarks(); dragSrc = null; return; }
+        e.preventDefault();
+        var r = fld.getBoundingClientRect();
+        var below = e.clientY > r.top + r.height / 2;
+        var toIdx = fldIndex(sec, fld);
+        var insertBefore = below ? toIdx + 1 : toIdx;
+        sync();
+        var arr = sectionFields(sec);
+        var from = dragSrc.fromIdx;
+        if (from >= 0 && from < arr.length && insertBefore !== from && insertBefore !== from + 1) {
+            var moved = arr.splice(from, 1)[0];
+            if (from < insertBefore) insertBefore--;
+            arr.splice(insertBefore, 0, moved);
+        }
+        clearDropMarks(); dragSrc = null;
+        render();
+    });
+    editor.addEventListener('dragend', function () {
+        clearDropMarks();
+        editor.querySelectorAll('.fld.dragging').forEach(function (x) { x.classList.remove('dragging'); });
+        dragSrc = null;
     });
 
     editor.addEventListener('change', function (e) {
