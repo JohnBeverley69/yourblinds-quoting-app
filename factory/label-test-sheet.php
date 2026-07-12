@@ -31,7 +31,7 @@ $leftPad   = $f('left', 10);
 $labelW    = $f('w', 90);
 $largeH    = $f('large', 50);
 $gap       = $f('gap', 7);
-$smallH    = $f('small', 21);
+$smallH    = $f('small', 20.9);
 $count     = max(1, min(30, $i('n', 10)));
 $centreGap = $f('centre', 10);
 
