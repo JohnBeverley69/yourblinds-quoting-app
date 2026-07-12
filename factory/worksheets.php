@@ -217,6 +217,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     .size-ctl input { width:3.4rem; padding:0.25rem 0.35rem; }
     .ws-preview { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.25rem; margin-top:0.4rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
     .pv-sheet { overflow-x:auto; }
+    .pv-head { display:flex; align-items:flex-start; gap:1rem; margin-bottom:0.6rem; }
+    .pv-head .ws-hint { flex:1; margin:0; }
+    .pv-zoom { flex:0 0 auto; display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#64748b; }
+    .pv-zoom button { cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:6px; width:1.7rem; height:1.7rem; line-height:1; font-size:1rem; padding:0; }
+    .pv-zoom button:hover { background:#f1f5f9; }
+    .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
+    .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
     .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.3 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
@@ -315,7 +322,15 @@ require __DIR__ . '/../_partials/factory_head.php';
 </div>
 
 <div class="ws-preview" id="preview-wrap">
-    <div class="ws-hint" style="margin-bottom:0.6rem;">Live preview · sample data, drawn at real label size. <strong>Drag a field on the label to reorder it.</strong> Faint italic fields only print when they have a value.</div>
+    <div class="pv-head">
+        <div class="ws-hint">Live preview · sample data, drawn at real label size. <strong>Drag a field on the label to reorder it.</strong> Faint italic fields only print when they have a value.</div>
+        <div class="pv-zoom" title="Zoom the preview (this screen only — doesn't change the label)">
+            <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+            <span id="zoom-val">100%</span>
+            <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" id="zoom-reset" class="pv-zoom-reset">Reset</button>
+        </div>
+    </div>
     <div class="pv-warn" id="pv-warn">⚠ Some labels are overflowing (outlined in red) — that content won't all fit at this size. Trim fields, shorten captions, or make the label bigger.</div>
     <div class="pv-sheet" id="preview"></div>
 </div>
@@ -646,7 +661,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (interactive ? ' pv-drag' : '');
         return '<span class="' + cls + '">' + t + '</span>';
     }
-    var SCALE = 4; // px per mm on screen — keeps labels at true proportion
+    // px per mm on screen. BASE = true label size (1:1 with the die-cut); the
+    // zoom control scales it up/down for legibility (remembered per computer).
+    // Font scales WITH the box so proportions — and the overflow check — hold.
+    var BASE_SCALE = 4;
+    var SCALE = Math.max(2, Math.min(12, parseFloat(localStorage.getItem('lblPreviewZoom')) || BASE_SCALE));
     function inlineFields(fields, ln, interactive) {
         var out = '';
         fields.forEach(function (f, i) {
@@ -657,7 +676,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         return out || '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
     }
     function labelBox(w, h, inner, secAttr) {
-        return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px">' + inner + '</div>';
+        return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px;font-size:' + (2.25 * SCALE) + 'px">' + inner + '</div>';
     }
     function renderPreview() {
         sync();
@@ -699,6 +718,18 @@ require __DIR__ . '/../_partials/factory_head.php';
     editor.addEventListener('change', function (e) {
         if (!e.target.classList.contains('add-src')) renderPreview();
     });
+
+    // Zoom control — scales the whole preview (screen only; label size unchanged).
+    function setZoom(s) {
+        SCALE = Math.max(2, Math.min(12, s));
+        localStorage.setItem('lblPreviewZoom', SCALE);
+        document.getElementById('zoom-val').textContent = Math.round(SCALE / BASE_SCALE * 100) + '%';
+        renderPreview();
+    }
+    document.getElementById('zoom-in').addEventListener('click', function () { setZoom(SCALE + 1); });
+    document.getElementById('zoom-out').addEventListener('click', function () { setZoom(SCALE - 1); });
+    document.getElementById('zoom-reset').addEventListener('click', function () { setZoom(BASE_SCALE); });
+    document.getElementById('zoom-val').textContent = Math.round(SCALE / BASE_SCALE * 100) + '%';
 
     document.getElementById('save-form').addEventListener('submit', function (e) {
         sync();
