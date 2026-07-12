@@ -231,6 +231,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-fld.pv-dragging { opacity:0.35; }
     .pv-fld.pv-drop-before { box-shadow:-2px 0 0 #166534; }
     .pv-fld.pv-drop-after { box-shadow:2px 0 0 #166534; }
+    /* this page wants the room for a side-by-side editor + full-size preview */
+    body main.factory-main { max-width:1700px; }
     /* editor + live preview side by side */
     .ws-layout { display:flex; gap:1rem; align-items:flex-start; }
     .ws-layout > .ws-card { flex:1 1 480px; min-width:0; margin:0; }
