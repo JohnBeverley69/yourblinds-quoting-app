@@ -40,6 +40,7 @@ $ORDER_FIELDS = [
     'colour'       => ['Colour',       'White'],
     'control'      => ['Control',      'Corded'],
     'draw'         => ['Draw',         'R/R'],
+    'wand_length'  => ['Wand length',  '600'],
     'bracket'      => ['Bracket',      'Plastic'],
     'fabric'       => ['Fabric',       'Signature Sand'],
     'location'     => ['Location',     'LOUNGE'],

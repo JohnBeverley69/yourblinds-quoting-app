@@ -95,20 +95,6 @@ if ($lines) {
     }
 }
 
-// TEMP debug: dump raw extras (name/label/user_value) to find where fields live.
-if (($_GET['debug'] ?? '') === '1') {
-    header('Content-Type: text/plain; charset=utf-8');
-    foreach ($lines as $ln) {
-        echo "line {$ln['line_no']} — {$ln['product_name_snapshot']} / {$ln['system_name_snapshot']}\n";
-        foreach ($extrasBy[(int) $ln['id']] ?? [] as $r) {
-            echo sprintf("   %-22s = %-20s user_value=%s\n",
-                (string) $r['extra_name_snapshot'], (string) $r['choice_label_snapshot'],
-                var_export($r['user_value'] ?? null, true));
-        }
-    }
-    exit;
-}
-
 // ---- Worksheet template per product (default) ------------------------------
 $templateByProduct = [];
 $loadTemplate = static function (PDO $pdo, int $pid) use (&$templateByProduct) {
@@ -144,14 +130,17 @@ $rendered = [];   // [ ['ctx'=>lineDetailVals merged with order, 'computed'=>var
 foreach ($lines as $ln) {
     $extras = $extrasBy[(int) $ln['id']] ?? [];
 
-    $byName      = [];   // lower group name => chosen label
-    $fitHeight   = 0.0;
+    $byName     = [];   // lower group name => chosen label
+    $userVal    = [];   // lower group name => typed numeric input (user_value)
     foreach ($extras as $r) {
-        $byName[strtolower(trim((string) $r['extra_name_snapshot']))] = (string) $r['choice_label_snapshot'];
-        if (stripos((string) $r['extra_name_snapshot'], 'fit height') !== false && is_numeric($r['user_value'] ?? null)) {
-            $fitHeight = (float) $r['user_value'];
-        }
+        $nm = strtolower(trim((string) $r['extra_name_snapshot']));
+        $byName[$nm] = (string) $r['choice_label_snapshot'];
+        if (is_numeric($r['user_value'] ?? null)) $userVal[$nm] = (float) $r['user_value'];
     }
+    $fitHeight = $userVal['fit height'] ?? 0.0;
+    // Wand length is a typed input riding on the "Wand Options" row (user_value).
+    $numTidy  = static fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
+    $wandLen  = isset($userVal['wand options']) ? $numTidy($userVal['wand options']) : '';
     // Decision tables match on the System axis + option group NAME (tenant group
     // ids differ from the master's), so key selections by name.
     $optSel = array_merge(['system' => (string) ($ln['system_name_snapshot'] ?? '')], $byName);
@@ -177,6 +166,7 @@ foreach ($lines as $ln) {
         'notes'        => (string) ($ln['notes'] ?? ''),
         'control'      => $pick($byName, ['control options', 'control']),
         'draw'         => $pick($byName, ['draw options', 'wand options', 'draw']),
+        'wand_length'  => $wandLen,
         'bracket'      => $pick($byName, ['brackets', 'bracket']),
         'recess_exact' => $pick($byName, ['exact or recess', 'recess or exact', 'recess']),
         'fix'          => $pick($byName, ['fix', 'fixing', 'fit type']),
