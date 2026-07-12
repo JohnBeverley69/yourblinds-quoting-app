@@ -56,10 +56,13 @@ try {
 $lines = [];
 if ($order) {
     try {
+        // source_product_id maps the tenant's catalogue copy back to the Beverley
+        // master product, where the build rules + worksheet template live.
         $li = $pdo->prepare(
             "SELECT qi.id, qi.line_no, qi.quantity, qi.product_id, qi.system_id, qi.width_mm, qi.drop_mm,
                     qi.product_name_snapshot, qi.system_name_snapshot,
-                    qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes
+                    qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes,
+                    COALESCE(p.source_product_id, p.id) AS master_product_id
                FROM quote_items qi JOIN products p ON p.id = qi.product_id
               WHERE qi.quote_id = ? AND p.source_client_id = ?
            ORDER BY qi.line_no, qi.id"
@@ -127,23 +130,25 @@ $rendered = [];   // [ ['ctx'=>lineDetailVals merged with order, 'computed'=>var
 foreach ($lines as $ln) {
     $extras = $extrasBy[(int) $ln['id']] ?? [];
 
-    $optSel      = ['system' => (string) ($ln['system_name_snapshot'] ?? '')];
     $byName      = [];   // lower group name => chosen label
     $fitHeight   = 0.0;
     foreach ($extras as $r) {
-        $optSel['extra:' . (int) $r['product_extra_id']] = (string) $r['choice_label_snapshot'];
         $byName[strtolower(trim((string) $r['extra_name_snapshot']))] = (string) $r['choice_label_snapshot'];
         if (stripos((string) $r['extra_name_snapshot'], 'fit height') !== false && is_numeric($r['user_value'] ?? null)) {
             $fitHeight = (float) $r['user_value'];
         }
     }
+    // Decision tables match on the System axis + option group NAME (tenant group
+    // ids differ from the master's), so key selections by name.
+    $optSel = array_merge(['system' => (string) ($ln['system_name_snapshot'] ?? '')], $byName);
+    $masterPid = (int) ($ln['master_product_id'] ?? $ln['product_id']);
     $pick = static function (array $byName, array $names): string {
         foreach ($names as $n) { if (isset($byName[$n])) return $byName[$n]; }
         return '';
     };
 
     $numVars = ['Width' => (float) $ln['width_mm'], 'Drop' => (float) $ln['drop_mm'], 'Fit_height' => $fitHeight];
-    $eval    = build_evaluate($pdo, (int) $ln['product_id'], $numVars, $optSel);
+    $eval    = build_evaluate($pdo, $masterPid, $numVars, $optSel);
 
     $lineVals = [
         'line_no'      => $ln['line_no'] . '/' . $totalLines,
@@ -167,7 +172,7 @@ foreach ($lines as $ln) {
     $rendered[] = [
         'ctx'      => array_merge($orderVals, $lineVals),
         'computed' => $eval['vars'],
-        'template' => $loadTemplate($pdo, (int) $ln['product_id']),
+        'template' => $loadTemplate($pdo, $masterPid),
         'product'  => (string) ($ln['product_name_snapshot'] ?? ''),
     ];
 }
