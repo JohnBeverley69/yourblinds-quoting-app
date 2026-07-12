@@ -212,7 +212,7 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
 if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     $ff = static fn (string $k, float $d): float => isset($_GET[$k]) && is_numeric($_GET[$k]) ? (float) $_GET[$k] : $d;
     $topPad = $ff('top', 15); $leftPad = $ff('left', 10); $labelW = $ff('w', 90); $largeH = $ff('large', 50);
-    $gap = $ff('gap', 7); $smallH = $ff('small', 20.9); $centreGap = $ff('centre', 10); $fs = $ff('fs', 6.5);
+    $gap = $ff('gap', 7); $smallH = $ff('small', 20.9); $centreGap = $ff('centre', 10); $fs = $ff('fs', 8);
     $linesOn = (($_GET['lines'] ?? '1') !== '0');   // draw thin label outlines (for the plain-paper test)
     $cal     = (($_GET['cal'] ?? '1') !== '0');      // crop marks + 100mm ruler
     $cols = [$leftPad, $leftPad + $labelW + $centreGap];
@@ -252,8 +252,9 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     #sheet-inner { position:absolute; inset:0; }
     .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
     .dc-label .flds { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; line-height:1.12; }
-    .dc-label.dc-small .flds { font-size:<?= $mm($fs) ?>pt; }
-    .dc-label.dc-large .flds { font-size:<?= $mm($fs + 1.5) ?>pt; }
+    :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
+    .dc-label.dc-small .flds { font-size:var(--fs-s); }
+    .dc-label.dc-large .flds { font-size:var(--fs-l); }
     .dc-label .flds span { white-space:nowrap; }
     .dc-label .flds .dcbr { flex:0 0 100%; height:0; }
     .dc-label .flds .r { margin-left:auto; } .dc-label .flds .c { margin-left:auto; margin-right:auto; }
@@ -274,6 +275,9 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
         <button type="button" data-nx="-0.5" title="left">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5" title="right">&#9654;</button>
         <button type="button" data-ny="-0.5" title="up">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5" title="down">&#9660;</button>
         <button type="button" id="nudge-reset" title="reset">&#8635;</button>
+    </span>
+    <span class="nudge"><span>Font&nbsp;pt</span>
+        <button type="button" id="fs-down" title="smaller">&#8722;</button><input id="fsv" type="number" step="0.5" value="<?= $mm($fs) ?>"><button type="button" id="fs-up" title="bigger">+</button>
     </span>
     <button onclick="window.print()">Print</button>
 </div>
@@ -313,6 +317,20 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     document.querySelectorAll('[data-ny]').forEach(function (b) { b.addEventListener('click', function () { oy = Math.round((oy + parseFloat(b.dataset.ny)) * 10) / 10; apply(); }); });
     document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
     apply();
+
+    // Live font-size control (remembered per computer). Small = fs, large = fs + 1.5.
+    var fsBase = parseFloat('<?= $mm($fs) ?>') || 8;
+    var fs = parseFloat(localStorage.getItem('lblDiecutFs')) || fsBase;
+    var fsv = document.getElementById('fsv');
+    function applyFs() {
+        document.documentElement.style.setProperty('--fs-s', fs + 'pt');
+        document.documentElement.style.setProperty('--fs-l', (fs + 1.5) + 'pt');
+        fsv.value = fs; localStorage.setItem('lblDiecutFs', fs);
+    }
+    fsv.addEventListener('input', function () { fs = parseFloat(fsv.value) || fsBase; applyFs(); });
+    document.getElementById('fs-up').addEventListener('click', function () { fs = Math.round((fs + 0.5) * 10) / 10; applyFs(); });
+    document.getElementById('fs-down').addEventListener('click', function () { fs = Math.max(4, Math.round((fs - 0.5) * 10) / 10); applyFs(); });
+    applyFs();
 })();
 </script>
 </body></html>
