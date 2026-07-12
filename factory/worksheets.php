@@ -210,7 +210,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld input.cap { width:9rem; }
     .fld select.src { min-width:12rem; }
     .fld select.show { width:8.5rem; }
-    .fld select.align { width:5.5rem; }
+    .fld select.align { width:6rem; }
     .fld .free { font-size:0.7rem; color:#94a3b8; width:8.5rem; text-align:center; }
     .add-fld { margin-top:0.5rem; }
     .add-fld select { min-width:14rem; }
@@ -252,6 +252,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-drag:hover { background:#eef2ff; }
     .pv-drag:active { cursor:grabbing; }
     .pv-alignright { margin-left:auto; }
+    .pv-aligncentre { margin-left:auto; margin-right:auto; }
     .pv-rm { display:none; position:absolute; top:50%; right:0; transform:translateY(-50%); width:13px; height:13px; padding:0; line-height:11px; text-align:center; border:none; border-radius:50%; background:#ef4444; color:#fff; font-size:11px; font-family:sans-serif; cursor:pointer; z-index:3; box-shadow:0 1px 2px rgba(0,0,0,0.3); }
     .pv-drag:hover .pv-rm { display:block; }
     .pv-fld.pv-ghost { opacity:0.45; font-style:italic; }
@@ -483,7 +484,8 @@ require __DIR__ . '/../_partials/factory_head.php';
             + '<option value="never"' + (f.show === 'never' ? ' selected' : '') + '>Never</option>'
             + '</select>';
         html += '<select class="align" title="Where it sits on the label line">'
-            + '<option value="left"' + (f.align === 'right' ? '' : ' selected') + '>⇤ Left</option>'
+            + '<option value="left"' + (f.align === 'right' || f.align === 'centre' ? '' : ' selected') + '>⇤ Left</option>'
+            + '<option value="centre"' + (f.align === 'centre' ? ' selected' : '') + '>Centre</option>'
             + '<option value="right"' + (f.align === 'right' ? ' selected' : '') + '>Right ⇥</option>'
             + '</select>';
         html += '<button type="button" class="fld-rm" title="Remove field">×</button>';
@@ -558,7 +560,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     caption: r.querySelector('input.cap').value,
                     show: showSel ? showSel.value : 'always'
                 };
-                if (alignSel && alignSel.value === 'right') o.align = 'right';
+                if (alignSel && (alignSel.value === 'right' || alignSel.value === 'centre')) o.align = alignSel.value;
                 out.push(o);
             });
             fields.length = 0; Array.prototype.push.apply(fields, out);
@@ -708,7 +710,8 @@ require __DIR__ . '/../_partials/factory_head.php';
         if (f.source === 'text') t = esc(v || cap || '(text)');
         else t = esc(cap ? (cap + ' ' + v) : String(v !== '' && v != null ? v : '·'));
         var cls = 'pv-fld' + (hidden ? ' pv-ghost' : '') + (never ? ' pv-never' : '')
-                + (f.align === 'right' ? ' pv-alignright' : '') + (interactive ? ' pv-drag' : '');
+                + (f.align === 'right' ? ' pv-alignright' : (f.align === 'centre' ? ' pv-aligncentre' : ''))
+                + (interactive ? ' pv-drag' : '');
         return '<span class="' + cls + '" data-fi="' + i + '">' + t + rm + '</span>';
     }
     // px per mm on screen. BASE = true label size (1:1 with the die-cut); the

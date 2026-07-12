@@ -218,6 +218,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .wp-label .fields { font-family:ui-monospace,Consolas,monospace; font-size:0.82rem; line-height:1.6; display:flex; flex-wrap:wrap; gap:0.1rem 0.7rem; }
     .wp-break { flex:0 0 100%; height:0; }
     .wp-right { margin-left:auto; }
+    .wp-centre { margin-left:auto; margin-right:auto; }
     .wp-flag { color:#b91c1c; }
     .wp-note { color:#94a3b8; font-size:0.85rem; }
     @media print {
@@ -245,7 +246,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div class="wp-header">
         <?php foreach ($headerFields as $f): ?>
             <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
-            <?php $t = $fieldText($f, $orderVals, []); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : '' ?>><?= e($t) ?></span><?php endif; ?>
+            <?php $t = $fieldText($f, $orderVals, []); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= e($t) ?></span><?php endif; ?>
         <?php endforeach; ?>
         <?php if (!$headerFields): ?><span class="wp-note">No worksheet template for this product yet — build one in Worksheets.</span><?php endif; ?>
     </div>
@@ -259,7 +260,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <div class="fields">
                             <?php foreach (($lab['fields'] ?? []) as $f): ?>
                                 <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
-                                <?php $t = $fieldText($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : '' ?>><?= e($t) ?></span><?php endif; ?>
+                                <?php $t = $fieldText($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= e($t) ?></span><?php endif; ?>
                             <?php endforeach; ?>
                         </div>
                     </div>
