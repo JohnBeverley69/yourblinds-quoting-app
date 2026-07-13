@@ -6,9 +6,11 @@ declare(strict_types=1);
  *
  * From Beverley's "Vertical Cutt allowances" sheet — the mm deducted from the
  * width for the headrail cut, keyed by system + control + (draw) + Recess/Exact.
- * "All minus sums" — every value is a deduction. Used by Vertical Blinds and
- * Vertical Head Rail Only, referenced from a build rule as e.g.
- *   H_Cut = Width_conversion - LOOKUP("vertical_headrail", HeadRail, ControlOptions, DrawOption, ExactorRecess)
+ * "All minus sums" — every value is a deduction, so it is stored as a NEGATIVE
+ * figure (signed-allowance convention: the build rule ADDS the value, so a
+ * deduction is negative and any future addition would be positive). Used by
+ * Vertical Blinds and Vertical Head Rail Only, referenced from a build rule as
+ *   H_Cut = Width_conversion + LOOKUP("vertical_headrail", HeadRail, ControlOptions, DrawOption, ExactorRecess)
  * (Nova is the 2026 system and uses 3 keys: system, control, Recess/Exact.)
  *
  * Idempotent (upsert). Run via web: /seed_vertical_allowances.php (super-admin).
@@ -66,7 +68,9 @@ foreach ($defs as [$keyPrefix, $basis, $value]) {
     $rows[] = [
         'key_norm'     => strtolower(implode('|', $keys)),
         'keys_display' => implode(' · ', $keys),
-        'value'        => $value,
+        // Signed-allowance convention: every headrail value is a deduction,
+        // so store it negative. The build rule adds it (Width + LOOKUP(...)).
+        'value'        => $value == 0.0 ? 0.0 : -abs($value),
     ];
 }
 

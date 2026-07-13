@@ -157,7 +157,8 @@ require __DIR__ . '/../_partials/factory_head.php';
             </tbody>
         </table>
         <div style="margin-top:0.9rem"><button type="submit" class="btn primary">Save allowances</button></div>
-        <p class="al-hint">To delete a row, clear its Keys and Save. Separate keys with <code>·</code> (or <code>|</code>/comma). The build rule must LOOKUP with the same keys in the same order.</p>
+        <p class="al-hint"><strong>Signed values:</strong> enter the actual change to the dimension — a deduction is <strong>negative</strong> (e.g. <code>-35</code>), an addition is <strong>positive</strong> (e.g. <code>3</code>). The build rule <em>adds</em> the value (<code>Width + LOOKUP(...)</code>), so both work. (Best-fit tables are the exception: their values are max widths, always positive.)<br>
+        To delete a row, clear its Keys and Save. Separate keys with <code>·</code> (or <code>|</code>/comma). The build rule must LOOKUP with the same keys in the same order.</p>
     </form>
 </div>
 <?php endif; ?>
