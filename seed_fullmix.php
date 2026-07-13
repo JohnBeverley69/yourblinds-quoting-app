@@ -236,29 +236,43 @@ try {
             $it = $freshTokens($it);
             $newItemId = $insertRow($pdo, 'quote_items', $it);
 
-            // Process in order (parents before children); only fill a
-            // conditional group when one of its parent choices was selected.
-            $selected = [];
-            foreach ($groups as $g) {
-                $gid = (int) $g['id'];
-                $parents = $parentsOf[$gid] ?? [];
-                if ($parents) {
-                    $applies = false;
-                    foreach ($parents as $pcid => $_) { if (isset($selected[$pcid])) { $applies = true; break; } }
-                    if (!$applies) continue;   // parent choice not selected — group doesn't apply
+            // Decide choices ORDER-INDEPENDENTLY: fill unconditional groups,
+            // then cascade conditional groups as their parent choices become
+            // selected, repeating to a fixpoint. (A single list-order pass
+            // missed conditionals whose parent group sorts after them — e.g.
+            // Braid Colour, gated by Scallops, which sorts later.) A conditional
+            // group whose parent is never selected stays unfilled.
+            $selected = [];   // choice ids chosen on this blind
+            $decided  = [];   // gid => ['name'=>, 'ch'=>row|null]
+            do {
+                $changed = false;
+                foreach ($groups as $g) {
+                    $gid = (int) $g['id'];
+                    if (array_key_exists($gid, $decided)) continue;
+                    $parents = $parentsOf[$gid] ?? [];
+                    if ($parents) {
+                        $applies = false;
+                        foreach ($parents as $pcid => $_) { if (isset($selected[$pcid])) { $applies = true; break; } }
+                        if (!$applies) continue;   // parent not selected yet — retry a later pass
+                    }
+                    $ch = $pickChoice($gid, (int) $sys['id']);
+                    $decided[$gid] = ['name' => (string) $g['name'], 'ch' => $ch ?: null];
+                    if ($ch) $selected[(int) $ch['id']] = true;
+                    $changed = true;
                 }
-                $ch = $pickChoice($gid, (int) $sys['id']);
-                if (!$ch) continue;
+            } while ($changed);
+
+            foreach ($decided as $gid => $d) {
+                if (!$d['ch']) continue;
                 $ex = $baseExtra;
                 $ex['quote_item_id']           = $newItemId;
                 $ex['product_extra_id']        = $gid;
-                $ex['product_extra_choice_id'] = (int) $ch['id'];
-                $ex['extra_name_snapshot']     = (string) $g['name'];
-                $ex['choice_label_snapshot']   = (string) $ch['label'];
+                $ex['product_extra_choice_id'] = (int) $d['ch']['id'];
+                $ex['extra_name_snapshot']     = $d['name'];
+                $ex['choice_label_snapshot']   = (string) $d['ch']['label'];
                 if (array_key_exists('user_value', $ex)) $ex['user_value'] = null;
                 $ex = $freshTokens($ex);
                 $insertRow($pdo, 'quote_item_extras', $ex);
-                $selected[(int) $ch['id']] = true;
             }
             $blinds++;
         }
