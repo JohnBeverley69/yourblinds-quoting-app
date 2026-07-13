@@ -571,14 +571,24 @@ function pp_sync_extras_and_choices(
     );
     $src->execute([$sourceClientId, $sourceProductId]);
 
-    $find = $pdo->prepare(
-        'SELECT id FROM product_extras
-          WHERE client_id = ? AND product_id = ? AND name = ? LIMIT 1'
-    );
+    // Match same-named extras POSITIONALLY: the Nth source extra of a given
+    // name maps to the Nth existing target extra of that name (extra sources
+    // beyond that INSERT their own). A plain "name = ? LIMIT 1" match collapsed
+    // duplicate-named groups — e.g. the roller's several parent-gated "End Cap
+    // Colour" / "Profile Colour" extras — onto one target, wiping their
+    // per-parent conditional wiring (End Cap Colour under Bottom Bar "Senses
+    // Metal Cloth Covered" never reappeared on the tenant copy).
+    $tgtByName = [];
+    $tq = $pdo->prepare('SELECT id, name FROM product_extras WHERE client_id = ? AND product_id = ? ORDER BY id');
+    $tq->execute([$targetClientId, $targetProductId]);
+    foreach ($tq->fetchAll(PDO::FETCH_ASSOC) as $tr) { $tgtByName[(string) $tr['name']][] = (int) $tr['id']; }
+    $nameUsed = [];
 
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $find->execute([$targetClientId, $targetProductId, (string) $r['name']]);
-        $tgtId = $find->fetchColumn();
+        $nm  = (string) $r['name'];
+        $idx = $nameUsed[$nm] ?? 0;
+        $nameUsed[$nm] = $idx + 1;
+        $tgtId = $tgtByName[$nm][$idx] ?? false;
 
         if ($tgtId === false) {
             // INSERT — same dynamic column shape.
