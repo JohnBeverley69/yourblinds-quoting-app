@@ -76,9 +76,27 @@ $sysSt = $pdo->prepare('SELECT id, name FROM product_systems WHERE product_id = 
 $sysSt->execute([$productId, $clientId]);
 $systems = $sysSt->fetchAll(PDO::FETCH_ASSOC);
 
-$grpSt = $pdo->prepare('SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, id');
+$grpSt = $pdo->prepare('SELECT id, name, parent_choice_id FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, id');
 $grpSt->execute([$productId, $clientId]);
 $groups = $grpSt->fetchAll(PDO::FETCH_ASSOC);
+
+// Conditional gating: the parent choice ids that make each group appear
+// (product_extra_parent_choices junction + legacy parent_choice_id). A group
+// with no parents is unconditional. A dummy only fills a conditional group when
+// one of its parent choices was actually selected — so a "No Braid" scallop
+// never gets a Braid Colour, an end-cap colour only appears for its fascia, etc.
+$parentsOf = [];
+foreach ($groups as $g) {
+    $parentsOf[(int) $g['id']] = [];
+    if ($g['parent_choice_id'] !== null) $parentsOf[(int) $g['id']][(int) $g['parent_choice_id']] = true;
+}
+try {
+    $jq = $pdo->prepare('SELECT pep.product_extra_id AS eid, pep.product_extra_choice_id AS cid
+                           FROM product_extra_parent_choices pep JOIN product_extras e ON e.id = pep.product_extra_id
+                          WHERE e.product_id = ? AND e.client_id = ?');
+    $jq->execute([$productId, $clientId]);
+    foreach ($jq->fetchAll(PDO::FETCH_ASSOC) as $r) { $parentsOf[(int) $r['eid']][(int) $r['cid']] = true; }
+} catch (Throwable $e) { /* no junction table */ }
 
 $fabSt = $pdo->prepare('SELECT id, band_code, supplier_name, name, colour, code FROM product_options
                          WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY RAND() LIMIT 400');
@@ -180,18 +198,29 @@ try {
             $it = $freshTokens($it);
             $newItemId = $insertRow($pdo, 'quote_items', $it);
 
+            // Process in order (parents before children); only fill a
+            // conditional group when one of its parent choices was selected.
+            $selected = [];
             foreach ($groups as $g) {
-                $ch = $pickChoice((int) $g['id'], (int) $sys['id']);
+                $gid = (int) $g['id'];
+                $parents = $parentsOf[$gid] ?? [];
+                if ($parents) {
+                    $applies = false;
+                    foreach ($parents as $pcid => $_) { if (isset($selected[$pcid])) { $applies = true; break; } }
+                    if (!$applies) continue;   // parent choice not selected — group doesn't apply
+                }
+                $ch = $pickChoice($gid, (int) $sys['id']);
                 if (!$ch) continue;
                 $ex = $baseExtra;
                 $ex['quote_item_id']           = $newItemId;
-                $ex['product_extra_id']        = (int) $g['id'];
+                $ex['product_extra_id']        = $gid;
                 $ex['product_extra_choice_id'] = (int) $ch['id'];
                 $ex['extra_name_snapshot']     = (string) $g['name'];
                 $ex['choice_label_snapshot']   = (string) $ch['label'];
                 if (array_key_exists('user_value', $ex)) $ex['user_value'] = null;
                 $ex = $freshTokens($ex);
                 $insertRow($pdo, 'quote_item_extras', $ex);
+                $selected[(int) $ch['id']] = true;
             }
             $blinds++;
         }
