@@ -188,12 +188,19 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 
-// Field sources + samples for JS.
+// Field sources + samples for JS. The order-detail list is trimmed per product:
+// the vertical-specific fields (draw, wand, welded, weights, headrail colour…)
+// only make sense on the vertical blind. Every other product gets the generic
+// order/line fields (size, fabric, location, notes…) and reaches its own
+// options through the "Product options" group instead.
+$verticalOnlyFields = ['hd_colour', 'control', 'chain', 'draw', 'wand_length', 'fit_height', 'bracket', 'welded', 'bottom_weight', 'weight_colour'];
+$isVertical = stripos($productName, 'Vertical') !== false;
 $jsOrderFields = [];
 $jsSamples     = [];
 foreach ($ORDER_FIELDS as $key => [$label, $sample]) {
+    $jsSamples['order:' . $key] = $sample;   // keep every sample so an already-placed field still previews
+    if (!$isVertical && in_array($key, $verticalOnlyFields, true)) continue;
     $jsOrderFields[] = ['key' => $key, 'label' => $label];
-    $jsSamples['order:' . $key] = $sample;
 }
 $varSamples = ['H_Cut' => '2330', 'C_L' => '7700', 'CH_L' => '2980', 'Hem_To_Hem' => '1435', 'Mtrs' => '51', 'Vanes' => '32'];
 foreach ($buildVars as $vn) { $jsSamples['var:' . $vn] = $varSamples[$vn] ?? '0'; }
