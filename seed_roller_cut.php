@@ -26,6 +26,8 @@ declare(strict_types=1);
  *   FABRIC DROP = Drop + 350, or + 400 when a scallop shape is chosen
  *     (Scallops 1-4 With Braid · Scallops 1-6 No Braid · Pole Scallop (Shapes 1,5 and 6 only)).
  *
+ *   CHAIN LENGTH = (Drop - 100) * 2  (the continuous chain loop).
+ *
  * A formula can't read an option value, so Fascia/Fit/Scallops are decision-table
  * columns. Cruze/Hybrid/Senses Universal from the calculator aren't in the
  * YourBlinds catalogue, so they're omitted (add later if offered). P&F Roller is
@@ -144,10 +146,12 @@ foreach ($SHAPES as $s) $dropRows[] = ['cells' => [$s], 'result' => 'Drop + 400'
 $dropRows[] = ['cells' => [''], 'result' => 'Drop + 350'];
 
 $vars = [
-    ['name' => 'Tube_Cut',    'seq' => 10, 'cols' => [$colFascia, $colFit], 'rows' => $tubeRows],
-    ['name' => 'Fabric_W',    'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut - 3']]],
-    ['name' => 'Fascia_Cut',  'seq' => 30, 'cols' => [$colFascia, $colFit], 'rows' => $fasciaRows],
-    ['name' => 'Fabric_Drop', 'seq' => 40, 'cols' => [$colScallop],         'rows' => $dropRows],
+    ['name' => 'Tube_Cut',     'seq' => 10, 'cols' => [$colFascia, $colFit], 'rows' => $tubeRows],
+    ['name' => 'Fabric_W',     'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut - 3']]],
+    ['name' => 'Fascia_Cut',   'seq' => 30, 'cols' => [$colFascia, $colFit], 'rows' => $fasciaRows],
+    ['name' => 'Fabric_Drop',  'seq' => 40, 'cols' => [$colScallop],         'rows' => $dropRows],
+    // Chain loop = twice the hanging length (100mm short of the drop).
+    ['name' => 'Chain_Length', 'seq' => 50, 'cols' => [],                    'rows' => [['cells' => [], 'result' => '(Drop - 100) * 2']]],
 ];
 
 $upVar = $pdo->prepare(
