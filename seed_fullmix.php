@@ -113,6 +113,38 @@ if (($_GET['probe'] ?? '0') !== '0' && ($_GET['probe'] ?? '') !== '') {
     exit;
 }
 
+// Verify: no dummy blind carries a Braid Colour without a with-braid scallop parent.
+if (($_GET['verify'] ?? '0') !== '0' && ($_GET['verify'] ?? '') !== '') {
+    $braidGid = 0;
+    foreach ($groups as $g) { if (mb_strtolower(trim((string) $g['name'])) === 'braid colour') { $braidGid = (int) $g['id']; break; } }
+    if (!$braidGid) { exit("No 'Braid Colour' group on {$productName}.\n"); }
+    $braidParents = $parentsOf[$braidGid] ?? [];
+    echo "Product {$productId} ({$productName}); Braid Colour group {$braidGid} gated by " . count($braidParents) . " scallop choice(s).\n";
+    $items = $pdo->prepare("SELECT qi.id, q.quote_number FROM quote_items qi JOIN quotes q ON q.id = qi.quote_id
+                             WHERE q.client_id = ? AND q.customer_reference = 'DUMMY' AND qi.product_id = ?");
+    $items->execute([$clientId, $productId]);
+    $exSt = $pdo->prepare("SELECT product_extra_choice_id cid, extra_name_snapshot nm, choice_label_snapshot lbl FROM quote_item_extras WHERE quote_item_id = ?");
+    $checked = 0; $bad = 0; $examples = [];
+    foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $it) {
+        $exSt->execute([(int) $it['id']]);
+        $sel = []; $hasBraid = false; $braidLbl = ''; $scallopLbl = '(none)';
+        foreach ($exSt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $sel[(int) $r['cid']] = true;
+            $nm = mb_strtolower(trim((string) $r['nm']));
+            if ($nm === 'braid colour')       { $hasBraid = true; $braidLbl = (string) $r['lbl']; }
+            if ($nm === 'scallops and trims')  { $scallopLbl = (string) $r['lbl']; }
+        }
+        if (!$hasBraid) continue;
+        $checked++;
+        $ok = false; foreach ($braidParents as $pc => $_) { if (isset($sel[$pc])) { $ok = true; break; } }
+        if (!$ok) { $bad++; if (count($examples) < 8) $examples[] = "{$it['quote_number']}: scallop '{$scallopLbl}' + braid '{$braidLbl}'"; }
+    }
+    echo "Blinds with a Braid Colour: {$checked}\n";
+    echo "Impossible (braid on a non-braid scallop): {$bad}\n";
+    foreach ($examples as $e) echo "  {$e}\n";
+    exit;
+}
+
 if (!$baseItem || !$tplQuote || !$baseExtra) { exit("No existing ABC order to clone structure from — create one order in ABC first.\n"); }
 if (!$systems) { exit("Product {$productId} has no systems on ABC.\n"); }
 if (!$fabrics) { exit("Product {$productId} has no fabrics on ABC.\n"); }
