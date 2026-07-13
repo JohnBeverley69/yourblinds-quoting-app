@@ -77,7 +77,7 @@ $fabSample = '1/1  Amaris  White  Hem 1145  Mtrs 23  Vanes 17  1200 x 1200  Rece
     .box { position: absolute; border: 0.3mm solid #111; overflow: hidden; }
     .box .tag { position: absolute; top: 0.3mm; left: 0.8mm; font-size: 5pt; color: #c00; font-family: monospace; z-index: 2; }
     .box .sample { position: absolute; top: 3mm; left: 1mm; right: 1mm; bottom: 0.6mm; overflow: hidden;
-                   font-family: ui-monospace, Consolas, monospace; line-height: 1.15; color: #111;
+                   font-family: ui-monospace, Consolas, monospace; line-height: 1.05; color: #111;
                    font-size: var(--fs-s); word-break: break-word; }
     .box.large .sample { top: 4.2mm; font-size: var(--fs-l); }
     .mk-h { position: absolute; border-top: 0.3mm solid #111; }   /* border prints; background does not */
