@@ -177,6 +177,16 @@ foreach ($lines as $ln) {
         'weight_colour' => $pick($byName, ['colour', 'weight colour', 'bottom weight colour']),
     ];
 
+    // Generic per-product option values (opt:<group name>) — every option group
+    // on this order, keyed by name, so any product's own options resolve. The
+    // chosen label, or the typed number (fit height / wand length) when the
+    // group carries a value rather than a choice.
+    foreach ($byName as $gname => $label) $lineVals['opt:' . $gname] = $label;
+    foreach ($userVal as $gname => $uv) {
+        $ok = 'opt:' . $gname;
+        if (($lineVals[$ok] ?? '') === '') $lineVals[$ok] = $numTidy($uv);
+    }
+
     $rendered[] = [
         'ctx'      => array_merge($orderVals, $lineVals),
         'computed' => $eval['vars'],
@@ -198,6 +208,7 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
     if ($src === 'text') { $val = $cap; $cap = ''; }
     elseif (strncmp($src, 'var:', 4) === 0) { $n = substr($src, 4); $val = array_key_exists($n, $computed) ? $fmtVal($computed[$n]) : ''; }
     elseif (strncmp($src, 'order:', 6) === 0) { $k = substr($src, 6); $val = (string) ($ctx[$k] ?? ''); }
+    elseif (strncmp($src, 'opt:', 4) === 0)   { $val = (string) ($ctx[$src] ?? ''); }
     elseif (strncmp($src, 'barcode:', 8) === 0) { $k = substr($src, 8); $val = '▏▎▍▌▍▎▏ ' . (string) ($ctx[$k] ?? ''); }
     if ($show === 'never') return null;
     if ($show === 'ifvalue' && trim($val) === '') return null;

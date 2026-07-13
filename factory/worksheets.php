@@ -83,6 +83,20 @@ try {
     $buildVars = $bv->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { /* build_variables not migrated */ }
 
+// This product's OWN option groups → the "Product options" field sources, so
+// each product (vertical, roller, pleated…) offers ITS real options to drop on
+// a label rather than a hardcoded list. Sample = the group's first choice.
+$productOptions = [];
+try {
+    $pe = $pdo->prepare('SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name');
+    $pe->execute([$productId, $MASTER]);
+    $cs = $pdo->prepare('SELECT label FROM product_extra_choices WHERE product_extra_id = ? AND active = 1 ORDER BY sort_order, label LIMIT 1');
+    foreach ($pe->fetchAll(PDO::FETCH_ASSOC) as $er) {
+        $cs->execute([(int) $er['id']]);
+        $productOptions[] = ['key' => mb_strtolower(trim((string) $er['name'])), 'label' => (string) $er['name'], 'sample' => (string) ($cs->fetchColumn() ?: '')];
+    }
+} catch (Throwable $e) { /* product_extras not available */ }
+
 // ---- POST: save / delete --------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
     csrf_check();
@@ -168,6 +182,12 @@ foreach ($ORDER_FIELDS as $key => [$label, $sample]) {
 }
 $varSamples = ['H_Cut' => '2330', 'C_L' => '7700', 'CH_L' => '2980', 'Hem_To_Hem' => '1435', 'Mtrs' => '51', 'Vanes' => '32'];
 foreach ($buildVars as $vn) { $jsSamples['var:' . $vn] = $varSamples[$vn] ?? '0'; }
+
+$jsProductOptions = [];
+foreach ($productOptions as $po) {
+    $jsProductOptions[] = ['key' => $po['key'], 'label' => $po['label']];
+    $jsSamples['opt:' . $po['key']] = $po['sample'];
+}
 
 $factoryTitle = 'Worksheets';
 $factoryNav   = 'worksheets';
@@ -366,12 +386,14 @@ require __DIR__ . '/../_partials/factory_head.php';
 (function () {
     var BUILD_VARS  = <?= json_encode(array_values($buildVars), $jsonFlags) ?>;
     var ORDER_FIELDS = <?= json_encode($jsOrderFields, $jsonFlags) ?>;
+    var PRODUCT_OPTIONS = <?= json_encode($jsProductOptions, $jsonFlags) ?>;
     var SAMPLES     = <?= json_encode($jsSamples, $jsonFlags) ?>;
     var LAYOUT      = <?= json_encode($currentLayout, $jsonFlags) ?>;
 
     // Available field sources, grouped, for the add-field / source dropdowns.
     var SOURCES = [];
     BUILD_VARS.forEach(function (v) { SOURCES.push({ value: 'var:' + v, label: v, group: 'Build variable' }); });
+    PRODUCT_OPTIONS.forEach(function (o) { SOURCES.push({ value: 'opt:' + o.key, label: o.label, group: 'Product options' }); });
     ORDER_FIELDS.forEach(function (f) { SOURCES.push({ value: 'order:' + f.key, label: f.label, group: 'Order detail' }); });
     SOURCES.push({ value: 'text', label: 'Free text', group: 'Extras' });
     SOURCES.push({ value: 'barcode:order_no', label: 'Barcode (order no)', group: 'Extras' });
