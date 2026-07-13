@@ -326,7 +326,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     $ff = static fn (string $k, float $d): float => isset($_GET[$k]) && is_numeric($_GET[$k]) ? (float) $_GET[$k] : $d;
     $topPad = $ff('top', 15); $leftPad = $ff('left', 10); $labelW = $ff('w', 90); $largeH = $ff('large', 50);
-    $gap = $ff('gap', 7); $smallH = $ff('small', 20.9); $centreGap = $ff('centre', 10); $fs = $ff('fs', 8);
+    $gap = $ff('gap', 7); $smallH = $ff('small', 21); $centreGap = $ff('centre', 10); $fs = $ff('fs', 8);
     $linesOn = (($_GET['lines'] ?? '1') !== '0');   // draw thin label outlines (for the plain-paper test)
     $cal     = (($_GET['cal'] ?? '1') !== '0');      // crop marks + 100mm ruler
     $cols = [$leftPad, $leftPad + $labelW + $centreGap];
