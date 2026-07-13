@@ -4,24 +4,39 @@ declare(strict_types=1);
 /**
  * Seed: Roller cut build variables + allowances (Bev Roller Blinds).
  *
- * Signed-allowance convention (a value is the actual change to the dimension and
- * the build rule ADDS it — deduction negative, addition positive):
+ * Decoded from the workshop "ROLLER CALCULATOR AND LABEL PRINTER" and confirmed
+ * with John. Signed-allowance convention — a value is the actual change to the
+ * dimension and the rule ADDS it (deduction negative, addition positive).
  *
- *   roller_pole   (tube/pole cut, off the WIDTH):   Recess -35 · Exact -25 · Cloth Size +3
- *   roller_fabric (fabric width,  off the POLE CUT): Recess -3  · Exact -3  · Cloth Size  0
+ * The cut depends on the FASCIA (Fascia Options) and the FIT (Exact or Recess):
  *
- * Build variables (decision tables keyed on the "Exact or Recess" fit option —
- * a formula can't read an option value, so the basis has to be a table column):
+ *   POLE (tube) cut, off WIDTH:
+ *                          Recess   Exact   Cloth Size
+ *     None (standard)       -35     -25      +3
+ *     Senses / LL 70 / LL40 -47     -37      +3   (cassette)
+ *     Grip Fix Cassette     -42     -42      -42  (fixed, any fit)
  *
- *   Tube_Cut    = Width    + LOOKUP("roller_pole",   <basis>)
- *   Fabric_W    = Tube_Cut + LOOKUP("roller_fabric", <basis>)      (fabric cut width)
- *   Fabric_Drop = Drop + 400                                        (fabric cut drop)
+ *   FABRIC (cloth) cut  = POLE - 3  (always — incl. Grip Fix, per John).
  *
- * The tube is 32mm or 40mm, but the cut allowance is identical for both, so tube
- * size is not a key. Worked example — Width 1200, Drop 1500:
- *   Recess     → Tube_Cut 1165, Fabric_W 1162, Fabric_Drop 1900
- *   Exact      → Tube_Cut 1175, Fabric_W 1172
- *   Cloth Size → Tube_Cut 1203, Fabric_W 1203
+ *   FASCIA (cassette extrusion) cut, off WIDTH (cassette fascias only):
+ *     Senses / LL 70 / LL40 -12     -4       +38
+ *     Grip Fix Cassette     -20     -20      -20
+ *     None                  (blank — no fascia)
+ *
+ *   FABRIC DROP = Drop + 350, or + 400 when a scallop shape is chosen
+ *     (Scallops 1-4 With Braid · Scallops 1-6 No Braid · Pole Scallop (Shapes 1,5 and 6 only)).
+ *
+ * A formula can't read an option value, so Fascia/Fit/Scallops are decision-table
+ * columns. Cruze/Hybrid/Senses Universal from the calculator aren't in the
+ * YourBlinds catalogue, so they're omitted (add later if offered). P&F Roller is
+ * a separate product (Bev PF Roller) and is not handled here.
+ *
+ * Worked example — Width 1200, Drop 1500:
+ *   None/Recess:   Tube 1165, Fabric 1162, Fascia blank, Drop 1850
+ *   Senses/Recess: Tube 1153, Fabric 1150, Fascia 1188
+ *   Grip Fix:      Tube 1158, Fabric 1155, Fascia 1180
+ *   None/Cloth:    Tube 1203, Fabric 1200
+ *   +scallop shape: Drop 1900
  *
  * Idempotent (upsert). Run via web: /seed_roller_cut.php (super-admin).
  */
@@ -47,19 +62,41 @@ $prod->execute([$MASTER]);
 $productId = (int) $prod->fetchColumn();
 if ($productId === 0) { exit("Could not find product 'Bev Roller Blinds' for client {$MASTER}.\n"); }
 
-$ex = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND client_id = ? AND name = 'Exact or Recess' LIMIT 1");
-$ex->execute([$productId, $MASTER]);
-$basisId = (int) $ex->fetchColumn();
-if ($basisId === 0) { exit("Missing option group 'Exact or Recess' on product {$productId}.\n"); }
+// Resolve the option-group ids we branch on.
+$extraId = static function (string $name) use ($pdo, $productId, $MASTER): int {
+    $q = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND client_id = ? AND name = ? LIMIT 1");
+    $q->execute([$productId, $MASTER, $name]);
+    return (int) $q->fetchColumn();
+};
+$fasciaId  = $extraId('Fascia Options');
+$fitId     = $extraId('Exact or Recess');
+$scallopId = $extraId('Scallops and Trims');
+foreach (['Fascia Options' => $fasciaId, 'Exact or Recess' => $fitId, 'Scallops and Trims' => $scallopId] as $n => $id) {
+    if ($id === 0) { exit("Missing option group '{$n}' on product {$productId}.\n"); }
+}
 
 // ---- Allowance tables (signed) --------------------------------------------
 $allow = [
-    'roller_pole'   => ['Recess' => -35, 'Exact' => -25, 'Cloth Size' => 3],
-    'roller_fabric' => ['Recess' => -3,  'Exact' => -3,  'Cloth Size' => 0],
+    'roller_pole' => [
+        ['gripfix',          'Grip Fix (any fit)', -42],
+        ['cloth',            'Cloth Size',          3],
+        ['cassette|recess',  'Cassette · Recess',  -47],
+        ['cassette|exact',   'Cassette · Exact',   -37],
+        ['standard|recess',  'Standard · Recess',  -35],
+        ['standard|exact',   'Standard · Exact',   -25],
+    ],
+    'roller_fascia' => [
+        ['gripfix',          'Grip Fix (any fit)', -20],
+        ['cassette|recess',  'Cassette · Recess',  -12],
+        ['cassette|exact',   'Cassette · Exact',   -4],
+        ['cassette|cloth',   'Cassette · Cloth',    38],
+    ],
 ];
 
-// Drop the earlier ad-hoc "Roller" table (superseded by the two clean tables).
-$pdo->prepare("DELETE FROM allowance_rows WHERE table_name = 'Roller'")->execute();
+// Remove the earlier ad-hoc / superseded tables.
+foreach (['Roller', 'roller_fabric'] as $stale) {
+    $pdo->prepare("DELETE FROM allowance_rows WHERE table_name = ?")->execute([$stale]);
+}
 
 $insAllow = $pdo->prepare(
     "INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq)
@@ -69,28 +106,48 @@ $insAllow = $pdo->prepare(
 foreach ($allow as $table => $rows) {
     $pdo->prepare("DELETE FROM allowance_rows WHERE table_name = ?")->execute([$table]);
     $seq = 0;
-    foreach ($rows as $basis => $val) {
-        $insAllow->execute([$table, strtolower($basis), $basis, (float) $val, $seq++]);
-        echo sprintf("  %-14s %-12s = %s\n", $table, $basis, rtrim(rtrim(number_format((float) $val, 2, '.', ''), '0'), '.'));
+    foreach ($rows as [$key, $disp, $val]) {
+        $insAllow->execute([$table, $key, $disp, (float) $val, $seq++]);
+        echo sprintf("  %-14s %-20s = %s\n", $table, $disp, rtrim(rtrim(number_format((float) $val, 2, '.', ''), '0'), '.'));
     }
 }
 
-// ---- Build variables (decision tables on "Exact or Recess") ---------------
-$col   = ['ref' => 'extra:' . $basisId, 'label' => 'Exact or Recess'];
-$bases = ['Recess' => 'recess', 'Exact' => 'exact', 'Cloth Size' => 'cloth size'];
+// ---- Build variables (decision tables) ------------------------------------
+$colFascia  = ['ref' => 'extra:' . $fasciaId,  'label' => 'Fascia Options'];
+$colFit     = ['ref' => 'extra:' . $fitId,     'label' => 'Exact or Recess'];
+$colScallop = ['ref' => 'extra:' . $scallopId, 'label' => 'Scallops and Trims'];
 
-$mkRows = static function (string $exprFmt) use ($bases): array {
-    $rows = [];
-    foreach ($bases as $label => $key) {
-        $rows[] = ['cells' => [$label], 'result' => sprintf($exprFmt, $key)];
-    }
-    return $rows;
-};
+$CASSETTES = ['Senses', 'LL 70mm Cassette', 'LL 40mm Cassette'];
+$GRIPFIX   = 'Grip Fix Cassette';
+$SHAPES    = ['Scallops 1-4 With Braid', 'Scallops 1-6 No Braid', 'Pole Scallop (Shapes 1,5 and 6 only)'];
+
+// Tube_Cut — Width + pole allowance, keyed on Fascia × Fit (Grip Fix first).
+$tubeRows = [];
+$tubeRows[] = ['cells' => [$GRIPFIX, ''],  'result' => 'Width + LOOKUP("roller_pole", "gripfix")'];
+$tubeRows[] = ['cells' => ['', 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_pole", "cloth")'];
+foreach ($CASSETTES as $c) $tubeRows[] = ['cells' => [$c, 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "cassette", "recess")'];
+foreach ($CASSETTES as $c) $tubeRows[] = ['cells' => [$c, 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "cassette", "exact")'];
+$tubeRows[] = ['cells' => ['', 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];
+$tubeRows[] = ['cells' => ['', 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "standard", "exact")'];
+
+// Fascia_Cut — Width + fascia allowance (cassette + Grip Fix); None → blank.
+$fasciaRows = [];
+$fasciaRows[] = ['cells' => [$GRIPFIX, ''], 'result' => 'Width + LOOKUP("roller_fascia", "gripfix")'];
+foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Recess'],     'result' => 'Width + LOOKUP("roller_fascia", "cassette", "recess")'];
+foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Exact'],      'result' => 'Width + LOOKUP("roller_fascia", "cassette", "exact")'];
+foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_fascia", "cassette", "cloth")'];
+$fasciaRows[] = ['cells' => ['', ''], 'result' => '""'];   // None / anything else → no fascia piece
+
+// Fabric_Drop — Drop + 350, or + 400 for a scallop shape.
+$dropRows = [];
+foreach ($SHAPES as $s) $dropRows[] = ['cells' => [$s], 'result' => 'Drop + 400'];
+$dropRows[] = ['cells' => [''], 'result' => 'Drop + 350'];
 
 $vars = [
-    ['name' => 'Tube_Cut',    'seq' => 10, 'cols' => [$col], 'rows' => $mkRows('Width + LOOKUP("roller_pole", "%s")')],
-    ['name' => 'Fabric_W',    'seq' => 20, 'cols' => [$col], 'rows' => $mkRows('Tube_Cut + LOOKUP("roller_fabric", "%s")')],
-    ['name' => 'Fabric_Drop', 'seq' => 30, 'cols' => [],     'rows' => [['cells' => [], 'result' => 'Drop + 400']]],
+    ['name' => 'Tube_Cut',    'seq' => 10, 'cols' => [$colFascia, $colFit], 'rows' => $tubeRows],
+    ['name' => 'Fabric_W',    'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut - 3']]],
+    ['name' => 'Fascia_Cut',  'seq' => 30, 'cols' => [$colFascia, $colFit], 'rows' => $fasciaRows],
+    ['name' => 'Fabric_Drop', 'seq' => 40, 'cols' => [$colScallop],         'rows' => $dropRows],
 ];
 
 $upVar = $pdo->prepare(
@@ -108,4 +165,5 @@ foreach ($vars as $v) {
 }
 
 echo "\nDone — roller cut on product {$productId} (Bev Roller Blinds).\n";
-echo "Check in Build Rules test panel: Width 1200 / Recess → Tube_Cut 1165, Fabric_W 1162; Drop 1500 → Fabric_Drop 1900.\n";
+echo "Test panel (Width 1200 / Drop 1500): None+Recess → Tube 1165 Fabric 1162 Drop 1850; " .
+     "Senses+Recess → 1153/1150/Fascia 1188; Grip Fix → 1158/1155/Fascia 1180; None+Cloth → 1203/1200.\n";
