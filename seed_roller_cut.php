@@ -23,8 +23,8 @@ declare(strict_types=1);
  *     Grip Fix Cassette     -20     -20      -20
  *     None                  (blank — no fascia)
  *
- *   FABRIC DROP = Drop + 350, or + 400 when a scallop shape is chosen
- *     (Scallops 1-4 With Braid · Scallops 1-6 No Braid · Pole Scallop (Shapes 1,5 and 6 only)).
+ *   FABRIC DROP = Drop + 400 for any scallop / trim; Drop + 350 only for
+ *     "Not Required" (plain bottom, no scallop).
  *
  *   CHAIN LENGTH = (Drop - 100) * 2  (the continuous chain loop) — only on a
  *     chain-operated blind (Control Options = Side Winder); blank for motor/spring.
@@ -124,7 +124,6 @@ $colControl = ['ref' => 'extra:' . $controlId, 'label' => 'Control Options'];
 
 $CASSETTES = ['Senses', 'LL 70mm Cassette', 'LL 40mm Cassette'];
 $GRIPFIX   = 'Grip Fix Cassette';
-$SHAPES    = ['Scallops 1-4 With Braid', 'Scallops 1-6 No Braid', 'Pole Scallop (Shapes 1,5 and 6 only)'];
 
 // Tube_Cut — Width + pole allowance, keyed on Fascia × Fit (Grip Fix first).
 $tubeRows = [];
@@ -143,10 +142,13 @@ foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Exact'],      'resu
 foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_fascia", "cassette", "cloth")'];
 $fasciaRows[] = ['cells' => ['', ''], 'result' => '""'];   // None / anything else → no fascia piece
 
-// Fabric_Drop — Drop + 350, or + 400 for a scallop shape.
-$dropRows = [];
-foreach ($SHAPES as $s) $dropRows[] = ['cells' => [$s], 'result' => 'Drop + 400'];
-$dropRows[] = ['cells' => [''], 'result' => 'Drop + 350'];
+// Fabric_Drop — Drop + 400 for any scallop / trim; + 350 only for "Not Required"
+// (plain, no scallop). The scallop choices were split per-shape, so the old
+// shaped-label list no longer matched — every scalloped bottom now gets +400.
+$dropRows = [
+    ['cells' => ['Not Required'], 'result' => 'Drop + 350'],
+    ['cells' => [''],             'result' => 'Drop + 400'],
+];
 
 $vars = [
     ['name' => 'Tube_Cut',     'seq' => 10, 'cols' => [$colFascia, $colFit], 'rows' => $tubeRows],
