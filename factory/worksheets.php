@@ -243,7 +243,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
     .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
-    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.3 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
+    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
     .pv-labelbox span { white-space:nowrap; }
     .pv-break { flex:0 0 100%; display:flex; align-items:center; justify-content:center; height:0.85em; color:#94a3b8; border-top:1px dashed #cbd5e1; margin-top:1px; }
