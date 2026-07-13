@@ -91,9 +91,24 @@ try {
     $pe = $pdo->prepare('SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name');
     $pe->execute([$productId, $MASTER]);
     $cs = $pdo->prepare('SELECT label FROM product_extra_choices WHERE product_extra_id = ? AND active = 1 ORDER BY sort_order, label LIMIT 1');
+    // Merge groups that share a name (e.g. parent-gated variants such as two
+    // "Profile Colour" / "End Cap Colour" menus wired to different Fascia
+    // choices). On any order only the fascia-matched variant is ever selected,
+    // so the worksheet resolves opt:<name> by name to whatever value the order
+    // carries — one merged field is the correct model, not two.
+    $seenOpt = [];
     foreach ($pe->fetchAll(PDO::FETCH_ASSOC) as $er) {
+        $key = mb_strtolower(trim((string) $er['name']));
         $cs->execute([(int) $er['id']]);
-        $productOptions[] = ['key' => mb_strtolower(trim((string) $er['name'])), 'label' => (string) $er['name'], 'sample' => (string) ($cs->fetchColumn() ?: '')];
+        $sample = (string) ($cs->fetchColumn() ?: '');
+        if (isset($seenOpt[$key])) {
+            if ($sample !== '' && $productOptions[$seenOpt[$key]]['sample'] === '') {
+                $productOptions[$seenOpt[$key]]['sample'] = $sample;
+            }
+            continue;
+        }
+        $seenOpt[$key] = count($productOptions);
+        $productOptions[] = ['key' => $key, 'label' => (string) $er['name'], 'sample' => $sample];
     }
 } catch (Throwable $e) { /* product_extras not available */ }
 
