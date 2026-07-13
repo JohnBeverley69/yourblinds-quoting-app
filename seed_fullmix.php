@@ -140,8 +140,16 @@ try {
         $q = $tplQuote;
         $q['client_id']          = $clientId;
         if (array_key_exists('company_name', $q)) $q['company_name'] = $abcName;
+        if (array_key_exists('status', $q))       $q['status'] = 'ordered';   // placed → shows in the factory incoming queue
         $q['quote_number']       = 'ABC-TEST-' . str_pad((string) ($maxNum + $i + 1), 4, '0', STR_PAD_LEFT);
         $q['customer_reference'] = 'DUMMY';
+        // Scrub end-customer PII inherited from the structural template.
+        foreach ($q as $qk => $qv) {
+            if (in_array($qk, ['company_name', 'customer_reference'], true)) continue;
+            if (is_string($qv) && preg_match('/customer|address|postcode|post_code|email|phone|contact/i', $qk)) {
+                $q[$qk] = (stripos($qk, 'end_customer_name') !== false) ? 'Dummy Customer' : '';
+            }
+        }
         $q['created_at']         = date('Y-m-d H:i:s', time() - mt_rand(0, 14 * 86400));
         if (array_key_exists('updated_at', $q)) $q['updated_at'] = $q['created_at'];
         $q = $freshTokens($q);
