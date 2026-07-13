@@ -215,6 +215,109 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
     return $cap !== '' ? ($cap . ' ' . $val) : $val;
 };
 
+// Which label stock is this worksheet on? roll-102x76 = roller single label.
+$tplStock = '';
+foreach ($rendered as $r) { if (!empty($r['template']['stock'])) { $tplStock = (string) $r['template']['stock']; break; } }
+$isRoll = ($tplStock === 'roll-102x76');
+
+// ---- Roll label print (?rolllabel=1) — one self-contained label per blind --
+// For roller blinds: a single label per blind on a thermal roll (default
+// 102x76mm), not the vertical A4 die-cut sheet. Per-computer nudge + font.
+if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
+    $ff = static fn (string $k, float $d): float => isset($_GET[$k]) && is_numeric($_GET[$k]) ? (float) $_GET[$k] : $d;
+    $LW = $ff('w', 102); $LH = $ff('h', 76); $fs = $ff('fs', 9);
+    $linesOn = (($_GET['lines'] ?? '1') !== '0');
+    $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText): string {
+        $out = '';
+        foreach ($fields as $f) {
+            if (($f['source'] ?? '') === '__break__') { $out .= '<span class="rlbr"></span>'; continue; }
+            $t = $fieldText($f, $ctx, $computed);
+            if ($t === null) continue;
+            $al = (string) ($f['align'] ?? '');
+            $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
+            $out .= '<span' . $c . '>' . e($t) . '</span>';
+        }
+        return $out;
+    };
+    header('Content-Type: text/html; charset=utf-8');
+    $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
+    $ol  = $linesOn ? ' outline' : '';
+    ?><!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Roll label · <?= $ono ?></title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --fs:<?= $mm($fs) ?>pt; --nx:0mm; --ny:0mm; }
+    body { background:#666; font-family:system-ui,sans-serif; }
+    .toolbar { position:fixed; top:0; left:0; right:0; background:#1f2a37; color:#e5edf5; padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:10; font-size:14px; }
+    .toolbar b { color:#fff; } .toolbar .note { color:#b9c6d3; flex:1; min-width:220px; }
+    .toolbar > button { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:7px 16px; background:#38bdf8; color:#06263a; }
+    .nudge { display:flex; align-items:center; gap:4px; color:#b9c6d3; white-space:nowrap; }
+    .nudge .lbl { color:#8ba0b3; } .nudge input { width:3.2rem; font:inherit; border:none; border-radius:6px; padding:5px 6px; text-align:right; }
+    .nudge button { font:inherit; cursor:pointer; border:none; border-radius:6px; padding:5px 9px; background:#2c3a4a; color:#e5edf5; }
+    .stack { padding:72px 0 40px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+    .rl-label { position:relative; width:<?= $mm($LW) ?>mm; height:<?= $mm($LH) ?>mm; background:#fff; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.4); }
+    .rl-label.outline { outline:0.2mm solid #c9c9c9; outline-offset:-0.2mm; }
+    .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
+                      display:flex; flex-wrap:wrap; align-content:flex-start; gap:0.4mm 2.4mm; line-height:1.18;
+                      font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
+    .rl-label .flds span { white-space:nowrap; }
+    .rl-label .flds .r { margin-left:auto; } .rl-label .flds .c { margin-left:auto; margin-right:auto; }
+    .rlbr { flex:0 0 100%; height:0; }
+    @media print {
+        body { background:#fff; } .toolbar { display:none; }
+        .stack { padding:0; gap:0; display:block; }
+        .rl-label { box-shadow:none; page-break-after:always; break-after:page; }
+        .rl-label:last-child { page-break-after:auto; break-after:auto; }
+        @page { size:<?= $mm($LW) ?>mm <?= $mm($LH) ?>mm; margin:0; }
+    }
+</style></head>
+<body>
+<div class="toolbar">
+    <b>Roll label</b>
+    <span class="note">Order <?= $ono ?> · <?= (int) $totalLines ?> label<?= $totalLines === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> + <b>Font</b> saved for this computer.</span>
+    <span class="nudge"><span class="lbl">Nudge&nbsp;mm</span>
+        <button type="button" data-nx="-0.5">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5">&#9654;</button>
+        <button type="button" data-ny="-0.5">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5">&#9660;</button>
+        <button type="button" id="nudge-reset">&#8635;</button></span>
+    <span class="nudge"><span class="lbl">Font&nbsp;pt</span>
+        <button type="button" id="fs-down">&#8722;</button><input id="fsv" type="number" step="0.5" value="<?= $mm($fs) ?>"><button type="button" id="fs-up">+</button></span>
+    <button onclick="window.print()">Print</button>
+</div>
+<div class="stack">
+<?php foreach ($rendered as $r): $labFields = $r['template']['labels'][0]['fields'] ?? []; ?>
+    <div class="rl-label<?= $ol ?>"><div class="flds"><?= $renderFields($labFields, $r['ctx'], $r['computed']) ?></div></div>
+<?php endforeach; ?>
+</div>
+<script>
+(function () {
+    var root = document.documentElement;
+    var iox = document.getElementById('ox'), ioy = document.getElementById('oy');
+    var ox = parseFloat(localStorage.getItem('lblRollX') || '0') || 0;
+    var oy = parseFloat(localStorage.getItem('lblRollY') || '0') || 0;
+    function apply() { root.style.setProperty('--nx', ox + 'mm'); root.style.setProperty('--ny', oy + 'mm'); iox.value = ox; ioy.value = oy; localStorage.setItem('lblRollX', ox); localStorage.setItem('lblRollY', oy); }
+    iox.addEventListener('input', function () { ox = parseFloat(iox.value) || 0; apply(); });
+    ioy.addEventListener('input', function () { oy = parseFloat(ioy.value) || 0; apply(); });
+    document.querySelectorAll('[data-nx]').forEach(function (b) { b.addEventListener('click', function () { ox = Math.round((ox + parseFloat(b.dataset.nx)) * 10) / 10; apply(); }); });
+    document.querySelectorAll('[data-ny]').forEach(function (b) { b.addEventListener('click', function () { oy = Math.round((oy + parseFloat(b.dataset.ny)) * 10) / 10; apply(); }); });
+    document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
+    apply();
+    var fsBase = parseFloat('<?= $mm($fs) ?>') || 9;
+    var fs = parseFloat(localStorage.getItem('lblRollFs')) || fsBase;
+    var fsv = document.getElementById('fsv');
+    function applyFs() { root.style.setProperty('--fs', fs + 'pt'); fsv.value = fs; localStorage.setItem('lblRollFs', fs); }
+    fsv.addEventListener('input', function () { fs = parseFloat(fsv.value) || fsBase; applyFs(); });
+    document.getElementById('fs-up').addEventListener('click', function () { fs = Math.round((fs + 0.5) * 10) / 10; applyFs(); });
+    document.getElementById('fs-down').addEventListener('click', function () { fs = Math.max(4, Math.round((fs - 0.5) * 10) / 10); applyFs(); });
+    applyFs();
+})();
+</script>
+</body></html>
+<?php
+    exit;
+}
+
 // ---- Die-cut print layout (?diecut=1) --------------------------------------
 // Same A4 geometry as the Label Sheet page, but each box filled with the real
 // content, so a 100% print drops straight onto the die-cut label stock. Header
@@ -381,7 +484,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if ($order): ?>
         <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e((string) ($order['company_name'] ?? '')) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
         <span style="flex:1"></span>
+        <?php if ($isRoll): ?>
+        <a class="btn" href="?order=<?= (int) $qid ?>&rolllabel=1" style="background:#0369a1; text-decoration:none;">Roll label print &#8599;</a>
+        <?php else: ?>
         <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1" style="background:#0369a1; text-decoration:none;">Die-cut label print &#8599;</a>
+        <?php endif; ?>
         <button class="btn" onclick="window.print()">Print</button>
     <?php endif; ?>
 </div>
