@@ -26,7 +26,8 @@ declare(strict_types=1);
  *   FABRIC DROP = Drop + 350, or + 400 when a scallop shape is chosen
  *     (Scallops 1-4 With Braid · Scallops 1-6 No Braid · Pole Scallop (Shapes 1,5 and 6 only)).
  *
- *   CHAIN LENGTH = (Drop - 100) * 2  (the continuous chain loop).
+ *   CHAIN LENGTH = (Drop - 100) * 2  (the continuous chain loop) — only on a
+ *     chain-operated blind (Control Options = Side Winder); blank for motor/spring.
  *
  * A formula can't read an option value, so Fascia/Fit/Scallops are decision-table
  * columns. Cruze/Hybrid/Senses Universal from the calculator aren't in the
@@ -73,7 +74,8 @@ $extraId = static function (string $name) use ($pdo, $productId, $MASTER): int {
 $fasciaId  = $extraId('Fascia Options');
 $fitId     = $extraId('Exact or Recess');
 $scallopId = $extraId('Scallops and Trims');
-foreach (['Fascia Options' => $fasciaId, 'Exact or Recess' => $fitId, 'Scallops and Trims' => $scallopId] as $n => $id) {
+$controlId = $extraId('Control Options');
+foreach (['Fascia Options' => $fasciaId, 'Exact or Recess' => $fitId, 'Scallops and Trims' => $scallopId, 'Control Options' => $controlId] as $n => $id) {
     if ($id === 0) { exit("Missing option group '{$n}' on product {$productId}.\n"); }
 }
 
@@ -118,6 +120,7 @@ foreach ($allow as $table => $rows) {
 $colFascia  = ['ref' => 'extra:' . $fasciaId,  'label' => 'Fascia Options'];
 $colFit     = ['ref' => 'extra:' . $fitId,     'label' => 'Exact or Recess'];
 $colScallop = ['ref' => 'extra:' . $scallopId, 'label' => 'Scallops and Trims'];
+$colControl = ['ref' => 'extra:' . $controlId, 'label' => 'Control Options'];
 
 $CASSETTES = ['Senses', 'LL 70mm Cassette', 'LL 40mm Cassette'];
 $GRIPFIX   = 'Grip Fix Cassette';
@@ -150,8 +153,12 @@ $vars = [
     ['name' => 'Fabric_W',     'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut - 3']]],
     ['name' => 'Fascia_Cut',   'seq' => 30, 'cols' => [$colFascia, $colFit], 'rows' => $fasciaRows],
     ['name' => 'Fabric_Drop',  'seq' => 40, 'cols' => [$colScallop],         'rows' => $dropRows],
-    // Chain loop = twice the hanging length (100mm short of the drop).
-    ['name' => 'Chain_Length', 'seq' => 50, 'cols' => [],                    'rows' => [['cells' => [], 'result' => '(Drop - 100) * 2']]],
+    // Chain loop = twice the hanging length (100mm short of the drop) — only on
+    // a chain-operated blind (Side Winder); blank for motor / spring controls.
+    ['name' => 'Chain_Length', 'seq' => 50, 'cols' => [$colControl], 'rows' => [
+        ['cells' => ['Side Winder'], 'result' => '(Drop - 100) * 2'],
+        ['cells' => [''],            'result' => '""'],
+    ]],
 ];
 
 $upVar = $pdo->prepare(
