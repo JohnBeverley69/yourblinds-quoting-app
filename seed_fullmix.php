@@ -27,21 +27,23 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $MASTER = function_exists('factory_client_id') ? factory_client_id() : 3;
 
 $productArg = strtolower(trim((string) ($_GET['product'] ?? 'roller')));
-$isVert = str_contains($productArg, 'vert');
-$nameLike = $isVert ? '%Vertical%' : '%Roller%';
+if (isset($_GET['name']) && trim((string) $_GET['name']) !== '') { $targetName = trim((string) $_GET['name']); }
+elseif (str_contains($productArg, 'vert')) { $targetName = 'Bev Vertical Blinds'; }
+elseif (str_contains($productArg, 'pf'))   { $targetName = 'Bev PF Roller'; }
+else                                       { $targetName = 'Bev Roller Blinds'; }
 $n = isset($_GET['n']) && ctype_digit((string) $_GET['n']) ? max(1, min(200, (int) $_GET['n'])) : 50;
 
 // ABC client.
 $clientId = (int) ($pdo->query("SELECT client_id FROM quotes WHERE quote_number LIKE 'ABC-TEST-%' ORDER BY id DESC LIMIT 1")->fetchColumn() ?: 0);
 if ($clientId === 0) { $clientId = (int) ($pdo->query("SELECT id FROM clients WHERE company_name LIKE '%ABC%' ORDER BY id LIMIT 1")->fetchColumn() ?: 0); }
 if ($clientId === 0) { exit("Could not determine the ABC client.\n"); }
+$abcName = (string) ($pdo->query("SELECT company_name FROM clients WHERE id = {$clientId}")->fetchColumn() ?: 'ABC Blinds');
 
-// Capture a structural template (any ABC quote/item/extra) BEFORE any delete.
-$baseItem = $pdo->prepare("SELECT qi.* FROM quote_items qi JOIN quotes q ON q.id = qi.quote_id
-                            WHERE q.client_id = ? AND EXISTS (SELECT 1 FROM quote_item_extras e WHERE e.quote_item_id = qi.id)
-                         ORDER BY qi.id LIMIT 1");
-$baseItem->execute([$clientId]);
-$baseItem = $baseItem->fetch(PDO::FETCH_ASSOC);
+// Capture a structural template — ANY quote/item/extra in the system (columns
+// are schema-wide; we overwrite client/product/fabric/extras anyway).
+$baseItem = $pdo->query("SELECT qi.* FROM quote_items qi
+                          WHERE EXISTS (SELECT 1 FROM quote_item_extras e WHERE e.quote_item_id = qi.id)
+                       ORDER BY qi.id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $tplQuote = $baseItem ? $pdo->query('SELECT * FROM quotes WHERE id = ' . (int) $baseItem['quote_id'])->fetch(PDO::FETCH_ASSOC) : null;
 $baseExtra = $baseItem ? $pdo->query('SELECT * FROM quote_item_extras WHERE quote_item_id = ' . (int) $baseItem['id'] . ' ORDER BY id LIMIT 1')->fetch(PDO::FETCH_ASSOC) : null;
 
@@ -63,11 +65,11 @@ if (($_GET['delete'] ?? '0') !== '0' && ($_GET['delete'] ?? '') !== '') {
     exit("Deleted {$c} ABC-TEST dummy order(s).\n");
 }
 
-// Target product on ABC (source-mapped from master).
-$prod = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? AND source_client_id = ? AND name LIKE ? ORDER BY id LIMIT 1");
-$prod->execute([$clientId, $MASTER, $nameLike]);
+// Target product on ABC (exact name, source-mapped from master).
+$prod = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? AND source_client_id = ? AND name = ? ORDER BY id LIMIT 1");
+$prod->execute([$clientId, $MASTER, $targetName]);
 $prow = $prod->fetch(PDO::FETCH_ASSOC);
-if (!$prow) { exit("ABC has no product matching '{$nameLike}' (source-mapped). Push the catalogue first.\n"); }
+if (!$prow) { exit("ABC has no product named '{$targetName}' (source-mapped). Push the catalogue first.\n"); }
 $productId = (int) $prow['id']; $productName = (string) $prow['name'];
 
 $sysSt = $pdo->prepare('SELECT id, name FROM product_systems WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, id');
@@ -137,6 +139,7 @@ try {
     for ($i = 0; $i < $n; $i++) {
         $q = $tplQuote;
         $q['client_id']          = $clientId;
+        if (array_key_exists('company_name', $q)) $q['company_name'] = $abcName;
         $q['quote_number']       = 'ABC-TEST-' . str_pad((string) ($maxNum + $i + 1), 4, '0', STR_PAD_LEFT);
         $q['customer_reference'] = 'DUMMY';
         $q['created_at']         = date('Y-m-d H:i:s', time() - mt_rand(0, 14 * 86400));
