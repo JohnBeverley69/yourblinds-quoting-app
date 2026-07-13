@@ -119,7 +119,13 @@ if (($_GET['verify'] ?? '0') !== '0' && ($_GET['verify'] ?? '') !== '') {
     foreach ($groups as $g) { if (mb_strtolower(trim((string) $g['name'])) === 'braid colour') { $braidGid = (int) $g['id']; break; } }
     if (!$braidGid) { exit("No 'Braid Colour' group on {$productName}.\n"); }
     $braidParents = $parentsOf[$braidGid] ?? [];
-    echo "Product {$productId} ({$productName}); Braid Colour group {$braidGid} gated by " . count($braidParents) . " scallop choice(s).\n";
+    echo "Product {$productId} ({$productName}); Braid Colour group {$braidGid} gated by " . count($braidParents) . " parent choice(s):\n";
+    if ($braidParents) {
+        $in = implode(',', array_map('intval', array_keys($braidParents)));
+        foreach ($pdo->query("SELECT c.id, c.label, e.name grp FROM product_extra_choices c JOIN product_extras e ON e.id = c.product_extra_id WHERE c.id IN ($in) ORDER BY e.name, c.label") as $r) {
+            echo "    \"{$r['label']}\" (under {$r['grp']})\n";
+        }
+    }
     $items = $pdo->prepare("SELECT qi.id, q.quote_number FROM quote_items qi JOIN quotes q ON q.id = qi.quote_id
                              WHERE q.client_id = ? AND q.customer_reference = 'DUMMY' AND qi.product_id = ?");
     $items->execute([$clientId, $productId]);
