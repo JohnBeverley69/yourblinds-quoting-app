@@ -8,38 +8,36 @@ declare(strict_types=1);
  * with John. Signed-allowance convention — a value is the actual change to the
  * dimension and the rule ADDS it (deduction negative, addition positive).
  *
- * The cut depends on the FASCIA (Fascia Options) and the FIT (Exact or Recess):
+ * Per the official Louvolite cassette sheet (rows used: Standard Roller & Open
+ * Cassette inc 70mm) + Beverley's own fabric/drop spec:
  *
- *   POLE (tube) cut, off WIDTH:
- *                          Recess   Exact   Cloth Size
- *     None (standard)       -35     -25      +3
- *     Senses / LL 70 / LL40 -47     -37      +3   (cassette)
- *     Grip Fix Cassette     -42     -42      -42  (fixed, any fit)
+ *   TUBE cut, off WIDTH:
+ *                                 Recess  Exact  Cloth
+ *     Standard (None)              -35    -35     +3
+ *     LL 70/40 · Senses · GripFix  -45    -35     +3
+ *   (Open 70mm cassette: recess -10 to blind size, then tube -35 = -45.
+ *    Exact = blind size given, so just -35. LL 40 uses the 70mm figures.)
  *
- *   FABRIC (cloth) cut  = POLE - 3  (always — incl. Grip Fix, per John).
+ *   FABRIC (cloth) cut = TUBE - 3  (Beverley runout, ~1.5mm each side) —
+ *     exposed as the editable roller_fabric allowance ("offset").
  *
- *   FASCIA (cassette extrusion) cut, off WIDTH (cassette fascias only):
- *     Senses / LL 70 / LL40 -12     -4       +38
- *     Grip Fix Cassette     -20     -20      -20
- *     None                  (blank — no fascia)
+ *   FASCIA (extrusion) cut, off WIDTH — comes from the Allowances page
+ *     (roller_fascia), defaults LL/Senses -12 / -4 / +38 (Recess/Exact/Cloth);
+ *     Standard (None) → blank.
  *
- *   FABRIC DROP = Drop + 400 for any scallop / trim; Drop + 350 only for
- *     "Not Required" (plain bottom, no scallop).
+ *   FABRIC DROP = Drop + 400 for any scallop / trim; + 350 only for "Not Required".
+ *   CHAIN LENGTH = (Drop - 100) * 2 — chain-operated (Side Winder) only.
  *
- *   CHAIN LENGTH = (Drop - 100) * 2  (the continuous chain loop) — only on a
- *     chain-operated blind (Control Options = Side Winder); blank for motor/spring.
+ * Fascia/Fit/Scallops/Control are decision-table columns (a formula can't read an
+ * option value). All allowances (roller_pole/roller_fabric/roller_fascia) are
+ * editable on the Allowances page, LL-prefixed with Senses cloned. P&F Roller is
+ * a separate product.
  *
- * A formula can't read an option value, so Fascia/Fit/Scallops are decision-table
- * columns. Cruze/Hybrid/Senses Universal from the calculator aren't in the
- * YourBlinds catalogue, so they're omitted (add later if offered). P&F Roller is
- * a separate product (Bev PF Roller) and is not handled here.
- *
- * Worked example — Width 1200, Drop 1500:
- *   None/Recess:   Tube 1165, Fabric 1162, Fascia blank, Drop 1850
- *   Senses/Recess: Tube 1153, Fabric 1150, Fascia 1188
- *   Grip Fix:      Tube 1158, Fabric 1155, Fascia 1180
- *   None/Cloth:    Tube 1203, Fabric 1200
- *   +scallop shape: Drop 1900
+ * Worked example — Width 1000, Drop 1500 (Not Required):
+ *   None/Recess:  Tube 965, Fabric 962, Fascia blank, Drop 1850
+ *   LL 70/Recess: Tube 955, Fabric 952, Fascia 988
+ *   LL 70/Exact:  Tube 965, Fabric 962, Fascia 996
+ *   None/Cloth:   Tube 1003, Fabric 1000
  *
  * Idempotent (upsert). Run via web: /seed_roller_cut.php (super-admin).
  */
@@ -82,25 +80,29 @@ foreach (['Fascia Options' => $fasciaId, 'Exact or Recess' => $fitId, 'Scallops 
 // ---- Allowance tables (signed) --------------------------------------------
 $allow = [
     'roller_pole' => [
-        ['gripfix',          'Grip Fix (any fit)', -42],
-        ['cloth',            'Cloth Size',          3],
-        ['cassette|recess',  'Cassette · Recess',  -47],
-        ['cassette|exact',   'Cassette · Exact',   -37],
-        ['standard|recess',  'Standard · Recess',  -35],
-        ['standard|exact',   'Standard · Exact',   -25],
+        ['cloth',           'Cloth Size (any fascia)', 3],
+        ['standard|recess', 'Standard · Recess', -35],
+        ['standard|exact',  'Standard · Exact',  -35],
+        ['ll|recess',       'LL · Recess',       -45],
+        ['ll|exact',        'LL · Exact',        -35],
+        ['senses|recess',   'Senses · Recess',   -45],
+        ['senses|exact',    'Senses · Exact',    -35],
+    ],
+    'roller_fabric' => [
+        ['offset', 'Fabric (off the tube)', -3],
     ],
     'roller_fascia' => [
-        ['gripfix',          'Grip Fix (any fit)', -20],
-        ['cassette|recess',  'Cassette · Recess',  -12],
-        ['cassette|exact',   'Cassette · Exact',   -4],
-        ['cassette|cloth',   'Cassette · Cloth',    38],
+        ['ll|recess',     'LL · Recess',     -12],
+        ['ll|exact',      'LL · Exact',      -4],
+        ['ll|cloth',      'LL · Cloth',       38],
+        ['senses|recess', 'Senses · Recess', -12],
+        ['senses|exact',  'Senses · Exact',  -4],
+        ['senses|cloth',  'Senses · Cloth',   38],
     ],
 ];
 
-// Remove the earlier ad-hoc / superseded tables.
-foreach (['Roller', 'roller_fabric'] as $stale) {
-    $pdo->prepare("DELETE FROM allowance_rows WHERE table_name = ?")->execute([$stale]);
-}
+// Remove the earlier ad-hoc / superseded table.
+$pdo->prepare("DELETE FROM allowance_rows WHERE table_name = 'Roller'")->execute();
 
 $insAllow = $pdo->prepare(
     "INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq)
@@ -122,24 +124,33 @@ $colFit     = ['ref' => 'extra:' . $fitId,     'label' => 'Exact or Recess'];
 $colScallop = ['ref' => 'extra:' . $scallopId, 'label' => 'Scallops and Trims'];
 $colControl = ['ref' => 'extra:' . $controlId, 'label' => 'Control Options'];
 
-$CASSETTES = ['Senses', 'LL 70mm Cassette', 'LL 40mm Cassette'];
-$GRIPFIX   = 'Grip Fix Cassette';
+// LL fascias share the open-70mm figures; Grip Fix uses the LL 70mm cassette too.
+$LL_FASCIAS = ['LL 70mm Cassette', 'LL 40mm Cassette', 'Grip Fix Cassette'];
 
-// Tube_Cut — Width + pole allowance, keyed on Fascia × Fit (Grip Fix first).
+// Tube_Cut — Width + tube allowance by Fascia × Fit. Cloth (+3) first (any
+// fascia); then Standard (None) / LL (open 70mm, incl Grip Fix) / Senses.
 $tubeRows = [];
-$tubeRows[] = ['cells' => [$GRIPFIX, ''],  'result' => 'Width + LOOKUP("roller_pole", "gripfix")'];
-$tubeRows[] = ['cells' => ['', 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_pole", "cloth")'];
-foreach ($CASSETTES as $c) $tubeRows[] = ['cells' => [$c, 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "cassette", "recess")'];
-foreach ($CASSETTES as $c) $tubeRows[] = ['cells' => [$c, 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "cassette", "exact")'];
-$tubeRows[] = ['cells' => ['', 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];
+$tubeRows[] = ['cells' => ['', 'Cloth Size'],   'result' => 'Width + LOOKUP("roller_pole", "cloth")'];
+$tubeRows[] = ['cells' => ['None', 'Recess'],   'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];
+$tubeRows[] = ['cells' => ['None', 'Exact'],    'result' => 'Width + LOOKUP("roller_pole", "standard", "exact")'];
+$tubeRows[] = ['cells' => ['Senses', 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "senses", "recess")'];
+$tubeRows[] = ['cells' => ['Senses', 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "senses", "exact")'];
+foreach ($LL_FASCIAS as $f) $tubeRows[] = ['cells' => [$f, 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "ll", "recess")'];
+foreach ($LL_FASCIAS as $f) $tubeRows[] = ['cells' => [$f, 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "ll", "exact")'];
+$tubeRows[] = ['cells' => ['', 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];  // any other fascia
 $tubeRows[] = ['cells' => ['', 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "standard", "exact")'];
 
-// Fascia_Cut — Width + fascia allowance (cassette + Grip Fix); None → blank.
+// Fascia_Cut — Width + fascia (extrusion) allowance from the Allowances page;
+// LL fascias (incl Grip Fix) use the LL rows; Standard (None) → blank.
 $fasciaRows = [];
-$fasciaRows[] = ['cells' => [$GRIPFIX, ''], 'result' => 'Width + LOOKUP("roller_fascia", "gripfix")'];
-foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Recess'],     'result' => 'Width + LOOKUP("roller_fascia", "cassette", "recess")'];
-foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Exact'],      'result' => 'Width + LOOKUP("roller_fascia", "cassette", "exact")'];
-foreach ($CASSETTES as $c) $fasciaRows[] = ['cells' => [$c, 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_fascia", "cassette", "cloth")'];
+$fasciaRows[] = ['cells' => ['Senses', 'Recess'],     'result' => 'Width + LOOKUP("roller_fascia", "senses", "recess")'];
+$fasciaRows[] = ['cells' => ['Senses', 'Exact'],      'result' => 'Width + LOOKUP("roller_fascia", "senses", "exact")'];
+$fasciaRows[] = ['cells' => ['Senses', 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_fascia", "senses", "cloth")'];
+foreach ($LL_FASCIAS as $f) {
+    $fasciaRows[] = ['cells' => [$f, 'Recess'],     'result' => 'Width + LOOKUP("roller_fascia", "ll", "recess")'];
+    $fasciaRows[] = ['cells' => [$f, 'Exact'],      'result' => 'Width + LOOKUP("roller_fascia", "ll", "exact")'];
+    $fasciaRows[] = ['cells' => [$f, 'Cloth Size'], 'result' => 'Width + LOOKUP("roller_fascia", "ll", "cloth")'];
+}
 $fasciaRows[] = ['cells' => ['', ''], 'result' => '""'];   // None / anything else → no fascia piece
 
 // Fabric_Drop — Drop + 400 for any scallop / trim; + 350 only for "Not Required"
@@ -152,7 +163,7 @@ $dropRows = [
 
 $vars = [
     ['name' => 'Tube_Cut',     'seq' => 10, 'cols' => [$colFascia, $colFit], 'rows' => $tubeRows],
-    ['name' => 'Fabric_W',     'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut - 3']]],
+    ['name' => 'Fabric_W',     'seq' => 20, 'cols' => [],                    'rows' => [['cells' => [], 'result' => 'Tube_Cut + LOOKUP("roller_fabric", "offset")']]],
     ['name' => 'Fascia_Cut',   'seq' => 30, 'cols' => [$colFascia, $colFit], 'rows' => $fasciaRows],
     ['name' => 'Fabric_Drop',  'seq' => 40, 'cols' => [$colScallop],         'rows' => $dropRows],
     // Chain loop = twice the hanging length (100mm short of the drop) — only on
@@ -178,5 +189,5 @@ foreach ($vars as $v) {
 }
 
 echo "\nDone — roller cut on product {$productId} (Bev Roller Blinds).\n";
-echo "Test panel (Width 1200 / Drop 1500): None+Recess → Tube 1165 Fabric 1162 Drop 1850; " .
-     "Senses+Recess → 1153/1150/Fascia 1188; Grip Fix → 1158/1155/Fascia 1180; None+Cloth → 1203/1200.\n";
+echo "Test panel (Width 1000 / Drop 1500, Not Required): None+Recess → Tube 965 Fabric 962 Drop 1850; " .
+     "LL 70+Recess → 955/952/Fascia 988; LL 70+Exact → 965/962/Fascia 996; None+Cloth → 1003/1000.\n";
