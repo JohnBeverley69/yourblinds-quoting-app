@@ -114,9 +114,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     $fullName = trim($first . ' ' . $last);
 
-    if ($fullName === '' || $email === '') {
-        $error = 'Name and email are required.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($fullName === '') {
+        $error = 'A name is required.';
+    } elseif ($email === '' && $uname === '') {
+        $error = 'Enter an email address or a username.';
+    } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } elseif (!$rolesIn) {
         $error = 'Pick at least one role for this user.';
@@ -175,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $first !== '' ? $first : null,
                 $last  !== '' ? $last  : null,
                 $fullName,
-                $email,
+                $email !== '' ? $email : null,
                 $uname !== '' ? $uname : null,
                 $role,
                 $active,
@@ -320,8 +322,8 @@ $activeNav = 'users';
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="email">Email <span class="required">*</span></label>
-                        <input id="email" name="email" type="email" required maxlength="150"
+                        <label for="email">Email <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <input id="email" name="email" type="email" maxlength="150"
                                value="<?= e((string) $target['email']) ?>">
                     </div>
                     <div class="form-group">
