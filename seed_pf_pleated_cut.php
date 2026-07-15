@@ -13,8 +13,10 @@ declare(strict_types=1);
  *   Frame side rails       = Glass Drop  - 28
  *   Headrails (x2) + slats = Glass Width - 16
  *   Fabric width           = Glass Width - 16
- *   Blind (fabric) drop    = Glass Drop  - 0   (= glass drop; number of pleats is
- *                                                read off Louvolite's 20mm drop chart)
+ *   Blind (fabric) drop    = Glass Drop  - 0   (the finished blind height)
+ *   No. of pleats (cellular) = ROUND(Drop/1000 x 54 x 1.3)   (John: 54 pleats/m
+ *                              stretched, x1.3 for the correct count) — Beverley
+ *                              only makes Cellular fabric.
  *   Cord length            = 4 x Width + 2 x Drop   (from the sheet's assembly steps)
  *
  * No tube / bottom bar (pleated has neither). Deductions are the same for the
@@ -50,11 +52,15 @@ if ($productId === 0) { exit("Could not find product 'Bev PF Pleated' for client
 
 // ---- Allowance table (signed, editable) -----------------------------------
 $rows = [
-    ['frame_tb',     'Frame top/bottom rails', -28],
-    ['frame_side',   'Frame side rails',       -28],
-    ['headrail',     'Headrails + slats',      -16],
-    ['fabric_width', 'Fabric width',           -16],
-    ['drop',         'Blind drop',               0],
+    ['frame_tb',        'Frame top/bottom rails', -28],
+    ['frame_side',      'Frame side rails',       -28],
+    ['headrail',        'Headrails + slats',      -16],
+    ['fabric_width',    'Fabric width',           -16],
+    ['drop',            'Blind drop',               0],
+    // Cellular fabric: pleats per metre (stretched) x the drop multiplier gives
+    // the correct number of pleats (John: 54/m stretched, x1.3).
+    ['pleats_per_mtr',  'Pleats per metre (stretched)', 54],
+    ['drop_multiplier', 'Drop multiplier (cellular)',   1.3],
 ];
 $pdo->prepare("DELETE FROM allowance_rows WHERE table_name = 'pf_pleated'")->execute();
 $insAllow = $pdo->prepare(
@@ -74,6 +80,7 @@ $vars = [
     ['name' => 'Headrail',     'seq' => 30, 'result' => 'Width + LOOKUP("pf_pleated", "headrail")'],
     ['name' => 'Fabric_W',     'seq' => 40, 'result' => 'Width + LOOKUP("pf_pleated", "fabric_width")'],
     ['name' => 'Blind_Drop',   'seq' => 50, 'result' => 'Drop + LOOKUP("pf_pleated", "drop")'],
+    ['name' => 'No_Pleats',    'seq' => 55, 'result' => 'ROUND(Drop / 1000 * LOOKUP("pf_pleated", "pleats_per_mtr") * LOOKUP("pf_pleated", "drop_multiplier"), 0)'],
     ['name' => 'Cord_Length',  'seq' => 60, 'result' => '4 * Width + 2 * Drop'],
 ];
 
@@ -92,4 +99,4 @@ foreach ($vars as $v) {
 }
 
 echo "\nDone — Perfect Fit pleated cut on product {$productId} (Bev PF Pleated).\n";
-echo "Test panel (glass 1000 x 1200): Frame 972 x 1172, Headrail 984, Fabric 984 x 1200, Cord 6400.\n";
+echo "Test panel (glass 1000 x 1200): Frame 972 x 1172, Headrail 984, Fabric 984 x 1200, No. pleats 84, Cord 6400.\n";
