@@ -63,9 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $primaryRole   = $pickPrimary($rolesIn);
 
     $fullName = trim($form['first_name'] . ' ' . $form['last_name']);
-    if ($fullName === '' || $form['email'] === '') {
-        $error = 'Name and email are required.';
-    } elseif (!filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
+    if ($fullName === '') {
+        $error = 'A name is required.';
+    } elseif ($form['email'] === '' && $form['username'] === '') {
+        $error = 'Enter an email address or a username — workshop staff can log in with just a username.';
+    } elseif ($form['email'] !== '' && !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } elseif (strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
@@ -89,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $fullName,
                 $form['first_name'] !== '' ? $form['first_name'] : null,
                 $form['last_name']  !== '' ? $form['last_name']  : null,
-                $form['email'],
+                $form['email'] !== '' ? $form['email'] : null,
                 password_hash($password, PASSWORD_DEFAULT),
                 $primaryRole,
                 $form['can_create_quotes'],
@@ -112,6 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $pdo->prepare('UPDATE client_users SET can_view_fittings_only = 1 WHERE id = ?')
                         ->execute([$newUserId]);
                 } catch (Throwable $e) { /* column not present yet — skip */ }
+            }
+            // Username-only accounts (no email — e.g. workshop staff) have
+            // nothing to verify, so mark them verified now, or the login
+            // email-verification gate would lock them out. Schema-tolerant.
+            if ($form['email'] === '') {
+                try {
+                    $pdo->query('SELECT email_verified_at FROM client_users LIMIT 0');
+                    $pdo->prepare('UPDATE client_users SET email_verified_at = NOW() WHERE id = ?')->execute([$newUserId]);
+                } catch (Throwable $e) { /* column absent — gate treats as verified anyway */ }
             }
             $pdo->commit();
             $_SESSION['flash_success'] = 'User added.';
@@ -213,12 +224,12 @@ $activeNav = 'users';
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="email">Email <span class="required">*</span></label>
-                        <input id="email" name="email" type="email" required maxlength="150"
+                        <label for="email">Email <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <input id="email" name="email" type="email" maxlength="150"
                                value="<?= e($form['email']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="username">Username (optional)</label>
+                        <label for="username">Username <span style="color:var(--text-faint);font-weight:400">(use this for staff with no email)</span></label>
                         <input id="username" name="username" type="text" maxlength="60"
                                value="<?= e($form['username']) ?>">
                     </div>
