@@ -15,6 +15,12 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+// 'factory' (production back-office) is only offered on the Beverley factory
+// account itself — requireFactory() also scopes access to that client, so the
+// role is meaningless (and hidden) on tenant accounts.
+if (function_exists('factory_client_id') && (int) $clientId === factory_client_id()) {
+    $validRoles[] = 'factory';
+}
 $rolePriority = array_flip($validRoles);
 $pickPrimary = static function (array $roles) use ($rolePriority): string {
     if (!$roles) return 'sales';

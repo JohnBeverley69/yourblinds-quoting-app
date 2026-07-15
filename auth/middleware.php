@@ -382,6 +382,17 @@ function redirect_after_login(): void
     // with dashboard access lands there; everyone else lands on the
     // calendar (where fitters do their day-to-day).
     $user  = current_user();
+
+    // Dedicated factory staff (the 'factory' role on the factory account, and
+    // not an admin) land straight on the factory back-office rather than the
+    // sales dashboard — so a factory login goes where it's useful.
+    if ($user && current_user_has_role('factory')
+        && (int) ($user['client_id'] ?? 0) === factory_client_id()
+        && ($user['role'] ?? '') !== 'admin') {
+        header('Location: /factory/incoming-orders.php');
+        exit;
+    }
+
     $perms = function_exists('current_user_permissions')
         ? current_user_permissions()
         : [];

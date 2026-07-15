@@ -27,6 +27,10 @@ if (!$target) {
 }
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+// 'factory' role only on the Beverley factory account (see admin/users.php).
+if (function_exists('factory_client_id') && (int) $clientId === factory_client_id()) {
+    $validRoles[] = 'factory';
+}
 
 // Priority for picking the "primary" role to write into client_users.role
 // when the user has more than one selected. Highest-privilege wins, so
