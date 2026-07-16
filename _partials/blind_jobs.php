@@ -49,11 +49,15 @@ function bj_route_steps(PDO $pdo, int $productId): array
  * stage of its product's route (or unrouted — station NULL — if the product has
  * no route yet). Idempotent: a line already tracked is left exactly where it is.
  * Returns how many NEW blind jobs were created.
+ *
+ * The line points at the TENANT's pushed copy of the product, but routes are
+ * defined once on Beverley's master product — so source_product_id maps the
+ * copy back and the job stores the MASTER product id.
  */
 function bj_release_order(PDO $pdo, int $quoteId, int $master): int
 {
     $items = $pdo->prepare(
-        'SELECT qi.id, qi.product_id
+        'SELECT qi.id, COALESCE(p.source_product_id, p.id) AS master_product_id
            FROM quote_items qi JOIN products p ON p.id = qi.product_id
           WHERE qi.quote_id = ? AND p.source_client_id = ?
           ORDER BY qi.line_no, qi.id'
@@ -67,10 +71,10 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
     );
     $created = 0;
     foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $it) {
-        $steps = bj_route_steps($pdo, (int) $it['product_id']);
+        $steps = bj_route_steps($pdo, (int) $it['master_product_id']);
         $first = $steps[0] ?? null;
         $ins->execute([
-            $quoteId, (int) $it['id'], (int) $it['product_id'],
+            $quoteId, (int) $it['id'], (int) $it['master_product_id'],
             $first ? (int) $first['id'] : null,
             $first ? (int) $first['station_id'] : null,
             $first ? (int) $first['seq'] : 0,

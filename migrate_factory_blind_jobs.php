@@ -35,7 +35,8 @@ if (!$tableExists('factory_blind_jobs')) {
             id              INT AUTO_INCREMENT PRIMARY KEY,
             quote_id        INT NOT NULL,
             quote_item_id   INT NOT NULL,
-            product_id      INT NOT NULL,
+            product_id      INT NOT NULL,                -- Beverley's MASTER product, not the tenant's pushed copy: routes are keyed to the master
+
             route_step_id   INT NULL,                    -- current stage (product_route_steps.id); NULL = complete or unrouted
             station_id      INT NULL,                    -- denormalised current station, for fast queue grouping
             seq             INT NOT NULL DEFAULT 0,      -- denormalised position of the current stage
