@@ -5,8 +5,8 @@ declare(strict_types=1);
  * Factory · QR test sheet.
  *
  * Answers one question with evidence instead of arithmetic: how small can a QR
- * code be printed on the kraft die-cut work tickets — inkjet, uncoated stock,
- * ink wicking into the fibres — and still scan first time?
+ * code be printed on the die-cut work tickets — inkjet, white uncoated face
+ * stock, ink spreading as it dries — and still scan first time?
  *
  * Prints a size sweep onto the REAL label positions of the A4 SET 22TV die, so
  * the test happens on the actual material through the actual printer. Left and
@@ -111,12 +111,13 @@ $factoryNav   = 'labelsheet';
 
 <div class="panel">
     <h1>QR test sheet</h1>
-    <p>Finds the smallest QR that scans reliably <strong>on your kraft labels, through your Epson</strong> — rather than us guessing about ink bleed. Each square is a real version-1 code (<?= (int) $modules ?> modules incl. quiet zone), identical to a live blind's label. Only the printed size changes, <?= (int) $from ?>mm&ndash;<?= (int) $to ?>mm down each column.</p>
+    <p>Finds the smallest QR that scans reliably <strong>on your label stock, through your Epson</strong> — rather than us guessing about ink spread. Each square is a real version-1 code (<?= (int) $modules ?> modules incl. quiet zone), identical to a live blind's label. Only the printed size changes, <?= (int) $from ?>mm&ndash;<?= (int) $to ?>mm down each column.</p>
+    <p>If a smaller size reads cleanly, take it &mdash; every millimetre you don't spend on the QR is width back for the text on a label that's only <?= $mm($smallH) ?>mm tall.</p>
 
     <div class="warn"><strong>Print at 100% / “Actual size”.</strong> Not “Fit to page”, not “Shrink oversized”. Any scaling makes every measurement below a lie. Check the 80mm ruler on the header label with a tape measure before you trust a single result.</div>
 
     <ol>
-        <li>Load a sheet of the <strong>SET 22TV kraft label stock</strong> and print this page at 100%.</li>
+        <li>Load a sheet of the real <strong>SET 22TV label stock</strong> and print this page at 100%.</li>
         <li>Measure the ruler. If it isn't 80mm, fix the print scaling and reprint.</li>
         <li>Click in the box below, then scan each square with the D5100, smallest first.</li>
         <li>Each one that reads lights up green. The smallest green size is your answer — I'd then use one step <em>above</em> it on the real labels for margin.</li>
@@ -131,7 +132,7 @@ $factoryNav   = 'labelsheet';
 <div class="sheet">
     <?php // Header label: instructions + the print-scale ruler. ?>
     <div class="lbl hdr guide" style="left:<?= $mm($cols[0]) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
-        <h2>QR size test &mdash; kraft / inkjet</h2>
+        <h2>QR size test &mdash; label stock / inkjet</h2>
         <div>Scan each square below, smallest first. The code tells us the cell:<br>
              <strong>9</strong>=left column, <strong>8</strong>=right, then the size in mm.<br>
              e.g. <span style="font-family:monospace">91400000</span> = left column, 14mm.</div>
@@ -148,7 +149,7 @@ $factoryNav   = 'labelsheet';
     <div class="lbl hdr guide" style="left:<?= $mm($cols[1]) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
         <h2>Right column</h2>
         <div>Same sizes as the left, repeated — inkjets don't lay ink down evenly across a page, so a size that reads on one side and not the other tells us it's marginal, not fine.</div>
-        <div style="margin-top:2mm">Roller labels are thermal on white and get <strong>20mm</strong>, so they aren't in question here. This is only about the kraft.</div>
+        <div style="margin-top:2mm">Roller labels are thermal and get <strong>20mm</strong> on a 102&times;76mm label, so they aren't in question. This sheet is only about the small work tickets, where 21mm of height is the whole constraint.</div>
     </div>
 
     <?php foreach ($cols as $ci => $x): ?>

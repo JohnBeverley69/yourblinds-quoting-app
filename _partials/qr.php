@@ -10,18 +10,21 @@ declare(strict_types=1);
  *
  * THE PAYLOAD IS DELIBERATELY TINY. A blind's code is 8 digits — see
  * qr_blind_code() — which fits a **version 1** symbol (21x21 modules, 29 with
- * the mandatory quiet zone). That matters because the vertical work tickets are
- * inkjet-printed onto 55gsm uncoated kraft, where ink wicks into the fibres and
- * fattens every module. Fewer, bigger modules survive that; a URL would push it
- * to version 2+ and shrink them by ~13% on a label only 21mm tall. The bench
- * scanners are USB wedges (they type the code straight into the station page),
- * so the payload never needed to be a web address.
+ * the mandatory quiet zone). That matters because the vertical work ticket is
+ * only 21mm tall, so the symbol can never be wider than ~19mm however much we
+ * want it to be: the only way to get fatter, more forgiving modules is to carry
+ * less data. A URL would push it to version 2+ and shrink every module by ~13%.
+ * The bench scanners are USB wedges (they type the code straight into the
+ * station page), so the payload never needed to be a web address.
  *
- * Sizing on the two label stocks:
- *   - roller  102x76mm thermal on white  — masses of room, ~20mm, easy.
- *   - vertical 90x21mm kraft via inkjet  — ~17mm is the ceiling (the height
- *     limits it), giving ~0.59mm modules at ECC level Q.
- * The real ceiling is whatever /factory/qr-test-sheet.php proves scannable.
+ * Sizing on the two label stocks (both print black on WHITE face stock — the
+ * "kraft" in the die drawing is the backing liner, not what you print on):
+ *   - roller  102x76mm thermal  — masses of room, ~20mm, easy.
+ *   - vertical 90x21mm inkjet   — ~17mm ceiling (the label height caps it),
+ *     giving ~0.59mm modules at ECC level Q. Inkjet on uncoated stock still
+ *     spreads ink, so modules fatten — hence ECC Q and as few as possible.
+ * The real floor is whatever /factory/qr-test-sheet.php proves scannable; if a
+ * smaller size reads cleanly, take it and give the width back to the text.
  */
 
 require_once __DIR__ . '/../_lib/qrcode/autoload.php';
