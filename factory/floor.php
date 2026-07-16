@@ -18,12 +18,14 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
+require __DIR__ . '/../_partials/due_dates.php';
 
 requireFactory();
 
 $pdo    = db();
 $MASTER = factory_client_id();
 $ready  = bj_tables_ready($pdo);
+$hasDue = dd_ready($pdo);   // due dates are a later migration — degrade quietly
 
 $showMade = isset($_GET['made']);   // completed blinds are hidden by default
 
@@ -43,10 +45,13 @@ if ($ready) {
     )->fetchAll(PDO::FETCH_ASSOC);
 
     $where = $showMade ? '' : "WHERE bj.status IN ('queued','in_progress')";
+    // Soonest-due first, undated last — the order a workshop actually works to.
+    $dueSel   = $hasDue ? 'q.due_date' : 'NULL AS due_date';
+    $dueOrder = $hasDue ? 'q.due_date IS NULL, q.due_date,' : '';
     $st = $pdo->query(
         "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id,
                 bj.route_step_id, bj.station_id, bj.seq, bj.status,
-                q.quote_number, q.created_at, c.company_name AS tenant,
+                q.quote_number, q.created_at, $dueSel, c.company_name AS tenant,
                 qi.line_no, qi.product_name_snapshot, qi.system_name_snapshot,
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
                 qi.width_mm, qi.drop_mm, qi.quantity, qi.room_name
@@ -55,7 +60,7 @@ if ($ready) {
            JOIN clients c      ON c.id = q.client_id
            JOIN quote_items qi ON qi.id = bj.quote_item_id
            $where
-          ORDER BY q.created_at, q.id, qi.line_no, bj.unit_no
+          ORDER BY $dueOrder q.created_at, q.id, qi.line_no, bj.unit_no
           LIMIT 500"
     )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -69,6 +74,20 @@ $fmtDate = static function (?string $ts): string {
     if (!$ts) return '';
     try { return (new DateTimeImmutable($ts))->format('j M y'); }
     catch (Throwable $e) { return (string) $ts; }
+};
+
+// How a due date reads on an unfinished blind: [class, text].
+$today  = new DateTimeImmutable('today');
+$dueTag = static function (?string $due, bool $done) use ($today, $fmtDate): array {
+    if (!$due) return ['', '—'];
+    try { $d = new DateTimeImmutable($due); } catch (Throwable $e) { return ['', (string) $due]; }
+    $label = $fmtDate($due);
+    if ($done) return ['', $label];                       // made — lateness is moot
+    $days = (int) $today->diff($d)->format('%r%a');
+    if ($days < 0)  return ['late',  $label . ' · ' . abs($days) . 'd late'];
+    if ($days === 0) return ['today', $label . ' · today'];
+    if ($days <= 2) return ['soon',  $label];
+    return ['', $label];
 };
 
 $factoryTitle = 'Production Floor';
@@ -119,7 +138,7 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
             <th>Blind</th>
             <th>Size</th>
             <th>Room</th>
-            <th>Ordered</th>
+            <th>Due</th>
             <th>Stages &mdash; click to move</th>
         </tr>
     </thead>
@@ -165,7 +184,8 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
             </td>
             <td class="fl-size"><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
             <td><?= e((string) $r['room_name']) ?></td>
-            <td class="fl-date"><?= e($fmtDate($r['created_at'] ?? null)) ?></td>
+            <?php [$dueCls, $dueTxt] = $dueTag($r['due_date'] ?? null, $done); ?>
+            <td class="fl-date fl-due <?= $dueCls ?>" title="Ordered <?= e($fmtDate($r['created_at'] ?? null)) ?>"><?= e($dueTxt) ?></td>
             <td>
                 <?php if ($total === 0): ?>
                     <span class="pill out">no route</span> &mdash; set one on <a href="/factory/routes.php">Routes</a>

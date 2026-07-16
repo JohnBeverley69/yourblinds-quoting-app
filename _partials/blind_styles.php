@@ -34,6 +34,9 @@
   .fl-fab { display:block; font-size:.78rem; font-weight:400; color:var(--text-muted,#667); }
   .fl-size { font-variant-numeric:tabular-nums; white-space:nowrap; }
   .fl-date { color:var(--text-muted,#667); white-space:nowrap; font-size:.82rem; }
+  .fl-due.late  { color:#b91c1c; font-weight:700; }
+  .fl-due.today { color:#b45309; font-weight:700; }
+  .fl-due.soon  { color:#92600a; font-weight:600; }
 
   /* Progress bar. */
   .fl-prog { display:flex; align-items:center; gap:.4rem; min-width:6.5rem; }

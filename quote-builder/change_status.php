@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require __DIR__ . '/../_partials/due_dates.php';
 
 requireLogin();
 
@@ -64,6 +65,23 @@ try {
     if ($target === 'accepted' && empty($quote['accepted_at'])) {
         $pdo->prepare('UPDATE quotes SET accepted_at = NOW() WHERE id = ?')
             ->execute([$quoteId]);
+    }
+
+    // Placing the order stamps its promised date from the production times in
+    // force RIGHT NOW. One-way: dd_stamp_order leaves an existing date alone, so
+    // rewinding and re-placing won't move a date already given to a customer,
+    // and a later change to the production times can't reach back into this
+    // order. Skipped silently until the due-date migration has run.
+    $dueMsg = '';
+    if ($target === 'ordered') {
+        try {
+            $due = dd_stamp_order($pdo, $quoteId, factory_client_id());
+            if ($due !== null) {
+                $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
+            }
+        } catch (Throwable $e) {
+            error_log('Due-date stamp skipped for quote ' . $quoteId . ': ' . $e->getMessage());
+        }
     }
 
     // First time a quote lands in 'accepted', seed deposit_amount from
@@ -168,7 +186,7 @@ try {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
-        'Status: ' . $target . '.' . $appointmentMsg
+        'Status: ' . $target . '.' . $dueMsg . $appointmentMsg
     );
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
