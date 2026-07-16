@@ -30,10 +30,12 @@
   /* Blind card. */
   .bcard { background:var(--bg-card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:10px; padding:.55rem .65rem; box-shadow:0 1px 2px rgba(0,0,0,.04); }
   .bcard.working { border-color:#f59e0b; box-shadow:0 0 0 1px #f59e0b33; }
-  .bcard-top { display:flex; align-items:center; gap:.4rem; }
-  .bcard-ref { font-weight:700; font-variant-numeric:tabular-nums; }
-  .bcard-qty { font-size:.72rem; font-weight:700; background:#e2e8f0; color:#334155; border-radius:6px; padding:.02rem .35rem; }
-  .bcard-live { margin-left:auto; font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#b45309; background:#fef3c7; border-radius:999px; padding:.05rem .45rem; }
+  /* Nothing in the header may wrap mid-word — a squeezed card must push the
+     badges onto a second line, not shred the order ref down the card. */
+  .bcard-top { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
+  .bcard-ref { font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .bcard-qty { font-size:.72rem; font-weight:700; background:#e2e8f0; color:#334155; border-radius:6px; padding:.02rem .35rem; white-space:nowrap; }
+  .bcard-live { margin-left:auto; font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#b45309; background:#fef3c7; border-radius:999px; padding:.05rem .45rem; white-space:nowrap; }
   .bcard-prod { font-weight:600; font-size:.9rem; margin-top:.15rem; }
   .bcard-sys { font-weight:400; color:var(--text-muted,#667); font-size:.8rem; }
   .bcard-fab { color:var(--text-muted,#556); font-size:.82rem; }
