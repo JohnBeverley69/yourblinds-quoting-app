@@ -34,7 +34,7 @@ if ($ready && $stationId > 0) {
 
     if ($station) {
         $q = $pdo->prepare(
-            "SELECT bj.id, bj.quote_id, bj.status, bj.seq,
+            "SELECT bj.id, bj.quote_id, bj.status, bj.seq, bj.unit_no,
                     q.quote_number, c.company_name AS tenant,
                     qi.product_name_snapshot, qi.system_name_snapshot,
                     qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
@@ -46,7 +46,7 @@ if ($ready && $stationId > 0) {
                JOIN quote_items qi ON qi.id = bj.quote_item_id
                LEFT JOIN product_route_steps rs ON rs.id = bj.route_step_id
               WHERE bj.station_id = ? AND bj.status IN ('queued','in_progress')
-              ORDER BY bj.status DESC, q.created_at, bj.id"
+              ORDER BY bj.status DESC, q.created_at, bj.quote_item_id, bj.unit_no, bj.id"
         );
         $q->execute([$stationId]);
         $rows = $q->fetchAll(PDO::FETCH_ASSOC);

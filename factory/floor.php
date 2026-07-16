@@ -39,7 +39,7 @@ if ($ready) {
     )->fetchAll(PDO::FETCH_ASSOC);
 
     $sel =
-        "SELECT bj.id, bj.quote_id, bj.station_id, bj.status, bj.seq, bj.completed_at,
+        "SELECT bj.id, bj.quote_id, bj.station_id, bj.status, bj.seq, bj.unit_no, bj.completed_at,
                 q.quote_number, c.company_name AS tenant,
                 qi.product_name_snapshot, qi.system_name_snapshot,
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
@@ -54,7 +54,7 @@ if ($ready) {
     // On the floor now.
     $live = $pdo->query(
         $sel . " WHERE bj.status IN ('queued','in_progress')
-                 ORDER BY bj.seq, q.created_at, bj.id"
+                 ORDER BY bj.seq, q.created_at, bj.quote_item_id, bj.unit_no, bj.id"
     )->fetchAll(PDO::FETCH_ASSOC);
     foreach ($live as $row) {
         $activeTot++;
@@ -136,7 +136,7 @@ $RT = '/factory/floor.php';
                         <div class="bcard" style="opacity:.85">
                             <div class="bcard-top">
                                 <span class="bcard-ref"><?= e((string) ($row['quote_number'] ?? '')) ?></span>
-                                <?php if ((int) $row['quantity'] > 1): ?><span class="bcard-qty">&times;<?= (int) $row['quantity'] ?></span><?php endif; ?>
+                                <?php if ((int) $row['quantity'] > 1): ?><span class="bcard-qty"><?= (int) $row['unit_no'] ?> of <?= (int) $row['quantity'] ?></span><?php endif; ?>
                                 <span class="bcard-live" style="margin-left:auto;color:#166534;background:#dcfce7">made</span>
                             </div>
                             <div class="bcard-prod"><?= e((string) ($row['product_name_snapshot'] ?? '')) ?></div>
