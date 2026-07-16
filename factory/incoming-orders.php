@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/blind_jobs.php';
 
 requireFactory();
 
@@ -102,6 +103,12 @@ try {
     $loadError = $e->getMessage();
 }
 
+// Floor progress per order (blinds made / total) once released — Phase B.
+$floorProg = [];
+if (bj_tables_ready($pdo) && !empty($ids)) {
+    try { $floorProg = bj_order_progress($pdo, $ids); } catch (Throwable $e) { $floorProg = []; }
+}
+
 $newCount = 0;
 foreach ($orders as $o) {
     if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
@@ -175,6 +182,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-status { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.15rem 0.55rem; border-radius: 999px; background: #e0e7ff; color: #3730a3; }
     .io-status.ordered { background: #dcfce7; color: #166534; }
     .io-stage { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
+    .io-prog { display: inline-block; margin-left: 0.4rem; font-size: 0.6875rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; background: #fef3c7; color: #92600a; text-decoration: none; white-space: nowrap; }
+    .io-prog.all { background: #dcfce7; color: #166534; }
+    .io-prog:hover { text-decoration: underline; }
     .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.35rem 0.8rem; }
     .io-btn.advance { background: #1f2a37; color: #fff; }
     .io-btn.advance:hover { background: #111a24; }
@@ -232,6 +242,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             $stagePill = $STAGE_META[$stage] ?? null;
             $next      = $STAGE_NEXT[$stage] ?? null;
             $prev      = $STAGE_PREV[$stage] ?? null;
+            $prog      = $floorProg[$qid] ?? null;   // ['total'=>, 'done'=>] once on the floor
             $searchKey = strtolower(trim($ref . ' ' . $tenant . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
             <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>">
@@ -245,6 +256,9 @@ require __DIR__ . '/../_partials/factory_head.php';
                             <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>"><?= e($stagePill[0]) ?></span>
                         <?php else: ?>
                             <span class="io-status <?= $status === 'ordered' ? 'ordered' : '' ?>"><?= e($status !== '' ? $status : 'new') ?></span>
+                        <?php endif; ?>
+                        <?php if ($prog !== null && $prog['total'] > 0): ?>
+                            <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>
                         <?php endif; ?>
                     </span>
                     <span class="io-actions">
