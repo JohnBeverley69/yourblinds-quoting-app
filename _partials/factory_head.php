@@ -16,6 +16,7 @@ $fu           = function_exists('current_user') ? current_user() : null;
 // Nav grows as factory features land; the queue is the first.
 $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
+    'routes'     => ['/factory/routes.php',          'Routes'],
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
     'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
