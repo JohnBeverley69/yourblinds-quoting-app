@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/due_dates.php';
 requireFactory();
 
 $pdo    = db();
@@ -77,6 +78,9 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($action === 'remove_step') {
             $pdo->prepare('DELETE FROM product_route_steps WHERE id = ? AND product_id = ?')->execute([(int) $_POST['step_id'], $productId]);
+        } elseif ($action === 'set_lead' && $productId > 0) {
+            dd_set_lead_days($pdo, $productId, (int) ($_POST['lead_days'] ?? 0));
+            $_SESSION['flash_success'] = 'Production time saved — it applies to orders placed from now on. Orders already placed keep the date they were promised.';
         } elseif ($action === 'move_step' && $productId > 0) {
             $s = $pdo->prepare('SELECT id FROM product_route_steps WHERE product_id = ? ORDER BY seq, id'); $s->execute([$productId]);
             $ids = array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN));
@@ -137,6 +141,8 @@ require __DIR__ . '/../_partials/factory_head.php';
   .mv { color:#64748b; text-decoration:none; padding:0 .25rem; font-weight:700; }
   .inline { display:inline; }
   .add-row { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem; }
+  .lead-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:0 0 1.1rem; padding:.6rem .75rem; background:var(--bg-subtle,#f8fafc); border:1px solid var(--border,#e5e7eb); border-radius:10px; }
+  .lead-row label { font-weight:600; font-size:.9rem; }
 </style>
 
 <h1 style="font-size:1.5rem;margin:0 0 .3rem;">Routes &amp; Stations</h1>
@@ -184,6 +190,17 @@ require __DIR__ . '/../_partials/factory_head.php';
         <?php endforeach; ?>
       </select>
     </form>
+
+    <?php if (dd_ready($pdo) && $productId > 0): ?>
+      <form method="post" class="lead-row">
+        <?= csrf_field() ?><input type="hidden" name="_action" value="set_lead"><input type="hidden" name="product_id" value="<?= $productId ?>">
+        <label for="lead_days">Production time</label>
+        <input type="number" id="lead_days" name="lead_days" value="<?= (int) dd_lead_days($pdo, $productId) ?>" min="0" max="365" step="1" style="width:4.5rem">
+        <span class="rt-sub" style="margin:0">working days</span>
+        <button class="btn mini">Save</button>
+        <p class="rt-sub" style="margin:.35rem 0 0;flex-basis:100%">Turn this up when the workshop is busy. It sets the due date on orders placed <strong>from now on</strong> — orders already placed keep the date they were promised.</p>
+      </form>
+    <?php endif; ?>
 
     <?php if (!$steps): ?>
       <p class="rt-sub">No route set yet — add the first stage below (or leave empty for a buy-in product).</p>

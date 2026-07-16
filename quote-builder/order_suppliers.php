@@ -335,6 +335,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $adv->execute([$quoteId, $clientId]);
             $advancedToOrdered = $adv->rowCount() > 0;
+            // Same placement moment as change_status.php — stamp the promised
+            // date from the production times in force now, once and for good.
+            if ($advancedToOrdered) {
+                require_once __DIR__ . '/../_partials/due_dates.php';
+                dd_stamp_order(db(), $quoteId, factory_client_id());
+            }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());
         }

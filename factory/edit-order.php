@@ -169,6 +169,13 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <label>Additional reference</label>
                 <input type="text" name="additional_reference" value="<?= e((string) ($order['additional_reference'] ?? '')) ?>" maxlength="120">
             </div>
+            <?php if (array_key_exists('due_date', (array) $order)): ?>
+                <div class="fld">
+                    <label>Due date</label>
+                    <input type="date" name="due_date" value="<?= e((string) ($order['due_date'] ?? '')) ?>">
+                    <small style="color:var(--text-muted,#667)">Stamped when the order was placed. Change it to pull a rush job forward; clear it to remove.</small>
+                </div>
+            <?php endif; ?>
         </div>
 
         <?php foreach ($items as $it):

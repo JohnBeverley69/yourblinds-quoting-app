@@ -127,6 +127,13 @@ try {
             $qid,
         ]);
 
+    // Due date: an explicit human override of the date stamped at placement.
+    // Only touched when the field was actually rendered on the form.
+    if (array_key_exists('due_date', $_POST)) {
+        require_once __DIR__ . '/../_partials/due_dates.php';
+        if (dd_ready($pdo)) dd_set_due($pdo, $qid, (string) $_POST['due_date']);
+    }
+
     // Item product ids — a picked fabric must belong to the item's own product.
     $itemProduct = [];
     if ($validItems) {
