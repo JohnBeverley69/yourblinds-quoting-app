@@ -122,6 +122,7 @@ $factoryNav   = 'labelsheet';
         <li>Measure the ruler. If it isn't 80mm, fix the print scaling and reprint.</li>
         <li>Click in the box below, then scan each square with the D5100, smallest first.</li>
         <li>Each one that reads lights up green. The smallest green size is your answer — I'd then use one step <em>above</em> it on the real labels for margin.</li>
+        <li><strong>Then the smudge test.</strong> Give a few of the squares a firm rub with your thumb and rescan them. Herma sell this stock for <em>laser</em> printers, and inkjet ink can sit on the surface instead of soaking in — a code that scans fresh but wipes off in the workshop is no use to anyone. If they smudge, tell me: that's a printer problem, not a size problem, and no amount of extra millimetres fixes it.</li>
     </ol>
 
     <p><strong>Scan into here:</strong> <input id="scan" autocomplete="off" placeholder="click, then scan…" autofocus></p>
