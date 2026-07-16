@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/blind_jobs.php';
 
 requireFactory();
 
@@ -68,6 +69,8 @@ if ($quoteId <= 0 || !$isBev) {
 try {
     if ($target === 'new') {
         $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ?")->execute([$quoteId]);
+        // Reset pulls the order's blinds back off the floor too.
+        if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId);
         $_SESSION['flash_success'] = 'Order moved back to new.';
     } else {
         $recvAt = $target === 'received' ? date('Y-m-d H:i:s') : null;
@@ -82,7 +85,15 @@ try {
                  received_at = COALESCE(received_at, VALUES(received_at)),
                  received_by = COALESCE(received_by, VALUES(received_by))"
         )->execute([$quoteId, $target, $userId ?: null, $recvAt, $recvBy]);
-        $_SESSION['flash_success'] = 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.';
+
+        // Moving into production releases the order's Beverley blinds onto the
+        // floor (idempotent — re-entering production won't duplicate them).
+        $released = '';
+        if ($target === 'in_production' && bj_tables_ready($pdo)) {
+            $n = bj_release_order($pdo, $quoteId, $MASTER);
+            if ($n > 0) $released = " {$n} blind" . ($n === 1 ? '' : 's') . ' released to the floor.';
+        }
+        $_SESSION['flash_success'] = 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.' . $released;
     }
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = 'Could not update the order: ' . $e->getMessage()
