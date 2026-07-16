@@ -45,10 +45,16 @@ function bj_route_steps(PDO $pdo, int $productId): array
 }
 
 /**
- * Release an order's Beverley lines onto the floor, each parked at the first
+ * Release an order's Beverley blinds onto the floor, each parked at the first
  * stage of its product's route (or unrouted — station NULL — if the product has
- * no route yet). Idempotent: a line already tracked is left exactly where it is.
- * Returns how many NEW blind jobs were created.
+ * no route yet). Returns how many NEW blind jobs were created.
+ *
+ * ONE CARD PER PHYSICAL BLIND: a qty-3 line becomes three jobs (unit 1..3) that
+ * move through the route independently, since the workshop can have them at
+ * three different benches at once.
+ *
+ * Idempotent on (line, unit) — a blind already tracked is left exactly where it
+ * is, so re-releasing only tops up units that don't exist yet.
  *
  * The line points at the TENANT's pushed copy of the product, but routes are
  * defined once on Beverley's master product — so source_product_id maps the
@@ -57,7 +63,7 @@ function bj_route_steps(PDO $pdo, int $productId): array
 function bj_release_order(PDO $pdo, int $quoteId, int $master): int
 {
     $items = $pdo->prepare(
-        'SELECT qi.id, COALESCE(p.source_product_id, p.id) AS master_product_id
+        'SELECT qi.id, qi.quantity, COALESCE(p.source_product_id, p.id) AS master_product_id
            FROM quote_items qi JOIN products p ON p.id = qi.product_id
           WHERE qi.quote_id = ? AND p.source_client_id = ?
           ORDER BY qi.line_no, qi.id'
@@ -66,20 +72,23 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
 
     $ins = $pdo->prepare(
         "INSERT IGNORE INTO factory_blind_jobs
-             (quote_id, quote_item_id, product_id, route_step_id, station_id, seq, status, step_started_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'queued', NOW())"
+             (quote_id, quote_item_id, unit_no, product_id, route_step_id, station_id, seq, status, step_started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', NOW())"
     );
     $created = 0;
     foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $it) {
         $steps = bj_route_steps($pdo, (int) $it['master_product_id']);
         $first = $steps[0] ?? null;
-        $ins->execute([
-            $quoteId, (int) $it['id'], (int) $it['master_product_id'],
-            $first ? (int) $first['id'] : null,
-            $first ? (int) $first['station_id'] : null,
-            $first ? (int) $first['seq'] : 0,
-        ]);
-        $created += $ins->rowCount();   // 0 when the UNIQUE key made it a no-op
+        $qty   = max(1, (int) $it['quantity']);
+        for ($unit = 1; $unit <= $qty; $unit++) {
+            $ins->execute([
+                $quoteId, (int) $it['id'], $unit, (int) $it['master_product_id'],
+                $first ? (int) $first['id'] : null,
+                $first ? (int) $first['station_id'] : null,
+                $first ? (int) $first['seq'] : 0,
+            ]);
+            $created += $ins->rowCount();   // 0 when the UNIQUE key made it a no-op
+        }
     }
     return $created;
 }

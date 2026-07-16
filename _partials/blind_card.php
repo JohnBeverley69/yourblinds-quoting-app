@@ -21,6 +21,7 @@ if (!function_exists('bj_render_card')) {
         $w       = (int) ($r['width_mm'] ?? 0);
         $d       = (int) ($r['drop_mm'] ?? 0);
         $qty     = (int) ($r['quantity'] ?? 1);
+        $unit    = (int) ($r['unit_no'] ?? 1);
         $status  = (string) ($r['status'] ?? 'queued');
         $jobId   = (int) ($r['id'] ?? 0);
         $working = $status === 'in_progress';
@@ -31,7 +32,7 @@ if (!function_exists('bj_render_card')) {
         <div class="bcard<?= $working ? ' working' : '' ?>">
             <div class="bcard-top">
                 <span class="bcard-ref"><?= e($ref) ?></span>
-                <?php if ($qty > 1): ?><span class="bcard-qty">&times;<?= $qty ?></span><?php endif; ?>
+                <?php if ($qty > 1): ?><span class="bcard-qty" title="one of <?= $qty ?> identical blinds on this line"><?= $unit ?> of <?= $qty ?></span><?php endif; ?>
                 <?php if ($working): ?><span class="bcard-live">working</span><?php endif; ?>
             </div>
             <div class="bcard-prod"><?= e($product) ?><?php if ($system !== ''): ?> <span class="bcard-sys"><?= e($system) ?></span><?php endif; ?></div>

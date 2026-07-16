@@ -4,14 +4,14 @@ declare(strict_types=1);
 /**
  * Migration (Phase B): per-blind production tracking.
  *
- *   factory_blind_jobs — one row per order LINE released to the floor. It rides
- *   the product's route (product_route_steps): route_step_id is the stage it's
- *   currently sitting at, with station_id + seq denormalised so the floor board
- *   and per-station queues group cheaply. status: queued -> in_progress ->
+ *   factory_blind_jobs — one row per PHYSICAL BLIND released to the floor. It
+ *   rides the product's route (product_route_steps): route_step_id is the stage
+ *   it's currently sitting at, with station_id + seq denormalised so the floor
+ *   board and per-station queues group cheaply. status: queued -> in_progress ->
  *   (advance through the route) -> complete.
  *
- * A "blind" here is a quote_items line (shown with its quantity). One line =
- * one card on the floor; per-unit splitting can come later. Beverley-master
+ * A qty-3 order line becomes three rows (unit 1..3) that move independently —
+ * the workshop can have them at three different benches at once. Beverley-master
  * owned (the lines are always Beverley products). Idempotent.
  *
  * Run via web: /migrate_factory_blind_jobs.php (super-admin). Needs the routing
@@ -35,6 +35,7 @@ if (!$tableExists('factory_blind_jobs')) {
             id              INT AUTO_INCREMENT PRIMARY KEY,
             quote_id        INT NOT NULL,
             quote_item_id   INT NOT NULL,
+            unit_no         INT NOT NULL DEFAULT 1,      -- a qty-3 line = 3 physical blinds, tracked independently
             product_id      INT NOT NULL,                -- Beverley's MASTER product, not the tenant's pushed copy: routes are keyed to the master
 
             route_step_id   INT NULL,                    -- current stage (product_route_steps.id); NULL = complete or unrouted
@@ -47,7 +48,7 @@ if (!$tableExists('factory_blind_jobs')) {
             updated_by      INT NULL,
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_item (quote_item_id),
+            UNIQUE KEY uq_item_unit (quote_item_id, unit_no),
             KEY idx_station (station_id, status),
             KEY idx_quote (quote_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
