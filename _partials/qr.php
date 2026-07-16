@@ -1,0 +1,114 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * QR codes for shop-floor labels.
+ *
+ * Renders an inline SVG (not an image file) so it prints crisply at any size
+ * and needs no writable directory, no GD, and no JavaScript timing games with
+ * window.print().
+ *
+ * THE PAYLOAD IS DELIBERATELY TINY. A blind's code is 8 digits — see
+ * qr_blind_code() — which fits a **version 1** symbol (21x21 modules, 29 with
+ * the mandatory quiet zone). That matters because the vertical work tickets are
+ * inkjet-printed onto 55gsm uncoated kraft, where ink wicks into the fibres and
+ * fattens every module. Fewer, bigger modules survive that; a URL would push it
+ * to version 2+ and shrink them by ~13% on a label only 21mm tall. The bench
+ * scanners are USB wedges (they type the code straight into the station page),
+ * so the payload never needed to be a web address.
+ *
+ * Sizing on the two label stocks:
+ *   - roller  102x76mm thermal on white  — masses of room, ~20mm, easy.
+ *   - vertical 90x21mm kraft via inkjet  — ~17mm is the ceiling (the height
+ *     limits it), giving ~0.59mm modules at ECC level Q.
+ * The real ceiling is whatever /factory/qr-test-sheet.php proves scannable.
+ */
+
+require_once __DIR__ . '/../_lib/qrcode/autoload.php';
+
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Output\QROutputInterface;
+
+/**
+ * A blind's scannable code: 8 digits, zero-padded — 6 for the order line and
+ * 2 for the unit ("2 of 3"). Fixed length keeps every label on a version 1
+ * symbol, so module size never changes under us. Stable from the moment the
+ * order is placed, which is what lets labels print before the blind is
+ * released to the floor.
+ */
+function qr_blind_code(int $quoteItemId, int $unitNo): string
+{
+    return str_pad((string) $quoteItemId, 6, '0', STR_PAD_LEFT)
+         . str_pad((string) min(99, max(1, $unitNo)), 2, '0', STR_PAD_LEFT);
+}
+
+/** Split a scanned code back into [quote_item_id, unit_no], or null if it isn't one. */
+function qr_parse_code(string $scanned): ?array
+{
+    $s = trim($scanned);
+    // Tolerate a URL wrapper in case a code ever ships as one (phone camera).
+    if (preg_match('~(\d{8})\s*$~', $s, $m)) $s = $m[1];
+    if (!preg_match('/^\d{8}$/', $s)) return null;
+    $itemId = (int) substr($s, 0, 6);
+    $unitNo = (int) substr($s, 6, 2);
+    if ($itemId <= 0 || $unitNo <= 0) return null;
+    return [$itemId, $unitNo];
+}
+
+/**
+ * Inline SVG for a QR code, sized in millimetres.
+ *
+ * $ecc: 'L'|'M'|'Q'|'H' — Q (25% recovery) is the default because these labels
+ * live in a workshop and get dust, grease and creases on them.
+ */
+function qr_svg(string $payload, float $mm, string $ecc = 'Q'): string
+{
+    static $cache = [];
+    $key = $payload . '|' . $ecc;
+
+    if (!isset($cache[$key])) {
+        $levels = ['L' => EccLevel::L, 'M' => EccLevel::M, 'Q' => EccLevel::Q, 'H' => EccLevel::H];
+        $opts = new QROptions([
+            'version'         => QRCode::VERSION_AUTO,
+            'eccLevel'        => $levels[strtoupper($ecc)] ?? EccLevel::Q,
+            'outputType'      => QROutputInterface::CUSTOM,
+            'quietzoneSize'   => 4,        // mandated by the spec — scanners need it
+        ]);
+        $cache[$key] = (new QRCode($opts))->getQRMatrix($payload);
+    }
+    $matrix = $cache[$key];
+    $n      = $matrix->getSize();          // includes the quiet zone
+
+    // One <rect> per dark module, on a viewBox of n units — the SVG scales to
+    // whatever physical size we ask for, so print DPI does the rasterising.
+    $rects = '';
+    for ($y = 0; $y < $n; $y++) {
+        for ($x = 0; $x < $n; $x++) {
+            if ($matrix->check($x, $y)) {
+                $rects .= '<rect x="' . $x . '" y="' . $y . '" width="1" height="1"/>';
+            }
+        }
+    }
+    $size = rtrim(rtrim(number_format($mm, 2, '.', ''), '0'), '.');
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $n . ' ' . $n . '"'
+         . ' width="' . $size . 'mm" height="' . $size . 'mm"'
+         . ' shape-rendering="crispEdges" role="img" aria-label="code ' . htmlspecialchars($payload, ENT_QUOTES) . '">'
+         . '<rect width="' . $n . '" height="' . $n . '" fill="#fff"/>'
+         . '<g fill="#000">' . $rects . '</g></svg>';
+}
+
+/** Module count of the symbol (incl. quiet zone) — for reporting mm-per-module. */
+function qr_module_count(string $payload, string $ecc = 'Q'): int
+{
+    $levels = ['L' => EccLevel::L, 'M' => EccLevel::M, 'Q' => EccLevel::Q, 'H' => EccLevel::H];
+    $opts = new QROptions([
+        'version'       => QRCode::VERSION_AUTO,
+        'eccLevel'      => $levels[strtoupper($ecc)] ?? EccLevel::Q,
+        'outputType'    => QROutputInterface::CUSTOM,
+        'quietzoneSize' => 4,
+    ]);
+    return (new QRCode($opts))->getQRMatrix($payload)->getSize();
+}
