@@ -167,6 +167,43 @@ function bj_advance(PDO $pdo, int $jobId, ?int $userId): void
     }
 }
 
+/**
+ * Jump a blind straight to any stage on its route — what clicking a chip on the
+ * floor's stage strip does. $stepId null means "finished the whole route".
+ * A step that isn't on this product's live route is ignored.
+ */
+function bj_set_stage(PDO $pdo, int $jobId, ?int $stepId, ?int $userId): void
+{
+    $job = bj_get($pdo, $jobId);
+    if (!$job) return;
+
+    if ($stepId === null) {
+        $pdo->prepare(
+            "UPDATE factory_blind_jobs
+                SET route_step_id = NULL, station_id = NULL, status = 'complete',
+                    completed_at = NOW(), started_at = COALESCE(started_at, NOW()),
+                    updated_by = ?
+              WHERE id = ?"
+        )->execute([$userId, $jobId]);
+        bj_maybe_complete_order($pdo, (int) $job['quote_id']);
+        return;
+    }
+
+    $target = null;
+    foreach (bj_route_steps($pdo, (int) $job['product_id']) as $s) {
+        if ((int) $s['id'] === $stepId) { $target = $s; break; }
+    }
+    if (!$target) return;
+
+    $pdo->prepare(
+        "UPDATE factory_blind_jobs
+            SET route_step_id = ?, station_id = ?, seq = ?, status = 'queued',
+                completed_at = NULL, step_started_at = NOW(),
+                started_at = COALESCE(started_at, NOW()), updated_by = ?
+          WHERE id = ?"
+    )->execute([(int) $target['id'], (int) $target['station_id'], (int) $target['seq'], $userId, $jobId]);
+}
+
 /** Step a blind back one stage (undo a premature "done"). */
 function bj_back(PDO $pdo, int $jobId, ?int $userId): void
 {

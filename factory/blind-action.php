@@ -39,6 +39,11 @@ try {
         case 'start': bj_start($pdo, $jobId, $userId);   break;
         case 'done':  bj_advance($pdo, $jobId, $userId); break;
         case 'back':  bj_back($pdo, $jobId, $userId);    break;
+        case 'set_stage':
+            // From the floor's stage strip: "done" = ran off the end of the route.
+            $step = (string) ($_POST['step_id'] ?? '');
+            bj_set_stage($pdo, $jobId, $step === 'done' ? null : (int) $step, $userId);
+            break;
         default:
             $_SESSION['flash_error'] = 'Unknown action.';
     }
