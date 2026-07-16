@@ -94,9 +94,10 @@ $factoryNav   = 'labelsheet';
     .small .meta span { font-family: "Courier New", monospace; letter-spacing: .3mm; }
     .hdr { padding: 3mm; font-size: 3.2mm; line-height: 1.45; }
     .hdr h2 { font-size: 4.5mm; margin-bottom: 1.5mm; }
-    .ruler { margin-top: 2mm; height: 6mm; position: relative; border-left: .3mm solid #000; border-right: .3mm solid #000; border-bottom: .3mm solid #000; width: 80mm; }
+    /* Numbers sit BELOW the rule — above, they collide with the text block. */
+    .ruler { margin: 2mm 0 4.5mm; height: 5mm; position: relative; border-left: .3mm solid #000; border-right: .3mm solid #000; border-bottom: .3mm solid #000; width: 80mm; }
     .ruler i { position: absolute; bottom: 0; width: .3mm; height: 2.5mm; background: #000; }
-    .ruler em { position: absolute; bottom: 6.5mm; font-size: 2.6mm; font-style: normal; transform: translateX(-50%); }
+    .ruler em { position: absolute; top: 5.4mm; font-size: 2.4mm; font-style: normal; transform: translateX(-50%); line-height: 1; }
     .guide { outline: .2mm dashed #bbb; outline-offset: 0; }
 
     @media print {
@@ -121,6 +122,7 @@ $factoryNav   = 'labelsheet';
         <li>Measure the ruler. If it isn't 80mm, fix the print scaling and reprint.</li>
         <li>Click in the box below, then scan each square with the D5100, smallest first.</li>
         <li>Each one that reads lights up green. The smallest green size is your answer — I'd then use one step <em>above</em> it on the real labels for margin.</li>
+        <li><strong>Then the smudge test.</strong> Give a few of the squares a firm rub with your thumb and rescan them. Herma sell this stock for <em>laser</em> printers, and inkjet ink can sit on the surface instead of soaking in — a code that scans fresh but wipes off in the workshop is no use to anyone. If they smudge, tell me: that's a printer problem, not a size problem, and no amount of extra millimetres fixes it.</li>
     </ol>
 
     <p><strong>Scan into here:</strong> <input id="scan" autocomplete="off" placeholder="click, then scan…" autofocus></p>
