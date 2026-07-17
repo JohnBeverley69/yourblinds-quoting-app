@@ -12,7 +12,7 @@ declare(strict_types=1);
  * and searchable at a few hundred blinds (the columns drowned).
  *
  * Blinds land here when an order is moved to "in production" on Incoming
- * Orders. A maker who only wants their own bench opens /factory/station.php.
+ * Orders. Someone working one process scans at /factory/scan.php.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -39,9 +39,16 @@ $liveTot   = 0;
 $madeTot   = 0;
 
 if ($ready) {
+    // Filter by PROCESS, not bench. The same saw serves verticals, rollers and
+    // pleateds, so "Safety Saw" was never a useful thing to filter by — what
+    // anyone actually wants is "show me the vertical headrails".
     $stations = $pdo->query(
-        "SELECT id, name FROM factory_stations
-          WHERE client_id = {$MASTER} AND active = 1 ORDER BY sort_order, id"
+        "SELECT DISTINCT CONCAT(rs.product_id,'|',COALESCE(NULLIF(rs.stream,''),'main')) AS id,
+                CASE WHEN COALESCE(NULLIF(rs.stream,''),'main') = 'main' THEN p.name
+                     ELSE CONCAT(p.name,' — ',rs.stream) END AS name
+           FROM product_route_steps rs JOIN products p ON p.id = rs.product_id
+          WHERE p.client_id = {$MASTER} AND rs.active = 1
+          ORDER BY name"
     )->fetchAll(PDO::FETCH_ASSOC);
 
     $where = $showMade ? '' : "WHERE bj.status IN ('queued','in_progress')";
@@ -121,12 +128,12 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
 <div class="fl-bar">
     <input type="search" id="fl-search" placeholder="Search job ref, blind, fabric, room, customer&hellip;" autocomplete="off">
     <select id="fl-station">
-        <option value="">All stations</option>
+        <option value="">All processes</option>
         <?php foreach ($stations as $s): ?>
-            <option value="<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></option>
+            <?php // id is "<product>|<stream>", not a number — don't cast it. ?>
+            <option value="<?= e((string) $s['id']) ?>"><?= e((string) $s['name']) ?></option>
         <?php endforeach; ?>
     </select>
-    <a id="fl-bench" class="fl-stat" href="#" hidden>open bench view &rarr;</a>
     <label><input type="checkbox" id="fl-made" <?= $showMade ? 'checked' : '' ?>> Show made</label>
     <span class="fl-stat" id="fl-shown"></span>
 </div>
@@ -160,9 +167,13 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
         $myStreams  = $streamsBy[$jobId] ?? [];
         [$doneCount, $total] = bj_progress($byStream, $myStreams);
         $pct = $total > 0 ? (int) round($doneCount / $total * 100) : 0;
-        // Which stations this blind is waiting at, for the station filter.
+        // Which processes this blind still needs, for the filter. A vertical with
+        // its fabric finished but headrail outstanding should show under
+        // "Vertical — Headrail" and not under "Vertical — Fabric".
         $atStations = [];
-        foreach ($myStreams as $sr) if ($sr['station_id'] !== null && $sr['status'] !== 'done') $atStations[] = (int) $sr['station_id'];
+        foreach ($myStreams as $sname => $sr) {
+            if ($sr['status'] !== 'done') $atStations[] = (int) $r['product_id'] . '|' . $sname;
+        }
 
         $fab = trim((string) $r['fabric_name_snapshot']);
         $col = trim((string) $r['fabric_colour_snapshot']);
@@ -214,9 +225,9 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
                                     $cls = 'stg';
                                     if ($i < $sDoneCount)             $cls .= ' done';
                                     elseif (!$sDone && $i === $idx)   $cls .= $sWork ? ' working' : ' current';
-                                    $tip = (string) $s['station'] . ($s['label'] ? ' · ' . $s['label'] : '');
+                                    $tip = (string) ($s['label'] ?? '');
                                 ?>
-                                    <button type="submit" name="step_id" value="<?= (int) $s['id'] ?>" class="<?= $cls ?>" title="<?= e($tip) ?>"><?= e((string) ($s['label'] ?: $s['station'])) ?></button>
+                                    <button type="submit" name="step_id" value="<?= (int) $s['id'] ?>" class="<?= $cls ?>" title="<?= e($tip) ?>"><?= e((string) ($s['label'] ?? '')) ?></button>
                                 <?php endforeach; ?>
                                 <button type="submit" name="step_id" value="done" class="stg made<?= $sDone ? ' done' : '' ?>" title="<?= $multi ? e($stream . ' finished') : 'Finished — off the floor' ?>"><?= $multi ? 'Done' : 'Made' ?></button>
                             </form>
@@ -237,7 +248,6 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
     var station = document.getElementById('fl-station');
     var made    = document.getElementById('fl-made');
     var shown   = document.getElementById('fl-shown');
-    var bench   = document.getElementById('fl-bench');
     var rows    = [].slice.call(document.querySelectorAll('.fl-tbl tbody tr'));
     if (!rows.length) return;
 
@@ -245,12 +255,9 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
         var q = (search.value || '').trim().toLowerCase();
         var s = station.value;
         var n = 0;
-        // Filtering to one station offers its roomier maker's view.
-        bench.hidden = !s;
-        if (s) bench.href = '/factory/station.php?station_id=' + encodeURIComponent(s);
         rows.forEach(function (tr) {
-            // A blind can be waiting at two benches at once (headrail + fabric),
-            // so data-station is a list.
+            // A blind needs two processes at once (headrail + fabric), so
+            // data-station is a list of "<product>|<stream>".
             var at = (tr.dataset.station || '').split(',');
             var ok = (!q || (tr.dataset.search || '').indexOf(q) !== -1)
                   && (!s || at.indexOf(s) !== -1);
