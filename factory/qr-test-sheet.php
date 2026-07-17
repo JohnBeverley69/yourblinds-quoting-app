@@ -129,6 +129,40 @@ $factoryNav   = 'labelsheet';
     <div id="results"></div>
     <p style="margin-top:.9rem"><button class="btn" onclick="window.print()">Print sheet</button>
        <a href="/factory/label-test-sheet.php" style="margin-left:.8rem;font-size:.9rem">die alignment sheet</a></p>
+
+    <?php
+    // ---- Control codes -----------------------------------------------------
+    // Diagnostic, screen-only, deliberately big: if a scanner reads a URL QR but
+    // not ours at the SAME size, then size was never the variable — the symbol
+    // is. Ours is a version 1: the smallest QR that exists, 21 modules, and the
+    // only version with no alignment pattern. Every code this scanner has read
+    // so far has been a URL, i.e. version 2+. These isolate exactly that.
+    $controls = array(
+        array('A', 'ours — 8 digits, numeric', '91900000'),
+        array('B', 'digits, longer',           '9190000091900000919000001234'),
+        array('C', 'URL — byte mode',          'https://yourblinds.uk/s/91900000'),
+        array('D', 'URL — longer',             'https://www.yourblinds.uk/factory/floor.php?scan=91900000'),
+    );
+    ?>
+    <hr style="margin:1.3rem 0; border:none; border-top:1px solid #e5e7eb">
+    <h2 style="font-size:1rem; margin:0 0 .3rem;">Control codes &mdash; scan these on screen</h2>
+    <p style="margin:.2rem 0 .9rem">All <strong>40mm</strong>, so size is ruled out. Only the <em>kind</em> of symbol changes: <strong>A</strong> is exactly what's on the labels. Scan each and tell me which ones beep &mdash; that says what this scanner accepts, and I'll match the labels to it.</p>
+    <div style="display:flex; gap:1.3rem; flex-wrap:wrap; align-items:flex-start;">
+        <?php foreach ($controls as $c):
+            list($k, $desc, $payload) = $c;
+            $mods = qr_module_count($payload, 'Q');
+            $ver  = (int) floor(($mods - 8 - 21) / 4) + 1;   // modules include 8 of quiet zone
+        ?>
+            <div style="text-align:center; font-size:.8rem; color:#556;">
+                <div style="background:#fff; padding:2mm; display:inline-block; border:1px solid #eee;">
+                    <?= qr_svg($payload, 40, 'Q') ?>
+                </div>
+                <div style="margin-top:.35rem; font-weight:700; color:#111; font-size:.95rem;"><?= e($k) ?> &mdash; version <?= $ver ?></div>
+                <div><?= e($desc) ?></div>
+                <div style="color:#94a3b8"><?= (int) $mods ?> modules incl. quiet zone</div>
+            </div>
+        <?php endforeach; ?>
+    </div>
 </div>
 
 <div class="sheet">
