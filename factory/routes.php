@@ -78,6 +78,12 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($action === 'remove_step') {
             $pdo->prepare('DELETE FROM product_route_steps WHERE id = ? AND product_id = ?')->execute([(int) $_POST['step_id'], $productId]);
+        } elseif ($action === 'rename_step' && $productId > 0) {
+            // The stage label is what the floor strip shows, so it's worth being
+            // able to word it the way the workshop actually talks.
+            $label = trim((string) ($_POST['label'] ?? ''));
+            $pdo->prepare('UPDATE product_route_steps SET label = ? WHERE id = ? AND product_id = ?')
+                ->execute([$label !== '' ? $label : null, (int) $_POST['step_id'], $productId]);
         } elseif ($action === 'set_lead' && $productId > 0) {
             dd_set_lead_days($pdo, $productId, (int) ($_POST['lead_days'] ?? 0));
             $_SESSION['flash_success'] = 'Production time saved — it applies to orders placed from now on. Orders already placed keep the date they were promised.';
@@ -138,6 +144,7 @@ require __DIR__ . '/../_partials/factory_head.php';
   .pill { font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:999px; }
   .pill.out{ background:#fef3c7; color:#92400e; } .pill.off{ background:#e5e7eb; color:#6b7280; }
   .seq { width:1.6rem; height:1.6rem; border-radius:50%; background:#0f766e; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700; flex:0 0 auto; }
+  .step-station { font-weight:600; flex:0 0 9.5rem; font-size:.9rem; }
   .mv { color:#64748b; text-decoration:none; padding:0 .25rem; font-weight:700; }
   .inline { display:inline; }
   .add-row { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem; }
@@ -208,7 +215,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php foreach ($steps as $i => $st): ?>
       <div class="step-row">
         <span class="seq"><?= $i + 1 ?></span>
-        <span style="flex:1"><strong><?= e((string) $st['station']) ?></strong><?php if ($st['label']): ?> <span style="color:var(--text-muted,#667);font-size:.85rem;">· <?= e((string) $st['label']) ?></span><?php endif; ?><?php if ((int) $st['is_outsourced'] === 1): ?> <span class="pill out">buy-in</span><?php endif; ?></span>
+        <span class="step-station"><?= e((string) $st['station']) ?><?php if ((int) $st['is_outsourced'] === 1): ?> <span class="pill out">buy-in</span><?php endif; ?></span>
+        <form method="post" class="inline" style="flex:1;display:flex">
+          <?= csrf_field() ?><input type="hidden" name="_action" value="rename_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>">
+          <input type="text" name="label" value="<?= e((string) ($st['label'] ?? '')) ?>" placeholder="what happens here (optional)" onchange="this.form.submit()" style="flex:1" title="This is what the workshop reads on the floor — name the job, e.g. &quot;sew or weld&quot;.">
+        </form>
         <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="move_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>"><button class="mv" name="dir" value="up">▲</button><button class="mv" name="dir" value="down">▼</button></form>
         <form method="post" class="inline" onsubmit="return confirm('Remove this stage?')"><?= csrf_field() ?><input type="hidden" name="_action" value="remove_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>"><button class="btn ghost mini">✕</button></form>
       </div>
