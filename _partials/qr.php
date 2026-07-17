@@ -69,29 +69,46 @@ function qr_matrix(string $payload, string $ecc = 'Q')
 }
 
 /**
- * A blind's scannable code: 8 digits, zero-padded — 6 for the order line and
- * 2 for the unit ("2 of 3"). Fixed length keeps every label on a version 1
- * symbol, so module size never changes under us. Stable from the moment the
- * order is placed, which is what lets labels print before the blind is
- * released to the floor.
+ * A blind's scannable code: 9 digits, zero-padded — 6 for the order line, 2 for
+ * the unit ("2 of 3"), and 1 for the STREAM the label belongs to.
+ *
+ * The stream digit is what John spotted: a vertical already prints two labels,
+ * and the cutting label travels with the headrail while the fabric label travels
+ * with the fabric. They're physically separated already. So the label should say
+ * which side it is, and then a scan is never ambiguous — no asking the workshop
+ * "which one did you just finish?". 0 = the whole blind (single-stream products
+ * and any label that doesn't name a side).
+ *
+ * Still 9 numeric digits = a version 1 symbol (numeric mode holds 16 at ECC Q),
+ * so this costs nothing: same 29 modules, same 12mm, same proven scan.
+ *
+ * Fixed length keeps every label on version 1, so module size never changes
+ * under us. Stable from the moment the order is placed, which is what lets
+ * labels print before the blind is released to the floor.
  */
-function qr_blind_code(int $quoteItemId, int $unitNo): string
+function qr_blind_code(int $quoteItemId, int $unitNo, int $streamIdx = 0): string
 {
     return str_pad((string) $quoteItemId, 6, '0', STR_PAD_LEFT)
-         . str_pad((string) min(99, max(1, $unitNo)), 2, '0', STR_PAD_LEFT);
+         . str_pad((string) min(99, max(1, $unitNo)), 2, '0', STR_PAD_LEFT)
+         . (string) max(0, min(9, $streamIdx));
 }
 
-/** Split a scanned code back into [quote_item_id, unit_no], or null if it isn't one. */
+/**
+ * Split a scanned code back into [quote_item_id, unit_no, stream_idx], or null.
+ * Accepts the older 8-digit codes (stream 0) so labels already printed and hung
+ * on a blind keep working.
+ */
 function qr_parse_code(string $scanned): ?array
 {
     $s = trim($scanned);
     // Tolerate a URL wrapper in case a code ever ships as one (phone camera).
-    if (preg_match('~(\d{8})\s*$~', $s, $m)) $s = $m[1];
-    if (!preg_match('/^\d{8}$/', $s)) return null;
+    if (preg_match('~(\d{8,9})\s*$~', $s, $m)) $s = $m[1];
+    if (!preg_match('/^\d{8,9}$/', $s)) return null;
     $itemId = (int) substr($s, 0, 6);
     $unitNo = (int) substr($s, 6, 2);
+    $stream = strlen($s) === 9 ? (int) substr($s, 8, 1) : 0;
     if ($itemId <= 0 || $unitNo <= 0) return null;
-    return [$itemId, $unitNo];
+    return [$itemId, $unitNo, $stream];
 }
 
 /**

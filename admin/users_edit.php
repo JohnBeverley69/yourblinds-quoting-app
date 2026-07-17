@@ -33,17 +33,29 @@ if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }
 
-// Benches, for a station login (an account that IS a bench rather than a
-// person). Null = don't offer the field at all: not the factory account, or the
-// routing/station migrations haven't run.
-$factoryStations = null;
+// Processes, for a workstation login. A workshop account is a PROCESS, not a
+// person: "Vertical Head Rail" owns the vertical's Headrail stream wherever the
+// saw happens to be. Every (product, stream) on the master's routes is offered;
+// tick as many as the login covers. Null = don't offer it (not the factory
+// account, or not migrated).
+$factoryProcesses = null;
+$myProcesses      = [];
 if ($isFactoryAccount) {
     try {
-        db()->query('SELECT factory_station_id FROM client_users LIMIT 0');
-        $s = db()->prepare('SELECT id, name FROM factory_stations WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+        db()->query('SELECT 1 FROM workstation_streams LIMIT 0');
+        $s = db()->prepare(
+            "SELECT DISTINCT rs.product_id, COALESCE(NULLIF(rs.stream,''),'main') AS stream, p.name
+               FROM product_route_steps rs JOIN products p ON p.id = rs.product_id
+              WHERE p.client_id = ? AND rs.active = 1
+              ORDER BY p.name, stream"
+        );
         $s->execute([$clientId]);
-        $factoryStations = $s->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) { $factoryStations = null; }
+        $factoryProcesses = $s->fetchAll(PDO::FETCH_ASSOC);
+
+        $m = db()->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
+        $m->execute([$id]);
+        foreach ($m->fetchAll(PDO::FETCH_ASSOC) as $r) $myProcesses[$r['product_id'] . '|' . $r['stream']] = true;
+    } catch (Throwable $e) { $factoryProcesses = null; }
 }
 
 // Priority for picking the "primary" role to write into client_users.role
@@ -217,15 +229,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $home['home_county']   !== '' ? $home['home_county']   : null,
                 $home['home_postcode'] !== '' ? $home['home_postcode'] : null,
             );
-            // Bench assignment — only ever touched on the factory account, where
-            // the field is actually rendered. Other accounts keep whatever's
-            // there (which is NULL) rather than being blanked by a form that
-            // never showed the option.
-            if ($factoryStations !== null) {
-                $sql .= ', factory_station_id = ?';
-                $stationPick = (int) ($_POST['factory_station_id'] ?? 0);
-                $params[] = $stationPick > 0 ? $stationPick : null;
-            }
             if ($newPassword !== '') {
                 $sql .= ', password_hash = ?';
                 $params[] = password_hash($newPassword, PASSWORD_DEFAULT);
@@ -248,6 +251,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             );
             foreach ($rolesIn as $r) {
                 $insRole->execute([$id, $r]);
+            }
+
+            // Workstation processes — same replace-wholesale approach as roles.
+            // Only touched on the factory account, where the field was actually
+            // rendered, so a form that never showed it can't wipe them.
+            if ($factoryProcesses !== null) {
+                $pdo->prepare('DELETE FROM workstation_streams WHERE user_id = ?')->execute([$id]);
+                $insWs = $pdo->prepare('INSERT IGNORE INTO workstation_streams (user_id, product_id, stream) VALUES (?, ?, ?)');
+                $valid = [];
+                foreach ($factoryProcesses as $p) $valid[$p['product_id'] . '|' . $p['stream']] = true;
+                foreach ((array) ($_POST['processes'] ?? []) as $key) {
+                    if (!isset($valid[(string) $key])) continue;   // only real routes
+                    [$pid, $stream] = explode('|', (string) $key, 2);
+                    $insWs->execute([$id, (int) $pid, $stream]);
+                }
             }
             $pdo->commit();
 
@@ -400,23 +418,35 @@ $activeNav = 'users';
                     </div>
                 </div>
 
-                <?php if ($factoryStations !== null): ?>
+                <?php if ($factoryProcesses !== null): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="factory_station_id">Bench</label>
-                        <select id="factory_station_id" name="factory_station_id">
-                            <option value="">Not a bench login — lands on Incoming Orders</option>
-                            <?php foreach ($factoryStations as $s): ?>
-                                <option value="<?= (int) $s['id'] ?>" <?= (int) ($target['factory_station_id'] ?? 0) === (int) $s['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $s['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label>Workstation processes</label>
+                        <?php if (!$factoryProcesses): ?>
+                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No routes set up yet — build them on Factory &rarr; Routes first.</p>
+                        <?php else: ?>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
+                                        padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
+                                        border-radius:8px; background:var(--bg-input); color:var(--text-body);
+                                        font-size:0.9375rem;">
+                                <?php foreach ($factoryProcesses as $p):
+                                    $key = $p['product_id'] . '|' . $p['stream'];
+                                    $lab = $p['stream'] === 'main' ? (string) $p['name'] : $p['name'] . ' — ' . $p['stream'];
+                                ?>
+                                    <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
+                                        <input type="checkbox" name="processes[]" value="<?= e($key) ?>"
+                                               <?= isset($myProcesses[$key]) ? 'checked' : '' ?>>
+                                        <?= e($lab) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
-                            For a workshop login that <em>is</em> a bench rather than a person —
-                            different staff use the same account all day. It logs straight into
-                            that bench's queue, and once the scanners are in, a scan knows which
-                            bench it came from. Needs the <strong>Factory</strong> role ticked above.
+                            For a workshop login that <em>is</em> a process rather than a person &mdash;
+                            “Vertical Head Rail”, “Roller”. Whoever's on that job today uses the account.
+                            Tick as many as it covers; staff move where they're needed, and more than one
+                            login can cover the same process. It logs straight into its scan screen.
+                            Needs the <strong>Factory</strong> role ticked above.
                         </p>
                     </div>
                 </div>
