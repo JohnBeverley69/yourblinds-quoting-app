@@ -261,6 +261,11 @@ require __DIR__ . '/../_partials/factory_head.php';
   .sc-warn { background:#fef3c7; border:1px solid #fde68a; color:#92400e; border-radius:12px; padding:.9rem 1.1rem; margin:0 0 1.2rem; font-size:1rem; line-height:1.5; }
   .sc-warn strong { display:block; font-size:1.15rem; margin-bottom:.2rem; }
   .sc-warn.caught { background:#b91c1c; border-color:#b91c1c; color:#fff; }
+  /* Amber, sticky under the top bar, impossible to miss — it means every scan
+     is currently being lost. */
+  .sc-focus { position:sticky; top:56px; z-index:16; background:#b45309; color:#fff; border-radius:12px;
+      padding:.9rem 1.2rem; margin:0 0 1rem; font-size:1.05rem; line-height:1.45; box-shadow:0 2px 12px rgba(0,0,0,.2); cursor:pointer; }
+  .sc-focus strong { display:block; font-size:1.25rem; }
 </style>
 
 <?php if (!$mine): ?>
@@ -302,6 +307,15 @@ require __DIR__ . '/../_partials/factory_head.php';
                 </form>
             <?php endif; ?>
         <?php endif; ?>
+    </div>
+
+    <!-- Shown whenever the browser window isn't the active window. A wedge
+         scanner types into whatever window Windows has in front, so if this one
+         isn't it, every scan lands somewhere else and vanishes — and the page
+         looks like it's just ignoring you. Better to say so, loudly. -->
+    <div class="sc-focus" id="sc-focus" hidden>
+        <strong>This window isn't listening.</strong>
+        Click anywhere on this page before scanning &mdash; your scans are going to another window.
     </div>
 
     <form method="post" class="sc-box" id="sc-form">
@@ -358,6 +372,22 @@ require __DIR__ . '/../_partials/factory_head.php';
     // The scanner is a keyboard: if focus wanders, the scan types into nothing.
     setInterval(function () { if (document.activeElement !== box) box.focus(); }, 700);
     document.addEventListener('click', function (e) { if (!e.target.closest('.sc-pick')) box.focus(); });
+
+    // A wedge scanner types into whatever WINDOW Windows has in front. If that
+    // isn't this one, the box having focus counts for nothing — the scan lands
+    // in another app and is gone. Warn plainly while the window is unfocused,
+    // because otherwise the page just looks like it's ignoring the scanner.
+    var focusWarn = document.getElementById('sc-focus');
+    function reflectWindowFocus() {
+        var listening = document.hasFocus();
+        if (focusWarn) focusWarn.hidden = listening;
+        box.style.opacity = listening ? '' : '0.4';
+        if (listening) box.focus();
+    }
+    window.addEventListener('focus', reflectWindowFocus);
+    window.addEventListener('blur',  reflectWindowFocus);
+    if (focusWarn) focusWarn.addEventListener('click', function () { window.focus(); box.focus(); reflectWindowFocus(); });
+    reflectWindowFocus();
 
     var banner = document.getElementById('sc-banner');
     var qbody  = document.getElementById('sc-qbody');
