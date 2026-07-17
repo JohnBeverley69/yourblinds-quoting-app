@@ -85,10 +85,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $form['roles'] = $rolesIn ?: ['sales'];
     $primaryRole   = $pickPrimary($rolesIn);
 
+    // A workstation login isn't a person — it's "Vertical Head Rail". It has no
+    // first name and no last name, and demanding them is the very "user is a
+    // person" assumption this account type exists to get away from. So the
+    // username is its name.
     $fullName = trim($form['first_name'] . ' ' . $form['last_name']);
-    if ($fullName === '') {
-        $error = 'A name is required.';
-    } elseif ($form['email'] === '' && $form['username'] === '') {
+    if ($fullName === '') $fullName = $form['username'];
+
+    if ($form['email'] === '' && $form['username'] === '') {
         $error = 'Enter an email address or a username — workshop staff can log in with just a username.';
     } elseif ($form['email'] !== '' && !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
@@ -250,16 +254,20 @@ $activeNav = 'users';
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="first_name">First name <span class="required">*</span></label>
-                        <input id="first_name" name="first_name" type="text" required maxlength="80"
+                        <label for="first_name">First name</label>
+                        <input id="first_name" name="first_name" type="text" maxlength="80"
                                value="<?= e($form['first_name']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="last_name">Last name <span class="required">*</span></label>
-                        <input id="last_name" name="last_name" type="text" required maxlength="80"
+                        <label for="last_name">Last name</label>
+                        <input id="last_name" name="last_name" type="text" maxlength="80"
                                value="<?= e($form['last_name']) ?>">
                     </div>
                 </div>
+                <p style="font-size:0.8125rem; color:#6b7280; margin:-0.5rem 0 0.9rem;">
+                    Leave both blank for a <strong>workstation</strong> — “Vertical Head Rail” isn't a person
+                    and hasn't got a surname. It'll be known by its username.
+                </p>
 
                 <div class="form-row">
                     <div class="form-group">
