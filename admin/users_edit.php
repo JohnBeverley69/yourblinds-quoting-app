@@ -138,11 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         'home_postcode' => trim((string) ($_POST['home_postcode'] ?? '')),
     ];
 
+    // A workstation login isn't a person — it's "Vertical Head Rail". No first
+    // name, no surname. The username is its name. See admin/users.php.
     $fullName = trim($first . ' ' . $last);
+    if ($fullName === '') $fullName = $uname;
 
-    if ($fullName === '') {
-        $error = 'A name is required.';
-    } elseif ($email === '' && $uname === '') {
+    if ($email === '' && $uname === '') {
         $error = 'Enter an email address or a username.';
     } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
