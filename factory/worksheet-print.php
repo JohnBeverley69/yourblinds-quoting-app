@@ -20,6 +20,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/build_eval.php';
+require __DIR__ . '/../_partials/qr.php';
 
 requireFactory();
 
@@ -187,12 +188,28 @@ foreach ($lines as $ln) {
         if (($lineVals[$ok] ?? '') === '') $lineVals[$ok] = $numTidy($uv);
     }
 
-    $rendered[] = [
-        'ctx'      => array_merge($orderVals, $lineVals),
-        'computed' => $eval['vars'],
-        'template' => $loadTemplate($pdo, $masterPid),
-        'product'  => (string) ($ln['product_name_snapshot'] ?? ''),
-    ];
+    // ONE LABEL PER PHYSICAL BLIND, not per order line. A qty-3 line is three
+    // blinds that are tracked, routed and scanned separately, so each needs its
+    // own ticket carrying its own code — a single label saying "qty 3" can't
+    // follow three blinds round three different benches.
+    $qty  = max(1, (int) $ln['quantity']);
+    $tpl  = $loadTemplate($pdo, $masterPid);
+    for ($u = 1; $u <= $qty; $u++) {
+        $unitVals = [
+            'unit'     => $qty > 1 ? $u . '/' . $qty : '',
+            'unit_no'  => (string) $u,
+            // The scannable code: 6 digits of line + 2 of unit. Stable from the
+            // moment the order is placed, so labels can print before the blind
+            // is released to the floor.
+            'qr_code'  => function_exists('qr_blind_code') ? qr_blind_code((int) $ln['id'], $u) : '',
+        ];
+        $rendered[] = [
+            'ctx'      => array_merge($orderVals, $lineVals, $unitVals),
+            'computed' => $eval['vars'],
+            'template' => $tpl,
+            'product'  => (string) ($ln['product_name_snapshot'] ?? ''),
+        ];
+    }
 }
 
 // Header template: take the first line's product template (they share the die-cut header).
@@ -229,10 +246,19 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $linesOn = (($_GET['lines'] ?? '1') !== '0');
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText): string {
+    $qrMm = $ff('qr', 20);   // roller: 102x76mm thermal, room to spare
+
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText, $qrMm): string {
         $out = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="rlbr"></span>'; continue; }
+            // A real, scannable QR of this blind's code — unlike the old
+            // "barcode" source, which only ever printed block characters.
+            if (($f['source'] ?? '') === 'qr') {
+                $code = (string) ($ctx['qr_code'] ?? '');
+                if ($code !== '') $out .= '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
+                continue;
+            }
             $t = $fieldText($f, $ctx, $computed);
             if ($t === null) continue;
             $al = (string) ($f['align'] ?? '');
@@ -263,6 +289,10 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
                       display:flex; flex-wrap:wrap; align-content:flex-start; gap:0.4mm 2.4mm; line-height:1.18;
                       font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
     .rl-label .flds span { white-space:nowrap; }
+    /* The QR is a graphic, not text — keep line-height off it or the span padding
+       eats into the quiet zone that scanners need. */
+    .rl-label .flds .qr { line-height:0; }
+    .rl-label .flds .qr svg { display:block; }
     .rl-label .flds .r { margin-left:auto; } .rl-label .flds .c { margin-left:auto; margin-right:auto; }
     .rlbr { flex:0 0 100%; height:0; }
     @media print {
@@ -335,10 +365,19 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     $ol = $linesOn ? ' dc-outline' : '';
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText): string {
+    // 12mm on the die-cut: 20% above the 10mm John proved on the real stock with
+    // a hard thumb rub, and the label is only 21mm tall. Override with ?qr=
+    $qrMm = $ff('qr', 12);
+
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText, $qrMm): string {
         $out = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="dcbr"></span>'; continue; }
+            if (($f['source'] ?? '') === 'qr') {
+                $code = (string) ($ctx['qr_code'] ?? '');
+                if ($code !== '') $out .= '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
+                continue;
+            }
             $t = $fieldText($f, $ctx, $computed);
             if ($t === null) continue;
             $al = (string) ($f['align'] ?? '');
@@ -365,6 +404,10 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .sheet { position:relative; width:210mm; height:297mm; background:#fff; margin:60px auto 40px; box-shadow:0 4px 24px rgba(0,0,0,0.4); overflow:hidden; }
     #sheet-inner { position:absolute; inset:0; }
     .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
+    /* The QR is a graphic, not text — keep line-height off it or the span padding
+       eats into the quiet zone that scanners need. */
+    .dc-label .qr { line-height:0; }
+    .dc-label .qr svg { display:block; }
     .dc-label .flds { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; line-height:1.05; }
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }

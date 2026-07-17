@@ -418,13 +418,15 @@ require __DIR__ . '/../_partials/factory_head.php';
     PRODUCT_OPTIONS.forEach(function (o) { SOURCES.push({ value: 'opt:' + o.key, label: o.label, group: 'Product options' }); });
     ORDER_FIELDS.forEach(function (f) { SOURCES.push({ value: 'order:' + f.key, label: f.label, group: 'Order detail' }); });
     SOURCES.push({ value: 'text', label: 'Free text', group: 'Extras' });
-    SOURCES.push({ value: 'barcode:order_no', label: 'Barcode (order no)', group: 'Extras' });
+    SOURCES.push({ value: 'qr', label: 'QR code (scannable)', group: 'Extras' });
+    SOURCES.push({ value: 'barcode:order_no', label: 'Barcode (order no) — decorative only', group: 'Extras' });
 
     var srcLabel = {};
     SOURCES.forEach(function (s) { srcLabel[s.value] = s.label; });
 
     function defaultCaption(src) {
         if (src === 'text') return 'Text';
+        if (src === 'qr') return '';
         if (src.indexOf('barcode:') === 0) return '';
         return srcLabel[src] || src;
     }
@@ -761,6 +763,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     // ---- Live preview (sample data) + drag-to-reorder on the label --------
     function valueFor(f) {
         if (f.source === 'text') return f.caption || '';
+        if (f.source === 'qr') return '[QR ▓▒░]';
         if (f.source.indexOf('barcode:') === 0) return '▏▎▍▌▍▎▏ ' + (SAMPLES['order:' + f.source.slice(8)] || '');
         return SAMPLES[f.source] != null ? SAMPLES[f.source] : '';
     }
