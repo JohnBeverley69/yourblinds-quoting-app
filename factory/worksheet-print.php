@@ -232,6 +232,22 @@ $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVa
     return $cap !== '' ? ($cap . ' ' . $val) : $val;
 };
 
+/**
+ * A field as HTML. Everything is escaped text EXCEPT the QR, which is a graphic
+ * — so it can't go through $fieldText, whose callers e() the result and would
+ * print the SVG source as gibberish. Every render path goes through here, so a
+ * qr field can't work on one view and silently vanish on another.
+ */
+$fieldHtml = static function (array $f, array $ctx, array $computed, float $qrMm = 12) use ($fieldText): ?string {
+    if (($f['source'] ?? '') === 'qr') {
+        $code = (string) ($ctx['qr_code'] ?? '');
+        if ($code === '') return null;
+        return '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
+    }
+    $t = $fieldText($f, $ctx, $computed);
+    return $t === null ? null : e($t);
+};
+
 // Which label stock is this worksheet on? roll-102x76 = roller single label.
 $tplStock = '';
 foreach ($rendered as $r) { if (!empty($r['template']['stock'])) { $tplStock = (string) $r['template']['stock']; break; } }
@@ -248,22 +264,16 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 
     $qrMm = $ff('qr', 20);   // roller: 102x76mm thermal, room to spare
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText, $qrMm): string {
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
         $out = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="rlbr"></span>'; continue; }
-            // A real, scannable QR of this blind's code — unlike the old
-            // "barcode" source, which only ever printed block characters.
-            if (($f['source'] ?? '') === 'qr') {
-                $code = (string) ($ctx['qr_code'] ?? '');
-                if ($code !== '') $out .= '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
-                continue;
-            }
-            $t = $fieldText($f, $ctx, $computed);
+            $t = $fieldHtml($f, $ctx, $computed, $qrMm);
             if ($t === null) continue;
             $al = (string) ($f['align'] ?? '');
             $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            $out .= '<span' . $c . '>' . e($t) . '</span>';
+            if (($f['source'] ?? '') === 'qr') { $out .= $t; continue; }   // already markup
+            $out .= '<span' . $c . '>' . $t . '</span>';
         }
         return $out;
     };
@@ -369,20 +379,16 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     // a hard thumb rub, and the label is only 21mm tall. Override with ?qr=
     $qrMm = $ff('qr', 12);
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldText, $qrMm): string {
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
         $out = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="dcbr"></span>'; continue; }
-            if (($f['source'] ?? '') === 'qr') {
-                $code = (string) ($ctx['qr_code'] ?? '');
-                if ($code !== '') $out .= '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
-                continue;
-            }
-            $t = $fieldText($f, $ctx, $computed);
+            $t = $fieldHtml($f, $ctx, $computed, $qrMm);
             if ($t === null) continue;
             $al = (string) ($f['align'] ?? '');
             $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            $out .= '<span' . $c . '>' . e($t) . '</span>';
+            if (($f['source'] ?? '') === 'qr') { $out .= $t; continue; }   // already markup
+            $out .= '<span' . $c . '>' . $t . '</span>';
         }
         return $out;
     };
@@ -505,6 +511,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .wp-bar .btn { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:0.5rem 1.1rem; background:#1f2a37; color:#fff; }
     .wp-bar .btn:hover { background:#111a24; }
     .wp-sheet { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.25rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+    /* The QR is a graphic, not text — keep line-height off it or the span padding
+       eats into the quiet zone that scanners need. */
+    .wp-sheet .qr { line-height:0; display:inline-block; }
+    .wp-sheet .qr svg { display:block; }
     .wp-header { border-bottom:2px solid #111; padding-bottom:0.6rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; gap:0.2rem 1.4rem; font-family:ui-monospace,Consolas,monospace; font-size:0.9rem; }
     .wp-line { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:0.7rem 0; border-bottom:1px dashed #d1d5db; }
     .wp-label { border:1px solid #cbd5e1; border-radius:8px; padding:0.5rem 0.7rem; }
@@ -559,7 +569,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <div class="fields">
                             <?php foreach (($lab['fields'] ?? []) as $f): ?>
                                 <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
-                                <?php $t = $fieldText($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= e($t) ?></span><?php endif; ?>
+                                <?php $t = $fieldHtml($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= $t ?></span><?php endif; ?>
                             <?php endforeach; ?>
                         </div>
                     </div>
