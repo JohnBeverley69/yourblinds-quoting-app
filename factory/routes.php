@@ -23,6 +23,13 @@ $ready = true;
 try { $pdo->query('SELECT 1 FROM factory_stations LIMIT 0'); $pdo->query('SELECT 1 FROM product_route_steps LIMIT 0'); }
 catch (Throwable $e) { $ready = false; }
 
+// Parallel streams arrive with migrate_route_streams.php — degrade quietly.
+$hasStreams = false;
+if ($ready) {
+    try { $pdo->query('SELECT stream FROM product_route_steps LIMIT 0'); $hasStreams = true; }
+    catch (Throwable $e) { /* not migrated yet */ }
+}
+
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
 
 /** Reassign 0..n order to a list of ids on the given table/column. */
@@ -71,19 +78,33 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'add_step' && $productId > 0) {
             $stationId = (int) ($_POST['station_id'] ?? 0);
             $label = trim((string) ($_POST['label'] ?? ''));
+            $stream = trim((string) ($_POST['stream'] ?? ''));
             if ($stationId > 0) {
                 $m = $pdo->prepare('SELECT COALESCE(MAX(seq),-1)+1 FROM product_route_steps WHERE product_id = ?'); $m->execute([$productId]);
-                $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, ?, ?, 1)')
-                    ->execute([$productId, (int) $m->fetchColumn(), $stationId, $label !== '' ? $label : null]);
+                $seqNext = (int) $m->fetchColumn();
+                if ($hasStreams) {
+                    $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, stream, active) VALUES (?, ?, ?, ?, ?, 1)')
+                        ->execute([$productId, $seqNext, $stationId, $label !== '' ? $label : null, $stream !== '' ? $stream : null]);
+                } else {
+                    $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, ?, ?, 1)')
+                        ->execute([$productId, $seqNext, $stationId, $label !== '' ? $label : null]);
+                }
             }
         } elseif ($action === 'remove_step') {
             $pdo->prepare('DELETE FROM product_route_steps WHERE id = ? AND product_id = ?')->execute([(int) $_POST['step_id'], $productId]);
         } elseif ($action === 'rename_step' && $productId > 0) {
-            // The stage label is what the floor strip shows, so it's worth being
-            // able to word it the way the workshop actually talks.
-            $label = trim((string) ($_POST['label'] ?? ''));
-            $pdo->prepare('UPDATE product_route_steps SET label = ? WHERE id = ? AND product_id = ?')
-                ->execute([$label !== '' ? $label : null, (int) $_POST['step_id'], $productId]);
+            // The label is what the floor strip shows, so it's worth wording it
+            // the way the workshop talks. The stream decides what runs alongside
+            // what: same stream = in order, different streams = independent.
+            $label  = trim((string) ($_POST['label'] ?? ''));
+            $stream = trim((string) ($_POST['stream'] ?? ''));
+            if ($hasStreams) {
+                $pdo->prepare('UPDATE product_route_steps SET label = ?, stream = ? WHERE id = ? AND product_id = ?')
+                    ->execute([$label !== '' ? $label : null, $stream !== '' ? $stream : null, (int) $_POST['step_id'], $productId]);
+            } else {
+                $pdo->prepare('UPDATE product_route_steps SET label = ? WHERE id = ? AND product_id = ?')
+                    ->execute([$label !== '' ? $label : null, (int) $_POST['step_id'], $productId]);
+            }
         } elseif ($action === 'set_lead' && $productId > 0) {
             dd_set_lead_days($pdo, $productId, (int) ($_POST['lead_days'] ?? 0));
             $_SESSION['flash_success'] = 'Production time saved — it applies to orders placed from now on. Orders already placed keep the date they were promised.';
@@ -110,10 +131,11 @@ if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
 
 $steps = [];
 if ($ready && $productId > 0) {
+    $streamSel = $hasStreams ? "COALESCE(NULLIF(rs.stream,''),'main') AS stream" : "'main' AS stream";
     $st = $pdo->prepare(
-        'SELECT rs.id, rs.label, s.name AS station, s.is_outsourced
+        "SELECT rs.id, rs.label, $streamSel, s.name AS station, s.is_outsourced
            FROM product_route_steps rs JOIN factory_stations s ON s.id = rs.station_id
-          WHERE rs.product_id = ? ORDER BY rs.seq, rs.id'
+          WHERE rs.product_id = ? ORDER BY rs.seq, rs.id"
     );
     $st->execute([$productId]);
     $steps = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -153,7 +175,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 </style>
 
 <h1 style="font-size:1.5rem;margin:0 0 .3rem;">Routes &amp; Stations</h1>
-<p class="rt-sub">The machines &amp; benches on the floor, and the run of stages each product passes through. Edit any of it, any time.</p>
+<p class="rt-sub">The machines &amp; benches on the floor, and the run of stages each product passes through. Edit any of it, any time.<?php if ($hasStreams): ?> Stages in the same <strong>stream</strong> run in order; different streams run alongside each other and imply nothing about one another &mdash; that's how the vertical's headrail and fabric are tracked separately.<?php endif; ?></p>
 
 <?php if ($flashOk !== ''): ?><div class="rt-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="rt-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -216,9 +238,12 @@ require __DIR__ . '/../_partials/factory_head.php';
       <div class="step-row">
         <span class="seq"><?= $i + 1 ?></span>
         <span class="step-station"><?= e((string) $st['station']) ?><?php if ((int) $st['is_outsourced'] === 1): ?> <span class="pill out">buy-in</span><?php endif; ?></span>
-        <form method="post" class="inline" style="flex:1;display:flex">
+        <form method="post" class="inline" style="flex:1;display:flex;gap:.3rem">
           <?= csrf_field() ?><input type="hidden" name="_action" value="rename_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>">
           <input type="text" name="label" value="<?= e((string) ($st['label'] ?? '')) ?>" placeholder="what happens here (optional)" onchange="this.form.submit()" style="flex:1" title="This is what the workshop reads on the floor — name the job, e.g. &quot;sew or weld&quot;.">
+          <?php if ($hasStreams): ?>
+            <input type="text" name="stream" value="<?= e((string) $st['stream']) ?>" placeholder="main" onchange="this.form.submit()" style="flex:0 0 6rem" title="Stages sharing a stream run in order. Different streams run alongside each other and mean nothing to one another — the vertical's Headrail and Fabric. Leave as 'main' for a single line.">
+          <?php endif; ?>
         </form>
         <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="move_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>"><button class="mv" name="dir" value="up">▲</button><button class="mv" name="dir" value="down">▼</button></form>
         <form method="post" class="inline" onsubmit="return confirm('Remove this stage?')"><?= csrf_field() ?><input type="hidden" name="_action" value="remove_step"><input type="hidden" name="product_id" value="<?= $productId ?>"><input type="hidden" name="step_id" value="<?= (int) $st['id'] ?>"><button class="btn ghost mini">✕</button></form>
@@ -232,6 +257,9 @@ require __DIR__ . '/../_partials/factory_head.php';
         <?php foreach ($activeStations as $s): ?><option value="<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></option><?php endforeach; ?>
       </select>
       <input type="text" name="label" placeholder="operation (optional, e.g. tube cut)" style="flex:1;min-width:9rem">
+      <?php if ($hasStreams): ?>
+        <input type="text" name="stream" placeholder="stream (main)" style="flex:0 0 7rem" title="Which stream this stage belongs to. Leave blank for a single line.">
+      <?php endif; ?>
       <button class="btn">Add stage</button>
     </form>
   </div>

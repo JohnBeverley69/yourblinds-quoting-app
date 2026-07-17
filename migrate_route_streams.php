@@ -81,7 +81,37 @@ if (!$tableExists('factory_blind_streams')) {
     echo "  factory_blind_streams already exists — skipped.\n";
 }
 
-// ---- 3. Backfill ----------------------------------------------------------
+// ---- 3. Repair positions that no longer fit the route ---------------------
+// A route can be re-streamed after blinds are already on the floor — which is
+// exactly what happens the first time round: this migration runs (everything is
+// one 'main' stream), then seed_factory_routes splits the vertical into Headrail
+// + Fabric, and every existing position is suddenly in a stream its route no
+// longer has. Same if the seed re-cuts the steps and their ids change.
+//
+// A position like that can't be mapped onto the new shape, so drop it and let
+// the backfill below re-open the stream at its first stage. That's the honest
+// outcome: re-streaming a route resets where things are, rather than inventing
+// a position. Left alone, a stale row would also block the blind ever counting
+// as made, since a blind is only made when ALL its streams are done.
+//
+// Guarded on the product actually having a route, so a legitimately unrouted
+// blind (station NULL) isn't swept away.
+$cleared = $pdo->exec(
+    "DELETE s FROM factory_blind_streams s
+       JOIN factory_blind_jobs j ON j.id = s.blind_job_id
+      WHERE EXISTS (SELECT 1 FROM product_route_steps rs
+                     WHERE rs.product_id = j.product_id AND rs.active = 1)
+        AND (
+              NOT EXISTS (SELECT 1 FROM product_route_steps rs
+                           WHERE rs.product_id = j.product_id AND rs.active = 1
+                             AND COALESCE(NULLIF(rs.stream, ''), 'main') = s.stream)
+           OR (s.route_step_id IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM product_route_steps rs WHERE rs.id = s.route_step_id))
+        )"
+);
+if ($cleared > 0) echo "  Cleared {$cleared} position(s) that no longer match their route.\n";
+
+// ---- 4. Backfill ----------------------------------------------------------
 // Carry each blind's existing single pointer into the stream it belongs to,
 // then open every other stream its product has at that stream's first stage.
 $jobs = $pdo->query(
@@ -142,6 +172,8 @@ foreach ($jobs as $j) {
         $made++;
     }
 }
-echo "\n  Backfilled {$made} stream position(s) across " . count($jobs) . " blind(s).\n";
-echo "\nDone. Now run /seed_factory_routes.php to split the vertical's route into\n";
-echo "its Headrail and Fabric streams (it leaves roller + pleated as one line).\n";
+echo "\n  Opened {$made} stream position(s) across " . count($jobs) . " blind(s).\n";
+echo "\nDone. If you haven't yet, run /seed_factory_routes.php to split the\n";
+echo "vertical's route into its Headrail and Fabric streams (roller + pleated\n";
+echo "stay as one line) — then run THIS script once more, so blinds already on\n";
+echo "the floor pick up the streams the new route gave them.\n";
