@@ -177,27 +177,51 @@ require __DIR__ . '/../_partials/factory_head.php';
   .sc-q tr:last-child td { border-bottom:none; }
   .sc-ref { font-weight:700; font-variant-numeric:tabular-nums; }
   .sc-empty { background:var(--bg-subtle,#f8fafc); border:1px dashed var(--border,#e5e7eb); border-radius:12px; padding:2rem; text-align:center; color:var(--text-faint,#94a3b8); }
+
+  .sc-nobench { max-width:44rem; }
+  .sc-nobench h1 { font-size:1.4rem; margin:0 0 .4rem; }
+  .sc-nobench p { color:var(--text-muted,#667); margin:.35rem 0; line-height:1.5; }
+  .sc-warn { background:#fef3c7; border:1px solid #fde68a; color:#92400e; border-radius:12px; padding:.9rem 1.1rem; margin:0 0 1.2rem; font-size:1rem; line-height:1.5; }
+  .sc-warn strong { display:block; font-size:1.15rem; margin-bottom:.2rem; }
+  .sc-warn.caught { background:#b91c1c; border-color:#b91c1c; color:#fff; }
+  .sc-warn.caught strong { font-size:1.4rem; }
+  .sc-benches { display:flex; flex-wrap:wrap; gap:.5rem; margin:.2rem 0 0; }
+  .sc-benches a { display:inline-block; padding:.55rem 1rem; background:#1f2a37; color:#fff; border-radius:10px;
+      text-decoration:none; font-weight:600; font-size:1rem; }
+  .sc-benches a:hover { background:#111a24; }
 </style>
 
 <?php if ($stationId === null): ?>
-    <div class="sc-empty" style="text-align:left">
-        <h1 style="margin:0 0 .5rem;font-size:1.3rem;color:var(--text-body,#111)">This login isn't a bench</h1>
-        <p style="margin:0 0 .8rem">A bench login <em>is</em> a station — the PC stays signed in as “Safety Saw” and whoever's stood at it uses it. Set the <strong>Bench</strong> on the account in Admin &rarr; Users.</p>
+    <!-- This page CANNOT take a scan: without a bench there's nothing to mark
+         done. Say so loudly and catch a scan that lands here, rather than
+         swallowing it silently and leaving someone thinking the system's broken. -->
+    <div class="sc-nobench">
+        <div class="sc-warn" id="sc-warn">
+            <strong>Don't scan yet — pick your bench below first.</strong>
+            This page can't take a scan: until it knows which bench you're at, it can't tell
+            what to mark done.
+        </div>
+
+        <h1>Which bench is this?</h1>
+        <p>A bench login <em>is</em> a station — the PC stays signed in as “Safety Saw” and
+           whoever's stood at it uses it. Set the <strong>Bench</strong> on the account in
+           <a href="/admin/users.php">Admin &rarr; Users</a> and it'll come straight here, and this
+           screen will never appear again.</p>
         <?php if ($stations): ?>
-            <p style="margin:0">Or pick one to try it out:</p>
-            <p style="margin:.5rem 0 0">
+            <p style="margin:.2rem 0 .6rem">Meanwhile, pick one — this PC will remember it:</p>
+            <div class="sc-benches">
                 <?php foreach ($stations as $s): ?>
-                    <a class="btn" style="display:inline-block;margin:.2rem .3rem .2rem 0;padding:.35rem .7rem;background:#eef2f6;color:#334155;border-radius:8px;text-decoration:none"
-                       href="/factory/scan.php?station_id=<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></a>
+                    <a href="/factory/scan.php?station_id=<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></a>
                 <?php endforeach; ?>
-            </p>
+            </div>
         <?php endif; ?>
     </div>
 <?php else: ?>
 
     <div class="sc-head">
         <h1 class="sc-bench"><?= e((string) $station['name']) ?></h1>
-        <p class="sc-sub"><?= count($queue) ?> waiting<?= $picked > 0 ? ' · previewing as super-admin' : '' ?></p>
+        <p class="sc-sub"><?= count($queue) ?> waiting<?php if ($picked > 0): ?>
+            &middot; not a bench login &mdash; <a href="#" id="sc-change">change bench</a><?php endif; ?></p>
     </div>
 
     <?php if ($result !== null): ?>
@@ -239,6 +263,49 @@ require __DIR__ . '/../_partials/factory_head.php';
 
 <script>
 (function () {
+    // ---- The bench picker ------------------------------------------------
+    // Nothing here can accept a scan, so catch one landing on this page and say
+    // why rather than swallowing it. A wedge scanner is just a keyboard: without
+    // this, the characters go nowhere and it looks like the system is broken.
+    var warn = document.getElementById('sc-warn');
+    if (warn) {
+        var buf = '', last = 0;
+        document.addEventListener('keydown', function (e) {
+            var now = Date.now();
+            if (now - last > 120) buf = '';        // a human typing, not a scanner burst
+            last = now;
+            if (e.key && e.key.length === 1) { buf += e.key; return; }
+            if (e.key === 'Enter' && buf.length >= 4) {
+                var code = buf; buf = '';
+                warn.className = 'sc-warn caught';
+                warn.innerHTML = '<strong>That scan did nothing — ' + code.replace(/[<>&]/g, '') + '</strong>'
+                    + 'This page isn\'t a bench, so there\'s nothing to mark done. Pick your bench below, '
+                    + 'then scan again.';
+                warn.scrollIntoView({ block: 'center' });
+            }
+        });
+        // Remember the bench per PC, so this screen is a one-off even without a
+        // bench login. "change bench" on the scan page clears it.
+        document.querySelectorAll('.sc-benches a').forEach(function (a) {
+            a.addEventListener('click', function () {
+                try { localStorage.setItem('factoryBench', a.href.match(/station_id=(\d+)/)[1]); } catch (e) {}
+            });
+        });
+        try {
+            var remembered = localStorage.getItem('factoryBench');
+            if (remembered && !/no_auto/.test(location.search)) location.replace('/factory/scan.php?station_id=' + remembered);
+        } catch (e) {}
+        return;
+    }
+
+    // ---- The bench itself -------------------------------------------------
+    var change = document.getElementById('sc-change');
+    if (change) change.addEventListener('click', function (e) {
+        e.preventDefault();
+        try { localStorage.removeItem('factoryBench'); } catch (err) {}
+        location.href = '/factory/scan.php?no_auto=1';
+    });
+
     var box = document.getElementById('sc-code'), form = document.getElementById('sc-form');
     if (!box || !form) return;
 
