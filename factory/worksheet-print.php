@@ -301,8 +301,13 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds span { white-space:nowrap; }
     /* The QR is a graphic, not text — keep line-height off it or the span padding
        eats into the quiet zone that scanners need. */
-    .rl-label .flds .qr { line-height:0; }
+    /* The QR is a graphic, not a word — pin it to the bottom-right corner rather
+       than letting it flow along with the text and land wherever. The matching
+       padding reserves that corner so words can't run under it and eat the quiet
+       zone the scanner needs. */
+    .rl-label .flds .qr { line-height:0; position:absolute; right:3mm; bottom:2.5mm; }
     .rl-label .flds .qr svg { display:block; }
+    .rl-label .flds:has(.qr) { padding-right:<?= $mm($qrMm + 4) ?>mm; }
     .rl-label .flds .r { margin-left:auto; } .rl-label .flds .c { margin-left:auto; margin-right:auto; }
     .rlbr { flex:0 0 100%; height:0; }
     @media print {
@@ -412,8 +417,12 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
     /* The QR is a graphic, not text — keep line-height off it or the span padding
        eats into the quiet zone that scanners need. */
-    .dc-label .qr { line-height:0; }
+    /* Pinned to the corner, with the corner reserved — see the roll label above.
+       On a 21mm ticket a QR flowing with the text would shove lines off the
+       label entirely. */
+    .dc-label .qr { line-height:0; position:absolute; right:1.2mm; bottom:0.8mm; }
     .dc-label .qr svg { display:block; }
+    .dc-label:has(.qr) .flds { padding-right:<?= $mm($qrMm + 1.5) ?>mm; }
     .dc-label .flds { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; line-height:1.05; }
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
@@ -511,13 +520,14 @@ require __DIR__ . '/../_partials/factory_head.php';
     .wp-bar .btn { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:0.5rem 1.1rem; background:#1f2a37; color:#fff; }
     .wp-bar .btn:hover { background:#111a24; }
     .wp-sheet { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.25rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
-    /* The QR is a graphic, not text — keep line-height off it or the span padding
-       eats into the quiet zone that scanners need. */
-    .wp-sheet .qr { line-height:0; display:inline-block; }
+    /* Bottom-right corner, same as the real prints — see the label CSS below.
+       Reserve the corner so text can't run under it. */
+    .wp-sheet .qr { line-height:0; display:inline-block; position:absolute; right:0.6rem; bottom:0.6rem; }
     .wp-sheet .qr svg { display:block; }
+    .wp-label:has(.qr) .fields { padding-right:15mm; }
     .wp-header { border-bottom:2px solid #111; padding-bottom:0.6rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; gap:0.2rem 1.4rem; font-family:ui-monospace,Consolas,monospace; font-size:0.9rem; }
     .wp-line { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:0.7rem 0; border-bottom:1px dashed #d1d5db; }
-    .wp-label { border:1px solid #cbd5e1; border-radius:8px; padding:0.5rem 0.7rem; }
+    .wp-label { border:1px solid #cbd5e1; border-radius:8px; padding:0.5rem 0.7rem; position:relative; }
     .wp-label .lt { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8; margin-bottom:0.3rem; font-weight:600; }
     .wp-label .fields { font-family:ui-monospace,Consolas,monospace; font-size:0.82rem; line-height:1.6; display:flex; flex-wrap:wrap; gap:0.1rem 0.7rem; }
     .wp-break { flex:0 0 100%; height:0; }
