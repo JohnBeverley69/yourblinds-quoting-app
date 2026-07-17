@@ -145,25 +145,40 @@ $handleScan = function (string $scanned) use ($pdo, $mine, $processName, $advanc
     return $advance((int) reset($can)['id']);
 };
 
-// POST -> handle -> redirect, so a refresh can't replay a scan.
+// A scan must NOT reload the page. The workshop scans back to back, and a full
+// reload leaves ~half a second where the page is being torn down — a scan in
+// that window types into a dying document and is silently lost. So the browser
+// posts this in the background and we hand back JSON; the page never goes away
+// and the box is ready for the next trigger pull immediately.
+//
+// The plain (non-ajax) path is kept for no-JS and for the stream-choice buttons:
+// POST -> redirect -> GET, so a refresh can't replay a scan.
+$isAjax = !empty($_POST['_ajax']);
+$result = null;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     try {
         if (($_POST['_action'] ?? '') === 'pick' && (int) ($_POST['stream_id'] ?? 0) > 0) {
-            $_SESSION['scan_result'] = $advance((int) $_POST['stream_id']);
+            $result = $advance((int) $_POST['stream_id']);
         } else {
             $code = (string) ($_POST['code'] ?? '');
-            if (trim($code) !== '') $_SESSION['scan_result'] = $handleScan($code);
+            if (trim($code) !== '') $result = $handleScan($code);
         }
     } catch (Throwable $e) {
-        $_SESSION['scan_result'] = ['ok' => false, 'title' => 'Error', 'detail' => $e->getMessage()];
+        $result = ['ok' => false, 'title' => 'Error', 'detail' => $e->getMessage()];
     }
-    header('Location: /factory/scan.php');
-    exit;
+    if (!$isAjax) {
+        if ($result !== null) $_SESSION['scan_result'] = $result;
+        header('Location: /factory/scan.php');
+        exit;
+    }
 }
 
-$result = $_SESSION['scan_result'] ?? null;
-unset($_SESSION['scan_result']);
+if ($result === null) {
+    $result = $_SESSION['scan_result'] ?? null;
+    unset($_SESSION['scan_result']);
+}
 
 // This workstation's work: every live stream of every blind whose process we do.
 $queue = [];
@@ -191,6 +206,28 @@ $fmtDate = static function (?string $d): string {
     if (!$d) return '';
     try { return (new DateTimeImmutable($d))->format('j M'); } catch (Throwable $e) { return (string) $d; }
 };
+
+/** One queue row as the page (and the JSON) present it. */
+$rowOf = static function (array $r) use ($fmtDate): array {
+    $qty = max(1, (int) $r['quantity']);
+    return [
+        'ref'   => (string) $r['quote_number'] . '-' . (int) $r['line_no'] . '-(' . (int) $r['unit_no'] . '/' . $qty . ')',
+        'blind' => (string) $r['product_name_snapshot'],
+        'size'  => (int) $r['width_mm'] . ' × ' . (int) $r['drop_mm'],
+        'room'  => (string) $r['room_name'],
+        'stage' => (string) ($r['stage'] ?? ''),
+        'due'   => $fmtDate($r['due_date'] ?? null),
+    ];
+};
+
+// Background scan: hand back the outcome and the refreshed queue, and let the
+// page update itself in place. No reload, so no window in which a scan is lost.
+if ($isAjax) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['result' => $result, 'rows' => array_map($rowOf, $queue)]);
+    exit;
+}
 
 $factoryTitle = 'Scan';
 $factoryNav   = 'scan';
@@ -246,11 +283,12 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     <div class="sc-head">
         <h1 class="sc-bench"><?= e(implode(' · ', array_map(static fn ($w) => $processName((int) $w['product_id'], (string) $w['stream']), $mine))) ?></h1>
-        <p class="sc-sub"><?= count($queue) ?> waiting</p>
+        <p class="sc-sub" id="sc-count"><?= count($queue) ?> waiting</p>
     </div>
 
-    <?php if ($result !== null): ?>
-        <div class="sc-banner <?= !empty($result['choices']) ? 'ask' : ($result['ok'] ? 'ok' : 'bad') ?>">
+    <div class="sc-banner <?= !empty($result['choices']) ? 'ask' : (($result && $result['ok']) ? 'ok' : 'bad') ?>"
+         id="sc-banner" <?= $result === null ? 'hidden' : '' ?>>
+        <?php if ($result !== null): ?>
             <div class="t"><?= !empty($result['choices']) ? '' : ($result['ok'] ? '✓ ' : '✕ ') ?><?= e((string) $result['title']) ?></div>
             <div class="d"><?= e((string) $result['detail']) ?></div>
             <?php if (!empty($result['choices'])): ?>
@@ -263,8 +301,8 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <?php endforeach; ?>
                 </form>
             <?php endif; ?>
-        </div>
-    <?php endif; ?>
+        <?php endif; ?>
+    </div>
 
     <form method="post" class="sc-box" id="sc-form">
         <?= csrf_field() ?>
@@ -272,28 +310,22 @@ require __DIR__ . '/../_partials/factory_head.php';
         <span class="hint">Scan a blind to move it on one stage.</span>
     </form>
 
-    <?php if (!$queue): ?>
-        <div class="sc-empty">Nothing waiting.</div>
-    <?php else: ?>
-        <table class="sc-q">
-            <thead><tr><th>Job ref</th><th>Blind</th><th>Size</th><th>Room</th><th>Doing</th><th>Due</th></tr></thead>
-            <tbody>
-            <?php foreach ($queue as $r):
-                $qty = max(1, (int) $r['quantity']);
-                $ref = (string) $r['quote_number'] . '-' . (int) $r['line_no'] . '-(' . (int) $r['unit_no'] . '/' . $qty . ')';
-            ?>
-                <tr>
-                    <td class="sc-ref"><?= e($ref) ?></td>
-                    <td><?= e((string) $r['product_name_snapshot']) ?></td>
-                    <td><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
-                    <td><?= e((string) $r['room_name']) ?></td>
-                    <td><span class="sc-stage"><?= e((string) ($r['stage'] ?? '')) ?></span></td>
-                    <td><?= e($fmtDate($r['due_date'] ?? null)) ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+    <div class="sc-empty" id="sc-qempty" <?= $queue ? 'hidden' : '' ?>>Nothing waiting.</div>
+    <table class="sc-q" id="sc-qwrap" <?= $queue ? '' : 'hidden' ?>>
+        <thead><tr><th>Job ref</th><th>Blind</th><th>Size</th><th>Room</th><th>Doing</th><th>Due</th></tr></thead>
+        <tbody id="sc-qbody">
+        <?php foreach ($queue as $r): $row = $rowOf($r); ?>
+            <tr>
+                <td class="sc-ref"><?= e($row['ref']) ?></td>
+                <td><?= e($row['blind']) ?></td>
+                <td><?= e($row['size']) ?></td>
+                <td><?= e($row['room']) ?></td>
+                <td><span class="sc-stage"><?= e($row['stage']) ?></span></td>
+                <td><?= e($row['due']) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
 
 <?php endif; ?>
 
@@ -321,17 +353,70 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     var box = document.getElementById('sc-code'), form = document.getElementById('sc-form');
     if (!box || !form) return;
+    var TOKEN = <?= json_encode(csrf_token()) ?>;
 
     // The scanner is a keyboard: if focus wanders, the scan types into nothing.
     setInterval(function () { if (document.activeElement !== box) box.focus(); }, 700);
     document.addEventListener('click', function (e) { if (!e.target.closest('.sc-pick')) box.focus(); });
 
+    var banner = document.getElementById('sc-banner');
+    var qbody  = document.getElementById('sc-qbody');
+    var qwrap  = document.getElementById('sc-qwrap');
+    var qempty = document.getElementById('sc-qempty');
+    var count  = document.getElementById('sc-count');
+    var esc    = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+
+    function paint(r, rows) {
+        if (banner && r) {
+            var ask = r.choices && r.choices.length;
+            banner.className = 'sc-banner ' + (ask ? 'ask' : (r.ok ? 'ok' : 'bad'));
+            var h = '<div class="t">' + (ask ? '' : (r.ok ? '✓ ' : '✕ ')) + esc(r.title) + '</div>'
+                  + '<div class="d">' + esc(r.detail) + '</div>';
+            if (ask) {
+                h += '<form method="post" class="sc-pick">'
+                   + '<input type="hidden" name="_csrf" value="' + esc(TOKEN) + '">'
+                   + '<input type="hidden" name="_action" value="pick">';
+                r.choices.forEach(function (c) {
+                    h += '<button name="stream_id" value="' + esc(c.stream_id) + '">' + esc(c.stream) + ' — ' + esc(c.stage) + '</button>';
+                });
+                h += '</form>';
+            }
+            banner.innerHTML = h;
+            banner.hidden = false;
+        }
+        if (qbody && rows) {
+            qbody.innerHTML = rows.map(function (r) {
+                return '<tr><td class="sc-ref">' + esc(r.ref) + '</td><td>' + esc(r.blind) + '</td><td>' + esc(r.size)
+                     + '</td><td>' + esc(r.room) + '</td><td><span class="sc-stage">' + esc(r.stage)
+                     + '</span></td><td>' + esc(r.due) + '</td></tr>';
+            }).join('');
+            if (qwrap)  qwrap.hidden  = rows.length === 0;
+            if (qempty) qempty.hidden = rows.length !== 0;
+            if (count)  count.textContent = rows.length + ' waiting';
+        }
+    }
+
     var sent = false;
     function go() {
         if (sent) return;
-        if (!/^\d{8,9}$/.test(box.value.trim())) return;   // only a real code
+        var code = box.value.trim();
+        if (!/^\d{8,9}$/.test(code)) return;   // only a real code
         sent = true;
-        form.submit();
+        var body = new URLSearchParams({ _csrf: TOKEN, code: code, _ajax: '1' });
+        fetch('/factory/scan.php', { method: 'POST', body: body, headers: {'Content-Type':'application/x-www-form-urlencoded'} })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                box.value = '';
+                sent = false;
+                box.focus();
+                if (j) paint(j.result, j.rows);
+            })
+            .catch(function () {
+                // Never swallow a scan silently — if the post failed, say so, or
+                // the workshop scans on believing it landed.
+                box.value = ''; sent = false; box.focus();
+                paint({ ok: false, title: 'Scan not saved', detail: 'No answer from the server — scan it again.' }, null);
+            });
     }
 
     // DON'T depend on the scanner's Enter. A terminator is a setting, and a
@@ -347,12 +432,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         idle = setTimeout(go, 120);          // ~10x slower than the scanner, ~2x faster than typing
     });
 
-    // Enter still works, whether the scanner sends one or two. LF & CR sends it
-    // TWICE — submitting on the raw event would fire the form twice and advance
-    // the blind two stages, so the guard above matters either way.
+    // Enter still works, whether the scanner sends one or two — but it goes
+    // through the same background post, never a page reload. LF & CR sends
+    // Enter TWICE; the second lands while the first is in flight and is dropped
+    // by the sent guard, so a blind can't advance two stages off one pull.
     form.addEventListener('submit', function (e) {
-        if (sent || box.value.trim() === '') { e.preventDefault(); return; }
-        sent = true;
+        e.preventDefault();
+        clearTimeout(idle);
+        go();
     });
 })();
 </script>
