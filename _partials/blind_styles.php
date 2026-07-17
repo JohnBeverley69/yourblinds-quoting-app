@@ -21,6 +21,9 @@
   /* One row per blind. */
   .fl-tw { border:1px solid var(--border,#e5e7eb); border-radius:12px; background:var(--bg-card,#fff); overflow-x:auto; box-shadow:0 1px 2px rgba(0,0,0,.04); }
   .fl-tbl { width:100%; border-collapse:collapse; }
+  /* Hand any spare width to the stage strip. Otherwise the table shares it out
+     and leaves Job ref / Size / Due adrift in the middle of oversized columns. */
+  .fl-tbl th:last-child, .fl-tbl td:last-child { width:100%; }
   .fl-tbl th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint,#94a3b8); font-weight:700; padding:.5rem .7rem; background:var(--bg-subtle,#f8fafc); border-bottom:1px solid var(--border,#e5e7eb); white-space:nowrap; position:sticky; top:0; z-index:2; }
   .fl-tbl td { padding:.45rem .7rem; border-bottom:1px solid var(--border,#eef1f5); font-size:.875rem; vertical-align:middle; }
   .fl-tbl tr:last-child td { border-bottom:none; }

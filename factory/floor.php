@@ -92,6 +92,7 @@ $dueTag = static function (?string $due, bool $done) use ($today, $fmtDate): arr
 
 $factoryTitle = 'Production Floor';
 $factoryNav   = 'floor';
+$factoryWide  = true;   // the stage strip needs the whole monitor, not 1200px
 require __DIR__ . '/../_partials/factory_head.php';
 require __DIR__ . '/../_partials/blind_styles.php';
 $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');

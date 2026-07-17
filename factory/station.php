@@ -55,6 +55,7 @@ if ($ready && $stationId > 0) {
 
 $factoryTitle = $station ? (string) $station['name'] : 'Station';
 $factoryNav   = 'floor';
+$factoryWide  = true;   // bench view: more cards across a big screen, fewer scrolls
 require __DIR__ . '/../_partials/factory_head.php';
 require __DIR__ . '/../_partials/blind_styles.php';
 require __DIR__ . '/../_partials/blind_card.php';
