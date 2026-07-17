@@ -18,8 +18,24 @@ $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 // 'factory' (production back-office) is only offered on the Beverley factory
 // account itself — requireFactory() also scopes access to that client, so the
 // role is meaningless (and hidden) on tenant accounts.
-if (function_exists('factory_client_id') && (int) $clientId === factory_client_id()) {
+$isFactoryAccount = function_exists('factory_client_id') && (int) $clientId === factory_client_id();
+if ($isFactoryAccount) {
     $validRoles[] = 'factory';
+}
+
+// Benches, for a workshop login that IS a station rather than a person. Offered
+// right here on the create form, because that's when these accounts get made —
+// having to create the user and then go and edit it is exactly the sort of
+// two-step that gets forgotten, leaving a bench login stranded on the office
+// order list. Null = don't offer it (not the factory account, or not migrated).
+$factoryStations = null;
+if ($isFactoryAccount) {
+    try {
+        db()->query('SELECT factory_station_id FROM client_users LIMIT 0');
+        $s = db()->prepare('SELECT id, name FROM factory_stations WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+        $s->execute([$clientId]);
+        $factoryStations = $s->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $factoryStations = null; }
 }
 $rolePriority = array_flip($validRoles);
 $pickPrimary = static function (array $roles) use ($rolePriority): string {
@@ -34,6 +50,7 @@ $form = [
     'last_name'  => '',
     'username'   => '',
     'email'      => '',
+    'factory_station_id' => 0,
     'roles'      => ['sales'],
     'can_create_quotes'          => 1,
     'can_create_orders'          => 0,
@@ -52,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
+    $form['factory_station_id'] = (int) ($_POST['factory_station_id'] ?? 0);
     $password = (string) ($_POST['password'] ?? '');
 
     // Multi-role checkbox group. Filter to known roles, dedupe.
@@ -77,15 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $pdo = db();
         $pdo->beginTransaction();
         try {
+            $stationCol = $factoryStations !== null ? ', factory_station_id' : '';
+            $stationVal = $factoryStations !== null ? ', ?' : '';
             $stmt = $pdo->prepare(
-                'INSERT INTO client_users
+                "INSERT INTO client_users
                   (client_id, username, full_name, first_name, last_name,
                    email, password_hash, role,
                    can_create_quotes, can_create_orders,
-                   can_view_all_customer_jobs, can_view_costs, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                   can_view_all_customer_jobs, can_view_costs, active{$stationCol})
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1{$stationVal})"
             );
-            $stmt->execute([
+            $params = [
                 $clientId,
                 $form['username'] !== '' ? $form['username'] : null,
                 $fullName,
@@ -98,7 +118,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $form['can_create_orders'],
                 $form['can_view_all_customer_jobs'],
                 $form['can_view_costs'],
-            ]);
+            ];
+            if ($factoryStations !== null) {
+                $params[] = ((int) $form['factory_station_id']) > 0 ? (int) $form['factory_station_id'] : null;
+            }
+            $stmt->execute($params);
             $newUserId = (int) $pdo->lastInsertId();
             $insRole = $pdo->prepare(
                 'INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)'
@@ -258,6 +282,28 @@ $activeNav = 'users';
                         </div>
                     </div>
                 </div>
+
+                <?php if ($factoryStations !== null): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="factory_station_id">Bench</label>
+                        <select id="factory_station_id" name="factory_station_id">
+                            <option value="">Not a bench login — lands on Incoming Orders</option>
+                            <?php foreach ($factoryStations as $s): ?>
+                                <option value="<?= (int) $s['id'] ?>" <?= (int) $form['factory_station_id'] === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            For a workshop login that <em>is</em> a bench rather than a person —
+                            username the station, and whoever's stood at it uses it. It logs
+                            straight into that bench's queue instead of the office order list.
+                            Needs the <strong>Factory</strong> role ticked above.
+                        </p>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">
