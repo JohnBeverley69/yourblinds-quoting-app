@@ -32,7 +32,41 @@ require_once __DIR__ . '/../_lib/qrcode/autoload.php';
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Common\Mode;
 use chillerlan\QRCode\Output\QROutputInterface;
+
+/**
+ * The encoded matrix for a payload.
+ *
+ * BEWARE: QRCode::getQRMatrix() takes NO ARGUMENTS — it encodes the segments
+ * you have already added. Passing the payload to it does nothing (PHP silently
+ * drops the extra argument) and you get a valid-looking QR of an EMPTY string,
+ * identical for every input. That shipped once and cost a day of blaming the
+ * scanner. Data must be added first, exactly as QRCode::render() does it.
+ */
+function qr_matrix(string $payload, string $ecc = 'Q')
+{
+    static $cache = [];
+    $key = $payload . '|' . $ecc;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $levels = ['L' => EccLevel::L, 'M' => EccLevel::M, 'Q' => EccLevel::Q, 'H' => EccLevel::H];
+    $qr = new QRCode(new QROptions([
+        'version'       => QRCode::VERSION_AUTO,
+        'eccLevel'      => $levels[strtoupper($ecc)] ?? EccLevel::Q,
+        'outputType'    => QROutputInterface::CUSTOM,
+        'quietzoneSize' => 4,        // mandated by the spec — scanners need it
+    ]));
+
+    // Same mode detection render() uses: numeric for our digits, byte for a URL.
+    $added = false;
+    foreach (Mode::INTERFACES as $iface) {
+        if ($iface::validateString($payload)) { $qr->addSegment(new $iface($payload)); $added = true; break; }
+    }
+    if (!$added) $qr->addByteSegment($payload);
+
+    return $cache[$key] = $qr->getQRMatrix();
+}
 
 /**
  * A blind's scannable code: 8 digits, zero-padded — 6 for the order line and
@@ -68,20 +102,7 @@ function qr_parse_code(string $scanned): ?array
  */
 function qr_svg(string $payload, float $mm, string $ecc = 'Q'): string
 {
-    static $cache = [];
-    $key = $payload . '|' . $ecc;
-
-    if (!isset($cache[$key])) {
-        $levels = ['L' => EccLevel::L, 'M' => EccLevel::M, 'Q' => EccLevel::Q, 'H' => EccLevel::H];
-        $opts = new QROptions([
-            'version'         => QRCode::VERSION_AUTO,
-            'eccLevel'        => $levels[strtoupper($ecc)] ?? EccLevel::Q,
-            'outputType'      => QROutputInterface::CUSTOM,
-            'quietzoneSize'   => 4,        // mandated by the spec — scanners need it
-        ]);
-        $cache[$key] = (new QRCode($opts))->getQRMatrix($payload);
-    }
-    $matrix = $cache[$key];
+    $matrix = qr_matrix($payload, $ecc);
     $n      = $matrix->getSize();          // includes the quiet zone
 
     // One <rect> per dark module, on a viewBox of n units — the SVG scales to
@@ -106,12 +127,5 @@ function qr_svg(string $payload, float $mm, string $ecc = 'Q'): string
 /** Module count of the symbol (incl. quiet zone) — for reporting mm-per-module. */
 function qr_module_count(string $payload, string $ecc = 'Q'): int
 {
-    $levels = ['L' => EccLevel::L, 'M' => EccLevel::M, 'Q' => EccLevel::Q, 'H' => EccLevel::H];
-    $opts = new QROptions([
-        'version'       => QRCode::VERSION_AUTO,
-        'eccLevel'      => $levels[strtoupper($ecc)] ?? EccLevel::Q,
-        'outputType'    => QROutputInterface::CUSTOM,
-        'quietzoneSize' => 4,
-    ]);
-    return (new QRCode($opts))->getQRMatrix($payload)->getSize();
+    return qr_matrix($payload, $ecc)->getSize();
 }
