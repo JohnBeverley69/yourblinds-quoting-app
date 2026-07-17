@@ -61,7 +61,9 @@ $routes = [
         ['Safety Saw',          'profile cut'],
         ['Headrail Bench',      'headrail assembly'],
         ['VB1 Machine',         'fabric cut'],
-        ['Sew / Weld',          'by fabric finish'],
+        // Which one depends on the blind's fabric finish — but the label names
+        // the job, not the condition; it's what the floor reads on the strip.
+        ['Sew / Weld',          'sew or weld'],
         ['Weighting & Linking', 'finish'],
     ],
     'Bev Pleated' => [
