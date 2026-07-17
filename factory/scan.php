@@ -398,24 +398,34 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     var sent = false;
     function go() {
-        if (sent) return;
+        if (sent) return;                      // one in flight at a time
         var code = box.value.trim();
         if (!/^\d{8,9}$/.test(code)) return;   // only a real code
         sent = true;
+
+        // Clear the box BEFORE sending, not after. Someone can pull the trigger
+        // again while this is in the air — if the box still held the old code,
+        // the new scan would land on the end of it, make nonsense, and then get
+        // wiped when the reply cleared the box. Clearing now means a scan
+        // arriving mid-flight lands in an empty box and is waiting for us.
+        box.value = '';
+
         var body = new URLSearchParams({ _csrf: TOKEN, code: code, _ajax: '1' });
+        var done = function (r, rows) {
+            sent = false;
+            box.focus();
+            paint(r, rows);
+            // Anything that arrived while we were waiting? Deal with it now.
+            if (/^\d{8,9}$/.test(box.value.trim())) go();
+        };
         fetch('/factory/scan.php', { method: 'POST', body: body, headers: {'Content-Type':'application/x-www-form-urlencoded'} })
             .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (j) {
-                box.value = '';
-                sent = false;
-                box.focus();
-                if (j) paint(j.result, j.rows);
-            })
+            .then(function (j) { done(j ? j.result : null, j ? j.rows : null); })
             .catch(function () {
                 // Never swallow a scan silently — if the post failed, say so, or
-                // the workshop scans on believing it landed.
-                box.value = ''; sent = false; box.focus();
-                paint({ ok: false, title: 'Scan not saved', detail: 'No answer from the server — scan it again.' }, null);
+                // the workshop scans on believing it landed. The code is named
+                // so it can be found again.
+                done({ ok: false, title: 'Scan not saved', detail: code + ' didn\'t reach the server — scan it again.' }, null);
             });
     }
 
