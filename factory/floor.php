@@ -19,6 +19,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/due_dates.php';
+require __DIR__ . '/../_partials/factory_poll.php';
 
 requireFactory();
 
@@ -98,6 +99,10 @@ $dueTag = static function (?string $due, bool $done) use ($today, $fmtDate): arr
     return ['', $label];
 };
 
+// Blinds move when someone scans at a bench, so this screen goes stale on its
+// own. See the poll at the bottom.
+$pollVersion = fx_poll_version($pdo, 'floor', $MASTER);
+
 $factoryTitle = 'Production Floor';
 $factoryNav   = 'floor';
 $factoryWide  = true;   // the stage strip needs the whole monitor, not 1200px
@@ -105,6 +110,11 @@ require __DIR__ . '/../_partials/factory_head.php';
 require __DIR__ . '/../_partials/blind_styles.php';
 $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
 ?>
+
+<div class="io-news" id="fl-news" hidden style="position:sticky;top:56px;z-index:15;display:flex;align-items:center;gap:.9rem;background:#166534;color:#fff;padding:.7rem 1.1rem;border-radius:10px;margin:0 0 1rem;font-size:.95rem;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.15)">
+    <span>The floor has moved &mdash; someone's scanned since this loaded.</span>
+    <button type="button" id="fl-news-btn" style="font:inherit;font-weight:700;cursor:pointer;border:none;border-radius:8px;padding:.35rem .9rem;background:#fff;color:#166534">Refresh</button>
+</div>
 
 <div class="fl-head">
     <h1 class="fl-h1">Production Floor</h1>
@@ -243,6 +253,25 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
 <?php endif; ?>
 
 <script>
+// Blinds move when a bench scans one, so this screen goes stale on its own.
+// OFFER a refresh rather than taking one: every stage chip here is a button
+// that moves a blind, and a page that reloads under a hand lands the click on
+// the wrong one.
+(function () {
+    var mine = <?= json_encode($pollVersion) ?>;
+    var news = document.getElementById('fl-news');
+    var btn  = document.getElementById('fl-news-btn');
+    if (!news || !btn) return;
+    btn.addEventListener('click', function () { location.reload(); });
+    setInterval(function () {
+        if (document.hidden) return;
+        fetch('/factory/poll.php?what=floor', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) { if (j && j.v && j.v !== 'x' && j.v !== mine) news.hidden = false; })
+            .catch(function () {});
+    }, 20000);
+})();
+
 (function () {
     var search  = document.getElementById('fl-search');
     var station = document.getElementById('fl-station');

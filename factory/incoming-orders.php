@@ -15,6 +15,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
+require __DIR__ . '/../_partials/factory_poll.php';
 
 requireFactory();
 
@@ -146,6 +147,10 @@ $fmtDate = static function (?string $ts): string {
     catch (Throwable $e) { return (string) $ts; }
 };
 
+// What the page is looking at right now, so it can spot an order arriving while
+// it sits open on a screen.
+$pollVersion = fx_poll_version($pdo, 'incoming', $MASTER);
+
 $factoryTitle = 'Incoming Orders';
 $factoryNav   = 'incoming';
 require __DIR__ . '/../_partials/factory_head.php';
@@ -156,6 +161,14 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-badge { background: #dcfce7; color: #166534; font-size: 0.8125rem; font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 999px; }
     .io-search { margin-left: auto; font: inherit; padding: 0.45rem 0.75rem; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; min-width: 16rem; background: var(--bg-card, #fff); color: inherit; }
     .io-sub { color: var(--text-muted, #667); margin: 0 0 1.1rem; }
+    /* Deliberately an OFFER, not an auto-reload: this page has "Start production"
+       on it, and a page that reloads under someone's hand lands the click on the
+       wrong order. */
+    .io-news { position: sticky; top: 56px; z-index: 15; display: flex; align-items: center; gap: 0.9rem;
+        background: #166534; color: #fff; padding: 0.7rem 1.1rem; border-radius: 10px; margin: 0 0 1rem;
+        font-size: 0.95rem; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+    .io-news button { font: inherit; font-weight: 700; cursor: pointer; border: none; border-radius: 8px;
+        padding: 0.35rem 0.9rem; background: #fff; color: #166534; }
     .io-flash { padding: 0.7rem 1rem; border-radius: 10px; margin: 0 0 1.2rem; font-size: 0.9375rem; }
     .io-flash.ok  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .io-flash.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
@@ -207,6 +220,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         .io-summary .date, .io-summary .stat, .io-list-head span:nth-child(3), .io-list-head span:nth-child(5) { display: none; }
     }
 </style>
+
+<div class="io-news" id="io-news" hidden>
+    <span id="io-news-text">New orders have come in.</span>
+    <button type="button" id="io-news-btn">Refresh</button>
+</div>
 
 <div class="io-head-row">
     <h1 class="io-h1">Incoming Orders</h1>
@@ -343,6 +361,36 @@ require __DIR__ . '/../_partials/factory_head.php';
             if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('io-summary')) { e.preventDefault(); toggle(e.target); }
         });
     }
+    // This screen sits open all day, so an order can land and nobody know. Poll
+    // a cheap version string and OFFER a refresh — never take one, because the
+    // buttons on this page start production, and a page that reloads itself
+    // under a hand puts that click on the wrong order.
+    (function () {
+        var mine = <?= json_encode($pollVersion) ?>;
+        var news = document.getElementById('io-news');
+        var text = document.getElementById('io-news-text');
+        var btn  = document.getElementById('io-news-btn');
+        if (!news || !btn) return;
+        btn.addEventListener('click', function () { location.reload(); });
+
+        setInterval(function () {
+            if (document.hidden) return;              // don't poll a screen nobody's looking at
+            fetch('/factory/poll.php?what=incoming', { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (j) {
+                    if (!j || !j.v || j.v === 'x' || j.v === mine) return;
+                    // Say what changed if we can tell: the count is the first number.
+                    var a = (mine.match(/^i(\d+)/) || [])[1], b = (j.v.match(/^i(\d+)/) || [])[1];
+                    var n = (a !== undefined && b !== undefined) ? (parseInt(b, 10) - parseInt(a, 10)) : 0;
+                    text.textContent = n > 0
+                        ? (n === 1 ? '1 new order has come in.' : n + ' new orders have come in.')
+                        : 'Orders have changed.';
+                    news.hidden = false;
+                })
+                .catch(function () { /* offline / blip — say nothing */ });
+        }, 20000);
+    })();
+
     var search = document.getElementById('io-search');
     if (search) search.addEventListener('input', function () {
         var q = search.value.trim().toLowerCase();
