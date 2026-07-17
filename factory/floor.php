@@ -49,8 +49,7 @@ if ($ready) {
     $dueSel   = $hasDue ? 'q.due_date' : 'NULL AS due_date';
     $dueOrder = $hasDue ? 'q.due_date IS NULL, q.due_date,' : '';
     $st = $pdo->query(
-        "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id,
-                bj.route_step_id, bj.station_id, bj.seq, bj.status,
+        "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id, bj.status,
                 q.quote_number, q.created_at, $dueSel, c.company_name AS tenant,
                 qi.line_no, qi.product_name_snapshot, qi.system_name_snapshot,
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
@@ -68,6 +67,8 @@ if ($ready) {
         if ($r['status'] === 'complete') $madeTot++; else $liveTot++;
         $rows[] = $r;
     }
+    // Each blind's position in every one of its streams, in one query.
+    $streamsBy = bj_streams_for($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
 }
 
 $fmtDate = static function (?string $ts): string {
@@ -153,22 +154,22 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
         // Blind Matrix-style ref: order-line-(unit/qty).
         $ref = (string) $r['quote_number'] . '-' . (int) $r['line_no'] . '-(' . $unit . '/' . $qty . ')';
 
-        $steps = bj_route_steps($pdo, (int) $r['product_id']);
-        $total = count($steps);
-        // Where is it? Stages before this index are finished.
-        $idx = null;
-        foreach ($steps as $i => $s) {
-            if ((int) $s['id'] === (int) $r['route_step_id']) { $idx = $i; break; }
-        }
-        $doneCount = $done ? $total : ($idx ?? 0);
+        // A vertical has two streams (headrail + fabric) that run alongside each
+        // other; roller and pleated have one. Each keeps its own position.
+        $byStream   = bj_route_by_stream($pdo, (int) $r['product_id']);
+        $myStreams  = $streamsBy[$jobId] ?? [];
+        [$doneCount, $total] = bj_progress($byStream, $myStreams);
         $pct = $total > 0 ? (int) round($doneCount / $total * 100) : 0;
+        // Which stations this blind is waiting at, for the station filter.
+        $atStations = [];
+        foreach ($myStreams as $sr) if ($sr['station_id'] !== null && $sr['status'] !== 'done') $atStations[] = (int) $sr['station_id'];
 
         $fab = trim((string) $r['fabric_name_snapshot']);
         $col = trim((string) $r['fabric_colour_snapshot']);
         $sys = trim((string) $r['system_name_snapshot']);
         $searchKey = strtolower(trim($ref . ' ' . $r['product_name_snapshot'] . ' ' . $sys . ' ' . $fab . ' ' . $col . ' ' . $r['room_name'] . ' ' . $r['tenant']));
     ?>
-        <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= (int) ($r['station_id'] ?? 0) ?>" data-made="<?= $done ? 1 : 0 ?>">
+        <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-made="<?= $done ? 1 : 0 ?>">
             <td>
                 <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
                 <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
@@ -190,22 +191,37 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
             <td>
                 <?php if ($total === 0): ?>
                     <span class="pill out">no route</span> &mdash; set one on <a href="/factory/routes.php">Routes</a>
-                <?php else: ?>
-                    <form method="post" action="/factory/blind-action.php" class="fl-strip">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="set_stage">
-                        <input type="hidden" name="job_id" value="<?= $jobId ?>">
-                        <input type="hidden" name="return_to" value="<?= e($RT) ?>">
-                        <?php foreach ($steps as $i => $s):
-                            $cls = 'stg';
-                            if ($i < $doneCount)                 $cls .= ' done';
-                            elseif (!$done && $i === $idx)       $cls .= $working ? ' working' : ' current';
-                            $tip = (string) $s['station'] . ($s['label'] ? ' · ' . $s['label'] : '');
-                        ?>
-                            <button type="submit" name="step_id" value="<?= (int) $s['id'] ?>" class="<?= $cls ?>" title="<?= e($tip) ?>"><?= e((string) ($s['label'] ?: $s['station'])) ?></button>
-                        <?php endforeach; ?>
-                        <button type="submit" name="step_id" value="done" class="stg made<?= $done ? ' done' : '' ?>" title="Finished — off the floor">Made</button>
-                    </form>
+                <?php else: $multi = count($byStream) > 1; ?>
+                    <?php foreach ($byStream as $stream => $list):
+                        $sr  = $myStreams[$stream] ?? null;
+                        if (!$sr) continue;
+                        $sDone = $sr['status'] === 'done' || $sr['route_step_id'] === null;
+                        $sWork = $sr['status'] === 'in_progress';
+                        $idx = null;
+                        foreach ($list as $i => $s) {
+                            if ((int) $s['id'] === (int) $sr['route_step_id']) { $idx = $i; break; }
+                        }
+                        $sDoneCount = $sDone ? count($list) : ($idx ?? 0);
+                    ?>
+                        <div class="fl-streamline">
+                            <?php if ($multi): ?><span class="fl-streamname"><?= e((string) $stream) ?></span><?php endif; ?>
+                            <form method="post" action="/factory/blind-action.php" class="fl-strip">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="set_stage">
+                                <input type="hidden" name="stream_id" value="<?= (int) $sr['id'] ?>">
+                                <input type="hidden" name="return_to" value="<?= e($RT) ?>">
+                                <?php foreach ($list as $i => $s):
+                                    $cls = 'stg';
+                                    if ($i < $sDoneCount)             $cls .= ' done';
+                                    elseif (!$sDone && $i === $idx)   $cls .= $sWork ? ' working' : ' current';
+                                    $tip = (string) $s['station'] . ($s['label'] ? ' · ' . $s['label'] : '');
+                                ?>
+                                    <button type="submit" name="step_id" value="<?= (int) $s['id'] ?>" class="<?= $cls ?>" title="<?= e($tip) ?>"><?= e((string) ($s['label'] ?: $s['station'])) ?></button>
+                                <?php endforeach; ?>
+                                <button type="submit" name="step_id" value="done" class="stg made<?= $sDone ? ' done' : '' ?>" title="<?= $multi ? e($stream . ' finished') : 'Finished — off the floor' ?>"><?= $multi ? 'Done' : 'Made' ?></button>
+                            </form>
+                        </div>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </td>
         </tr>
@@ -233,8 +249,11 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
         bench.hidden = !s;
         if (s) bench.href = '/factory/station.php?station_id=' + encodeURIComponent(s);
         rows.forEach(function (tr) {
+            // A blind can be waiting at two benches at once (headrail + fabric),
+            // so data-station is a list.
+            var at = (tr.dataset.station || '').split(',');
             var ok = (!q || (tr.dataset.search || '').indexOf(q) !== -1)
-                  && (!s || tr.dataset.station === s);
+                  && (!s || at.indexOf(s) !== -1);
             tr.style.display = ok ? '' : 'none';
             if (ok) n++;
         });

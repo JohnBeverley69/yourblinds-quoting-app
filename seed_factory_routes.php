@@ -51,31 +51,47 @@ foreach ($stations as [$name, $outsourced]) {
 }
 
 // ---- Routes (rebuilt for the three seeded products) -----------------------
+// [station, label, stream]. Steps sharing a stream run in order; different
+// streams run alongside each other and imply nothing about one another.
+// 'main' = a single line, which is roller and pleated: John confirmed the saw
+// work really does have to finish before the fabric table starts on those.
+//
+// The vertical is the exception — the headrail and the fabric are two separate
+// jobs that never meet in the workshop. They're finished as parts and the fitter
+// marries them on site, so either can be done first, or both at once.
 $routes = [
     'Bev Roller Blinds' => [
-        ['Safety Saw',          'tube cut'],
-        ['Roller Fabric Table', 'cut + mount to pole'],
-        ['Bottom Bar Bench',    'bottom bar'],
+        ['Safety Saw',          'tube cut',            'main'],
+        ['Roller Fabric Table', 'cut + mount to pole', 'main'],
+        ['Bottom Bar Bench',    'bottom bar',          'main'],
     ],
     'Bev Vertical Blinds' => [
-        ['Safety Saw',          'profile cut'],
-        ['Headrail Bench',      'headrail assembly'],
-        ['VB1 Machine',         'fabric cut'],
+        ['Safety Saw',          'profile cut',       'Headrail'],
+        ['Headrail Bench',      'headrail assembly', 'Headrail'],
+        ['VB1 Machine',         'fabric cut',        'Fabric'],
         // Which one depends on the blind's fabric finish — but the label names
         // the job, not the condition; it's what the floor reads on the strip.
-        ['Sew / Weld',          'sew or weld'],
-        ['Weighting & Linking', 'finish'],
+        ['Sew / Weld',          'sew or weld',       'Fabric'],
+        ['Weighting & Linking', 'finish',            'Fabric'],
     ],
     'Bev Pleated' => [
-        ['Safety Saw',     'profile cut'],
-        ['Pleated Cutter', 'fabric cut'],
-        ['Pleated Bench',  'assemble'],
+        ['Safety Saw',     'profile cut', 'main'],
+        ['Pleated Cutter', 'fabric cut',  'main'],
+        ['Pleated Bench',  'assemble',    'main'],
     ],
 ];
 
 $findProduct = $pdo->prepare("SELECT id FROM products WHERE client_id = ? AND name = ? LIMIT 1");
 $delSteps    = $pdo->prepare('DELETE FROM product_route_steps WHERE product_id = ?');
-$insStep     = $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, ?, ?, 1)');
+
+// The stream column only exists once migrate_route_streams.php has run.
+$hasStream = true;
+try { $pdo->query('SELECT stream FROM product_route_steps LIMIT 0'); }
+catch (Throwable $e) { $hasStream = false; }
+$insStep = $hasStream
+    ? $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, stream, active) VALUES (?, ?, ?, ?, ?, 1)')
+    : $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, ?, ?, 1)');
+if (!$hasStream) echo "  ! product_route_steps.stream is missing — run /migrate_route_streams.php to split the vertical.\n";
 
 foreach ($routes as $productName => $steps) {
     $findProduct->execute([$MASTER, $productName]);
@@ -83,10 +99,15 @@ foreach ($routes as $productName => $steps) {
     if ($pid === 0) { echo "  ! product not found: {$productName}\n"; continue; }
     $delSteps->execute([$pid]);
     $s = 0;
-    foreach ($steps as [$stationName, $label]) {
-        $insStep->execute([$pid, $s++, $stationId[$stationName], $label]);
+    $streams = [];
+    foreach ($steps as [$stationName, $label, $stream]) {
+        $streams[$stream] = true;
+        $hasStream
+            ? $insStep->execute([$pid, $s++, $stationId[$stationName], $label, $stream])
+            : $insStep->execute([$pid, $s++, $stationId[$stationName], $label]);
     }
-    echo "  route: {$productName} — " . count($steps) . " stages\n";
+    $note = ($hasStream && count($streams) > 1) ? ' in ' . count($streams) . ' parallel streams (' . implode(', ', array_keys($streams)) . ')' : '';
+    echo "  route: {$productName} — " . count($steps) . " stages{$note}\n";
 }
 
 echo "\nDone — " . count($stationId) . " stations, " . count($routes) . " routes seeded.\n";

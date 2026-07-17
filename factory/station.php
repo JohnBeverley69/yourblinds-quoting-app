@@ -33,20 +33,25 @@ if ($ready && $stationId > 0) {
     $station = $s->fetch(PDO::FETCH_ASSOC) ?: null;
 
     if ($station) {
+        // Streams sitting at this bench. A stream's current step is by definition
+        // the next ready piece of work in it, so this queue is only ever work
+        // that can actually be started — nothing waiting on an earlier stage.
         $q = $pdo->prepare(
-            "SELECT bj.id, bj.quote_id, bj.status, bj.seq, bj.unit_no,
+            "SELECT bs.id AS stream_id, bs.status, bs.stream, bs.seq,
+                    bj.id AS job_id, bj.quote_id, bj.unit_no,
                     q.quote_number, c.company_name AS tenant,
                     qi.product_name_snapshot, qi.system_name_snapshot,
                     qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
                     qi.width_mm, qi.drop_mm, qi.quantity, qi.room_name,
                     rs.label AS step_label
-               FROM factory_blind_jobs bj
+               FROM factory_blind_streams bs
+               JOIN factory_blind_jobs bj ON bj.id = bs.blind_job_id
                JOIN quotes q       ON q.id = bj.quote_id
                JOIN clients c      ON c.id = q.client_id
                JOIN quote_items qi ON qi.id = bj.quote_item_id
-               LEFT JOIN product_route_steps rs ON rs.id = bj.route_step_id
-              WHERE bj.station_id = ? AND bj.status IN ('queued','in_progress')
-              ORDER BY bj.status DESC, q.created_at, bj.quote_item_id, bj.unit_no, bj.id"
+               LEFT JOIN product_route_steps rs ON rs.id = bs.route_step_id
+              WHERE bs.station_id = ? AND bs.status IN ('queued','in_progress')
+              ORDER BY bs.status DESC, q.created_at, bj.quote_item_id, bj.unit_no, bs.id"
         );
         $q->execute([$stationId]);
         $rows = $q->fetchAll(PDO::FETCH_ASSOC);
