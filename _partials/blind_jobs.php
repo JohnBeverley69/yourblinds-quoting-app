@@ -25,6 +25,34 @@ declare(strict_types=1);
  * stored seq is only a fallback anchor if the current step was deleted mid-run.
  */
 
+/**
+ * The processes a workstation login covers: [['product_id'=>, 'stream'=>], …].
+ *
+ * A workstation is a PROCESS, not a bench — "Vertical Head Rail" owns the
+ * vertical's Headrail stream, profile cut through to assembly, wherever the
+ * saw happens to be. A login may cover any number (staff move where they're
+ * needed) and several logins may cover the same one.
+ */
+function bj_workstation_streams(PDO $pdo, int $userId): array
+{
+    static $cache = [];
+    if (isset($cache[$userId])) return $cache[$userId];
+    try {
+        $st = $pdo->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
+        $st->execute([$userId]);
+        return $cache[$userId] = $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { return $cache[$userId] = []; }   // not migrated yet
+}
+
+/** Does this login cover this product's stream? */
+function bj_covers(array $workstationStreams, int $productId, string $stream): bool
+{
+    foreach ($workstationStreams as $w) {
+        if ((int) $w['product_id'] === $productId && (string) $w['stream'] === $stream) return true;
+    }
+    return false;
+}
+
 /** True once the blind-job + stream tables exist. Cached per request. */
 function bj_tables_ready(PDO $pdo): bool
 {

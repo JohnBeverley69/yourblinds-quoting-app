@@ -2,21 +2,23 @@
 declare(strict_types=1);
 
 /**
- * Factory · Bench scan.
+ * Factory · Workstation scan.
  *
- * The point of the whole exercise: a PC at each bench, logged in as that bench,
- * with a wedge scanner. Scan a blind's label -> that bench's stage is done ->
- * it moves to the next stage on its route. No mouse, no keyboard, no hunting a
- * row on a screen with a 2.7m blind under your arm.
+ * A workstation is a PROCESS, not a bench. John: "the user is not a person its
+ * simply 'Vertical Head Rail' ... The benches are just noise as the product has
+ * processes rather than benches."
  *
- * Which bench this is comes from the LOGIN (client_users.factory_station_id),
- * not from the code — that's what lets us reject a blind scanned at the wrong
- * bench instead of silently moving it. The super-admin can pick a bench with
- * ?station_id= to test without a station login.
+ * So the login covers one or more (product, stream) pairs — "Vertical Head Rail"
+ * = the vertical's Headrail stream, profile cut through to assembly, wherever
+ * the saw happens to be that day. Scan a blind's label and the stream this
+ * workstation owns moves on one stage.
  *
- * The result banner is deliberately enormous: with a wireless scanner you may be
- * several metres from the screen, and the scanner's own beep only means "I read
- * something", not "the system accepted it".
+ * The blind's QR identifies the BLIND (line + unit), so it already tells us the
+ * product and its streams. The login only has to say which process it does.
+ *
+ * Ambiguity: if a login covers BOTH of a vertical's streams, a scan can't know
+ * which you just finished — so it offers a button per stream. That's the only
+ * case that needs a tap; everywhere else is scan-and-go.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -28,34 +30,66 @@ requireFactory();
 
 $pdo    = db();
 $MASTER = factory_client_id();
+$user   = current_user();
+$userId = (int) ($user['user_id'] ?? 0);
 
-// The bench: from the login first, else an explicit pick (super-admin testing).
-$stationId = current_user_station_id();
-$picked    = (int) ($_GET['station_id'] ?? 0);
-if ($stationId === null && $picked > 0 && is_super_admin()) $stationId = $picked;
+$mine = bj_workstation_streams($pdo, $userId);
 
-$station = null;
-if ($stationId !== null) {
-    $s = $pdo->prepare('SELECT id, name FROM factory_stations WHERE id = ? AND client_id = ? LIMIT 1');
-    $s->execute([$stationId, $MASTER]);
-    $station = $s->fetch(PDO::FETCH_ASSOC) ?: null;
-    if (!$station) $stationId = null;
+// Product names for the master products we might mention.
+$pname = [];
+foreach ($pdo->query("SELECT id, name FROM products WHERE client_id = {$MASTER}")->fetchAll(PDO::FETCH_ASSOC) as $p) {
+    $pname[(int) $p['id']] = (string) $p['name'];
 }
+$processName = static function (int $pid, string $stream) use ($pname): string {
+    $n = $pname[$pid] ?? ('product ' . $pid);
+    return $stream === 'main' ? $n : $n . ' — ' . $stream;
+};
+
+/** Advance one stream and describe what happened. */
+$advance = function (int $streamId) use ($pdo, $userId): array {
+    $row = bj_stream_get($pdo, $streamId);
+    if (!$row) return ['ok' => false, 'title' => 'Gone', 'detail' => 'That job no longer exists.'];
+    bj_stream_advance($pdo, $streamId, $userId ?: null);
+    $after = bj_stream_get($pdo, $streamId);
+
+    $q = $pdo->prepare(
+        'SELECT q.quote_number, qi.line_no, qi.quantity, qi.product_name_snapshot,
+                qi.width_mm, qi.drop_mm, qi.room_name, bj.unit_no
+           FROM factory_blind_jobs bj
+           JOIN quote_items qi ON qi.id = bj.quote_item_id
+           JOIN quotes q       ON q.id = bj.quote_id
+          WHERE bj.id = ? LIMIT 1'
+    );
+    $q->execute([(int) $row['blind_job_id']]);
+    $j = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+    $ref = ($j['quote_number'] ?? '?') . '-' . (int) ($j['line_no'] ?? 0)
+         . '-(' . (int) ($j['unit_no'] ?? 1) . '/' . max(1, (int) ($j['quantity'] ?? 1)) . ')';
+    $what = trim((string) ($j['product_name_snapshot'] ?? '') . '  '
+          . (int) ($j['width_mm'] ?? 0) . '×' . (int) ($j['drop_mm'] ?? 0)
+          . (trim((string) ($j['room_name'] ?? '')) !== '' ? '  ' . $j['room_name'] : ''));
+
+    $next = 'finished — nothing left on this side';
+    if ($after && $after['route_step_id'] !== null) {
+        $s = $pdo->prepare('SELECT label FROM product_route_steps WHERE id = ?');
+        $s->execute([(int) $after['route_step_id']]);
+        $next = 'next: ' . ((string) $s->fetchColumn() ?: '?');
+    }
+    return ['ok' => true, 'title' => $ref, 'detail' => $what . '  ·  ' . $next];
+};
 
 /**
- * Take one scanned code and try to move that blind on at THIS bench.
- * @return array{ok:bool,title:string,detail:string}
+ * A scanned code -> either done, an error, or a choice of streams.
+ * @return array{ok:bool,title:string,detail:string,choices?:array}
  */
-$handleScan = function (string $scanned) use ($pdo, $stationId, $station): array {
+$handleScan = function (string $scanned) use ($pdo, $mine, $processName, $advance): array {
     $parsed = qr_parse_code($scanned);
     if ($parsed === null) {
-        return ['ok' => false, 'title' => 'Not a blind label',
-                'detail' => 'Scanned: ' . mb_substr(trim($scanned), 0, 40)];
+        return ['ok' => false, 'title' => 'Not a blind label', 'detail' => 'Scanned: ' . mb_substr(trim($scanned), 0, 40)];
     }
     [$itemId, $unitNo] = $parsed;
 
     $q = $pdo->prepare(
-        'SELECT bj.id, bj.status, qi.product_name_snapshot, qi.width_mm, qi.drop_mm,
+        'SELECT bj.id, bj.status, bj.product_id, qi.product_name_snapshot, qi.width_mm, qi.drop_mm,
                 qi.quantity, qi.room_name, qi.line_no, q.quote_number
            FROM factory_blind_jobs bj
            JOIN quote_items qi ON qi.id = bj.quote_item_id
@@ -64,95 +98,101 @@ $handleScan = function (string $scanned) use ($pdo, $stationId, $station): array
     );
     $q->execute([$itemId, $unitNo]);
     $job = $q->fetch(PDO::FETCH_ASSOC);
-
-    if (!$job) {
-        return ['ok' => false, 'title' => 'Not on the floor',
-                'detail' => 'That blind hasn\'t been released to production yet.'];
-    }
+    if (!$job) return ['ok' => false, 'title' => 'Not on the floor', 'detail' => 'That blind hasn\'t been released to production yet.'];
 
     $ref = (string) $job['quote_number'] . '-' . (int) $job['line_no']
          . '-(' . $unitNo . '/' . max(1, (int) $job['quantity']) . ')';
     $what = trim((string) $job['product_name_snapshot'] . '  '
           . (int) $job['width_mm'] . '×' . (int) $job['drop_mm']
-          . ((string) $job['room_name'] !== '' ? '  ' . $job['room_name'] : ''));
+          . (trim((string) $job['room_name']) !== '' ? '  ' . $job['room_name'] : ''));
 
-    if ($job['status'] === 'complete') {
-        return ['ok' => false, 'title' => 'Already made', 'detail' => $ref . ' — ' . $what];
-    }
+    if ($job['status'] === 'complete') return ['ok' => false, 'title' => 'Already made', 'detail' => $ref . ' — ' . $what];
 
-    // Which of this blind's streams is sitting at THIS bench?
+    $pid     = (int) $job['product_id'];
     $streams = bj_streams_for($pdo, [(int) $job['id']])[(int) $job['id']] ?? [];
-    $mine = null;
-    foreach ($streams as $sr) {
-        if ((int) ($sr['station_id'] ?? 0) === (int) $stationId
-            && in_array($sr['status'], ['queued', 'in_progress'], true)) { $mine = $sr; break; }
+
+    // Which of this blind's live streams does this workstation actually do?
+    $can = [];
+    foreach ($streams as $name => $sr) {
+        if ($sr['status'] === 'done') continue;
+        if (!bj_covers($mine, $pid, (string) $name)) continue;
+        $can[$name] = $sr;
     }
 
-    if (!$mine) {
-        // Say where it actually is — "wrong bench" is useless without "it's at the saw".
-        $where = [];
+    if (!$can) {
+        // Not our work — say whose it is, rather than just "no".
+        $bits = [];
         foreach ($streams as $name => $sr) {
-            if ($sr['status'] === 'done') { $where[] = $name . ': done'; continue; }
-            $st = $pdo->prepare('SELECT s.name FROM factory_stations s WHERE s.id = ?');
-            $st->execute([(int) $sr['station_id']]);
-            $where[] = $name . ': ' . ((string) $st->fetchColumn() ?: 'no route');
+            $bits[] = $name . ': ' . ($sr['status'] === 'done' ? 'done' : 'still to do');
         }
-        return ['ok' => false, 'title' => 'Not at this bench',
-                'detail' => $ref . ' — ' . $what . ($where ? '  ·  ' . implode('   ', $where) : '')];
+        return ['ok' => false, 'title' => 'Not this workstation\'s job',
+                'detail' => $ref . ' — ' . $what . ($bits ? '  ·  ' . implode('   ', $bits) : '')
+                          . '  ·  this login does: ' . implode(', ', array_map(
+                                static fn ($w) => $processName((int) $w['product_id'], (string) $w['stream']), $mine))];
     }
 
-    bj_stream_advance($pdo, (int) $mine['id'], (int) (current_user()['user_id'] ?? 0) ?: null);
-
-    // Where has it gone?
-    $after = bj_stream_get($pdo, (int) $mine['id']);
-    $next  = 'finished';
-    if ($after && $after['station_id'] !== null) {
-        $st = $pdo->prepare('SELECT name FROM factory_stations WHERE id = ?');
-        $st->execute([(int) $after['station_id']]);
-        $next = 'next: ' . ((string) $st->fetchColumn() ?: '?');
+    if (count($can) > 1) {
+        // Covers both sides of the same blind — we can't know which was finished.
+        $choices = [];
+        foreach ($can as $name => $sr) {
+            $s = $pdo->prepare('SELECT label FROM product_route_steps WHERE id = ?');
+            $s->execute([(int) $sr['route_step_id']]);
+            $choices[] = ['stream_id' => (int) $sr['id'], 'stream' => (string) $name, 'stage' => (string) ($s->fetchColumn() ?: '?')];
+        }
+        return ['ok' => false, 'title' => 'Which one?', 'detail' => $ref . ' — ' . $what, 'choices' => $choices];
     }
-    return ['ok' => true, 'title' => $ref, 'detail' => $what . '  ·  ' . $next];
+
+    return $advance((int) reset($can)['id']);
 };
 
 // POST -> handle -> redirect, so a refresh can't replay a scan.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $stationId !== null) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    $code = (string) ($_POST['code'] ?? '');
-    if (trim($code) !== '') {
-        try { $_SESSION['scan_result'] = $handleScan($code); }
-        catch (Throwable $e) { $_SESSION['scan_result'] = ['ok' => false, 'title' => 'Error', 'detail' => $e->getMessage()]; }
+    try {
+        if (($_POST['_action'] ?? '') === 'pick' && (int) ($_POST['stream_id'] ?? 0) > 0) {
+            $_SESSION['scan_result'] = $advance((int) $_POST['stream_id']);
+        } else {
+            $code = (string) ($_POST['code'] ?? '');
+            if (trim($code) !== '') $_SESSION['scan_result'] = $handleScan($code);
+        }
+    } catch (Throwable $e) {
+        $_SESSION['scan_result'] = ['ok' => false, 'title' => 'Error', 'detail' => $e->getMessage()];
     }
-    header('Location: /factory/scan.php' . ($picked > 0 ? '?station_id=' . $picked : ''));
+    header('Location: /factory/scan.php');
     exit;
 }
 
 $result = $_SESSION['scan_result'] ?? null;
 unset($_SESSION['scan_result']);
 
-// This bench's queue, so there's something to look at between scans.
+// This workstation's work: every live stream of every blind whose process we do.
 $queue = [];
-if ($stationId !== null && bj_tables_ready($pdo)) {
-    $q = $pdo->prepare(
-        "SELECT bs.stream, q.quote_number, qi.line_no, bs.blind_job_id, bj.unit_no, qi.quantity,
-                qi.product_name_snapshot, qi.width_mm, qi.drop_mm, qi.room_name, rs.label AS step_label
+if ($mine && bj_tables_ready($pdo)) {
+    $ors = [];
+    $args = [];
+    foreach ($mine as $w) { $ors[] = '(bj.product_id = ? AND bs.stream = ?)'; $args[] = (int) $w['product_id']; $args[] = (string) $w['stream']; }
+    $sql =
+        "SELECT bs.id AS stream_id, bs.stream, bs.status, q.quote_number, qi.line_no, bj.unit_no, qi.quantity,
+                qi.product_name_snapshot, qi.width_mm, qi.drop_mm, qi.room_name, q.due_date,
+                rs.label AS stage
            FROM factory_blind_streams bs
            JOIN factory_blind_jobs bj ON bj.id = bs.blind_job_id
            JOIN quote_items qi ON qi.id = bj.quote_item_id
            JOIN quotes q       ON q.id = bj.quote_id
            LEFT JOIN product_route_steps rs ON rs.id = bs.route_step_id
-          WHERE bs.station_id = ? AND bs.status IN ('queued','in_progress')
+          WHERE bs.status IN ('queued','in_progress') AND (" . implode(' OR ', $ors) . ")
           ORDER BY q.due_date IS NULL, q.due_date, q.created_at, qi.line_no, bj.unit_no
-          LIMIT 40"
-    );
-    try { $q->execute([$stationId]); $queue = $q->fetchAll(PDO::FETCH_ASSOC); }
+          LIMIT 60";
+    try { $st = $pdo->prepare($sql); $st->execute($args); $queue = $st->fetchAll(PDO::FETCH_ASSOC); }
     catch (Throwable $e) { $queue = []; }
 }
 
-$stations = is_super_admin() && $stationId === null
-    ? $pdo->query("SELECT id, name FROM factory_stations WHERE client_id = {$MASTER} AND active = 1 ORDER BY sort_order, id")->fetchAll(PDO::FETCH_ASSOC)
-    : [];
+$fmtDate = static function (?string $d): string {
+    if (!$d) return '';
+    try { return (new DateTimeImmutable($d))->format('j M'); } catch (Throwable $e) { return (string) $d; }
+};
 
-$factoryTitle = $station ? 'Scan · ' . $station['name'] : 'Scan';
+$factoryTitle = 'Scan';
 $factoryNav   = 'scan';
 $factoryWide  = true;
 require __DIR__ . '/../_partials/factory_head.php';
@@ -161,12 +201,15 @@ require __DIR__ . '/../_partials/factory_head.php';
   .sc-head { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; margin:0 0 1rem; }
   .sc-bench { font-size:2rem; font-weight:800; letter-spacing:-.02em; margin:0; }
   .sc-sub { color:var(--text-muted,#667); margin:0; }
-  /* Readable from across a workshop — with a wireless scanner you're not at the screen. */
   .sc-banner { border-radius:14px; padding:1.4rem 1.6rem; margin:0 0 1.2rem; }
   .sc-banner.ok  { background:#16a34a; color:#fff; }
   .sc-banner.bad { background:#b91c1c; color:#fff; }
+  .sc-banner.ask { background:#b45309; color:#fff; }
   .sc-banner .t { font-size:2.4rem; font-weight:800; line-height:1.1; }
   .sc-banner .d { font-size:1.15rem; opacity:.95; margin-top:.35rem; }
+  .sc-pick { display:flex; gap:.6rem; margin-top:.9rem; flex-wrap:wrap; }
+  .sc-pick button { font:inherit; font-size:1.15rem; font-weight:700; cursor:pointer; border:none; border-radius:10px;
+      padding:.7rem 1.2rem; background:#fff; color:#7c2d12; }
   .sc-box { display:flex; align-items:center; gap:.8rem; margin:0 0 1.4rem; }
   .sc-box input { font:inherit; font-size:1.6rem; font-weight:700; letter-spacing:.08em;
       padding:.6rem .9rem; border:3px solid #166534; border-radius:12px; width:16rem; background:var(--bg-card,#fff); color:inherit; }
@@ -176,72 +219,64 @@ require __DIR__ . '/../_partials/factory_head.php';
   .sc-q td { padding:.5rem .7rem; border-bottom:1px solid var(--border,#eef1f5); font-size:1rem; }
   .sc-q tr:last-child td { border-bottom:none; }
   .sc-ref { font-weight:700; font-variant-numeric:tabular-nums; }
+  .sc-stage { background:#eef2ff; color:#3730a3; border-radius:6px; padding:.05rem .45rem; font-size:.85rem; }
   .sc-empty { background:var(--bg-subtle,#f8fafc); border:1px dashed var(--border,#e5e7eb); border-radius:12px; padding:2rem; text-align:center; color:var(--text-faint,#94a3b8); }
-
-  .sc-nobench { max-width:44rem; }
-  .sc-nobench h1 { font-size:1.4rem; margin:0 0 .4rem; }
-  .sc-nobench p { color:var(--text-muted,#667); margin:.35rem 0; line-height:1.5; }
   .sc-warn { background:#fef3c7; border:1px solid #fde68a; color:#92400e; border-radius:12px; padding:.9rem 1.1rem; margin:0 0 1.2rem; font-size:1rem; line-height:1.5; }
   .sc-warn strong { display:block; font-size:1.15rem; margin-bottom:.2rem; }
   .sc-warn.caught { background:#b91c1c; border-color:#b91c1c; color:#fff; }
-  .sc-warn.caught strong { font-size:1.4rem; }
-  .sc-benches { display:flex; flex-wrap:wrap; gap:.5rem; margin:.2rem 0 0; }
-  .sc-benches a { display:inline-block; padding:.55rem 1rem; background:#1f2a37; color:#fff; border-radius:10px;
-      text-decoration:none; font-weight:600; font-size:1rem; }
-  .sc-benches a:hover { background:#111a24; }
 </style>
 
-<?php if ($stationId === null): ?>
-    <!-- This page CANNOT take a scan: without a bench there's nothing to mark
-         done. Say so loudly and catch a scan that lands here, rather than
-         swallowing it silently and leaving someone thinking the system's broken. -->
-    <div class="sc-nobench">
+<?php if (!$mine): ?>
+    <!-- No processes assigned: this login cannot accept a scan. Say so, and catch
+         a scan landing here rather than swallowing it. -->
+    <div style="max-width:44rem">
         <div class="sc-warn" id="sc-warn">
-            <strong>Don't scan yet — pick your bench below first.</strong>
-            This page can't take a scan: until it knows which bench you're at, it can't tell
-            what to mark done.
+            <strong>Don't scan yet — this login has no processes.</strong>
+            A workstation is a process, not a person: “Vertical Head Rail”, “Roller”. Until this login
+            is told what it does, a scan has nothing to mark done.
         </div>
-
-        <h1>Which bench is this?</h1>
-        <p>A bench login <em>is</em> a station — the PC stays signed in as “Safety Saw” and
-           whoever's stood at it uses it. Set the <strong>Bench</strong> on the account in
-           <a href="/admin/users.php">Admin &rarr; Users</a> and it'll come straight here, and this
-           screen will never appear again.</p>
-        <?php if ($stations): ?>
-            <p style="margin:.2rem 0 .6rem">Meanwhile, pick one — this PC will remember it:</p>
-            <div class="sc-benches">
-                <?php foreach ($stations as $s): ?>
-                    <a href="/factory/scan.php?station_id=<?= (int) $s['id'] ?>"><?= e((string) $s['name']) ?></a>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+        <h1 style="font-size:1.4rem;margin:0 0 .4rem">Assign this login's processes</h1>
+        <p style="color:var(--text-muted,#667);margin:.3rem 0">
+            <a href="/admin/users.php">Admin &rarr; Users</a> &rarr; this account &rarr; tick the processes it
+            covers. Tick as many as you like &mdash; staff move where they're needed, and more than one
+            login can cover the same process.
+        </p>
     </div>
 <?php else: ?>
 
     <div class="sc-head">
-        <h1 class="sc-bench"><?= e((string) $station['name']) ?></h1>
-        <p class="sc-sub"><?= count($queue) ?> waiting<?php if ($picked > 0): ?>
-            &middot; not a bench login &mdash; <a href="#" id="sc-change">change bench</a><?php endif; ?></p>
+        <h1 class="sc-bench"><?= e(implode(' · ', array_map(static fn ($w) => $processName((int) $w['product_id'], (string) $w['stream']), $mine))) ?></h1>
+        <p class="sc-sub"><?= count($queue) ?> waiting</p>
     </div>
 
     <?php if ($result !== null): ?>
-        <div class="sc-banner <?= $result['ok'] ? 'ok' : 'bad' ?>">
-            <div class="t"><?= $result['ok'] ? '✓ ' : '✕ ' ?><?= e((string) $result['title']) ?></div>
+        <div class="sc-banner <?= !empty($result['choices']) ? 'ask' : ($result['ok'] ? 'ok' : 'bad') ?>">
+            <div class="t"><?= !empty($result['choices']) ? '' : ($result['ok'] ? '✓ ' : '✕ ') ?><?= e((string) $result['title']) ?></div>
             <div class="d"><?= e((string) $result['detail']) ?></div>
+            <?php if (!empty($result['choices'])): ?>
+                <form method="post" class="sc-pick">
+                    <?= csrf_field() ?><input type="hidden" name="_action" value="pick">
+                    <?php foreach ($result['choices'] as $c): ?>
+                        <button name="stream_id" value="<?= (int) $c['stream_id'] ?>">
+                            <?= e((string) $c['stream']) ?> &mdash; <?= e((string) $c['stage']) ?>
+                        </button>
+                    <?php endforeach; ?>
+                </form>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
     <form method="post" class="sc-box" id="sc-form">
         <?= csrf_field() ?>
         <input type="text" name="code" id="sc-code" autocomplete="off" autofocus placeholder="scan a label">
-        <span class="hint">Scan a blind's label to mark <strong><?= e((string) $station['name']) ?></strong> done. It'll move to the next stage on its route.</span>
+        <span class="hint">Scan a blind to move it on one stage.</span>
     </form>
 
     <?php if (!$queue): ?>
-        <div class="sc-empty">Nothing waiting at this bench.</div>
+        <div class="sc-empty">Nothing waiting.</div>
     <?php else: ?>
         <table class="sc-q">
-            <thead><tr><th>Job ref</th><th>Blind</th><th>Size</th><th>Room</th><th>Doing</th></tr></thead>
+            <thead><tr><th>Job ref</th><th>Blind</th><th>Size</th><th>Room</th><th>Doing</th><th>Due</th></tr></thead>
             <tbody>
             <?php foreach ($queue as $r):
                 $qty = max(1, (int) $r['quantity']);
@@ -252,7 +287,8 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <td><?= e((string) $r['product_name_snapshot']) ?></td>
                     <td><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
                     <td><?= e((string) $r['room_name']) ?></td>
-                    <td><?= e((string) ($r['step_label'] ?? '')) ?></td>
+                    <td><span class="sc-stage"><?= e((string) ($r['stage'] ?? '')) ?></span></td>
+                    <td><?= e($fmtDate($r['due_date'] ?? null)) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -263,60 +299,35 @@ require __DIR__ . '/../_partials/factory_head.php';
 
 <script>
 (function () {
-    // ---- The bench picker ------------------------------------------------
-    // Nothing here can accept a scan, so catch one landing on this page and say
-    // why rather than swallowing it. A wedge scanner is just a keyboard: without
-    // this, the characters go nowhere and it looks like the system is broken.
+    // No processes assigned: catch a scan and say why it did nothing, rather
+    // than letting a wedge scanner type into the void.
     var warn = document.getElementById('sc-warn');
     if (warn) {
         var buf = '', last = 0;
         document.addEventListener('keydown', function (e) {
             var now = Date.now();
-            if (now - last > 120) buf = '';        // a human typing, not a scanner burst
+            if (now - last > 120) buf = '';
             last = now;
             if (e.key && e.key.length === 1) { buf += e.key; return; }
             if (e.key === 'Enter' && buf.length >= 4) {
                 var code = buf; buf = '';
                 warn.className = 'sc-warn caught';
                 warn.innerHTML = '<strong>That scan did nothing — ' + code.replace(/[<>&]/g, '') + '</strong>'
-                    + 'This page isn\'t a bench, so there\'s nothing to mark done. Pick your bench below, '
-                    + 'then scan again.';
-                warn.scrollIntoView({ block: 'center' });
+                    + 'This login has no processes assigned, so there\'s nothing for it to mark done.';
             }
         });
-        // Remember the bench per PC, so this screen is a one-off even without a
-        // bench login. "change bench" on the scan page clears it.
-        document.querySelectorAll('.sc-benches a').forEach(function (a) {
-            a.addEventListener('click', function () {
-                try { localStorage.setItem('factoryBench', a.href.match(/station_id=(\d+)/)[1]); } catch (e) {}
-            });
-        });
-        try {
-            var remembered = localStorage.getItem('factoryBench');
-            if (remembered && !/no_auto/.test(location.search)) location.replace('/factory/scan.php?station_id=' + remembered);
-        } catch (e) {}
         return;
     }
-
-    // ---- The bench itself -------------------------------------------------
-    var change = document.getElementById('sc-change');
-    if (change) change.addEventListener('click', function (e) {
-        e.preventDefault();
-        try { localStorage.removeItem('factoryBench'); } catch (err) {}
-        location.href = '/factory/scan.php?no_auto=1';
-    });
 
     var box = document.getElementById('sc-code'), form = document.getElementById('sc-form');
     if (!box || !form) return;
 
-    // The scanner is a keyboard: if focus wanders, the scan is typed into nothing.
+    // The scanner is a keyboard: if focus wanders, the scan types into nothing.
     setInterval(function () { if (document.activeElement !== box) box.focus(); }, 700);
-    document.addEventListener('click', function () { box.focus(); });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.sc-pick')) box.focus(); });
 
-    // The D5100's LF & CR terminator sends Enter TWICE. Submitting on the raw
-    // Enter would fire the form twice and advance the blind two stages. So
-    // submit only when there's actually something in the box, and lock straight
-    // away so the second Enter lands on a spent form.
+    // LF & CR sends Enter TWICE. Submitting on the raw Enter would fire the form
+    // twice and advance the blind two stages.
     var sent = false;
     form.addEventListener('submit', function (e) {
         if (sent || box.value.trim() === '') { e.preventDefault(); return; }
