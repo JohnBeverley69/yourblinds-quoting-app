@@ -250,29 +250,29 @@ function factory_client_id(): int
 }
 
 /**
- * The bench this login IS, or null if it's a person rather than a station.
+ * Is this login a WORKSTATION — i.e. a process rather than a person?
  *
- * Workshop logins are per station, not per user — the PC at the saw stays
- * logged in as "Safety Saw" and whoever's stood there uses it. That's what
- * lands them on their own queue, and (once the scanners are in) what lets a
- * scan know which bench it came from.
+ * "Vertical Head Rail" owns the vertical's headrail from profile cut to
+ * assembly, wherever the saw happens to be that day. Whoever's on that job uses
+ * the account. A workstation is defined by the processes it covers, not by a
+ * bench: the same saw serves verticals, rollers and pleateds, so a bench-shaped
+ * login showed a mixed queue that was nobody's job.
  *
- * Cached per request. Null whenever the column or the account says otherwise,
- * so this is safe to call before the migration has run.
+ * Cached per request; false whenever the table or the account says otherwise,
+ * so it's safe to call before the migration has run.
  */
-function current_user_station_id(): ?int
+function current_user_is_workstation(): bool
 {
-    static $cache = false;
-    if ($cache !== false) return $cache;
+    static $cache = null;
+    if ($cache !== null) return $cache;
 
     $user = current_user();
-    if (!$user || (int) ($user['client_id'] ?? 0) !== factory_client_id()) return $cache = null;
+    if (!$user || (int) ($user['client_id'] ?? 0) !== factory_client_id()) return $cache = false;
     try {
-        $st = db()->prepare('SELECT factory_station_id FROM client_users WHERE id = ? AND client_id = ? LIMIT 1');
-        $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
-        $v = $st->fetchColumn();
-    } catch (Throwable $e) { return $cache = null; }   // column not migrated yet
-    return $cache = ($v === false || $v === null) ? null : (int) $v;
+        $st = db()->prepare('SELECT 1 FROM workstation_streams WHERE user_id = ? LIMIT 1');
+        $st->execute([(int) $user['user_id']]);
+        return $cache = (bool) $st->fetchColumn();
+    } catch (Throwable $e) { return $cache = false; }   // not migrated yet
 }
 
 /**
@@ -415,12 +415,11 @@ function redirect_after_login(): void
     if ($user && current_user_has_role('factory')
         && (int) ($user['client_id'] ?? 0) === factory_client_id()
         && ($user['role'] ?? '') !== 'admin') {
-        // A bench login IS a station rather than a person — whoever's stood at
-        // it uses it. Drop it straight on that bench's queue; the incoming
-        // orders list is an office view and no use at a machine.
-        $station = current_user_station_id();
-        header('Location: ' . ($station !== null
-            ? '/factory/station.php?station_id=' . $station
+        // A workstation login IS a process rather than a person — whoever's on
+        // that job today uses it. Drop it straight on its scan screen; the
+        // incoming orders list is an office view and no use at a machine.
+        header('Location: ' . (current_user_is_workstation()
+            ? '/factory/scan.php'
             : '/factory/incoming-orders.php'));
         exit;
     }

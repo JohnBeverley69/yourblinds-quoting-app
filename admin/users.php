@@ -23,19 +23,24 @@ if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }
 
-// Benches, for a workshop login that IS a station rather than a person. Offered
-// right here on the create form, because that's when these accounts get made —
-// having to create the user and then go and edit it is exactly the sort of
-// two-step that gets forgotten, leaving a bench login stranded on the office
+// Processes, for a workshop login that IS a process rather than a person —
+// "Vertical Head Rail", "Roller". Offered right here on the create form, because
+// that's when these accounts get made; create-then-go-and-edit is exactly the
+// two-step that gets forgotten, leaving a workstation stranded on the office
 // order list. Null = don't offer it (not the factory account, or not migrated).
-$factoryStations = null;
+$factoryProcesses = null;
 if ($isFactoryAccount) {
     try {
-        db()->query('SELECT factory_station_id FROM client_users LIMIT 0');
-        $s = db()->prepare('SELECT id, name FROM factory_stations WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+        db()->query('SELECT 1 FROM workstation_streams LIMIT 0');
+        $s = db()->prepare(
+            "SELECT DISTINCT rs.product_id, COALESCE(NULLIF(rs.stream,''),'main') AS stream, p.name
+               FROM product_route_steps rs JOIN products p ON p.id = rs.product_id
+              WHERE p.client_id = ? AND rs.active = 1
+              ORDER BY p.name, stream"
+        );
         $s->execute([$clientId]);
-        $factoryStations = $s->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) { $factoryStations = null; }
+        $factoryProcesses = $s->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $factoryProcesses = null; }
 }
 $rolePriority = array_flip($validRoles);
 $pickPrimary = static function (array $roles) use ($rolePriority): string {
@@ -50,7 +55,7 @@ $form = [
     'last_name'  => '',
     'username'   => '',
     'email'      => '',
-    'factory_station_id' => 0,
+    'processes'  => [],
     'roles'      => ['sales'],
     'can_create_quotes'          => 1,
     'can_create_orders'          => 0,
@@ -69,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
-    $form['factory_station_id'] = (int) ($_POST['factory_station_id'] ?? 0);
+    $form['processes'] = array_values(array_filter(array_map('strval', (array) ($_POST['processes'] ?? []))));
     $password = (string) ($_POST['password'] ?? '');
 
     // Multi-role checkbox group. Filter to known roles, dedupe.
@@ -95,15 +100,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            $stationCol = $factoryStations !== null ? ', factory_station_id' : '';
-            $stationVal = $factoryStations !== null ? ', ?' : '';
             $stmt = $pdo->prepare(
                 "INSERT INTO client_users
                   (client_id, username, full_name, first_name, last_name,
                    email, password_hash, role,
                    can_create_quotes, can_create_orders,
-                   can_view_all_customer_jobs, can_view_costs, active{$stationCol})
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1{$stationVal})"
+                   can_view_all_customer_jobs, can_view_costs, active)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
             );
             $params = [
                 $clientId,
@@ -119,11 +122,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $form['can_view_all_customer_jobs'],
                 $form['can_view_costs'],
             ];
-            if ($factoryStations !== null) {
-                $params[] = ((int) $form['factory_station_id']) > 0 ? (int) $form['factory_station_id'] : null;
-            }
             $stmt->execute($params);
             $newUserId = (int) $pdo->lastInsertId();
+
+            // Workstation processes — assigned here at creation, so a workshop
+            // login can't be made and then left stranded on the office order
+            // list because someone forgot the second step.
+            if ($factoryProcesses !== null && $form['processes']) {
+                $valid = [];
+                foreach ($factoryProcesses as $p) $valid[$p['product_id'] . '|' . $p['stream']] = true;
+                $insWs = $pdo->prepare('INSERT IGNORE INTO workstation_streams (user_id, product_id, stream) VALUES (?, ?, ?)');
+                foreach ($form['processes'] as $key) {
+                    if (!isset($valid[$key])) continue;   // only real routes
+                    [$wpid, $wstream] = explode('|', $key, 2);
+                    $insWs->execute([$newUserId, (int) $wpid, $wstream]);
+                }
+            }
+
             $insRole = $pdo->prepare(
                 'INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)'
             );
@@ -283,23 +298,34 @@ $activeNav = 'users';
                     </div>
                 </div>
 
-                <?php if ($factoryStations !== null): ?>
+                <?php if ($factoryProcesses !== null): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="factory_station_id">Bench</label>
-                        <select id="factory_station_id" name="factory_station_id">
-                            <option value="">Not a bench login — lands on Incoming Orders</option>
-                            <?php foreach ($factoryStations as $s): ?>
-                                <option value="<?= (int) $s['id'] ?>" <?= (int) $form['factory_station_id'] === (int) $s['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $s['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label>Workstation processes</label>
+                        <?php if (!$factoryProcesses): ?>
+                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No routes set up yet — build them on Factory &rarr; Routes first.</p>
+                        <?php else: ?>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
+                                        padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
+                                        border-radius:8px; background:var(--bg-input); color:var(--text-body);
+                                        font-size:0.9375rem;">
+                                <?php foreach ($factoryProcesses as $p):
+                                    $key = $p['product_id'] . '|' . $p['stream'];
+                                    $lab = $p['stream'] === 'main' ? (string) $p['name'] : $p['name'] . ' — ' . $p['stream'];
+                                ?>
+                                    <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
+                                        <input type="checkbox" name="processes[]" value="<?= e($key) ?>"
+                                               <?= in_array($key, (array) $form['processes'], true) ? 'checked' : '' ?>>
+                                        <?= e($lab) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
-                            For a workshop login that <em>is</em> a bench rather than a person —
-                            username the station, and whoever's stood at it uses it. It logs
-                            straight into that bench's queue instead of the office order list.
-                            Needs the <strong>Factory</strong> role ticked above.
+                            For a workshop login that <em>is</em> a process rather than a person &mdash;
+                            username it “Vertical Head Rail”, and whoever's on that job today uses it.
+                            Tick as many as it covers. It logs straight into its scan screen instead of
+                            the office order list. Needs the <strong>Factory</strong> role ticked above.
                         </p>
                     </div>
                 </div>
