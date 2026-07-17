@@ -21,6 +21,7 @@ $fu           = function_exists('current_user') ? current_user() : null;
 $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
     'floor'      => ['/factory/floor.php',           'Floor'],
+    'scan'       => ['/factory/scan.php',            'Scan'],
     'routes'     => ['/factory/routes.php',          'Routes'],
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
