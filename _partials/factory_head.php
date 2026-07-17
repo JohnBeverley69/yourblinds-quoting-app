@@ -4,6 +4,9 @@
  * output, after the page has done its data work. Expects in scope:
  *   $factoryTitle (string)  page title
  *   $factoryNav   (string)  active nav key ('incoming' | 'production' | ...)
+ *   $factoryWide  (bool)    optional — drop the reading-width cap and use the
+ *                           whole monitor. For dense tables like the floor,
+ *                           where 1200px just buys you a scrollbar.
  * Close the page with _partials/factory_foot.php.
  *
  * Deliberately its OWN chrome (a top bar, not the tenant sidebar) so the
@@ -11,6 +14,7 @@
  */
 $factoryTitle = $factoryTitle ?? 'Factory';
 $factoryNav   = $factoryNav   ?? '';
+$factoryWide  = $factoryWide  ?? false;
 $fu           = function_exists('current_user') ? current_user() : null;
 
 // Nav grows as factory features land; the queue is the first.
@@ -53,7 +57,11 @@ $factoryNavItems = [
         .factory-user { display: flex; align-items: center; gap: 0.9rem; font-size: 0.875rem; color: #b9c6d3; }
         .factory-user a { color: #e5edf5; text-decoration: none; font-weight: 600; }
         .factory-user a:hover { text-decoration: underline; }
+        /* 1200px is a comfortable reading width for forms. Dense tables want the
+           whole monitor instead — capping them just hides columns behind a
+           scrollbar on a screen that had the room all along. */
         .factory-main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+        .factory-main.is-wide { max-width: none; }
     </style>
 </head>
 <body class="factory-body">
@@ -69,4 +77,4 @@ $factoryNavItems = [
         <a href="/auth/logout.php">Log out</a>
     </div>
 </header>
-<main class="factory-main">
+<main class="factory-main<?= $factoryWide ? ' is-wide' : '' ?>">
