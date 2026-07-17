@@ -48,7 +48,12 @@
   .fl-prog-fill.full { background:#16a34a; }
   .fl-prog-pct { font-size:.7rem; font-weight:700; color:#166534; min-width:2.4rem; text-align:right; font-variant-numeric:tabular-nums; }
 
-  /* The route as a chevron strip — click a stage to move the blind there. */
+  /* The route as a chevron strip — click a stage to move the blind there.
+     A product with parallel streams (the vertical's headrail + fabric) gets one
+     line each: they run alongside one another and imply nothing about the other. */
+  .fl-streamline { display:flex; align-items:center; gap:.4rem; }
+  .fl-streamline + .fl-streamline { margin-top:.25rem; }
+  .fl-streamname { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint,#94a3b8); flex:0 0 4.2rem; text-align:right; }
   .fl-strip { display:flex; align-items:stretch; white-space:nowrap; margin:0; }
   .stg { font:inherit; font-size:.72rem; font-weight:600; cursor:pointer; border:none; color:#64748b; background:#eef1f5;
          padding:.3rem .75rem .3rem 1rem; margin-right:-7px; position:relative;

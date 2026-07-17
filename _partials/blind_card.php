@@ -23,7 +23,7 @@ if (!function_exists('bj_render_card')) {
         $qty     = (int) ($r['quantity'] ?? 1);
         $unit    = (int) ($r['unit_no'] ?? 1);
         $status  = (string) ($r['status'] ?? 'queued');
-        $jobId   = (int) ($r['id'] ?? 0);
+        $streamId = (int) ($r["stream_id"] ?? $r["id"] ?? 0);
         $working = $status === 'in_progress';
         $fabLine = trim($fabric . ($colour !== '' ? ' / ' . $colour : ''));
         $rt      = e($returnTo);
@@ -51,20 +51,20 @@ if (!function_exists('bj_render_card')) {
                 <?php if (!$working): ?>
                     <form method="post" action="/factory/blind-action.php" class="bc-inline">
                         <?= $tok ?><input type="hidden" name="action" value="start">
-                        <input type="hidden" name="job_id" value="<?= $jobId ?>">
+                        <input type="hidden" name="stream_id" value="<?= $streamId ?>">
                         <input type="hidden" name="return_to" value="<?= $rt ?>">
                         <button class="bc-btn ghost">Start</button>
                     </form>
                 <?php endif; ?>
                 <form method="post" action="/factory/blind-action.php" class="bc-inline">
                     <?= $tok ?><input type="hidden" name="action" value="done">
-                    <input type="hidden" name="job_id" value="<?= $jobId ?>">
+                    <input type="hidden" name="stream_id" value="<?= $streamId ?>">
                     <input type="hidden" name="return_to" value="<?= $rt ?>">
                     <button class="bc-btn go">Done &rarr;</button>
                 </form>
                 <form method="post" action="/factory/blind-action.php" class="bc-inline" title="Step back a stage">
                     <?= $tok ?><input type="hidden" name="action" value="back">
-                    <input type="hidden" name="job_id" value="<?= $jobId ?>">
+                    <input type="hidden" name="stream_id" value="<?= $streamId ?>">
                     <input type="hidden" name="return_to" value="<?= $rt ?>">
                     <button class="bc-btn back" aria-label="Step back">&larr;</button>
                 </form>
