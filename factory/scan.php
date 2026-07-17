@@ -326,9 +326,30 @@ require __DIR__ . '/../_partials/factory_head.php';
     setInterval(function () { if (document.activeElement !== box) box.focus(); }, 700);
     document.addEventListener('click', function (e) { if (!e.target.closest('.sc-pick')) box.focus(); });
 
-    // LF & CR sends Enter TWICE. Submitting on the raw Enter would fire the form
-    // twice and advance the blind two stages.
     var sent = false;
+    function go() {
+        if (sent) return;
+        if (!/^\d{8,9}$/.test(box.value.trim())) return;   // only a real code
+        sent = true;
+        form.submit();
+    }
+
+    // DON'T depend on the scanner's Enter. A terminator is a setting, and a
+    // setting is something that can be off, or knocked off while someone's
+    // hunting through the manual for something else — and when it is, the code
+    // lands in the box, nothing happens, and it looks like the system is
+    // broken. A wedge scanner types far faster than a human, so a complete code
+    // followed by a moment's silence IS the end of a scan. Submit on that, and
+    // the terminator setting stops mattering.
+    var idle = null;
+    box.addEventListener('input', function () {
+        clearTimeout(idle);
+        idle = setTimeout(go, 120);          // ~10x slower than the scanner, ~2x faster than typing
+    });
+
+    // Enter still works, whether the scanner sends one or two. LF & CR sends it
+    // TWICE — submitting on the raw event would fire the form twice and advance
+    // the blind two stages, so the guard above matters either way.
     form.addEventListener('submit', function (e) {
         if (sent || box.value.trim() === '') { e.preventDefault(); return; }
         sent = true;
