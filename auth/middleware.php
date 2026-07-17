@@ -250,6 +250,32 @@ function factory_client_id(): int
 }
 
 /**
+ * The bench this login IS, or null if it's a person rather than a station.
+ *
+ * Workshop logins are per station, not per user — the PC at the saw stays
+ * logged in as "Safety Saw" and whoever's stood there uses it. That's what
+ * lands them on their own queue, and (once the scanners are in) what lets a
+ * scan know which bench it came from.
+ *
+ * Cached per request. Null whenever the column or the account says otherwise,
+ * so this is safe to call before the migration has run.
+ */
+function current_user_station_id(): ?int
+{
+    static $cache = false;
+    if ($cache !== false) return $cache;
+
+    $user = current_user();
+    if (!$user || (int) ($user['client_id'] ?? 0) !== factory_client_id()) return $cache = null;
+    try {
+        $st = db()->prepare('SELECT factory_station_id FROM client_users WHERE id = ? AND client_id = ? LIMIT 1');
+        $st->execute([(int) $user['user_id'], (int) $user['client_id']]);
+        $v = $st->fetchColumn();
+    } catch (Throwable $e) { return $cache = null; }   // column not migrated yet
+    return $cache = ($v === false || $v === null) ? null : (int) $v;
+}
+
+/**
  * Guard for the factory back-office (factory.yourblinds.uk). Access is
  * Beverley's own people only: the super-admin, OR a user on the factory
  * account carrying the 'factory' role. Scoping to the factory account is
@@ -389,7 +415,13 @@ function redirect_after_login(): void
     if ($user && current_user_has_role('factory')
         && (int) ($user['client_id'] ?? 0) === factory_client_id()
         && ($user['role'] ?? '') !== 'admin') {
-        header('Location: /factory/incoming-orders.php');
+        // A bench login IS a station rather than a person — whoever's stood at
+        // it uses it. Drop it straight on that bench's queue; the incoming
+        // orders list is an office view and no use at a machine.
+        $station = current_user_station_id();
+        header('Location: ' . ($station !== null
+            ? '/factory/station.php?station_id=' . $station
+            : '/factory/incoming-orders.php'));
         exit;
     }
 

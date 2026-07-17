@@ -28,8 +28,22 @@ if (!$target) {
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 // 'factory' role only on the Beverley factory account (see admin/users.php).
-if (function_exists('factory_client_id') && (int) $clientId === factory_client_id()) {
+$isFactoryAccount = function_exists('factory_client_id') && (int) $clientId === factory_client_id();
+if ($isFactoryAccount) {
     $validRoles[] = 'factory';
+}
+
+// Benches, for a station login (an account that IS a bench rather than a
+// person). Null = don't offer the field at all: not the factory account, or the
+// routing/station migrations haven't run.
+$factoryStations = null;
+if ($isFactoryAccount) {
+    try {
+        db()->query('SELECT factory_station_id FROM client_users LIMIT 0');
+        $s = db()->prepare('SELECT id, name FROM factory_stations WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+        $s->execute([$clientId]);
+        $factoryStations = $s->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $factoryStations = null; }
 }
 
 // Priority for picking the "primary" role to write into client_users.role
@@ -203,6 +217,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $home['home_county']   !== '' ? $home['home_county']   : null,
                 $home['home_postcode'] !== '' ? $home['home_postcode'] : null,
             );
+            // Bench assignment — only ever touched on the factory account, where
+            // the field is actually rendered. Other accounts keep whatever's
+            // there (which is NULL) rather than being blanked by a form that
+            // never showed the option.
+            if ($factoryStations !== null) {
+                $sql .= ', factory_station_id = ?';
+                $stationPick = (int) ($_POST['factory_station_id'] ?? 0);
+                $params[] = $stationPick > 0 ? $stationPick : null;
+            }
             if ($newPassword !== '') {
                 $sql .= ', password_hash = ?';
                 $params[] = password_hash($newPassword, PASSWORD_DEFAULT);
@@ -376,6 +399,28 @@ $activeNav = 'users';
                         </p>
                     </div>
                 </div>
+
+                <?php if ($factoryStations !== null): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="factory_station_id">Bench</label>
+                        <select id="factory_station_id" name="factory_station_id">
+                            <option value="">Not a bench login — lands on Incoming Orders</option>
+                            <?php foreach ($factoryStations as $s): ?>
+                                <option value="<?= (int) $s['id'] ?>" <?= (int) ($target['factory_station_id'] ?? 0) === (int) $s['id'] ? 'selected' : '' ?>>
+                                    <?= e((string) $s['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            For a workshop login that <em>is</em> a bench rather than a person —
+                            different staff use the same account all day. It logs straight into
+                            that bench's queue, and once the scanners are in, a scan knows which
+                            bench it came from. Needs the <strong>Factory</strong> role ticked above.
+                        </p>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="form-row full">
                     <div class="form-group">
