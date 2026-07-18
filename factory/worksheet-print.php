@@ -21,6 +21,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/build_eval.php';
 require __DIR__ . '/../_partials/qr.php';
+require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a label's part-specific QR
 
 requireFactory();
 
