@@ -327,6 +327,8 @@ $activeNav = 'products';
                    class="btn btn-secondary">Single-band import</a>
                 <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>"
                    class="btn btn-secondary">Bulk import (multiple bands)</a>
+                <a href="/admin/products/price-cost-import.php?system_id=<?= (int) $systemId ?>"
+                   class="btn btn-secondary" title="Overlay your cost grid onto these prices to get profit margins">Import costs</a>
                 <a href="/admin/products/extras.php?product_id=<?= (int) $productId ?>"
                    class="btn btn-primary">Next: options &rarr;</a>
             </div>
