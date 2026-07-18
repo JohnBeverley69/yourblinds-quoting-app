@@ -47,8 +47,23 @@ $log = static function (string $result, ?string $detail, ?string $code, ?array $
 };
 
 $key    = (string) ($_REQUEST['key'] ?? '');
-$code   = trim((string) ($_REQUEST['c'] ?? $_REQUEST['code'] ?? ''));
 $source = (string) ($_REQUEST['s'] ?? $_REQUEST['scanner'] ?? '');
+
+// Different WiFi scanners send the code differently: a query param, a form
+// field, a JSON body, or the bare code as the whole body. Accept all of them so
+// whichever this scanner does, it lands. Query/form first, then the raw body.
+$rawBody = file_get_contents('php://input') ?: '';
+$code = trim((string) ($_REQUEST['c'] ?? $_REQUEST['code'] ?? ''));
+if ($code === '' && $rawBody !== '') {
+    $j = json_decode($rawBody, true);
+    if (is_array($j)) {
+        foreach (['c', 'code', 'data', 'barcode', 'qr', 'value'] as $k) {
+            if (isset($j[$k]) && is_scalar($j[$k])) { $code = trim((string) $j[$k]); break; }
+        }
+    } elseif (preg_match('/^\s*[0-9]{8,9}\s*$/', $rawBody)) {
+        $code = trim($rawBody);           // the scanner just sent the bare code
+    }
+}
 
 // The secret. Timing-safe, and a missing/blank configured key can never match.
 $expected = fx_scan_key($pdo);
@@ -59,7 +74,12 @@ if ($expected === '' || !hash_equals($expected, $key)) {
 
 $parsed = qr_parse_code($code);
 if ($parsed === null) {
-    $log('bad_code', 'unrecognised', $code, null, $source);
+    // Capture HOW the scanner sent things, so the very first live test tells us
+    // the payload format instead of just failing silently. This is the one place
+    // we don't yet know a new scanner's shape.
+    $seen = $_SERVER['REQUEST_METHOD'] . ' q=' . http_build_query(array_diff_key($_REQUEST, ['key' => 1]))
+          . ' body=' . mb_substr($rawBody, 0, 120);
+    $log('bad_code', $seen, $code !== '' ? $code : '(empty)', null, $source);
     $reply(400, 'BAD CODE');
 }
 [$itemId, $unitNo, $streamDigit] = $parsed;
