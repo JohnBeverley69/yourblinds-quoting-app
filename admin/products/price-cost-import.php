@@ -18,7 +18,10 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
-requireAdmin();
+// Cost prices are super-admin ONLY. They must never be seen by tenant admins,
+// office staff, or the trade customers the catalogue is pushed to — leaking
+// Beverley's cost/margin would be commercially damaging.
+requireSuperAdmin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];

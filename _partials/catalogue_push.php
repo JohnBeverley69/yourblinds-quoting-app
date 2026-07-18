@@ -74,8 +74,12 @@ function push_catalogue_to_client(
     // this, a pushed headrail lost width_only (and friends) and started
     // showing a drop on the target tenant. Empty on older schemas.
     $flagCols = [];
+    // NB: cost_price is deliberately NOT here. Cost prices are Beverley's alone
+    // and must never reach a tenant — same rule as the size-varying
+    // price_table_rows.cost (which the row copy also omits) and the extra-choice
+    // cost. Behaviour flags push; costs never do.
     foreach (['requires_option', 'width_only', 'price_per_slat',
-              'show_colour_field', 'band_label', 'cost_price'] as $col) {
+              'show_colour_field', 'band_label'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $flagCols[] = $col;
