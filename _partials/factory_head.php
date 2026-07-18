@@ -25,6 +25,13 @@ $factoryNavItems = [
     // is the scan surface you actually watch. The tablet page (/factory/scan.php)
     // is still there by URL for the deferred tablet option.
     'scan'       => ['/factory/scan-log.php',        'Scan log'],
+];
+// Profit shows real cost, so it's super-admin ONLY — added after the shared
+// items so factory-role staff never even see the link.
+if (function_exists('is_super_admin') && is_super_admin()) {
+    $factoryNavItems['profit'] = ['/factory/profit.php', 'Profit'];
+}
+$factoryNavItems += [
     'routes'     => ['/factory/routes.php',          'Routes'],
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
