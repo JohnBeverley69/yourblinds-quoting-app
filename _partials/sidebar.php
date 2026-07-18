@@ -60,6 +60,14 @@ $_perms = function_exists('current_user_permissions')
 $canCreateQuotes  = $isAdmin || $_perms['can_create_quotes'];
 $canCreateOrders  = $isAdmin || $_perms['can_create_orders'];
 $canSeeAllJobs    = $isAdmin || $_perms['can_view_all_customer_jobs'];
+
+// Show the Factory link only to people who can actually get in — the same test
+// requireFactory() uses. Otherwise the link would just 403. Super-admin, or a
+// factory-role user on the Beverley (factory) account.
+$factoryClientId  = function_exists('factory_client_id') ? factory_client_id() : 3;
+$canSeeFactory    = $isSuperAdmin
+    || ((int) ($user['client_id'] ?? 0) === $factoryClientId
+        && function_exists('current_user_has_role') && current_user_has_role('factory'));
 // Quote History is hidden for users with no quote-related permission
 // (they have nothing to see). Orders stays VISIBLE to everyone in the
 // tenant, including fitters — they need to open the orders they're
@@ -153,6 +161,9 @@ $navSections = [
             // click here first to create employee logins (Tyler). The nav
             // key + route stay 'accounts' to avoid churn.
             'accounts'      => ['/accounts/index.php',         'Payments',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+            // The production back-office — its own app, but a link here so it's
+            // reachable without typing the URL. Only shown to those who can enter.
+            'factory'       => ['/factory/incoming-orders.php', 'Factory',      $canSeeFactory],
             'help'          => ['/help/index.php',             'Help & guide',  true],
         ],
     ],
