@@ -1384,20 +1384,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
 // "Quick start" default grid (UK standard sizes) is only suggested when the
 // table is empty — once populated we always render exactly what's stored.
 // ---------------------------------------------------------------------------
+// Cost is MASTER-ADMIN ONLY. Gate it at the query, so a non-super admin's
+// browser never even receives the cost — the strongest guard. Probe the column
+// so this still works before/without the cost migration.
+$showCost = false;
+if (function_exists('is_super_admin') && is_super_admin()) {
+    try { db()->query('SELECT cost FROM price_table_rows LIMIT 0'); $showCost = true; }
+    catch (Throwable $e) { $showCost = false; }
+}
+
 $cellStmt = db()->prepare(
-    'SELECT width_mm, drop_mm, price FROM price_table_rows WHERE price_table_id = ?'
+    ($showCost ? 'SELECT width_mm, drop_mm, price, cost' : 'SELECT width_mm, drop_mm, price')
+    . ' FROM price_table_rows WHERE price_table_id = ?'
 );
 $cellStmt->execute([$tableId]);
 $cells = $cellStmt->fetchAll();
 
 $matrixWidths = $matrixDrops = [];
-$matrixByPair = [];
+$matrixByPair = $matrixByCost = [];
 foreach ($cells as $c) {
     $w = (int) $c['width_mm'];
     $d = (int) $c['drop_mm'];
     $matrixWidths[$w] = true;
     $matrixDrops[$d]  = true;
     $matrixByPair["$w|$d"] = $c['price'];
+    if ($showCost) $matrixByCost["$w|$d"] = $c['cost'];
 }
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
@@ -1588,6 +1599,13 @@ $activeNav = 'products';
             -webkit-appearance: none; margin: 0;
         }
         .grid-cell-input { -moz-appearance: textfield; }
+        /* Cost + margin under each price — master-admin only (loaded only for
+           super-admins server-side, so it never reaches anyone else). */
+        .grid-cost {
+            font-size: 0.6875rem; text-align: right; padding: 0 0.5rem 0.25rem;
+            color: var(--text-faint, #94a3b8); font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .grid-cost .neg { color: #b91c1c; font-weight: 700; }
         .grid-axis-rm {
             background: transparent; border: 0;
             color: rgba(255, 255, 255, 0.7);
@@ -2084,6 +2102,14 @@ $activeNav = 'products';
                                                    inputmode="decimal"
                                                    name="cells[<?= (int) $w ?>_<?= (int) $d ?>]"
                                                    value="<?= $val === null ? '' : e(number_format((float) $val, 2, '.', '')) ?>">
+                                            <?php if ($showCost):
+                                                $cost = $matrixByCost["$w|$d"] ?? null;
+                                                if ($cost !== null):
+                                                    $c = (float) $cost; $p = (float) ($val ?? 0);
+                                                    $marg = $p > 0 ? ($p - $c) / $p * 100 : null;
+                                            ?>
+                                                <div class="grid-cost" title="cost to make · margin (master admin only)">£<?= number_format($c, 2) ?><?php if ($marg !== null): ?> · <span class="<?= $marg < 0 ? 'neg' : '' ?>"><?= number_format($marg, 0) ?>%</span><?php endif; ?></div>
+                                            <?php endif; endif; ?>
                                         </td>
                                     <?php endforeach; ?>
                                     <td></td>
