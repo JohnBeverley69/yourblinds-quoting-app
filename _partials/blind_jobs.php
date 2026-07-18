@@ -99,6 +99,74 @@ function bj_route_by_stream(PDO $pdo, int $productId): array
 }
 
 /**
+ * A product's stream NAMES in a stable order (earliest stage first). This is
+ * what the single stream-digit on a label maps to: digit 0 = the whole blind,
+ * digit N = the Nth stream here. So a vertical's cutting label carries digit 1
+ * (Headrail) and its fabric label digit 2 (Fabric), and each scan completes
+ * exactly that part.
+ */
+function bj_streams_ordered(PDO $pdo, int $productId): array
+{
+    static $cache = [];
+    if (isset($cache[$productId])) return $cache[$productId];
+    $names = [];
+    foreach (bj_route_by_stream($pdo, $productId) as $name => $_steps) $names[] = (string) $name;
+    return $cache[$productId] = $names;
+}
+
+/**
+ * Complete a blind's part from a scanned code — the whole point of the WiFi
+ * scan-in path. No login: the code says everything.
+ *
+ * streamDigit 0 = finish the whole blind (single-stream products: roller,
+ * pleated). N = finish the Nth stream (a vertical's headrail or fabric). "One
+ * scan = that part done" — the stages inside the stream are marked complete
+ * together; add per-stage scanning later by advancing instead of completing.
+ *
+ * @return array{ok:bool, title:string, detail:string, already?:bool}
+ */
+function bj_complete_by_code(PDO $pdo, int $itemId, int $unitNo, int $streamDigit, ?int $userId): array
+{
+    $q = $pdo->prepare(
+        'SELECT bj.id, bj.status, bj.product_id, qi.product_name_snapshot, qi.width_mm, qi.drop_mm,
+                qi.quantity, qi.room_name, qi.line_no, q.quote_number
+           FROM factory_blind_jobs bj
+           JOIN quote_items qi ON qi.id = bj.quote_item_id
+           JOIN quotes q       ON q.id = bj.quote_id
+          WHERE bj.quote_item_id = ? AND bj.unit_no = ? LIMIT 1'
+    );
+    $q->execute([$itemId, $unitNo]);
+    $job = $q->fetch(PDO::FETCH_ASSOC);
+    if (!$job) return ['ok' => false, 'title' => 'Not on the floor', 'detail' => 'Blind not released to production.'];
+
+    $ref = (string) $job['quote_number'] . '-' . (int) $job['line_no'] . '-(' . $unitNo . '/' . max(1, (int) $job['quantity']) . ')';
+    $streams = bj_streams_for($pdo, [(int) $job['id']])[(int) $job['id']] ?? [];
+
+    // Which stream rows does this scan finish?
+    $targets = [];
+    if ($streamDigit === 0) {
+        $targets = $streams;                              // whole blind
+    } else {
+        $ordered = bj_streams_ordered($pdo, (int) $job['product_id']);
+        $name = $ordered[$streamDigit - 1] ?? null;
+        if ($name !== null && isset($streams[$name])) $targets = [$name => $streams[$name]];
+    }
+    if (!$targets) return ['ok' => false, 'title' => 'Nothing to finish', 'detail' => $ref . ' — that part isn\'t on this blind.'];
+
+    $didAny = false;
+    foreach ($targets as $sr) {
+        if ($sr['status'] === 'done') continue;
+        bj_stream_set_stage($pdo, (int) $sr['id'], null, $userId);   // null = stream complete
+        $didAny = true;
+    }
+
+    $partName = $streamDigit === 0 ? '' : (array_key_first($targets) ?: '');
+    $what = trim((string) $job['product_name_snapshot'] . '  ' . (int) $job['width_mm'] . '×' . (int) $job['drop_mm']);
+    if (!$didAny) return ['ok' => true, 'already' => true, 'title' => $ref, 'detail' => ($partName !== '' ? $partName . ' ' : '') . 'was already done · ' . $what];
+    return ['ok' => true, 'title' => $ref, 'detail' => ($partName !== '' ? $partName . ' done · ' : 'made · ') . $what];
+}
+
+/**
  * Release an order's Beverley blinds onto the floor: one blind per physical unit
  * (a qty-3 line is 3), and one open position per stream on its route.
  *
