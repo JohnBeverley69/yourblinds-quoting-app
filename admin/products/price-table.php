@@ -29,6 +29,15 @@ requireAdmin();
 
 $user     = current_user();
 $clientId = $user['client_id'];
+
+// Cost lives beside the price (price_table_rows.cost) and is MASTER-ADMIN ONLY.
+// $costEditable → a super-admin may enter/paste cost here. $hasCostCol lets the
+// save handlers PRESERVE existing cost across the delete+reinsert so editing a
+// price never wipes an imported cost — including when a non-super admin saves.
+$hasCostCol = false;
+try { db()->query('SELECT cost FROM price_table_rows LIMIT 0'); $hasCostCol = true; }
+catch (Throwable $e) { $hasCostCol = false; }
+$costEditable = $hasCostCol && function_exists('is_super_admin') && is_super_admin();
 // Company default unit for displaying / entering grid widths + drops.
 // Cell values are PRICES (unit-independent); only the axis labels and the
 // add-width/add-drop inputs use the unit. Stored dims stay mm.
@@ -657,15 +666,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
     $pdo = db();
     $pdo->beginTransaction();
     try {
+        // Carry existing cost across the wipe-and-rebuild — editing prices must
+        // never erase the imported cost grid, whoever's saving.
+        $costMap = [];
+        if ($hasCostCol) {
+            $cst = $pdo->prepare('SELECT width_mm, drop_mm, cost FROM price_table_rows WHERE price_table_id = ? AND cost IS NOT NULL');
+            $cst->execute([$tableId]);
+            foreach ($cst->fetchAll(PDO::FETCH_ASSOC) as $cr) $costMap[$cr['width_mm'] . '|' . $cr['drop_mm']] = $cr['cost'];
+        }
         $del = $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?');
         $del->execute([$tableId]);
         if ($bulk) {
-            $ins = $pdo->prepare(
-                'INSERT INTO price_table_rows
-                   (price_table_id, width_mm, drop_mm, price)
-                 VALUES (?, ?, ?, ?)'
-            );
-            foreach ($bulk as $args) { $ins->execute($args); }
+            $ins = $pdo->prepare($hasCostCol
+                ? 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price, cost) VALUES (?, ?, ?, ?, ?)'
+                : 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, ?, ?)');
+            foreach ($bulk as $args) {
+                if ($hasCostCol) { [$tid, $w, $d, $pr] = $args; $ins->execute([$tid, $w, $d, $pr, $costMap["$w|$d"] ?? null]); }
+                else $ins->execute($args);
+            }
         }
         // Bump the updated_at on the parent table so the products
         // list reflects the change in its "Updated" column.
@@ -747,7 +765,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
 
     $wmm   = (array) ($_POST['wmm']   ?? []);
     $price = (array) ($_POST['price'] ?? []);
-    $byWidth = [];   // width_mm => price (last wins)
+    $cost  = (array) ($_POST['cost']  ?? []);   // super-admin only; ignored otherwise
+    $byWidth = [];   // width_mm => ['price'=>, 'cost'=>null] (last wins)
     $rowErrs = [];
     foreach ($wmm as $i => $wRaw) {
         // Widths are typed in the company unit — convert to mm. Explicit
@@ -762,22 +781,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
             continue;
         }
         // Rates (per-metre-of-drop) keep more precision than flat prices.
-        $byWidth[$w] = round((float) $p, $pricePerDrop ? 4 : 2);
+        $entry = ['price' => round((float) $p, $pricePerDrop ? 4 : 2), 'cost' => null];
+        if ($costEditable) {
+            $cRaw = trim((string) ($cost[$i] ?? ''));
+            if ($cRaw !== '' && is_numeric($cRaw) && (float) $cRaw >= 0) $entry['cost'] = round((float) $cRaw, 4);
+        }
+        $byWidth[$w] = $entry;
     }
 
     $pdo = db();
     $pdo->beginTransaction();
     try {
+        // Preserve any existing cost the (non-super) editor didn't submit, so a
+        // price edit never wipes an imported cost.
+        $axisCol = $pricePerDrop ? 'drop_mm' : 'width_mm';
+        $existingCost = [];
+        if ($hasCostCol) {
+            $ec = $pdo->prepare("SELECT $axisCol AS axis, cost FROM price_table_rows WHERE price_table_id = ? AND cost IS NOT NULL");
+            $ec->execute([$tableId]);
+            foreach ($ec->fetchAll(PDO::FETCH_ASSOC) as $er) $existingCost[(int) $er['axis']] = $er['cost'];
+        }
         $pdo->prepare('DELETE FROM price_table_rows WHERE price_table_id = ?')->execute([$tableId]);
         if ($byWidth) {
             ksort($byWidth);
             // Per-slat tables key the axis on DROP (drop_mm); width-only on
             // width (width_mm). Same bound values either way.
             $ins = $pdo->prepare($pricePerDrop
-                ? 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, 0, ?, ?)'
-                : 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, 0, ?)'
+                ? 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price' . ($hasCostCol ? ', cost' : '') . ') VALUES (?, 0, ?, ?' . ($hasCostCol ? ', ?' : '') . ')'
+                : 'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price' . ($hasCostCol ? ', cost' : '') . ') VALUES (?, ?, 0, ?' . ($hasCostCol ? ', ?' : '') . ')'
             );
-            foreach ($byWidth as $w => $p) { $ins->execute([$tableId, $w, $p]); }
+            foreach ($byWidth as $w => $entry) {
+                $costVal = $entry['cost'] ?? ($existingCost[$w] ?? null);   // submitted wins, else keep existing
+                if ($hasCostCol) $ins->execute([$tableId, $w, $entry['price'], $costVal]);
+                else $ins->execute([$tableId, $w, $entry['price']]);
+            }
         }
         $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
         $pdo->commit();
@@ -967,8 +1004,9 @@ if ($oneDimEditor) {
     // Per-slat tables key the axis on drop_mm; width-only on width_mm. Alias
     // to width_mm so the render below stays the same.
     $woAxisCol = $pricePerDrop ? 'drop_mm' : 'width_mm';
+    $woCostSel = $costEditable ? ', cost' : '';
     $woRowsStmt = db()->prepare(
-        "SELECT $woAxisCol AS width_mm, price FROM price_table_rows
+        "SELECT $woAxisCol AS width_mm, price$woCostSel FROM price_table_rows
           WHERE price_table_id = ? ORDER BY $woAxisCol"
     );
     $woRowsStmt->execute([$tableId]);
@@ -998,7 +1036,10 @@ if ($oneDimEditor) {
         <title><?= e((string) $table['product_name']) ?> &middot; Width prices &middot; YourBlinds</title>
         <link rel="stylesheet" href="<?= asset('/app.css') ?>">
         <style>
-            .wo-table { border-collapse: collapse; width: 100%; max-width: 30rem; }
+            .wo-table { border-collapse: collapse; width: 100%; max-width: <?= $costEditable ? '42rem' : '30rem' ?>; }
+            .cost-badge { font-size: 0.625rem; text-transform: none; letter-spacing: 0; font-weight: 600;
+                          color: #92400e; background: #fef3c7; border-radius: 4px; padding: 0.05rem 0.35rem; }
+            .wo-table input.wo-cost { background: #fffbeb; }
             .wo-table th, .wo-table td { padding: 0.375rem 0.5rem; text-align: left; }
             .wo-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
                            color: var(--text-faint); border-bottom: 1px solid var(--border); }
@@ -1063,7 +1104,7 @@ if ($oneDimEditor) {
                     ?>
                     <table class="wo-table" id="wo-table">
                         <thead>
-                            <tr><th><?= e($axisLabel) ?> (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><th></th></tr>
+                            <tr><th><?= e($axisLabel) ?> (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><?php if ($costEditable): ?><th>Cost (£) <span class="cost-badge">master only</span></th><?php endif; ?><th></th></tr>
                         </thead>
                         <tbody>
                             <?php
@@ -1081,6 +1122,11 @@ if ($oneDimEditor) {
                                     <td><input type="number" name="price[]" min="0" step="0.0001"
                                                value="<?= $r['price'] === '' ? '' : e((string) $r['price']) ?>"
                                                placeholder="<?= e($pricePh) ?>"></td>
+                                    <?php if ($costEditable): ?>
+                                    <td><input type="number" name="cost[]" min="0" step="0.0001" class="wo-cost"
+                                               value="<?= (isset($r['cost']) && $r['cost'] !== null && $r['cost'] !== '') ? e((string) $r['cost']) : '' ?>"
+                                               placeholder="paste here"></td>
+                                    <?php endif; ?>
                                     <td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1109,6 +1155,7 @@ if ($oneDimEditor) {
             tr.innerHTML =
                 '<td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>" placeholder="<?= e($woPh) ?>"></td>'
               + '<td><input type="number" name="price[]" min="0" step="0.0001" placeholder="<?= e($pricePh) ?>"></td>'
+              + '<?= $costEditable ? '<td><input type="number" name="cost[]" min="0" step="0.0001" class="wo-cost" placeholder="paste here"></td>' : '' ?>'
               + '<td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>';
             tbody.appendChild(tr);
             var inp = tr.querySelector('input'); if (inp) inp.focus();
@@ -1118,6 +1165,34 @@ if ($oneDimEditor) {
             if (e.target && e.target.classList.contains('wo-rm-btn')) {
                 var tr = e.target.closest('tr');
                 if (tr) tr.remove();
+            }
+        });
+
+        // Paste a whole column of costs from Excel: click the first Cost cell,
+        // Ctrl+V, and the values flow down — one per row, adding rows if the
+        // pasted column is longer than the table. Fills the SAME column the
+        // paste landed in (cost or price), so it works for either.
+        function colInputs(name) {
+            return Array.prototype.slice.call(tbody.querySelectorAll('input[name="' + name + '[]"]'));
+        }
+        if (tbody) tbody.addEventListener('paste', function (e) {
+            var t = e.target;
+            if (!t || t.tagName !== 'INPUT') return;
+            var name = t.getAttribute('name') === 'cost[]' ? 'cost'
+                     : t.getAttribute('name') === 'price[]' ? 'price' : null;
+            if (!name) return;
+            var text = (e.clipboardData || window.clipboardData).getData('text') || '';
+            // Split on newlines / tabs, keep numeric tokens only.
+            var parts = text.split(/[\r\n\t]+/).map(function (s) { return s.replace(/[£,\s]/g, ''); })
+                            .filter(function (s) { return s !== '' && !isNaN(Number(s)); });
+            if (parts.length <= 1) return;   // single value — let the browser paste normally
+            e.preventDefault();
+            var inputs = colInputs(name);
+            var start = inputs.indexOf(t);
+            if (start < 0) start = 0;
+            for (var i = 0; i < parts.length; i++) {
+                while (start + i >= inputs.length) { newRow(); inputs = colInputs(name); }
+                inputs[start + i].value = parts[i];
             }
         });
     })();
