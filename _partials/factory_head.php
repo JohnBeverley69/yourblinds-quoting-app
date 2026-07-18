@@ -21,7 +21,10 @@ $fu           = function_exists('current_user') ? current_user() : null;
 $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
     'floor'      => ['/factory/floor.php',           'Floor'],
-    'scan'       => ['/factory/scan.php',            'Scan'],
+    // Points at the scan LOG, not the tablet page — with WiFi scanners the log
+    // is the scan surface you actually watch. The tablet page (/factory/scan.php)
+    // is still there by URL for the deferred tablet option.
+    'scan'       => ['/factory/scan-log.php',        'Scan log'],
     'routes'     => ['/factory/routes.php',          'Routes'],
     'build'      => ['/factory/build-rules.php',     'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
