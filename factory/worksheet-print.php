@@ -269,10 +269,18 @@ $fieldHtml = static function (array $f, array $ctx, array $computed, float $qrMm
     return $t === null ? null : e($t);
 };
 
-// Which label stock is this worksheet on? roll-102x76 = roller single label.
-$tplStock = '';
-foreach ($rendered as $r) { if (!empty($r['template']['stock'])) { $tplStock = (string) $r['template']['stock']; break; } }
-$isRoll = ($tplStock === 'roll-102x76');
+// A product prints on its OWN stock: rollers on the 102×76 thermal roll, the
+// rest on the A4 die-cut sheet — different printers. A mixed order (a vertical
+// AND a roller) therefore needs BOTH runs, so split the blinds by stock rather
+// than forcing the whole order onto whichever product happened to come first.
+$rollBlinds   = [];
+$diecutBlinds = [];
+foreach ($rendered as $r) {
+    if ((string) ($r['template']['stock'] ?? '') === 'roll-102x76') $rollBlinds[] = $r;
+    else                                                            $diecutBlinds[] = $r;
+}
+$hasRoll   = $rollBlinds   !== [];
+$hasDiecut = $diecutBlinds !== [];
 
 // ---- Roll label print (?rolllabel=1) — one self-contained label per blind --
 // For roller blinds: a single label per blind on a thermal roll (default
@@ -342,7 +350,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 <body>
 <div class="toolbar">
     <b>Roll label</b>
-    <span class="note">Order <?= $ono ?> · <?= (int) $totalLines ?> label<?= $totalLines === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> + <b>Font</b> saved for this computer.</span>
+    <span class="note">Order <?= $ono ?> · <?= count($rollBlinds) ?> roller label<?= count($rollBlinds) === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> + <b>Font</b> saved for this computer.</span>
     <span class="nudge"><span class="lbl">Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5">&#9654;</button>
         <button type="button" data-ny="-0.5">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5">&#9660;</button>
@@ -352,7 +360,8 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     <button onclick="window.print()">Print</button>
 </div>
 <div class="stack">
-<?php foreach ($rendered as $r): $labFields = $r['template']['labels'][0]['fields'] ?? []; ?>
+<?php // Roller blinds only — verticals go on the die-cut sheet, a different printer. ?>
+<?php foreach ($rollBlinds as $r): $labFields = $r['template']['labels'][0]['fields'] ?? []; ?>
     <div class="rl-label<?= $ol ?>"><div class="flds"><?= $renderFields($labFields, $labelCtx($r, 0), $r['computed']) ?></div></div>
 <?php endforeach; ?>
 </div>
@@ -397,7 +406,10 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     $cal     = (($_GET['cal'] ?? '1') !== '0');      // crop marks + 100mm ruler
     $cols = [$leftPad, $leftPad + $labelW + $centreGap];
     $firstSmallTop = $topPad + $largeH + $gap;
-    $rowCap = min($totalLines, 10);
+    // Die-cut sheet holds the die-cut blinds only (verticals); rollers print on
+    // the thermal roll. One row per blind, up to 10 to a sheet.
+    $dieCount = count($diecutBlinds);
+    $rowCap = min($dieCount, 10);
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     $ol = $linesOn ? ' dc-outline' : '';
 
@@ -462,7 +474,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
 <body>
 <div class="toolbar">
     <b>Die-cut label print</b>
-    <span class="note">Order <?= $ono ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b>, margins <b>None</b>. Lay the plain print over the label stock to check it lands right.</span>
+    <span class="note">Order <?= $ono ?> · <?= (int) $dieCount ?> die-cut blind<?= $dieCount === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b>, margins <b>None</b>. Lay the plain print over the label stock to check it lands right.</span>
     <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
     <span class="nudge"><span>Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5" title="left">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5" title="right">&#9654;</button>
@@ -479,7 +491,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     <div class="dc-label dc-large<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
         <div class="flds"><?= $renderFields($headerFields, $orderVals, []) ?></div>
     </div>
-    <?php for ($k = 0; $k < $rowCap; $k++): $r = $rendered[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
+    <?php for ($k = 0; $k < $rowCap; $k++): $r = $diecutBlinds[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
         <div class="dc-label dc-small<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
             <div class="flds"><?= $lab ? $renderFields($lab['fields'] ?? [], $labelCtx($r, $ci), $r['computed']) : '' ?></div>
         </div>
@@ -496,7 +508,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     <div class="cal-txt" style="left:152mm; top:8.4mm;">= 100 mm</div>
 <?php endif; ?>
 </div></div>
-<?php if ($totalLines > $rowCap): ?><div style="position:fixed; bottom:6px; left:16px; color:#fbbf24; font-size:13px;">Note: <?= (int) $totalLines ?> lines on this order — only the first <?= (int) $rowCap ?> fit one sheet.</div><?php endif; ?>
+<?php if ($dieCount > $rowCap): ?><div style="position:fixed; bottom:6px; left:16px; color:#fbbf24; font-size:13px;">Note: <?= (int) $dieCount ?> die-cut blinds on this order — only the first <?= (int) $rowCap ?> fit one sheet.</div><?php endif; ?>
 <script>
 (function () {
     var inner = document.getElementById('sheet-inner');
@@ -568,10 +580,12 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if ($order): ?>
         <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e((string) ($order['company_name'] ?? '')) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
         <span style="flex:1"></span>
-        <?php if ($isRoll): ?>
-        <a class="btn" href="?order=<?= (int) $qid ?>&rolllabel=1" style="background:#0369a1; text-decoration:none;">Roll label print &#8599;</a>
-        <?php else: ?>
-        <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1" style="background:#0369a1; text-decoration:none;">Die-cut label print &#8599;</a>
+        <?php // A mixed order shows BOTH — each prints only its own products, on its own printer. ?>
+        <?php if ($hasDiecut): ?>
+        <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1" style="background:#0369a1; text-decoration:none;">Die-cut sheet<?= $hasRoll ? ' (' . count($diecutBlinds) . ')' : '' ?> &#8599;</a>
+        <?php endif; ?>
+        <?php if ($hasRoll): ?>
+        <a class="btn" href="?order=<?= (int) $qid ?>&rolllabel=1" style="background:#0369a1; text-decoration:none;">Roll labels<?= $hasDiecut ? ' (' . count($rollBlinds) . ')' : '' ?> &#8599;</a>
         <?php endif; ?>
         <button class="btn" onclick="window.print()">Print</button>
     <?php endif; ?>
