@@ -1036,10 +1036,13 @@ if ($oneDimEditor) {
         <title><?= e((string) $table['product_name']) ?> &middot; Width prices &middot; YourBlinds</title>
         <link rel="stylesheet" href="<?= asset('/app.css') ?>">
         <style>
-            .wo-table { border-collapse: collapse; width: 100%; max-width: <?= $costEditable ? '42rem' : '30rem' ?>; }
+            .wo-table { border-collapse: collapse; width: 100%; max-width: <?= $costEditable ? '52rem' : '30rem' ?>; }
             .cost-badge { font-size: 0.625rem; text-transform: none; letter-spacing: 0; font-weight: 600;
                           color: #92400e; background: #fef3c7; border-radius: 4px; padding: 0.05rem 0.35rem; }
             .wo-table input.wo-cost { background: #fffbeb; }
+            .wo-table td.wo-margin { font-variant-numeric: tabular-nums; font-size: 0.8125rem;
+                                     color: var(--text-muted, #4b5563); white-space: nowrap; }
+            .wo-table td.wo-margin.neg { color: #b91c1c; font-weight: 700; }
             .wo-table th, .wo-table td { padding: 0.375rem 0.5rem; text-align: left; }
             .wo-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
                            color: var(--text-faint); border-bottom: 1px solid var(--border); }
@@ -1104,7 +1107,7 @@ if ($oneDimEditor) {
                     ?>
                     <table class="wo-table" id="wo-table">
                         <thead>
-                            <tr><th><?= e($axisLabel) ?> (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><?php if ($costEditable): ?><th>Cost (£) <span class="cost-badge">master only</span></th><?php endif; ?><th></th></tr>
+                            <tr><th><?= e($axisLabel) ?> (<?= e(unit_suffix($tableUnit)) ?>)</th><th><?= e($valLabel) ?></th><?php if ($costEditable): ?><th>Cost (£) <span class="cost-badge">master only</span></th><th>Margin</th><?php endif; ?><th></th></tr>
                         </thead>
                         <tbody>
                             <?php
@@ -1123,9 +1126,16 @@ if ($oneDimEditor) {
                                                value="<?= $r['price'] === '' ? '' : e((string) $r['price']) ?>"
                                                placeholder="<?= e($pricePh) ?>"></td>
                                     <?php if ($costEditable): ?>
+                                    <?php
+                                        // DECIMAL(10,4) hands us "3.3900"; show it as "3.39". Keeps up to
+                                        // 4dp when the cost genuinely uses them.
+                                        $costHas = isset($r['cost']) && $r['cost'] !== null && $r['cost'] !== '';
+                                        $costVal = $costHas ? rtrim(rtrim((string) $r['cost'], '0'), '.') : '';
+                                    ?>
                                     <td><input type="number" name="cost[]" min="0" step="0.0001" class="wo-cost"
-                                               value="<?= (isset($r['cost']) && $r['cost'] !== null && $r['cost'] !== '') ? e((string) $r['cost']) : '' ?>"
+                                               value="<?= e($costVal) ?>"
                                                placeholder="paste here"></td>
+                                    <td class="wo-margin"></td>
                                     <?php endif; ?>
                                     <td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>
                                 </tr>
@@ -1155,7 +1165,7 @@ if ($oneDimEditor) {
             tr.innerHTML =
                 '<td><input type="number" name="wmm[]" min="0" step="<?= $woStep ?>" placeholder="<?= e($woPh) ?>"></td>'
               + '<td><input type="number" name="price[]" min="0" step="0.0001" placeholder="<?= e($pricePh) ?>"></td>'
-              + '<?= $costEditable ? '<td><input type="number" name="cost[]" min="0" step="0.0001" class="wo-cost" placeholder="paste here"></td>' : '' ?>'
+              + '<?= $costEditable ? '<td><input type="number" name="cost[]" min="0" step="0.0001" class="wo-cost" placeholder="paste here"></td><td class="wo-margin"></td>' : '' ?>'
               + '<td class="rm"><button type="button" class="wo-rm-btn" title="Remove row">&times;</button></td>';
             tbody.appendChild(tr);
             var inp = tr.querySelector('input'); if (inp) inp.focus();
@@ -1166,6 +1176,28 @@ if ($oneDimEditor) {
                 var tr = e.target.closest('tr');
                 if (tr) tr.remove();
             }
+        });
+
+        // Live margin per row: £profit and % off the sell price, recomputed as
+        // price or cost changes. Only present when the Cost column is (super-only).
+        function recalc(tr) {
+            var cell = tr.querySelector('.wo-margin');
+            if (!cell) return;
+            var pIn = tr.querySelector('input[name="price[]"]');
+            var cIn = tr.querySelector('input[name="cost[]"]');
+            var p = parseFloat(pIn && pIn.value), c = parseFloat(cIn && cIn.value);
+            if (!(p > 0) || isNaN(c)) { cell.textContent = ''; cell.className = 'wo-margin'; return; }
+            var profit = p - c, pct = Math.round(profit / p * 100);
+            cell.textContent = '£' + profit.toFixed(2) + ' · ' + pct + '%';
+            cell.className = 'wo-margin' + (profit < 0 ? ' neg' : '');
+        }
+        function recalcAll() {
+            if (!tbody) return;
+            Array.prototype.forEach.call(tbody.querySelectorAll('tr'), recalc);
+        }
+        if (tbody) tbody.addEventListener('input', function (e) {
+            var t = e.target, n = t && t.getAttribute && t.getAttribute('name');
+            if (n === 'price[]' || n === 'cost[]') recalc(t.closest('tr'));
         });
 
         // Paste a whole column of costs from Excel: click the first Cost cell,
@@ -1194,7 +1226,10 @@ if ($oneDimEditor) {
                 while (start + i >= inputs.length) { newRow(); inputs = colInputs(name); }
                 inputs[start + i].value = parts[i];
             }
+            recalcAll();
         });
+
+        recalcAll();   // paint margins for the rows already on the page
     })();
     </script>
     </body>
