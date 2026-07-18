@@ -193,14 +193,15 @@ foreach ($lines as $ln) {
     // own ticket carrying its own code — a single label saying "qty 3" can't
     // follow three blinds round three different benches.
     $qty  = max(1, (int) $ln['quantity']);
-    $tpl  = $loadTemplate($pdo, $masterPid);
+    $tpl     = $loadTemplate($pdo, $masterPid);
+    $streams = function_exists('bj_streams_ordered') ? bj_streams_ordered($pdo, $masterPid) : [];
     for ($u = 1; $u <= $qty; $u++) {
         $unitVals = [
             'unit'     => $qty > 1 ? $u . '/' . $qty : '',
             'unit_no'  => (string) $u,
-            // The scannable code: 6 digits of line + 2 of unit. Stable from the
-            // moment the order is placed, so labels can print before the blind
-            // is released to the floor.
+            // A per-label code is filled in at render time (each label carries
+            // its own part's stream), so this whole-blind code is only a
+            // fallback for a label with no stream position.
             'qr_code'  => function_exists('qr_blind_code') ? qr_blind_code((int) $ln['id'], $u) : '',
         ];
         $rendered[] = [
@@ -208,9 +209,29 @@ foreach ($lines as $ln) {
             'computed' => $eval['vars'],
             'template' => $tpl,
             'product'  => (string) ($ln['product_name_snapshot'] ?? ''),
+            'item_id'  => (int) $ln['id'],
+            'unit_no'  => $u,
+            'streams'  => $streams,   // ordered stream names for this product
         ];
     }
 }
+
+/**
+ * The context for one LABEL of a blind, with its QR pointing at that label's
+ * part. A label's position IS its stream position: on a vertical, label 0 (the
+ * cutting label) carries the Headrail code, label 1 (the fabric label) the
+ * Fabric code, so each scan finishes exactly that part. Single-stream products
+ * (roller, pleated) use digit 0 = the whole blind, whichever label is scanned.
+ */
+$labelCtx = static function (array $r, int $labelIndex): array {
+    $ctx = $r['ctx'];
+    if (function_exists('qr_blind_code')) {
+        $streams = $r['streams'] ?? [];
+        $digit   = count($streams) <= 1 ? 0 : min($labelIndex + 1, count($streams));
+        $ctx['qr_code'] = qr_blind_code((int) ($r['item_id'] ?? 0), (int) ($r['unit_no'] ?? 1), $digit);
+    }
+    return $ctx;
+};
 
 // Header template: take the first line's product template (they share the die-cut header).
 $headerFields = [];
@@ -332,7 +353,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 </div>
 <div class="stack">
 <?php foreach ($rendered as $r): $labFields = $r['template']['labels'][0]['fields'] ?? []; ?>
-    <div class="rl-label<?= $ol ?>"><div class="flds"><?= $renderFields($labFields, $r['ctx'], $r['computed']) ?></div></div>
+    <div class="rl-label<?= $ol ?>"><div class="flds"><?= $renderFields($labFields, $labelCtx($r, 0), $r['computed']) ?></div></div>
 <?php endforeach; ?>
 </div>
 <script>
@@ -460,7 +481,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     </div>
     <?php for ($k = 0; $k < $rowCap; $k++): $r = $rendered[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
         <div class="dc-label dc-small<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
-            <div class="flds"><?= $lab ? $renderFields($lab['fields'] ?? [], $r['ctx'], $r['computed']) : '' ?></div>
+            <div class="flds"><?= $lab ? $renderFields($lab['fields'] ?? [], $labelCtx($r, $ci), $r['computed']) : '' ?></div>
         </div>
     <?php endfor; ?>
 <?php endforeach; ?>
@@ -573,13 +594,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php foreach ($rendered as $r): $tpl = $r['template']; ?>
         <div class="wp-line">
             <?php if ($tpl && !empty($tpl['labels'])): ?>
-                <?php foreach ($tpl['labels'] as $lab): ?>
+                <?php foreach ($tpl['labels'] as $li => $lab): $lctx = $labelCtx($r, (int) $li); ?>
                     <div class="wp-label">
                         <div class="lt"><?= e((string) ($lab['title'] ?? 'Label')) ?></div>
                         <div class="fields">
                             <?php foreach (($lab['fields'] ?? []) as $f): ?>
                                 <?php if (($f['source'] ?? '') === '__break__'): ?><span class="wp-break"></span><?php continue; endif; ?>
-                                <?php $t = $fieldHtml($f, $r['ctx'], $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= $t ?></span><?php endif; ?>
+                                <?php $t = $fieldHtml($f, $lctx, $r['computed']); if ($t !== null): ?><span<?= (($f['align'] ?? '') === 'right') ? ' class="wp-right"' : ((($f['align'] ?? '') === 'centre') ? ' class="wp-centre"' : '') ?>><?= $t ?></span><?php endif; ?>
                             <?php endforeach; ?>
                         </div>
                     </div>
