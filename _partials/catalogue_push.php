@@ -890,6 +890,13 @@ function pp_sync_price_tables(
     array $systemMap,
     array &$summary
 ): void {
+    // The grid holds Beverley's SUPPLIER-list price; the trade price it charges a
+    // tenant is that figure with Beverley's own per-(product,system) discount and
+    // markup applied — exactly what the master's InstaPrice shows. The push must
+    // bake those in, or the tenant receives the raw supplier list. Reuse the engine
+    // so the pushed figure always equals the master's displayed trade price.
+    require_once __DIR__ . '/pricing_engine.php';
+
     $src = $pdo->prepare(
         'SELECT id, system_id, band_code, name, notes, active
            FROM price_tables
@@ -922,11 +929,20 @@ function pp_sync_price_tables(
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $pt) {
         // Map source system → target system. NULL stays NULL (products
         // without systems use the IS NULL bucket).
+        $srcSystemId = $pt['system_id'] !== null ? (int) $pt['system_id'] : null;
         $tgtSystemId = null;
-        if ($pt['system_id'] !== null) {
-            $tgtSystemId = $systemMap[(int) $pt['system_id']] ?? null;
+        if ($srcSystemId !== null) {
+            $tgtSystemId = $systemMap[$srcSystemId] ?? null;
             if ($tgtSystemId === null) continue; // can't push without a target system
         }
+
+        // Master's discount + markup for THIS (product, system) → the trade-price
+        // factor. discount off the base first, then markup on top — matches the
+        // pricing engine's sell_price formula. The tenant's OWN markup is applied
+        // later, on top of this, and is never touched by the push.
+        $discPct     = pe_discount_for_system($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
+        $markPct     = pe_markup_for_system  ($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
+        $tradeFactor = (1 - $discPct / 100) * (1 + $markPct / 100);
 
         $find->execute([
             $targetClientId, $targetProductId,
@@ -969,7 +985,7 @@ function pp_sync_price_tables(
         foreach ($cellSel->fetchAll(PDO::FETCH_ASSOC) as $cell) {
             $w = (int) $cell['width_mm'];
             $d = (int) $cell['drop_mm'];
-            $p = (float) $cell['price'];
+            $p = round((float) $cell['price'] * $tradeFactor, 2);   // supplier list → trade price
             if ($cellUpsert !== null) {
                 try {
                     $cellUpsert->execute([$tgtPtId, $w, $d, $p]);
