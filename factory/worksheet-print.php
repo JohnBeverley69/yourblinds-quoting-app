@@ -366,13 +366,11 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 <body>
 <div class="toolbar">
     <b>Roll label</b>
-    <span class="note">Order <?= $ono ?> · <?= count($rollBlinds) ?> roller label<?= count($rollBlinds) === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> + <b>Font</b> saved for this computer.</span>
+    <span class="note">Order <?= $ono ?> · <?= count($rollBlinds) ?> roller label<?= count($rollBlinds) === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> saved for this computer. Font &amp; line spacing are set per label in the Worksheets editor.</span>
     <span class="nudge"><span class="lbl">Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5">&#9654;</button>
         <button type="button" data-ny="-0.5">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5">&#9660;</button>
         <button type="button" id="nudge-reset">&#8635;</button></span>
-    <span class="nudge"><span class="lbl">Font&nbsp;pt</span>
-        <button type="button" id="fs-down">&#8722;</button><input id="fsv" type="number" step="0.5" value="<?= $mm($fs) ?>"><button type="button" id="fs-up">+</button></span>
     <button onclick="window.print()">Print</button>
 </div>
 <div class="stack">
@@ -394,14 +392,8 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     document.querySelectorAll('[data-ny]').forEach(function (b) { b.addEventListener('click', function () { oy = Math.round((oy + parseFloat(b.dataset.ny)) * 10) / 10; apply(); }); });
     document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
     apply();
-    var fsBase = parseFloat('<?= $mm($fs) ?>') || 9;
-    var fs = parseFloat(localStorage.getItem('lblRollFs')) || fsBase;
-    var fsv = document.getElementById('fsv');
-    function applyFs() { root.style.setProperty('--fs', fs + 'pt'); fsv.value = fs; localStorage.setItem('lblRollFs', fs); }
-    fsv.addEventListener('input', function () { fs = parseFloat(fsv.value) || fsBase; applyFs(); });
-    document.getElementById('fs-up').addEventListener('click', function () { fs = Math.round((fs + 0.5) * 10) / 10; applyFs(); });
-    document.getElementById('fs-down').addEventListener('click', function () { fs = Math.max(4, Math.round((fs - 0.5) * 10) / 10); applyFs(); });
-    applyFs();
+    // Font size + line spacing now live per-label in the Worksheets editor, so the
+    // print toolbar is nudge-only.
 })();
 </script>
 </body></html>
@@ -498,9 +490,6 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
         <button type="button" data-ny="-0.5" title="up">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5" title="down">&#9660;</button>
         <button type="button" id="nudge-reset" title="reset">&#8635;</button>
     </span>
-    <span class="nudge"><span>Font&nbsp;pt</span>
-        <button type="button" id="fs-down" title="smaller">&#8722;</button><input id="fsv" type="number" step="0.5" value="<?= $mm($fs) ?>"><button type="button" id="fs-up" title="bigger">+</button>
-    </span>
     <button onclick="window.print()">Print</button>
 </div>
 <div class="sheet"><div id="sheet-inner">
@@ -540,20 +529,8 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     document.querySelectorAll('[data-ny]').forEach(function (b) { b.addEventListener('click', function () { oy = Math.round((oy + parseFloat(b.dataset.ny)) * 10) / 10; apply(); }); });
     document.getElementById('nudge-reset').addEventListener('click', function () { ox = 0; oy = 0; apply(); });
     apply();
-
-    // Live font-size control (remembered per computer). Small = fs, large = fs + 1.5.
-    var fsBase = parseFloat('<?= $mm($fs) ?>') || 8;
-    var fs = parseFloat(localStorage.getItem('lblDiecutFs')) || fsBase;
-    var fsv = document.getElementById('fsv');
-    function applyFs() {
-        document.documentElement.style.setProperty('--fs-s', fs + 'pt');
-        document.documentElement.style.setProperty('--fs-l', (fs + 1.5) + 'pt');
-        fsv.value = fs; localStorage.setItem('lblDiecutFs', fs);
-    }
-    fsv.addEventListener('input', function () { fs = parseFloat(fsv.value) || fsBase; applyFs(); });
-    document.getElementById('fs-up').addEventListener('click', function () { fs = Math.round((fs + 0.5) * 10) / 10; applyFs(); });
-    document.getElementById('fs-down').addEventListener('click', function () { fs = Math.max(4, Math.round((fs - 0.5) * 10) / 10); applyFs(); });
-    applyFs();
+    // Font size + line spacing now live per-label in the Worksheets editor, so the
+    // print toolbar is nudge-only.
 })();
 </script>
 </body></html>
