@@ -290,16 +290,19 @@ require __DIR__ . '/../_partials/factory_head.php';
        (label − QR) tall spacer lets text run full width on top and wrap beside the
        QR at the bottom. A right-aligned field floats to its line's right edge, which
        at the bottom is the QR's left edge — so it stops at the QR, never under it. */
-    .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flow-root; }
+    .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:block; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
-    .pv-labelbox:has(.pv-qr)::before { content:""; float:right; width:0; height:calc(100% - var(--qrpx, 0px)); }
+    /* Each line is its OWN block context so a right-aligned field stays on its line
+       (never floats up to another) and line breaks land exactly where they're set. */
+    .pv-ln { display:flow-root; }
     .pv-ln .pv-fld { display:inline-block; vertical-align:top; margin-right:5px; white-space:nowrap; }
-    .pv-ln .pv-alignright { float:right; margin-right:0; margin-left:5px; }
-    /* Centre flows inline like the other fields (it used to take a whole line each,
-       which made busy labels overflow). Its line stays as packed as Left/Right. */
-    /* QR box drawn at its real size (var --qrpx), floated into the bottom-right. */
-    .pv-qr { float:right; clear:right; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
-             position:relative; margin-left:4px; display:flex; align-items:center; justify-content:center;
+    /* Right-aligned fields reserve the QR's width so they stop at its left edge
+       instead of hiding under it. Centre flows inline (packs like Left/Right). */
+    .pv-ln .pv-alignright { float:right; margin-right:calc(var(--qrpx, 0px) + 3px); margin-left:5px; }
+    /* QR is drawn at real size (--qrpx) and pinned ABSOLUTELY to the corner — it
+       never moves and can't be pushed off the label by the content flow. */
+    .pv-qr { position:absolute; right:2px; bottom:2px; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
+             display:flex; align-items:center; justify-content:center; z-index:2;
              font-size:0.7em; color:#64748b; background:#fff; border:1px solid #64748b; border-radius:1px;
              background-image:linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%),linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%);
              background-size:4px 4px; background-position:0 0,2px 2px; cursor:default; }

@@ -355,22 +355,18 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label { position:relative; width:<?= $mm($LW) ?>mm; height:<?= $mm($LH) ?>mm; background:#fff; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.4); }
     .rl-label.outline { outline:0.2mm solid #c9c9c9; outline-offset:-0.2mm; }
     .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
-                      display:flow-root; line-height:1.18;
+                      line-height:1.18;
                       font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
-    /* Fields are grouped into per-line blocks (.ln). A right-aligned field floats
-       to the RIGHT of its own line — which, on the bottom line beside the QR, is
-       the QR's left edge — so it stops at the QR instead of running under it. */
+    /* Each line is its own block, so a right-aligned field stays on its line and
+       breaks land where set. Right fields reserve the QR width to stop at its edge;
+       centre flows inline. */
+    .rl-label .flds .ln { display:flow-root; }
     .rl-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:2.4mm; }
-    /* The QR is a graphic pinned to the bottom-right corner. A zero-WIDTH float
-       spacer as tall as the label MINUS the QR pushes the QR (which clears below
-       it) into the bottom band; text flows full-width above the spacer and wraps
-       to the LEFT of the QR only on the lines beside it. line-height:0 on the QR
-       keeps span padding out of the quiet zone the scanner needs. */
-    .rl-label .flds:has(.qr)::before { content:""; float:right; width:0; height:calc(100% - <?= $mm($qrMm + 1) ?>mm); }
-    .rl-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 2mm; }
+    /* QR pinned ABSOLUTELY to the bottom-right corner — fixed, never pushed off by
+       the content flow. line-height:0 keeps span padding out of the scanner quiet zone. */
+    .rl-label .flds .qr { position:absolute; right:3mm; bottom:2.5mm; line-height:0; }
     .rl-label .flds .qr svg { display:block; }
-    .rl-label .flds .ln .r { float:right; margin-right:0; margin-left:2.4mm; }
-    /* Centre flows inline (it used to take a whole line each, overflowing labels). */
+    .rl-label .flds .ln .r { float:right; margin-right:<?= $mm($qrMm + 1) ?>mm; margin-left:2.4mm; }
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -462,23 +458,21 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .sheet { position:relative; width:210mm; height:297mm; background:#fff; margin:60px auto 40px; box-shadow:0 4px 24px rgba(0,0,0,0.4); overflow:hidden; }
     #sheet-inner { position:absolute; inset:0; }
     .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
-    .dc-label .flds { display:flow-root; height:100%; line-height:1.05; }
-    /* QR floats into the bottom-right corner via a zero-width, (label − QR) tall
-       spacer — text runs full width above it and only wraps beside it at the
-       bottom. On a 21mm ticket that frees ~3 lines of full-width text above the
-       code. line-height:0 keeps the span padding out of the scanner quiet zone. */
-    .dc-label:has(.qr) .flds::before { content:""; float:right; width:0; height:calc(100% - <?= $mm($qrMm + 1) ?>mm); }
-    .dc-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 1.5mm; }
+    .dc-label .flds { position:relative; height:100%; line-height:1.05; }
+    /* QR pinned ABSOLUTELY to the bottom-right corner — fixed, so the content flow
+       can never push it off the label. line-height:0 keeps the span padding out of
+       the scanner quiet zone. */
+    .dc-label .flds .qr { position:absolute; right:0; bottom:0; line-height:0; }
     .dc-label .flds .qr svg { display:block; }
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
     .dc-label.dc-large .flds { font-size:var(--fs-l); }
-    /* Fields grouped into per-line blocks (.ln) so a right-aligned field aligns to
-       its line's right edge — at the QR's left edge on the bottom line, so it stops
-       at the QR rather than under it. */
+    /* Each line is its own block, so a right-aligned field stays on its line and
+       breaks land exactly where set. Right fields reserve the QR width so they stop
+       at the QR's edge; centre flows inline. */
+    .dc-label .flds .ln { display:flow-root; }
     .dc-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
-    .dc-label .flds .ln .r { float:right; margin-right:0; margin-left:1.8mm; }
-    /* Centre flows inline (it used to take a whole line each, overflowing labels). */
+    .dc-label .flds .ln .r { float:right; margin-right:<?= $mm($qrMm + 1) ?>mm; margin-left:1.8mm; }
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
