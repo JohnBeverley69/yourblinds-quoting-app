@@ -236,6 +236,12 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     .sec { border:1px solid #e5e7eb; border-radius:12px; padding:0.9rem 1rem; margin-bottom:0.9rem; background:#fcfcfd; }
     .sec-top { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem; }
+    .sec-toggle { cursor:pointer; border:none; background:none; color:#64748b; font-size:0.9rem; line-height:1; padding:0.1rem 0.3rem; border-radius:6px; transition:transform 0.12s; }
+    .sec-toggle:hover { background:#eef2f7; color:#334155; }
+    .sec.is-collapsed .sec-toggle { transform:rotate(-90deg); }
+    .sec.is-collapsed .sec-body { display:none; }
+    .sec.is-collapsed { padding-bottom:0.7rem; }
+    .sec.is-collapsed .sec-top { margin-bottom:0; }
     .sec-top .tag { font-size:0.68rem; letter-spacing:0.05em; text-transform:uppercase; color:#64748b; font-weight:700; background:#eef2f7; padding:0.2rem 0.5rem; border-radius:6px; }
     .sec-top input.title { font-weight:600; width:14rem; }
     .sec-top .rm { margin-left:auto; }
@@ -381,6 +387,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.9rem;">
         <button type="button" class="btn ghost" id="add-label">+ Add label</button>
+        <button type="button" class="btn ghost" id="collapse-all">Collapse all</button>
         <button type="button" class="btn ghost" id="load-starter">Load starter vertical layout</button>
     </div>
 
@@ -495,6 +502,9 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     var STATE = LAYOUT && LAYOUT.header ? LAYOUT
               : { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
+
+    // Which sections are folded (UI only — not saved). Keyed 'header' / 'label-<i>'.
+    var collapsed = {};
 
     var editor = document.getElementById('editor');
 
@@ -611,22 +621,25 @@ require __DIR__ . '/../_partials/factory_head.php';
         return fields.map(fieldRow).join('');
     }
 
+    // A little caret button that folds a section's fields away, so tall sections
+    // can be collapsed while you drag on another. Collapsed state lives in
+    // `collapsed` (keyed by section) so it survives re-renders.
+    function caret() { return '<button type="button" class="sec-toggle" title="Collapse / expand this section">▾</button>'; }
+
     function render() {
         qrLast(STATE.header.fields);
         STATE.labels.forEach(function (l) { qrLast(l.fields); });
         var html = '';
         // Header section.
-        html += '<div class="sec" data-sec="header">';
-        html += '<div class="sec-top"><span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h, STATE.header.fs, STATE.header.lh) + '</div>';
-        html += '<div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>';
-        html += addFieldControl();
+        html += '<div class="sec' + (collapsed['header'] ? ' is-collapsed' : '') + '" data-sec="header">';
+        html += '<div class="sec-top">' + caret() + '<span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h, STATE.header.fs, STATE.header.lh) + '</div>';
+        html += '<div class="sec-body"><div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>' + addFieldControl() + '</div>';
         html += '</div>';
         // Label sections.
         STATE.labels.forEach(function (lab, li) {
-            html += '<div class="sec" data-sec="label" data-li="' + li + '">';
-            html += '<div class="sec-top"><span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h, lab.fs, lab.lh) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
-            html += '<div class="flds">' + fieldsBlock(lab.fields) + '</div>';
-            html += addFieldControl();
+            html += '<div class="sec' + (collapsed['label-' + li] ? ' is-collapsed' : '') + '" data-sec="label" data-li="' + li + '">';
+            html += '<div class="sec-top">' + caret() + '<span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h, lab.fs, lab.lh) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
+            html += '<div class="sec-body"><div class="flds">' + fieldsBlock(lab.fields) + '</div>' + addFieldControl() + '</div>';
             html += '</div>';
         });
         editor.innerHTML = html;
@@ -696,7 +709,11 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     editor.addEventListener('click', function (e) {
         var sec = e.target.closest('.sec'); if (!sec) return;
-        if (e.target.classList.contains('fld-rm')) {
+        if (e.target.classList.contains('sec-toggle')) {
+            var key = sec.dataset.sec === 'header' ? 'header' : 'label-' + sec.dataset.li;
+            collapsed[key] = !collapsed[key];
+            sec.classList.toggle('is-collapsed', !!collapsed[key]);   // toggle in place, no full re-render
+        } else if (e.target.classList.contains('fld-rm')) {
             var row = e.target.closest('.fld'); if (row) removeFieldRow(row);
         } else if (e.target.classList.contains('rm-label')) {
             sync(); STATE.labels.splice(+sec.dataset.li, 1); render();
@@ -796,6 +813,15 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     document.getElementById('add-label').addEventListener('click', function () {
         sync(); STATE.labels.push({ title: 'Label', w: 80, h: 18, fields: [] }); render();
+    });
+
+    // Collapse / expand every section at once, to clear the deck for drag-and-drop.
+    document.getElementById('collapse-all').addEventListener('click', function () {
+        var anyOpen = !!editor.querySelector('.sec:not(.is-collapsed)');
+        collapsed['header'] = anyOpen;
+        STATE.labels.forEach(function (_, i) { collapsed['label-' + i] = anyOpen; });
+        editor.querySelectorAll('.sec').forEach(function (sec) { sec.classList.toggle('is-collapsed', anyOpen); });
+        this.textContent = anyOpen ? 'Expand all' : 'Collapse all';
     });
 
     document.getElementById('load-starter').addEventListener('click', function () {
