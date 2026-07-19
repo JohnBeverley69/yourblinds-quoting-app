@@ -749,11 +749,40 @@ function pp_sync_choices(
         }
         $map[(int) $r['id']] = $tgtId;
 
+        // Per-choice band scope — which price bands this choice applies to. This is
+        // the gate that hides e.g. Tape Width on a string slat (its choices are
+        // scoped to the tape bands only). Without copying it the tenant copy
+        // defaults to "all bands", so band-gated extras wrongly show everywhere.
+        pp_sync_choice_bands($pdo, (int) $r['id'], $tgtId);
+
         // Width-table cells on this choice — merge by width_mm.
         pp_sync_extra_choice_price_rows($pdo, (int) $r['id'], $tgtId, $summary);
     }
 
     return $map;
+}
+
+/**
+ * Copy a choice's band scope (product_extra_choice_bands). Band codes are shared
+ * strings across tenants (matched case-insensitively), so no id mapping is needed.
+ * Master is authoritative for the gate, so the target's scope is replaced with the
+ * source's. Schema-tolerant: silently no-ops if the table isn't present.
+ */
+function pp_sync_choice_bands(PDO $pdo, int $sourceChoiceId, int $targetChoiceId): void
+{
+    try {
+        $src = $pdo->prepare('SELECT band_code FROM product_extra_choice_bands WHERE choice_id = ?');
+        $src->execute([$sourceChoiceId]);
+        $bands = $src->fetchAll(PDO::FETCH_COLUMN);
+
+        $pdo->prepare('DELETE FROM product_extra_choice_bands WHERE choice_id = ?')->execute([$targetChoiceId]);
+        if ($bands) {
+            $ins = $pdo->prepare('INSERT INTO product_extra_choice_bands (choice_id, band_code) VALUES (?, ?)');
+            foreach ($bands as $bc) { $ins->execute([$targetChoiceId, (string) $bc]); }
+        }
+    } catch (Throwable $e) {
+        // Table not present (pre migrate_choice_band_scoping) — nothing to carry.
+    }
 }
 
 function pp_sync_extra_choice_price_rows(
