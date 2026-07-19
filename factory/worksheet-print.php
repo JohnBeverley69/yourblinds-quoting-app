@@ -357,16 +357,16 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
                       line-height:1.18;
                       font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
-    /* Each line is its own block, so a right-aligned field stays on its line and
-       breaks land where set. Right fields reserve the QR width to stop at its edge;
-       centre flows inline. */
-    .rl-label .flds .ln { display:flow-root; }
-    .rl-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:2.4mm; }
+    /* Each line is a flex row → true Left / Centre / Right via auto margins; a script
+       reserves the QR width for right fields level with the QR. */
+    .rl-label .flds .ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 2.4mm; }
+    .rl-label .flds .ln span { white-space:nowrap; }
     /* QR pinned ABSOLUTELY to the bottom-right corner — fixed, never pushed off by
        the content flow. line-height:0 keeps span padding out of the scanner quiet zone. */
     .rl-label .flds .qr { position:absolute; right:3mm; bottom:2.5mm; line-height:0; }
     .rl-label .flds .qr svg { display:block; }
-    .rl-label .flds .ln .r { float:right; margin-right:<?= $mm($qrMm + 1) ?>mm; margin-left:2.4mm; }
+    .rl-label .flds .ln .r { margin-left:auto; }
+    .rl-label .flds .ln .c { margin-left:auto; margin-right:auto; }
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -406,6 +406,21 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     apply();
     // Font size + line spacing now live per-label in the Worksheets editor, so the
     // print toolbar is nudge-only.
+
+    // Reserve the QR's width for right-aligned fields ONLY where they sit level with
+    // the QR, so a top-right field reaches the full edge while a bottom-right one
+    // stops at the QR instead of printing under it.
+    function reserveQr(flds) {
+        var qr = flds.querySelector('.qr'); if (!qr) return;
+        var rights = flds.querySelectorAll('.ln .r');
+        rights.forEach(function (f) { f.style.marginRight = ''; });
+        var qb = qr.getBoundingClientRect();
+        var reserve = (qb.width * 1.08) + 'px';
+        rights.forEach(function (f) {
+            if (f.getBoundingClientRect().bottom > qb.top + 0.5) f.style.marginRight = reserve;
+        });
+    }
+    document.querySelectorAll('.rl-label .flds, .dc-label .flds').forEach(reserveQr);
 })();
 </script>
 </body></html>
@@ -467,12 +482,13 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
     .dc-label.dc-large .flds { font-size:var(--fs-l); }
-    /* Each line is its own block, so a right-aligned field stays on its line and
-       breaks land exactly where set. Right fields reserve the QR width so they stop
-       at the QR's edge; centre flows inline. */
-    .dc-label .flds .ln { display:flow-root; }
-    .dc-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
-    .dc-label .flds .ln .r { float:right; margin-right:<?= $mm($qrMm + 1) ?>mm; margin-left:1.8mm; }
+    /* Each line is a flex row → true Left / Centre / Right via auto margins. A script
+       reserves the QR width for right fields level with the QR, so they stop at its
+       edge while top-right fields reach the full edge. */
+    .dc-label .flds .ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; }
+    .dc-label .flds .ln span { white-space:nowrap; }
+    .dc-label .flds .ln .r { margin-left:auto; }
+    .dc-label .flds .ln .c { margin-left:auto; margin-right:auto; }
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
@@ -532,6 +548,21 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     apply();
     // Font size + line spacing now live per-label in the Worksheets editor, so the
     // print toolbar is nudge-only.
+
+    // Reserve the QR's width for right-aligned fields ONLY where they sit level with
+    // the QR, so a top-right field reaches the full edge while a bottom-right one
+    // stops at the QR instead of printing under it.
+    function reserveQr(flds) {
+        var qr = flds.querySelector('.qr'); if (!qr) return;
+        var rights = flds.querySelectorAll('.ln .r');
+        rights.forEach(function (f) { f.style.marginRight = ''; });
+        var qb = qr.getBoundingClientRect();
+        var reserve = (qb.width * 1.08) + 'px';
+        rights.forEach(function (f) {
+            if (f.getBoundingClientRect().bottom > qb.top + 0.5) f.style.marginRight = reserve;
+        });
+    }
+    document.querySelectorAll('.rl-label .flds, .dc-label .flds').forEach(reserveQr);
 })();
 </script>
 </body></html>

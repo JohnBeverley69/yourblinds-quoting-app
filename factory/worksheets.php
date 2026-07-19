@@ -285,20 +285,18 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
     .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
-    /* Line-block float model — mirrors the printed label so the preview is honest:
-       fields group into .pv-ln lines, the QR floats bottom-right, and a zero-width
-       (label − QR) tall spacer lets text run full width on top and wrap beside the
-       QR at the bottom. A right-aligned field floats to its line's right edge, which
-       at the bottom is the QR's left edge — so it stops at the QR, never under it. */
+    /* Mirrors the printed label so the preview is honest. Each line is a flex row —
+       giving true Left / Centre / Right positioning via auto margins — and the QR is
+       pinned absolutely in the corner (below), so it never moves or gets pushed off.
+       A script then reserves the QR's width for right-aligned fields ONLY where they
+       sit level with the QR, so a top-right field reaches the full edge while a
+       bottom-right one stops at the QR. */
     .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:block; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
-    /* Each line is its OWN block context so a right-aligned field stays on its line
-       (never floats up to another) and line breaks land exactly where they're set. */
-    .pv-ln { display:flow-root; }
-    .pv-ln .pv-fld { display:inline-block; vertical-align:top; margin-right:5px; white-space:nowrap; }
-    /* Right-aligned fields reserve the QR's width so they stop at its left edge
-       instead of hiding under it. Centre flows inline (packs like Left/Right). */
-    .pv-ln .pv-alignright { float:right; margin-right:calc(var(--qrpx, 0px) + 3px); margin-left:5px; }
+    .pv-ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
+    .pv-ln .pv-fld { white-space:nowrap; }
+    .pv-ln .pv-alignright { margin-left:auto; }                    /* JS reserves QR width when level with QR */
+    .pv-ln .pv-aligncentre { margin-left:auto; margin-right:auto; } /* true centre */
     /* QR is drawn at real size (--qrpx) and pinned ABSOLUTELY to the corner — it
        never moves and can't be pushed off the label by the content flow. */
     .pv-qr { position:absolute; right:2px; bottom:2px; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
@@ -896,11 +894,27 @@ require __DIR__ . '/../_partials/factory_head.php';
             html += '</div>';
         });
         pv.innerHTML = html;
+        pv.querySelectorAll('.pv-labelbox').forEach(reserveQr);
         var over = false;
         pv.querySelectorAll('.pv-labelbox').forEach(function (b) {
             if (b.scrollHeight > b.clientHeight + 1) { b.classList.add('over'); over = true; }
         });
         document.getElementById('pv-warn').style.display = over ? 'block' : 'none';
+    }
+
+    // A right-aligned field floats to its line's right edge. Reserve the QR's width
+    // ONLY for the ones that sit level with the QR (their box reaches the QR's top
+    // band), so a top-right field keeps the full edge while a bottom-right one stops
+    // at the QR instead of hiding under it. Pure CSS can't tell them apart.
+    function reserveQr(box) {
+        var qr = box.querySelector('.pv-qr'); if (!qr) return;
+        var rights = box.querySelectorAll('.pv-ln .pv-alignright');
+        rights.forEach(function (f) { f.style.marginRight = ''; });   // reset before measuring
+        var qb = qr.getBoundingClientRect();
+        var reserve = (qb.width + 3) + 'px';
+        rights.forEach(function (f) {
+            if (f.getBoundingClientRect().bottom > qb.top + 0.5) f.style.marginRight = reserve;
+        });
     }
 
     // Drag a chip on the label itself to reorder within that label (or header).
