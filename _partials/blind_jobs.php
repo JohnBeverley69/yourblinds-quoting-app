@@ -118,10 +118,14 @@ function bj_streams_ordered(PDO $pdo, int $productId): array
  * Complete a blind's part from a scanned code — the whole point of the WiFi
  * scan-in path. No login: the code says everything.
  *
- * streamDigit 0 = finish the whole blind (single-stream products: roller,
- * pleated). N = finish the Nth stream (a vertical's headrail or fabric). "One
- * scan = that part done" — the stages inside the stream are marked complete
- * together; add per-stage scanning later by advancing instead of completing.
+ * streamDigit 0 = the whole blind (single-stream products: roller, pleated).
+ * N = the Nth stream (a vertical's headrail or fabric).
+ *
+ * PER-STAGE: one scan finishes the CURRENT stage and moves the stream to its
+ * next stage — the label travels with the blind and is scanned at each station.
+ * A stream is done only when its last stage is scanned; the blind is made only
+ * when every stream is done. A double pull can't skip a stage — the 10s de-dupe
+ * in scan-in.php swallows it.
  *
  * @return array{ok:bool, title:string, detail:string, already?:bool}
  */
@@ -153,17 +157,60 @@ function bj_complete_by_code(PDO $pdo, int $itemId, int $unitNo, int $streamDigi
     }
     if (!$targets) return ['ok' => false, 'title' => 'Nothing to finish', 'detail' => $ref . ' — that part isn\'t on this blind.'];
 
+    $what = trim((string) $job['product_name_snapshot'] . '  ' . (int) $job['width_mm'] . '×' . (int) $job['drop_mm']);
+
+    // Advance each target stream ONE stage. $moved records the first (in normal
+    // use the only) transition, for the line the scanner reads back.
     $didAny = false;
-    foreach ($targets as $sr) {
+    $moved  = null;   // [stream, fromStage, toStage, streamFinished]
+    foreach ($targets as $streamName => $sr) {
         if ($sr['status'] === 'done') continue;
-        bj_stream_set_stage($pdo, (int) $sr['id'], null, $userId);   // null = stream complete
+        $list = bj_route_by_stream($pdo, (int) $job['product_id'])[(string) $streamName] ?? [];
+        $from = bj_step_label($list, $sr['route_step_id'] !== null ? (int) $sr['route_step_id'] : null);
+
+        bj_stream_advance($pdo, (int) $sr['id'], $userId);
         $didAny = true;
+
+        $after     = bj_stream_get($pdo, (int) $sr['id']);
+        $finished  = !$after || $after['status'] === 'done' || $after['route_step_id'] === null;
+        $to        = $finished ? '' : bj_step_label($list, (int) $after['route_step_id']);
+        if ($moved === null) $moved = [(string) $streamName, $from, $to, $finished];
     }
 
-    $partName = $streamDigit === 0 ? '' : (array_key_first($targets) ?: '');
-    $what = trim((string) $job['product_name_snapshot'] . '  ' . (int) $job['width_mm'] . '×' . (int) $job['drop_mm']);
-    if (!$didAny) return ['ok' => true, 'already' => true, 'title' => $ref, 'detail' => ($partName !== '' ? $partName . ' ' : '') . 'was already done · ' . $what];
-    return ['ok' => true, 'title' => $ref, 'detail' => ($partName !== '' ? $partName . ' done · ' : 'made · ') . $what];
+    if (!$didAny) {
+        return ['ok' => true, 'already' => true, 'title' => $ref, 'detail' => 'already finished · ' . $what];
+    }
+
+    // Made only once every stream of this blind is done.
+    $fresh   = bj_streams_for($pdo, [(int) $job['id']])[(int) $job['id']] ?? [];
+    $allDone = $fresh !== [] && count(array_filter($fresh, static fn ($s) => $s['status'] !== 'done')) === 0;
+
+    [$sName, $fromLabel, $toLabel, $streamFinished] = $moved;
+    $part = $streamDigit === 0 ? '' : $sName;   // 'main' means nothing to an operator
+
+    if ($allDone) {
+        $detail = 'made · ' . $what;
+    } elseif ($streamFinished) {
+        $detail = ($part !== '' ? $part . ' finished' : 'part finished') . ' · ' . $what;
+    } else {
+        $detail = ($fromLabel !== '' ? $fromLabel . ' done' : 'stage done')
+                . ($toLabel !== '' ? ' → next: ' . $toLabel : '')
+                . ' · ' . $what;
+    }
+    return ['ok' => true, 'title' => $ref, 'detail' => $detail];
+}
+
+/** A route step's display label (its own label, else the station name), or ''. */
+function bj_step_label(array $list, ?int $stepId): string
+{
+    if ($stepId === null) return '';
+    foreach ($list as $s) {
+        if ((int) $s['id'] === $stepId) {
+            $l = trim((string) ($s['label'] ?? ''));
+            return $l !== '' ? $l : trim((string) ($s['station'] ?? ''));
+        }
+    }
+    return '';
 }
 
 /**
