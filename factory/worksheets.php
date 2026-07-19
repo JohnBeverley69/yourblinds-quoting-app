@@ -285,9 +285,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
     .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
-    .pv-labelbox { border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
+    .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
     .pv-labelbox span { white-space:nowrap; }
+    /* QR is pinned to the corner (matches the printed label's floated QR), not part
+       of the draggable flow. */
+    .pv-qr { position:absolute; right:3px; bottom:2px; background:#fff; border:1px solid #cbd5e1; border-radius:2px; padding:0 2px; color:#334155; z-index:2; cursor:default; }
+    .pv-qr:hover .pv-rm { display:block; }
     .pv-break { flex:0 0 100%; display:flex; align-items:center; justify-content:center; height:0.85em; color:#94a3b8; border-top:1px dashed #cbd5e1; margin-top:1px; }
     .pv-never { text-decoration:line-through; }
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
@@ -391,7 +395,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 
 <div class="ws-preview" id="preview-wrap">
     <div class="pv-head">
-        <div class="ws-hint">Live preview · sample data, drawn at real label size. <strong>Drag a field on the label to reorder it.</strong> Faint italic fields only print when they have a value.</div>
+        <div class="ws-hint">Live preview · sample data, drawn at real label size. <strong>Drag a field on the label to reorder it.</strong> Faint italic fields only print when they have a value. Use each section's <strong>A pt</strong> (font size) and <strong>↕</strong> (line spacing) boxes to fit more in while keeping it readable — the preview and the print both follow them.</div>
         <div class="pv-zoom" title="Zoom the preview (this screen only — doesn't change the label)">
             <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
             <span id="zoom-val">100%</span>
@@ -483,17 +487,41 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     function num(v, d) { v = parseFloat(v); return (isFinite(v) && v > 0) ? v : d; }
 
-    // Older saved layouts (and blank ones) may lack label sizes — fill defaults.
-    function ensureSizes() {
-        if (!STATE.header) STATE.header = { fields: [] };
-        STATE.header.w = num(STATE.header.w, 170);
-        STATE.header.h = num(STATE.header.h, 22);
-        STATE.labels.forEach(function (l) { l.w = num(l.w, 80); l.h = num(l.h, 18); });
+    // The QR always prints FIXED in the bottom-right corner (it's floated there on
+    // the label regardless of field order), so its position in the list is
+    // meaningless. Keep it last everywhere — the preview then shows it pinned and
+    // non-draggable, and the drag indices of the other fields stay aligned.
+    function qrLast(fields) {
+        if (!fields || fields.length < 2) return;
+        if (!fields.some(function (f) { return f.source === 'qr'; })) return;
+        var rest = [], qrs = [];
+        fields.forEach(function (f) { (f.source === 'qr' ? qrs : rest).push(f); });
+        fields.length = 0;
+        Array.prototype.push.apply(fields, rest.concat(qrs));
     }
 
-    function sizeCtl(w, h) {
+    // Older saved layouts (and blank ones) may lack label sizes / type settings —
+    // fill defaults. Font (pt) + line spacing default to what the printer already
+    // uses for that stock, so an untouched template prints exactly as before.
+    function ensureSizes() {
+        if (!STATE.header) STATE.header = { fields: [] };
+        var isRoll = STATE.stock === 'roll-102x76';
+        STATE.header.w = num(STATE.header.w, 170);
+        STATE.header.h = num(STATE.header.h, 22);
+        STATE.header.fs = num(STATE.header.fs, isRoll ? 9 : 9.5);
+        STATE.header.lh = num(STATE.header.lh, isRoll ? 1.18 : 1.05);
+        STATE.labels.forEach(function (l) {
+            l.w = num(l.w, 80); l.h = num(l.h, 18);
+            l.fs = num(l.fs, isRoll ? 9 : 8);
+            l.lh = num(l.lh, isRoll ? 1.18 : 1.05);
+        });
+    }
+
+    function sizeCtl(w, h, fs, lh) {
         return '<span class="size-ctl"><input type="number" class="sw" value="' + w + '" min="10" max="210" step="any" title="width mm"> ×'
-             + '<input type="number" class="sh" value="' + h + '" min="5" max="297" step="any" title="height mm"> mm</span>';
+             + '<input type="number" class="sh" value="' + h + '" min="5" max="297" step="any" title="height mm"> mm</span>'
+             + '<span class="size-ctl" title="Font size in points — smaller fits more text">A<input type="number" class="sfs" value="' + fs + '" min="3" max="24" step="0.5"> pt</span>'
+             + '<span class="size-ctl" title="Line spacing — smaller packs the lines closer together">↕<input type="number" class="slh" value="' + lh + '" min="0.8" max="2" step="0.05"></span>';
     }
 
     // Full grouped option list for a source dropdown (built lazily on focus).
@@ -567,17 +595,19 @@ require __DIR__ . '/../_partials/factory_head.php';
     }
 
     function render() {
+        qrLast(STATE.header.fields);
+        STATE.labels.forEach(function (l) { qrLast(l.fields); });
         var html = '';
         // Header section.
         html += '<div class="sec" data-sec="header">';
-        html += '<div class="sec-top"><span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h) + '</div>';
+        html += '<div class="sec-top"><span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h, STATE.header.fs, STATE.header.lh) + '</div>';
         html += '<div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>';
         html += addFieldControl();
         html += '</div>';
         // Label sections.
         STATE.labels.forEach(function (lab, li) {
             html += '<div class="sec" data-sec="label" data-li="' + li + '">';
-            html += '<div class="sec-top"><span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
+            html += '<div class="sec-top"><span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h, lab.fs, lab.lh) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
             html += '<div class="flds">' + fieldsBlock(lab.fields) + '</div>';
             html += addFieldControl();
             html += '</div>';
@@ -595,14 +625,19 @@ require __DIR__ . '/../_partials/factory_head.php';
         editor.querySelectorAll('.sec').forEach(function (sec) {
             var fields = sectionFields(sec);
             var sw = sec.querySelector('.sw'), sh = sec.querySelector('.sh');
+            var sfs = sec.querySelector('.sfs'), slh = sec.querySelector('.slh');
             if (sec.dataset.sec === 'header') {
                 if (sw) STATE.header.w = num(sw.value, 170);
                 if (sh) STATE.header.h = num(sh.value, 22);
+                if (sfs) STATE.header.fs = num(sfs.value, 9.5);
+                if (slh) STATE.header.lh = num(slh.value, 1.05);
             } else {
                 var L = STATE.labels[+sec.dataset.li];
                 L.title = sec.querySelector('.title').value;
                 if (sw) L.w = num(sw.value, 80);
                 if (sh) L.h = num(sh.value, 18);
+                if (sfs) L.fs = num(sfs.value, 8);
+                if (slh) L.lh = num(slh.value, 1.05);
             }
             var rows = sec.querySelectorAll('.flds .fld');
             var out = [];
@@ -772,6 +807,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     // are shown as faint ghosts so they stay visible and reorderable.
     function fieldSpan(f, i, interactive) {
         var rm = interactive ? '<button type="button" class="pv-rm" data-fi="' + i + '" title="Remove this field">×</button>' : '';
+        // QR is pinned bottom-right (no pv-drag) — it can't be reordered because on
+        // the label it always floats to the corner. Still removable.
+        if (f.source === 'qr') {
+            return '<span class="pv-fld pv-qr" data-fi="' + i + '" title="QR code — always prints fixed in the bottom-right corner">[QR ▓▒░]' + rm + '</span>';
+        }
         if (f.source === '__break__') {
             return '<span class="pv-fld pv-break' + (interactive ? ' pv-drag' : '') + '" data-fi="' + i + '" title="line break">↵ new line' + rm + '</span>';
         }
@@ -801,23 +841,28 @@ require __DIR__ . '/../_partials/factory_head.php';
         });
         return out || '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
     }
-    function labelBox(w, h, inner, secAttr) {
-        return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE) + 'px;font-size:' + (2.25 * SCALE) + 'px">' + inner + '</div>';
+    // Font is entered in points; 1pt = 0.3528mm, and SCALE is px-per-mm, so the
+    // preview shows the label at its true printed text size (and overflows for
+    // real). Line spacing is the unitless line-height, straight through.
+    function labelBox(w, h, inner, secAttr, fs, lh) {
+        var pxFont = (num(fs, 8) * 0.3528 * SCALE).toFixed(2);
+        return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE)
+             + 'px;font-size:' + pxFont + 'px;line-height:' + num(lh, 1.05) + '">' + inner + '</div>';
     }
     function renderPreview() {
         sync();
         var pv = document.getElementById('preview');
         var html = '';
         html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
-        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"');
+        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"', STATE.header.fs, STATE.header.lh);
         html += '<div class="pv-badge">▼ one row per blind — sample shows two (drag on the first row) ▼</div>';
         [ '1/2', '2/2' ].forEach(function (ln, ri) {
             var interactive = (ri === 0);   // only the first sample row is draggable
             html += '<div class="pv-line2">';
-            (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [] }]).forEach(function (lab, li) {
+            (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [], fs: 8, lh: 1.05 }]).forEach(function (lab, li) {
                 var sec = interactive ? ('data-sec="label" data-li="' + li + '"') : '';
                 html += '<div><div class="pv-cap">' + esc(lab.title || 'Label') + ' · ' + lab.w + ' × ' + lab.h + ' mm</div>'
-                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln, interactive), sec) + '</div>';
+                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln, interactive), sec, lab.fs, lab.lh) + '</div>';
             });
             html += '</div>';
         });
