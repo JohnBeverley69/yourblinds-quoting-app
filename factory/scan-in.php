@@ -57,9 +57,13 @@ $code = trim((string) ($_REQUEST['c'] ?? $_REQUEST['code'] ?? ''));
 if ($code === '' && $rawBody !== '') {
     $j = json_decode($rawBody, true);
     if (is_array($j)) {
-        foreach (['c', 'code', 'data', 'barcode', 'qr', 'value'] as $k) {
+        // 'msg' is the NetumScan wireless family — it posts {"id":"<device>","msg":"<code>"}.
+        foreach (['c', 'code', 'data', 'barcode', 'qr', 'value', 'msg'] as $k) {
             if (isset($j[$k]) && is_scalar($j[$k])) { $code = trim((string) $j[$k]); break; }
         }
+        // Same scanners carry their own id in the body, not the URL — use it as the
+        // bench id so the scan log's scanner column isn't blank.
+        if ($source === '' && isset($j['id']) && is_scalar($j['id'])) { $source = trim((string) $j['id']); }
     } elseif (preg_match('/^\s*[0-9]{8,9}\s*$/', $rawBody)) {
         $code = trim($rawBody);           // the scanner just sent the bare code
     }
