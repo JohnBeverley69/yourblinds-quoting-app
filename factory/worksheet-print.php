@@ -237,7 +237,9 @@ $labelCtx = static function (array $r, int $labelIndex): array {
 // Header template: take the first line's product template (they share the die-cut header).
 $headerFields = [];
 $headerBlock  = [];   // the header section itself — carries its font size / line spacing
+$layoutQr     = null; // QR size (mm) set in the Worksheets editor, if any
 foreach ($rendered as $r) { if ($r['template'] && !empty($r['template']['header']['fields'])) { $headerFields = $r['template']['header']['fields']; $headerBlock = $r['template']['header']; break; } }
+foreach ($rendered as $r) { if (!empty($r['template']) && isset($r['template']['qr']) && is_numeric($r['template']['qr'])) { $layoutQr = (float) $r['template']['qr']; break; } }
 
 // Per-label font (pt) + line spacing, set in the Worksheets editor. Falls back to
 // the stock's built-in default so a template saved before this feature prints
@@ -281,6 +283,32 @@ $fieldHtml = static function (array $f, array $ctx, array $computed, float $qrMm
     return $t === null ? null : e($t);
 };
 
+/**
+ * Render a label's fields as line blocks, with the QR floated into the bottom-
+ * right corner. Grouping each line (fields between "line break" markers) into its
+ * own <div class="ln"> is what lets a right-aligned field align to the RIGHT edge
+ * of its line — which, on the bottom line beside the QR, is the QR's left edge. So
+ * a right-aligned date stops AT the QR instead of running under it, while the top
+ * lines still use the full width. Empty lines collapse to nothing (height 0), so
+ * a break with no content behaves exactly like before. QR comes last (it floats).
+ */
+$renderLineFields = static function (array $fields, array $ctx, array $computed, callable $fieldHtml, float $qrMm): string {
+    $lines = ['']; $qr = '';
+    foreach ($fields as $f) {
+        $src = (string) ($f['source'] ?? '');
+        if ($src === '__break__') { $lines[] = ''; continue; }
+        $t = $fieldHtml($f, $ctx, $computed, $qrMm);
+        if ($t === null) continue;
+        if ($src === 'qr') { $qr = $t; continue; }
+        $al  = (string) ($f['align'] ?? '');
+        $cls = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
+        $lines[count($lines) - 1] .= '<span' . $cls . '>' . $t . '</span>';
+    }
+    $out = '';
+    foreach ($lines as $ln) { $out .= '<div class="ln">' . $ln . '</div>'; }
+    return $out . $qr;
+};
+
 // A product prints on its OWN stock: rollers on the 102×76 thermal roll, the
 // rest on the A4 die-cut sheet — different printers. A mixed order (a vertical
 // AND a roller) therefore needs BOTH runs, so split the blinds by stock rather
@@ -303,23 +331,10 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $linesOn = (($_GET['lines'] ?? '1') !== '0');
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 
-    $qrMm = $ff('qr', 20);   // roller: 102x76mm thermal, room to spare
+    $qrMm = $ff('qr', is_numeric($layoutQr) ? (float) $layoutQr : 20);   // roller: 102x76mm thermal, room to spare
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
-        $out = ''; $qr = '';
-        foreach ($fields as $f) {
-            if (($f['source'] ?? '') === '__break__') { $out .= '<span class="rlbr"></span>'; continue; }
-            $t = $fieldHtml($f, $ctx, $computed, $qrMm);
-            if ($t === null) continue;
-            // The QR floats into the bottom-right corner, so it must come LAST in
-            // source order — text above it then uses the full label width and only
-            // the lines beside it wrap in. (Already <span class="qr"> markup.)
-            if (($f['source'] ?? '') === 'qr') { $qr = $t; continue; }
-            $al = (string) ($f['align'] ?? '');
-            $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            $out .= '<span' . $c . '>' . $t . '</span>';
-        }
-        return $out . $qr;
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($renderLineFields, $fieldHtml, $qrMm): string {
+        return $renderLineFields($fields, $ctx, $computed, $fieldHtml, $qrMm);
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
@@ -342,19 +357,20 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
                       display:flow-root; line-height:1.18;
                       font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
-    .rl-label .flds span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:2.4mm; }
+    /* Fields are grouped into per-line blocks (.ln). A right-aligned field floats
+       to the RIGHT of its own line — which, on the bottom line beside the QR, is
+       the QR's left edge — so it stops at the QR instead of running under it. */
+    .rl-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:2.4mm; }
     /* The QR is a graphic pinned to the bottom-right corner. A zero-WIDTH float
        spacer as tall as the label MINUS the QR pushes the QR (which clears below
        it) into the bottom band; text flows full-width above the spacer and wraps
-       to the LEFT of the QR only on the lines beside it. That reclaims the whole
-       top-right strip the old full-height padding used to waste. line-height:0 on
-       the QR keeps span padding out of the quiet zone the scanner needs. */
+       to the LEFT of the QR only on the lines beside it. line-height:0 on the QR
+       keeps span padding out of the quiet zone the scanner needs. */
     .rl-label .flds:has(.qr)::before { content:""; float:right; width:0; height:calc(100% - <?= $mm($qrMm + 1) ?>mm); }
     .rl-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 2mm; }
     .rl-label .flds .qr svg { display:block; }
-    .rl-label .flds .r { float:right; margin-right:0; margin-left:2.4mm; }
-    .rl-label .flds .c { display:block; width:100%; text-align:center; margin-right:0; }
-    .rlbr { display:block; width:100%; height:0; margin:0; }
+    .rl-label .flds .ln .r { float:right; margin-right:0; margin-left:2.4mm; }
+    .rl-label .flds .ln .c { display:block; width:100%; text-align:center; margin-right:0; }
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -423,21 +439,10 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
 
     // 12mm on the die-cut: 20% above the 10mm John proved on the real stock with
     // a hard thumb rub, and the label is only 21mm tall. Override with ?qr=
-    $qrMm = $ff('qr', 12);
+    $qrMm = $ff('qr', is_numeric($layoutQr) ? (float) $layoutQr : 12);
 
-    $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
-        $out = ''; $qr = '';
-        foreach ($fields as $f) {
-            if (($f['source'] ?? '') === '__break__') { $out .= '<span class="dcbr"></span>'; continue; }
-            $t = $fieldHtml($f, $ctx, $computed, $qrMm);
-            if ($t === null) continue;
-            // QR floats bottom-right, so emit it LAST — text above runs full width.
-            if (($f['source'] ?? '') === 'qr') { $qr = $t; continue; }
-            $al = (string) ($f['align'] ?? '');
-            $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            $out .= '<span' . $c . '>' . $t . '</span>';
-        }
-        return $out . $qr;
+    $renderFields = static function (array $fields, array $ctx, array $computed) use ($renderLineFields, $fieldHtml, $qrMm): string {
+        return $renderLineFields($fields, $ctx, $computed, $fieldHtml, $qrMm);
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
@@ -468,10 +473,12 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
     .dc-label.dc-large .flds { font-size:var(--fs-l); }
-    .dc-label .flds span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
-    .dc-label .flds .dcbr { display:block; width:100%; height:0; margin:0; }
-    .dc-label .flds .r { float:right; margin-right:0; margin-left:1.8mm; }
-    .dc-label .flds .c { display:block; width:100%; text-align:center; margin-right:0; }
+    /* Fields grouped into per-line blocks (.ln) so a right-aligned field aligns to
+       its line's right edge — at the QR's left edge on the bottom line, so it stops
+       at the QR rather than under it. */
+    .dc-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
+    .dc-label .flds .ln .r { float:right; margin-right:0; margin-left:1.8mm; }
+    .dc-label .flds .ln .c { display:block; width:100%; text-align:center; margin-right:0; }
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
