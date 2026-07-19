@@ -14,9 +14,9 @@ declare(strict_types=1);
  *   Headrails (x2) + slats = Glass Width - 16
  *   Fabric width           = Glass Width - 16
  *   Blind (fabric) drop    = Glass Drop  - 0   (the finished blind height)
- *   No. of pleats (cellular) = ROUND(Drop/1000 x 54 x 1.3)   (John: 54 pleats/m
- *                              stretched, x1.3 for the correct count) — Beverley
- *                              only makes Cellular fabric.
+ *   No. of pleats           = ROUND(Drop x 0.06)   (flat per-drop rule; replaced
+ *                              the old 54 pleats/m stretched x1.3, now folded into
+ *                              the 0.06 constant) — Beverley only makes Cellular.
  *   Cord length            = 4 x Width + 2 x Drop   (from the sheet's assembly steps)
  *
  * No tube / bottom bar (pleated has neither). Deductions are the same for the
@@ -57,10 +57,8 @@ $rows = [
     ['headrail',        'Headrails + slats',      -16],
     ['fabric_width',    'Fabric width',           -16],
     ['drop',            'Blind drop',               0],
-    // Cellular fabric: pleats per metre (stretched) x the drop multiplier gives
-    // the correct number of pleats (John: 54/m stretched, x1.3).
-    ['pleats_per_mtr',  'Pleats per metre (stretched)', 54],
-    ['drop_multiplier', 'Drop multiplier (cellular)',   1.3],
+    // Pleat count is now a flat per-drop rule (Drop x 0.06) held in the Pleats
+    // build variable — no allowance rows needed. (Was 54 pleats/m stretched x1.3.)
 ];
 $pdo->prepare("DELETE FROM allowance_rows WHERE table_name = 'pf_pleated'")->execute();
 $insAllow = $pdo->prepare(
@@ -80,9 +78,14 @@ $vars = [
     ['name' => 'Headrail',     'seq' => 30, 'result' => 'Width + LOOKUP("pf_pleated", "headrail")'],
     ['name' => 'Fabric_W',     'seq' => 40, 'result' => 'Width + LOOKUP("pf_pleated", "fabric_width")'],
     ['name' => 'Blind_Drop',   'seq' => 50, 'result' => 'Drop + LOOKUP("pf_pleated", "drop")'],
-    ['name' => 'No_Pleats',    'seq' => 55, 'result' => 'ROUND(Drop / 1000 * LOOKUP("pf_pleated", "pleats_per_mtr") * LOOKUP("pf_pleated", "drop_multiplier"), 0)'],
+    ['name' => 'Pleats',       'seq' => 55, 'result' => 'ROUND(Drop * 0.06, 0)'],
     ['name' => 'Cord_Length',  'seq' => 60, 'result' => '4 * Width + 2 * Drop'],
 ];
+
+// Pleat count was 'No_Pleats' (Drop/1000 x pleats/m x multiplier); it's now the
+// flat 'Pleats' variable above. Drop the old name so it can't linger as a stale
+// duplicate that still references the deleted allowances.
+$pdo->prepare("DELETE FROM build_variables WHERE product_id = ? AND name = 'No_Pleats'")->execute([$productId]);
 
 $upVar = $pdo->prepare(
     "INSERT INTO build_variables (product_id, name, seq, columns_json, rows_json)
@@ -99,4 +102,4 @@ foreach ($vars as $v) {
 }
 
 echo "\nDone — Perfect Fit pleated cut on product {$productId} (Bev PF Pleated).\n";
-echo "Test panel (glass 1000 x 1200): Frame 972 x 1172, Headrail 984, Fabric 984 x 1200, No. pleats 84, Cord 6400.\n";
+echo "Test panel (glass 1000 x 1200): Frame 972 x 1172, Headrail 984, Fabric 984 x 1200, Pleats 72, Cord 6400.\n";
