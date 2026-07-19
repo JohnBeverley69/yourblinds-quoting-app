@@ -236,7 +236,18 @@ $labelCtx = static function (array $r, int $labelIndex): array {
 
 // Header template: take the first line's product template (they share the die-cut header).
 $headerFields = [];
-foreach ($rendered as $r) { if ($r['template'] && !empty($r['template']['header']['fields'])) { $headerFields = $r['template']['header']['fields']; break; } }
+$headerBlock  = [];   // the header section itself — carries its font size / line spacing
+foreach ($rendered as $r) { if ($r['template'] && !empty($r['template']['header']['fields'])) { $headerFields = $r['template']['header']['fields']; $headerBlock = $r['template']['header']; break; } }
+
+// Per-label font (pt) + line spacing, set in the Worksheets editor. Falls back to
+// the stock's built-in default so a template saved before this feature prints
+// unchanged. Emitted as an inline style on the label's .flds.
+$labelTypeStyle = static function (array $labelBlock, float $fsDefault, float $lhDefault): string {
+    $fs = isset($labelBlock['fs']) && is_numeric($labelBlock['fs']) ? (float) $labelBlock['fs'] : $fsDefault;
+    $lh = isset($labelBlock['lh']) && is_numeric($labelBlock['lh']) ? (float) $labelBlock['lh'] : $lhDefault;
+    $n  = static fn (float $v): string => rtrim(rtrim(number_format($v, 3, '.', ''), '0'), '.');
+    return 'font-size:' . $n($fs) . 'pt;line-height:' . $n($lh);
+};
 
 /** Render one template field to "caption value" (or null to omit). */
 $fieldText = static function (array $f, array $ctx, array $computed) use ($fmtVal): ?string {
@@ -366,8 +377,8 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 </div>
 <div class="stack">
 <?php // Roller blinds only — verticals go on the die-cut sheet, a different printer. ?>
-<?php foreach ($rollBlinds as $r): $labFields = $r['template']['labels'][0]['fields'] ?? []; ?>
-    <div class="rl-label<?= $ol ?>"><div class="flds"><?= $renderFields($labFields, $labelCtx($r, 0), $r['computed']) ?></div></div>
+<?php foreach ($rollBlinds as $r): $lab0 = $r['template']['labels'][0] ?? []; $labFields = is_array($lab0) ? ($lab0['fields'] ?? []) : []; ?>
+    <div class="rl-label<?= $ol ?>"><div class="flds" style="<?= e($labelTypeStyle(is_array($lab0) ? $lab0 : [], $fs, 1.18)) ?>"><?= $renderFields($labFields, $labelCtx($r, 0), $r['computed']) ?></div></div>
 <?php endforeach; ?>
 </div>
 <script>
@@ -493,13 +504,14 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     <button onclick="window.print()">Print</button>
 </div>
 <div class="sheet"><div id="sheet-inner">
+<?php $headerFldsStyle = $labelTypeStyle($headerBlock, $fs + 1.5, 1.05); ?>
 <?php foreach ($cols as $ci => $x): ?>
     <div class="dc-label dc-large<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
-        <div class="flds"><?= $renderFields($headerFields, $orderVals, []) ?></div>
+        <div class="flds" style="<?= e($headerFldsStyle) ?>"><?= $renderFields($headerFields, $orderVals, []) ?></div>
     </div>
     <?php for ($k = 0; $k < $rowCap; $k++): $r = $diecutBlinds[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
         <div class="dc-label dc-small<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
-            <div class="flds"><?= $lab ? $renderFields($lab['fields'] ?? [], $labelCtx($r, $ci), $r['computed']) : '' ?></div>
+            <div class="flds" style="<?= e($labelTypeStyle(is_array($lab) ? $lab : [], $fs, 1.05)) ?>"><?= $lab ? $renderFields($lab['fields'] ?? [], $labelCtx($r, $ci), $r['computed']) : '' ?></div>
         </div>
     <?php endfor; ?>
 <?php endforeach; ?>
