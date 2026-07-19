@@ -683,17 +683,22 @@ function pp_sync_choices(
     );
     $src->execute([$sourceExtraId]);
 
+    // Match an existing target choice by label AND system, not label alone.
+    // A product legitimately carries the SAME label on different systems —
+    // e.g. "Anthracite" headrail on both Nova and Vogue (often at different
+    // prices). Matching on label only collapses them into one row: the last
+    // system pushed wins and every earlier system loses that colour, which is
+    // how Nova ended up showing White only. (system_id <=> ? is NULL-safe, so
+    // an "all systems" choice matches the target's all-systems row.)
     $find = $pdo->prepare(
         'SELECT id FROM product_extra_choices
-          WHERE product_extra_id = ? AND label = ? LIMIT 1'
+          WHERE product_extra_id = ? AND label = ? AND (system_id <=> ?) LIMIT 1'
     );
 
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $find->execute([$targetExtraId, (string) $r['label']]);
-        $tgtId = $find->fetchColumn();
-
-        // Translate source's system_id → target's via the map. NULL
-        // stays NULL (choice available on every system).
+        // Translate source's system_id → target's via the map. NULL stays NULL
+        // (choice available on every system). Do this BEFORE the lookup — the
+        // target system id is now part of the choice's identity.
         $tgtSystemId = null;
         if ($r['system_id'] !== null) {
             $srcSys = (int) $r['system_id'];
@@ -701,6 +706,9 @@ function pp_sync_choices(
             // If we couldn't map (system missing on target somehow),
             // leave NULL — degrade to "all systems" rather than crash.
         }
+
+        $find->execute([$targetExtraId, (string) $r['label'], $tgtSystemId]);
+        $tgtId = $find->fetchColumn();
 
         $imagePath = $r['image_path'] !== null ? (string) $r['image_path'] : null;
 
