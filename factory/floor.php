@@ -99,30 +99,42 @@ $dueTag = static function (?string $due, bool $done) use ($today, $fmtDate): arr
     return ['', $label];
 };
 
-// Blinds move when someone scans at a bench, so this screen goes stale on its
-// own. See the poll at the bottom.
+// The floor is a live wallboard — scans out on the shop floor move blinds, and
+// this screen swaps the changed rows in on its own (see the script at the foot).
 $pollVersion = fx_poll_version($pdo, 'floor', $MASTER);
+$RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
+
+// Live-update fragment: just the rows + counts + version, so the board can
+// refresh in place without a reload. Must run before any page chrome is echoed.
+if (isset($_GET['rows'])) {
+    ob_start();
+    if ($ready && $rows) require __DIR__ . '/../_partials/floor_rows.php';
+    $rowsHtml = ob_get_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['v' => $pollVersion, 'live' => $liveTot, 'made' => $madeTot, 'html' => $rowsHtml]);
+    exit;
+}
 
 $factoryTitle = 'Production Floor';
 $factoryNav   = 'floor';
 $factoryWide  = true;   // the stage strip needs the whole monitor, not 1200px
 require __DIR__ . '/../_partials/factory_head.php';
 require __DIR__ . '/../_partials/blind_styles.php';
-$RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
 ?>
 
-<div class="io-news" id="fl-news" hidden style="position:sticky;top:56px;z-index:15;display:flex;align-items:center;gap:.9rem;background:#166534;color:#fff;padding:.7rem 1.1rem;border-radius:10px;margin:0 0 1rem;font-size:.95rem;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.15)">
-    <span>The floor has moved &mdash; someone's scanned since this loaded.</span>
-    <button type="button" id="fl-news-btn" style="font:inherit;font-weight:700;cursor:pointer;border:none;border-radius:8px;padding:.35rem .9rem;background:#fff;color:#166534">Refresh</button>
-</div>
-
+<style>
+    .fl-live { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; color:#64748b; }
+    .fl-live-dot { width:.55rem; height:.55rem; border-radius:50%; background:#94a3b8; transition:background .2s, box-shadow .2s; }
+    .fl-live-dot.on { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.2); }
+</style>
 <div class="fl-head">
     <h1 class="fl-h1">Production Floor</h1>
     <?php if ($ready): ?>
-        <span class="fl-stat"><b><?= (int) $liveTot ?></b> in production<?php if ($showMade): ?> &middot; <b><?= (int) $madeTot ?></b> made<?php endif; ?></span>
+        <span class="fl-stat"><b id="fl-live-stat"><?= (int) $liveTot ?></b> in production<?php if ($showMade): ?> &middot; <b><?= (int) $madeTot ?></b> made<?php endif; ?></span>
+        <span class="fl-live" title="This board updates itself as blinds are scanned — no need to refresh."><span class="fl-live-dot" id="fl-live-dot"></span> Live</span>
     <?php endif; ?>
 </div>
-<p class="fl-sub">Every blind in production, one row each. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
+<p class="fl-sub">Every blind in production, one row each &mdash; the board updates itself as scans come in. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
 
 <?php if ($flashOk !== ''): ?><div class="fl-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="fl-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -162,129 +174,28 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
         </tr>
     </thead>
     <tbody>
-    <?php foreach ($rows as $r):
-        $jobId   = (int) $r['id'];
-        $qty     = max(1, (int) $r['quantity']);
-        $unit    = (int) $r['unit_no'];
-        $done    = $r['status'] === 'complete';
-        $working = $r['status'] === 'in_progress';
-        // Blind Matrix-style ref: order-line-(unit/qty).
-        $ref = (string) $r['quote_number'] . '-' . (int) $r['line_no'] . '-(' . $unit . '/' . $qty . ')';
-
-        // A vertical has two streams (headrail + fabric) that run alongside each
-        // other; roller and pleated have one. Each keeps its own position.
-        $byStream   = bj_route_by_stream($pdo, (int) $r['product_id']);
-        $myStreams  = $streamsBy[$jobId] ?? [];
-        [$doneCount, $total] = bj_progress($byStream, $myStreams);
-        $pct = $total > 0 ? (int) round($doneCount / $total * 100) : 0;
-        // Which processes this blind still needs, for the filter. A vertical with
-        // its fabric finished but headrail outstanding should show under
-        // "Vertical — Headrail" and not under "Vertical — Fabric".
-        $atStations = [];
-        foreach ($myStreams as $sname => $sr) {
-            if ($sr['status'] !== 'done') $atStations[] = (int) $r['product_id'] . '|' . $sname;
-        }
-
-        $fab = trim((string) $r['fabric_name_snapshot']);
-        $col = trim((string) $r['fabric_colour_snapshot']);
-        $sys = trim((string) $r['system_name_snapshot']);
-        $searchKey = strtolower(trim($ref . ' ' . $r['product_name_snapshot'] . ' ' . $sys . ' ' . $fab . ' ' . $col . ' ' . $r['room_name'] . ' ' . $r['tenant']));
-    ?>
-        <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-made="<?= $done ? 1 : 0 ?>">
-            <td>
-                <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
-                <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
-            </td>
-            <td>
-                <div class="fl-prog" title="<?= $doneCount ?> of <?= $total ?> stages done">
-                    <div class="fl-prog-track"><div class="fl-prog-fill<?= $pct >= 100 ? ' full' : '' ?>" style="width:<?= $pct ?>%"></div></div>
-                    <span class="fl-prog-pct"><?= $total > 0 ? $pct . '%' : '—' ?></span>
-                </div>
-            </td>
-            <td>
-                <span class="fl-blind"><?= e((string) $r['product_name_snapshot']) ?><?php if ($sys !== ''): ?> <span><?= e($sys) ?></span><?php endif; ?></span>
-                <?php if ($fab !== '' || $col !== ''): ?><span class="fl-fab"><?= e(trim($fab . ($col !== '' ? ' / ' . $col : ''))) ?></span><?php endif; ?>
-            </td>
-            <td class="fl-size"><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
-            <td><?= e((string) $r['room_name']) ?></td>
-            <?php [$dueCls, $dueTxt] = $dueTag($r['due_date'] ?? null, $done); ?>
-            <td class="fl-date fl-due <?= $dueCls ?>" title="Ordered <?= e($fmtDate($r['created_at'] ?? null)) ?>"><?= e($dueTxt) ?></td>
-            <td>
-                <?php if ($total === 0): ?>
-                    <span class="pill out">no route</span> &mdash; set one on <a href="/factory/routes.php">Routes</a>
-                <?php else: $multi = count($byStream) > 1; ?>
-                    <?php foreach ($byStream as $stream => $list):
-                        $sr  = $myStreams[$stream] ?? null;
-                        if (!$sr) continue;
-                        $sDone = $sr['status'] === 'done' || $sr['route_step_id'] === null;
-                        $sWork = $sr['status'] === 'in_progress';
-                        $idx = null;
-                        foreach ($list as $i => $s) {
-                            if ((int) $s['id'] === (int) $sr['route_step_id']) { $idx = $i; break; }
-                        }
-                        $sDoneCount = $sDone ? count($list) : ($idx ?? 0);
-                    ?>
-                        <div class="fl-streamline">
-                            <?php if ($multi): ?><span class="fl-streamname"><?= e((string) $stream) ?></span><?php endif; ?>
-                            <form method="post" action="/factory/blind-action.php" class="fl-strip">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="set_stage">
-                                <input type="hidden" name="stream_id" value="<?= (int) $sr['id'] ?>">
-                                <input type="hidden" name="return_to" value="<?= e($RT) ?>">
-                                <?php foreach ($list as $i => $s):
-                                    $cls = 'stg';
-                                    if ($i < $sDoneCount)             $cls .= ' done';
-                                    elseif (!$sDone && $i === $idx)   $cls .= $sWork ? ' working' : ' current';
-                                    $tip = (string) ($s['label'] ?? '');
-                                ?>
-                                    <button type="submit" name="step_id" value="<?= (int) $s['id'] ?>" class="<?= $cls ?>" title="<?= e($tip) ?>"><?= e((string) ($s['label'] ?? '')) ?></button>
-                                <?php endforeach; ?>
-                                <button type="submit" name="step_id" value="done" class="stg made<?= $sDone ? ' done' : '' ?>" title="<?= $multi ? e($stream . ' finished') : 'Finished — off the floor' ?>"><?= $multi ? 'Done' : 'Made' ?></button>
-                            </form>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </td>
-        </tr>
-    <?php endforeach; ?>
+    <?php require __DIR__ . '/../_partials/floor_rows.php'; ?>
     </tbody>
 </table>
 </div>
 <?php endif; ?>
 
 <script>
-// Blinds move when a bench scans one, so this screen goes stale on its own.
-// OFFER a refresh rather than taking one: every stage chip here is a button
-// that moves a blind, and a page that reloads under a hand lands the click on
-// the wrong one.
-(function () {
-    var mine = <?= json_encode($pollVersion) ?>;
-    var news = document.getElementById('fl-news');
-    var btn  = document.getElementById('fl-news-btn');
-    if (!news || !btn) return;
-    btn.addEventListener('click', function () { location.reload(); });
-    setInterval(function () {
-        if (document.hidden) return;
-        fetch('/factory/poll.php?what=floor', { cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (j) { if (j && j.v && j.v !== 'x' && j.v !== mine) news.hidden = false; })
-            .catch(function () {});
-    }, 20000);
-})();
-
 (function () {
     var search  = document.getElementById('fl-search');
     var station = document.getElementById('fl-station');
     var made    = document.getElementById('fl-made');
     var shown   = document.getElementById('fl-shown');
-    var rows    = [].slice.call(document.querySelectorAll('.fl-tbl tbody tr'));
-    if (!rows.length) return;
+    var tbody   = document.querySelector('.fl-tbl tbody');
 
+    // Search / process filter. Re-reads the rows each pass so it keeps working
+    // after the live update swaps fresh ones in.
     function apply() {
+        if (!tbody || !search) return;
         var q = (search.value || '').trim().toLowerCase();
         var s = station.value;
         var n = 0;
-        rows.forEach(function (tr) {
+        [].slice.call(tbody.querySelectorAll('tr')).forEach(function (tr) {
             // A blind needs two processes at once (headrail + fabric), so
             // data-station is a list of "<product>|<stream>".
             var at = (tr.dataset.station || '').split(',');
@@ -293,15 +204,50 @@ $RT = '/factory/floor.php' . ($showMade ? '?made=1' : '');
             tr.style.display = ok ? '' : 'none';
             if (ok) n++;
         });
-        shown.textContent = n + (n === 1 ? ' blind' : ' blinds');
+        if (shown) shown.textContent = n + (n === 1 ? ' blind' : ' blinds');
     }
-    search.addEventListener('input', apply);
-    station.addEventListener('change', apply);
+    if (search)  search.addEventListener('input', apply);
+    if (station) station.addEventListener('change', apply);
     // "Show made" is a server round-trip — completed blinds aren't loaded otherwise.
-    made.addEventListener('change', function () {
+    if (made) made.addEventListener('change', function () {
         window.location = '/factory/floor.php' + (made.checked ? '?made=1' : '');
     });
     apply();
+
+    // ---- Live wallboard --------------------------------------------------
+    // Scans out on the shop floor move blinds, so instead of nagging for a
+    // refresh, fetch just the changed rows and swap them in — no reload, no
+    // scroll jump, filters preserved. Hold off while a hand is on the table so
+    // the rows never re-shuffle under a click.
+    if (!tbody) return;
+    var mine = <?= json_encode($pollVersion) ?>;
+    var stat = document.getElementById('fl-live-stat');
+    var dot  = document.getElementById('fl-live-dot');
+    var hovering = false, pending = null;
+    tbody.addEventListener('mouseenter', function () { hovering = true; });
+    tbody.addEventListener('mouseleave', function () { hovering = false; if (pending) { swap(pending); pending = null; } });
+
+    function swap(j) {
+        if (!j.html) { location.reload(); return; }   // floor emptied — show the empty state
+        tbody.innerHTML = j.html;
+        mine = j.v;
+        if (stat) stat.textContent = j.live;
+        apply();
+        if (dot) { dot.classList.add('on'); setTimeout(function () { dot.classList.remove('on'); }, 700); }
+    }
+    setInterval(function () {
+        if (document.hidden) return;
+        // Cheap version check first; only pull the (heavier) fresh rows if it moved.
+        fetch('/factory/poll.php?what=floor', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (pv) {
+                if (!pv || !pv.v || pv.v === 'x' || pv.v === mine) return;
+                return fetch('/factory/floor.php?rows=1' + (made && made.checked ? '&made=1' : ''), { cache: 'no-store' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) { if (j && j.v) { if (hovering) pending = j; else swap(j); } });
+            })
+            .catch(function () {});
+    }, 8000);
 })();
 </script>
 
