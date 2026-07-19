@@ -305,7 +305,10 @@ require __DIR__ . '/../_partials/factory_head.php';
              background-image:linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%),linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%);
              background-size:4px 4px; background-position:0 0,2px 2px; cursor:default; }
     .pv-qr:hover .pv-rm { display:block; }
-    .pv-break { display:inline-block; color:#94a3b8; font-style:italic; padding:0 2px; }
+    /* A break marker takes a full-width row of its own, so it never sits to the
+       right of a right-aligned field and rob it of the edge. (Preview only — the
+       print doesn't render breaks.) */
+    .pv-break { flex:0 0 100%; color:#94a3b8; font-style:italic; padding:0; line-height:1.1; }
     .pv-never { text-decoration:line-through; }
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
     .pv-line2 { display:flex; gap:10px; padding:0.5rem 0; }
