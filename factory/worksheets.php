@@ -847,21 +847,31 @@ require __DIR__ . '/../_partials/factory_head.php';
     // Font scales WITH the box so proportions — and the overflow check — hold.
     var BASE_SCALE = 4;
     var SCALE = Math.max(2, Math.min(12, parseFloat(localStorage.getItem('lblPreviewZoom')) || BASE_SCALE));
-    // Fields are grouped into per-line blocks (matching the print), so a right-
-    // aligned field aligns to its line's right edge — the QR's left edge on the
-    // bottom line — and stops at the QR instead of running under it. The QR is
-    // emitted outside the lines; it floats into the bottom-right corner.
+    // Fields are grouped into per-line flex blocks. On a line that has a right-
+    // aligned field, centre fields flow LEFT so the right field can sit hard against
+    // the edge (a flex line can't both truly-centre one field AND pin another to the
+    // edge — the auto margins would share the gap). Centre still centres on any line
+    // without a right field. The QR is emitted outside the lines (absolute corner).
     function inlineFields(fields, ln, interactive) {
-        var lines = [''], qr = '';
+        var lineGroups = [[]], qr = null;
         fields.forEach(function (f, i) {
             var ff = f;
             if (ln && f.source === 'order:line_no') ff = { source: 'text', caption: ln, show: 'always' };
-            if (f.source === 'qr') { qr = fieldSpan(ff, i, interactive); return; }
-            if (f.source === '__break__') { lines[lines.length - 1] += fieldSpan(ff, i, interactive); lines.push(''); return; }
-            lines[lines.length - 1] += fieldSpan(ff, i, interactive);
+            if (f.source === 'qr') { qr = { f: ff, i: i }; return; }
+            lineGroups[lineGroups.length - 1].push({ f: ff, i: i });
+            if (f.source === '__break__') lineGroups.push([]);
+        });
+        var lines = lineGroups.map(function (grp) {
+            var hasRight = grp.some(function (x) { return x.f.align === 'right'; });
+            return grp.map(function (x) {
+                var ff = x.f;
+                if (hasRight && ff.align === 'centre') { ff = {}; for (var k in x.f) ff[k] = x.f[k]; ff.align = ''; }
+                return fieldSpan(ff, x.i, interactive);
+            }).join('');
         });
         var out = '';
         lines.forEach(function (h) { out += '<div class="pv-ln">' + h + '</div>'; });
+        qr = qr ? fieldSpan(qr.f, qr.i, interactive) : '';
         if (!lines.some(function (h) { return h; }) && !qr) {
             return '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
         }

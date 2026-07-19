@@ -293,19 +293,32 @@ $fieldHtml = static function (array $f, array $ctx, array $computed, float $qrMm
  * a break with no content behaves exactly like before. QR comes last (it floats).
  */
 $renderLineFields = static function (array $fields, array $ctx, array $computed, callable $fieldHtml, float $qrMm): string {
-    $lines = ['']; $qr = '';
+    // Group into lines (split on breaks) and pull out the QR.
+    $lineGroups = [[]]; $qr = '';
     foreach ($fields as $f) {
         $src = (string) ($f['source'] ?? '');
-        if ($src === '__break__') { $lines[] = ''; continue; }
-        $t = $fieldHtml($f, $ctx, $computed, $qrMm);
-        if ($t === null) continue;
-        if ($src === 'qr') { $qr = $t; continue; }
-        $al  = (string) ($f['align'] ?? '');
-        $cls = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-        $lines[count($lines) - 1] .= '<span' . $cls . '>' . $t . '</span>';
+        if ($src === 'qr') { $t = $fieldHtml($f, $ctx, $computed, $qrMm); if ($t !== null) $qr = $t; continue; }
+        $lineGroups[count($lineGroups) - 1][] = $f;
+        if ($src === '__break__') $lineGroups[] = [];
     }
     $out = '';
-    foreach ($lines as $ln) { $out .= '<div class="ln">' . $ln . '</div>'; }
+    foreach ($lineGroups as $grp) {
+        // On a line with a right-aligned field, centre fields flow left so the right
+        // one can sit hard against the edge (flex can't do both at once).
+        $hasRight = false;
+        foreach ($grp as $f) { if (($f['align'] ?? '') === 'right') { $hasRight = true; break; } }
+        $lineHtml = '';
+        foreach ($grp as $f) {
+            if ((string) ($f['source'] ?? '') === '__break__') continue;   // boundary only
+            $t = $fieldHtml($f, $ctx, $computed, $qrMm);
+            if ($t === null) continue;
+            $al = (string) ($f['align'] ?? '');
+            if ($hasRight && $al === 'centre') $al = '';
+            $cls = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
+            $lineHtml .= '<span' . $cls . '>' . $t . '</span>';
+        }
+        $out .= '<div class="ln">' . $lineHtml . '</div>';
+    }
     return $out . $qr;
 };
 
