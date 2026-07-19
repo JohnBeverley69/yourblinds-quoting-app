@@ -301,6 +301,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
     .pv-ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
     .pv-ln .pv-fld { white-space:nowrap; }
+    /* The order header has room to spare, so let a long field (e.g. a full address)
+       wrap down into it instead of running off the width. The tight labels keep
+       no-wrap so short fields stay side by side. */
+    .pv-labelbox[data-sec="header"] .pv-ln .pv-fld { white-space:normal; overflow-wrap:anywhere; min-width:0; }
     .pv-ln .pv-alignright { margin-left:auto; }                    /* JS reserves QR width when level with QR */
     .pv-ln .pv-aligncentre { margin-left:auto; margin-right:auto; } /* true centre */
     /* QR is drawn at real size (--qrpx) and pinned ABSOLUTELY to the corner — it
