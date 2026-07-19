@@ -495,6 +495,9 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
     .dc-label.dc-large .flds { font-size:var(--fs-l); }
+    /* The header (dc-large) has room, so let a long field (e.g. a full address) wrap
+       down into it instead of running off the width. Small labels keep no-wrap. */
+    .dc-label.dc-large .flds .ln span { white-space:normal; overflow-wrap:anywhere; min-width:0; }
     /* Each line is a flex row → true Left / Centre / Right via auto margins. A script
        reserves the QR width for right fields level with the QR, so they stop at its
        edge while top-right fields reach the full edge. */
