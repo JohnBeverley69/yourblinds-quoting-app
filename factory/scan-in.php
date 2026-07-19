@@ -69,6 +69,22 @@ if ($code === '' && $rawBody !== '') {
     }
 }
 
+// A setup/config QR (the scanner's OWN configuration — AT+URL, AT+RAP …) can get
+// scanned as if it were a barcode. That payload carries the scan KEY, so it must
+// never be written to the log. Detect the AT-command shape and drop it whole,
+// recording nothing but a redacted note.
+if (preg_match('~\bAT[+_]~i', $rawBody . ' ' . $code)) {
+    $log('bad_code', 'config/setup scan ignored (redacted)', null, null, $source);
+    $reply(400, 'CONFIG SCAN — IGNORED');
+}
+
+// A trigger held down (or a multi-read) can pack the same code in several times,
+// e.g. "002924012 002924012 002924012". Reduce to the first whole 8–9 digit code
+// so an over-eager scan still completes instead of being dropped as unreadable.
+if ($code !== '' && !preg_match('/^\d{8,9}$/', $code) && preg_match('/\b\d{8,9}\b/', $code, $m)) {
+    $code = $m[0];
+}
+
 // The secret. Timing-safe, and a missing/blank configured key can never match.
 $expected = fx_scan_key($pdo);
 if ($expected === '' || !hash_equals($expected, $key)) {
