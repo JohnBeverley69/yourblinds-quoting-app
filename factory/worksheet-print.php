@@ -370,7 +370,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 2mm; }
     .rl-label .flds .qr svg { display:block; }
     .rl-label .flds .ln .r { float:right; margin-right:0; margin-left:2.4mm; }
-    .rl-label .flds .ln .c { display:block; width:100%; text-align:center; margin-right:0; }
+    /* Centre flows inline (it used to take a whole line each, overflowing labels). */
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -478,7 +478,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
        at the QR rather than under it. */
     .dc-label .flds .ln span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
     .dc-label .flds .ln .r { float:right; margin-right:0; margin-left:1.8mm; }
-    .dc-label .flds .ln .c { display:block; width:100%; text-align:center; margin-right:0; }
+    /* Centre flows inline (it used to take a whole line each, overflowing labels). */
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
