@@ -46,6 +46,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
         $valsIn = (array) ($_POST['value'] ?? []);
         try {
             $pdo->beginTransaction();
+            // Keep the machine key of rows the user didn't touch. LOOKUP() matches on
+            // key_norm, and seeded rows deliberately use short codes (e.g. frame_tb)
+            // as the key behind friendly display text. Deriving key_norm from the text
+            // on every save would silently repoint those codes — so deleting or adding
+            // ONE row would break every OTHER formula in the table. Preserve the
+            // original key_norm whenever a row's display text is unchanged; only new or
+            // edited text earns a freshly-derived key.
+            $priorKey = [];
+            $pk = $pdo->prepare('SELECT keys_display, key_norm FROM allowance_rows WHERE table_name = ?');
+            $pk->execute([$table]);
+            foreach ($pk->fetchAll(PDO::FETCH_ASSOC) as $pr) {
+                $disp = (string) $pr['keys_display'];
+                if (!array_key_exists($disp, $priorKey)) $priorKey[$disp] = (string) $pr['key_norm'];
+            }
             $pdo->prepare('DELETE FROM allowance_rows WHERE table_name = ?')->execute([$table]);
             $ins = $pdo->prepare(
                 'INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?)'
@@ -55,7 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 $keys = $normKeys((string) $raw);
                 $valRaw = trim((string) ($valsIn[$i] ?? ''));
                 if (!$keys || $valRaw === '' || !is_numeric($valRaw)) continue;
-                $ins->execute([$table, strtolower(implode('|', $keys)), implode(' · ', $keys), (float) $valRaw, $n]);
+                $display = implode(' · ', $keys);
+                $keyNorm = $priorKey[$display] ?? strtolower(implode('|', $keys));
+                $ins->execute([$table, $keyNorm, $display, (float) $valRaw, $n]);
                 $n++;
             }
             $pdo->commit();
