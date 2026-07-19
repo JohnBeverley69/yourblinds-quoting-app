@@ -46,7 +46,7 @@ try {
     $q = $pdo->prepare(
         "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
                 q.end_customer_name, q.client_id,
-                c.company_name, c.address1, c.address2, c.town, c.county, c.postcode
+                c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone
            FROM quotes q JOIN clients c ON c.id = q.client_id
           WHERE q.id = ? LIMIT 1"
     );
@@ -122,8 +122,14 @@ $orderVals = $order ? [
     'order_no'   => (string) ($order['quote_number'] ?? ('#' . $qid)),
     'order_date' => $fmtDate($order['created_at'] ?? null),
     'customer'   => (string) ($order['company_name'] ?? ''),
-    'address'    => $addr,
+    'address'    => $addr,   // whole address on one line (kept for existing templates)
+    // …and the pieces, so an address block can be built line-by-line on the header.
+    'address1'   => (string) ($order['address1'] ?? ''),
+    'address2'   => (string) ($order['address2'] ?? ''),
+    'town'       => (string) ($order['town'] ?? ''),
+    'county'     => (string) ($order['county'] ?? ''),
     'post_code'  => (string) ($order['postcode'] ?? ''),
+    'phone'      => (string) ($order['phone'] ?? ''),
     'cust_ref'   => (string) ($order['customer_reference'] ?? ''),
 ] : [];
 
