@@ -295,17 +295,20 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $qrMm = $ff('qr', 20);   // roller: 102x76mm thermal, room to spare
 
     $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
-        $out = '';
+        $out = ''; $qr = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="rlbr"></span>'; continue; }
             $t = $fieldHtml($f, $ctx, $computed, $qrMm);
             if ($t === null) continue;
+            // The QR floats into the bottom-right corner, so it must come LAST in
+            // source order — text above it then uses the full label width and only
+            // the lines beside it wrap in. (Already <span class="qr"> markup.)
+            if (($f['source'] ?? '') === 'qr') { $qr = $t; continue; }
             $al = (string) ($f['align'] ?? '');
             $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            if (($f['source'] ?? '') === 'qr') { $out .= $t; continue; }   // already markup
             $out .= '<span' . $c . '>' . $t . '</span>';
         }
-        return $out;
+        return $out . $qr;
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
@@ -326,20 +329,21 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label { position:relative; width:<?= $mm($LW) ?>mm; height:<?= $mm($LH) ?>mm; background:#fff; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.4); }
     .rl-label.outline { outline:0.2mm solid #c9c9c9; outline-offset:-0.2mm; }
     .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
-                      display:flex; flex-wrap:wrap; align-content:flex-start; gap:0.4mm 2.4mm; line-height:1.18;
+                      display:flow-root; line-height:1.18;
                       font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
-    .rl-label .flds span { white-space:nowrap; }
-    /* The QR is a graphic, not text — keep line-height off it or the span padding
-       eats into the quiet zone that scanners need. */
-    /* The QR is a graphic, not a word — pin it to the bottom-right corner rather
-       than letting it flow along with the text and land wherever. The matching
-       padding reserves that corner so words can't run under it and eat the quiet
-       zone the scanner needs. */
-    .rl-label .flds .qr { line-height:0; position:absolute; right:3mm; bottom:2.5mm; }
+    .rl-label .flds span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:2.4mm; }
+    /* The QR is a graphic pinned to the bottom-right corner. A zero-WIDTH float
+       spacer as tall as the label MINUS the QR pushes the QR (which clears below
+       it) into the bottom band; text flows full-width above the spacer and wraps
+       to the LEFT of the QR only on the lines beside it. That reclaims the whole
+       top-right strip the old full-height padding used to waste. line-height:0 on
+       the QR keeps span padding out of the quiet zone the scanner needs. */
+    .rl-label .flds:has(.qr)::before { content:""; float:right; width:0; height:calc(100% - <?= $mm($qrMm + 1) ?>mm); }
+    .rl-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 2mm; }
     .rl-label .flds .qr svg { display:block; }
-    .rl-label .flds:has(.qr) { padding-right:<?= $mm($qrMm + 4) ?>mm; }
-    .rl-label .flds .r { margin-left:auto; } .rl-label .flds .c { margin-left:auto; margin-right:auto; }
-    .rlbr { flex:0 0 100%; height:0; }
+    .rl-label .flds .r { float:right; margin-right:0; margin-left:2.4mm; }
+    .rl-label .flds .c { display:block; width:100%; text-align:center; margin-right:0; }
+    .rlbr { display:block; width:100%; height:0; margin:0; }
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -419,17 +423,18 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     $qrMm = $ff('qr', 12);
 
     $renderFields = static function (array $fields, array $ctx, array $computed) use ($fieldHtml, $qrMm): string {
-        $out = '';
+        $out = ''; $qr = '';
         foreach ($fields as $f) {
             if (($f['source'] ?? '') === '__break__') { $out .= '<span class="dcbr"></span>'; continue; }
             $t = $fieldHtml($f, $ctx, $computed, $qrMm);
             if ($t === null) continue;
+            // QR floats bottom-right, so emit it LAST — text above runs full width.
+            if (($f['source'] ?? '') === 'qr') { $qr = $t; continue; }
             $al = (string) ($f['align'] ?? '');
             $c  = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            if (($f['source'] ?? '') === 'qr') { $out .= $t; continue; }   // already markup
             $out .= '<span' . $c . '>' . $t . '</span>';
         }
-        return $out;
+        return $out . $qr;
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
@@ -449,21 +454,21 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .sheet { position:relative; width:210mm; height:297mm; background:#fff; margin:60px auto 40px; box-shadow:0 4px 24px rgba(0,0,0,0.4); overflow:hidden; }
     #sheet-inner { position:absolute; inset:0; }
     .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
-    /* The QR is a graphic, not text — keep line-height off it or the span padding
-       eats into the quiet zone that scanners need. */
-    /* Pinned to the corner, with the corner reserved — see the roll label above.
-       On a 21mm ticket a QR flowing with the text would shove lines off the
-       label entirely. */
-    .dc-label .qr { line-height:0; position:absolute; right:1.2mm; bottom:0.8mm; }
-    .dc-label .qr svg { display:block; }
-    .dc-label:has(.qr) .flds { padding-right:<?= $mm($qrMm + 1.5) ?>mm; }
-    .dc-label .flds { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; line-height:1.05; }
+    .dc-label .flds { display:flow-root; height:100%; line-height:1.05; }
+    /* QR floats into the bottom-right corner via a zero-width, (label − QR) tall
+       spacer — text runs full width above it and only wraps beside it at the
+       bottom. On a 21mm ticket that frees ~3 lines of full-width text above the
+       code. line-height:0 keeps the span padding out of the scanner quiet zone. */
+    .dc-label:has(.qr) .flds::before { content:""; float:right; width:0; height:calc(100% - <?= $mm($qrMm + 1) ?>mm); }
+    .dc-label .flds .qr { float:right; clear:right; line-height:0; margin:0 0 0 1.5mm; }
+    .dc-label .flds .qr svg { display:block; }
     :root { --fs-s:<?= $mm($fs) ?>pt; --fs-l:<?= $mm($fs + 1.5) ?>pt; }
     .dc-label.dc-small .flds { font-size:var(--fs-s); }
     .dc-label.dc-large .flds { font-size:var(--fs-l); }
-    .dc-label .flds span { white-space:nowrap; }
-    .dc-label .flds .dcbr { flex:0 0 100%; height:0; }
-    .dc-label .flds .r { margin-left:auto; } .dc-label .flds .c { margin-left:auto; margin-right:auto; }
+    .dc-label .flds span { white-space:nowrap; display:inline-block; vertical-align:top; margin-right:1.8mm; }
+    .dc-label .flds .dcbr { display:block; width:100%; height:0; margin:0; }
+    .dc-label .flds .r { float:right; margin-right:0; margin-left:1.8mm; }
+    .dc-label .flds .c { display:block; width:100%; text-align:center; margin-right:0; }
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
