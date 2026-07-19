@@ -295,7 +295,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-labelbox:has(.pv-qr)::before { content:""; float:right; width:0; height:calc(100% - var(--qrpx, 0px)); }
     .pv-ln .pv-fld { display:inline-block; vertical-align:top; margin-right:5px; white-space:nowrap; }
     .pv-ln .pv-alignright { float:right; margin-right:0; margin-left:5px; }
-    .pv-ln .pv-aligncentre { display:block; text-align:center; margin:0; }
+    /* Centre flows inline like the other fields (it used to take a whole line each,
+       which made busy labels overflow). Its line stays as packed as Left/Right. */
     /* QR box drawn at its real size (var --qrpx), floated into the bottom-right. */
     .pv-qr { float:right; clear:right; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
              position:relative; margin-left:4px; display:flex; align-items:center; justify-content:center;
