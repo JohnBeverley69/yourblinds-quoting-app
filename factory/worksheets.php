@@ -285,14 +285,25 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-zoom .pv-zoom-reset { width:auto; padding:0 0.5rem; font-size:0.72rem; }
     .pv-zoom #zoom-val { min-width:2.8rem; text-align:center; font-variant-numeric:tabular-nums; }
     .pv-warn { color:#b91c1c; font-size:0.82rem; margin-bottom:0.7rem; line-height:1.4; display:none; }
-    .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 5px; }
+    /* Line-block float model — mirrors the printed label so the preview is honest:
+       fields group into .pv-ln lines, the QR floats bottom-right, and a zero-width
+       (label − QR) tall spacer lets text run full width on top and wrap beside the
+       QR at the bottom. A right-aligned field floats to its line's right edge, which
+       at the bottom is the QR's left edge — so it stops at the QR, never under it. */
+    .pv-labelbox { position:relative; border:1px solid #94a3b8; border-radius:2px; padding:2px 4px; font:9px/1.05 ui-monospace,Consolas,monospace; color:#111; overflow:hidden; box-sizing:border-box; background:#fff; display:flow-root; }
     .pv-labelbox.over { border-color:#ef4444; box-shadow:0 0 0 1px #ef4444; }
-    .pv-labelbox span { white-space:nowrap; }
-    /* QR is pinned to the corner (matches the printed label's floated QR), not part
-       of the draggable flow. */
-    .pv-qr { position:absolute; right:3px; bottom:2px; background:#fff; border:1px solid #cbd5e1; border-radius:2px; padding:0 2px; color:#334155; z-index:2; cursor:default; }
+    .pv-labelbox:has(.pv-qr)::before { content:""; float:right; width:0; height:calc(100% - var(--qrpx, 0px)); }
+    .pv-ln .pv-fld { display:inline-block; vertical-align:top; margin-right:5px; white-space:nowrap; }
+    .pv-ln .pv-alignright { float:right; margin-right:0; margin-left:5px; }
+    .pv-ln .pv-aligncentre { display:block; text-align:center; margin:0; }
+    /* QR box drawn at its real size (var --qrpx), floated into the bottom-right. */
+    .pv-qr { float:right; clear:right; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
+             position:relative; margin-left:4px; display:flex; align-items:center; justify-content:center;
+             font-size:0.7em; color:#64748b; background:#fff; border:1px solid #64748b; border-radius:1px;
+             background-image:linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%),linear-gradient(45deg,#e2e8f0 25%,transparent 25%,transparent 75%,#e2e8f0 75%);
+             background-size:4px 4px; background-position:0 0,2px 2px; cursor:default; }
     .pv-qr:hover .pv-rm { display:block; }
-    .pv-break { flex:0 0 100%; display:flex; align-items:center; justify-content:center; height:0.85em; color:#94a3b8; border-top:1px dashed #cbd5e1; margin-top:1px; }
+    .pv-break { display:inline-block; color:#94a3b8; font-style:italic; padding:0 2px; }
     .pv-never { text-decoration:line-through; }
     .pv-cap { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin:0 0 0.15rem; }
     .pv-line2 { display:flex; gap:10px; padding:0.5rem 0; }
@@ -300,8 +311,6 @@ require __DIR__ . '/../_partials/factory_head.php';
     .pv-drag { cursor:grab; border-radius:2px; touch-action:none; position:relative; }
     .pv-drag:hover { background:#eef2ff; }
     .pv-drag:active { cursor:grabbing; }
-    .pv-alignright { margin-left:auto; }
-    .pv-aligncentre { margin-left:auto; margin-right:auto; }
     .pv-rm { display:none; position:absolute; top:50%; right:0; transform:translateY(-50%); width:13px; height:13px; padding:0; line-height:11px; text-align:center; border:none; border-radius:50%; background:#ef4444; color:#fff; font-size:11px; font-family:sans-serif; cursor:pointer; z-index:3; box-shadow:0 1px 2px rgba(0,0,0,0.3); }
     .pv-drag:hover .pv-rm { display:block; }
     .pv-fld.pv-ghost { opacity:0.45; font-style:italic; }
@@ -357,6 +366,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <label style="font-size:0.8rem; color:#64748b; font-weight:600;">Template name</label>
         <input type="text" id="tpl-name" value="<?= e($currentName) ?>" style="width:16rem;">
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;"><input type="checkbox" id="tpl-default" <?= $currentIsDef ? 'checked' : '' ?>> Default for printing</label>
+        <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="QR code size on every label of this worksheet. Smaller frees space — 10mm has tested fine on your stock.">QR size <input type="number" id="tpl-qr" min="6" max="40" step="0.5" style="width:4.2rem;"> mm</label>
         <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
     </div>
 
@@ -438,6 +448,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     // Starter layout modelled on the real vertical worksheet.
     var STARTER = {
         stock: 'a4-diecut',
+        qr: 12,
         header: { w: 170, h: 22, fields: [
             { source: 'order:order_no',   caption: 'ONO',       show: 'always' },
             { source: 'order:order_date', caption: 'Date',      show: 'always' },
@@ -506,6 +517,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     function ensureSizes() {
         if (!STATE.header) STATE.header = { fields: [] };
         var isRoll = STATE.stock === 'roll-102x76';
+        STATE.qr = num(STATE.qr, isRoll ? 20 : 12);   // QR size (mm), one per worksheet
         STATE.header.w = num(STATE.header.w, 170);
         STATE.header.h = num(STATE.header.h, 22);
         STATE.header.fs = num(STATE.header.fs, isRoll ? 9 : 9.5);
@@ -785,14 +797,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         if (STATE.header.fields.length || STATE.labels.length) {
             if (!confirm('Replace the current layout with the starter vertical layout?')) return;
         }
-        STATE = JSON.parse(JSON.stringify(STARTER)); render();
+        STATE = JSON.parse(JSON.stringify(STARTER)); render(); refreshQrInput();
     });
 
     document.getElementById('new-tpl').addEventListener('click', function () {
         document.getElementById('f-tid').value = '0';
         document.getElementById('tpl-name').value = 'New worksheet';
-        STATE = { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
-        render();
+        STATE = { stock: 'a4-diecut', qr: 12, header: { w: 170, h: 22, fields: [] }, labels: [] };
+        render(); refreshQrInput();
     });
 
     // ---- Live preview (sample data) + drag-to-reorder on the label --------
@@ -808,9 +820,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     function fieldSpan(f, i, interactive) {
         var rm = interactive ? '<button type="button" class="pv-rm" data-fi="' + i + '" title="Remove this field">×</button>' : '';
         // QR is pinned bottom-right (no pv-drag) — it can't be reordered because on
-        // the label it always floats to the corner. Still removable.
+        // the label it always floats to the corner. Drawn at its real size (set by
+        // "QR size") so you can judge the fit. Still removable.
         if (f.source === 'qr') {
-            return '<span class="pv-fld pv-qr" data-fi="' + i + '" title="QR code — always prints fixed in the bottom-right corner">[QR ▓▒░]' + rm + '</span>';
+            return '<span class="pv-fld pv-qr" data-fi="' + i + '" title="QR code — fixed bottom-right; size set by “QR size” above">QR' + rm + '</span>';
         }
         if (f.source === '__break__') {
             return '<span class="pv-fld pv-break' + (interactive ? ' pv-drag' : '') + '" data-fi="' + i + '" title="line break">↵ new line' + rm + '</span>';
@@ -832,29 +845,41 @@ require __DIR__ . '/../_partials/factory_head.php';
     // Font scales WITH the box so proportions — and the overflow check — hold.
     var BASE_SCALE = 4;
     var SCALE = Math.max(2, Math.min(12, parseFloat(localStorage.getItem('lblPreviewZoom')) || BASE_SCALE));
+    // Fields are grouped into per-line blocks (matching the print), so a right-
+    // aligned field aligns to its line's right edge — the QR's left edge on the
+    // bottom line — and stops at the QR instead of running under it. The QR is
+    // emitted outside the lines; it floats into the bottom-right corner.
     function inlineFields(fields, ln, interactive) {
-        var out = '';
+        var lines = [''], qr = '';
         fields.forEach(function (f, i) {
             var ff = f;
             if (ln && f.source === 'order:line_no') ff = { source: 'text', caption: ln, show: 'always' };
-            out += fieldSpan(ff, i, interactive);
+            if (f.source === 'qr') { qr = fieldSpan(ff, i, interactive); return; }
+            if (f.source === '__break__') { lines[lines.length - 1] += fieldSpan(ff, i, interactive); lines.push(''); return; }
+            lines[lines.length - 1] += fieldSpan(ff, i, interactive);
         });
-        return out || '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
+        var out = '';
+        lines.forEach(function (h) { out += '<div class="pv-ln">' + h + '</div>'; });
+        if (!lines.some(function (h) { return h; }) && !qr) {
+            return '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
+        }
+        return out + qr;
     }
     // Font is entered in points; 1pt = 0.3528mm, and SCALE is px-per-mm, so the
     // preview shows the label at its true printed text size (and overflows for
     // real). Line spacing is the unitless line-height, straight through.
-    function labelBox(w, h, inner, secAttr, fs, lh) {
+    function labelBox(w, h, inner, secAttr, fs, lh, qrMm) {
         var pxFont = (num(fs, 8) * 0.3528 * SCALE).toFixed(2);
+        var qrpx   = (num(qrMm, 12) * SCALE).toFixed(1);   // --qrpx sizes the QR box + the float spacer
         return '<div class="pv-labelbox" ' + (secAttr || '') + ' style="width:' + (w * SCALE) + 'px;height:' + (h * SCALE)
-             + 'px;font-size:' + pxFont + 'px;line-height:' + num(lh, 1.05) + '">' + inner + '</div>';
+             + 'px;font-size:' + pxFont + 'px;line-height:' + num(lh, 1.05) + ';--qrpx:' + qrpx + 'px">' + inner + '</div>';
     }
     function renderPreview() {
         sync();
         var pv = document.getElementById('preview');
         var html = '';
         html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
-        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"', STATE.header.fs, STATE.header.lh);
+        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"', STATE.header.fs, STATE.header.lh, STATE.qr);
         html += '<div class="pv-badge">▼ one row per blind — sample shows two (drag on the first row) ▼</div>';
         [ '1/2', '2/2' ].forEach(function (ln, ri) {
             var interactive = (ri === 0);   // only the first sample row is draggable
@@ -862,7 +887,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             (STATE.labels.length ? STATE.labels : [{ title: '', w: 80, h: 18, fields: [], fs: 8, lh: 1.05 }]).forEach(function (lab, li) {
                 var sec = interactive ? ('data-sec="label" data-li="' + li + '"') : '';
                 html += '<div><div class="pv-cap">' + esc(lab.title || 'Label') + ' · ' + lab.w + ' × ' + lab.h + ' mm</div>'
-                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln, interactive), sec, lab.fs, lab.lh) + '</div>';
+                      + labelBox(lab.w, lab.h, inlineFields(lab.fields, ln, interactive), sec, lab.fs, lab.lh, STATE.qr) + '</div>';
             });
             html += '</div>';
         });
@@ -1032,8 +1057,17 @@ require __DIR__ . '/../_partials/factory_head.php';
     });
     <?php endif; ?>
 
+    // QR size control (one per worksheet). Its own input — outside the section
+    // editors — updates STATE.qr and re-renders the preview live.
+    function refreshQrInput() { var q = document.getElementById('tpl-qr'); if (q) q.value = STATE.qr; }
+    (function () {
+        var q = document.getElementById('tpl-qr');
+        if (q) q.addEventListener('input', function () { STATE.qr = num(q.value, STATE.qr); renderPreview(); });
+    })();
+
     ensureSizes();
     render();
+    refreshQrInput();
 })();
 </script>
 <?php endif; ?>
