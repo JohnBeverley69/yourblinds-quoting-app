@@ -840,8 +840,25 @@ $activeNav = 'instaprice';
         renderExtras();
         if (productSel.value) { fabricSearch.focus(); searchFabrics(''); }
     });
-    fabricSearch.addEventListener('focus', function () { if (productSel.value) searchFabrics(fabricSearch.value.trim()); });
-    fabricSearch.addEventListener('click', function () { if (productSel.value) searchFabrics(fabricSearch.value.trim()); });
+    // What to search when the box is merely REOPENED (focus / click) rather than
+    // typed into. pickFabric() writes the chosen fabric's LABEL into this same
+    // box, so once something is picked the text is a label, not a search term.
+    // Using it as a query returns exactly one row — the fabric already chosen —
+    // so there is no way to switch colour without first deleting the text.
+    // Browse the full list instead; typing clears fabricId and searches again.
+    function fabricBrowseQuery() {
+        return fabricId.value ? '' : fabricSearch.value.trim();
+    }
+    fabricSearch.addEventListener('focus', function () {
+        if (!productSel.value) return;
+        // Select an already-picked label so the first keystroke replaces it
+        // rather than appending to it ("Autumn GoldFl").
+        if (fabricId.value) {
+            setTimeout(function () { try { fabricSearch.select(); } catch (e) {} }, 0);
+        }
+        searchFabrics(fabricBrowseQuery());
+    });
+    fabricSearch.addEventListener('click', function () { if (productSel.value) searchFabrics(fabricBrowseQuery()); });
     fabricSearch.addEventListener('input', function () { fabricId.value = ''; scheduleFabricSearch(); schedulePreview(); });
     fabricSearch.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeFabricResults(); });
     fabricSearch.addEventListener('blur', function () { setTimeout(closeFabricResults, 150); });
