@@ -3043,17 +3043,36 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     syncRateOverride(); // paint hint + hidden value from any pre-filled override
 
     // Fabric typeahead listeners.
+    // What to search when the box is merely REOPENED (focus / click) rather
+    // than typed into.
+    //
+    // pickFabric() writes the chosen fabric's label into this same box, so
+    // once something is picked the text is a label, not a search term. Using
+    // it as a query returns exactly one row — the fabric already chosen — so
+    // the list looks empty of alternatives and there's no way to change
+    // colour without first deleting the text. Browse the full list instead;
+    // typing (which clears fabricId) searches normally again.
+    function fabricBrowseQuery() {
+        return fabricId.value ? '' : fabricSearch.value.trim();
+    }
+
     fabricSearch.addEventListener('focus', function () {
         // On focus, kick off a query (empty = first 50 alphabetical) so the
         // user gets something to browse before typing.
-        if (productSel.value) searchFabrics(fabricSearch.value.trim());
+        if (!productSel.value) return;
+        // Select the label of an already-picked fabric so the first keystroke
+        // replaces it rather than appending to it ("Autumn GoldFl").
+        if (fabricId.value) {
+            setTimeout(function () { try { fabricSearch.select(); } catch (e) {} }, 0);
+        }
+        searchFabrics(fabricBrowseQuery());
     });
     fabricSearch.addEventListener('click', function () {
         // Clicking the input always reopens the dropdown — even when focus
         // was already inside (in which case the 'focus' event won't re-fire).
         // Without this, after picking a fabric the user has to delete the
         // text to browse again, which is exactly what Tyler reported.
-        if (productSel.value) searchFabrics(fabricSearch.value.trim());
+        if (productSel.value) searchFabrics(fabricBrowseQuery());
     });
     fabricSearch.addEventListener('input', function () {
         // Typing invalidates the previous picked id — they're searching anew.
