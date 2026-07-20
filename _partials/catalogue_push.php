@@ -366,14 +366,11 @@ function pp_find_by_source(PDO $pdo, string $table, string $srcCol, array $scope
     } catch (Throwable $e) { return null; }
 }
 
-/** Record which master row this copy came from. Safe to call repeatedly. */
-function pp_stamp_source(PDO $pdo, string $table, string $srcCol, int $targetId, int $sourceId): void
-{
-    if (!pp_has_src_col($pdo, $table, $srcCol)) return;
-    try {
-        $pdo->prepare("UPDATE `$table` SET `$srcCol` = ? WHERE id = ?")->execute([$sourceId, $targetId]);
-    } catch (Throwable $e) { /* never break a push over bookkeeping */ }
-}
+// NOTE: there is deliberately no "stamp" helper. The source id is written by
+// the INSERT and UPDATE that each row already runs — see pp_has_src_col() at
+// the top of each sync function. A separate stamping query per row would add
+// roughly one write per fabric (~6,400 a tenant) for no benefit, which is the
+// difference between a push you can run across 70 accounts and one you can't.
 
 /**
  * Remove our copies whose master original is gone — the half of mirroring that
@@ -428,6 +425,7 @@ function pp_sync_systems(
     );
 
     $seenSystemIds = [];
+    $hasSysSrc     = pp_has_src_col($pdo, 'product_systems', 'source_system_id');
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $srcSysId        = (int) $r['id'];
         $seenSystemIds[] = $srcSysId;
@@ -445,18 +443,23 @@ function pp_sync_systems(
             // is_default: never let our push silently flip an existing
             // tenant's default. For NEW systems on the target, copy the
             // source's value — they're starting fresh anyway.
-            $ins = $pdo->prepare(
-                'INSERT INTO product_systems
-                   (client_id, product_id, name, sort_order, active, is_default)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            );
-            $ins->execute([
+            // source_system_id rides along in the INSERT rather than costing a
+            // second UPDATE per row — at ~6,400 fabrics and thousands of other
+            // rows per tenant, a separate stamping query is the difference
+            // between a push you can run across 70 accounts and one you can't.
+            $cols   = ['client_id', 'product_id', 'name', 'sort_order', 'active', 'is_default'];
+            $params = [
                 $targetClientId, $targetProductId,
                 (string) $r['name'],
                 (int) ($r['sort_order'] ?? 0),
                 (int) ($r['active']     ?? 1),
                 (int) ($r['is_default'] ?? 0),
-            ]);
+            ];
+            if ($hasSysSrc) { $cols[] = 'source_system_id'; $params[] = $srcSysId; }
+            $pdo->prepare(
+                'INSERT INTO product_systems (' . implode(',', $cols) . ') VALUES ('
+                . implode(',', array_fill(0, count($cols), '?')) . ')'
+            )->execute($params);
             $tgtId = (int) $pdo->lastInsertId();
             $summary['systems_added']++;
         } else {
@@ -464,16 +467,18 @@ function pp_sync_systems(
             // Update non-name fields, and the NAME too now that identity is
             // tracked separately — that is what carries a master rename over.
             // Skip is_default — the tenant may have set their own preference.
-            $pdo->prepare(
-                'UPDATE product_systems SET name = ?, sort_order = ?, active = ? WHERE id = ?'
-            )->execute([
+            $sets   = ['name = ?', 'sort_order = ?', 'active = ?'];
+            $params = [
                 (string) $r['name'],
                 (int) ($r['sort_order'] ?? 0),
                 (int) ($r['active']     ?? 1),
-                $tgtId,
-            ]);
+            ];
+            if ($hasSysSrc) { $sets[] = 'source_system_id = ?'; $params[] = $srcSysId; }
+            $params[] = $tgtId;
+            $pdo->prepare(
+                'UPDATE product_systems SET ' . implode(', ', $sets) . ' WHERE id = ?'
+            )->execute($params);
         }
-        pp_stamp_source($pdo, 'product_systems', 'source_system_id', (int) $tgtId, $srcSysId);
         $systemMap[(int) $r['id']] = $tgtId;
     }
 
@@ -504,6 +509,7 @@ function pp_sync_options(
     // translate per-fabric choice scoping onto the tenant's own fabric rows.
     $optionMap     = [];
     $seenOptionIds = [];
+    $hasOptSrc     = pp_has_src_col($pdo, 'product_options', 'source_option_id');
 
     // Schema-aware: tenants on a target DB that hasn't run
     // migrate_option_system_scope.php yet won't have the system_id
@@ -590,42 +596,32 @@ function pp_sync_options(
             $tgtId = $find->fetchColumn();
         }
         if ($tgtId === false) {
-            // INSERT — include system_id only when the column exists.
-            if ($hasSystemIdCol) {
-                $ins = $pdo->prepare(
-                    'INSERT INTO product_options
-                       (client_id, product_id, system_id, band_code,
-                        supplier_name, name, colour, code, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $ins->execute([
-                    $targetClientId, $targetProductId,
-                    $tgtSystemId,
-                    (string) $r['band_code'],
-                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                    (string) $r['name'],
-                    $r['colour'] !== null ? (string) $r['colour'] : null,
-                    $r['code']   !== null ? (string) $r['code']   : null,
-                    (int) ($r['sort_order'] ?? 0),
-                    (int) ($r['active']     ?? 1),
-                ]);
-            } else {
-                $ins = $pdo->prepare(
-                    'INSERT INTO product_options
-                       (client_id, product_id, band_code, supplier_name, name, colour, code, sort_order, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $ins->execute([
-                    $targetClientId, $targetProductId,
-                    (string) $r['band_code'],
-                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                    (string) $r['name'],
-                    $r['colour'] !== null ? (string) $r['colour'] : null,
-                    $r['code']   !== null ? (string) $r['code']   : null,
-                    (int) ($r['sort_order'] ?? 0),
-                    (int) ($r['active']     ?? 1),
-                ]);
-            }
+            // One dynamic INSERT rather than two hand-written shapes. system_id
+            // and source_option_id are each appended only when the column is
+            // there — and source_option_id riding along here is what saves a
+            // second UPDATE per fabric. At ~6,400 fabrics a tenant, that one
+            // extra query per row is what makes a 70-account push unworkable.
+            $cols   = ['client_id', 'product_id', 'band_code', 'supplier_name',
+                       'name', 'colour', 'code', 'sort_order', 'active'];
+            $params = [
+                $targetClientId, $targetProductId,
+                (string) $r['band_code'],
+                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                (string) $r['name'],
+                $r['colour'] !== null ? (string) $r['colour'] : null,
+                $r['code']   !== null ? (string) $r['code']   : null,
+                (int) ($r['sort_order'] ?? 0),
+                (int) ($r['active']     ?? 1),
+            ];
+            if ($hasSystemIdCol) { $cols[] = 'system_id';        $params[] = $tgtSystemId; }
+            if ($hasOptSrc)      { $cols[] = 'source_option_id'; $params[] = $srcOptId;    }
+            $pdo->prepare(
+                'INSERT INTO product_options (' . implode(',', $cols) . ') VALUES ('
+                . implode(',', array_fill(0, count($cols), '?')) . ')'
+            )->execute($params);
+            // Single INSERT shape now, so lastInsertId is trustworthy — which
+            // also saves the SELECT that used to re-find the row we just wrote.
+            $tgtId = (int) $pdo->lastInsertId();
             $summary['fabrics_added']++;
         } else {
             // UPDATE — re-sync system_id too, so a re-push after the
@@ -638,66 +634,30 @@ function pp_sync_options(
             // a spelling fix on the master read as a different fabric and left
             // the old row behind. Moving Infusions' fabrics onto bands A-D is
             // exactly that case.
-            if ($hasSystemIdCol) {
-                $pdo->prepare(
-                    'UPDATE product_options
-                        SET system_id = ?, band_code = ?, name = ?, colour = ?,
-                            supplier_name = ?, code = ?,
-                            sort_order = ?, active = ?
-                      WHERE id = ?'
-                )->execute([
-                    $tgtSystemId,
-                    (string) $r['band_code'],
-                    (string) $r['name'],
-                    $r['colour']        !== null ? (string) $r['colour']        : null,
-                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                    $r['code']          !== null ? (string) $r['code']          : null,
-                    (int) ($r['sort_order'] ?? 0),
-                    (int) ($r['active']     ?? 1),
-                    (int) $tgtId,
-                ]);
-            } else {
-                $pdo->prepare(
-                    'UPDATE product_options
-                        SET band_code = ?, name = ?, colour = ?,
-                            supplier_name = ?, code = ?, sort_order = ?, active = ?
-                      WHERE id = ?'
-                )->execute([
-                    (string) $r['band_code'],
-                    (string) $r['name'],
-                    $r['colour']        !== null ? (string) $r['colour']        : null,
-                    $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                    $r['code']          !== null ? (string) $r['code']          : null,
-                    (int) ($r['sort_order'] ?? 0),
-                    (int) ($r['active']     ?? 1),
-                    (int) $tgtId,
-                ]);
-            }
+            $sets   = ['band_code = ?', 'name = ?', 'colour = ?',
+                       'supplier_name = ?', 'code = ?', 'sort_order = ?', 'active = ?'];
+            $params = [
+                (string) $r['band_code'],
+                (string) $r['name'],
+                $r['colour']        !== null ? (string) $r['colour']        : null,
+                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                $r['code']          !== null ? (string) $r['code']          : null,
+                (int) ($r['sort_order'] ?? 0),
+                (int) ($r['active']     ?? 1),
+            ];
+            if ($hasSystemIdCol) { $sets[] = 'system_id = ?';        $params[] = $tgtSystemId; }
+            if ($hasOptSrc)      { $sets[] = 'source_option_id = ?'; $params[] = $srcOptId;    }
+            $params[] = (int) $tgtId;
+            $pdo->prepare(
+                'UPDATE product_options SET ' . implode(', ', $sets) . ' WHERE id = ?'
+            )->execute($params);
             $summary['fabrics_updated']++;
         }
 
         // Source fabric → target fabric. Choices can be scoped to specific
         // fabrics (product_extra_choice_options), so the choices pass needs
         // this to translate that scope onto the tenant's own fabric rows.
-        if ($tgtId !== false && $tgtId !== null) {
-            $optionMap[(int) $r['id']] = (int) $tgtId;
-            pp_stamp_source($pdo, 'product_options', 'source_option_id', (int) $tgtId, $srcOptId);
-        } else {
-            // Freshly inserted above — look it up rather than trusting
-            // lastInsertId across the two INSERT shapes.
-            $find->execute([
-                $targetClientId, $targetProductId,
-                (string) $r['band_code'],
-                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-                (string) $r['name'],
-                $r['colour'] !== null ? (string) $r['colour'] : null,
-            ]);
-            $newId = $find->fetchColumn();
-            if ($newId !== false) {
-                $optionMap[(int) $r['id']] = (int) $newId;
-                pp_stamp_source($pdo, 'product_options', 'source_option_id', (int) $newId, $srcOptId);
-            }
-        }
+        if ($tgtId) $optionMap[(int) $r['id']] = (int) $tgtId;
     }
 
     // Fabrics the master has deleted — the 36 duplicate Infusions slats, say.
@@ -755,6 +715,7 @@ function pp_sync_extras_and_choices(
     $nameUsed = [];
 
     $seenExtraIds = [];
+    $hasExtraSrc  = pp_has_src_col($pdo, 'product_extras', 'source_extra_id');
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $srcExtraId       = (int) $r['id'];
         $seenExtraIds[]   = $srcExtraId;
@@ -788,6 +749,7 @@ function pp_sync_extras_and_choices(
                 $cols[] = 'allow_multi';
                 $params[] = (int) ($r['allow_multi'] ?? 0);
             }
+            if ($hasExtraSrc) { $cols[] = 'source_extra_id'; $params[] = $srcExtraId; }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -814,13 +776,13 @@ function pp_sync_extras_and_choices(
                 $sets[]   = 'allow_multi = ?';
                 $params[] = (int) ($r['allow_multi'] ?? 0);
             }
+            if ($hasExtraSrc) { $sets[] = 'source_extra_id = ?'; $params[] = $srcExtraId; }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'
             )->execute($params);
             $summary['extras_updated']++;
         }
-        pp_stamp_source($pdo, 'product_extras', 'source_extra_id', (int) $tgtId, $srcExtraId);
         $extraMap[(int) $r['id']] = $tgtId;
 
         // ---- Choices for this extra ----
@@ -896,10 +858,6 @@ function pp_sync_choices(
               WHERE product_extra_id = ? AND source_choice_id = ? LIMIT 1'
           )
         : null;
-    $stampSrc = $hasSrcCol
-        ? $pdo->prepare('UPDATE product_extra_choices SET source_choice_id = ? WHERE id = ?')
-        : null;
-
     $seenSourceIds = [];
 
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -933,13 +891,9 @@ function pp_sync_choices(
         $imagePath = $r['image_path'] !== null ? (string) $r['image_path'] : null;
 
         if ($tgtId === false) {
-            $ins = $pdo->prepare(
-                'INSERT INTO product_extra_choices
-                   (product_extra_id, label, system_id, price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active, image_path)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $ins->execute([
+            $cols   = ['product_extra_id', 'label', 'system_id', 'price_delta', 'price_percent',
+                       'price_per_metre', 'is_default', 'sort_order', 'active', 'image_path'];
+            $params = [
                 $targetExtraId,
                 (string) $r['label'],
                 $tgtSystemId,
@@ -950,7 +904,12 @@ function pp_sync_choices(
                 (int)   ($r['sort_order']      ?? 0),
                 (int)   ($r['active']          ?? 1),
                 $imagePath,
-            ]);
+            ];
+            if ($hasSrcCol) { $cols[] = 'source_choice_id'; $params[] = $srcChoiceId; }
+            $pdo->prepare(
+                'INSERT INTO product_extra_choices (' . implode(',', $cols) . ') VALUES ('
+                . implode(',', array_fill(0, count($cols), '?')) . ')'
+            )->execute($params);
             $tgtId = (int) $pdo->lastInsertId();
             $summary['choices_added']++;
         } else {
@@ -962,12 +921,9 @@ function pp_sync_choices(
             // The LABEL is updated too, which it couldn't be while the label was
             // the identity. That's what makes a master rename land on the
             // tenant's existing row instead of appearing beside it.
-            $pdo->prepare(
-                'UPDATE product_extra_choices
-                    SET label = ?, system_id = ?, price_delta = ?, price_percent = ?, price_per_metre = ?,
-                        sort_order = ?, active = ?, image_path = ?
-                  WHERE id = ?'
-            )->execute([
+            $sets   = ['label = ?', 'system_id = ?', 'price_delta = ?', 'price_percent = ?',
+                       'price_per_metre = ?', 'sort_order = ?', 'active = ?', 'image_path = ?'];
+            $params = [
                 (string) $r['label'],
                 $tgtSystemId,
                 (float) ($r['price_delta']     ?? 0),
@@ -976,14 +932,17 @@ function pp_sync_choices(
                 (int)   ($r['sort_order']      ?? 0),
                 (int)   ($r['active']          ?? 1),
                 $imagePath,
-                $tgtId,
-            ]);
+            ];
+            // Stamping rides along here instead of costing its own UPDATE —
+            // it also re-stamps a legacy row matched by label, which is how
+            // identities fill in for rows pushed before the column existed.
+            if ($hasSrcCol) { $sets[] = 'source_choice_id = ?'; $params[] = $srcChoiceId; }
+            $params[] = $tgtId;
+            $pdo->prepare(
+                'UPDATE product_extra_choices SET ' . implode(', ', $sets) . ' WHERE id = ?'
+            )->execute($params);
             $summary['choices_updated']++;
         }
-
-        // Stamp the identity — on a fresh insert, and on a legacy row matched
-        // by label, so the next push can find it without relying on the name.
-        if ($stampSrc) $stampSrc->execute([$srcChoiceId, $tgtId]);
 
         $map[(int) $r['id']] = $tgtId;
 
@@ -1260,6 +1219,7 @@ function pp_sync_price_tables(
     require_once __DIR__ . '/price_source.php';
 
     $seenTableIds = [];
+    $hasTableSrc  = pp_has_src_col($pdo, 'price_tables', 'source_table_id');
 
     $src = $pdo->prepare(
         'SELECT id, system_id, band_code, name, notes, active
@@ -1338,39 +1298,40 @@ function pp_sync_price_tables(
         }
 
         if ($tgtPtId === false) {
-            $ins = $pdo->prepare(
-                'INSERT INTO price_tables
-                   (client_id, product_id, system_id, band_code, name, notes, active)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            $ins->execute([
+            $cols   = ['client_id', 'product_id', 'system_id', 'band_code', 'name', 'notes', 'active'];
+            $params = [
                 $targetClientId, $targetProductId,
                 $tgtSystemId,
                 strtoupper((string) $pt['band_code']),
                 $pt['name']  !== null ? (string) $pt['name']  : null,
                 $pt['notes'] !== null ? (string) $pt['notes'] : null,
                 (int) ($pt['active'] ?? 1),
-            ]);
+            ];
+            if ($hasTableSrc) { $cols[] = 'source_table_id'; $params[] = $srcTableId; }
+            $pdo->prepare(
+                'INSERT INTO price_tables (' . implode(',', $cols) . ') VALUES ('
+                . implode(',', array_fill(0, count($cols), '?')) . ')'
+            )->execute($params);
             $tgtPtId = (int) $pdo->lastInsertId();
             $summary['price_tables_added']++;
         } else {
             $tgtPtId = (int) $tgtPtId;
             // band_code / system_id update too now that identity is separate,
             // so a band rename moves the tenant's table rather than orphaning it.
-            $pdo->prepare(
-                'UPDATE price_tables
-                    SET system_id = ?, band_code = ?, name = ?, notes = ?, active = ?
-                  WHERE id = ?'
-            )->execute([
+            $sets   = ['system_id = ?', 'band_code = ?', 'name = ?', 'notes = ?', 'active = ?'];
+            $params = [
                 $tgtSystemId,
                 strtoupper((string) $pt['band_code']),
                 $pt['name']  !== null ? (string) $pt['name']  : null,
                 $pt['notes'] !== null ? (string) $pt['notes'] : null,
                 (int) ($pt['active'] ?? 1),
-                $tgtPtId,
-            ]);
+            ];
+            if ($hasTableSrc) { $sets[] = 'source_table_id = ?'; $params[] = $srcTableId; }
+            $params[] = $tgtPtId;
+            $pdo->prepare(
+                'UPDATE price_tables SET ' . implode(', ', $sets) . ' WHERE id = ?'
+            )->execute($params);
         }
-        pp_stamp_source($pdo, 'price_tables', 'source_table_id', (int) $tgtPtId, $srcTableId);
 
         // Merge cells: master's price wins for matching (width, drop);
         // client's extra cells (outside master's range) are kept.
