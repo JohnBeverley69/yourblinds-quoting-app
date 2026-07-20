@@ -83,6 +83,41 @@ if ($hasBandScopingTbl) {
     );
 }
 
+// Per-FABRIC scoping (migrate_choice_option_scoping.php). One level finer than
+// bands, for restrictions the band can't express — 38mm slat offered on Snow
+// and Cool White only, where Snow shares band C with ten colours that don't
+// offer it. Absent table = feature not enabled, picker hidden, applies to all.
+$hasFabricScopingTbl = false;
+try {
+    $hasFabricScopingTbl = (bool) db()->query(
+        "SELECT 1 FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'product_extra_choice_options'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$existingFabrics = [];
+if ($hasFabricScopingTbl) {
+    $fSt = db()->prepare(
+        'SELECT option_id FROM product_extra_choice_options WHERE choice_id = ?'
+    );
+    $fSt->execute([$id]);
+    $existingFabrics = array_map('intval', $fSt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+// The product's fabrics, for the picker. Ordered so the list reads the same as
+// the Fabrics page.
+$knownFabrics = [];
+if ($hasFabricScopingTbl) {
+    $kfSt = db()->prepare(
+        'SELECT id, name, colour, band_code FROM product_options
+          WHERE product_id = ? AND client_id = ?
+       ORDER BY band_code, name, colour'
+    );
+    $kfSt->execute([(int) $choice['product_id'], $clientId]);
+    $knownFabrics = $kfSt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 // Known bands across this product — same union as options.php, so
 // the picker offers exactly the bands the tenant has actually
 // defined (no free-text). Empty list → no bands defined yet,
@@ -173,6 +208,7 @@ $f = [
     'active'          => (int)    $choice['active'],
     'system_id'       => $choice['system_id'] !== null ? (int) $choice['system_id'] : 0,
     'bands'           => $existingBands,
+    'fabrics'         => $existingFabrics,
 ];
 $error = null;
 
@@ -229,6 +265,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($idx !== false) $f['bands'][] = $knownBands[$idx];
     }
     $f['bands'] = array_values(array_unique($f['bands']));
+
+    // fabric_filter[] — same contract as bands, one level finer. Nothing
+    // ticked = "applies to every fabric" (clears the junction). Ids are
+    // cross-checked against this product's own fabrics so a tampered form
+    // can't scope the choice to another product's — or another tenant's — row.
+    $submittedFabrics = is_array($_POST['fabric_filter'] ?? null) ? $_POST['fabric_filter'] : [];
+    $knownFabricIds   = array_map(static fn ($r) => (int) $r['id'], $knownFabrics);
+    $f['fabrics'] = [];
+    foreach ($submittedFabrics as $o) {
+        $oid = (int) $o;
+        if ($oid > 0 && in_array($oid, $knownFabricIds, true)) $f['fabrics'][] = $oid;
+    }
+    $f['fabrics'] = array_values(array_unique($f['fabrics']));
 
     if ($f['label'] === '') {
         $error = 'Label is required.';
@@ -411,6 +460,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                         foreach ($f['bands'] as $b) {
                             $insB->execute([$id, $b]);
+                        }
+                    }
+                }
+
+                // Replace the per-choice FABRIC scope. Same shape as bands,
+                // one level finer: empty = every fabric, otherwise only the
+                // ticked ones. This is what says "38mm slat, but only on Snow
+                // and Cool White" — a restriction bands can't express, because
+                // Snow shares its band with colours that don't offer 38mm.
+                if ($hasFabricScopingTbl) {
+                    $pdo->prepare(
+                        'DELETE FROM product_extra_choice_options WHERE choice_id = ?'
+                    )->execute([$id]);
+                    if ($f['fabrics']) {
+                        $insF = $pdo->prepare(
+                            'INSERT INTO product_extra_choice_options
+                                (choice_id, option_id) VALUES (?, ?)'
+                        );
+                        foreach ($f['fabrics'] as $oid) {
+                            $insF->execute([$id, (int) $oid]);
                         }
                     }
                 }
@@ -796,6 +865,47 @@ $activeNav = 'products';
                                 a tape colour, bracket size, or similar isn't available across
                                 every fabric tier.
                             </small>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($hasFabricScopingTbl): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Available for specific fabrics</label>
+                        <?php if (!$knownFabrics): ?>
+                            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0">
+                                No fabrics on this product yet.
+                            </p>
+                        <?php else: ?>
+                            <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-bottom:0.5rem">
+                                Only needed when a band can't say it. Leave everything unticked =
+                                <strong>appears for every fabric</strong> — that's the normal case, and
+                                what bands above are for. Tick fabrics only when the restriction applies
+                                to <em>some</em> fabrics within a band: e.g. a 38mm slat offered on Snow
+                                and Cool White, where Snow shares its band with colours that don't have it.
+                            </small>
+                            <div style="max-height:16rem;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem">
+                                <?php
+                                $lastBand = null;
+                                foreach ($knownFabrics as $fab):
+                                    $bandOf = trim((string) ($fab['band_code'] ?? ''));
+                                    if ($bandOf !== $lastBand):
+                                        $lastBand = $bandOf;
+                                ?>
+                                    <div style="font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin:0.5rem 0 0.25rem">
+                                        <?= $bandOf !== '' ? e('Band ' . $bandOf) : 'No band' ?>
+                                    </div>
+                                <?php endif; ?>
+                                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:400;cursor:pointer;margin:0 1rem 0.25rem 0">
+                                        <input type="checkbox" name="fabric_filter[]"
+                                               value="<?= (int) $fab['id'] ?>"
+                                               <?= in_array((int) $fab['id'], $f['fabrics'], true) ? 'checked' : '' ?>>
+                                        <?= e(trim((string) $fab['name'] . ' ' . (string) ($fab['colour'] ?? ''))) ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

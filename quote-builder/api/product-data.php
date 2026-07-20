@@ -269,8 +269,9 @@ if ($extraIds) {
     }
 }
 
-$choicesByExtra = [];
-$bandsByChoice  = [];
+$choicesByExtra  = [];
+$bandsByChoice   = [];
+$fabricsByChoice = [];
 if ($extraIds) {
     $ph = implode(',', array_fill(0, count($extraIds), '?'));
     // Per-choice number-input label (migrate_choice_length_input.php) is
@@ -314,6 +315,25 @@ if ($extraIds) {
             // Table missing — leave $bandsByChoice empty. Every
             // choice will report 'bands' => [] meaning "all bands".
         }
+
+        // Per-choice FABRIC scope. Finer than bands, for restrictions the band
+        // can't express — e.g. a 38mm slat offered on Snow and Cool White only,
+        // where Snow shares its band with ten other colours. Empty = every
+        // fabric, so an unscoped choice behaves exactly as before.
+        try {
+            $cph2 = implode(',', array_fill(0, count($choiceIds), '?'));
+            $oSt  = $pdo->prepare(
+                "SELECT choice_id, option_id
+                   FROM product_extra_choice_options
+                  WHERE choice_id IN ($cph2)"
+            );
+            $oSt->execute($choiceIds);
+            foreach ($oSt->fetchAll() as $orow) {
+                $fabricsByChoice[(int) $orow['choice_id']][] = (int) $orow['option_id'];
+            }
+        } catch (Throwable $e) {
+            // Pre-migration — every choice reports 'fabrics' => [] = all fabrics.
+        }
     }
 
     foreach ($choiceRows as $r) {
@@ -340,6 +360,11 @@ if ($extraIds) {
             // so a tape band rename without an immediate scope edit
             // still resolves.
             'bands'      => $bandsByChoice[$cid] ?? [],
+            // fabrics = the option ids this choice is restricted to.
+            // Empty = every fabric on the product. Finer-grained than
+            // bands, for "38mm slat, but only on Snow and Cool White"
+            // where those share a band with colours that don't offer it.
+            'fabrics'    => $fabricsByChoice[$cid] ?? [],
         ];
     }
 }

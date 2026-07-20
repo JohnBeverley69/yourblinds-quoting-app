@@ -2359,17 +2359,35 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Falls back to the extra's defaults for the current system if
         // nothing's been picked yet — covers the first-paint case where
         // the DOM hasn't been written and preset is empty.
-        // Single source of truth for choice visibility. Two filters:
+        // Single source of truth for choice visibility. Three filters:
         //   - system_id: null/undefined = "all systems", else exact match
+        //   - fabrics:   []    = "every fabric",         else the picked
+        //                fabric's id must be in the list. Finer than bands,
+        //                for restrictions a band can't express — 38mm slat
+        //                on Snow and Cool White only, where Snow shares its
+        //                band with ten colours that don't offer it.
         //   - bands:     []    = "all bands",            else case-
         //                insensitive membership against the currently-
         //                picked fabric's band. With no fabric picked
         //                yet, band-scoped choices stay hidden — showing
         //                them risks the salesperson committing a pick
         //                that becomes invalid the moment they pick a
-        //                fabric on the wrong band.
+        //                fabric on the wrong band. Fabric scoping hides for
+        //                the same reason.
         function choiceAvailable(c) {
             if (c.system_id !== null && c.system_id !== undefined && c.system_id !== systemId) return false;
+
+            var fabrics = c.fabrics || [];
+            if (fabrics.length > 0) {
+                var picked = parseInt(fabricId && fabricId.value, 10) || 0;
+                if (!picked) return false;
+                var hit = false;
+                for (var j = 0; j < fabrics.length; j++) {
+                    if (parseInt(fabrics[j], 10) === picked) { hit = true; break; }
+                }
+                if (!hit) return false;
+            }
+
             var bands = c.bands || [];
             if (bands.length === 0) return true;
             if (!currentFabricBand) return false;

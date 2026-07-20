@@ -496,6 +496,81 @@ try {
             break;
 
         // -----------------------------------------------------------------
+        // set_fabrics — restrict a choice to specific FABRICS.
+        //
+        // Bands can't always say it: on Bev Infusions "38mm slat" applies to
+        // Snow and Cool White, but Snow shares band C with ten other colours,
+        // so a band scope would offer 38mm on all of them. Empty list = every
+        // fabric, matching how a choice behaves before it is ever scoped.
+        // -----------------------------------------------------------------
+        case 'set_fabrics':
+            $choiceId = (int) ($_POST['choice_id'] ?? 0);
+
+            $cSt = $pdo->prepare(
+                'SELECT c.id, e.product_id
+                   FROM product_extra_choices c
+                   JOIN product_extras e ON e.id = c.product_extra_id
+                  WHERE c.id = ? AND c.product_extra_id = ? LIMIT 1'
+            );
+            $cSt->execute([$choiceId, $extraId]);
+            $cRow = $cSt->fetch();
+            if (!$cRow) throw new RuntimeException('Choice not found.');
+            $cProductId = (int) $cRow['product_id'];
+
+            $hasTbl = false;
+            try {
+                $hasTbl = (bool) $pdo->query(
+                    "SELECT 1 FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME   = 'product_extra_choice_options'"
+                )->fetchColumn();
+            } catch (Throwable $e) { /* keep false */ }
+            if (!$hasTbl) {
+                throw new RuntimeException(
+                    'Fabric scoping is not enabled — run migrate_choice_option_scoping.php first.'
+                );
+            }
+
+            // Only fabrics that actually belong to THIS product/tenant, so a
+            // tampered DOM can't scope a choice to someone else's fabric.
+            $koSt = $pdo->prepare(
+                'SELECT id FROM product_options WHERE product_id = ? AND client_id = ?'
+            );
+            $koSt->execute([$cProductId, $clientId]);
+            $knownOpts = array_map('intval', $koSt->fetchAll(PDO::FETCH_COLUMN));
+
+            $submitted = is_array($_POST['fabrics'] ?? null) ? $_POST['fabrics'] : [];
+            $clean     = [];
+            foreach ($submitted as $o) {
+                $oid = (int) $o;
+                if ($oid > 0 && in_array($oid, $knownOpts, true)) $clean[] = $oid;
+            }
+            $clean = array_values(array_unique($clean));
+
+            $pdo->beginTransaction();
+            $pdo->prepare(
+                'DELETE FROM product_extra_choice_options WHERE choice_id = ?'
+            )->execute([$choiceId]);
+            if ($clean) {
+                $io = $pdo->prepare(
+                    'INSERT INTO product_extra_choice_options
+                       (choice_id, option_id) VALUES (?, ?)'
+                );
+                foreach ($clean as $oid) { $io->execute([$choiceId, $oid]); }
+            }
+            $pdo->commit();
+
+            catalogue_audit_log('choice', $choiceId, 'update', null, null,
+                ['fabrics' => $clean], $productId, ['extra_id' => $extraId, 'set' => 'fabrics']);
+
+            echo json_encode([
+                'ok'      => true,
+                'fabrics' => $clean,
+                'count'   => count($clean),
+            ]);
+            break;
+
+        // -----------------------------------------------------------------
         // set_bands_all — apply ONE band scope to every choice on this
         // extra at once. Same validation + canonicalisation as set_bands,
         // but the DELETE/INSERT spans all of the extra's choices in a
