@@ -2397,11 +2397,31 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             return false;
         }
 
+        // What is actually selected on an option right now.
+        //
+        // A preset is only honoured while the choice it names is STILL
+        // available. Change the fabric and a previous pick can stop being
+        // offered — swap a 63mm-capable colour for one that's 50mm only and
+        // the old 63mm pick is no longer on the menu. Left in place it stays
+        // silently "selected", so anything gated on that option (Tape only
+        // appears at 50mm) sees the stale id and vanishes, taking the rest of
+        // the form with it. Treat it as stale and fall back to the default.
+        function isChoiceStillOffered(extra, id) {
+            return !!extra.choices.find(function (c) {
+                return c.id === id && choiceAvailable(c);
+            });
+        }
+
         function effectiveChoiceIds(extra) {
-            // Multi-pick: the multi preset is an array of ids.
+            // Multi-pick: the multi preset is an array of ids. Drop any that
+            // are no longer offered; keep the rest of the customer's picks.
             if (extra.allow_multi) {
                 var multi = preset[extra.id + '__multi'];
-                if (multi !== undefined) return multi.slice();
+                if (multi !== undefined) {
+                    return multi.filter(function (id) {
+                        return isChoiceStillOffered(extra, parseInt(id, 10));
+                    });
+                }
                 // First paint — pick all available defaults. Defaults
                 // tagged to a band the customer hasn't picked don't
                 // auto-select.
@@ -2411,13 +2431,25 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             }
             // Single-pick — single preset value (string).
             if (preset[extra.id] !== undefined) {
-                var v = preset[extra.id];
-                return v ? [parseInt(v, 10)] : [];
+                var v  = preset[extra.id];
+                var id = v ? parseInt(v, 10) : 0;
+                if (!id) return [];                                  // deliberately cleared
+                if (isChoiceStillOffered(extra, id)) return [id];
+                // Stale — fall through and re-default below.
             }
             var def = extra.choices.find(function (c) {
                 return choiceAvailable(c) && c.is_default;
             });
-            return def ? [def.id] : [];
+            if (def) return [def.id];
+            // No default offered for this fabric. For a REQUIRED option take the
+            // first that is, so it is never left silently holding nothing — the
+            // salesperson can still change it. An optional one stays empty
+            // rather than quietly adding a priced choice nobody asked for.
+            if (extra.is_required) {
+                var first = extra.choices.find(function (c) { return choiceAvailable(c); });
+                if (first) return [first.id];
+            }
+            return [];
         }
 
         // Backwards-compat wrapper — some callers want a single value.
