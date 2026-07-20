@@ -224,8 +224,9 @@ function push_one_product(
     //         source_id => target_id for downstream use. ----
     $systemMap = pp_sync_systems($pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid, $summary);
 
-    // ---- 3. Fabrics / options ----
-    pp_sync_options(
+    // ---- 3. Fabrics / options. Returns source fabric id => target fabric id,
+    //         which step 4 needs to carry per-fabric choice scoping across. ----
+    $optionMap = pp_sync_options(
         $pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid,
         $systemMap, $summary
     );
@@ -235,7 +236,7 @@ function push_one_product(
     //         seed function does. ----
     [$extraMap, $choiceMap] = pp_sync_extras_and_choices(
         $pdo, $sourceClientId, $sourceProductId, $targetClientId, $tgtPid,
-        $systemMap, $summary
+        $systemMap, $optionMap, $summary
     );
     pp_wire_extra_parent_choices($pdo, $sourceClientId, $sourceProductId, $targetClientId, $extraMap, $choiceMap);
 
@@ -394,7 +395,11 @@ function pp_sync_options(
     int   $targetProductId,
     array $systemMap,
     array &$summary
-): void {
+): array {
+    // Source fabric id → target fabric id, returned so the choices pass can
+    // translate per-fabric choice scoping onto the tenant's own fabric rows.
+    $optionMap = [];
+
     // Schema-aware: tenants on a target DB that hasn't run
     // migrate_option_system_scope.php yet won't have the system_id
     // column. Detect once and degrade gracefully — we'll skip the
@@ -540,7 +545,28 @@ function pp_sync_options(
             }
             $summary['fabrics_updated']++;
         }
+
+        // Source fabric → target fabric. Choices can be scoped to specific
+        // fabrics (product_extra_choice_options), so the choices pass needs
+        // this to translate that scope onto the tenant's own fabric rows.
+        if ($tgtId !== false && $tgtId !== null) {
+            $optionMap[(int) $r['id']] = (int) $tgtId;
+        } else {
+            // Freshly inserted above — look it up rather than trusting
+            // lastInsertId across the two INSERT shapes.
+            $find->execute([
+                $targetClientId, $targetProductId,
+                (string) $r['band_code'],
+                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                (string) $r['name'],
+                $r['colour'] !== null ? (string) $r['colour'] : null,
+            ]);
+            $newId = $find->fetchColumn();
+            if ($newId !== false) $optionMap[(int) $r['id']] = (int) $newId;
+        }
     }
+
+    return $optionMap;
 }
 
 // ---------------------------------------------------------------------
@@ -554,6 +580,7 @@ function pp_sync_extras_and_choices(
     int   $targetClientId,
     int   $targetProductId,
     array $systemMap,
+    array $optionMap,
     array &$summary
 ): array {
     $extraMap  = [];
@@ -645,7 +672,7 @@ function pp_sync_extras_and_choices(
 
         // ---- Choices for this extra ----
         $choiceMapPart = pp_sync_choices(
-            $pdo, $sourceClientId, (int) $r['id'], $tgtId, $systemMap, $summary
+            $pdo, $sourceClientId, (int) $r['id'], $tgtId, $systemMap, $optionMap, $summary
         );
         foreach ($choiceMapPart as $sCid => $tCid) {
             $choiceMap[$sCid] = $tCid;
@@ -661,6 +688,7 @@ function pp_sync_choices(
     int   $sourceExtraId,
     int   $targetExtraId,
     array $systemMap,
+    array $optionMap,
     array &$summary
 ): array {
     $map = [];
@@ -763,6 +791,11 @@ function pp_sync_choices(
         // defaults to "all bands", so band-gated extras wrongly show everywhere.
         pp_sync_choice_bands($pdo, (int) $r['id'], $tgtId);
 
+        // Per-choice FABRIC scope. Same idea as the band gate but finer — it's
+        // how "38mm slat, but only on Snow and Cool White" survives a push,
+        // where those fabrics share a band with colours that don't offer it.
+        pp_sync_choice_fabrics($pdo, (int) $r['id'], $tgtId, $optionMap);
+
         // Width-table cells on this choice — merge by width_mm.
         pp_sync_extra_choice_price_rows($pdo, (int) $r['id'], $tgtId, $summary);
     }
@@ -790,6 +823,53 @@ function pp_sync_choice_bands(PDO $pdo, int $sourceChoiceId, int $targetChoiceId
         }
     } catch (Throwable $e) {
         // Table not present (pre migrate_choice_band_scoping) — nothing to carry.
+    }
+}
+
+/**
+ * Copy a choice's FABRIC scope (product_extra_choice_options).
+ *
+ * Unlike bands — shared strings that need no translation — a fabric scope is a
+ * list of product_options ids, which differ per tenant. $optionMap (built by
+ * pp_sync_options) turns the master's ids into the target's. A source fabric
+ * with no target counterpart is skipped rather than guessed at.
+ *
+ * Careful: if NONE of the scoped fabrics map, we must NOT write an empty scope,
+ * because empty means "every fabric" — the exact opposite of the restriction.
+ * In that case leave the target's own scope alone.
+ *
+ * Master is authoritative otherwise, so the target's scope is replaced.
+ * Schema-tolerant: silently no-ops if the table isn't present.
+ */
+function pp_sync_choice_fabrics(PDO $pdo, int $sourceChoiceId, int $targetChoiceId, array $optionMap): void
+{
+    try {
+        $src = $pdo->prepare('SELECT option_id FROM product_extra_choice_options WHERE choice_id = ?');
+        $src->execute([$sourceChoiceId]);
+        $srcOptIds = array_map('intval', $src->fetchAll(PDO::FETCH_COLUMN));
+
+        if (!$srcOptIds) {
+            // Unscoped on the master = available on every fabric. Mirror that.
+            $pdo->prepare('DELETE FROM product_extra_choice_options WHERE choice_id = ?')
+                ->execute([$targetChoiceId]);
+            return;
+        }
+
+        $mapped = [];
+        foreach ($srcOptIds as $sid) {
+            if (isset($optionMap[$sid])) $mapped[] = (int) $optionMap[$sid];
+        }
+        $mapped = array_values(array_unique($mapped));
+        if (!$mapped) return;   // nothing resolved — don't widen the restriction
+
+        $pdo->prepare('DELETE FROM product_extra_choice_options WHERE choice_id = ?')
+            ->execute([$targetChoiceId]);
+        $ins = $pdo->prepare(
+            'INSERT INTO product_extra_choice_options (choice_id, option_id) VALUES (?, ?)'
+        );
+        foreach ($mapped as $oid) { $ins->execute([$targetChoiceId, $oid]); }
+    } catch (Throwable $e) {
+        // Table not present (pre migrate_choice_option_scoping) — nothing to carry.
     }
 }
 
