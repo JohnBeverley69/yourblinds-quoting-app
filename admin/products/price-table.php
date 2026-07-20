@@ -474,6 +474,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bump_prices') {
 }
 
 // ---------------------------------------------------------------------------
+// Buying discount + margin for a SUPPLIER price list, edited right here.
+//
+// They live per (product, system) — the same rows the product screen writes —
+// so this is a shortcut to the numbers that turn the supplier's list into our
+// price, set where you're actually looking at that list. It therefore applies
+// to every band on this system, which the form says plainly.
+//
+// Same semantics as the product screen: a 0 markup DELETES the override row so
+// the product falls back to the tenant default, rather than leaving a stale 0%
+// that looks deliberate. Markup is stored as markup even for a 'margin' tenant;
+// the basis only decides how it's typed and shown.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_trade_terms') {
+    csrf_check();
+
+    require_once __DIR__ . '/../../_partials/pricing_basis.php';
+    $basis = pricing_basis_for(db(), (int) $clientId);
+
+    $discRaw = trim((string) ($_POST['discount_percent'] ?? ''));
+    $markRaw = trim((string) ($_POST['markup_percent'] ?? ''));
+
+    if (($discRaw !== '' && !is_numeric($discRaw)) || ($markRaw !== '' && !is_numeric($markRaw))) {
+        $_SESSION['flash_error'] = 'Discount and ' . strtolower(pricing_basis_label($basis)) . ' must be numbers.';
+    } elseif ((float) $discRaw < 0 || (float) $discRaw >= 100) {
+        $_SESSION['flash_error'] = 'Discount must be 0 or more and less than 100.';
+    } elseif ((float) $markRaw < 0) {
+        $_SESSION['flash_error'] = strtolower(pricing_basis_label($basis)) . ' cannot be negative.';
+    } else {
+        $pid   = (int) $table['product_id'];
+        $sysId = $table['system_id'] !== null ? (int) $table['system_id'] : null;
+        $dp    = $discRaw === '' ? 0.0 : (float) $discRaw;
+        $mp    = $markRaw === '' ? 0.0 : display_to_markup((float) $markRaw, $basis);
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            if ($dp > 0) {
+                $pdo->prepare(
+                    'INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent)
+                     VALUES (?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE discount_percent = VALUES(discount_percent)'
+                )->execute([$clientId, $pid, $sysId, $dp]);
+            } else {
+                $pdo->prepare(
+                    'DELETE FROM client_discounts
+                      WHERE client_id = ? AND product_id = ?
+                        AND ((system_id IS NULL AND ? IS NULL) OR system_id = ?)'
+                )->execute([$clientId, $pid, $sysId, $sysId]);
+            }
+
+            if ($mp > 0) {
+                $pdo->prepare(
+                    'INSERT INTO client_markups (client_id, product_id, system_id, markup_percent)
+                     VALUES (?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE markup_percent = VALUES(markup_percent)'
+                )->execute([$clientId, $pid, $sysId, $mp]);
+            } else {
+                $pdo->prepare(
+                    'DELETE FROM client_markups
+                      WHERE client_id = ? AND product_id = ?
+                        AND ((system_id IS NULL AND ? IS NULL) OR system_id = ?)'
+                )->execute([$clientId, $pid, $sysId, $sysId]);
+            }
+
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Trade terms saved for this system.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not save trade terms: ' . $e->getMessage();
+        }
+    }
+
+    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
+    if (($_GET['from'] ?? '') === 'wizard') {
+        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
+}
+
+// ---------------------------------------------------------------------------
 // Rename / edit the table's metadata. Band code, name, notes. Used when
 // a tenant realises the band they typed at create time (e.g. "FW35ML
 // String") wasn't quite right and needs tweaking — without this, they'd
@@ -1523,6 +1604,28 @@ foreach ($cells as $c) {
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 
+// What this grid HOLDS — shown at the top of the page, and what decides how the
+// cost/margin line under each cell is worked out (see price_source.php).
+//
+//   'own'      the grid is our SELLING price and the cost is stored alongside it,
+//              so margin compares the two directly.
+//   'supplier' the grid is the supplier's LIST. Nothing is stored: our cost is
+//              the list less the buying discount, our trade price is that plus
+//              the margin, and the margin between them is what we actually keep.
+require_once __DIR__ . '/../../_partials/price_source.php';
+$priceSource = ps_for_product(db(), (int) $table['product_id']);
+$psIsSupplier = $priceSource === PRICE_SOURCE_SUPPLIER;
+
+// Resolved whenever this is a supplier list — the cost/margin line needs them,
+// but so does the editable terms form, which any admin sees (these two numbers
+// are not cost data; they're already on the product screen).
+$psDiscPct = $psMarkPct = 0.0;
+if ($psIsSupplier) {
+    require_once __DIR__ . '/../../_partials/pricing_engine.php';
+    $psDiscPct = pe_discount_for_system(db(), (int) $clientId, (int) $table['product_id'], (int) $table['system_id']);
+    $psMarkPct = pe_markup_for_system  (db(), (int) $clientId, (int) $table['product_id'], (int) $table['system_id']);
+}
+
 $isEmpty = !$matrixWidths && !$matrixDrops;
 
 // "Quick start" grid for empty tables.
@@ -1895,6 +1998,68 @@ $activeNav = 'products';
             </div>
         </div>
 
+        <?php /* What these numbers ARE. Stated up front because entering a
+                 supplier's list into a grid meant for our own selling price
+                 (or the reverse) silently moves every trade account's price. */ ?>
+        <div style="margin:0 0 1.25rem;padding:0.75rem 1.125rem;border-radius:10px;
+                    border:1px solid <?= $psIsSupplier ? '#f59e0b' : 'var(--border)' ?>;
+                    background:<?= $psIsSupplier ? 'rgba(245,158,11,0.08)' : 'var(--bg-subtle-2)' ?>;
+                    display:flex;gap:0.625rem;align-items:baseline;flex-wrap:wrap">
+            <strong style="font-size:0.875rem;color:var(--text-primary)">
+                <?= e(ps_label($priceSource)) ?>
+            </strong>
+            <span style="color:var(--text-faint);font-size:0.8125rem">
+                <?= e(ps_hint($priceSource)) ?>
+            </span>
+            <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>#pricing"
+               style="color:var(--brand);font-size:0.8125rem;margin-left:auto">Change</a>
+
+            <?php if ($psIsSupplier):
+                // The two numbers that turn this supplier list into our price.
+                // Editable here because this is where you're looking at the list.
+                require_once __DIR__ . '/../../_partials/pricing_basis.php';
+                $ptBasis     = pricing_basis_for(db(), (int) $clientId);
+                $ptMarkShown = $psMarkPct > 0
+                    ? rtrim(rtrim(number_format(markup_to_display($psMarkPct, $ptBasis), 2, '.', ''), '0'), '.')
+                    : '';
+                $ptDiscShown = $psDiscPct > 0
+                    ? rtrim(rtrim(number_format($psDiscPct, 2, '.', ''), '0'), '.')
+                    : '';
+            ?>
+            <form method="post"
+                  action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
+                  style="flex-basis:100%;display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;
+                         margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_trade_terms">
+                <div>
+                    <label for="tt-disc" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
+                        Buying discount %
+                    </label>
+                    <input id="tt-disc" name="discount_percent" type="number"
+                           min="0" max="99.99" step="0.01" inputmode="decimal"
+                           value="<?= e($ptDiscShown) ?>" placeholder="0"
+                           style="width:8rem;padding:0.4rem 0.55rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                </div>
+                <div>
+                    <label for="tt-mark" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
+                        Our <?= e(strtolower(pricing_basis_label($ptBasis))) ?> %
+                    </label>
+                    <input id="tt-mark" name="markup_percent" type="number"
+                           min="0" step="0.01" inputmode="decimal"
+                           value="<?= e($ptMarkShown) ?>" placeholder="0"
+                           style="width:8rem;padding:0.4rem 0.55rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                </div>
+                <button type="submit" class="btn btn-secondary" style="padding:0.4rem 0.9rem">Save terms</button>
+                <span style="color:var(--text-faint);font-size:0.8125rem">
+                    Applies to <strong>every band</strong> on
+                    <?= e((string) ($table['system_name'] ?? 'this system')) ?>.
+                    Leave blank or 0 to inherit the default.
+                </span>
+            </form>
+            <?php endif; ?>
+        </div>
+
         <!-- Inline edit form for the table's metadata. Hidden by
              default; the "Edit band / name / notes" link above
              toggles it. Saves via PRG to the same page. -->
@@ -2213,12 +2378,33 @@ $activeNav = 'products';
                                                    name="cells[<?= (int) $w ?>_<?= (int) $d ?>]"
                                                    value="<?= $val === null ? '' : e(number_format((float) $val, 2, '.', '')) ?>">
                                             <?php if ($showCost):
-                                                $cost = $matrixByCost["$w|$d"] ?? null;
-                                                if ($cost !== null):
-                                                    $c = (float) $cost; $p = (float) ($val ?? 0);
-                                                    $marg = $p > 0 ? ($p - $c) / $p * 100 : null;
+                                                // Two ways to reach cost + margin, depending on what this
+                                                // grid holds. Supplier grids derive both from the discount;
+                                                // our own grids read the cost stored beside the price.
+                                                $c = $p = $sell = null; $marg = null; $tip = '';
+                                                if ($psIsSupplier) {
+                                                    $list = (float) ($val ?? 0);
+                                                    if ($list > 0) {
+                                                        $c    = $list * (1 - $psDiscPct / 100);   // what we pay
+                                                        $sell = $c    * (1 + $psMarkPct / 100);   // what we charge
+                                                        $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
+                                                        $tip  = 'list £' . number_format($list, 2)
+                                                              . ' less ' . rtrim(rtrim(number_format($psDiscPct, 2, '.', ''), '0'), '.') . '% = cost'
+                                                              . ' · plus ' . rtrim(rtrim(number_format($psMarkPct, 2, '.', ''), '0'), '.') . '% = our price'
+                                                              . ' · margin (master admin only)';
+                                                    }
+                                                } else {
+                                                    $cost = $matrixByCost["$w|$d"] ?? null;
+                                                    if ($cost !== null) {
+                                                        $c    = (float) $cost;
+                                                        $sell = (float) ($val ?? 0);
+                                                        $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
+                                                        $tip  = 'cost to make · margin (master admin only)';
+                                                    }
+                                                }
+                                                if ($c !== null):
                                             ?>
-                                                <div class="grid-cost" title="cost to make · margin (master admin only)">£<?= number_format($c, 2) ?><?php if ($marg !== null): ?> · <span class="<?= $marg < 0 ? 'neg' : '' ?>"><?= number_format($marg, 0) ?>%</span><?php endif; ?></div>
+                                                <div class="grid-cost" title="<?= e($tip) ?>">£<?= number_format($c, 2) ?><?php if ($psIsSupplier && $sell !== null): ?> &rarr; £<?= number_format($sell, 2) ?><?php endif; ?><?php if ($marg !== null): ?> · <span class="<?= $marg < 0 ? 'neg' : '' ?>"><?= number_format($marg, 0) ?>%</span><?php endif; ?></div>
                                             <?php endif; endif; ?>
                                         </td>
                                     <?php endforeach; ?>
