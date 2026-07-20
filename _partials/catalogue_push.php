@@ -63,6 +63,7 @@ function push_catalogue_to_client(
         'extras_updated'         => 0,
         'choices_added'          => 0,
         'choices_updated'        => 0,
+        'choices_removed'        => 0,
         'price_tables_added'     => 0,
         'price_table_cells'      => 0,
         'width_table_cells'      => 0,
@@ -723,6 +724,27 @@ function pp_sync_choices(
           WHERE product_extra_id = ? AND label = ? AND (system_id <=> ?) LIMIT 1'
     );
 
+    // Identity beats label. source_choice_id says "this row IS our copy of
+    // master choice N", so a rename on the master renames the tenant's row
+    // instead of adding a second one beside it. Label matching stays as the
+    // fallback for rows pushed before the column existed — those get stamped
+    // on the way past, so identities fill in on their own.
+    $hasSrcCol = false;
+    try { $pdo->query('SELECT source_choice_id FROM product_extra_choices LIMIT 0'); $hasSrcCol = true; }
+    catch (Throwable $e) { $hasSrcCol = false; }
+
+    $findBySrc = $hasSrcCol
+        ? $pdo->prepare(
+            'SELECT id FROM product_extra_choices
+              WHERE product_extra_id = ? AND source_choice_id = ? LIMIT 1'
+          )
+        : null;
+    $stampSrc = $hasSrcCol
+        ? $pdo->prepare('UPDATE product_extra_choices SET source_choice_id = ? WHERE id = ?')
+        : null;
+
+    $seenSourceIds = [];
+
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
         // Translate source's system_id → target's via the map. NULL stays NULL
         // (choice available on every system). Do this BEFORE the lookup — the
@@ -735,8 +757,21 @@ function pp_sync_choices(
             // leave NULL — degrade to "all systems" rather than crash.
         }
 
-        $find->execute([$targetExtraId, (string) $r['label'], $tgtSystemId]);
-        $tgtId = $find->fetchColumn();
+        $srcChoiceId     = (int) $r['id'];
+        $seenSourceIds[] = $srcChoiceId;
+
+        // Identity first, label second. Finding by source id is what lets a
+        // renamed master choice update the tenant's existing row rather than
+        // spawning a duplicate next to the old name.
+        $tgtId = false;
+        if ($findBySrc) {
+            $findBySrc->execute([$targetExtraId, $srcChoiceId]);
+            $tgtId = $findBySrc->fetchColumn();
+        }
+        if ($tgtId === false) {
+            $find->execute([$targetExtraId, (string) $r['label'], $tgtSystemId]);
+            $tgtId = $find->fetchColumn();
+        }
 
         $imagePath = $r['image_path'] !== null ? (string) $r['image_path'] : null;
 
@@ -766,12 +801,17 @@ function pp_sync_choices(
             // Don't update is_default — the tenant may have moved it.
             // image_path IS updated so a master-side image swap
             // propagates on the next push.
+            //
+            // The LABEL is updated too, which it couldn't be while the label was
+            // the identity. That's what makes a master rename land on the
+            // tenant's existing row instead of appearing beside it.
             $pdo->prepare(
                 'UPDATE product_extra_choices
-                    SET system_id = ?, price_delta = ?, price_percent = ?, price_per_metre = ?,
+                    SET label = ?, system_id = ?, price_delta = ?, price_percent = ?, price_per_metre = ?,
                         sort_order = ?, active = ?, image_path = ?
                   WHERE id = ?'
             )->execute([
+                (string) $r['label'],
                 $tgtSystemId,
                 (float) ($r['price_delta']     ?? 0),
                 (float) ($r['price_percent']   ?? 0),
@@ -783,6 +823,11 @@ function pp_sync_choices(
             ]);
             $summary['choices_updated']++;
         }
+
+        // Stamp the identity — on a fresh insert, and on a legacy row matched
+        // by label, so the next push can find it without relying on the name.
+        if ($stampSrc) $stampSrc->execute([$srcChoiceId, $tgtId]);
+
         $map[(int) $r['id']] = $tgtId;
 
         // Per-choice band scope — which price bands this choice applies to. This is
@@ -798,6 +843,46 @@ function pp_sync_choices(
 
         // Width-table cells on this choice — merge by width_mm.
         pp_sync_extra_choice_price_rows($pdo, (int) $r['id'], $tgtId, $summary);
+    }
+
+    // Retire the ones the master has deleted.
+    //
+    // The push is additive by design — it must never destroy something a tenant
+    // set up themselves. source_choice_id is what makes the difference sayable:
+    // a row that carries one is OUR copy, so if its master original is gone the
+    // copy should go too. Delete "Not Required" from the master and the tenant
+    // stops offering it, instead of keeping it forever beside its replacement.
+    //
+    // NULL source_choice_id is never touched — that's either the tenant's own
+    // choice or a row from before the column existed. Deliberately conservative:
+    // the cost of leaving a stale row is a tidy-up, the cost of deleting a
+    // tenant's own is their data.
+    if ($hasSrcCol) {
+        try {
+            if ($seenSourceIds) {
+                $ph  = implode(',', array_fill(0, count($seenSourceIds), '?'));
+                $del = $pdo->prepare(
+                    "DELETE FROM product_extra_choices
+                      WHERE product_extra_id = ?
+                        AND source_choice_id IS NOT NULL
+                        AND source_choice_id NOT IN ($ph)"
+                );
+                $del->execute(array_merge([$targetExtraId], $seenSourceIds));
+            } else {
+                // Master has no choices left on this option at all.
+                $del = $pdo->prepare(
+                    'DELETE FROM product_extra_choices
+                      WHERE product_extra_id = ? AND source_choice_id IS NOT NULL'
+                );
+                $del->execute([$targetExtraId]);
+            }
+            $gone = $del->rowCount();
+            if ($gone > 0) {
+                $summary['choices_removed'] = ($summary['choices_removed'] ?? 0) + $gone;
+            }
+        } catch (Throwable $e) {
+            // Never let a tidy-up break a push that has already done its work.
+        }
     }
 
     return $map;

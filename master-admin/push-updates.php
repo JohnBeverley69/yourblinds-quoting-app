@@ -71,6 +71,7 @@ function pu_blank_summary(): array {
         'products_added' => 0, 'products_updated' => 0, 'systems_added' => 0,
         'fabrics_added' => 0, 'fabrics_updated' => 0, 'extras_added' => 0,
         'extras_updated' => 0, 'choices_added' => 0, 'choices_updated' => 0,
+        'choices_removed' => 0,
         'price_tables_added' => 0, 'price_table_cells' => 0, 'width_table_cells' => 0,
         'errors' => [],
     ];
@@ -451,6 +452,7 @@ $activeNav = 'push-updates';
                                 <span><strong><?= (int) $s['extras_updated']     ?></strong> options updated</span>
                                 <span><strong><?= (int) $s['choices_added']      ?></strong> choices added</span>
                                 <span><strong><?= (int) $s['choices_updated']    ?></strong> choices updated</span>
+                                <span><strong><?= (int) ($s['choices_removed'] ?? 0) ?></strong> choices removed</span>
                                 <span><strong><?= (int) $s['price_tables_added'] ?></strong> price tables added</span>
                                 <span><strong><?= (int) $s['price_table_cells']  ?></strong> price cells synced</span>
                                 <span><strong><?= (int) $s['width_table_cells']  ?></strong> width-table cells synced</span>
@@ -627,6 +629,7 @@ $activeNav = 'push-updates';
                                 [s.extras_updated,     'options updated'],
                                 [s.choices_added,      'choices added'],
                                 [s.choices_updated,    'choices updated'],
+                                [s.choices_removed,    'choices removed'],
                                 [s.price_tables_added, 'price tables added'],
                                 [s.price_table_cells,  'price cells synced'],
                                 [s.width_table_cells,  'width-table cells synced']
