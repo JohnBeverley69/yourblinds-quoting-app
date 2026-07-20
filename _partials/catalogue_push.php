@@ -64,6 +64,10 @@ function push_catalogue_to_client(
         'choices_added'          => 0,
         'choices_updated'        => 0,
         'choices_removed'        => 0,
+        'systems_removed'        => 0,
+        'fabrics_removed'        => 0,
+        'extras_removed'         => 0,
+        'price_tables_removed'   => 0,
         'price_tables_added'     => 0,
         'price_table_cells'      => 0,
         'width_table_cells'      => 0,
@@ -322,6 +326,84 @@ function pp_find_product_by_name(PDO $pdo, int $clientId, string $name): ?int
 }
 
 // ---------------------------------------------------------------------
+// Mirroring helpers — stable identity for pushed rows.
+//
+// The push used to match a tenant's copy by NAME. A name is not an identity,
+// so renaming on the master added a second row beside the old one, and
+// deleting on the master did nothing at all — the copy lived forever. A tenant
+// drifted from the catalogue with every tidy-up.
+//
+// Each pushed row now carries the id of the master row it came from
+// (migrate_push_source_ids.php). NULL means "the tenant made this themselves"
+// and is NEVER touched. Set means "our copy of master row N", which is what
+// lets a rename land in place and a deletion actually remove it.
+// ---------------------------------------------------------------------
+
+/** Does this table carry its source-id column yet? Cached per request. */
+function pp_has_src_col(PDO $pdo, string $table, string $col): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $col;
+    if (isset($cache[$key])) return $cache[$key];
+    try { $pdo->query("SELECT `$col` FROM `$table` LIMIT 0"); return $cache[$key] = true; }
+    catch (Throwable $e) { return $cache[$key] = false; }
+}
+
+/** The target row that is our copy of $sourceId, or null. */
+function pp_find_by_source(PDO $pdo, string $table, string $srcCol, array $scope, int $sourceId): ?int
+{
+    if (!pp_has_src_col($pdo, $table, $srcCol)) return null;
+    $where = [];
+    $args  = [];
+    foreach ($scope as $col => $val) { $where[] = "`$col` = ?"; $args[] = $val; }
+    $where[] = "`$srcCol` = ?";
+    $args[]  = $sourceId;
+    try {
+        $st = $pdo->prepare("SELECT id FROM `$table` WHERE " . implode(' AND ', $where) . ' LIMIT 1');
+        $st->execute($args);
+        $id = $st->fetchColumn();
+        return $id !== false ? (int) $id : null;
+    } catch (Throwable $e) { return null; }
+}
+
+/** Record which master row this copy came from. Safe to call repeatedly. */
+function pp_stamp_source(PDO $pdo, string $table, string $srcCol, int $targetId, int $sourceId): void
+{
+    if (!pp_has_src_col($pdo, $table, $srcCol)) return;
+    try {
+        $pdo->prepare("UPDATE `$table` SET `$srcCol` = ? WHERE id = ?")->execute([$sourceId, $targetId]);
+    } catch (Throwable $e) { /* never break a push over bookkeeping */ }
+}
+
+/**
+ * Remove our copies whose master original is gone — the half of mirroring that
+ * makes a deletion on the master actually reach the tenant.
+ *
+ * Deliberately narrow: only rows whose source id is SET (so, rows this push
+ * created) and which the master no longer has. A tenant's own row, and any row
+ * from before the column existed, is left alone. The cost of keeping a stale
+ * row is a tidy-up; the cost of deleting a tenant's own work is their data.
+ */
+function pp_prune_by_source(PDO $pdo, string $table, string $srcCol, array $scope, array $seenSourceIds): int
+{
+    if (!pp_has_src_col($pdo, $table, $srcCol)) return 0;
+    $where = [];
+    $args  = [];
+    foreach ($scope as $col => $val) { $where[] = "`$col` = ?"; $args[] = $val; }
+    $where[] = "`$srcCol` IS NOT NULL";
+    if ($seenSourceIds) {
+        $ph      = implode(',', array_fill(0, count($seenSourceIds), '?'));
+        $where[] = "`$srcCol` NOT IN ($ph)";
+        $args    = array_merge($args, array_map('intval', $seenSourceIds));
+    }
+    try {
+        $st = $pdo->prepare("DELETE FROM `$table` WHERE " . implode(' AND ', $where));
+        $st->execute($args);
+        return $st->rowCount();
+    } catch (Throwable $e) { return 0; }
+}
+
+// ---------------------------------------------------------------------
 // Systems
 // ---------------------------------------------------------------------
 
@@ -345,9 +427,20 @@ function pp_sync_systems(
           WHERE client_id = ? AND product_id = ? AND name = ? LIMIT 1'
     );
 
+    $seenSystemIds = [];
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $find->execute([$targetClientId, $targetProductId, (string) $r['name']]);
-        $tgtId = $find->fetchColumn();
+        $srcSysId        = (int) $r['id'];
+        $seenSystemIds[] = $srcSysId;
+
+        // Identity first, name second — so renaming a system on the master
+        // renames the tenant's copy instead of adding a second one.
+        $byId  = pp_find_by_source($pdo, 'product_systems', 'source_system_id',
+                    ['client_id' => $targetClientId, 'product_id' => $targetProductId], $srcSysId);
+        $tgtId = $byId !== null ? $byId : false;
+        if ($tgtId === false) {
+            $find->execute([$targetClientId, $targetProductId, (string) $r['name']]);
+            $tgtId = $find->fetchColumn();
+        }
         if ($tgtId === false) {
             // is_default: never let our push silently flip an existing
             // tenant's default. For NEW systems on the target, copy the
@@ -368,18 +461,28 @@ function pp_sync_systems(
             $summary['systems_added']++;
         } else {
             $tgtId = (int) $tgtId;
-            // Update non-name fields. Skip is_default — the tenant may
-            // have set their own preference.
+            // Update non-name fields, and the NAME too now that identity is
+            // tracked separately — that is what carries a master rename over.
+            // Skip is_default — the tenant may have set their own preference.
             $pdo->prepare(
-                'UPDATE product_systems SET sort_order = ?, active = ? WHERE id = ?'
+                'UPDATE product_systems SET name = ?, sort_order = ?, active = ? WHERE id = ?'
             )->execute([
+                (string) $r['name'],
                 (int) ($r['sort_order'] ?? 0),
                 (int) ($r['active']     ?? 1),
                 $tgtId,
             ]);
         }
+        pp_stamp_source($pdo, 'product_systems', 'source_system_id', (int) $tgtId, $srcSysId);
         $systemMap[(int) $r['id']] = $tgtId;
     }
+
+    // Systems the master has deleted. Their price tables go with them via the
+    // schema's cascade, which is what we want — a system that no longer exists
+    // has no prices.
+    $gone = pp_prune_by_source($pdo, 'product_systems', 'source_system_id',
+        ['client_id' => $targetClientId, 'product_id' => $targetProductId], $seenSystemIds);
+    if ($gone > 0) $summary['systems_removed'] = ($summary['systems_removed'] ?? 0) + $gone;
 
     return $systemMap;
 }
@@ -399,7 +502,8 @@ function pp_sync_options(
 ): array {
     // Source fabric id → target fabric id, returned so the choices pass can
     // translate per-fabric choice scoping onto the tenant's own fabric rows.
-    $optionMap = [];
+    $optionMap     = [];
+    $seenOptionIds = [];
 
     // Schema-aware: tenants on a target DB that hasn't run
     // migrate_option_system_scope.php yet won't have the system_id
@@ -465,14 +569,26 @@ function pp_sync_options(
             $tgtSystemId = $systemMap[$srcSys] ?? null;
         }
 
-        $find->execute([
-            $targetClientId, $targetProductId,
-            (string) $r['band_code'],
-            $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
-            (string) $r['name'],
-            $r['colour'] !== null ? (string) $r['colour'] : null,
-        ]);
-        $tgtId = $find->fetchColumn();
+        $srcOptId        = (int) $r['id'];
+        $seenOptionIds[] = $srcOptId;
+
+        // Identity first. Without it, changing a fabric's band or colour on the
+        // master reads as a different fabric — the old row stays and a new one
+        // appears beside it. Restructuring Infusions moved 35 fabrics between
+        // bands and deleted 36; none of that could reach a tenant.
+        $byId  = pp_find_by_source($pdo, 'product_options', 'source_option_id',
+                    ['client_id' => $targetClientId, 'product_id' => $targetProductId], $srcOptId);
+        $tgtId = $byId !== null ? $byId : false;
+        if ($tgtId === false) {
+            $find->execute([
+                $targetClientId, $targetProductId,
+                (string) $r['band_code'],
+                $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
+                (string) $r['name'],
+                $r['colour'] !== null ? (string) $r['colour'] : null,
+            ]);
+            $tgtId = $find->fetchColumn();
+        }
         if ($tgtId === false) {
             // INSERT — include system_id only when the column exists.
             if ($hasSystemIdCol) {
@@ -517,14 +633,23 @@ function pp_sync_options(
             // updates the target. Otherwise existing rows would
             // stay stuck with their original (possibly wrong)
             // system_id forever.
+            // band_code / name / colour are updated too, now that identity is
+            // tracked separately. They used to BE the match key, so a reband or
+            // a spelling fix on the master read as a different fabric and left
+            // the old row behind. Moving Infusions' fabrics onto bands A-D is
+            // exactly that case.
             if ($hasSystemIdCol) {
                 $pdo->prepare(
                     'UPDATE product_options
-                        SET system_id = ?, supplier_name = ?, code = ?,
+                        SET system_id = ?, band_code = ?, name = ?, colour = ?,
+                            supplier_name = ?, code = ?,
                             sort_order = ?, active = ?
                       WHERE id = ?'
                 )->execute([
                     $tgtSystemId,
+                    (string) $r['band_code'],
+                    (string) $r['name'],
+                    $r['colour']        !== null ? (string) $r['colour']        : null,
                     $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
                     $r['code']          !== null ? (string) $r['code']          : null,
                     (int) ($r['sort_order'] ?? 0),
@@ -534,9 +659,13 @@ function pp_sync_options(
             } else {
                 $pdo->prepare(
                     'UPDATE product_options
-                        SET supplier_name = ?, code = ?, sort_order = ?, active = ?
+                        SET band_code = ?, name = ?, colour = ?,
+                            supplier_name = ?, code = ?, sort_order = ?, active = ?
                       WHERE id = ?'
                 )->execute([
+                    (string) $r['band_code'],
+                    (string) $r['name'],
+                    $r['colour']        !== null ? (string) $r['colour']        : null,
                     $r['supplier_name'] !== null ? (string) $r['supplier_name'] : null,
                     $r['code']          !== null ? (string) $r['code']          : null,
                     (int) ($r['sort_order'] ?? 0),
@@ -552,6 +681,7 @@ function pp_sync_options(
         // this to translate that scope onto the tenant's own fabric rows.
         if ($tgtId !== false && $tgtId !== null) {
             $optionMap[(int) $r['id']] = (int) $tgtId;
+            pp_stamp_source($pdo, 'product_options', 'source_option_id', (int) $tgtId, $srcOptId);
         } else {
             // Freshly inserted above — look it up rather than trusting
             // lastInsertId across the two INSERT shapes.
@@ -563,9 +693,17 @@ function pp_sync_options(
                 $r['colour'] !== null ? (string) $r['colour'] : null,
             ]);
             $newId = $find->fetchColumn();
-            if ($newId !== false) $optionMap[(int) $r['id']] = (int) $newId;
+            if ($newId !== false) {
+                $optionMap[(int) $r['id']] = (int) $newId;
+                pp_stamp_source($pdo, 'product_options', 'source_option_id', (int) $newId, $srcOptId);
+            }
         }
     }
+
+    // Fabrics the master has deleted — the 36 duplicate Infusions slats, say.
+    $gone = pp_prune_by_source($pdo, 'product_options', 'source_option_id',
+        ['client_id' => $targetClientId, 'product_id' => $targetProductId], $seenOptionIds);
+    if ($gone > 0) $summary['fabrics_removed'] = ($summary['fabrics_removed'] ?? 0) + $gone;
 
     return $optionMap;
 }
@@ -616,11 +754,21 @@ function pp_sync_extras_and_choices(
     foreach ($tq->fetchAll(PDO::FETCH_ASSOC) as $tr) { $tgtByName[(string) $tr['name']][] = (int) $tr['id']; }
     $nameUsed = [];
 
+    $seenExtraIds = [];
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $srcExtraId       = (int) $r['id'];
+        $seenExtraIds[]   = $srcExtraId;
+
+        // Identity first; the positional name match below stays as the fallback
+        // for rows pushed before the column existed. Without identity, renaming
+        // an option on the master added a second one beside the old name.
+        $byId  = pp_find_by_source($pdo, 'product_extras', 'source_extra_id',
+                    ['client_id' => $targetClientId, 'product_id' => $targetProductId], $srcExtraId);
+
         $nm  = (string) $r['name'];
         $idx = $nameUsed[$nm] ?? 0;
         $nameUsed[$nm] = $idx + 1;
-        $tgtId = $tgtByName[$nm][$idx] ?? false;
+        $tgtId = $byId !== null ? $byId : ($tgtByName[$nm][$idx] ?? false);
 
         if ($tgtId === false) {
             // INSERT — same dynamic column shape.
@@ -647,10 +795,13 @@ function pp_sync_extras_and_choices(
             $tgtId = (int) $pdo->lastInsertId();
             $summary['extras_added']++;
         } else {
-            // UPDATE — non-name fields only.
+            // UPDATE — including the NAME now that identity is tracked
+            // separately, so renaming an option on the master renames the
+            // tenant's copy instead of leaving the old name beside it.
             $tgtId = (int) $tgtId;
-            $sets   = ['is_required = ?', 'sort_order = ?', 'active = ?'];
+            $sets   = ['name = ?', 'is_required = ?', 'sort_order = ?', 'active = ?'];
             $params = [
+                (string) $r['name'],
                 (int) ($r['is_required'] ?? 0),
                 (int) ($r['sort_order']  ?? 0),
                 (int) ($r['active']      ?? 1),
@@ -669,6 +820,7 @@ function pp_sync_extras_and_choices(
             )->execute($params);
             $summary['extras_updated']++;
         }
+        pp_stamp_source($pdo, 'product_extras', 'source_extra_id', (int) $tgtId, $srcExtraId);
         $extraMap[(int) $r['id']] = $tgtId;
 
         // ---- Choices for this extra ----
@@ -679,6 +831,11 @@ function pp_sync_extras_and_choices(
             $choiceMap[$sCid] = $tCid;
         }
     }
+
+    // Options the master has deleted. Their choices go with them via cascade.
+    $gone = pp_prune_by_source($pdo, 'product_extras', 'source_extra_id',
+        ['client_id' => $targetClientId, 'product_id' => $targetProductId], $seenExtraIds);
+    if ($gone > 0) $summary['extras_removed'] = ($summary['extras_removed'] ?? 0) + $gone;
 
     return [$extraMap, $choiceMap];
 }
@@ -1102,6 +1259,8 @@ function pp_sync_price_tables(
     require_once __DIR__ . '/pricing_engine.php';
     require_once __DIR__ . '/price_source.php';
 
+    $seenTableIds = [];
+
     $src = $pdo->prepare(
         'SELECT id, system_id, band_code, name, notes, active
            FROM price_tables
@@ -1160,12 +1319,23 @@ function pp_sync_price_tables(
             $tradeFactor = (1 - $discPct / 100) * (1 + $markPct / 100);
         }
 
-        $find->execute([
-            $targetClientId, $targetProductId,
-            $tgtSystemId,
-            (string) $pt['band_code'],
-        ]);
-        $tgtPtId = $find->fetchColumn();
+        $srcTableId      = (int) $pt['id'];
+        $seenTableIds[]  = $srcTableId;
+
+        // Identity first, (system, band) second. Renaming a band on the master
+        // — Infusions' slat-size bands becoming A/B/C/D — used to read as a
+        // brand-new table, leaving the old one behind with its old prices.
+        $byId    = pp_find_by_source($pdo, 'price_tables', 'source_table_id',
+                      ['client_id' => $targetClientId, 'product_id' => $targetProductId], $srcTableId);
+        $tgtPtId = $byId !== null ? $byId : false;
+        if ($tgtPtId === false) {
+            $find->execute([
+                $targetClientId, $targetProductId,
+                $tgtSystemId,
+                (string) $pt['band_code'],
+            ]);
+            $tgtPtId = $find->fetchColumn();
+        }
 
         if ($tgtPtId === false) {
             $ins = $pdo->prepare(
@@ -1185,15 +1355,22 @@ function pp_sync_price_tables(
             $summary['price_tables_added']++;
         } else {
             $tgtPtId = (int) $tgtPtId;
+            // band_code / system_id update too now that identity is separate,
+            // so a band rename moves the tenant's table rather than orphaning it.
             $pdo->prepare(
-                'UPDATE price_tables SET name = ?, notes = ?, active = ? WHERE id = ?'
+                'UPDATE price_tables
+                    SET system_id = ?, band_code = ?, name = ?, notes = ?, active = ?
+                  WHERE id = ?'
             )->execute([
+                $tgtSystemId,
+                strtoupper((string) $pt['band_code']),
                 $pt['name']  !== null ? (string) $pt['name']  : null,
                 $pt['notes'] !== null ? (string) $pt['notes'] : null,
                 (int) ($pt['active'] ?? 1),
                 $tgtPtId,
             ]);
         }
+        pp_stamp_source($pdo, 'price_tables', 'source_table_id', (int) $tgtPtId, $srcTableId);
 
         // Merge cells: master's price wins for matching (width, drop);
         // client's extra cells (outside master's range) are kept.
@@ -1222,6 +1399,12 @@ function pp_sync_price_tables(
             $summary['price_table_cells']++;
         }
     }
+
+    // Price tables the master has deleted — Infusions' nine slat-size and
+    // string/tape bands, replaced by A/B/C/D. Their cells go via cascade.
+    $gone = pp_prune_by_source($pdo, 'price_tables', 'source_table_id',
+        ['client_id' => $targetClientId, 'product_id' => $targetProductId], $seenTableIds);
+    if ($gone > 0) $summary['price_tables_removed'] = ($summary['price_tables_removed'] ?? 0) + $gone;
 }
 
 // ---------------------------------------------------------------------
