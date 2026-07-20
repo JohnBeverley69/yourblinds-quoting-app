@@ -927,12 +927,15 @@ function pp_sync_price_tables(
     array $systemMap,
     array &$summary
 ): void {
-    // The grid holds Beverley's SUPPLIER-list price; the trade price it charges a
-    // tenant is that figure with Beverley's own per-(product,system) discount and
-    // markup applied — exactly what the master's InstaPrice shows. The push must
-    // bake those in, or the tenant receives the raw supplier list. Reuse the engine
-    // so the pushed figure always equals the master's displayed trade price.
+    // What the grid HOLDS depends on the product's price source, so read that
+    // first (see price_source.php):
+    //   'supplier' — the supplier's list price. The trade price we charge a tenant
+    //                is that figure less our buying discount plus our margin,
+    //                exactly what the master's InstaPrice shows, so bake those in
+    //                or the tenant receives the raw supplier list.
+    //   'own'      — our own selling price already. Push it verbatim.
     require_once __DIR__ . '/pricing_engine.php';
+    require_once __DIR__ . '/price_source.php';
 
     $src = $pdo->prepare(
         'SELECT id, system_id, band_code, name, notes, active
@@ -973,13 +976,24 @@ function pp_sync_price_tables(
             if ($tgtSystemId === null) continue; // can't push without a target system
         }
 
-        // Master's discount + markup for THIS (product, system) → the trade-price
-        // factor. discount off the base first, then markup on top — matches the
-        // pricing engine's sell_price formula. The tenant's OWN markup is applied
-        // later, on top of this, and is never touched by the push.
-        $discPct     = pe_discount_for_system($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
-        $markPct     = pe_markup_for_system  ($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
-        $tradeFactor = (1 - $discPct / 100) * (1 + $markPct / 100);
+        // The trade-price factor — but ONLY for a bought-in product.
+        //
+        // 'supplier': the grid is the supplier's list, so our price is
+        //   list − our buying discount + our margin. Same order as the pricing
+        //   engine's sell_price. The tenant's OWN markup goes on top later and
+        //   is never touched by the push.
+        //
+        // 'own': we manufacture it and the grid is ALREADY our selling price
+        //   (its cost lives in the parallel cost grid). Applying the factor here
+        //   would re-charge a markup that is our RETAIL uplift, not a trade one —
+        //   which is exactly how a £18.92 vertical reached a tenant as £37.82.
+        //   Push it through untouched.
+        $tradeFactor = 1.0;
+        if (ps_needs_trade_factor($pdo, $sourceProductId)) {
+            $discPct     = pe_discount_for_system($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
+            $markPct     = pe_markup_for_system  ($pdo, $sourceClientId, $sourceProductId, $srcSystemId);
+            $tradeFactor = (1 - $discPct / 100) * (1 + $markPct / 100);
+        }
 
         $find->execute([
             $targetClientId, $targetProductId,

@@ -151,6 +151,31 @@ if ($hasRequiresOption) {
     } catch (Throwable $e) { /* keep 1 */ }
 }
 
+// price_source is an optional column (migrate_price_source.php). It says what
+// the price grids actually hold — our own selling price, or a supplier's list
+// we discount and mark up — which is what the catalogue push needs to know
+// before it touches a tenant's prices. Default 'own' (push verbatim).
+require_once __DIR__ . '/../../_partials/price_source.php';
+$hasPriceSource = false;
+try {
+    $hasPriceSource = (bool) db()->query(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'products'
+            AND COLUMN_NAME  = 'price_source'"
+    )->fetchColumn();
+} catch (Throwable $e) { /* keep false */ }
+
+$priceSourceValue = PRICE_SOURCE_OWN;
+if ($hasPriceSource) {
+    try {
+        $psStmt = db()->prepare('SELECT price_source FROM products WHERE id = ? AND client_id = ?');
+        $psStmt->execute([$id, $clientId]);
+        $psVal = $psStmt->fetchColumn();
+        $priceSourceValue = ps_normalise($psVal === false ? null : (string) $psVal);
+    } catch (Throwable $e) { /* keep own */ }
+}
+
 // width_only is an optional column (migrate_width_only.php). 1 = priced
 // on width alone (headrail/track): no drop axis. Detect + load. Default 0.
 $hasWidthOnly = false;
@@ -451,6 +476,9 @@ $f = [
     'band_label'        => $bandLabelValue,
     // 1 = needs a fabric (normal); 0 = no-fabric product. Optional column.
     'requires_option'   => $requiresOptionValue,
+    // 'own' = the grid is our selling price; 'supplier' = it's their list and
+    // we apply the buying discount + margin. Optional column.
+    'price_source'      => $priceSourceValue,
     // 1 = priced on width alone (no drop). Optional column.
     'width_only'        => $widthOnlyValue,
     // 1 = price table is width→rate; price = rate × drop. Optional column.
@@ -493,6 +521,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
     // Checkbox is "this product has no fabrics" → requires_option = 0.
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
+    // Radio: whose price list the grids hold. Anything unexpected → 'own',
+    // the safe side (the push sends the grid through untouched).
+    $f['price_source']      = ps_normalise((string) ($_POST['price_source'] ?? ''));
     // Checkbox is "priced by width only" → width_only = 1.
     $f['width_only']        = !empty($_POST['width_only']) ? 1 : 0;
     // Checkbox is "priced per metre of drop" → price_per_slat = 1.
@@ -593,6 +624,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasWidthOnly) {
                 $cols[] = 'width_only = ?';
                 $vals[] = $f['width_only'];
+            }
+            if ($hasPriceSource) {
+                $cols[] = 'price_source = ?';
+                $vals[] = $f['price_source'];
             }
             if ($hasPricePerDrop) {
                 $cols[] = 'price_per_slat = ?';
@@ -1248,6 +1283,42 @@ $activeNav = 'products';
                          products.cost_price column still exists in the
                          schema so we can resurrect this later if a tenant
                          wants per-product overhead, but no UI for now. */ ?>
+
+                <?php if ($hasPriceSource): ?>
+                <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
+                        Pricing source
+                    </legend>
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+                        What the numbers in this product's price tables actually are. This decides
+                        whether a trade account receives them as they stand, or with your buying
+                        discount and margin applied.
+                    </p>
+                    <label style="display:flex;gap:0.625rem;align-items:flex-start;margin-bottom:0.625rem;cursor:pointer">
+                        <input type="radio" name="price_source" value="<?= PRICE_SOURCE_OWN ?>"
+                               style="margin-top:0.25rem"
+                               <?= $f['price_source'] === PRICE_SOURCE_OWN ? 'checked' : '' ?>>
+                        <span>
+                            <strong>Our price list</strong> — we make it.
+                            <span style="color:var(--text-faint)">The grid is our selling price (its cost
+                            sits in the cost grid). Selling is cost plus a percentage, labour and overhead,
+                            so it isn't a straight percentage of cost. Trade accounts get these prices
+                            <strong>exactly as they are</strong>.</span>
+                        </span>
+                    </label>
+                    <label style="display:flex;gap:0.625rem;align-items:flex-start;cursor:pointer">
+                        <input type="radio" name="price_source" value="<?= PRICE_SOURCE_SUPPLIER ?>"
+                               style="margin-top:0.25rem"
+                               <?= $f['price_source'] === PRICE_SOURCE_SUPPLIER ? 'checked' : '' ?>>
+                        <span>
+                            <strong>Supplier price list</strong> — we buy it in.
+                            <span style="color:var(--text-faint)">The grid is the supplier's standard trade
+                            list. Trade accounts get it <strong>less the discount plus the margin</strong>
+                            set below.</span>
+                        </span>
+                    </label>
+                </fieldset>
+                <?php endif; ?>
 
                 <fieldset style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.125rem;margin:1rem 0">
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">

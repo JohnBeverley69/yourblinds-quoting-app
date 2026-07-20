@@ -1523,6 +1523,25 @@ foreach ($cells as $c) {
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 
+// What this grid HOLDS — shown at the top of the page, and what decides how the
+// cost/margin line under each cell is worked out (see price_source.php).
+//
+//   'own'      the grid is our SELLING price and the cost is stored alongside it,
+//              so margin compares the two directly.
+//   'supplier' the grid is the supplier's LIST. Nothing is stored: our cost is
+//              the list less the buying discount, our trade price is that plus
+//              the margin, and the margin between them is what we actually keep.
+require_once __DIR__ . '/../../_partials/price_source.php';
+$priceSource = ps_for_product(db(), (int) $table['product_id']);
+$psIsSupplier = $priceSource === PRICE_SOURCE_SUPPLIER;
+
+$psDiscPct = $psMarkPct = 0.0;
+if ($showCost && $psIsSupplier) {
+    require_once __DIR__ . '/../../_partials/pricing_engine.php';
+    $psDiscPct = pe_discount_for_system(db(), (int) $clientId, (int) $table['product_id'], (int) $table['system_id']);
+    $psMarkPct = pe_markup_for_system  (db(), (int) $clientId, (int) $table['product_id'], (int) $table['system_id']);
+}
+
 $isEmpty = !$matrixWidths && !$matrixDrops;
 
 // "Quick start" grid for empty tables.
@@ -1895,6 +1914,23 @@ $activeNav = 'products';
             </div>
         </div>
 
+        <?php /* What these numbers ARE. Stated up front because entering a
+                 supplier's list into a grid meant for our own selling price
+                 (or the reverse) silently moves every trade account's price. */ ?>
+        <div style="margin:0 0 1.25rem;padding:0.75rem 1.125rem;border-radius:10px;
+                    border:1px solid <?= $psIsSupplier ? '#f59e0b' : 'var(--border)' ?>;
+                    background:<?= $psIsSupplier ? 'rgba(245,158,11,0.08)' : 'var(--bg-subtle-2)' ?>;
+                    display:flex;gap:0.625rem;align-items:baseline;flex-wrap:wrap">
+            <strong style="font-size:0.875rem;color:var(--text-primary)">
+                <?= e(ps_label($priceSource)) ?>
+            </strong>
+            <span style="color:var(--text-faint);font-size:0.8125rem">
+                <?= e(ps_hint($priceSource)) ?>
+            </span>
+            <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>#pricing"
+               style="color:var(--brand);font-size:0.8125rem;margin-left:auto">Change</a>
+        </div>
+
         <!-- Inline edit form for the table's metadata. Hidden by
              default; the "Edit band / name / notes" link above
              toggles it. Saves via PRG to the same page. -->
@@ -2213,12 +2249,33 @@ $activeNav = 'products';
                                                    name="cells[<?= (int) $w ?>_<?= (int) $d ?>]"
                                                    value="<?= $val === null ? '' : e(number_format((float) $val, 2, '.', '')) ?>">
                                             <?php if ($showCost):
-                                                $cost = $matrixByCost["$w|$d"] ?? null;
-                                                if ($cost !== null):
-                                                    $c = (float) $cost; $p = (float) ($val ?? 0);
-                                                    $marg = $p > 0 ? ($p - $c) / $p * 100 : null;
+                                                // Two ways to reach cost + margin, depending on what this
+                                                // grid holds. Supplier grids derive both from the discount;
+                                                // our own grids read the cost stored beside the price.
+                                                $c = $p = $sell = null; $marg = null; $tip = '';
+                                                if ($psIsSupplier) {
+                                                    $list = (float) ($val ?? 0);
+                                                    if ($list > 0) {
+                                                        $c    = $list * (1 - $psDiscPct / 100);   // what we pay
+                                                        $sell = $c    * (1 + $psMarkPct / 100);   // what we charge
+                                                        $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
+                                                        $tip  = 'list £' . number_format($list, 2)
+                                                              . ' less ' . rtrim(rtrim(number_format($psDiscPct, 2, '.', ''), '0'), '.') . '% = cost'
+                                                              . ' · plus ' . rtrim(rtrim(number_format($psMarkPct, 2, '.', ''), '0'), '.') . '% = our price'
+                                                              . ' · margin (master admin only)';
+                                                    }
+                                                } else {
+                                                    $cost = $matrixByCost["$w|$d"] ?? null;
+                                                    if ($cost !== null) {
+                                                        $c    = (float) $cost;
+                                                        $sell = (float) ($val ?? 0);
+                                                        $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
+                                                        $tip  = 'cost to make · margin (master admin only)';
+                                                    }
+                                                }
+                                                if ($c !== null):
                                             ?>
-                                                <div class="grid-cost" title="cost to make · margin (master admin only)">£<?= number_format($c, 2) ?><?php if ($marg !== null): ?> · <span class="<?= $marg < 0 ? 'neg' : '' ?>"><?= number_format($marg, 0) ?>%</span><?php endif; ?></div>
+                                                <div class="grid-cost" title="<?= e($tip) ?>">£<?= number_format($c, 2) ?><?php if ($psIsSupplier && $sell !== null): ?> &rarr; £<?= number_format($sell, 2) ?><?php endif; ?><?php if ($marg !== null): ?> · <span class="<?= $marg < 0 ? 'neg' : '' ?>"><?= number_format($marg, 0) ?>%</span><?php endif; ?></div>
                                             <?php endif; endif; ?>
                                         </td>
                                     <?php endforeach; ?>
