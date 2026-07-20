@@ -14,11 +14,17 @@ declare(strict_types=1);
  *   4. selected extras      → extras_applied[] with mode + amount each
  *   5. markup % = client_markups row (per product+system) OR 0
  *   6. discount % = client_discounts row (per product+system) OR 0
- *   7. sell_price = base × (1 − discount/100) × (1 + markup/100) + extras_total
- *      — discount comes off the price-table first, then the markup
- *        is added to the discounted price. Both apply ONLY to the
- *        base (the material price). Extras are pure pass-through;
- *        tenants set the customer price directly in the options page.
+ *   7. sell_price — depends on whose price list the grid holds:
+ *        our own      = base × (1 − discount/100) × (1 + markup/100)
+ *                       + extras_total
+ *                       Discount then markup on the base only; extras are pure
+ *                       pass-through, since the tenant types the customer-facing
+ *                       figure straight into the options page.
+ *        supplier's   = (base + extras_total)
+ *                       × (1 − discount/100) × (1 + markup/100)
+ *                       The supplier's own adjustments (taped +20%, no valance
+ *                       −£1.50) are part of what we BUY, so they go through the
+ *                       buying discount and margin with everything else.
  *   8. line_total = sell_price × quantity
  *
  * All helpers take $clientId explicitly. There is no global state — this is
@@ -32,6 +38,11 @@ declare(strict_types=1);
  *   - On any resolution failure (missing fabric, no price table, etc.) the
  *     entry point returns ['error' => '<message>'] — never throws.
  */
+
+// Whose price list a product's grid holds. Decides whether the supplier's own
+// adjustments (a taped surcharge, a no-valance reduction) sit inside the buying
+// discount + margin or pass through at face value. See step 8 below.
+require_once __DIR__ . '/price_source.php';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1018,12 +1029,25 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //    easier to follow.
     //
     //    Extras (price_delta, price_percent, price_per_metre,
-    //    width_table) are NEVER marked up or discounted here — the
-    //    tenant sets the customer-facing price directly in the
-    //    options page.
-    $discountedBase = $basePrice    * (1 - $discount / 100);
-    $sellBase       = $discountedBase * (1 + $markup / 100);
-    $sellPrice      = round($sellBase + $extrasTotal, 2);
+    //    width_table) are normally NEVER marked up or discounted — on a
+    //    product we price ourselves the tenant types the customer-facing
+    //    figure straight into the options page, so it passes through.
+    //
+    //    A SUPPLIER price list is the exception. There the extras are the
+    //    supplier's own adjustments to their list price — Infusions' "taped
+    //    +20%", "no valance −£1.50", "metal cord pulls +£5" — so they are
+    //    part of what we BUY, not what we charge. They have to sit inside the
+    //    buying discount and margin like the rest of that supplier's price,
+    //    or the quote stops matching the supplier's own taped price: a £69
+    //    blind + 20% tape came out at £76.21 instead of £74.89, because the
+    //    surcharge skipped the ×0.67 ×1.35 the base went through.
+    $discountedBase = $basePrice * (1 - $discount / 100);
+    if (ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
+        $sellPrice = round(($basePrice + $extrasTotal)
+                           * (1 - $discount / 100) * (1 + $markup / 100), 2);
+    } else {
+        $sellPrice = round($discountedBase * (1 + $markup / 100) + $extrasTotal, 2);
+    }
     // Per-line flat charge (products.line_charge) — a fixed £ added ONCE per
     // line, AFTER the × quantity step, so it is not multiplied by the slat
     // count on per-slat products. E.g. Arena "Louvres Only" £6.98 per set.
