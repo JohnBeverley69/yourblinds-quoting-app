@@ -499,6 +499,22 @@ $activeNav = 'instaprice';
 
         function choiceAvailable(c) {
             if (c.system_id !== null && c.system_id !== undefined && c.system_id !== systemId) return false;
+
+            // Per-fabric scope — must mirror quote-builder/edit.php exactly, or
+            // InstaPrice shows and prices a choice on a fabric that doesn't offer
+            // it (e.g. a 38mm slat restricted to Snow/Cool White). Empty list =
+            // every fabric; with a fabric picked, its id must be in the list.
+            var fabrics = c.fabrics || [];
+            if (fabrics.length > 0) {
+                var picked = parseInt(fabricId && fabricId.value, 10) || 0;
+                if (!picked) return false;
+                var hit = false;
+                for (var j = 0; j < fabrics.length; j++) {
+                    if (parseInt(fabrics[j], 10) === picked) { hit = true; break; }
+                }
+                if (!hit) return false;
+            }
+
             var bands = c.bands || [];
             if (bands.length === 0) return true;
             if (!currentFabricBand) return false;

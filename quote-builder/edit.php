@@ -2418,9 +2418,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (extra.allow_multi) {
                 var multi = preset[extra.id + '__multi'];
                 if (multi !== undefined) {
-                    return multi.filter(function (id) {
+                    var kept = multi.filter(function (id) {
                         return isChoiceStillOffered(extra, parseInt(id, 10));
                     });
+                    // If a fabric change stripped every pick from a REQUIRED
+                    // option, fall back to whatever defaults the new fabric does
+                    // offer — mirrors the single-pick path, so a required option
+                    // never ends up holding nothing.
+                    if (kept.length === 0 && extra.is_required) {
+                        return extra.choices.filter(function (c) {
+                            return choiceAvailable(c) && c.is_default;
+                        }).map(function (c) { return c.id; });
+                    }
+                    return kept;
                 }
                 // First paint — pick all available defaults. Defaults
                 // tagged to a band the customer hasn't picked don't
