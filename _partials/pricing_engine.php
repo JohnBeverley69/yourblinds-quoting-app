@@ -528,13 +528,21 @@ function pe_apply_extra(
     //    modes (flat / percent / per-metre / width-table) since the
     //    tenant thinks of it as "my margin on top of supplier cost"
     //    regardless of how that cost is expressed.
+    //    EXCEPT on a supplier product. There the extra is the supplier's own
+    //    surcharge (e.g. taped +20%), which is folded into the base and taken
+    //    through the product discount + markup at the sell-price step. Applying
+    //    the options markup here as well would margin that one surcharge twice —
+    //    once as "my margin on the add-on", once as the product markup — so it is
+    //    skipped for supplier products. (No effect while the options markup is 0,
+    //    which is why it didn't show in the Infusions checks.)
+    $isSupplier = ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER;
     $markupOverride = isset($choice['markup_pct_override']) && $choice['markup_pct_override'] !== null
         ? (float) $choice['markup_pct_override']
         : null;
     $optionsMarkup = $markupOverride !== null
         ? $markupOverride
         : pe_tenant_defaults($pdo, $clientId)['options'];
-    if ($optionsMarkup != 0.0) {
+    if (!$isSupplier && $optionsMarkup != 0.0) {
         $amount *= (1 + $optionsMarkup / 100.0);
     }
 
