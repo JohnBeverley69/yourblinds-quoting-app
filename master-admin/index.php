@@ -10,6 +10,8 @@ requireSuperAdmin();
 
 // Global "pause emails" (testing mode) — current state for the toggle card.
 $emailPaused = app_setting_on('email_paused');
+// Global "public sign-up closed" — current state for its toggle card.
+$signupsPaused = app_setting_on('signups_paused');
 
 $user        = current_user();
 $myClientId  = (int) $user['client_id'];
@@ -177,6 +179,34 @@ $activeNav = 'master-admin';
                     <input type="checkbox" name="email_paused" value="1" <?= $emailPaused ? 'checked' : '' ?>
                            style="width:1.15rem;height:1.15rem">
                     Pause all outgoing emails (testing mode)
+                </label>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </section>
+
+        <!-- Public sign-up: open or close the self-service registration form.
+             Close it while trial tenants are being cleared out; reopen when
+             real clients should be able to register again. -->
+        <section class="section" style="<?= $signupsPaused ? 'border:2px solid #b91c1c;' : '' ?>">
+            <h2 class="section-title" style="margin:0 0 0.5rem">Public sign-up</h2>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5;max-width:46rem">
+                Tick this to <strong>close the public sign-up form</strong> — the
+                <code>/auth/signup.php</code> page stops creating accounts and the
+                "Create an account" link disappears from the login page. Existing
+                tenants and their logins are unaffected; this only turns off new
+                self-service registrations. Untick it to reopen sign-ups.
+            </p>
+            <?php if ($signupsPaused): ?>
+                <p style="margin:0 0 1rem;font-weight:600;color:#b91c1c">
+                    🚫 Public sign-up is currently CLOSED — no new accounts can be created.
+                </p>
+            <?php endif; ?>
+            <form method="post" action="/master-admin/signup-toggle.php">
+                <?= csrf_field() ?>
+                <label style="display:flex;align-items:center;gap:0.6rem;margin:0 0 1rem;font-size:0.95rem;cursor:pointer">
+                    <input type="checkbox" name="signups_paused" value="1" <?= $signupsPaused ? 'checked' : '' ?>
+                           style="width:1.15rem;height:1.15rem">
+                    Close public sign-up (no new self-service accounts)
                 </label>
                 <button type="submit" class="btn btn-primary">Save</button>
             </form>
