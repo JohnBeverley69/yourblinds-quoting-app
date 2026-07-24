@@ -1251,6 +1251,15 @@ function pp_sync_price_tables(
     }
 
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $pt) {
+        // This table EXISTS on the master, so it counts as "seen" — record that
+        // before the mapping guard below can `continue`. Otherwise a table we
+        // skip this run (its system can't be mapped to the target) never enters
+        // $seenTableIds, the end-of-function prune reads it as "deleted on the
+        // master", and wipes the tenant's mirror of it — taking any client-added
+        // cells with it, and with no way for a later push to rebuild it.
+        $srcTableId     = (int) $pt['id'];
+        $seenTableIds[] = $srcTableId;
+
         // Map source system → target system. NULL stays NULL (products
         // without systems use the IS NULL bucket).
         $srcSystemId = $pt['system_id'] !== null ? (int) $pt['system_id'] : null;
