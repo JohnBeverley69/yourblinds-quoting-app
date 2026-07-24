@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/middleware.php';
+require_once __DIR__ . '/../_partials/app_settings.php';
 
 // Already logged in? Bounce straight to the dashboard.
 if (is_logged_in()) {
@@ -184,9 +185,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit">Sign in</button>
         </form>
 
+        <?php if (!app_setting_on('signups_paused')): ?>
         <p class="auth-footer">
             New to YourBlinds? <a href="/auth/signup.php">Create an account</a>
         </p>
+        <?php endif; ?>
 
         <p class="auth-meta">
             &copy; <?= date('Y') ?> YourBlinds. All rights reserved.

@@ -18,6 +18,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/middleware.php';
 require_once __DIR__ . '/../_partials/verification.php';
+require_once __DIR__ . '/../_partials/app_settings.php';
 
 const SIGNUP_TRIAL_DAYS = 30;
 
@@ -25,11 +26,16 @@ if (is_logged_in()) {
     redirect_after_login();
 }
 
+// Public sign-up can be closed site-wide from Master Admin (e.g. while clearing
+// out trial tenants). When closed we render a "closed" notice instead of the
+// form and refuse to process a POST — a hand-crafted POST can't slip past it.
+$signupsClosed = app_setting_on('signups_paused');
+
 $error   = null;
 $created = false;
 $form    = ['company_name' => '', 'full_name' => '', 'email' => ''];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $ip = client_ip();
 
@@ -167,7 +173,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <span class="auth-brand-tag">Trade Quoting Portal</span>
         </div>
 
-        <?php if ($created): ?>
+        <?php if ($signupsClosed): ?>
+            <h1>Sign-up is closed</h1>
+            <div class="alert alert-error" role="status">
+                New accounts aren't being accepted at the moment.
+            </div>
+            <p class="auth-subtitle">
+                If you already have an account you can still sign in. Otherwise please
+                check back later.
+            </p>
+            <p class="auth-footer">
+                <a href="/auth/login.php">&larr; Back to sign in</a>
+            </p>
+        <?php elseif ($created): ?>
             <h1>Check your email</h1>
             <div class="alert alert-success" role="status">
                 Your account is created. We've sent a confirmation link to
