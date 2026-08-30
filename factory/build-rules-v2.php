@@ -112,13 +112,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($rj === false) continue;
             $rows = json_decode((string) $rj, true);
             if (!is_array($rows)) continue;
-            foreach ((array) $rowTakes as $ri => $takeRaw) {
-                $ri = (int) $ri;
-                if (!isset($rows[$ri])) continue;
-                $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
-                if ($p === null) continue;                          // only rewrite clean cut rows
+            foreach ((array) $rowTakes as $riKey => $takeRaw) {
                 if (trim((string) $takeRaw) === '' || !is_numeric($takeRaw)) continue;
-                $rows[$ri]['result'] = $buildResult($p['base'], (float) $takeRaw);
+                // A grid cell may stand for several stored rows (Centre = L+R,
+                // No Thrills folded into Slimline): the key is comma-joined indices.
+                foreach (explode(',', (string) $riKey) as $riStr) {
+                    $ri = (int) $riStr;
+                    if (!isset($rows[$ri])) continue;
+                    $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
+                    if ($p === null) continue;                      // only rewrite clean cut rows
+                    $rows[$ri]['result'] = $buildResult($p['base'], (float) $takeRaw);
+                }
             }
             $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
         }
@@ -176,6 +180,87 @@ $usesChart = false; foreach ($plumbing as $pl) { if ($pl['bestfit']) { $usesChar
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error']   ?? '');
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+// ---- Fold each cut into a readable grid ------------------------------------
+// Pivot the Recess/Exact "basis" column into value columns; group the remaining
+// rows, aliasing Center Left/Right -> "Centre" and No Thrills -> its parent
+// system, so ~24 raw rows read as ~8. Each grid cell keeps the comma-joined list
+// of underlying row indices it represents, so one edit fans back to them all.
+$SYSTEM_PARENT = ['no thrills' => 'SlimLine', 'no frills' => 'SlimLine'];
+$BASIS_SET     = ['recess', 'exact', 'cloth size', 'cloth'];
+$BASIS_ORDER   = ['recess' => 0, 'exact' => 1, 'cloth size' => 2, 'cloth' => 3];
+
+$cutsGrid = [];
+foreach ($cuts as $c) {
+    $labels = $c['labels']; $active = $c['active'];
+    $basisIdx = null; $sysIdx = null; $wandIdx = null; $ctlIdx = null;
+    foreach ($active as $i) {
+        $lab = strtolower($labels[$i] ?? '');
+        $vals = [];
+        foreach ($c['rows'] as $r) { $v = strtolower(trim((string) ($r['cells'][$i] ?? ''))); if ($v !== '') $vals[$v] = true; }
+        if ($basisIdx === null && $vals && !array_diff(array_keys($vals), $BASIS_SET)) { $basisIdx = $i; continue; }
+        if (strpos($lab, 'system')  !== false) $sysIdx  = $i;
+        if (strpos($lab, 'wand')    !== false) $wandIdx = $i;
+        if (strpos($lab, 'control') !== false) $ctlIdx  = $i;
+    }
+    $keyCols = array_values(array_filter($active, static fn ($i) => $i !== $basisIdx));
+
+    $groups = []; $basisSeen = [];
+    foreach ($c['rows'] as $ri => $r) {
+        $basisRaw = $basisIdx !== null ? trim((string) ($r['cells'][$basisIdx] ?? '')) : '';
+        $basisKey = strtolower($basisRaw);
+        $basisSeen[$basisKey] = $basisRaw;
+        $keyParts = [];
+        foreach ($keyCols as $i) {
+            $val = trim((string) ($r['cells'][$i] ?? ''));
+            if ($i === $sysIdx)  $val = $SYSTEM_PARENT[strtolower($val)] ?? $val;
+            if ($i === $wandIdx) { $lv = strtolower($val); if ($lv === 'center left' || $lv === 'center right') $val = 'Centre'; }
+            $keyParts[$i] = $val;
+        }
+        $gk = implode('|', array_map('strtolower', $keyParts));
+        if (!isset($groups[$gk])) $groups[$gk] = ['keyParts' => $keyParts, 'cells' => []];
+        $take = $r['sign'] < 0 ? $r['n'] : -$r['n'];
+        if (!isset($groups[$gk]['cells'][$basisKey])) $groups[$gk]['cells'][$basisKey] = ['take' => $take, 'idx' => []];
+        $groups[$gk]['cells'][$basisKey]['idx'][] = $ri;
+    }
+
+    $basisKeys = array_keys($basisSeen);
+    usort($basisKeys, static function ($a, $b) use ($BASIS_ORDER) {
+        $oa = $BASIS_ORDER[$a] ?? ($a === '' ? 99 : 50);
+        $ob = $BASIS_ORDER[$b] ?? ($b === '' ? 99 : 50);
+        return $oa <=> $ob ?: strcmp($a, $b);
+    });
+
+    $gridRows = [];
+    foreach ($groups as $g) {
+        $disp = [];
+        foreach ($keyCols as $i) {
+            $val = $g['keyParts'][$i];
+            if ($i === $wandIdx && $val === '') {
+                $ctlVal = $ctlIdx !== null ? strtolower((string) ($g['keyParts'][$ctlIdx] ?? '')) : '';
+                $disp[$i] = (strpos($ctlVal, 'wand') !== false) ? 'Stack' : '—';
+            } else {
+                $disp[$i] = $val === '' ? '—' : $val;
+            }
+        }
+        $cells = [];
+        foreach ($basisKeys as $bk) {
+            $cells[$bk] = isset($g['cells'][$bk])
+                ? ['take' => $g['cells'][$bk]['take'], 'idxKey' => implode(',', $g['cells'][$bk]['idx'])]
+                : null;
+        }
+        $gridRows[] = ['disp' => $disp, 'cells' => $cells];
+    }
+
+    $cutsGrid[] = [
+        'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'],
+        'keyCols'   => $keyCols,
+        'keyLabels' => array_map(static fn ($i) => $labels[$i] ?? '', $keyCols),
+        'basisKeys' => $basisKeys,
+        'basisDisp' => array_map(static fn ($k) => $k === '' ? '— any —' : $basisSeen[$k], $basisKeys),
+        'rows'      => $gridRows,
+    ];
+}
 
 $factoryTitle = 'Build rules v2';
 $factoryNav   = 'buildv2';
@@ -299,11 +384,11 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   <div class="layout">
     <div>
       <!-- CUTS -->
-      <?php if ($cuts): ?>
+      <?php if ($cutsGrid): ?>
       <div class="grouplabel"><span>Cuts &nbsp;·&nbsp; measurement − allowance</span><span class="badge prints">prints on the ticket</span><span class="ln"></span></div>
       <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>">
         <?= csrf_field() ?>
-        <?php foreach ($cuts as $c): ?>
+        <?php foreach ($cutsGrid as $c): ?>
         <div class="cut">
           <div class="cut-top">
             <span class="cut-name"><?= $e2($c['friendly']) ?></span>
@@ -313,18 +398,20 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
           <div class="scroll">
           <table>
             <thead><tr>
-              <?php foreach ($c['active'] as $i): ?><th><?= $e2($c['labels'][$i] ?? '') ?></th><?php endforeach; ?>
-              <th class="r">Take off (mm)</th>
+              <?php foreach ($c['keyLabels'] as $kl): ?><th><?= $e2($kl) ?></th><?php endforeach; ?>
+              <?php foreach ($c['basisDisp'] as $bd): ?><th class="r"><?= $e2($bd) ?></th><?php endforeach; ?>
             </tr></thead>
             <tbody>
-              <?php foreach ($c['rows'] as $ri => $cr): $take = $cr['sign'] < 0 ? $cr['n'] : -$cr['n']; ?>
+              <?php foreach ($c['rows'] as $gr): ?>
               <tr>
-                <?php foreach ($c['active'] as $i): $cell = $cr['cells'][$i] ?? ''; ?>
-                  <td><?= $cell === '' ? '<span style="opacity:.5">— any —</span>' : $e2($cell) ?></td>
+                <?php foreach ($c['keyCols'] as $ci): ?>
+                  <td><?= $e2($gr['disp'][$ci] ?? '—') ?></td>
                 <?php endforeach; ?>
-                <td class="num"><input class="take" type="number" step="any"
-                    name="cut[<?= $e2($c['name']) ?>][<?= (int) $ri ?>]"
-                    value="<?= $e2(rtrim(rtrim(number_format($take, 3, '.', ''), '0'), '.')) ?>"></td>
+                <?php foreach ($c['basisKeys'] as $bk): $cell = $gr['cells'][$bk]; ?>
+                  <td class="num"><?php if ($cell): ?><input class="take" type="number" step="any"
+                      name="cut[<?= $e2($c['name']) ?>][<?= $e2($cell['idxKey']) ?>]"
+                      value="<?= $e2(rtrim(rtrim(number_format($cell['take'], 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
+                <?php endforeach; ?>
               </tr>
               <?php endforeach; ?>
             </tbody>
