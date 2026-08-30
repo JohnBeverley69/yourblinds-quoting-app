@@ -158,7 +158,10 @@ foreach ($lines as $ln) {
         return '';
     };
 
-    $numVars = ['Width' => (float) $ln['width_mm'], 'Drop' => (float) $ln['drop_mm'], 'Fit_height' => $fitHeight];
+    // Quantity is exposed so build rules can reference the ordered qty — e.g. a
+    // fabric-only Vanes = Quantity + 1 (the spare vane) and a total-metres calc.
+    $numVars = ['Width' => (float) $ln['width_mm'], 'Drop' => (float) $ln['drop_mm'], 'Fit_height' => $fitHeight,
+                'Quantity' => (float) $ln['quantity']];
     $eval    = build_evaluate($pdo, $masterPid, $numVars, $optSel);
 
     $lineVals = [
