@@ -340,8 +340,8 @@ foreach ($cuts as $c) {
     ];
 }
 
-$factoryTitle = 'Build rules v2';
-$factoryNav   = 'buildv2';
+$factoryTitle = 'Build rules';
+$factoryNav   = 'build';
 require __DIR__ . '/../_partials/factory_head.php';
 
 $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
@@ -442,6 +442,8 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 a.chartlink{ display:inline-block; margin-top:.15rem; font-size:.85rem; font-weight:600;
       color:var(--accent-ink); text-decoration:none; }
   .brv2 a.chartlink:hover{ text-decoration:underline; }
+  .brv2 a.advlink{ margin-left:auto; font-size:.8rem; color:var(--faint); text-decoration:none; }
+  .brv2 a.advlink:hover{ color:var(--accent-ink); text-decoration:underline; }
 
   @media (prefers-color-scheme:dark){
     .brv2:not([data-lit]){ --ink:#e8eef3; --soft:#a3b0bc; --faint:#6e7d89; --line:#2b343d; --line-2:#232b33;
@@ -452,7 +454,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 
 <div class="brv2">
   <span class="preview-flag">● Live &amp; editable</span>
-  <h1>Build rules <span style="color:var(--accent)">v2</span></h1>
+  <h1>Build rules</h1>
   <p class="sub">Your <em>actual</em> stored build rules — the same numbers the worksheet uses — as <b>Cuts</b>, <b>Calcs</b> and <b>Charts</b>, plumbing tucked away. Edit a take-off, hit <b>Save cuts</b>, and the worksheet uses it.</p>
   <?php if ($flashOk !== ''): ?><div class="flash ok"><?= $e2($flashOk) ?></div><?php endif; ?>
   <?php if ($flashErr !== ''): ?><div class="flash err"><?= $e2($flashErr) ?></div><?php endif; ?>
@@ -466,6 +468,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <?php endforeach; ?>
       </select>
     </form>
+    <?php if ($productId > 0): ?><a class="advlink" href="/factory/build-rules.php?product_id=<?= (int) $productId ?>">Advanced: raw editor →</a><?php endif; ?>
   </div>
 
   <?php if (!$vars): ?>
