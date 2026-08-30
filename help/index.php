@@ -80,6 +80,12 @@ $canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
     return true; // 'all'
 };
 
+// ── Guided walkthroughs — the step-by-step "dummies' guide" pages ────────────
+$guides = [];
+foreach (require __DIR__ . '/_guides.php' as $slug => $gd) {
+    if ($canSee($gd['aud'])) $guides[$slug] = $gd;
+}
+
 // ── Topics ────────────────────────────────────────────────────────────────
 // Each: ['aud'=>all|admin|super, 'cat'=>section, 'title'=>.., 'keys'=>extra
 //        search words, 'body'=>HTML].
@@ -351,6 +357,16 @@ $activeNav = 'help';
         .vid-add input { padding: 0.4rem 0.55rem; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; background: var(--bg-input); }
         .vid-add input[name="title"] { flex: 1 1 16rem; }
         .vid-add input[name="url"] { flex: 2 1 20rem; }
+
+        .guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.7rem; }
+        .guide-card { display: flex; flex-direction: column; gap: 0.2rem; text-decoration: none;
+            border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; background: var(--bg-card);
+            box-shadow: var(--shadow-sm); transition: border-color 120ms, transform 120ms; }
+        .guide-card:hover { border-color: var(--link); transform: translateY(-1px); }
+        .guide-eyebrow { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--link); }
+        .guide-title { font-size: 1.02rem; font-weight: 700; color: var(--text-primary); margin-top: 0.15rem; }
+        .guide-blurb { font-size: 0.875rem; color: var(--text-muted); line-height: 1.45; margin-top: 0.15rem; }
+        .guide-go { font-size: 0.8125rem; font-weight: 600; color: var(--link); margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -428,6 +444,26 @@ $activeNav = 'help';
                         <p style="color:var(--text-faint);font-size:0.8125rem;margin:.4rem 0 0">You're the only one who sees these add/edit controls; everyone sees the videos.</p>
                     <?php endif; ?>
                 <?php endif; ?>
+            </section>
+        <?php endif; ?>
+
+        <!-- Guided walkthroughs -->
+        <?php if ($guides): ?>
+            <section class="section">
+                <h2 class="help-vid-title">Step-by-step guides</h2>
+                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.7rem">
+                    Animated walk-throughs with a voice-over you can play aloud — written for a first-timer.
+                </p>
+                <div class="guide-grid">
+                    <?php foreach ($guides as $slug => $gd): ?>
+                        <a class="guide-card" href="/help/guide.php?g=<?= e(rawurlencode($slug)) ?>">
+                            <span class="guide-eyebrow"><?= e($gd['eyebrow']) ?></span>
+                            <span class="guide-title"><?= e($gd['title']) ?></span>
+                            <span class="guide-blurb"><?= e($gd['blurb'] ?? '') ?></span>
+                            <span class="guide-go">Open guide &rarr;</span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </section>
         <?php endif; ?>
 
