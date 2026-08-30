@@ -157,7 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Numbers from the form are always positive; the direction says which way.
         $dir = ($_POST['dir'] ?? 'deduct') === 'add' ? 'add' : 'deduct';
         $mk = static function ($amount, string $base) use ($dir): string {
-            $adj = $dir === 'add' ? (float) $amount : -(float) $amount;   // signed change
+            // The direction sets the sign — ignore any sign the user typed.
+            $adj = $dir === 'add' ? abs((float) $amount) : -abs((float) $amount);
             if (abs($adj) < 1e-9) return $base;
             $n = rtrim(rtrim(number_format(abs($adj), 3, '.', ''), '0'), '.');
             return $adj < 0 ? "$base - $n" : "$base + $n";
@@ -224,10 +225,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sel->execute([$productId, $vname]);
             $rj   = $sel->fetchColumn();
             $rows = ($rj !== false) ? (json_decode((string) $rj, true) ?: []) : [];
+            $varBase = null;   // base (Width/Drop) for any brand-new row, from an existing row
+            foreach ($rows as $rr) { $pp = $parseCut((string) ($rr['result'] ?? '')); if ($pp) { $varBase = $pp['base']; break; } }
             $dirty = false;
             foreach ((array) $rowTakes as $targetKey => $valRaw) {
                 if (trim((string) $valRaw) === '' || !is_numeric($valRaw)) continue;
-                $adj = $dir === 'deduct' ? -(float) $valRaw : (float) $valRaw;   // deduct: positive shrinks. add/mixed: value already signed toward the change
+                // deduct/add: the heading sets the sign, so ignore any sign typed.
+                // mixed: the number is the signed change itself, so keep it.
+                $adj = $dir === 'mixed' ? (float) $valRaw
+                     : ($dir === 'add' ? abs((float) $valRaw) : -abs((float) $valRaw));
                 // A grid cell may stand for several targets (Centre = L+R, No Thrills
                 // folded in, or several fascias sharing one allowance key).
                 foreach (explode(',', (string) $targetKey) as $tok) {
@@ -243,6 +249,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (count($rest) < 2) continue;
                         // Base + LOOKUP(value): the stored allowance IS the signed change.
                         $alwUpd->execute([$adj, strtolower($rest[0]), $rest[1]]);
+                    } elseif (strncmp($tok, 'new:', 4) === 0) {
+                        // Brand-new row for a previously-rowless option choice.
+                        if ($varBase === null) continue;
+                        $rows[] = ['cells' => [substr($tok, 4)], 'result' => $buildResult($varBase, $adj)];
+                        $dirty = true;
                     }
                 }
             }
@@ -282,6 +293,7 @@ foreach ($vars as $v) {
     $cols    = json_decode((string) $v['columns_json'], true) ?: [];
     $rows    = json_decode((string) $v['rows_json'], true) ?: [];
     $labels  = array_map(static fn ($c) => (string) ($c['label'] ?? ($c['ref'] ?? '')), $cols);
+    $colrefs = array_map(static fn ($c) => (string) ($c['ref'] ?? ''), $cols);
     $friendly = $FRIENDLY[$name] ?? $name;
 
     $rawResults = array_map(static fn ($r) => (string) ($r['result'] ?? ''), $rows);
@@ -322,7 +334,7 @@ foreach ($vars as $v) {
             foreach ($cutRows as $cr) { if (($cr['cells'][$i] ?? '') !== '') { $active[] = $i; break; } }
         }
         $cuts[] = ['name' => $name, 'friendly' => $friendly, 'base' => $base,
-                   'labels' => $labels, 'active' => $active, 'rows' => $cutRows];
+                   'labels' => $labels, 'colrefs' => $colrefs, 'active' => $active, 'rows' => $cutRows];
     } elseif (in_array($name, $PLUMBING, true)) {
         $plumbing[] = ['name' => $name, 'friendly' => $friendly, 'results' => $rawResults, 'bestfit' => $hasBestfit];
     } else {
@@ -438,6 +450,22 @@ foreach ($cuts as $c) {
     foreach ($c['rows'] as $rr) { if ($rr['take'] > 1e-9) $hasPos = true; elseif ($rr['take'] < -1e-9) $hasNeg = true; }
     $dir = ($hasPos && $hasNeg) ? 'mixed' : ($hasNeg ? 'add' : 'deduct');
 
+    // Auto-append a blank, fillable row for any option choice with no row yet
+    // (single-option-column cuts only), so newly-added choices appear ready to fill.
+    if (count($keyCols) === 1 && $basisKeys === ['']) {
+        $kc  = $keyCols[0];
+        $ref = $c['colrefs'][$kc] ?? '';
+        if ($ref !== '' && isset($sourceByRef[$ref])) {
+            $present = [];
+            foreach ($gridRows as $g2) { $present[strtolower((string) ($g2['disp'][$kc] ?? ''))] = true; }
+            foreach ($sourceByRef[$ref]['values'] as $choice) {
+                if (isset($present[strtolower((string) $choice)])) continue;
+                $disp = []; foreach ($keyCols as $ci) $disp[$ci] = ($ci === $kc) ? (string) $choice : '—';
+                $gridRows[] = ['disp' => $disp, 'cells' => ['' => ['take' => null, 'idxKey' => 'new:' . $choice]]];
+            }
+        }
+    }
+
     $cutsGrid[] = [
         'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'], 'dir' => $dir,
         'keyCols'   => $keyCols,
@@ -538,6 +566,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       color:var(--num); border:1px solid var(--line); border-radius:6px; padding:.22rem .4rem;
       background:var(--surface); font-variant-numeric:tabular-nums; }
   .brv2 input.take:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .brv2 input.take.newrow{ border-style:dashed; border-color:var(--accent); }
   .brv2 .saverow{ display:flex; align-items:center; gap:.9rem; margin:.2rem 0 .4rem; flex-wrap:wrap; }
   .brv2 .savebtn{ font:inherit; font-weight:700; cursor:pointer; border:none; border-radius:8px;
       padding:.5rem 1.15rem; background:var(--accent); color:#fff; }
@@ -647,9 +676,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
                   <td><?= $e2($gr['disp'][$ci] ?? '—') ?></td>
                 <?php endforeach; ?>
                 <?php foreach ($c['basisKeys'] as $bk): $cell = $gr['cells'][$bk]; ?>
-                  <td class="num"><?php if ($cell): $amt = $dir === 'deduct' ? $cell['take'] : -$cell['take']; ?><input class="take" type="number" step="any"<?= $dir === 'mixed' ? '' : ' min="0"' ?>
+                  <td class="num"><?php if ($cell): $isnew = ($cell['take'] === null); $amt = $isnew ? '' : ($dir === 'deduct' ? $cell['take'] : -$cell['take']); ?><input class="take<?= $isnew ? ' newrow' : '' ?>" type="number" step="any"<?= $dir === 'mixed' ? '' : ' min="0"' ?><?= $isnew ? ' placeholder="add"' : '' ?>
                       name="cut[<?= $e2($c['name']) ?>][<?= $e2($cell['idxKey']) ?>]"
-                      value="<?= $e2(rtrim(rtrim(number_format($amt, 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
+                      value="<?= $isnew ? '' : $e2(rtrim(rtrim(number_format((float) $amt, 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
                 <?php endforeach; ?>
               </tr>
               <?php endforeach; ?>
