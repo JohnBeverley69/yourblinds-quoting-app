@@ -196,7 +196,7 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </div>
-        <p><a href="/admin/products/price-table.php?system_id=<?= $systemId ?>" style="font-weight:600">View the priced grid &rarr;</a></p>
+        <p><a href="/admin/products/price-tables.php?system_id=<?= $systemId ?>" style="font-weight:600">View the priced grid &rarr;</a></p>
     <?php elseif ($stage === 'pick'): ?>
         <form method="post" enctype="multipart/form-data">
             <?= csrf_field() ?><input type="hidden" name="action" value="import"><input type="hidden" name="system_id" value="<?= $systemId ?>">
