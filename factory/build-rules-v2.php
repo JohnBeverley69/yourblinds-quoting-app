@@ -283,22 +283,48 @@ foreach ($cuts as $c) {
         return $oa <=> $ob ?: strcmp($a, $b);
     });
 
-    $gridRows = [];
+    // Merge groups whose cells resolve to the SAME target(s) per basis — e.g.
+    // several fascias sharing one allowance key. Otherwise they'd render as
+    // separate inputs with the same name and collide on submit. Their differing
+    // key-column labels are combined with " / ".
+    $merged = [];
     foreach ($groups as $g) {
+        $sig = [];
+        foreach ($basisKeys as $bk) {
+            if (isset($g['cells'][$bk])) { $t = array_unique($g['cells'][$bk]['idx']); sort($t); $sig[] = $bk . '=' . implode('+', $t); }
+        }
+        $sigKey = implode(';', $sig);
+        if (!isset($merged[$sigKey])) {
+            $merged[$sigKey] = ['keySets' => [], 'cells' => []];
+            foreach ($keyCols as $i) $merged[$sigKey]['keySets'][$i] = [];
+        }
+        foreach ($keyCols as $i) $merged[$sigKey]['keySets'][$i][(string) ($g['keyParts'][$i] ?? '')] = true;
+        foreach ($g['cells'] as $bk => $cell) {
+            if (!isset($merged[$sigKey]['cells'][$bk])) $merged[$sigKey]['cells'][$bk] = $cell;
+            else $merged[$sigKey]['cells'][$bk]['idx'] = array_merge($merged[$sigKey]['cells'][$bk]['idx'], $cell['idx']);
+        }
+    }
+
+    $gridRows = [];
+    foreach ($merged as $g) {
         $disp = [];
         foreach ($keyCols as $i) {
-            $val = $g['keyParts'][$i];
-            if ($i === $wandIdx && $val === '') {
-                $ctlVal = $ctlIdx !== null ? strtolower((string) ($g['keyParts'][$ctlIdx] ?? '')) : '';
-                $disp[$i] = (strpos($ctlVal, 'wand') !== false) ? 'Stack' : '—';
-            } else {
-                $disp[$i] = $val === '' ? '—' : $val;
+            $rendered = [];
+            foreach (array_keys($g['keySets'][$i]) as $val) {
+                if ($i === $wandIdx && $val === '') {
+                    $ctlVals = $ctlIdx !== null ? array_map('strtolower', array_keys($g['keySets'][$ctlIdx])) : [];
+                    $isWand = false; foreach ($ctlVals as $cv) { if (strpos($cv, 'wand') !== false) $isWand = true; }
+                    $rendered[] = $isWand ? 'Stack' : '—';
+                } else {
+                    $rendered[] = $val === '' ? '—' : $val;
+                }
             }
+            $disp[$i] = implode(' / ', array_values(array_unique($rendered)));
         }
         $cells = [];
         foreach ($basisKeys as $bk) {
             $cells[$bk] = isset($g['cells'][$bk])
-                ? ['take' => $g['cells'][$bk]['take'], 'idxKey' => implode(',', $g['cells'][$bk]['idx'])]
+                ? ['take' => $g['cells'][$bk]['take'], 'idxKey' => implode(',', array_values(array_unique($g['cells'][$bk]['idx'])))]
                 : null;
         }
         $gridRows[] = ['disp' => $disp, 'cells' => $cells];
