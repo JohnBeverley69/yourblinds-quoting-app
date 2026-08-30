@@ -138,6 +138,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['action'] ?? '');
 
+    // ---- Delete a rule --------------------------------------------------------
+    if (($delName = trim((string) ($_POST['deletevar'] ?? ''))) !== '') {
+        try {
+            $pdo->prepare('DELETE FROM build_variables WHERE product_id = ? AND name = ?')->execute([$productId, $delName]);
+            $_SESSION['flash_success'] = "Removed “{$delName}”.";
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not remove: ' . $e->getMessage(); }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
+    }
+
     // ---- Create a brand-new rule (cut or calc) --------------------------------
     if ($action === 'addcut' || $action === 'addcalc') {
         $redirect = '/factory/build-rules-v2.php?product_id=' . $productId;
@@ -478,6 +487,10 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .dirtag.off{ background:var(--accent-wash); color:var(--accent-ink); }
   .brv2 .dirtag.add{ background:var(--keep-wash); color:var(--keep); }
   .brv2 .dirtag.mix{ background:var(--panel); color:var(--soft); }
+  .brv2 .rmbtn{ margin-left:auto; font:inherit; font-size:.7rem; font-weight:600; color:var(--faint);
+      background:none; border:1px solid var(--line); border-radius:6px; padding:.12rem .5rem; cursor:pointer; }
+  .brv2 .rmbtn:hover{ color:#c0392b; border-color:#e2a3a0; }
+  .brv2 .calcedit-head{ display:flex; align-items:center; gap:.45rem; }
   .brv2 table{ width:100%; border-collapse:collapse; margin-top:.7rem; font-size:.9rem; }
   .brv2 th{ text-align:left; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);
       font-weight:700; padding:.35rem .6rem; border-bottom:1px solid var(--line); }
@@ -588,6 +601,14 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     </form>
     <?php if ($productId > 0): ?><a class="advlink" href="/factory/build-rules.php?product_id=<?= (int) $productId ?>">Advanced: raw editor →</a><?php endif; ?>
   </div>
+  <script>
+  function rmVar(btn, name){
+    if(!confirm('Remove "'+name+'"? This deletes the rule from this product.')) return;
+    var f = btn.form; if(!f) return;
+    var h = document.createElement('input'); h.type='hidden'; h.name='deletevar'; h.value=name;
+    f.appendChild(h); f.submit();
+  }
+  </script>
 
   <?php if (!$vars): ?>
     <div class="empty"><b><?= $e2($productName ?: 'This product') ?></b> has no rules yet. Add your first one below — a <b>Cut</b> (a measurement minus an allowance) or a <b>Calc</b> (a formula). As soon as you add one, it appears here to edit.</div>
@@ -611,6 +632,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
             <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $def ?></span>
             <span class="dirtag <?= $tagc ?>"><?= $e2($tag) ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
+            <button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($c['name']) ?>')">Remove</button>
           </div>
           <div class="scroll">
           <table>
@@ -651,7 +673,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div class="cut">
         <?php foreach ($calcs as $cc): ?>
           <div class="calcedit">
-            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span></div>
+            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
             <?php foreach ($cc['rows'] as $ri => $r):
               $ctx = [];
               foreach ((array) ($r['cells'] ?? []) as $cv) { $cv = trim((string) $cv); if ($cv !== '') $ctx[] = $cv; }
