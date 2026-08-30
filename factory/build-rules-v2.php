@@ -126,6 +126,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
         }
+        // Calcs: an edited formula string per row (kept as-is; these are the real sums).
+        foreach ((array) ($_POST['calc'] ?? []) as $vname => $rowsMap) {
+            $vname = (string) $vname;
+            $sel->execute([$productId, $vname]);
+            $rj = $sel->fetchColumn();
+            if ($rj === false) continue;
+            $rows = json_decode((string) $rj, true);
+            if (!is_array($rows)) continue;
+            foreach ((array) $rowsMap as $ri => $formula) {
+                $ri = (int) $ri;
+                if (!isset($rows[$ri])) continue;
+                $f = trim((string) $formula);
+                if ($f === '') continue;
+                $rows[$ri]['result'] = $f;
+            }
+            $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
+        }
         $pdo->commit();
         $_SESSION['flash_success'] = 'Saved — the worksheet now uses these numbers.';
     } catch (Throwable $e) {
@@ -352,6 +369,18 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .flash{ padding:.6rem .9rem; border-radius:9px; margin:.2rem 0 .4rem; font-size:.9rem; font-weight:600; }
   .brv2 .flash.ok{ background:var(--keep-wash); color:var(--keep); border:1px solid color-mix(in srgb,var(--keep) 30%,transparent); }
   .brv2 .flash.err{ background:#fdecec; color:#b03b3b; border:1px solid #f2b8b8; }
+  .brv2 .calcedit{ padding:.55rem 0; border-bottom:1px solid var(--line-2); }
+  .brv2 .calcedit:last-child{ border-bottom:none; }
+  .brv2 .calcedit-head{ margin-bottom:.35rem; }
+  .brv2 .calcrow{ display:flex; align-items:center; gap:.6rem; margin:.25rem 0; flex-wrap:wrap; }
+  .brv2 .calcwhen{ font-size:.72rem; font-weight:600; color:var(--faint); background:var(--panel);
+      border:1px solid var(--line); border-radius:5px; padding:.1rem .45rem; white-space:nowrap; }
+  .brv2 input.formula{ flex:1; min-width:16rem; font-family:ui-monospace,Menlo,monospace; font-size:.83rem;
+      color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:.35rem .55rem; background:var(--surface); }
+  .brv2 input.formula:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .brv2 a.chartlink{ display:inline-block; margin-top:.15rem; font-size:.85rem; font-weight:600;
+      color:var(--accent-ink); text-decoration:none; }
+  .brv2 a.chartlink:hover{ text-decoration:underline; }
 
   @media (prefers-color-scheme:dark){
     .brv2:not([data-lit]){ --ink:#e8eef3; --soft:#a3b0bc; --faint:#6e7d89; --line:#2b343d; --line-2:#232b33;
@@ -429,24 +458,31 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <!-- CALCS -->
       <?php if ($calcs): ?>
       <div class="grouplabel"><span>Calcs &nbsp;·&nbsp; the real sums</span><span class="badge prints">prints on the ticket</span><span class="ln"></span></div>
-      <div class="cut">
+      <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>">
+        <?= csrf_field() ?>
+        <div class="cut">
         <?php foreach ($calcs as $cc): ?>
-          <div class="calc">
-            <span class="cn"><?= $e2($cc['friendly']) ?> <span class="code-name">(<?= $e2($cc['name']) ?>)</span></span>
-            <span class="cf">
-              <?php if ($cc['gloss'] !== ''): ?>
-                <?= $e2($cc['gloss']) ?>
-              <?php else:
-                $parts = [];
-                foreach ($cc['rows'] as $r) { $parts[] = (string) ($r['result'] ?? ''); }
-                $parts = array_values(array_unique(array_filter($parts)));
-                echo $e2(implode('   ·   ', array_slice($parts, 0, 4)));
-              ?>
-              <?php endif; ?>
-            </span>
+          <div class="calcedit">
+            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span></div>
+            <?php foreach ($cc['rows'] as $ri => $r):
+              $ctx = [];
+              foreach ((array) ($r['cells'] ?? []) as $cv) { $cv = trim((string) $cv); if ($cv !== '') $ctx[] = $cv; }
+            ?>
+              <div class="calcrow">
+                <?php if ($ctx): ?><span class="calcwhen"><?= $e2(implode(' · ', $ctx)) ?></span><?php endif; ?>
+                <input class="formula" type="text" spellcheck="false"
+                    name="calc[<?= $e2($cc['name']) ?>][<?= (int) $ri ?>]"
+                    value="<?= $e2((string) ($r['result'] ?? '')) ?>">
+              </div>
+            <?php endforeach; ?>
           </div>
         <?php endforeach; ?>
-      </div>
+        </div>
+        <div class="saverow">
+          <button type="submit" class="savebtn">Save calcs</button>
+          <span>These are the real formulas. Change a number or the sum; keep the variable names (Width, Drop, Vanes…) as they are.</span>
+        </div>
+      </form>
       <?php endif; ?>
 
       <!-- CHART -->
@@ -457,6 +493,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div>
           <div class="cn">Vogue trucks — Louvolite chart</div>
           <p>Look up the width, get the number and size of trucks. Straight from Louvolite's sizing table — rarely touched. (The <em>Trucks</em> and <em>Truck size</em> plumbing below both read this one chart.)</p>
+          <p><a class="chartlink" href="/factory/allowances.php">Edit the truck charts in Allowances →</a></p>
         </div>
       </div>
       <?php endif; ?>
