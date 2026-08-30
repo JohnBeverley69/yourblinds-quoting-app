@@ -89,6 +89,49 @@ $parseCut = static function (string $result): ?array {
     return ['base' => $base, 'sign' => $sign, 'n' => $n];
 };
 
+// ---- Save handler: write edited take-offs back into build_variables --------
+// Only the numeric take-off in each cut row changes; cells/order are preserved.
+// The worksheet reads these same rows, so a save drives the real ticket.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    $edits = (array) ($_POST['cut'] ?? []);   // [ varName => [ rowIdx => takeoff ] ]
+    $fmtN = static fn ($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
+    $buildResult = static function (string $base, float $take) use ($fmtN): string {
+        if (abs($take) < 1e-9) return $base;                       // no change
+        return $take > 0 ? $base . ' - ' . $fmtN($take)            // take off
+                         : $base . ' + ' . $fmtN(abs($take));      // add on
+    };
+    try {
+        $pdo->beginTransaction();
+        $sel = $pdo->prepare('SELECT rows_json FROM build_variables WHERE product_id = ? AND name = ?');
+        $upd = $pdo->prepare('UPDATE build_variables SET rows_json = ? WHERE product_id = ? AND name = ?');
+        foreach ($edits as $vname => $rowTakes) {
+            $vname = (string) $vname;
+            $sel->execute([$productId, $vname]);
+            $rj = $sel->fetchColumn();
+            if ($rj === false) continue;
+            $rows = json_decode((string) $rj, true);
+            if (!is_array($rows)) continue;
+            foreach ((array) $rowTakes as $ri => $takeRaw) {
+                $ri = (int) $ri;
+                if (!isset($rows[$ri])) continue;
+                $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
+                if ($p === null) continue;                          // only rewrite clean cut rows
+                if (trim((string) $takeRaw) === '' || !is_numeric($takeRaw)) continue;
+                $rows[$ri]['result'] = $buildResult($p['base'], (float) $takeRaw);
+            }
+            $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
+        }
+        $pdo->commit();
+        $_SESSION['flash_success'] = 'Saved — the worksheet now uses these numbers.';
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+    }
+    header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
+    exit;
+}
+
 // Sort each variable into a bucket and pre-compute a tidy shape.
 $cuts = []; $calcs = []; $charts = []; $plumbing = [];
 foreach ($vars as $v) {
@@ -129,6 +172,10 @@ foreach ($vars as $v) {
 }
 // A single conceptual "chart" card if any plumbing uses best-fit.
 $usesChart = false; foreach ($plumbing as $pl) { if ($pl['bestfit']) { $usesChart = true; break; } }
+
+$flashOk  = (string) ($_SESSION['flash_success'] ?? '');
+$flashErr = (string) ($_SESSION['flash_error']   ?? '');
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $factoryTitle = 'Build rules v2';
 $factoryNav   = 'buildv2';
@@ -208,6 +255,19 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .out .ov small{ font-weight:500; color:var(--faint); font-size:.68rem; }
   .brv2 .empty{ background:var(--panel); border:1px dashed var(--line); border-radius:11px; padding:1rem 1.1rem; color:var(--soft); }
 
+  .brv2 input.take{ width:5rem; text-align:right; font-family:ui-monospace,Menlo,monospace; font-weight:600;
+      color:var(--num); border:1px solid var(--line); border-radius:6px; padding:.22rem .4rem;
+      background:var(--surface); font-variant-numeric:tabular-nums; }
+  .brv2 input.take:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .brv2 .saverow{ display:flex; align-items:center; gap:.9rem; margin:.2rem 0 .4rem; flex-wrap:wrap; }
+  .brv2 .savebtn{ font:inherit; font-weight:700; cursor:pointer; border:none; border-radius:8px;
+      padding:.5rem 1.15rem; background:var(--accent); color:#fff; }
+  .brv2 .savebtn:hover{ background:var(--accent-ink); }
+  .brv2 .saverow span{ font-size:.83rem; color:var(--soft); }
+  .brv2 .flash{ padding:.6rem .9rem; border-radius:9px; margin:.2rem 0 .4rem; font-size:.9rem; font-weight:600; }
+  .brv2 .flash.ok{ background:var(--keep-wash); color:var(--keep); border:1px solid color-mix(in srgb,var(--keep) 30%,transparent); }
+  .brv2 .flash.err{ background:#fdecec; color:#b03b3b; border:1px solid #f2b8b8; }
+
   @media (prefers-color-scheme:dark){
     .brv2:not([data-lit]){ --ink:#e8eef3; --soft:#a3b0bc; --faint:#6e7d89; --line:#2b343d; --line-2:#232b33;
         --surface:#1a2128; --panel:#161d23; --accent:#38bdf8; --accent-ink:#7dd3fc; --accent-wash:#0c2b3a;
@@ -216,9 +276,11 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 </style>
 
 <div class="brv2">
-  <span class="preview-flag">● Live data · read-only preview</span>
+  <span class="preview-flag">● Live &amp; editable</span>
   <h1>Build rules <span style="color:var(--accent)">v2</span></h1>
-  <p class="sub">Your <em>actual</em> stored build rules — the same numbers the worksheet uses — arranged as <b>Cuts</b>, <b>Calcs</b> and <b>Charts</b>, with the internal plumbing tucked away. Reading live; editing is the next step.</p>
+  <p class="sub">Your <em>actual</em> stored build rules — the same numbers the worksheet uses — as <b>Cuts</b>, <b>Calcs</b> and <b>Charts</b>, plumbing tucked away. Edit a take-off, hit <b>Save cuts</b>, and the worksheet uses it.</p>
+  <?php if ($flashOk !== ''): ?><div class="flash ok"><?= $e2($flashOk) ?></div><?php endif; ?>
+  <?php if ($flashErr !== ''): ?><div class="flash err"><?= $e2($flashErr) ?></div><?php endif; ?>
 
   <div class="topline">
     <label style="font-size:.8rem;color:var(--soft);font-weight:600">Product</label>
@@ -239,7 +301,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <!-- CUTS -->
       <?php if ($cuts): ?>
       <div class="grouplabel"><span>Cuts &nbsp;·&nbsp; measurement − allowance</span><span class="badge prints">prints on the ticket</span><span class="ln"></span></div>
-      <?php foreach ($cuts as $c): ?>
+      <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>">
+        <?= csrf_field() ?>
+        <?php foreach ($cuts as $c): ?>
         <div class="cut">
           <div class="cut-top">
             <span class="cut-name"><?= $e2($c['friendly']) ?></span>
@@ -253,19 +317,26 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
               <th class="r">Take off (mm)</th>
             </tr></thead>
             <tbody>
-              <?php foreach ($c['rows'] as $cr): $take = $cr['sign'] < 0 ? $cr['n'] : -$cr['n']; ?>
+              <?php foreach ($c['rows'] as $ri => $cr): $take = $cr['sign'] < 0 ? $cr['n'] : -$cr['n']; ?>
               <tr>
                 <?php foreach ($c['active'] as $i): $cell = $cr['cells'][$i] ?? ''; ?>
                   <td><?= $cell === '' ? '<span style="opacity:.5">— any —</span>' : $e2($cell) ?></td>
                 <?php endforeach; ?>
-                <td class="num"><?= $e2(rtrim(rtrim(number_format($take, 2, '.', ''), '0'), '.')) ?></td>
+                <td class="num"><input class="take" type="number" step="any"
+                    name="cut[<?= $e2($c['name']) ?>][<?= (int) $ri ?>]"
+                    value="<?= $e2(rtrim(rtrim(number_format($take, 3, '.', ''), '0'), '.')) ?>"></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
           </table>
           </div>
         </div>
-      <?php endforeach; ?>
+        <?php endforeach; ?>
+        <div class="saverow">
+          <button type="submit" class="savebtn">Save cuts</button>
+          <span>Changes the numbers the worksheet uses. Positive = take off; a negative number adds on.</span>
+        </div>
+      </form>
       <?php endif; ?>
 
       <!-- CALCS -->
