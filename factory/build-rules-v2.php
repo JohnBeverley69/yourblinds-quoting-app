@@ -60,6 +60,16 @@ if ($productId > 0) {
     } catch (Throwable $e) { /* table missing / not migrated */ }
 }
 
+// Allowance tables (for cuts stored as Base + LOOKUP("table", keys...)): resolve
+// the looked-up value so those cuts show as a plain editable number too.
+$alw = [];
+try {
+    $ars = $pdo->query('SELECT table_name, key_norm, value FROM allowance_rows');
+    foreach ($ars->fetchAll(PDO::FETCH_ASSOC) as $a) {
+        $alw[strtolower((string) $a['table_name'])][(string) $a['key_norm']] = (float) $a['value'];
+    }
+} catch (Throwable $e) { /* no allowance_rows */ }
+
 // Friendly names for the cryptic variable codes.
 $FRIENDLY = [
     'H_Cut' => 'Headrail cut', 'Hem_To_Hem' => 'Fabric drop', 'Vanes' => 'Vanes',
@@ -105,26 +115,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         $sel = $pdo->prepare('SELECT rows_json FROM build_variables WHERE product_id = ? AND name = ?');
         $upd = $pdo->prepare('UPDATE build_variables SET rows_json = ? WHERE product_id = ? AND name = ?');
+        $alwUpd = $pdo->prepare('UPDATE allowance_rows SET value = ? WHERE LOWER(table_name) = ? AND key_norm = ?');
         foreach ($edits as $vname => $rowTakes) {
             $vname = (string) $vname;
             $sel->execute([$productId, $vname]);
-            $rj = $sel->fetchColumn();
-            if ($rj === false) continue;
-            $rows = json_decode((string) $rj, true);
-            if (!is_array($rows)) continue;
-            foreach ((array) $rowTakes as $riKey => $takeRaw) {
+            $rj   = $sel->fetchColumn();
+            $rows = ($rj !== false) ? (json_decode((string) $rj, true) ?: []) : [];
+            $dirty = false;
+            foreach ((array) $rowTakes as $targetKey => $takeRaw) {
                 if (trim((string) $takeRaw) === '' || !is_numeric($takeRaw)) continue;
-                // A grid cell may stand for several stored rows (Centre = L+R,
-                // No Thrills folded into Slimline): the key is comma-joined indices.
-                foreach (explode(',', (string) $riKey) as $riStr) {
-                    $ri = (int) $riStr;
-                    if (!isset($rows[$ri])) continue;
-                    $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
-                    if ($p === null) continue;                      // only rewrite clean cut rows
-                    $rows[$ri]['result'] = $buildResult($p['base'], (float) $takeRaw);
+                $take = (float) $takeRaw;
+                // A grid cell may stand for several targets (Centre = L+R, No Thrills
+                // folded in, or several fascias sharing one allowance key).
+                foreach (explode(',', (string) $targetKey) as $tok) {
+                    if (strncmp($tok, 'bv:', 3) === 0) {
+                        $ri = (int) substr($tok, 3);
+                        if (!isset($rows[$ri])) continue;
+                        $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
+                        if ($p === null) continue;
+                        $rows[$ri]['result'] = $buildResult($p['base'], $take);
+                        $dirty = true;
+                    } elseif (strncmp($tok, 'alw:', 4) === 0) {
+                        $rest = explode(':', substr($tok, 4), 2);
+                        if (count($rest) < 2) continue;
+                        // Base + LOOKUP(value): stored value is signed; take-off is its negation.
+                        $alwUpd->execute([-$take, strtolower($rest[0]), $rest[1]]);
+                    }
                 }
             }
-            $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
+            if ($dirty) $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
         }
         // Calcs: an edited formula string per row (kept as-is; these are the real sums).
         foreach ((array) ($_POST['calc'] ?? []) as $vname => $rowsMap) {
@@ -166,14 +185,31 @@ foreach ($vars as $v) {
     $hasBestfit = false;
     foreach ($rawResults as $rr) { if (stripos($rr, 'BESTFIT') !== false) { $hasBestfit = true; break; } }
 
-    // CUT: has rows, and every row parses as the same single base.
+    // CUT: every row is Base ± N (inline, stored in build_variables) OR
+    // Base + LOOKUP("table", keys…) (the take-off lives in an allowance table).
+    // Each row carries its edit target: 'bv:<rowIdx>' or 'alw:<table>:<keynorm>'.
     $cutRows = []; $base = null; $isCut = !empty($rows);
-    foreach ($rows as $r) {
-        $p = $parseCut((string) ($r['result'] ?? ''));
-        if ($p === null) { $isCut = false; break; }
-        if ($base === null) $base = $p['base'];
-        if ($p['base'] !== $base) { $isCut = false; break; }
-        $cutRows[] = ['cells' => array_map('strval', (array) ($r['cells'] ?? [])), 'sign' => $p['sign'], 'n' => $p['n']];
+    foreach ($rows as $ri => $r) {
+        $res   = trim((string) ($r['result'] ?? ''));
+        $cells = array_map('strval', (array) ($r['cells'] ?? []));
+        $p = $parseCut($res);
+        if ($p !== null) {
+            $b = $p['base'];
+            $take = $p['sign'] < 0 ? $p['n'] : -$p['n'];
+            $target = 'bv:' . $ri;
+        } elseif (preg_match('/^(Width|Drop)\s*\+\s*LOOKUP\(\s*"([^"]+)"\s*,\s*(.+)\)$/i', $res, $m)) {
+            $b   = strcasecmp($m[1], 'Drop') === 0 ? 'Drop' : 'Width';
+            $tbl = $m[2];
+            preg_match_all('/"([^"]*)"/', $m[3], $km);
+            $kn  = strtolower(implode('|', array_map('trim', $km[1])));
+            $val = $alw[strtolower($tbl)][$kn] ?? null;
+            if ($val === null) { $isCut = false; break; }   // can't resolve → treat as a formula
+            $take   = -$val;
+            $target = 'alw:' . $tbl . ':' . $kn;
+        } else { $isCut = false; break; }
+        if ($base === null) $base = $b;
+        elseif ($b !== $base) { $isCut = false; break; }
+        $cutRows[] = ['cells' => $cells, 'take' => $take, 'target' => $target];
     }
 
     if ($isCut && $base !== null) {
@@ -236,9 +272,8 @@ foreach ($cuts as $c) {
         }
         $gk = implode('|', array_map('strtolower', $keyParts));
         if (!isset($groups[$gk])) $groups[$gk] = ['keyParts' => $keyParts, 'cells' => []];
-        $take = $r['sign'] < 0 ? $r['n'] : -$r['n'];
-        if (!isset($groups[$gk]['cells'][$basisKey])) $groups[$gk]['cells'][$basisKey] = ['take' => $take, 'idx' => []];
-        $groups[$gk]['cells'][$basisKey]['idx'][] = $ri;
+        if (!isset($groups[$gk]['cells'][$basisKey])) $groups[$gk]['cells'][$basisKey] = ['take' => $r['take'], 'idx' => []];
+        $groups[$gk]['cells'][$basisKey]['idx'][] = $r['target'];
     }
 
     $basisKeys = array_keys($basisSeen);
@@ -538,7 +573,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       foreach ($c['rows'] as $cr) {
           $keys = [];
           foreach ($c['active'] as $i) $keys[] = $cr['cells'][$i] ?? '';
-          $rows[] = ['keys' => $keys, 'sign' => $cr['sign'], 'n' => $cr['n']];
+          $rows[] = ['keys' => $keys, 'take' => $cr['take']];
       }
       return ['name' => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'], 'cols' => $cols, 'rows' => $rows];
   }, $cuts), JSON_UNESCAPED_UNICODE) ?>;
@@ -580,8 +615,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       if (ok){
         var baseVal = (c.base === 'Drop') ? d : w;
         if (isNaN(baseVal)) return null;
-        var val = baseVal + r.sign * r.n;
-        return { val: val, base: baseVal, sign: r.sign, n: r.n };
+        return { val: baseVal - r.take, base: baseVal, take: r.take };
       }
     }
     return null;
@@ -596,8 +630,8 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       var lab = document.createElement('span'); lab.className = 'ol'; lab.textContent = c.friendly;
       var v = document.createElement('span'); v.className = 'ov';
       if (res){
-        var op = res.sign < 0 ? '−' : '+';
-        v.innerHTML = Math.round(res.val) + ' <small>= ' + res.base + ' ' + op + ' ' + res.n + '</small>';
+        var op = res.take >= 0 ? '−' : '+';
+        v.innerHTML = Math.round(res.val) + ' <small>= ' + res.base + ' ' + op + ' ' + Math.abs(res.take) + '</small>';
       } else { v.textContent = '—'; }
       row.appendChild(lab); row.appendChild(v); outEl.appendChild(row);
     });
