@@ -208,15 +208,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $alwUpd = $pdo->prepare('UPDATE allowance_rows SET value = ? WHERE LOWER(table_name) = ? AND key_norm = ?');
         foreach ($edits as $vname => $rowTakes) {
             $vname = (string) $vname;
-            // Each cut declares whether its (always-positive) numbers take off or add on.
-            $dir = (($_POST['cutdir'][$vname] ?? 'deduct') === 'add') ? 'add' : 'deduct';
+            // Each cut declares its direction: deduct (positive shrinks), add
+            // (positive grows), or mixed (the number is the signed change itself).
+            $dirRaw = (string) ($_POST['cutdir'][$vname] ?? 'deduct');
+            $dir = in_array($dirRaw, ['add', 'mixed'], true) ? $dirRaw : 'deduct';
             $sel->execute([$productId, $vname]);
             $rj   = $sel->fetchColumn();
             $rows = ($rj !== false) ? (json_decode((string) $rj, true) ?: []) : [];
             $dirty = false;
             foreach ((array) $rowTakes as $targetKey => $valRaw) {
                 if (trim((string) $valRaw) === '' || !is_numeric($valRaw)) continue;
-                $adj = $dir === 'add' ? (float) $valRaw : -(float) $valRaw;   // signed change
+                $adj = $dir === 'deduct' ? -(float) $valRaw : (float) $valRaw;   // deduct: positive shrinks. add/mixed: value already signed toward the change
                 // A grid cell may stand for several targets (Centre = L+R, No Thrills
                 // folded in, or several fascias sharing one allowance key).
                 foreach (explode(',', (string) $targetKey) as $tok) {
@@ -422,10 +424,10 @@ foreach ($cuts as $c) {
         $gridRows[] = ['disp' => $disp, 'cells' => $cells];
     }
 
-    // Direction: does this cut take off (all rows shrink) or add on (all grow)?
+    // Direction: does this cut take off (shrinks), add on (grows), or both (mixed)?
     $hasPos = false; $hasNeg = false;
     foreach ($c['rows'] as $rr) { if ($rr['take'] > 1e-9) $hasPos = true; elseif ($rr['take'] < -1e-9) $hasNeg = true; }
-    $dir = ($hasNeg && !$hasPos) ? 'add' : 'deduct';
+    $dir = ($hasPos && $hasNeg) ? 'mixed' : ($hasNeg ? 'add' : 'deduct');
 
     $cutsGrid[] = [
         'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'], 'dir' => $dir,
@@ -475,6 +477,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .dirtag{ font-size:.62rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:.1rem .45rem; border-radius:5px; }
   .brv2 .dirtag.off{ background:var(--accent-wash); color:var(--accent-ink); }
   .brv2 .dirtag.add{ background:var(--keep-wash); color:var(--keep); }
+  .brv2 .dirtag.mix{ background:var(--panel); color:var(--soft); }
   .brv2 table{ width:100%; border-collapse:collapse; margin-top:.7rem; font-size:.9rem; }
   .brv2 th{ text-align:left; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);
       font-weight:700; padding:.35rem .6rem; border-bottom:1px solid var(--line); }
@@ -596,13 +599,17 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <div class="grouplabel"><span>Cuts &nbsp;·&nbsp; measurement − allowance</span><span class="badge prints">prints on the ticket</span><span class="ln"></span></div>
       <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>">
         <?= csrf_field() ?>
-        <?php foreach ($cutsGrid as $c): $isAdd = $c['dir'] === 'add'; ?>
+        <?php foreach ($cutsGrid as $c): $dir = $c['dir'];
+          $def  = $dir === 'add' ? '+ <span class="n">add&nbsp;on</span>' : ($dir === 'mixed' ? '<span class="n">± adjust</span>' : '− <span class="n">take&nbsp;off</span>');
+          $tag  = $dir === 'add' ? 'numbers add on (mm)' : ($dir === 'mixed' ? '+ bigger · − smaller (mm)' : 'numbers take off (mm)');
+          $tagc = $dir === 'add' ? 'add' : ($dir === 'mixed' ? 'mix' : 'off');
+        ?>
         <div class="cut">
-          <input type="hidden" name="cutdir[<?= $e2($c['name']) ?>]" value="<?= $isAdd ? 'add' : 'deduct' ?>">
+          <input type="hidden" name="cutdir[<?= $e2($c['name']) ?>]" value="<?= $e2($dir) ?>">
           <div class="cut-top">
             <span class="cut-name"><?= $e2($c['friendly']) ?></span>
-            <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $isAdd ? '+ <span class="n">add&nbsp;on</span>' : '− <span class="n">take&nbsp;off</span>' ?></span>
-            <span class="dirtag <?= $isAdd ? 'add' : 'off' ?>"><?= $isAdd ? 'numbers add on (mm)' : 'numbers take off (mm)' ?></span>
+            <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $def ?></span>
+            <span class="dirtag <?= $tagc ?>"><?= $e2($tag) ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
           </div>
           <div class="scroll">
@@ -618,7 +625,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
                   <td><?= $e2($gr['disp'][$ci] ?? '—') ?></td>
                 <?php endforeach; ?>
                 <?php foreach ($c['basisKeys'] as $bk): $cell = $gr['cells'][$bk]; ?>
-                  <td class="num"><?php if ($cell): $amt = $isAdd ? -$cell['take'] : $cell['take']; ?><input class="take" type="number" step="any" min="0"
+                  <td class="num"><?php if ($cell): $amt = $dir === 'deduct' ? $cell['take'] : -$cell['take']; ?><input class="take" type="number" step="any"<?= $dir === 'mixed' ? '' : ' min="0"' ?>
                       name="cut[<?= $e2($c['name']) ?>][<?= $e2($cell['idxKey']) ?>]"
                       value="<?= $e2(rtrim(rtrim(number_format($amt, 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
                 <?php endforeach; ?>
