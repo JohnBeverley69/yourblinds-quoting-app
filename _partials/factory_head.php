@@ -33,8 +33,7 @@ if (function_exists('is_super_admin') && is_super_admin()) {
 }
 $factoryNavItems += [
     'routes'     => ['/factory/routes.php',          'Routes'],
-    'build'      => ['/factory/build-rules.php',     'Build rules'],
-    'buildv2'    => ['/factory/build-rules-v2.php',  'Build rules v2'],
+    'build'      => ['/factory/build-rules-v2.php',  'Build rules'],
     'allowances' => ['/factory/allowances.php',      'Allowances'],
     'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
     'labelsheet' => ['/factory/label-test-sheet.php', 'Label sheet'],
