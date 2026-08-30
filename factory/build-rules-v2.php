@@ -145,11 +145,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = preg_replace('/[^A-Za-z0-9_]/', '', str_replace(' ', '_', trim((string) ($_POST['newname'] ?? ''))));
         if ($name === '') { $_SESSION['flash_error'] = 'Give the new rule a name (letters, digits, underscores).'; header("Location: $redirect"); exit; }
 
-        $mk = static function ($take, string $base): string {
-            $t = (float) $take;
-            if (abs($t) < 1e-9) return $base;
-            $n = rtrim(rtrim(number_format(abs($t), 3, '.', ''), '0'), '.');
-            return $t > 0 ? "$base - $n" : "$base + $n";
+        // Numbers from the form are always positive; the direction says which way.
+        $dir = ($_POST['dir'] ?? 'deduct') === 'add' ? 'add' : 'deduct';
+        $mk = static function ($amount, string $base) use ($dir): string {
+            $adj = $dir === 'add' ? (float) $amount : -(float) $amount;   // signed change
+            if (abs($adj) < 1e-9) return $base;
+            $n = rtrim(rtrim(number_format(abs($adj), 3, '.', ''), '0'), '.');
+            return $adj < 0 ? "$base - $n" : "$base + $n";
         };
 
         $columns = []; $rows = []; $err = null;
@@ -163,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $vals    = (array) ($_POST['cutval'] ?? []);
             if ($depends === '' || !isset($sourceByRef[$depends])) {
                 $flat = $vals['__flat__'] ?? '';
-                if (trim((string) $flat) === '' || !is_numeric($flat)) $err = 'Enter a take-off number.';
+                if (trim((string) $flat) === '' || !is_numeric($flat)) $err = 'Enter a number (mm).';
                 else $rows = [['cells' => [], 'result' => $mk($flat, $base)]];
             } else {
                 $src = $sourceByRef[$depends];
@@ -173,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (trim((string) $t) === '' || !is_numeric($t)) continue;
                     $rows[] = ['cells' => [$v], 'result' => $mk($t, $base)];
                 }
-                if (!$rows) $err = 'Enter a take-off number for at least one option.';
+                if (!$rows) $err = 'Enter a number for at least one option.';
             }
         }
         if ($err !== null) { $_SESSION['flash_error'] = $err; header("Location: $redirect"); exit; }
@@ -193,10 +195,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $edits = (array) ($_POST['cut'] ?? []);   // [ varName => [ rowIdx => takeoff ] ]
     $fmtN = static fn ($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
-    $buildResult = static function (string $base, float $take) use ($fmtN): string {
-        if (abs($take) < 1e-9) return $base;                       // no change
-        return $take > 0 ? $base . ' - ' . $fmtN($take)            // take off
-                         : $base . ' + ' . $fmtN(abs($take));      // add on
+    // $adj is the actual change to the measurement: negative shrinks, positive grows.
+    $buildResult = static function (string $base, float $adj) use ($fmtN): string {
+        if (abs($adj) < 1e-9) return $base;
+        return $adj < 0 ? $base . ' - ' . $fmtN(abs($adj))
+                        : $base . ' + ' . $fmtN($adj);
     };
     try {
         $pdo->beginTransaction();
@@ -205,13 +208,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $alwUpd = $pdo->prepare('UPDATE allowance_rows SET value = ? WHERE LOWER(table_name) = ? AND key_norm = ?');
         foreach ($edits as $vname => $rowTakes) {
             $vname = (string) $vname;
+            // Each cut declares whether its (always-positive) numbers take off or add on.
+            $dir = (($_POST['cutdir'][$vname] ?? 'deduct') === 'add') ? 'add' : 'deduct';
             $sel->execute([$productId, $vname]);
             $rj   = $sel->fetchColumn();
             $rows = ($rj !== false) ? (json_decode((string) $rj, true) ?: []) : [];
             $dirty = false;
-            foreach ((array) $rowTakes as $targetKey => $takeRaw) {
-                if (trim((string) $takeRaw) === '' || !is_numeric($takeRaw)) continue;
-                $take = (float) $takeRaw;
+            foreach ((array) $rowTakes as $targetKey => $valRaw) {
+                if (trim((string) $valRaw) === '' || !is_numeric($valRaw)) continue;
+                $adj = $dir === 'add' ? (float) $valRaw : -(float) $valRaw;   // signed change
                 // A grid cell may stand for several targets (Centre = L+R, No Thrills
                 // folded in, or several fascias sharing one allowance key).
                 foreach (explode(',', (string) $targetKey) as $tok) {
@@ -220,13 +225,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (!isset($rows[$ri])) continue;
                         $p = $parseCut((string) ($rows[$ri]['result'] ?? ''));
                         if ($p === null) continue;
-                        $rows[$ri]['result'] = $buildResult($p['base'], $take);
+                        $rows[$ri]['result'] = $buildResult($p['base'], $adj);
                         $dirty = true;
                     } elseif (strncmp($tok, 'alw:', 4) === 0) {
                         $rest = explode(':', substr($tok, 4), 2);
                         if (count($rest) < 2) continue;
-                        // Base + LOOKUP(value): stored value is signed; take-off is its negation.
-                        $alwUpd->execute([-$take, strtolower($rest[0]), $rest[1]]);
+                        // Base + LOOKUP(value): the stored allowance IS the signed change.
+                        $alwUpd->execute([$adj, strtolower($rest[0]), $rest[1]]);
                     }
                 }
             }
@@ -417,8 +422,13 @@ foreach ($cuts as $c) {
         $gridRows[] = ['disp' => $disp, 'cells' => $cells];
     }
 
+    // Direction: does this cut take off (all rows shrink) or add on (all grow)?
+    $hasPos = false; $hasNeg = false;
+    foreach ($c['rows'] as $rr) { if ($rr['take'] > 1e-9) $hasPos = true; elseif ($rr['take'] < -1e-9) $hasNeg = true; }
+    $dir = ($hasNeg && !$hasPos) ? 'add' : 'deduct';
+
     $cutsGrid[] = [
-        'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'],
+        'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'], 'dir' => $dir,
         'keyCols'   => $keyCols,
         'keyLabels' => array_map(static fn ($i) => $labels[$i] ?? '', $keyCols),
         'basisKeys' => $basisKeys,
@@ -462,6 +472,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .cut-def{ font-family:ui-monospace,Menlo,monospace; font-size:.85rem; color:var(--soft); }
   .brv2 .cut-def .m{ color:var(--accent); font-weight:600; } .brv2 .cut-def .n{ color:var(--num); font-weight:600; }
   .brv2 .code-name{ font-family:ui-monospace,Menlo,monospace; font-size:.72rem; color:var(--faint); }
+  .brv2 .dirtag{ font-size:.62rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:.1rem .45rem; border-radius:5px; }
+  .brv2 .dirtag.off{ background:var(--accent-wash); color:var(--accent-ink); }
+  .brv2 .dirtag.add{ background:var(--keep-wash); color:var(--keep); }
   .brv2 table{ width:100%; border-collapse:collapse; margin-top:.7rem; font-size:.9rem; }
   .brv2 th{ text-align:left; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);
       font-weight:700; padding:.35rem .6rem; border-bottom:1px solid var(--line); }
@@ -583,11 +596,13 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <div class="grouplabel"><span>Cuts &nbsp;·&nbsp; measurement − allowance</span><span class="badge prints">prints on the ticket</span><span class="ln"></span></div>
       <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>">
         <?= csrf_field() ?>
-        <?php foreach ($cutsGrid as $c): ?>
+        <?php foreach ($cutsGrid as $c): $isAdd = $c['dir'] === 'add'; ?>
         <div class="cut">
+          <input type="hidden" name="cutdir[<?= $e2($c['name']) ?>]" value="<?= $isAdd ? 'add' : 'deduct' ?>">
           <div class="cut-top">
             <span class="cut-name"><?= $e2($c['friendly']) ?></span>
-            <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> − <span class="n">take-off</span></span>
+            <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $isAdd ? '+ <span class="n">add&nbsp;on</span>' : '− <span class="n">take&nbsp;off</span>' ?></span>
+            <span class="dirtag <?= $isAdd ? 'add' : 'off' ?>"><?= $isAdd ? 'numbers add on (mm)' : 'numbers take off (mm)' ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
           </div>
           <div class="scroll">
@@ -603,9 +618,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
                   <td><?= $e2($gr['disp'][$ci] ?? '—') ?></td>
                 <?php endforeach; ?>
                 <?php foreach ($c['basisKeys'] as $bk): $cell = $gr['cells'][$bk]; ?>
-                  <td class="num"><?php if ($cell): ?><input class="take" type="number" step="any"
+                  <td class="num"><?php if ($cell): $amt = $isAdd ? -$cell['take'] : $cell['take']; ?><input class="take" type="number" step="any" min="0"
                       name="cut[<?= $e2($c['name']) ?>][<?= $e2($cell['idxKey']) ?>]"
-                      value="<?= $e2(rtrim(rtrim(number_format($cell['take'], 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
+                      value="<?= $e2(rtrim(rtrim(number_format($amt, 3, '.', ''), '0'), '.')) ?>"><?php else: ?><span style="opacity:.35">—</span><?php endif; ?></td>
                 <?php endforeach; ?>
               </tr>
               <?php endforeach; ?>
@@ -616,7 +631,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <?php endforeach; ?>
         <div class="saverow">
           <button type="submit" class="savebtn">Save cuts</button>
-          <span>Changes the numbers the worksheet uses. Positive = take off; a negative number adds on.</span>
+          <span>Every number is millimetres. Each cut's heading says whether it <b>takes off</b> or <b>adds on</b>.</span>
         </div>
       </form>
       <?php endif; ?>
@@ -702,7 +717,8 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="addcut">
           <div class="af-row"><label>Name <small>(no spaces)</small></label><input type="text" name="newname" placeholder="e.g. Fabric_Cut" required></div>
-          <div class="af-row"><label>Take off from</label><select name="base"><option value="Width">Width</option><option value="Drop">Drop</option></select></div>
+          <div class="af-row"><label>Based on</label><select name="base"><option value="Width">Width</option><option value="Drop">Drop</option></select></div>
+          <div class="af-row"><label>This cut</label><select name="dir"><option value="deduct">takes off (makes it smaller)</option><option value="add">adds on (makes it bigger)</option></select></div>
           <div class="af-row"><label>Depends on</label>
             <select name="depends" id="newcut_depends">
               <option value="">Nothing — one value for all</option>
@@ -711,7 +727,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
           </div>
           <div id="newcut_vals" class="af-vals"></div>
           <div><button type="submit" class="savebtn">Add cut</button></div>
-          <p class="af-hint">Positive number = take off; a negative number adds on. Refine it in the grid above afterwards.</p>
+          <p class="af-hint">Enter the millimetres as a plain positive number — the "takes off / adds on" choice above sets the direction. You can refine it in the grid afterwards.</p>
         </form>
       </details>
       <details class="addbox">
@@ -740,7 +756,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       function render(){
         box.innerHTML = '';
         var ref = sel.value;
-        if (!ref) { box.appendChild(field('Take off (mm)', 'cutval[__flat__]')); return; }
+        if (!ref) { box.appendChild(field('Amount (mm)', 'cutval[__flat__]')); return; }
         var src = SOURCES.filter(function(s){ return s.ref === ref; })[0];
         if (src) src.values.forEach(function(v){ box.appendChild(field(v, 'cutval[' + v + ']')); });
       }
