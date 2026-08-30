@@ -25,14 +25,14 @@ requireFactory();
 $pdo    = db();
 $MASTER = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
 
-// Products that have build variables (master "Bev …" catalogue), for the picker.
+// All master "Bev …" products (including ones with no rules yet, so you can
+// start a product from blank right here).
 $products = [];
 try {
     $ps = $pdo->prepare(
-        "SELECT DISTINCT p.id, p.name
-           FROM products p JOIN build_variables v ON v.product_id = p.id
-          WHERE p.client_id = ? AND p.name LIKE 'Bev%'
-          ORDER BY p.name"
+        "SELECT id, name FROM products
+          WHERE client_id = ? AND name LIKE 'Bev%'
+          ORDER BY name"
     );
     $ps->execute([$MASTER]);
     $products = $ps->fetchAll(PDO::FETCH_ASSOC);
@@ -70,6 +70,38 @@ try {
     }
 } catch (Throwable $e) { /* no allowance_rows */ }
 
+// Option sources for this product (what a new cut can be driven by): the System
+// axis plus each option group and its distinct choice labels. Same shape the old
+// editor uses. Feeds the "depends on" picker in the add-cut form.
+$optionSources = [];
+if ($productId > 0) {
+    try {
+        $ss = $pdo->prepare("SELECT name FROM product_systems WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name");
+        $ss->execute([$productId, $MASTER]);
+        $systems = $ss->fetchAll(PDO::FETCH_COLUMN);
+        if ($systems) $optionSources[] = ['ref' => 'system', 'label' => 'System', 'values' => array_values($systems)];
+    } catch (Throwable $e) { /* none */ }
+    try {
+        $gs = $pdo->prepare("SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name");
+        $gs->execute([$productId, $MASTER]);
+        $extraRows = $gs->fetchAll(PDO::FETCH_ASSOC);
+        if ($extraRows) {
+            $ids = array_map(static fn ($r) => (int) $r['id'], $extraRows);
+            $in  = implode(',', array_fill(0, count($ids), '?'));
+            $cs  = $pdo->prepare("SELECT product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($in) AND active = 1 ORDER BY product_extra_id, sort_order, label");
+            $cs->execute($ids);
+            $byExtra = [];
+            foreach ($cs->fetchAll(PDO::FETCH_ASSOC) as $c) { $byExtra[(int) $c['product_extra_id']][(string) $c['label']] = true; }
+            foreach ($extraRows as $er) {
+                $eid = (int) $er['id'];
+                $optionSources[] = ['ref' => 'extra:' . $eid, 'label' => (string) $er['name'], 'values' => array_keys($byExtra[$eid] ?? [])];
+            }
+        }
+    } catch (Throwable $e) { /* none */ }
+}
+$sourceByRef = [];
+foreach ($optionSources as $os) $sourceByRef[$os['ref']] = $os;
+
 // Friendly names for the cryptic variable codes.
 $FRIENDLY = [
     'H_Cut' => 'Headrail cut', 'Hem_To_Hem' => 'Fabric drop', 'Vanes' => 'Vanes',
@@ -104,6 +136,61 @@ $parseCut = static function (string $result): ?array {
 // The worksheet reads these same rows, so a save drives the real ticket.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    $action = (string) ($_POST['action'] ?? '');
+
+    // ---- Create a brand-new rule (cut or calc) --------------------------------
+    if ($action === 'addcut' || $action === 'addcalc') {
+        $redirect = '/factory/build-rules-v2.php?product_id=' . $productId;
+        // Names are code, not labels: no spaces, letters/digits/underscore only.
+        $name = preg_replace('/[^A-Za-z0-9_]/', '', str_replace(' ', '_', trim((string) ($_POST['newname'] ?? ''))));
+        if ($name === '') { $_SESSION['flash_error'] = 'Give the new rule a name (letters, digits, underscores).'; header("Location: $redirect"); exit; }
+
+        $mk = static function ($take, string $base): string {
+            $t = (float) $take;
+            if (abs($t) < 1e-9) return $base;
+            $n = rtrim(rtrim(number_format(abs($t), 3, '.', ''), '0'), '.');
+            return $t > 0 ? "$base - $n" : "$base + $n";
+        };
+
+        $columns = []; $rows = []; $err = null;
+        if ($action === 'addcalc') {
+            $formula = trim((string) ($_POST['formula'] ?? ''));
+            if ($formula === '') $err = 'Enter a formula for the calc.';
+            else $rows = [['cells' => [], 'result' => $formula]];
+        } else { // addcut
+            $base    = ($_POST['base'] ?? 'Width') === 'Drop' ? 'Drop' : 'Width';
+            $depends = (string) ($_POST['depends'] ?? '');
+            $vals    = (array) ($_POST['cutval'] ?? []);
+            if ($depends === '' || !isset($sourceByRef[$depends])) {
+                $flat = $vals['__flat__'] ?? '';
+                if (trim((string) $flat) === '' || !is_numeric($flat)) $err = 'Enter a take-off number.';
+                else $rows = [['cells' => [], 'result' => $mk($flat, $base)]];
+            } else {
+                $src = $sourceByRef[$depends];
+                $columns = [['label' => $src['label'], 'ref' => $src['ref']]];
+                foreach ($src['values'] as $v) {
+                    $t = $vals[$v] ?? '';
+                    if (trim((string) $t) === '' || !is_numeric($t)) continue;
+                    $rows[] = ['cells' => [$v], 'result' => $mk($t, $base)];
+                }
+                if (!$rows) $err = 'Enter a take-off number for at least one option.';
+            }
+        }
+        if ($err !== null) { $_SESSION['flash_error'] = $err; header("Location: $redirect"); exit; }
+
+        try {
+            $seqStmt = $pdo->prepare('SELECT COALESCE(MAX(seq), -1) + 1 FROM build_variables WHERE product_id = ?');
+            $seqStmt->execute([$productId]);
+            $seq = (int) $seqStmt->fetchColumn();
+            $ins = $pdo->prepare('INSERT INTO build_variables (product_id, name, seq, columns_json, rows_json) VALUES (?, ?, ?, ?, ?)');
+            $ins->execute([$productId, $name, $seq, json_encode($columns, JSON_UNESCAPED_UNICODE), json_encode($rows, JSON_UNESCAPED_UNICODE)]);
+            $_SESSION['flash_success'] = "Added “{$name}”. Edit it below any time.";
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = "Could not add “{$name}” — a rule with that name may already exist on this product.";
+        }
+        header("Location: $redirect"); exit;
+    }
+
     $edits = (array) ($_POST['cut'] ?? []);   // [ varName => [ rowIdx => takeoff ] ]
     $fmtN = static fn ($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
     $buildResult = static function (string $base, float $take) use ($fmtN): string {
@@ -444,6 +531,21 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 a.chartlink:hover{ text-decoration:underline; }
   .brv2 a.advlink{ margin-left:auto; font-size:.8rem; color:var(--faint); text-decoration:none; }
   .brv2 a.advlink:hover{ color:var(--accent-ink); text-decoration:underline; }
+  .brv2 .addwrap{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:940px; }
+  @media(max-width:720px){ .brv2 .addwrap{ grid-template-columns:1fr; } }
+  .brv2 details.addbox{ background:var(--surface); border:1px solid var(--line); border-radius:11px; }
+  .brv2 details.addbox summary{ cursor:pointer; font-weight:700; padding:.7rem .9rem; list-style:none; }
+  .brv2 details.addbox summary::-webkit-details-marker{ display:none; }
+  .brv2 details.addbox summary span{ font-weight:500; font-size:.8rem; color:var(--faint); margin-left:.4rem; }
+  .brv2 .addform{ padding:.2rem 1rem 1rem; display:flex; flex-direction:column; gap:.6rem; }
+  .brv2 .af-row{ display:flex; align-items:center; gap:.7rem; flex-wrap:wrap; }
+  .brv2 .af-row label{ font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); font-weight:700; min-width:6.5rem; }
+  .brv2 .af-row label small{ text-transform:none; letter-spacing:0; font-weight:500; }
+  .brv2 .af-row input[type=text], .brv2 .af-row select{ font:inherit; padding:.4rem .55rem; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); }
+  .brv2 .af-row input[type=text]{ flex:1; min-width:10rem; }
+  .brv2 .af-wide input{ font-family:ui-monospace,Menlo,monospace; }
+  .brv2 .af-vals{ display:flex; flex-direction:column; gap:.5rem; }
+  .brv2 .af-hint{ font-size:.78rem; color:var(--soft); margin:.1rem 0 0; }
 
   @media (prefers-color-scheme:dark){
     .brv2:not([data-lit]){ --ink:#e8eef3; --soft:#a3b0bc; --faint:#6e7d89; --line:#2b343d; --line-2:#232b33;
@@ -472,7 +574,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   </div>
 
   <?php if (!$vars): ?>
-    <div class="empty">No build variables found for this product<?= $productName ? ' (' . $e2($productName) . ')' : '' ?>. Pick another product, or this one hasn't been set up yet.</div>
+    <div class="empty"><b><?= $e2($productName ?: 'This product') ?></b> has no rules yet. Add your first one below — a <b>Cut</b> (a measurement minus an allowance) or a <b>Calc</b> (a formula). As soon as you add one, it appears here to edit.</div>
   <?php else: ?>
   <div class="layout">
     <div>
@@ -589,6 +691,63 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <div class="out" id="t_out"></div>
     </div>
   </div>
+  <?php endif; ?>
+
+  <?php if ($productId > 0): ?>
+    <div class="grouplabel" style="margin-top:2.4rem"><span>Add a rule</span><span class="ln"></span></div>
+    <div class="addwrap">
+      <details class="addbox">
+        <summary>+ Add a cut <span>measurement − allowance</span></summary>
+        <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" class="addform">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="addcut">
+          <div class="af-row"><label>Name <small>(no spaces)</small></label><input type="text" name="newname" placeholder="e.g. Fabric_Cut" required></div>
+          <div class="af-row"><label>Take off from</label><select name="base"><option value="Width">Width</option><option value="Drop">Drop</option></select></div>
+          <div class="af-row"><label>Depends on</label>
+            <select name="depends" id="newcut_depends">
+              <option value="">Nothing — one value for all</option>
+              <?php foreach ($optionSources as $os): ?><option value="<?= $e2($os['ref']) ?>"><?= $e2($os['label']) ?></option><?php endforeach; ?>
+            </select>
+          </div>
+          <div id="newcut_vals" class="af-vals"></div>
+          <div><button type="submit" class="savebtn">Add cut</button></div>
+          <p class="af-hint">Positive number = take off; a negative number adds on. Refine it in the grid above afterwards.</p>
+        </form>
+      </details>
+      <details class="addbox">
+        <summary>+ Add a calc <span>a formula</span></summary>
+        <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" class="addform">
+          <?= csrf_field() ?>
+          <input type="hidden" name="action" value="addcalc">
+          <div class="af-row"><label>Name <small>(no spaces)</small></label><input type="text" name="newname" placeholder="e.g. Vanes" required></div>
+          <div class="af-row af-wide"><label>Formula</label><input type="text" name="formula" class="formula" spellcheck="false" placeholder="e.g. Trucks + 1"></div>
+          <div><button type="submit" class="savebtn">Add calc</button></div>
+          <p class="af-hint">Use variable names (Width, Drop, and any rules above this one) with + − × ÷, IF(), ROUNDUP()…</p>
+        </form>
+      </details>
+    </div>
+    <script>
+    (function(){
+      var SOURCES = <?= json_encode(array_map(static fn ($s) => ['ref' => $s['ref'], 'label' => $s['label'], 'values' => array_values($s['values'])], $optionSources), JSON_UNESCAPED_UNICODE) ?>;
+      var sel = document.getElementById('newcut_depends'), box = document.getElementById('newcut_vals');
+      if (!sel || !box) return;
+      function field(labelText, name){
+        var w = document.createElement('div'); w.className = 'af-row';
+        var l = document.createElement('label'); l.textContent = labelText; w.appendChild(l);
+        var i = document.createElement('input'); i.type = 'number'; i.step = 'any'; i.name = name; i.className = 'take'; w.appendChild(i);
+        return w;
+      }
+      function render(){
+        box.innerHTML = '';
+        var ref = sel.value;
+        if (!ref) { box.appendChild(field('Take off (mm)', 'cutval[__flat__]')); return; }
+        var src = SOURCES.filter(function(s){ return s.ref === ref; })[0];
+        if (src) src.values.forEach(function(v){ box.appendChild(field(v, 'cutval[' + v + ']')); });
+      }
+      sel.addEventListener('change', render);
+      render();
+    })();
+    </script>
   <?php endif; ?>
 </div>
 
