@@ -102,6 +102,42 @@ if ($productId > 0) {
 $sourceByRef = [];
 foreach ($optionSources as $os) $sourceByRef[$os['ref']] = $os;
 
+// ---- Formula help: valid names + a validator that mirrors the real engine ----
+// The names a formula on THIS product may reference: the built-ins plus every
+// rule on the product. Powers the clickable chips AND the "Check" validation.
+require_once __DIR__ . '/../_partials/build_eval.php';   // be_norm_math + formula_eval (via formula_engine)
+$validNames = ['Width', 'Drop', 'Fit_height', 'Quantity'];
+foreach ($vars as $v) $validNames[] = (string) $v['name'];
+$validNames = array_values(array_unique(array_filter($validNames)));
+
+$checkFormula = static function (string $formula) use ($validNames, $alw): array {
+    $formula = trim($formula);
+    if ($formula === '') return ['ok' => false, 'error' => 'The formula is empty.'];
+    $pool = [];
+    foreach ($validNames as $n) $pool[$n] = 10.0;                 // sample values
+    $pool['Width'] = 1200.0; $pool['Drop'] = 1500.0; $pool['Quantity'] = 10.0; $pool['Fit_height'] = 0.0;
+    try {
+        $r = formula_eval(be_norm_math($formula), $pool, $alw);
+        return ['ok' => true, 'result' => is_numeric($r) ? (float) $r : (string) $r];
+    } catch (Throwable $e) {
+        $msg = $e->getMessage();
+        $suggest = '';
+        if (preg_match('/([A-Za-z_][A-Za-z0-9_]*)/', $msg, $m) && stripos($msg, 'variable') !== false) {
+            $bad = $m[1]; $bestD = 99;
+            foreach ($validNames as $n) { $d = levenshtein(strtolower($bad), strtolower($n)); if ($d < $bestD) { $bestD = $d; $suggest = $n; } }
+            if ($bestD < 1 || $bestD > 3) $suggest = '';
+        }
+        return ['ok' => false, 'error' => $msg, 'suggest' => $suggest];
+    }
+};
+
+// Live "Check" endpoint for the formula helper (GET, returns JSON).
+if (($_GET['action'] ?? '') === 'checkcalc') {
+    header('Content-Type: application/json');
+    echo json_encode($checkFormula((string) ($_GET['formula'] ?? '')));
+    exit;
+}
+
 // Friendly names for the cryptic variable codes.
 $FRIENDLY = [
     'H_Cut' => 'Headrail cut', 'Hem_To_Hem' => 'Fabric drop', 'Vanes' => 'Vanes',
@@ -167,8 +203,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $columns = []; $rows = []; $err = null;
         if ($action === 'addcalc') {
             $formula = trim((string) ($_POST['formula'] ?? ''));
-            if ($formula === '') $err = 'Enter a formula for the calc.';
-            else $rows = [['cells' => [], 'result' => $formula]];
+            if ($formula === '') {
+                $err = 'Enter a formula for the calc.';
+            } else {
+                $chk = $checkFormula($formula);
+                if (!$chk['ok']) $err = "That formula won't run: " . $chk['error'] . (!empty($chk['suggest']) ? " — did you mean “{$chk['suggest']}”?" : '');
+                else $rows = [['cells' => [], 'result' => $formula]];
+            }
         } else { // addcut
             $base    = ($_POST['base'] ?? 'Width') === 'Drop' ? 'Drop' : 'Width';
             $depends = (string) ($_POST['depends'] ?? '');
@@ -259,7 +300,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if ($dirty) $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
         }
-        // Calcs: an edited formula string per row (kept as-is; these are the real sums).
+        // Calcs: an edited formula string per row. A formula that won't run is
+        // left unchanged (not saved), so a typo can't silently break a ticket.
+        $badCalcs = [];
         foreach ((array) ($_POST['calc'] ?? []) as $vname => $rowsMap) {
             $vname = (string) $vname;
             $sel->execute([$productId, $vname]);
@@ -267,17 +310,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($rj === false) continue;
             $rows = json_decode((string) $rj, true);
             if (!is_array($rows)) continue;
+            $changed = false;
             foreach ((array) $rowsMap as $ri => $formula) {
                 $ri = (int) $ri;
                 if (!isset($rows[$ri])) continue;
                 $f = trim((string) $formula);
                 if ($f === '') continue;
-                $rows[$ri]['result'] = $f;
+                if (!$checkFormula($f)['ok']) { $badCalcs[] = $vname; continue; }
+                $rows[$ri]['result'] = $f; $changed = true;
             }
-            $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
+            if ($changed) $upd->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $productId, $vname]);
         }
         $pdo->commit();
-        $_SESSION['flash_success'] = 'Saved — the worksheet now uses these numbers.';
+        if (!empty($badCalcs)) {
+            $_SESSION['flash_error'] = 'Saved — but these formulas had an error and were left as they were: '
+                . implode(', ', array_values(array_unique($badCalcs))) . '. Fix the formula and save again.';
+        } else {
+            $_SESSION['flash_success'] = 'Saved — the worksheet now uses these numbers.';
+        }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
@@ -604,6 +654,18 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .af-wide input{ font-family:ui-monospace,Menlo,monospace; }
   .brv2 .af-vals{ display:flex; flex-direction:column; gap:.5rem; }
   .brv2 .af-hint{ font-size:.78rem; color:var(--soft); margin:.1rem 0 0; }
+  .brv2 .palette{ background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:.6rem .7rem; }
+  .brv2 .pal-row{ display:flex; flex-wrap:wrap; gap:.35rem; }
+  .brv2 .pal-lbl{ font-size:.7rem; color:var(--faint); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin:.6rem 0 .35rem; }
+  .brv2 .chip{ font:inherit; font-size:.82rem; cursor:pointer; border:1px solid var(--line); border-radius:6px; padding:.2rem .55rem; background:var(--surface); color:var(--ink); }
+  .brv2 .chip.fn{ font-family:ui-monospace,Menlo,monospace; }
+  .brv2 .chip.var{ color:var(--accent-ink); font-weight:600; }
+  .brv2 .chip:hover{ border-color:var(--accent); }
+  .brv2 .checkbtn{ font:inherit; font-weight:600; cursor:pointer; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:7px; padding:.35rem .8rem; }
+  .brv2 .checkbtn:hover{ border-color:var(--accent); }
+  .brv2 .checkout{ font-size:.85rem; font-weight:600; }
+  .brv2 .checkout.ok{ color:var(--keep); }
+  .brv2 .checkout.bad{ color:#c0392b; }
 
   @media (prefers-color-scheme:dark){
     .brv2:not([data-lit]){ --ink:#e8eef3; --soft:#a3b0bc; --faint:#6e7d89; --line:#2b343d; --line-2:#232b33;
@@ -790,13 +852,29 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       </details>
       <details class="addbox">
         <summary>+ Add a calc <span>a formula</span></summary>
-        <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" class="addform">
+        <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" class="addform" id="calcform">
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="addcalc">
-          <div class="af-row"><label>Name <small>(no spaces)</small></label><input type="text" name="newname" placeholder="e.g. Vanes" required></div>
-          <div class="af-row af-wide"><label>Formula</label><input type="text" name="formula" class="formula" spellcheck="false" placeholder="e.g. Trucks + 1"></div>
+          <div class="af-row"><label>Name <small>(no spaces)</small></label><input type="text" name="newname" id="calc_name" placeholder="e.g. Vanes" required></div>
+          <div class="af-row"><label>Start from</label>
+            <select id="calc_starter">
+              <option value="">— blank, or pick a common one —</option>
+              <option value="Quantity + 1" data-name="Vanes">Vanes — quantity + 1 (spare)</option>
+              <option value="Trucks + 1" data-name="Vanes">Vanes — trucks + 1</option>
+              <option value="ROUNDUP((Drop + 95) * Vanes / 1000)" data-name="Metres">Fabric metres — total</option>
+              <option value="(Drop + 95) / 1000" data-name="Metres">Fabric metres — per vane</option>
+              <option value="2 * Width" data-name="Cord">Draw cord — 2 × width</option>
+            </select>
+          </div>
+          <div class="af-row af-wide"><label>Formula</label><input type="text" name="formula" id="calc_formula" class="formula" spellcheck="false" placeholder="click the buttons below, or type"></div>
+          <div class="palette">
+            <div class="pal-row" id="pal_funcs"></div>
+            <div class="pal-lbl">Values you can use — click to drop one in:</div>
+            <div class="pal-row" id="pal_vars"></div>
+          </div>
+          <div class="af-row"><button type="button" class="checkbtn" id="calc_check_btn">Check it</button><span id="calc_check" class="checkout"></span></div>
           <div><button type="submit" class="savebtn">Add calc</button></div>
-          <p class="af-hint">Use variable names (Width, Drop, and any rules above this one) with + − × ÷, IF(), ROUNDUP()…</p>
+          <p class="af-hint">No need to remember names — click the chips. <b>Check it</b> tells you if it'll run (and roughly what it gives) before you save; a formula that won't run is refused.</p>
         </form>
       </details>
     </div>
@@ -820,6 +898,68 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       }
       sel.addEventListener('change', render);
       render();
+    })();
+    </script>
+    <script>
+    (function(){
+      var NAMES = <?= json_encode($validNames, JSON_UNESCAPED_UNICODE) ?>;
+      var PID = <?= (int) $productId ?>;
+      var formula = document.getElementById('calc_formula');
+      var nameEl  = document.getElementById('calc_name');
+      var out     = document.getElementById('calc_check');
+      if (!formula) return;
+
+      var FUNCS = [
+        {t:'+', ins:' + '}, {t:'−', ins:' - '}, {t:'×', ins:' * '}, {t:'÷', ins:' / '},
+        {t:'( )', ins:'()', off:-1},
+        {t:'Round up', ins:'ROUNDUP()', off:-1}, {t:'Round', ins:'ROUND()', off:-1},
+        {t:'Round down', ins:'ROUNDDOWN()', off:-1}, {t:'Even', ins:'EVEN()', off:-1},
+        {t:'If…', ins:'IF( , , )', off:-6}, {t:'Min', ins:'MIN( , )', off:-3}, {t:'Max', ins:'MAX( , )', off:-3}
+      ];
+
+      function insAt(text, off){
+        off = off || 0;
+        var s = formula.selectionStart, e = formula.selectionEnd, v = formula.value;
+        if (s == null) { s = e = v.length; }
+        formula.value = v.slice(0, s) + text + v.slice(e);
+        var pos = s + text.length + off;
+        formula.focus(); try { formula.setSelectionRange(pos, pos); } catch(_){}
+        schedule();
+      }
+      function chip(text, ins, off, cls){
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (cls ? ' ' + cls : ''); b.textContent = text;
+        b.addEventListener('click', function(){ insAt(ins, off); });
+        return b;
+      }
+      var pf = document.getElementById('pal_funcs');
+      FUNCS.forEach(function(f){ pf.appendChild(chip(f.t, f.ins, f.off || 0, 'fn')); });
+      var pv = document.getElementById('pal_vars');
+      NAMES.forEach(function(n){ pv.appendChild(chip(n, n, 0, 'var')); });
+
+      var starter = document.getElementById('calc_starter');
+      if (starter) starter.addEventListener('change', function(){
+        if (!this.value) return;
+        formula.value = this.value;
+        if (nameEl && !nameEl.value) nameEl.value = this.options[this.selectedIndex].getAttribute('data-name') || '';
+        check();
+      });
+
+      var timer = null;
+      function schedule(){ if (timer) clearTimeout(timer); timer = setTimeout(check, 400); }
+      function check(){
+        var f = (formula.value || '').trim();
+        if (!f){ out.textContent = ''; out.className = 'checkout'; return; }
+        out.textContent = 'checking…'; out.className = 'checkout';
+        fetch('/factory/build-rules-v2.php?action=checkcalc&product_id=' + PID + '&formula=' + encodeURIComponent(f))
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            if (d.ok){ out.textContent = '✓ looks good — e.g. gives ' + d.result; out.className = 'checkout ok'; }
+            else { out.textContent = '✗ ' + (d.error || "won't run") + (d.suggest ? ' — did you mean “' + d.suggest + '”?' : ''); out.className = 'checkout bad'; }
+          })
+          .catch(function(){ out.textContent = "(couldn't check just now)"; out.className = 'checkout'; });
+      }
+      formula.addEventListener('input', schedule);
+      document.getElementById('calc_check_btn').addEventListener('click', check);
     })();
     </script>
   <?php endif; ?>
