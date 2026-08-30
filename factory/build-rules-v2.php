@@ -122,10 +122,10 @@ $checkFormula = static function (string $formula) use ($validNames, $alw): array
     } catch (Throwable $e) {
         $msg = $e->getMessage();
         $suggest = '';
-        if (preg_match('/([A-Za-z_][A-Za-z0-9_]*)/', $msg, $m) && stripos($msg, 'variable') !== false) {
+        if (preg_match('/variable[:\s]+([A-Za-z_][A-Za-z0-9_]*)/i', $msg, $m)) {
             $bad = $m[1]; $bestD = 99;
             foreach ($validNames as $n) { $d = levenshtein(strtolower($bad), strtolower($n)); if ($d < $bestD) { $bestD = $d; $suggest = $n; } }
-            if ($bestD < 1 || $bestD > 3) $suggest = '';
+            if ($bestD < 1 || $bestD > 3) $suggest = '';   // only suggest a genuinely-close name
         }
         return ['ok' => false, 'error' => $msg, 'suggest' => $suggest];
     }
