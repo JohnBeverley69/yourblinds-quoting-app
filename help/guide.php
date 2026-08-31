@@ -142,6 +142,9 @@ $activeNav = 'help';
       .gd .ttsbtn{ font:inherit; font-weight:700; cursor:pointer; border:none; border-radius:9px; padding:.5rem 1rem; background:var(--accent); color:#fff; font-size:.9rem; }
       .gd .ttsbtn:hover{ background:var(--accent-ink); }
       .gd .ttsbtn:disabled{ background:var(--line); color:var(--faint); cursor:not-allowed; }
+      .gd .ttsbtn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--line); padding:.4rem .8rem; font-size:.84rem; font-weight:600; }
+      .gd .ttsbtn.ghost:hover{ background:var(--accent-wash); border-color:var(--accent); }
+      .gd .ttsbtn.speaking{ color:var(--err); }
       .gd .ttsnote{ font-size:.8rem; color:var(--soft); max-width:62ch; margin:.1rem 0 0; }
       .gd .vsel{ display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; color:var(--soft); }
       .gd .vsel span{ font-weight:600; }
@@ -191,12 +194,12 @@ $activeNav = 'help';
             </section>
 
             <section>
-                <div class="sec-h"><span class="num">03</span><h2>Listen</h2><p>press play to hear it read aloud</p></div>
+                <div class="sec-h"><span class="num">03</span><h2>Listen</h2><p>the voice-over plays on its own — turn your volume down for quiet</p></div>
                 <div class="ttsrow">
-                    <button id="gdPlay" class="ttsbtn">&#9654; Play narration</button>
+                    <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay narration</button>
                     <label class="vsel"><span>Voice</span><select id="gdVoice"></select></label>
                 </div>
-                <p class="ttsnote">Free, built-in text-to-speech — it defaults to <b>Google UK English Female</b> where your browser has it (Chrome / Edge). No sound? Some browsers only load voices after the first play — press it once more.</p>
+                <p class="ttsnote">Reads aloud automatically in <b>Google UK English Female</b> (Chrome / Edge). Prefer quiet? Just turn your volume down. Some browsers hold the sound until you tap the page first — if you hear nothing, click anywhere or press replay.</p>
                 <div class="script">
                     <div class="row head"><div class="c beat">Beat</div><div class="c screen">On screen</div><div class="c vo">Voiceover</div></div>
                     <?php foreach ($g['script'] as [$beat, $screen, $vo]): ?>
@@ -241,16 +244,35 @@ $activeNav = 'help';
                 var u = new SpeechSynthesisUtterance(lines[i]);
                 var v = currentVoice(); if (v) u.voice = v;
                 u.rate = 1; u.pitch = 1;
+                u.onstart = function(){ spokeAny = true; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); };
                 u.onend = function(){ i++; speakNext(); };
                 u.onerror = function(){ i++; speakNext(); };
                 synth.speak(u);
             }
-            function play(){ playing = true; i = 0; btn.textContent = '⏹ Stop'; synth.cancel(); setTimeout(speakNext, 60); }
-            function stop(){ playing = false; btn.textContent = '▶ Play narration'; clearHL(); synth.cancel(); }
+            function play(){ playing = true; i = 0; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); synth.cancel(); setTimeout(speakNext, 60); }
+            function stop(){ playing = false; btn.textContent = '▶ Replay narration'; btn.classList.remove('speaking'); clearHL(); synth.cancel(); }
             btn.addEventListener('click', function(){ playing ? stop() : play(); });
+
+            // Sound is on by default: try to start narration on load. Browsers that
+            // block autoplay until a user gesture are covered by the first-gesture
+            // fallback below (which fires only if nothing has spoken yet).
+            var spokeAny = false, autoStarted = false;
+            function autoStart(){ if (autoStarted) return; autoStarted = true; play(); }
+            function onFirstGesture(e){
+                document.removeEventListener('pointerdown', onFirstGesture, true);
+                document.removeEventListener('keydown', onFirstGesture, true);
+                var controls = document.querySelector('.gd .ttsrow');
+                if (controls && controls.contains(e.target)) return; // let the button handle itself
+                if (!spokeAny) play();                                // autoplay was blocked — start now
+            }
+
             loadVoices();
             if (typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
+            document.addEventListener('pointerdown', onFirstGesture, true);
+            document.addEventListener('keydown', onFirstGesture, true);
             window.addEventListener('pagehide', stop);
+            // Give voices a moment to load so the very first line uses the chosen voice.
+            setTimeout(autoStart, voices.length ? 350 : 700);
         })();
         </script>
     <?php endif; ?>
