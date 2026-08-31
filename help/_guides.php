@@ -316,7 +316,7 @@ return [
           <ul class="steps">
             <li><b>&#128183; Show order value + balance on the calendar</b> &mdash; each job linked to a quote shows its
                 order value, what&rsquo;s been paid (deposit + payments) and the balance left, with a <b>PAID</b> badge once
-                it&rsquo;s settled. Handy for you &mdash; but if <b>fitters share the screen</b>, leave it off so the money stays private.</li>
+                it&rsquo;s settled.</li>
             <li><b>&#129517; Navigation app</b> &mdash; when you tap an address on your schedule or the day calendar, it opens
                 in the app you pick here: <b>Google Maps</b> (the default) or <b>Waze</b> if your fitters prefer it for live traffic.</li>
             <li><b>&#128344; Morning / afternoon booking slots</b> &mdash; for <b>measure (quote) visits</b>, offer
@@ -324,10 +324,14 @@ return [
                 window. Set <b>bookings per window, per day</b> (e.g. 4) &mdash; once a window is full, it can&rsquo;t be booked.
                 Fittings aren&rsquo;t affected.</li>
           </ul>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Heads up about the money:</b> this shows the figures to
+             <b>everyone who can open the calendar</b> &mdash; including people whose logins normally hide costs, like fitters.
+             It ignores the per-person <b>&ldquo;Can view costs&rdquo;</b> option on the <b>Users</b> page, just for the calendar.
+             Leave it off if anyone who sees the calendar shouldn&rsquo;t see the figures.</div></div>
           <p>Each of the three has its <b>own Save button</b> &mdash; change one and save it; they don&rsquo;t depend on each other.</p>',
         'script'  => [
             ['0:00', 'Calendar section.',                 'Your calendar has three little choices. Here they are.', 0],
-            ['0:06', 'Money on; job shows figures.',       'Show each job\'s value, what\'s paid, and what\'s left. Sharing the screen with fitters? Leave it off.', 1],
+            ['0:06', 'Money on; job shows figures.',       'Show each job\'s value, what\'s paid, and what\'s left. But careful — everyone who can open the calendar sees it, even fitters. Leave it off if that\'s not what you want.', 1],
             ['0:14', 'Waze selected.',                     'Next, the map app your address links open in. Google Maps, or Waze if your fitters prefer it.', 2],
             ['0:22', 'Slots on; windows appear.',          'And morning or afternoon windows for measure visits, so you give a window, not an exact time. Set how many fit in each.', 3],
             ['0:31', 'Saved.',                             'Each choice saves on its own. That\'s your calendar sorted.', 4],

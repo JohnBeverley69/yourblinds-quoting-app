@@ -899,8 +899,15 @@ $activeNav = 'settings';
                         <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             On the month, week and day calendars, each job linked to a quote shows its
                             order value, amount received (deposit + payments) and outstanding balance —
-                            with a PAID badge once it's settled. Leave unticked to keep figures off the
-                            calendar (e.g. if fitters share the view).
+                            with a PAID badge once it's settled.
+                        </p>
+                        <p style="margin:0.4rem 0 0;padding:0.45rem 0.6rem;border-left:3px solid #f59e0b;
+                                  background:rgba(245,158,11,0.10);border-radius:6px;color:var(--text-muted);font-size:0.8125rem;">
+                            <strong>⚠ Heads up:</strong> this shows the figures to <strong>everyone who can open the
+                            calendar</strong> — including staff whose logins normally hide costs, like fitters. It
+                            ignores each person's <strong>“Can view costs”</strong> setting on the
+                            <a href="/admin/users.php">Users</a> page, just for the calendar. Leave it unticked if
+                            anyone who sees the calendar shouldn't see the money.
                         </p>
                     </div>
                 </div>
