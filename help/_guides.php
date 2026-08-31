@@ -176,4 +176,161 @@ return [
             ['0:18', 'Logo shown heading a mini quote.',       'And there it is, heading your quote. That\'s the logo done.', 2],
         ],
     ],
+
+    'settings-dashboard' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'The dashboard joke',
+        'eyebrow' => 'Settings · Company',
+        'blurb'   => 'One friendly toggle — a "Joke of the day" for your team on the dashboard.',
+        'lede'    => 'A tiny bit of fun: a different one-liner on your dashboard each day, just for your
+                      team (never customers). It\'s on by default — here\'s how to keep it or switch it off.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .chk{ display:inline-flex; align-items:center; gap:.5rem; font-weight:600; font-size:.85rem; color:var(--ink); }
+          .gd .tick{ width:18px; height:18px; border-radius:5px; border:1px solid var(--border-strong,#d1d5db); background:var(--accent); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.7rem; transition:background .2s, color .2s; }
+          .gd .hlp{ display:block; color:var(--faint); font-size:.75rem; margin-top:.35rem; }
+          .gd .stage[data-step="1"] .tick{ background:var(--surface); color:transparent; }
+          .gd .stage[data-step="2"] .save{ transform:scale(.96); filter:brightness(1.25); }
+          .gd .stage[data-step="2"] .toast{ opacity:1; transform:none; }
+          .gd .dashprev{ margin-top:1rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:.7rem .85rem; }
+          .gd .dp-h{ font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); font-weight:700; margin-bottom:.5rem; }
+          .gd .joke{ background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:.55rem .7rem; font-size:.84rem; color:var(--ink); transition:opacity .25s, transform .25s; }
+          .gd .stage[data-step="1"] .joke{ opacity:0; transform:translateY(-4px); }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="toast">&check; Saved</div>
+                <div class="card-t">Dashboard</div>
+                <label class="chk"><span class="tick">&check;</span> &#128516; Show a &ldquo;Joke of the day&rdquo; on the dashboard</label>
+                <span class="hlp">Staff only &mdash; never shown to customers. Dismissible each day.</span>
+                <div class="save">Save</div>
+                <div class="dashprev">
+                  <div class="dp-h">Your dashboard</div>
+                  <div class="joke">&#128516; Why did the scarecrow win an award? He was outstanding in his field.</div>
+                </div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> A joke on your dashboard &mdash; on by default.</b>
+                  <b class="c1"><span class="n">2</span> Not for you? Untick it and it&rsquo;s gone.</b>
+                  <b class="c2 good"><span class="n">3</span> Ticked, saved &mdash; done.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>Still on the <b>Company</b> tab, the <b>Dashboard</b> section has one friendly little option.</p>
+          <ul class="steps">
+            <li><b>&#128516; Show a &ldquo;Joke of the day&rdquo; on the dashboard</b> &mdash; tick it and your team
+                sees a different one-liner each day when they open the app. It&rsquo;s <b>staff only</b>; customers
+                never see it.</li>
+            <li>Anyone can <b>dismiss</b> the day&rsquo;s joke if they&rsquo;ve had enough &mdash; it&rsquo;s back tomorrow.</li>
+            <li>Not for your team? <b>Untick it</b> and it disappears. Either way, press <b>Save</b>.</li>
+          </ul>
+          <p>That&rsquo;s the whole section &mdash; a bit of light relief, nothing that touches your quotes or customers.</p>',
+        'script'  => [
+            ['0:00', 'Dashboard section; joke on.',    'Your dashboard can show a little joke each day, just for your team, never customers.', 0],
+            ['0:07', 'Untick; joke disappears.',       'Not for you? Untick it, and it\'s gone.', 1],
+            ['0:12', 'Tick again; Save; saved toast.', 'Leave it ticked, hit Save, and you\'re done.', 2],
+        ],
+    ],
+
+    'settings-calendar' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Calendar options',
+        'eyebrow' => 'Settings · Company',
+        'blurb'   => 'Three choices: show money on jobs, your map app, and morning/afternoon slots.',
+        'lede'    => 'The <b>Calendar</b> section has three quick choices — whether jobs show their money,
+                      which map app your address links open in, and whether measure visits are booked as
+                      morning or afternoon windows. Each saves on its own.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .opt{ border:1px solid var(--line); border-radius:10px; padding:.6rem .75rem; margin-bottom:.55rem; transition:box-shadow .2s, border-color .2s; }
+          .gd .opt-h{ display:flex; align-items:center; gap:.5rem; font-weight:600; font-size:.82rem; color:var(--ink); }
+          .gd .opt small{ display:block; color:var(--faint); font-size:.72rem; margin-top:.2rem; }
+          .gd .tick{ width:17px; height:17px; border-radius:5px; border:1px solid var(--border-strong,#d1d5db); background:var(--surface); color:transparent; display:inline-flex; align-items:center; justify-content:center; font-size:.66rem; transition:background .2s,color .2s; }
+          .gd .stage[data-step="1"] .t-money, .gd .stage[data-step="2"] .t-money, .gd .stage[data-step="3"] .t-money, .gd .stage[data-step="4"] .t-money{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="3"] .t-slots, .gd .stage[data-step="4"] .t-slots{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="1"] .opt-money, .gd .stage[data-step="2"] .opt-nav, .gd .stage[data-step="3"] .opt-slots{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+          .gd .jobchip{ margin-top:.5rem; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:.35rem .55rem; font-size:.74rem; background:var(--surface); display:inline-block; }
+          .gd .jobchip .money{ display:none; color:var(--soft); margin-top:.2rem; }
+          .gd .jobchip .paid{ display:none; margin-left:.35rem; color:var(--good); font-weight:700; }
+          .gd .stage[data-step="1"] .jobchip .money, .gd .stage[data-step="2"] .jobchip .money, .gd .stage[data-step="3"] .jobchip .money, .gd .stage[data-step="4"] .jobchip .money{ display:block; }
+          .gd .stage[data-step="1"] .jobchip .paid, .gd .stage[data-step="2"] .jobchip .paid, .gd .stage[data-step="3"] .jobchip .paid, .gd .stage[data-step="4"] .jobchip .paid{ display:inline; }
+          .gd .pill{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:999px; padding:.18rem .55rem; font-size:.74rem; margin-right:.35rem; color:var(--soft); }
+          .gd .pill.sel{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .stage[data-step="2"] .pill-google, .gd .stage[data-step="3"] .pill-google, .gd .stage[data-step="4"] .pill-google{ border-color:var(--line); background:transparent; color:var(--soft); }
+          .gd .stage[data-step="2"] .pill-waze, .gd .stage[data-step="3"] .pill-waze, .gd .stage[data-step="4"] .pill-waze{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .opens{ display:block; margin-top:.4rem; font-size:.74rem; color:var(--soft); }
+          .gd .nn-waze{ display:none; }
+          .gd .stage[data-step="2"] .nn-google, .gd .stage[data-step="3"] .nn-google, .gd .stage[data-step="4"] .nn-google{ display:none; }
+          .gd .stage[data-step="2"] .nn-waze, .gd .stage[data-step="3"] .nn-waze, .gd .stage[data-step="4"] .nn-waze{ display:inline; }
+          .gd .windows{ display:none; gap:.4rem; margin-top:.5rem; }
+          .gd .stage[data-step="3"] .windows, .gd .stage[data-step="4"] .windows{ display:flex; }
+          .gd .win{ border:1px solid var(--line); border-radius:7px; padding:.22rem .5rem; font-size:.72rem; color:var(--soft); background:var(--surface); }
+          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="toast">&check; Saved</div>
+                <div class="card-t">Calendar</div>
+                <div class="opt opt-money">
+                  <div class="opt-h"><span class="tick t-money">&check;</span> &#128183; Show order value + balance on the calendar</div>
+                  <div class="jobchip"><b>10:00 &middot; Mrs Patel &middot; Fit</b>
+                    <span class="money">Order &pound;540 &middot; Paid &pound;540 &middot; Balance &pound;0 <span class="paid">PAID</span></span></div>
+                </div>
+                <div class="opt opt-nav">
+                  <div class="opt-h">&#129517; Navigation app</div>
+                  <div style="margin-top:.4rem"><span class="pill pill-google sel">Google Maps</span><span class="pill pill-waze">Waze</span></div>
+                  <span class="opens">Tap an address &rarr; opens in <b class="nn-google">Google Maps</b><b class="nn-waze">Waze</b></span>
+                </div>
+                <div class="opt opt-slots">
+                  <div class="opt-h"><span class="tick t-slots">&check;</span> &#128344; Morning / afternoon booking slots</div>
+                  <small>A window, not an exact time. Bookings per window: <b>4</b></small>
+                  <div class="windows"><span class="win">Morning 9&ndash;1</span><span class="win">Afternoon 1&ndash;5</span></div>
+                </div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Three quick calendar choices.</b>
+                  <b class="c1"><span class="n">2</span> Show the money on jobs &mdash; or keep it off.</b>
+                  <b class="c2"><span class="n">3</span> The map app your address links open in.</b>
+                  <b class="c3"><span class="n">4</span> Morning or afternoon windows for measures.</b>
+                  <b class="c4 good"><span class="n">5</span> Each saves on its own &mdash; done.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>Still on the <b>Company</b> tab, scroll to <b>Calendar</b>. Three separate choices, each with its own <b>Save</b>:</p>
+          <ul class="steps">
+            <li><b>&#128183; Show order value + balance on the calendar</b> &mdash; each job linked to a quote shows its
+                order value, what&rsquo;s been paid (deposit + payments) and the balance left, with a <b>PAID</b> badge once
+                it&rsquo;s settled. Handy for you &mdash; but if <b>fitters share the screen</b>, leave it off so the money stays private.</li>
+            <li><b>&#129517; Navigation app</b> &mdash; when you tap an address on your schedule or the day calendar, it opens
+                in the app you pick here: <b>Google Maps</b> (the default) or <b>Waze</b> if your fitters prefer it for live traffic.</li>
+            <li><b>&#128344; Morning / afternoon booking slots</b> &mdash; for <b>measure (quote) visits</b>, offer
+                <b>Morning (9am&ndash;1pm)</b> or <b>Afternoon (1pm&ndash;5pm)</b> instead of an exact time, so you promise a
+                window. Set <b>bookings per window, per day</b> (e.g. 4) &mdash; once a window is full, it can&rsquo;t be booked.
+                Fittings aren&rsquo;t affected.</li>
+          </ul>
+          <p>Each of the three has its <b>own Save button</b> &mdash; change one and save it; they don&rsquo;t depend on each other.</p>',
+        'script'  => [
+            ['0:00', 'Calendar section.',                 'Your calendar has three little choices. Here they are.', 0],
+            ['0:06', 'Money on; job shows figures.',       'Show each job\'s value, what\'s paid, and what\'s left. Sharing the screen with fitters? Leave it off.', 1],
+            ['0:14', 'Waze selected.',                     'Next, the map app your address links open in. Google Maps, or Waze if your fitters prefer it.', 2],
+            ['0:22', 'Slots on; windows appear.',          'And morning or afternoon windows for measure visits, so you give a window, not an exact time. Set how many fit in each.', 3],
+            ['0:31', 'Saved.',                             'Each choice saves on its own. That\'s your calendar sorted.', 4],
+        ],
+    ],
 ];
