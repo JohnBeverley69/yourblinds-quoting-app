@@ -612,20 +612,23 @@ JS,
           .gd .fset{ border:1px solid var(--line); border-radius:9px; padding:.55rem .7rem; margin-top:.7rem; }
           .gd .fset-lg{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin-bottom:.45rem; }
           .gd .frow + .frow, .gd .qfield{ margin-top:.7rem; }
-          .gd .deprow{ display:flex; align-items:center; gap:.5rem 1rem; flex-wrap:wrap; font-size:.82rem; }
+          .gd .deprow{ display:flex; align-items:center; gap:.4rem .7rem; flex-wrap:wrap; font-size:.82rem; }
+          .gd .numbox{ display:inline-flex; align-items:center; justify-content:center; min-width:2.7rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.15rem .4rem; font-size:.8rem; color:var(--ink); background:var(--surface); }
+          .gd .numbox.faint{ color:var(--faint); }
+          .gd .unit{ color:var(--faint); font-size:.82rem; }
           .gd .depval{ opacity:0; transition:opacity .25s; font-weight:600; color:var(--ink); }
           .gd .chkrow{ display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:var(--soft); margin:.3rem 0; }
           .gd .muted{ color:var(--faint); }
-          /* the form fills in as the voice-over reaches each part */
-          .gd .g0 .val{ opacity:1; }
-          .gd .stage[data-step="1"] .depval, .gd .stage[data-step="2"] .depval, .gd .stage[data-step="3"] .depval, .gd .stage[data-step="4"] .depval{ opacity:1; }
-          .gd .stage[data-step="1"] .rperc, .gd .stage[data-step="2"] .rperc, .gd .stage[data-step="3"] .rperc, .gd .stage[data-step="4"] .rperc{ color:var(--ink); font-weight:600; }
-          .gd .stage[data-step="1"] .rperc .dot, .gd .stage[data-step="2"] .rperc .dot, .gd .stage[data-step="3"] .rperc .dot, .gd .stage[data-step="4"] .rperc .dot{ border-color:var(--accent); }
-          .gd .stage[data-step="1"] .rperc .dot::after, .gd .stage[data-step="2"] .rperc .dot::after, .gd .stage[data-step="3"] .rperc .dot::after, .gd .stage[data-step="4"] .rperc .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
-          .gd .stage[data-step="2"] .tShow, .gd .stage[data-step="3"] .tShow, .gd .stage[data-step="4"] .tShow, .gd .stage[data-step="2"] .tRec, .gd .stage[data-step="3"] .tRec, .gd .stage[data-step="4"] .tRec{ background:var(--accent); color:#fff; }
-          .gd .stage[data-step="3"] .g3 .val, .gd .stage[data-step="4"] .g3 .val{ opacity:1; }
-          .gd .stage[data-step="4"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
+          /* the form starts BLANK (poster = step 0) and fills in as the voice-over reaches each part */
+          .gd .stage:not([data-step="0"]) .g0 .val{ opacity:1; }
+          .gd .stage[data-step="2"] .depval, .gd .stage[data-step="3"] .depval, .gd .stage[data-step="4"] .depval, .gd .stage[data-step="5"] .depval{ opacity:1; }
+          .gd .stage[data-step="2"] .rperc, .gd .stage[data-step="3"] .rperc, .gd .stage[data-step="4"] .rperc, .gd .stage[data-step="5"] .rperc{ color:var(--ink); font-weight:600; }
+          .gd .stage[data-step="2"] .rperc .dot, .gd .stage[data-step="3"] .rperc .dot, .gd .stage[data-step="4"] .rperc .dot, .gd .stage[data-step="5"] .rperc .dot{ border-color:var(--accent); }
+          .gd .stage[data-step="2"] .rperc .dot::after, .gd .stage[data-step="3"] .rperc .dot::after, .gd .stage[data-step="4"] .rperc .dot::after, .gd .stage[data-step="5"] .rperc .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+          .gd .stage[data-step="3"] .tShow, .gd .stage[data-step="4"] .tShow, .gd .stage[data-step="5"] .tShow, .gd .stage[data-step="3"] .tRec, .gd .stage[data-step="4"] .tRec, .gd .stage[data-step="5"] .tRec{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="4"] .g3 .val, .gd .stage[data-step="5"] .g3 .val{ opacity:1; }
+          .gd .stage[data-step="5"] .save{ transform:scale(.96); filter:brightness(1.25); }
+          .gd .stage[data-step="5"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -645,13 +648,14 @@ JS,
                   <div class="fset-lg">Default deposit</div>
                   <div class="deprow">
                     <span class="radio rperc"><span class="dot"></span> Percentage of total</span>
-                    <span class="depval">50 %</span>
-                    <span class="radio rflat"><span class="dot"></span> Flat amount &pound;&mdash;</span>
+                    <span class="numbox"><span class="depval">50</span></span><span class="unit">%</span>
+                    <span class="radio rflat"><span class="dot"></span> Flat amount</span>
+                    <span class="unit">&pound;</span><span class="numbox faint">0.00</span>
                   </div>
                 </div>
                 <div class="fset">
                   <div class="chkrow"><span class="tick tShow">&check;</span> Show the price of each blind</div>
-                  <div class="chkrow"><span class="tick tWt">&check;</span> Enable the WT charge <span class="muted">(internal)</span></div>
+                  <div class="chkrow"><span class="tick tWt">&check;</span> Enable the Wally tax <span class="muted">(WT charge &mdash; internal)</span></div>
                   <div class="chkrow"><span class="tick tRec">&check;</span> Email a receipt when an order is paid in full</div>
                 </div>
                 <div class="frow">
@@ -662,11 +666,11 @@ JS,
                   <div class="ta g3"><span class="ph">A line for the bottom of the quote&hellip;</span><span class="val">Thank you for your custom &mdash; 5-year guarantee.</span></div></div>
                 <div class="save">Save quote defaults</div>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> Your quote prefix and VAT rate.</b>
-                  <b class="c1"><span class="n">2</span> A default deposit &mdash; percentage or flat.</b>
-                  <b class="c2"><span class="n">3</span> What the customer sees, WT, and receipts.</b>
-                  <b class="c3"><span class="n">4</span> Your email name, reply-to and footer.</b>
-                  <b class="c4 good"><span class="n">5</span> Save &mdash; all set.</b>
+                  <b class="c1"><span class="n">1</span> Your quote prefix and VAT rate.</b>
+                  <b class="c2"><span class="n">2</span> A default deposit &mdash; percentage or flat.</b>
+                  <b class="c3"><span class="n">3</span> What the customer sees, the Wally tax, and receipts.</b>
+                  <b class="c4"><span class="n">4</span> Your email name, reply-to and footer.</b>
+                  <b class="c5 good"><span class="n">5</span> Save &mdash; all set.</b>
                 </div>
               </div>
             </div>
@@ -680,8 +684,12 @@ JS,
                 total</b> or <b>a flat &pound; amount</b>. You can still change it on any single quote.</li>
             <li><b>Show the price of each blind</b> &mdash; ticked, the customer&rsquo;s quote lists a price per blind;
                 unticked, they see only the overall total.</li>
-            <li><b>WT charge (internal)</b> &mdash; adds a discretionary &ldquo;WT&rdquo; box in the quote builder. It goes on
-                <b>before VAT</b> and is <b>completely internal</b> &mdash; the customer never sees the letters &ldquo;WT&rdquo; or a separate line.</li>
+            <li><b>WT charge &mdash; the &ldquo;Wally tax&rdquo;</b> &mdash; a discretionary charge you can quietly add to a quote
+                for a job that&rsquo;s going to be more hassle than it&rsquo;s worth (an awkward customer, a fiddly fit &mdash; you know the ones).
+                Tick this to switch on a little <b>WT</b> box in the quote builder. It is <b>completely internal</b>: the customer
+                <b>never</b> sees the letters &ldquo;WT&rdquo;, the words &ldquo;Wally tax&rdquo;, or a separate line anywhere on their quote
+                or invoice. It&rsquo;s added <b>before VAT</b>, and if &ldquo;Show the price of each blind&rdquo; is on it&rsquo;s
+                <b>spread across the blind prices</b> proportionally so the figures still add up; otherwise it just lifts the total.</li>
             <li><b>Paid-in-full receipt</b> &mdash; when an order&rsquo;s balance hits zero, the customer is automatically emailed a
                 thank-you receipt (once per order).</li>
             <li><b>Email &ldquo;from&rdquo; name</b> and <b>Reply-to email</b> &mdash; how your emails to customers are signed, and where their replies land.</li>
@@ -692,11 +700,11 @@ JS,
              and your bank &ldquo;How to pay&rdquo; block both change what&rsquo;s on the customer&rsquo;s quote &mdash; so glance at a preview
              after changing them. The <b>WT charge</b> is the opposite: purely internal, never shown.</div></div>',
         'script'  => [
-            ['0:00', 'Prefix + VAT filled.',              'Set the prefix for your quote numbers, and your VAT rate.', 0],
-            ['0:07', 'Deposit: 50% percentage selected.', 'A default deposit that lands on every quote — a percentage, or a flat amount.', 1],
-            ['0:15', 'Three checkboxes set.',             'Choose whether the customer sees each blind\'s price, switch on the internal WT charge if you use it, and the automatic paid-in-full receipt.', 2],
-            ['0:25', 'Email name, reply-to, footer fill.', 'Add your email from-name, a reply-to address, and a footer line for the bottom of the quote.', 3],
-            ['0:33', 'Save; saved toast.',                'Save, and your quote defaults are set.', 4],
+            ['0:00', 'Prefix + VAT typed in.',            'Set the prefix for your quote numbers, and your VAT rate.', 1],
+            ['0:07', 'Deposit: 50% percentage selected.', 'A default deposit that lands on every quote — a percentage, or a flat amount.', 2],
+            ['0:15', 'Three checkboxes set.',             'Choose whether the customer sees each blind\'s price; switch on the Wally tax — a discretionary internal charge — if you want it; and the automatic paid-in-full receipt.', 3],
+            ['0:26', 'Email name, reply-to, footer fill.', 'Add your email from-name, a reply-to address, and a footer line for the bottom of the quote.', 4],
+            ['0:34', 'Save; saved toast.',                'Save, and your quote defaults are set.', 5],
         ],
     ],
 
