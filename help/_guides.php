@@ -1341,4 +1341,297 @@ JS,
             ['0:24', 'Price tables step; grid imported.', 'And finally, import your width-by-drop price grids, one per band. That\'s the product ready to quote.', 4],
         ],
     ],
+
+    'products-pricing-modes' => [
+        'aud'     => 'admin',
+        'section' => 'Products',
+        'title'   => 'Pricing modes',
+        'eyebrow' => 'Products',
+        'blurb'   => 'Width×drop, width-only, per slat, or per m² — and picking the right one.',
+        'lede'    => 'Most products price on a <b>width × drop grid</b> &mdash; the default. A few price differently: width only,
+                      per slat, or per square metre. You choose this on the product&rsquo;s <b>Edit</b> page.',
+        'open'    => '/admin/products/index.php',
+        'css'     => '
+          .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
+          .gd .modes{ display:flex; flex-direction:column; gap:.5rem; }
+          .gd .chkrow{ display:flex; align-items:flex-start; gap:.5rem; font-size:.8rem; color:var(--soft); }
+          .gd .chkrow .tick{ margin-top:1px; flex:none; }
+          .gd .stage[data-step="2"] .t-slat{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="3"] .t-sqm{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="2"] .m-slat, .gd .stage[data-step="3"] .m-sqm{ color:var(--ink); font-weight:600; }
+          .gd .minarea{ display:none; margin-top:.8rem; max-width:14rem; }
+          .gd .stage[data-step="3"] .minarea{ display:block; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / products / edit</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Pricing</div>
+                <p class="ldesc2">Most products price on a width &times; drop grid. Tick a box only if this one is different.</p>
+                <div class="modes">
+                  <label class="chkrow"><span class="tick">&check;</span> This product has no fabrics (headrail only, track, spares)</label>
+                  <label class="chkrow"><span class="tick">&check;</span> Priced by width only (no drop) &mdash; e.g. a headrail or track</label>
+                  <label class="chkrow m-slat"><span class="tick t-slat">&check;</span> Priced per slat (by drop) &mdash; e.g. vertical fabric only</label>
+                  <label class="chkrow m-sqm"><span class="tick t-sqm">&check;</span> Priced per square metre &mdash; e.g. shutters</label>
+                </div>
+                <div class="minarea"><label>Minimum billable area (m&sup2;)</label><div class="box"><span class="ph">e.g. 0.5 (blank = none)</span></div></div>
+                <div class="caps">
+                  <b class="c1"><span class="n">1</span> Default &mdash; a width &times; drop grid.</b>
+                  <b class="c2"><span class="n">2</span> Vertical fabric &rarr; per slat (drop &times; slats).</b>
+                  <b class="c3 good"><span class="n">3</span> Shutters &rarr; per m&sup2; (width &times; height).</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>Most products price on a <b>width &times; drop grid</b> &mdash; that&rsquo;s the default, and you tick nothing. A few price
+             differently; set that on the product&rsquo;s <b>Edit</b> page:</p>
+          <ul class="steps">
+            <li><b>No fabrics</b> &mdash; a headrail, track or spares with nothing to pick. Priced on system &times; size alone; the
+                quote builder hides the fabric/band pickers.</li>
+            <li><b>Width only</b> &mdash; priced on width, no drop (headrail/track). The Drop field is hidden; each table is a width &rarr; price list.</li>
+            <li><b>Per slat</b> &mdash; priced by the <b>drop</b> and the <b>number of slats</b> (vertical fabric replacement). No width.</li>
+            <li><b>Per square metre</b> &mdash; a single <b>&pound;/m&sup2; rate</b> &times; the area (width &times; height), e.g. shutters.
+                You can set a <b>minimum billable area</b>.</li>
+          </ul>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Pick one, and pick the right one.</b> Width-only, per-slat and per-m&sup2;
+             <b>can&rsquo;t be combined</b> &mdash; they price in different shapes. And the mode decides what the quote builder asks for and
+             what your price tables look like, so switching it later means re-importing your prices. Get it right <em>before</em> you import.</div></div>',
+        'script'  => [
+            ['0:00', 'Modes shown; all unticked.',            'Most products price on a width by drop grid — that\'s the default, nothing to tick.', 1],
+            ['0:06', 'Per slat ticked.',                      'Vertical fabric? Tick per slat — you price by the drop and the number of slats.', 2],
+            ['0:13', 'Per m² ticked; minimum area appears.',  'Shutters? Per square metre — priced on width times height, with an optional minimum area.', 3],
+        ],
+    ],
+
+    'products-import-price-tables' => [
+        'aud'     => 'admin',
+        'section' => 'Products',
+        'title'   => 'Importing price tables',
+        'eyebrow' => 'Products',
+        'blurb'   => 'Upload your width×drop price grids — the format, and fixing the "no bands" error.',
+        'lede'    => 'Load your <b>width &times; drop price grids</b> from one Excel file. The format is simple, and the one common
+                      error &mdash; a missing <b>Band</b> row &mdash; tells you exactly what&rsquo;s wrong.',
+        'open'    => '/admin/products/index.php',
+        'css'     => '
+          .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
+          .gd .filebox{ display:inline-flex; align-items:center; gap:.5rem; border:1px solid var(--line); border-radius:7px; padding:.3rem .5rem; background:var(--surface); font-size:.8rem; }
+          .gd .choosebtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.2rem .55rem; background:var(--panel); color:var(--ink); font-size:.76rem; }
+          .gd .fn{ color:var(--soft); }
+          .gd .impbtn{ margin-top:.75rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.4rem .8rem; font-size:.8rem; font-weight:700; }
+          .gd .stage[data-step="2"] .impbtn, .gd .stage[data-step="4"] .impbtn{ transform:scale(.97); filter:brightness(1.1); }
+          .gd .err-noband{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="2"] .err-noband{ display:flex; }
+          .gd .sheetprev{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="3"] .sheetprev, .gd .stage[data-step="4"] .sheetprev{ display:block; }
+          .gd .sheet{ border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.68rem; max-width:20rem; }
+          .gd .sheet .r{ display:grid; grid-template-columns:repeat(4,1fr); }
+          .gd .sheet .c{ padding:.22rem; text-align:center; border-top:1px solid var(--line); color:var(--soft); }
+          .gd .sheet .band{ grid-column:1/-1; background:var(--accent-wash); color:var(--accent-ink); font-weight:700; text-align:left; padding:.22rem .45rem; }
+          .gd .sheet .hd{ background:var(--panel); color:var(--faint); font-weight:700; }
+          .gd .ok-imported{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="4"] .ok-imported{ display:flex; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / price-tables / import</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Bulk import &mdash; Roller Blind / Standard</div>
+                <p class="ldesc2">Upload a multi-band Excel file of width &times; drop grids. Re-importing replaces that band&rsquo;s prices.</p>
+                <div class="fld"><label>Multi-band file (.xlsx)</label>
+                  <div class="filebox"><span class="choosebtn">Choose File</span> <span class="fn">prices.xlsx</span></div></div>
+                <div class="impbtn">Upload &amp; import &rarr;</div>
+                <div class="errbanner err-noband"><span>&#9888;</span><div><b>No band sections detected.</b> Each band block should start with a row containing &ldquo;Band X&rdquo; in column A.</div></div>
+                <div class="sheetprev">
+                  <div class="sheet">
+                    <div class="r"><span class="c band">Band A</span></div>
+                    <div class="r"><span class="c hd">mm</span><span class="c hd">610</span><span class="c hd">910</span><span class="c hd">1210</span></div>
+                    <div class="r"><span class="c hd">1000</span><span class="c">38</span><span class="c">46</span><span class="c">55</span></div>
+                    <div class="r"><span class="c hd">1500</span><span class="c">46</span><span class="c">57</span><span class="c">68</span></div>
+                  </div>
+                </div>
+                <div class="okbanner ok-imported"><span>&check;</span> Imported 2 bands into Standard.</div>
+                <div class="caps">
+                  <b class="c1"><span class="n">1</span> Pick your multi-band Excel file.</b>
+                  <b class="c2 err"><span class="n">2</span> No &ldquo;Band X&rdquo; rows? It won&rsquo;t import.</b>
+                  <b class="c3"><span class="n">3</span> A &ldquo;Band A&rdquo; row above each grid fixes it.</b>
+                  <b class="c4 good"><span class="n">4</span> Re-import &mdash; priced.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>On a system&rsquo;s <b>Price tables</b> page, <b>Bulk import (multiple bands)</b> reads one Excel file with all your grids.</p>
+          <ul class="steps">
+            <li>Lay each band out like this: a row that just says <b>Band A</b> (Band B, etc.) in <b>column A</b>, then a <b>widths</b>
+                row (in mm like <code>610mm</code>, or metres like <code>0.8</code>), then <b>drop + prices</b> across. Stack as many bands as you like.</li>
+            <li>Click <b>Upload &amp; import</b>. If the file has <b>several worksheets</b> with bands (e.g. one per slat size), you&rsquo;ll
+                pick which one goes into this system.</li>
+            <li><b>Re-importing replaces</b> that band&rsquo;s prices &mdash; safe to run again after a price change.</li>
+          </ul>
+          <div class="oops"><b>&ldquo;No band sections detected&rdquo;?</b> The file&rsquo;s missing the <b>Band X</b> header rows &mdash; every grid
+             needs a row with <code>Band A</code> (or B, C&hellip;) in column A above it. Add those and re-import. (The reader is forgiving on
+             spelling &mdash; <code>Band A</code>, <code>Price Band A</code>, even a <code>Bnad A</code> typo all work &mdash; but the word must be there.)</div>
+          <p><b>Tip:</b> currency symbols and commas in the prices are stripped automatically, so &pound; signs and thousands separators are fine.</p>',
+        'script'  => [
+            ['0:00', 'Import form; file chosen.',    'Import your prices as one Excel file — several bands stacked in the sheet.', 1],
+            ['0:07', 'Error: no Band X rows.',       'Miss the Band header and it stops you — no band sections detected. Each block needs a "Band X" row in column A.', 2],
+            ['0:15', 'Correct format shown.',        'So above each grid, put a row that just says Band A, then your widths, then the drops and prices.', 3],
+            ['0:23', 'Imported 2 bands.',            'Re-import, and your bands are in — the product\'s priced.', 4],
+        ],
+    ],
+
+    'products-import-fabrics' => [
+        'aud'     => 'admin',
+        'section' => 'Products',
+        'title'   => 'Importing fabrics',
+        'eyebrow' => 'Products',
+        'blurb'   => 'Add fabrics from a template — one product or many — and fix the row errors.',
+        'lede'    => 'Add a product&rsquo;s fabrics from a spreadsheet instead of one by one. Use the template, and if a row&rsquo;s
+                      missing its <b>band</b> or <b>name</b>, the import tells you exactly which.',
+        'open'    => '/admin/products/index.php',
+        'css'     => '
+          .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
+          .gd .tmplbtn{ display:inline-flex; align-items:center; gap:.35rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.3rem .6rem; font-size:.78rem; font-weight:600; color:var(--soft); background:var(--surface); }
+          .gd .cols{ font-size:.76rem; color:var(--soft); margin:.6rem 0 .7rem; }
+          .gd .cols b{ color:var(--ink); }
+          .gd .filebox{ display:inline-flex; align-items:center; gap:.5rem; border:1px solid var(--line); border-radius:7px; padding:.3rem .5rem; background:var(--surface); font-size:.8rem; }
+          .gd .choosebtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.2rem .55rem; background:var(--panel); color:var(--ink); font-size:.76rem; }
+          .gd .fn{ color:var(--soft); }
+          .gd .impbtn{ margin-top:.75rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.4rem .8rem; font-size:.8rem; font-weight:700; }
+          .gd .stage[data-step="2"] .impbtn, .gd .stage[data-step="3"] .impbtn{ transform:scale(.97); filter:brightness(1.1); }
+          .gd .err-row{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="2"] .err-row{ display:flex; }
+          .gd .ok-fab{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="3"] .ok-fab{ display:flex; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / products / import-fabrics</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Import fabrics &mdash; Roller Blind</div>
+                <p class="ldesc2">Fill the template, then upload. Band and name are required; colour, supplier and code are optional.</p>
+                <div class="tmplbtn">&#11015; Download blank template (.xlsx)</div>
+                <div class="cols">Columns: <b>Band*</b> &middot; <b>Fabric name*</b> &middot; Colour &middot; Supplier &middot; Code</div>
+                <div class="fld"><label>Filled template (.xlsx)</label>
+                  <div class="filebox"><span class="choosebtn">Choose File</span> <span class="fn">fabrics.xlsx</span></div></div>
+                <div class="impbtn">Upload &amp; import</div>
+                <div class="errbanner err-row"><span>&#9888;</span><div><b>Some rows had problems:</b> Row 3: missing band</div></div>
+                <div class="okbanner ok-fab"><span>&check;</span> Imported 12 fabrics. Skipped 1 duplicate.</div>
+                <div class="caps">
+                  <b class="c1"><span class="n">1</span> Fill the template &mdash; Band + name required.</b>
+                  <b class="c2 err"><span class="n">2</span> A row missing its Band? It names it.</b>
+                  <b class="c3 good"><span class="n">3</span> Fix it, re-import &mdash; fabrics in.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>A product&rsquo;s fabrics are its <b>options</b>. Add them from a spreadsheet rather than one at a time.</p>
+          <ul class="steps">
+            <li><b>For one product</b> &mdash; on its <b>Fabrics</b> page, <b>Import from Excel</b>. Download the blank <b>template</b>,
+                fill it in (columns <b>Band*</b>, <b>Fabric name*</b>, Colour, Supplier, Code &mdash; * = required), and upload.
+                Duplicate rows (band + name + colour) are skipped automatically.</li>
+            <li><b>For lots of products at once</b> &mdash; the <b>Bulk import fabrics</b> button on the Products page reads a workbook
+                with <b>one sheet per product</b> (columns Name, Colour, Band). Each sheet is matched to a product; you can <b>pick
+                several</b> (Ctrl/Cmd-click) so one shared range feeds every blind that uses it.</li>
+          </ul>
+          <div class="oops"><b>&ldquo;Row 3: missing band&rdquo; (or missing name)?</b> Every fabric needs a <b>band</b> and a <b>name</b> &mdash;
+             the import lists the exact rows that don&rsquo;t, and the good rows still go in. Fill the gaps and re-import. Always use the
+             <b>.xlsx template</b> &mdash; a hand-made CSV with everything crammed into one column won&rsquo;t map to the Band/Name/Colour
+             columns and every row will be rejected.</div>
+          <p>Once a product has at least one fabric and a price table, its <b>&ldquo;Needs fabric&rdquo;</b> flag clears and it&rsquo;s ready to
+             quote. Remember the <b>band on the fabric must match a price-table band</b>, or it shows no price.</p>',
+        'script'  => [
+            ['0:00', 'Import form; template + columns.', 'Add your fabrics from a spreadsheet. Download the template — Band and name are required, colour and code optional.', 1],
+            ['0:08', 'Error: Row 3 missing band.',       'Leave a band off a row and it tells you which — some rows had problems, row 3, missing band.', 2],
+            ['0:15', 'Imported 12 fabrics.',             'Fill that band in, re-import, and your fabrics are in — and the product\'s "needs fabric" flag clears.', 3],
+        ],
+    ],
+
+    'products-combine' => [
+        'aud'     => 'admin',
+        'section' => 'Products',
+        'title'   => 'Combining products into one',
+        'eyebrow' => 'Products',
+        'blurb'   => 'Fold separate sizes (15/25/35mm) into one product with a system for each.',
+        'lede'    => 'Imported a family as separate products (e.g. <em>15/25/35mm Venetian</em>)? <b>Combine</b> folds them into one
+                      product with a <b>system</b> for each size &mdash; their fabrics and prices come along.',
+        'open'    => '/admin/products/index.php',
+        'css'     => '
+          .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
+          .gd .ctable{ margin-top:.8rem; border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.78rem; }
+          .gd .ct-head, .gd .ct-row{ display:grid; grid-template-columns:1.3fr 1.2fr .55fr; gap:.5rem; padding:.35rem .55rem; align-items:center; }
+          .gd .ct-head{ background:var(--panel); font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; }
+          .gd .ct-row{ border-top:1px solid var(--line); color:var(--ink); }
+          .gd .masterpill{ display:inline-block; padding:.08rem .45rem; border-radius:999px; background:var(--accent-wash); color:var(--accent-ink); font-size:.6rem; font-weight:700; text-transform:uppercase; }
+          .gd .sysin{ border:1px solid var(--line); border-radius:6px; padding:.15rem .4rem; background:var(--panel); font-size:.74rem; color:var(--ink); }
+          .gd .cmbbtn{ margin-top:.85rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.42rem .9rem; font-size:.82rem; font-weight:700; }
+          .gd .stage[data-step="3"] .cmbbtn{ transform:scale(.97); filter:brightness(1.12); }
+          .gd .ok-cmb{ display:none; margin-top:.85rem; }
+          .gd .stage[data-step="3"] .ok-cmb{ display:flex; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / products / combine</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Combine into one product</div>
+                <p class="ldesc2">The first product becomes the master; the rest fold in as systems.</p>
+                <div class="fld"><label>Master product name <span class="req">*</span></label>
+                  <div class="box f1"><span class="ph">e.g. Metal Venetian</span><span class="val">Metal Venetian</span></div></div>
+                <div class="ctable">
+                  <div class="ct-head"><span>Product</span><span>Becomes system</span><span>Fabrics</span></div>
+                  <div class="ct-row"><span>15mm Venetian</span><span class="masterpill">Master</span><span>42</span></div>
+                  <div class="ct-row"><span>25mm Venetian</span><span><span class="sysin">25mm</span></span><span>38</span></div>
+                  <div class="ct-row"><span>35mm Venetian</span><span><span class="sysin">35mm</span></span><span>40</span></div>
+                </div>
+                <div class="cmbbtn">Combine into one product</div>
+                <div class="okbanner ok-cmb"><span>&check;</span><div>Combined into &ldquo;Metal Venetian&rdquo; with 3 systems. The others are now empty &amp; deactivated &mdash; delete once checked.</div></div>
+                <div class="caps">
+                  <b class="c1"><span class="n">1</span> First one&rsquo;s the master &mdash; name it.</b>
+                  <b class="c2"><span class="n">2</span> The rest become systems &mdash; 25mm, 35mm.</b>
+                  <b class="c3 good"><span class="n">3</span> Combined &mdash; delete the empty husks.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>Imported a family as separate products (e.g. <em>15/25/35mm Venetian</em>) and want them under one? <b>Combine</b> folds
+             them into a single product with a <b>system</b> for each size.</p>
+          <ul class="steps">
+            <li>On the <b>Products</b> list, <b>tick</b> the ones to combine, then press <b>&ldquo;Combine into product&hellip;&rdquo;</b>.
+                The <b>first one you ticked becomes the master</b> (it keeps its group and settings).</li>
+            <li>Name the <b>master</b> (e.g. <em>Metal Venetian</em>) and give each other one its <b>system</b> name (15mm, 25mm&hellip;).
+                Their fabrics, price tables and settings move across.</li>
+            <li>The folded-in products are <b>deactivated</b> &mdash; empty husks, nothing lost. <b>Delete them</b> once you&rsquo;ve
+                checked the master looks right.</li>
+          </ul>
+          <div class="oops"><b>&ldquo;These products are priced differently&hellip; can&rsquo;t be systems of one product&rdquo;?</b> Everything you
+             combine must share the <b>same pricing mode</b> (all width&times;drop, or all per-slat, etc.) &mdash; you can&rsquo;t mix a
+             per-slat product in with grid ones. Untick the odd one out. (You&rsquo;ll also be asked to give the master and each system a
+             name of 1&ndash;150 characters.)</div>
+          <p><b>Adding more later:</b> tick the existing master <b>first</b>, then the new single-size product(s), and Combine again
+             &mdash; they&rsquo;re appended as extra systems.</p>',
+        'script'  => [
+            ['0:00', 'Master name fills.',            'Combining sizes into one product — tick them on the products list, then here name the master. The first one becomes it.', 1],
+            ['0:07', 'Rows become systems.',          'The others fold in as systems — 25mm, 35mm — carrying their fabrics and prices across.', 2],
+            ['0:14', 'Combined; husks deactivated.',  'Combine, and it\'s one product with three systems. The old ones are emptied and switched off — delete them once you\'ve checked.', 3],
+        ],
+    ],
 ];
