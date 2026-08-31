@@ -31,16 +31,27 @@ return [
                       from <b>you</b>. Here\'s the whole thing, start to finish.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd #nameBox{ position:relative; transition:border-color .25s, box-shadow .25s; }
-          .gd #nameBox .ph{ color:var(--faint); transition:opacity .2s; }
-          .gd #nameBox .val{ position:absolute; left:.5rem; color:var(--ink); opacity:0; transition:opacity .2s; }
-          .gd .stage[data-step="1"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
-          .gd .stage[data-step="1"] .hint{ opacity:1; }
-          .gd .stage[data-step="1"] .save, .gd .stage[data-step="3"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          .gd .stage[data-step="2"] #nameBox .ph, .gd .stage[data-step="3"] #nameBox .ph{ opacity:0; }
-          .gd .stage[data-step="2"] #nameBox .val, .gd .stage[data-step="3"] #nameBox .val{ opacity:1; }
-          .gd .stage[data-step="3"] .toast{ opacity:1; transform:none; }
-          @media (prefers-reduced-motion:reduce){ .gd #nameBox, .gd #nameBox .ph, .gd #nameBox .val{ transition:none !important; } }',
+          .gd .box{ position:relative; }
+          .gd .box .ph{ color:var(--faint); }
+          .gd .box .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; white-space:nowrap; overflow:hidden; }
+          .gd .frow3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.7rem .8rem; margin-top:.7rem; }
+          .gd .frow + .frow{ margin-top:.7rem; }
+          .gd .vfield{ margin-top:.7rem; }
+          .gd .vhint{ font-size:.64rem; color:var(--faint); margin-top:.2rem; }
+          .gd #nameBox{ transition:border-color .25s, box-shadow .25s; }
+          /* the rest of the form fills in as the voice-over reaches it (step 1) */
+          .gd .stage[data-step="1"] .g2 .val, .gd .stage[data-step="2"] .g2 .val, .gd .stage[data-step="3"] .g2 .val, .gd .stage[data-step="4"] .g2 .val{ opacity:1; }
+          /* company name typed in from step 3 */
+          .gd .stage[data-step="3"] #nameBox .val, .gd .stage[data-step="4"] #nameBox .val{ opacity:1; }
+          /* the slip: Save with the name blank -> nudge at step 2 */
+          .gd .stage[data-step="2"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
+          .gd .stage[data-step="2"] .hint{ opacity:1; }
+          /* both Saves press */
+          .gd .stage[data-step="2"] .save, .gd .stage[data-step="4"] .save{ transform:scale(.96); filter:brightness(1.25); }
+          /* saved toast */
+          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }
+          @media(max-width:620px){ .gd .frow3{ grid-template-columns:1fr; } }
+          @media (prefers-reduced-motion:reduce){ .gd .box .val, .gd #nameBox{ transition:none !important; } }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -56,16 +67,31 @@ return [
                   <div class="fld"><label>Company name <span class="req">*</span></label>
                     <div class="box" id="nameBox"><span class="ph">Your company name</span><span class="val">Demo Blinds Ltd</span></div></div>
                   <div class="fld"><label>Contact name</label><div class="box filled">Alex Sample</div></div>
+                </div>
+                <div class="frow">
                   <div class="fld"><label>Email</label><div class="box filled">hello@demoblinds.example</div></div>
                   <div class="fld"><label>Phone</label><div class="box filled">01234 567890</div></div>
-                  <div class="hint">&#9888; Pop your company name in — it goes on every quote.</div>
                 </div>
+                <div class="fld vfield"><label>VAT number</label>
+                  <div class="box g2"><span class="ph">e.g. GB123456789</span><span class="val">GB 123 4567 89</span></div>
+                  <div class="vhint">Leave blank if you&rsquo;re not VAT-registered.</div></div>
+                <div class="frow">
+                  <div class="fld"><label>Address line 1</label><div class="box g2"><span class="ph">Address line 1</span><span class="val">Unit 4, Sample Way</span></div></div>
+                  <div class="fld"><label>Address line 2</label><div class="box g2"><span class="ph">Address line 2</span><span class="val">Sample Business Park</span></div></div>
+                </div>
+                <div class="frow3">
+                  <div class="fld"><label>Town</label><div class="box g2"><span class="ph">Town</span><span class="val">Leeds</span></div></div>
+                  <div class="fld"><label>County</label><div class="box g2"><span class="ph">County</span><span class="val">West Yorkshire</span></div></div>
+                  <div class="fld"><label>Postcode</label><div class="box g2"><span class="ph">Postcode</span><span class="val">LS1 1AA</span></div></div>
+                </div>
+                <div class="hint">&#9888; Pop your company name in &mdash; it goes on every quote.</div>
                 <div class="save">Save company details</div>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> Filling your details in…</b>
-                  <b class="c1 err"><span class="n">2</span> Company name\'s blank — the one field it won\'t skip.</b>
-                  <b class="c2"><span class="n">3</span> Pop the name in.</b>
-                  <b class="c3 good"><span class="n">4</span> Saved.</b>
+                  <b class="c0"><span class="n">1</span> Fill in your details &mdash; contact, email, phone&hellip;</b>
+                  <b class="c1"><span class="n">2</span> &hellip;your VAT number and address.</b>
+                  <b class="c2 err"><span class="n">3</span> Save &mdash; company name&rsquo;s blank, the one it won&rsquo;t skip.</b>
+                  <b class="c3"><span class="n">4</span> Pop the name in.</b>
+                  <b class="c4 good"><span class="n">5</span> Saved &mdash; every field&rsquo;s in.</b>
                 </div>
               </div>
             </div>
@@ -85,11 +111,11 @@ return [
              letting a nameless quote out. Add it, save again — hard to get wrong.</div>',
         // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
-            ['0:00', 'Settings opens on the Company tab.',            'Let\'s get your company details in — these print on every quote you send.', 0],
-            ['0:06', 'Cursor fills contact, email, phone.',          'Name, email and phone, so customers can reach a real person.', 0],
-            ['0:13', 'Clicks Save — company name still blank. Nudge appears.', 'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.', 1],
-            ['0:20', 'Types the company name into the field.',        'Pop the name in.', 2],
-            ['0:26', 'Clicks Save. Green "saved" appears.',           'Save again, and your details are done.', 3],
+            ['0:00', 'Company tab; details filling, name blank.', 'Let\'s get your company details in — these print on every quote you send.', 0],
+            ['0:07', 'VAT number and address fill in.',           'Contact, email and phone; your VAT number if you have one; and your business address.', 1],
+            ['0:15', 'Clicks Save — name blank; nudge appears.',  'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.', 2],
+            ['0:23', 'Types the company name in.',                'Pop the name in…', 3],
+            ['0:28', 'Clicks Save. Green "saved" appears.',       '…and save. Every field\'s in, and your details are done.', 4],
         ],
     ],
 
