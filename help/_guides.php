@@ -2883,8 +2883,9 @@ JS,
         'eyebrow' => 'Calendar',
         'blurb'   => 'The diary: jobs colour-coded by stage, the Pending Fitting tray you drag onto a date, AM/PM measure windows, and completing a fitting.',
         'lede'    => 'The <b>Calendar</b> is your diary &mdash; every job a card, <b>colour-coded by its stage</b>. Accepted quotes drop a
-                      <b>fitting</b> into the <b>Pending</b> tray to <b>drag onto a date</b>; <b>measure visits</b> you book into a
-                      <b>Morning / Afternoon window</b>; and completing a fitting nudges the order on to <b>Fitted</b>.',
+                      <b>fitting</b> into the <b>Pending</b> tray to <b>drag onto a date</b>; <b>measure visits</b> you book yourself (into a
+                      <b>Morning / Afternoon window</b>, if you&rsquo;ve turned those on, or an exact time); and completing a fitting nudges the
+                      order on to <b>Fitted</b>.',
         'open'    => '/calendar/index.php',
         'css'     => '
           .gd .ldesc2{ color:var(--soft); font-size:.76rem; margin:0 0 .55rem; }
@@ -3000,7 +3001,7 @@ JS,
                       <div class="ao pick"><span class="an">Afternoon</span> <span class="ar">(1pm&ndash;5pm)</span><div class="ac">3 of 4 left</div></div>
                     </div>
                   </div>
-                  <p class="note">The customer is given a <b>window</b>, never an exact time. Morning&rsquo;s full &mdash; so pick <b>Afternoon</b> (or another day). Times &amp; limits are set in <b>Settings &rarr; Calendar</b>.</p>
+                  <p class="note">With <b>Morning / Afternoon slots</b> turned on (Settings &rarr; Calendar), the customer gets a <b>window</b>, never an exact time &mdash; here Morning&rsquo;s full, so pick <b>Afternoon</b> (or another day). With slots <b>off</b>, you set an exact <b>time &amp; duration</b> instead.</p>
                 </div>
 
                 <!-- Scene: complete the fitting -->
@@ -3035,9 +3036,10 @@ JS,
             <li><b>Assign a fitter.</b> Open the appointment and pick a fitter under <b>Assigned to</b> (it only auto-assigns when you have exactly
                 one fitter). Left <b>&mdash; Unassigned &mdash;</b>, it sits in the <b>Day</b> view&rsquo;s <b>&#9888; Unassigned</b> column as
                 &ldquo;needs a fitter assigned&rdquo;.</li>
-            <li><b>Book a measure visit.</b> Click <b>+ Book appointment</b> for a survey/measure. Here the customer gets a <b>Morning</b> or
-                <b>Afternoon window</b> &mdash; never an exact time &mdash; and each window shows how many are left (<em>&ldquo;3 of 4 left&rdquo;</em>).
-                You can email the customer their window. <em>(Fittings don&rsquo;t use windows &mdash; you give them a real time.)</em></li>
+            <li><b>Book a measure visit.</b> Click <b>+ Book appointment</b> for a survey/measure. If you&rsquo;ve switched on
+                <b>Morning / Afternoon slots</b> (in <b>Settings &rarr; Calendar</b>), the customer gets a <b>window</b> &mdash; never an exact
+                time &mdash; and each shows how many are left (<em>&ldquo;3 of 4 left&rdquo;</em>); you can email them their window. <b>With slots
+                off</b>, you pick an exact <b>time</b> and <b>duration</b> instead. <em>(Fittings never use windows &mdash; always a real time.)</em></li>
             <li><b>Complete it.</b> Open the fitting and set <b>Update status &rarr; Completed</b>. That <b>advances the linked order to Fitted</b>
                 automatically &mdash; &ldquo;<em>Linked quote &lt;ref&gt; advanced to &lsquo;fitted&rsquo;</em>&rdquo;. (Cancel/no-show it while the
                 quote&rsquo;s still Fitted and a banner offers to rewind it.)</li>
@@ -3058,7 +3060,7 @@ JS,
             ['0:10', 'Pending Fitting tray.',              'When a quote is accepted, its fitting lands here in the Pending tray — Install, the order number, the customer — waiting for you to place it.', 2],
             ['0:19', 'Drag onto a day; set the time.',     'Drag the card onto a day and set the fitting time. That schedules it onto the calendar.', 3],
             ['0:26', 'Assign a fitter.',                   'Open it and pick a fitter, so it is not left sitting unassigned in the Day view.', 4],
-            ['0:33', 'Measure visit; AM/PM window.',       'Booking a measure visit is different — you give the customer a Morning or Afternoon window, not an exact time. If a window is full, it says so; pick the other one, or another day.', 5],
+            ['0:33', 'Measure visit; AM/PM window.',       'Booking a measure visit is a bit different. If you\'ve turned on Morning and Afternoon slots in Settings, you give the customer a window, not an exact time — and if one is full, pick the other, or another day. With slots off, you just set an exact time.', 5],
             ['0:44', 'Mark it Completed → Fitted.',        'When the install is done, mark the appointment Completed — and the linked order moves itself on to Fitted.', 6],
         ],
     ],
