@@ -320,9 +320,12 @@ return [
           .gd .nn-waze{ display:none; }
           .gd .stage[data-step="2"] .nn-google, .gd .stage[data-step="3"] .nn-google, .gd .stage[data-step="4"] .nn-google{ display:none; }
           .gd .stage[data-step="2"] .nn-waze, .gd .stage[data-step="3"] .nn-waze, .gd .stage[data-step="4"] .nn-waze{ display:inline; }
-          .gd .windows{ display:none; gap:.4rem; margin-top:.5rem; }
-          .gd .stage[data-step="3"] .windows, .gd .stage[data-step="4"] .windows{ display:flex; }
-          .gd .win{ border:1px solid var(--line); border-radius:7px; padding:.22rem .5rem; font-size:.72rem; color:var(--soft); background:var(--surface); }
+          .gd .wrows{ display:none; flex-direction:column; gap:.4rem; margin-top:.55rem; }
+          .gd .stage[data-step="3"] .wrows, .gd .stage[data-step="4"] .wrows{ display:flex; }
+          .gd .wrow{ display:flex; align-items:center; gap:.35rem; font-size:.74rem; color:var(--soft); flex-wrap:wrap; }
+          .gd .wlab{ min-width:4.3rem; font-weight:600; color:var(--ink); }
+          .gd .tfield, .gd .capfield{ border:1px solid var(--border-strong,#c7ccd4); border-radius:5px; padding:.08rem .4rem; background:var(--surface); color:var(--ink); font-size:.72rem; }
+          .gd .capfield{ min-width:1.9rem; text-align:center; }
           .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
           <div class="demo-shell">
@@ -347,14 +350,17 @@ return [
                 </div>
                 <div class="opt opt-slots">
                   <div class="opt-h"><span class="tick t-slots">&check;</span> &#128344; Morning / afternoon booking slots</div>
-                  <small>A window, not an exact time &mdash; set your own times &amp; limits.</small>
-                  <div class="windows"><span class="win">Morning 9&ndash;1 &middot; 5/day</span><span class="win">Afternoon 1&ndash;5 &middot; 3/day</span></div>
+                  <small>A window, not an exact time &mdash; set your own hours and limits for each.</small>
+                  <div class="wrows">
+                    <div class="wrow"><span class="wlab">Morning</span> From <span class="tfield">08:00</span> To <span class="tfield">12:30</span> &middot; <span class="capfield">5</span> / day</div>
+                    <div class="wrow"><span class="wlab">Afternoon</span> From <span class="tfield">12:30</span> To <span class="tfield">17:00</span> &middot; <span class="capfield">3</span> / day</div>
+                  </div>
                 </div>
                 <div class="caps">
                   <b class="c0"><span class="n">1</span> Three quick calendar choices.</b>
                   <b class="c1"><span class="n">2</span> Show the money on jobs &mdash; or keep it off.</b>
                   <b class="c2"><span class="n">3</span> The map app your address links open in.</b>
-                  <b class="c3"><span class="n">4</span> Morning or afternoon windows for measures.</b>
+                  <b class="c3"><span class="n">4</span> Windows for measures &mdash; your own hours &amp; limits.</b>
                   <b class="c4 good"><span class="n">5</span> Each saves on its own &mdash; done.</b>
                 </div>
               </div>
