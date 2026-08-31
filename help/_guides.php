@@ -871,7 +871,7 @@ JS,
         'eyebrow' => 'Settings · Status colours',
         'blurb'   => 'Your traffic-light colours — a colour per job stage, shown everywhere.',
         'lede'    => 'Your traffic-light system: give each job stage a colour and every job wears it &mdash; on the
-                      calendar and in your orders list &mdash; updating itself as the job moves along.',
+                      <b>calendar</b>, in your <b>orders list</b>, and across the <b>Pipeline</b> &mdash; updating itself as the job moves along.',
         'open'    => '/admin/settings.php',
         'css'     => '
           .gd .scgrp{ margin-bottom:.55rem; }
@@ -949,7 +949,7 @@ JS,
                 <div class="caps">
                   <b class="c1"><span class="n">1</span> Click a stage&rsquo;s colour box&hellip;</b>
                   <b class="c2"><span class="n">2</span> &hellip;pick your colour &mdash; the pill updates.</b>
-                  <b class="c3"><span class="n">3</span> That colour shows everywhere &mdash; calendar, orders.</b>
+                  <b class="c3"><span class="n">3</span> Shows everywhere &mdash; calendar, orders, Pipeline.</b>
                   <b class="c4 good"><span class="n">4</span> Save &mdash; done.</b>
                 </div>
               </div>
@@ -961,15 +961,15 @@ JS,
           <ul class="steps">
             <li>Each status has its own little <b>colour box</b> beside a <b>pill</b> in that colour. <b>Click a colour box</b>
                 to open the picker and choose any colour you like &mdash; the pill updates as you pick.</li>
-            <li>That colour then shows <b>everywhere the job appears</b> &mdash; on the <b>calendar</b> and in your <b>orders list</b>
-                &mdash; so you can read the board at a glance.</li>
+            <li>That colour then shows <b>everywhere the job appears</b> &mdash; on the <b>calendar</b>, in your <b>orders list</b>,
+                and across the <b>Pipeline</b> &mdash; so you can read the board at a glance.</li>
             <li>The colour <b>updates itself</b> as a job moves from stage to stage &mdash; you never recolour anything by hand.</li>
           </ul>
           <p>Then <b>Save status colours</b>. The text (black or white) is chosen automatically so your labels stay readable on any colour.</p>',
         'script'  => [
             ['0:00', 'Colour picker opens on a stage.',    'Each stage has a colour. Click its box to change it.', 1],
             ['0:06', 'Accepted becomes purple.',           'Pick any colour you like — the pill updates as you go.', 2],
-            ['0:12', 'Calendar chip shows the new colour.', 'That colour then shows everywhere — the calendar and your orders list.', 3],
+            ['0:12', 'Calendar chip shows the new colour.', 'That colour then shows everywhere — the calendar, your orders list, and the pipeline.', 3],
             ['0:17', 'Saved.',                             'Save, and you\'re done.', 4],
         ],
     ],
