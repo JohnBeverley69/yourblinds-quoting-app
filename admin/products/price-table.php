@@ -125,15 +125,26 @@ $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
     csrf_check();
 
-    // Parser identical to the Quick Start dialog — accepts tabs,
-    // newlines, commas, spaces, "mm" suffixes.
+    // Parser identical to the Quick Start dialog — accepts tabs, newlines,
+    // commas, spaces, decimals, unit suffixes (mm/cm/m/in/") and bare metres
+    // (0.8 = 800mm), so a paste straight from an Excel price list just works.
     $parse = static function (string $raw): array {
         $parts = preg_split('/[\s,;]+/', $raw) ?: [];
         $seen  = [];
         $out   = [];
         foreach ($parts as $p) {
-            $clean = trim((string) preg_replace('/mm$/i', '', $p));
-            $n = (int) $clean;
+            $t = strtolower(trim((string) $p));
+            if ($t === '') continue;
+            $mult = null;
+            if (preg_match('/mm$/', $t))         { $mult = 1.0;    $t = (string) preg_replace('/mm$/', '', $t); }
+            elseif (preg_match('/cm$/', $t))     { $mult = 10.0;   $t = (string) preg_replace('/cm$/', '', $t); }
+            elseif (preg_match('/(in|")$/', $t)) { $mult = 25.4;   $t = (string) preg_replace('/(in|")$/', '', $t); }
+            elseif (preg_match('/m$/', $t))      { $mult = 1000.0; $t = (string) preg_replace('/m$/', '', $t); }
+            $v = (float) preg_replace('/[^0-9.]/', '', $t);
+            if ($v <= 0) continue;
+            // No suffix: under 20 = metres (0.8 → 800mm), else already mm.
+            if ($mult === null) $mult = $v < 20 ? 1000.0 : 1.0;
+            $n = (int) round($v * $mult);
             if ($n <= 0 || isset($seen[$n])) continue;
             $seen[$n] = true;
             $out[] = $n;
@@ -2546,9 +2557,11 @@ $activeNav = 'products';
             <form method="dialog">
                 <h3>Start your grid</h3>
                 <p>
-                    Type or paste the widths and drops your supplier sells in.
-                    Each line / cell is one value. Defaults are filled in for
-                    you — clear them if you want to start from scratch.
+                    Type or paste the widths and drops your supplier sells in &mdash;
+                    a <strong>row or a column</strong> from Excel, commas, tabs and new lines all work.
+                    It reads <strong>decimals and metres</strong> too, so <strong>0.8 becomes 800&nbsp;mm</strong>.
+                    Defaults are filled in for you &mdash; hit <strong>Clear</strong> on a box first if you
+                    want only your own sizes.
                 </p>
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
                     <label for="qs-widths" style="font-weight:600;font-size:0.8125rem">
@@ -2836,18 +2849,31 @@ $activeNav = 'products';
     // addWidth / addDrop. Used by both "+ Width" and "+ Drop"
     // buttons; the only difference is which adder it calls.
     function parseAxisValues(raw) {
-        // Split on whitespace, tabs, newlines, commas, semicolons.
+        // Split on whitespace, tabs, newlines, commas, semicolons — so a paste
+        // from Excel works whether it came across as a row or down as a column.
         var parts = String(raw || '').split(/[\s,;]+/).filter(Boolean);
         var seen  = {};
         var out   = [];
-        parts.forEach(function (p) {
-            // Tolerate stray "mm" suffixes from supplier sheets.
-            var clean = p.replace(/mm$/i, '').trim();
-            var n = parseInt(clean, 10);
-            if (!n || n <= 0) return;
-            if (seen[n]) return;
-            seen[n] = true;
-            out.push(n);
+        parts.forEach(function (tok) {
+            var t = String(tok).trim().toLowerCase();
+            if (!t) return;
+            // Respect an explicit unit suffix if the sheet carries one.
+            var mult = null;
+            if (/mm$/.test(t))          { mult = 1;    t = t.replace(/mm$/, ''); }
+            else if (/cm$/.test(t))     { mult = 10;   t = t.replace(/cm$/, ''); }
+            else if (/(in|")$/.test(t)) { mult = 25.4; t = t.replace(/(in|")$/, ''); }
+            else if (/m$/.test(t))      { mult = 1000; t = t.replace(/m$/, ''); }
+            // parseFloat — NOT parseInt — so "0.800" and "1.200" survive.
+            var v = parseFloat(t.replace(/[^0-9.]/g, ''));
+            if (!isFinite(v) || v <= 0) return;
+            // No suffix: a blind size under 20 must be metres (0.8 = 800mm);
+            // 20 and up is already mm. No real blind is under 20mm or over 20m,
+            // so this tells metres from mm with no false positives.
+            if (mult === null) mult = v < 20 ? 1000 : 1;
+            var mm = Math.round(v * mult);
+            if (mm <= 0 || seen[mm]) return;
+            seen[mm] = true;
+            out.push(mm);
         });
         return out;
     }
@@ -2872,6 +2898,7 @@ $activeNav = 'products';
         dialogTitle.textContent = 'Add ' + label + ' (mm)';
         dialogHelp.innerHTML = 'Paste from Excel (a row OR a column), or type values'
             + ' separated by commas, spaces, tabs or newlines.'
+            + ' Decimals and metres are fine &mdash; <strong>0.8 becomes 800&nbsp;mm</strong>.'
             + ' Duplicates and non-numeric values are ignored.';
         dialogInput.value = '';
         dialogInput.placeholder = String(suggested);
