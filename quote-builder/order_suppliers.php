@@ -11,6 +11,13 @@ declare(strict_types=1);
  * Grouping key is the PRODUCT's supplier (quote_items.product_id ->
  * products.supplier_name). A line whose product has no supplier, or a supplier
  * with no email in Settings, is flagged and can't be sent.
+ *
+ * Exception — our own catalogue: a line whose product came from the master
+ * catalogue (products.source_client_id = the factory account) is NOT a
+ * supplier line at all. It routes straight to our manufacturing queue (the
+ * factory back-office pulls it off the "ordered" status), so it's shown in a
+ * separate non-blocking "manufacturing" group and needs no supplier or email —
+ * "Place order" just advances the quote to "ordered" and the factory sees it.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -107,6 +114,28 @@ try {
     }
 } catch (Throwable $e) { /* suppliers table may be absent */ }
 
+// Manufacturing hand-off: a line whose product came from the master catalogue
+// (products.source_client_id = the factory account) goes STRAIGHT to our own
+// manufacturing queue when the order is placed — the factory back-office pulls
+// it in off the "ordered" status, so it needs no supplier and no email. Probe
+// for the column so pre-migration tenants behave exactly as before.
+$factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+$productsHasSource = false;
+try {
+    $productsHasSource = db()->query("SHOW COLUMNS FROM products LIKE 'source_client_id'")->fetchColumn() !== false;
+} catch (Throwable $e) { /* leave false — no manufacturing routing */ }
+// Friendly name for the manufacturing destination (the factory account's
+// company name), falling back to a generic label.
+$factoryLabel = 'manufacturing';
+if ($factoryId > 0) {
+    try {
+        $flStmt = db()->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $flStmt->execute([$factoryId]);
+        $fl = trim((string) ($flStmt->fetchColumn() ?: ''));
+        if ($fl !== '') $factoryLabel = $fl;
+    } catch (Throwable $e) { /* keep generic label */ }
+}
+
 // Line items joined to their product's supplier (product_id is an int join —
 // no collation pitfall). Snapshots give the spec frozen at quote time.
 $lines = [];
@@ -117,8 +146,9 @@ try {
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.fabric_code_snapshot,
                 qi.fabric_band_snapshot, qi.width_mm, qi.drop_mm, qi.quantity,
                 qi.room_name, qi.notes,
-                p.supplier_name AS product_supplier
-           FROM quote_items qi
+                p.supplier_name AS product_supplier'
+        . ($productsHasSource ? ', p.source_client_id AS product_source' : '') .
+        ' FROM quote_items qi
       LEFT JOIN products p ON p.id = qi.product_id
           WHERE qi.quote_id = ?
        ORDER BY qi.line_no, qi.id'
@@ -172,13 +202,30 @@ $fmtExtraSpec = static function (array $ex): string {
     return $out;
 };
 
-// Group by the product's supplier. Empty supplier = "unassigned" (a blocker).
-$groups = [];   // name => ['items'=>[], 'qty'=>int]
+// Group by the product's supplier. Empty supplier = "unassigned" (a blocker) —
+// EXCEPT lines whose product is one of ours from the master catalogue
+// (source_client_id = the factory account): those route straight to our
+// manufacturing queue when the order is placed, so they need no supplier and
+// are pulled out into their own (non-blocking) group.
+$groups   = [];   // name => ['items'=>[], 'qty'=>int]
+$mfgItems = [];   // manufacturing lines (auto-routed to the factory)
+$mfgQty   = 0;
 foreach ($lines as $ln) {
-    $sup = trim((string) ($ln['product_supplier'] ?? ''));
-    $groups[$sup]['items'][]  = $ln;
-    $groups[$sup]['qty']       = ($groups[$sup]['qty'] ?? 0) + (int) ($ln['quantity'] ?? 1);
+    // Manufacturing only applies to OTHER tenants buying our catalogue — the
+    // factory account itself uses the normal supplier flow (it never orders
+    // from itself), so exclude it explicitly.
+    $sup   = trim((string) ($ln['product_supplier'] ?? ''));
+    $isMfg = $sup === '' && $factoryId > 0 && $clientId !== $factoryId
+             && (int) ($ln['product_source'] ?? 0) === $factoryId;
+    if ($isMfg) {
+        $mfgItems[] = $ln;
+        $mfgQty    += (int) ($ln['quantity'] ?? 1);
+        continue;
+    }
+    $groups[$sup]['items'][] = $ln;
+    $groups[$sup]['qty']     = ($groups[$sup]['qty'] ?? 0) + (int) ($ln['quantity'] ?? 1);
 }
+$hasManufacturing = $mfgItems !== [];
 // In House first, then named suppliers, then unassigned ('') last.
 uksort($groups, static function ($a, $b) {
     if (($a === '') !== ($b === '')) return $a === '' ? 1 : -1;   // unassigned last
@@ -326,8 +373,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // rewinds a job that's already ordered / fitted / invoiced / paid. The user
     // already cleared the can_create_orders gate above, which is exactly what
     // an 'ordered' transition requires.
+    // Placing the order advances accepted → ordered when EITHER a supplier
+    // email went out OR there are manufacturing lines to hand to the factory.
+    // (Manufacturing lines have no email — the factory queue pulls them in off
+    // the "ordered" status via products.source_client_id.) Guarded in SQL to
+    // only ever step accepted → ordered; it never rewinds a placed job.
     $advancedToOrdered = false;
-    if ($sentTo) {
+    if ($sentTo || $hasManufacturing) {
         try {
             $adv = db()->prepare(
                 "UPDATE quotes SET status = 'ordered'
@@ -347,15 +399,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $orderedNote = $advancedToOrdered ? ' Moved on to "Ordered".' : '';
 
-    if ($sentTo && !$failed) {
+    // Compose the result from what actually happened (supplier emails and/or
+    // the manufacturing hand-off).
+    $okParts = [];
+    if ($sentTo) {
+        $okParts[] = 'Order sent to ' . implode(', ', $sentTo) . '.';
+    }
+    if ($hasManufacturing && $advancedToOrdered) {
+        $okParts[] = $mfgQty . ' blind' . ($mfgQty === 1 ? '' : 's') . ' placed with '
+                   . $factoryLabel . ' manufacturing.';
+    }
+
+    if ($okParts && !$failed) {
+        qb_flash_redirect($backToQuote, 'success', implode(' ', $okParts) . $orderedNote);
+    } elseif ($okParts && $failed) {
+        qb_flash_redirect($backToQuote, 'error',
+            implode(' ', $okParts) . ' FAILED for ' . implode(', ', $failed) . ' — try again.' . $orderedNote);
+    } elseif ($failed) {
+        qb_flash_redirect($backToQuote, 'error',
+            'Nothing was sent (failed for ' . implode(', ', $failed) . ').');
+    } elseif ($hasManufacturing) {
+        // Manufacturing lines but no status change (already placed) and no emails.
         qb_flash_redirect($backToQuote, 'success',
-            'Order sent to ' . implode(', ', $sentTo) . '.' . $orderedNote);
-    } elseif ($sentTo && $failed) {
-        qb_flash_redirect($backToQuote, 'error',
-            'Sent to ' . implode(', ', $sentTo) . '; FAILED for ' . implode(', ', $failed) . ' — try again.' . $orderedNote);
+            'This order is already placed with ' . $factoryLabel . ' manufacturing.');
     } else {
-        qb_flash_redirect($backToQuote, 'error',
-            'Nothing was sent' . ($failed ? ' (failed for ' . implode(', ', $failed) . ')' : '') . '.');
+        qb_flash_redirect($backToQuote, 'error', 'Nothing was sent.');
     }
 }
 
@@ -390,6 +458,10 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
         .sup-meta { color: var(--text-faint); font-size: 0.8125rem; }
         .sup-opt  { color: #1f3b5b; font-size: 0.8125rem; font-weight: 600; }
         [data-theme="dark"] .sup-opt { color: #93c5fd; }
+        .mfg-group { border-color: #86efac; }
+        .mfg-note { color: #166534; background: #f0fdf4; font-size: 0.8125rem; padding: 0.5rem 1rem; }
+        [data-theme="dark"] .mfg-group { border-color: #14532d; }
+        [data-theme="dark"] .mfg-note { color: #86efac; background: #052e16; }
     </style>
 </head>
 <body>
@@ -405,7 +477,7 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
             </div>
         </div>
 
-        <?php if (trim($deliveryAddress) === ''): ?>
+        <?php if (trim($deliveryAddress) === '' && $groups): ?>
             <div class="alert alert-error" role="alert">
                 No delivery address set — suppliers won't know where to ship.
                 Add one under <strong>Settings &rsaquo; Suppliers</strong> first.
@@ -422,8 +494,48 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                     spec PDF. Tick the ones to send, then <strong>Send selected orders</strong>.
                 </p>
 
-                <?php if (!$groups): ?>
+                <?php if (!$groups && !$hasManufacturing): ?>
                     <p class="sup-meta">This order has no line items.</p>
+                <?php endif; ?>
+
+                <?php if ($hasManufacturing): ?>
+                    <div class="sup-group mfg-group">
+                        <div class="sup-head">
+                            <span class="sup-name">🏭 <?= e($factoryLabel) ?> — manufacturing</span>
+                            <span class="sup-meta"><?= count($mfgItems) ?> line<?= count($mfgItems) === 1 ? '' : 's' ?> · auto-routed</span>
+                        </div>
+                        <div class="mfg-note">
+                            These are your products from the <strong><?= e($factoryLabel) ?></strong> catalogue — they go
+                            <strong>straight to manufacturing</strong> when you place the order. No supplier email needed.
+                        </div>
+                        <table class="sup-items">
+                            <thead><tr>
+                                <th>Product</th><th>Fabric / colour</th><th>Size</th><th>Qty</th><th>Room</th>
+                            </tr></thead>
+                            <tbody>
+                                <?php foreach ($mfgItems as $it):
+                                    $fab = implode(' / ', array_filter([
+                                        (string) $it['fabric_name_snapshot'],
+                                        (string) $it['fabric_colour_snapshot'],
+                                        (string) $it['fabric_code_snapshot'],
+                                    ], static fn ($s) => trim((string) $s) !== ''));
+                                ?>
+                                    <tr>
+                                        <td><strong><?= e((string) $it['product_name_snapshot']) ?></strong>
+                                            <?= (string) $it['system_name_snapshot'] !== '' ? '<br><span class="sup-meta">' . e((string) $it['system_name_snapshot']) . '</span>' : '' ?>
+                                            <?php foreach (($extrasByItem[(int) $it['id']] ?? []) as $ex): ?>
+                                                <br><span class="sup-opt">+ <?= e($fmtExtraSpec($ex)) ?></span>
+                                            <?php endforeach; ?>
+                                        </td>
+                                        <td><?= $fab !== '' ? e($fab) : '—' ?></td>
+                                        <td><?= (int) ($it['width_mm'] ?? 0) ?> &times; <?= (int) ($it['drop_mm'] ?? 0) ?> mm</td>
+                                        <td><?= (int) ($it['quantity'] ?? 1) ?></td>
+                                        <td><?= e((string) ($it['room_name'] ?? '')) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 <?php endif; ?>
 
                 <?php foreach ($groups as $name => $g):
@@ -506,13 +618,23 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                     </div>
                 <?php endforeach; ?>
 
+                <?php
+                    $canSubmit = $sendableCount > 0 || $hasManufacturing;
+                    $submitLbl = $sendableCount > 0 && $hasManufacturing ? '📦 Send &amp; place order'
+                               : ($sendableCount > 0 ? '📦 Send selected orders' : '📦 Place order');
+                ?>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" <?= $sendableCount === 0 ? 'disabled' : '' ?>>
-                        📦 Send selected orders
+                    <button type="submit" class="btn btn-primary" <?= $canSubmit ? '' : 'disabled' ?>>
+                        <?= $submitLbl ?>
                     </button>
                     <a href="<?= e($backToQuote) ?>" class="btn btn-secondary">Cancel</a>
                 </div>
-                <?php if ($sendableCount === 0): ?>
+                <?php if ($hasManufacturing && $sendableCount === 0): ?>
+                    <p class="sup-meta" style="margin-top:0.5rem">
+                        Nothing to email — your <?= e($factoryLabel) ?> products go straight to manufacturing.
+                        <strong>Place order</strong> to send them through.
+                    </p>
+                <?php elseif ($sendableCount === 0): ?>
                     <p class="sup-meta" style="margin-top:0.5rem">
                         Nothing's ready to send yet — set suppliers on your products and their emails in Settings.
                     </p>
