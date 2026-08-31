@@ -31,27 +31,18 @@ return [
                       from <b>you</b>. Here\'s the whole thing, start to finish.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .box{ position:relative; }
-          .gd .box .ph{ color:var(--faint); }
-          .gd .box .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; white-space:nowrap; overflow:hidden; }
           .gd .frow3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.7rem .8rem; margin-top:.7rem; }
           .gd .frow + .frow{ margin-top:.7rem; }
           .gd .vfield{ margin-top:.7rem; }
           .gd .vhint{ font-size:.64rem; color:var(--faint); margin-top:.2rem; }
           .gd #nameBox{ transition:border-color .25s, box-shadow .25s; }
-          /* the rest of the form fills in as the voice-over reaches it (step 1) */
-          .gd .stage[data-step="1"] .g2 .val, .gd .stage[data-step="2"] .g2 .val, .gd .stage[data-step="3"] .g2 .val, .gd .stage[data-step="4"] .g2 .val{ opacity:1; }
-          /* company name typed in from step 3 */
-          .gd .stage[data-step="3"] #nameBox .val, .gd .stage[data-step="4"] #nameBox .val{ opacity:1; }
-          /* the slip: Save with the name blank -> nudge at step 2 */
-          .gd .stage[data-step="2"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
-          .gd .stage[data-step="2"] .hint{ opacity:1; }
-          /* both Saves press */
-          .gd .stage[data-step="2"] .save, .gd .stage[data-step="4"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          /* saved toast */
-          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }
-          @media(max-width:620px){ .gd .frow3{ grid-template-columns:1fr; } }
-          @media (prefers-reduced-motion:reduce){ .gd .box .val, .gd #nameBox{ transition:none !important; } }',
+          /* poster (step 0) is blank; contact/email/phone = f1, VAT+address = f2, name = f4 (shared fill engine).
+             The slip: Save with the name still blank -> nudge at step 3; the name types in at step 4. */
+          .gd .stage[data-step="3"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
+          .gd .stage[data-step="3"] .hint{ opacity:1; }
+          .gd .stage[data-step="3"] .save, .gd .stage[data-step="5"] .save{ transform:scale(.96); filter:brightness(1.25); }
+          .gd .stage[data-step="5"] .toast{ opacity:1; transform:none; }
+          @media(max-width:620px){ .gd .frow3{ grid-template-columns:1fr; } }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -65,33 +56,33 @@ return [
                 <div class="card-t">Company details</div>
                 <div class="frow">
                   <div class="fld"><label>Company name <span class="req">*</span></label>
-                    <div class="box" id="nameBox"><span class="ph">Your company name</span><span class="val">Demo Blinds Ltd</span></div></div>
-                  <div class="fld"><label>Contact name</label><div class="box filled">Alex Sample</div></div>
+                    <div class="box f4" id="nameBox"><span class="ph">Your company name</span><span class="val">Demo Blinds Ltd</span></div></div>
+                  <div class="fld"><label>Contact name</label><div class="box f1"><span class="ph">Contact name</span><span class="val">Alex Sample</span></div></div>
                 </div>
                 <div class="frow">
-                  <div class="fld"><label>Email</label><div class="box filled">hello@demoblinds.example</div></div>
-                  <div class="fld"><label>Phone</label><div class="box filled">01234 567890</div></div>
+                  <div class="fld"><label>Email</label><div class="box f1"><span class="ph">you@&hellip;</span><span class="val">hello@demoblinds.example</span></div></div>
+                  <div class="fld"><label>Phone</label><div class="box f1"><span class="ph">Phone</span><span class="val">01234 567890</span></div></div>
                 </div>
                 <div class="fld vfield"><label>VAT number</label>
-                  <div class="box g2"><span class="ph">e.g. GB123456789</span><span class="val">GB 123 4567 89</span></div>
+                  <div class="box f2"><span class="ph">e.g. GB123456789</span><span class="val">GB 123 4567 89</span></div>
                   <div class="vhint">Leave blank if you&rsquo;re not VAT-registered.</div></div>
                 <div class="frow">
-                  <div class="fld"><label>Address line 1</label><div class="box g2"><span class="ph">Address line 1</span><span class="val">Unit 4, Sample Way</span></div></div>
-                  <div class="fld"><label>Address line 2</label><div class="box g2"><span class="ph">Address line 2</span><span class="val">Sample Business Park</span></div></div>
+                  <div class="fld"><label>Address line 1</label><div class="box f2"><span class="ph">Address line 1</span><span class="val">Unit 4, Sample Way</span></div></div>
+                  <div class="fld"><label>Address line 2</label><div class="box f2"><span class="ph">Address line 2</span><span class="val">Sample Business Park</span></div></div>
                 </div>
                 <div class="frow3">
-                  <div class="fld"><label>Town</label><div class="box g2"><span class="ph">Town</span><span class="val">Leeds</span></div></div>
-                  <div class="fld"><label>County</label><div class="box g2"><span class="ph">County</span><span class="val">West Yorkshire</span></div></div>
-                  <div class="fld"><label>Postcode</label><div class="box g2"><span class="ph">Postcode</span><span class="val">LS1 1AA</span></div></div>
+                  <div class="fld"><label>Town</label><div class="box f2"><span class="ph">Town</span><span class="val">Leeds</span></div></div>
+                  <div class="fld"><label>County</label><div class="box f2"><span class="ph">County</span><span class="val">West Yorkshire</span></div></div>
+                  <div class="fld"><label>Postcode</label><div class="box f2"><span class="ph">Postcode</span><span class="val">LS1 1AA</span></div></div>
                 </div>
                 <div class="hint">&#9888; Pop your company name in &mdash; it goes on every quote.</div>
                 <div class="save">Save company details</div>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> Fill in your details &mdash; contact, email, phone&hellip;</b>
-                  <b class="c1"><span class="n">2</span> &hellip;your VAT number and address.</b>
-                  <b class="c2 err"><span class="n">3</span> Save &mdash; company name&rsquo;s blank, the one it won&rsquo;t skip.</b>
-                  <b class="c3"><span class="n">4</span> Pop the name in.</b>
-                  <b class="c4 good"><span class="n">5</span> Saved &mdash; every field&rsquo;s in.</b>
+                  <b class="c1"><span class="n">1</span> Fill in your details &mdash; contact, email, phone&hellip;</b>
+                  <b class="c2"><span class="n">2</span> &hellip;your VAT number and address.</b>
+                  <b class="c3 err"><span class="n">3</span> Save &mdash; company name&rsquo;s blank, the one it won&rsquo;t skip.</b>
+                  <b class="c4"><span class="n">4</span> Pop the name in.</b>
+                  <b class="c5 good"><span class="n">5</span> Saved &mdash; every field&rsquo;s in.</b>
                 </div>
               </div>
             </div>
@@ -111,11 +102,11 @@ return [
              letting a nameless quote out. Add it, save again — hard to get wrong.</div>',
         // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
-            ['0:00', 'Company tab; details filling, name blank.', 'Let\'s get your company details in — these print on every quote you send.', 0],
-            ['0:07', 'VAT number and address fill in.',           'Contact, email and phone; your VAT number if you have one; and your business address.', 1],
-            ['0:15', 'Clicks Save — name blank; nudge appears.',  'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.', 2],
-            ['0:23', 'Types the company name in.',                'Pop the name in…', 3],
-            ['0:28', 'Clicks Save. Green "saved" appears.',       '…and save. Every field\'s in, and your details are done.', 4],
+            ['0:00', 'Contact, email, phone type in.',            'Let\'s get your company details in — these print on every quote you send.', 1],
+            ['0:07', 'VAT number and address type in.',           'Contact, email and phone; your VAT number if you have one; and your business address.', 2],
+            ['0:15', 'Clicks Save — name blank; nudge appears.',  'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.', 3],
+            ['0:23', 'Types the company name in.',                'Pop the name in…', 4],
+            ['0:28', 'Clicks Save. Green "saved" appears.',       '…and save. Every field\'s in, and your details are done.', 5],
         ],
     ],
 
@@ -619,14 +610,13 @@ JS,
           .gd .depval{ opacity:0; transition:opacity .25s; font-weight:600; color:var(--ink); }
           .gd .chkrow{ display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:var(--soft); margin:.3rem 0; }
           .gd .muted{ color:var(--faint); }
-          /* the form starts BLANK (poster = step 0) and fills in as the voice-over reaches each part */
-          .gd .stage:not([data-step="0"]) .g0 .val{ opacity:1; }
+          /* the form starts BLANK (poster = step 0); fields tagged f1/f4 fill via the shared engine */
+          .gd .stage[data-step="2"] .depbox{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
           .gd .stage[data-step="2"] .depval, .gd .stage[data-step="3"] .depval, .gd .stage[data-step="4"] .depval, .gd .stage[data-step="5"] .depval{ opacity:1; }
           .gd .stage[data-step="2"] .rperc, .gd .stage[data-step="3"] .rperc, .gd .stage[data-step="4"] .rperc, .gd .stage[data-step="5"] .rperc{ color:var(--ink); font-weight:600; }
           .gd .stage[data-step="2"] .rperc .dot, .gd .stage[data-step="3"] .rperc .dot, .gd .stage[data-step="4"] .rperc .dot, .gd .stage[data-step="5"] .rperc .dot{ border-color:var(--accent); }
           .gd .stage[data-step="2"] .rperc .dot::after, .gd .stage[data-step="3"] .rperc .dot::after, .gd .stage[data-step="4"] .rperc .dot::after, .gd .stage[data-step="5"] .rperc .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
           .gd .stage[data-step="3"] .tShow, .gd .stage[data-step="4"] .tShow, .gd .stage[data-step="5"] .tShow, .gd .stage[data-step="3"] .tRec, .gd .stage[data-step="4"] .tRec, .gd .stage[data-step="5"] .tRec{ background:var(--accent); color:#fff; }
-          .gd .stage[data-step="4"] .g3 .val, .gd .stage[data-step="5"] .g3 .val{ opacity:1; }
           .gd .stage[data-step="5"] .save{ transform:scale(.96); filter:brightness(1.25); }
           .gd .stage[data-step="5"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
@@ -641,14 +631,14 @@ JS,
                 <div class="toast">&check; Quote defaults saved</div>
                 <div class="card-t">Quote defaults</div>
                 <div class="frow">
-                  <div class="fld"><label>Quote prefix</label><div class="box g0"><span class="ph">e.g. BRI</span><span class="val">BRI</span></div></div>
-                  <div class="fld"><label>VAT %</label><div class="box g0"><span class="ph">20</span><span class="val">20</span></div></div>
+                  <div class="fld"><label>Quote prefix</label><div class="box f1"><span class="ph">e.g. BRI</span><span class="val">BRI</span></div></div>
+                  <div class="fld"><label>VAT %</label><div class="box f1"><span class="ph">20</span><span class="val">20</span></div></div>
                 </div>
                 <div class="fset">
                   <div class="fset-lg">Default deposit</div>
                   <div class="deprow">
                     <span class="radio rperc"><span class="dot"></span> Percentage of total</span>
-                    <span class="numbox"><span class="depval">50</span></span><span class="unit">%</span>
+                    <span class="numbox depbox"><span class="depval">50</span></span><span class="unit">%</span>
                     <span class="radio rflat"><span class="dot"></span> Flat amount</span>
                     <span class="unit">&pound;</span><span class="numbox faint">0.00</span>
                   </div>
@@ -659,11 +649,11 @@ JS,
                   <div class="chkrow"><span class="tick tRec">&check;</span> Email a receipt when an order is paid in full</div>
                 </div>
                 <div class="frow">
-                  <div class="fld"><label>Email &ldquo;from&rdquo; name</label><div class="box g3"><span class="ph">Your name</span><span class="val">Demo Blinds</span></div></div>
-                  <div class="fld"><label>Reply-to email</label><div class="box g3"><span class="ph">you@&hellip;</span><span class="val">hello@demoblinds.example</span></div></div>
+                  <div class="fld"><label>Email &ldquo;from&rdquo; name</label><div class="box f4"><span class="ph">Your name</span><span class="val">Demo Blinds</span></div></div>
+                  <div class="fld"><label>Reply-to email</label><div class="box f4"><span class="ph">you@&hellip;</span><span class="val">hello@demoblinds.example</span></div></div>
                 </div>
                 <div class="fld qfield"><label>Quote footer</label>
-                  <div class="ta g3"><span class="ph">A line for the bottom of the quote&hellip;</span><span class="val">Thank you for your custom &mdash; 5-year guarantee.</span></div></div>
+                  <div class="ta f4"><span class="ph">A line for the bottom of the quote&hellip;</span><span class="val">Thank you for your custom &mdash; 5-year guarantee.</span></div></div>
                 <div class="save">Save quote defaults</div>
                 <div class="caps">
                   <b class="c1"><span class="n">1</span> Your quote prefix and VAT rate.</b>
@@ -721,12 +711,12 @@ JS,
           .gd .bfields{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem .7rem; }
           .gd .bfields .wide{ grid-column:1 / -1; }
           .gd .htp{ display:none; margin-top:1rem; border:1px solid #e5e7eb; border-radius:10px; background:#fff; color:#1c2733; padding:.7rem .85rem; font-size:.82rem; }
-          .gd .stage[data-step="1"] .htp, .gd .stage[data-step="2"] .htp{ display:block; }
+          .gd .stage[data-step="2"] .htp, .gd .stage[data-step="3"] .htp{ display:block; }
           .gd .htp-h{ font-weight:700; margin-bottom:.4rem; }
           .gd .htp-r{ display:flex; justify-content:space-between; padding:.18rem 0; border-bottom:1px solid #f5f7fa; }
           .gd .htp-r span{ color:#5b6b7b; }
           .gd .htp-r.ref{ border-bottom:none; }
-          .gd .stage[data-step="2"] .htp-r.ref{ background:#e5edff; border-radius:6px; padding:.18rem .4rem; }',
+          .gd .stage[data-step="3"] .htp-r.ref{ background:#e5edff; border-radius:6px; padding:.18rem .4rem; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -738,10 +728,10 @@ JS,
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Bank details for customer payments</div>
                 <div class="bfields">
-                  <div class="fld wide"><label>Account name</label><div class="box filled">Demo Blinds Ltd</div></div>
-                  <div class="fld"><label>Sort code</label><div class="box filled">20-00-00</div></div>
-                  <div class="fld"><label>Account number</label><div class="box filled">12345678</div></div>
-                  <div class="fld wide"><label>Payment note (optional)</label><div class="box filled">Please use your quote number as the reference</div></div>
+                  <div class="fld wide"><label>Account name</label><div class="box f1"><span class="ph">Account name</span><span class="val">Demo Blinds Ltd</span></div></div>
+                  <div class="fld"><label>Sort code</label><div class="box f1"><span class="ph">00-00-00</span><span class="val">20-00-00</span></div></div>
+                  <div class="fld"><label>Account number</label><div class="box f1"><span class="ph">Account number</span><span class="val">12345678</span></div></div>
+                  <div class="fld wide"><label>Payment note (optional)</label><div class="box f1"><span class="ph">e.g. use your quote number as the reference</span><span class="val">Please use your quote number as the reference</span></div></div>
                 </div>
                 <div class="htp">
                   <div class="htp-h">How to pay &mdash; bank transfer</div>
@@ -751,9 +741,9 @@ JS,
                   <div class="htp-r ref"><span>Reference</span><b>BRI-1042</b></div>
                 </div>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> Add your bank details.</b>
-                  <b class="c1"><span class="n">2</span> They print as a &ldquo;How to pay&rdquo; block.</b>
-                  <b class="c2 good"><span class="n">3</span> Quote number = the payment reference.</b>
+                  <b class="c1"><span class="n">1</span> Type in your bank details.</b>
+                  <b class="c2"><span class="n">2</span> They print as a &ldquo;How to pay&rdquo; block.</b>
+                  <b class="c3 good"><span class="n">3</span> Quote number = the payment reference.</b>
                 </div>
               </div>
             </div>
@@ -768,9 +758,9 @@ JS,
           </ul>
           <p><b>Leave the fields blank to hide the block entirely.</b> Then <b>Save bank details</b>.</p>',
         'script'  => [
-            ['0:00', 'Bank detail fields filled.',        'Pop in your bank details — account name, sort code and account number.', 0],
-            ['0:07', '"How to pay" block appears.',       'They print on the customer\'s quote as a "How to pay" block, so they can pay by transfer.', 1],
-            ['0:13', 'Reference row highlighted.',        'The quote number goes on as the reference, so payments are easy to match. Leave the fields blank and the block just doesn\'t show.', 2],
+            ['0:00', 'Bank detail fields type in.',       'Pop in your bank details — account name, sort code and account number.', 1],
+            ['0:07', '"How to pay" block appears.',       'They print on the customer\'s quote as a "How to pay" block, so they can pay by transfer.', 2],
+            ['0:13', 'Reference row highlighted.',        'The quote number goes on as the reference, so payments are easy to match. Leave the fields blank and the block just doesn\'t show.', 3],
         ],
     ],
 
