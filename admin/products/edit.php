@@ -106,6 +106,32 @@ if ($hasSupplierCol) {
     } catch (Throwable $e) { /* keep '' */ }
 }
 
+// source_client_id (migrate_catalogue_source.php) marks a product that came from
+// the master catalogue. For a TENANT (not the factory account itself), such a
+// product is MADE BY THE FACTORY and routes straight to their manufacturing when
+// an order is placed (order_suppliers.php routes it by this marker, as long as
+// supplier_name stays blank). So instead of an empty "Order supplier" box that
+// looks unset, we show a clear "made by <factory>" notice and don't offer the
+// input at all — keeping supplier_name NULL, which is what the routing needs.
+$factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+$sourceClientId = 0;
+try {
+    $srcStmt = db()->prepare('SELECT source_client_id FROM products WHERE id = ? AND client_id = ?');
+    $srcStmt->execute([$id, $clientId]);
+    $srcVal = $srcStmt->fetchColumn();
+    $sourceClientId = ($srcVal === null || $srcVal === false) ? 0 : (int) $srcVal;
+} catch (Throwable $e) { /* column absent pre-migration — treat as not-a-catalogue product */ }
+$isFactoryProduct = $factoryId > 0 && (int) $clientId !== $factoryId && $sourceClientId === $factoryId;
+$factoryLabel = 'our manufacturing';
+if ($isFactoryProduct) {
+    try {
+        $flStmt = db()->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $flStmt->execute([$factoryId]);
+        $fl = trim((string) ($flStmt->fetchColumn() ?: ''));
+        if ($fl !== '') $factoryLabel = $fl;
+    } catch (Throwable $e) { /* keep generic label */ }
+}
+
 // Known supplier names for the picker's datalist come from the managed
 // suppliers table ONLY (Settings › Suppliers), with "In House" always offered.
 // That makes Settings the single source of truth — delete a supplier there and
@@ -1083,26 +1109,37 @@ $activeNav = 'products';
                     <div class="form-row full">
                         <div class="form-group">
                             <label for="supplier_name">Order supplier</label>
-                            <input id="supplier_name" name="supplier_name" type="text"
-                                   maxlength="150" list="supplier-options"
-                                   value="<?= e((string) $f['supplier_name']) ?>"
-                                   placeholder="e.g. Decora, Louvolite, In House">
-                            <datalist id="supplier-options">
-                                <?php foreach ($knownSuppliers as $sn): ?>
-                                    <option value="<?= e((string) $sn) ?>"></option>
-                                <?php endforeach; ?>
-                            </datalist>
-                            <small style="color:var(--text-faint);font-size:0.8125rem">
-                                Who you <strong>order this product from</strong> &mdash; used on purchase orders.
-                                Pick an existing supplier or type a new one (new names appear under
-                                <strong>Settings &rsaquo; Suppliers</strong>, where you add their order email).
-                                Use <em>In House</em> for products you make yourself.
-                                <?php if (function_exists('is_super_admin') && is_super_admin()): ?>
-                                    <br><span style="color:#92400e">Note:</span> this is the <em>order</em> supplier,
-                                    not a master-catalogue <strong>Library supplier</strong> &mdash; those are matched
-                                    by the product's <strong>name prefix</strong> in Master Admin, not by this field.
-                                <?php endif; ?>
-                            </small>
+                            <?php if ($isFactoryProduct): ?>
+                                <div class="alert alert-success" role="status" style="margin:0 0 0.5rem">
+                                    &#127981; Made by <strong><?= e($factoryLabel) ?></strong> &mdash; orders go straight to their manufacturing.
+                                </div>
+                                <small style="color:var(--text-faint);font-size:0.8125rem">
+                                    This is a <strong><?= e($factoryLabel) ?></strong> catalogue product, so it&rsquo;s <strong>made for you by them</strong>.
+                                    When you place an order it routes <strong>straight into their manufacturing</strong> &mdash; there&rsquo;s
+                                    <strong>no order supplier to set</strong> here. (Only your <em>own</em> products need a supplier.)
+                                </small>
+                            <?php else: ?>
+                                <input id="supplier_name" name="supplier_name" type="text"
+                                       maxlength="150" list="supplier-options"
+                                       value="<?= e((string) $f['supplier_name']) ?>"
+                                       placeholder="e.g. Decora, Louvolite, In House">
+                                <datalist id="supplier-options">
+                                    <?php foreach ($knownSuppliers as $sn): ?>
+                                        <option value="<?= e((string) $sn) ?>"></option>
+                                    <?php endforeach; ?>
+                                </datalist>
+                                <small style="color:var(--text-faint);font-size:0.8125rem">
+                                    Who you <strong>order this product from</strong> &mdash; used on purchase orders.
+                                    Pick an existing supplier or type a new one (new names appear under
+                                    <strong>Settings &rsaquo; Suppliers</strong>, where you add their order email).
+                                    Use <em>In House</em> for products you make yourself.
+                                    <?php if (function_exists('is_super_admin') && is_super_admin()): ?>
+                                        <br><span style="color:#92400e">Note:</span> this is the <em>order</em> supplier,
+                                        not a master-catalogue <strong>Library supplier</strong> &mdash; those are matched
+                                        by the product's <strong>name prefix</strong> in Master Admin, not by this field.
+                                    <?php endif; ?>
+                                </small>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>
