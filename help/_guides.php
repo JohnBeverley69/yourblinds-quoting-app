@@ -381,6 +381,11 @@ return [
           .gd .stage[data-step="0"] .rmk, .gd .stage:not([data-step="0"]) .rmg{ color:var(--ink); font-weight:600; }
           .gd .stage[data-step="0"] .rmk .dot, .gd .stage:not([data-step="0"]) .rmg .dot{ border-color:var(--accent); }
           .gd .stage[data-step="0"] .rmk .dot::after, .gd .stage:not([data-step="0"]) .rmg .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+          .gd .mrates{ margin-bottom:.7rem; }
+          .gd .mhint{ font-size:.66rem; color:var(--accent); margin-top:.2rem; }
+          .gd .wmg, .gd .vmg, .gd .hmg{ display:none; }
+          .gd .stage:not([data-step="0"]) .wmk, .gd .stage:not([data-step="0"]) .vmk, .gd .stage:not([data-step="0"]) .hmk{ display:none; }
+          .gd .stage:not([data-step="0"]) .wmg, .gd .stage:not([data-step="0"]) .vmg, .gd .stage:not([data-step="0"]) .hmg{ display:inline; }
           .gd .exwrap{ min-height:52px; }
           .gd .ex{ display:none; align-items:center; gap:.5rem; font-size:1rem; padding:.55rem .8rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
           .gd .ex .exc{ color:var(--soft); }
@@ -429,6 +434,14 @@ return [
                 <div class="card-t">Default margins</div>
                 <div class="mlabel">Enter your margins as</div>
                 <div class="mradios"><span class="radio rmk"><span class="dot"></span> Markup&nbsp;%</span><span class="radio rmg"><span class="dot"></span> Margin&nbsp;%</span></div>
+                <div class="frow mrates">
+                  <div class="fld"><label>Default price-table <span class="wmk">markup</span><span class="wmg">margin</span> %</label>
+                    <div class="box filled"><span class="vmk">100</span><span class="vmg">50</span></div>
+                    <div class="mhint"><span class="hmk">&asymp; 50% margin</span><span class="hmg">&asymp; 100% markup</span></div></div>
+                  <div class="fld"><label>Default options &amp; extras <span class="wmk">markup</span><span class="wmg">margin</span> %</label>
+                    <div class="box filled"><span class="vmk">100</span><span class="vmg">50</span></div>
+                    <div class="mhint"><span class="hmk">&asymp; 50% margin</span><span class="hmg">&asymp; 100% markup</span></div></div>
+                </div>
                 <div class="exwrap">
                   <div class="ex e0"><span class="exc">Cost &pound;100</span> &rarr; <b class="exs">Sell &pound;150</b> <span class="exp">profit &pound;50</span></div>
                   <div class="ex e1"><span class="exc">Cost &pound;100</span> &rarr; <b class="exs">Sell &pound;200</b> <span class="exp">profit &pound;100</span></div>
@@ -596,16 +609,23 @@ JS,
                       the deposit that lands on every quote, and what the customer does (and doesn\'t) see.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .mq{ border:1px solid var(--line); border-radius:10px; background:#fff; color:#1c2733; padding:.7rem .85rem; font-size:.82rem; }
-          .gd .mq-h{ display:flex; justify-content:space-between; border-bottom:1px solid #eef2f6; padding-bottom:.4rem; font-weight:700; }
-          .gd .mq-h .qn{ color:#2563eb; }
-          .gd .mq-row{ display:flex; justify-content:space-between; padding:.24rem 0; border-bottom:1px solid #f5f7fa; }
-          .gd .mq-row .p{ color:#5b6b7b; }
-          .gd .mq-tot{ display:flex; justify-content:space-between; padding:.2rem 0; color:#5b6b7b; }
-          .gd .mq-tot.total{ font-weight:800; color:#1c2733; }
-          .gd .mq-dep{ display:none; justify-content:space-between; padding:.25rem 0 0; color:#b45309; font-weight:700; }
-          .gd .stage[data-step="1"] .mq-dep, .gd .stage[data-step="2"] .mq-dep, .gd .stage[data-step="3"] .mq-dep{ display:flex; }
-          .gd .stage[data-step="3"] .mq-row .p{ visibility:hidden; }',
+          .gd .fset{ border:1px solid var(--line); border-radius:9px; padding:.55rem .7rem; margin-top:.7rem; }
+          .gd .fset-lg{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin-bottom:.45rem; }
+          .gd .frow + .frow, .gd .qfield{ margin-top:.7rem; }
+          .gd .deprow{ display:flex; align-items:center; gap:.5rem 1rem; flex-wrap:wrap; font-size:.82rem; }
+          .gd .depval{ opacity:0; transition:opacity .25s; font-weight:600; color:var(--ink); }
+          .gd .chkrow{ display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:var(--soft); margin:.3rem 0; }
+          .gd .muted{ color:var(--faint); }
+          /* the form fills in as the voice-over reaches each part */
+          .gd .g0 .val{ opacity:1; }
+          .gd .stage[data-step="1"] .depval, .gd .stage[data-step="2"] .depval, .gd .stage[data-step="3"] .depval, .gd .stage[data-step="4"] .depval{ opacity:1; }
+          .gd .stage[data-step="1"] .rperc, .gd .stage[data-step="2"] .rperc, .gd .stage[data-step="3"] .rperc, .gd .stage[data-step="4"] .rperc{ color:var(--ink); font-weight:600; }
+          .gd .stage[data-step="1"] .rperc .dot, .gd .stage[data-step="2"] .rperc .dot, .gd .stage[data-step="3"] .rperc .dot, .gd .stage[data-step="4"] .rperc .dot{ border-color:var(--accent); }
+          .gd .stage[data-step="1"] .rperc .dot::after, .gd .stage[data-step="2"] .rperc .dot::after, .gd .stage[data-step="3"] .rperc .dot::after, .gd .stage[data-step="4"] .rperc .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+          .gd .stage[data-step="2"] .tShow, .gd .stage[data-step="3"] .tShow, .gd .stage[data-step="4"] .tShow, .gd .stage[data-step="2"] .tRec, .gd .stage[data-step="3"] .tRec, .gd .stage[data-step="4"] .tRec{ background:var(--accent); color:#fff; }
+          .gd .stage[data-step="3"] .g3 .val, .gd .stage[data-step="4"] .g3 .val{ opacity:1; }
+          .gd .stage[data-step="4"] .save{ transform:scale(.96); filter:brightness(1.25); }
+          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -615,21 +635,38 @@ JS,
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="card-t">Quote defaults &mdash; the customer&rsquo;s quote</div>
-                <div class="mq">
-                  <div class="mq-h"><span>Quote <span class="qn">BRI-1042</span></span><span>Demo Blinds Ltd</span></div>
-                  <div class="mq-row"><span>Roller blind &mdash; Kitchen</span><span class="p">&pound;130.00</span></div>
-                  <div class="mq-row"><span>Vertical &mdash; Lounge</span><span class="p">&pound;190.00</span></div>
-                  <div class="mq-tot"><span>Subtotal</span><span>&pound;320.00</span></div>
-                  <div class="mq-tot"><span>VAT 20%</span><span>&pound;64.00</span></div>
-                  <div class="mq-tot total"><span>Total</span><span>&pound;384.00</span></div>
-                  <div class="mq-dep"><span>Deposit (50%)</span><span>&pound;192.00</span></div>
+                <div class="toast">&check; Quote defaults saved</div>
+                <div class="card-t">Quote defaults</div>
+                <div class="frow">
+                  <div class="fld"><label>Quote prefix</label><div class="box g0"><span class="ph">e.g. BRI</span><span class="val">BRI</span></div></div>
+                  <div class="fld"><label>VAT %</label><div class="box g0"><span class="ph">20</span><span class="val">20</span></div></div>
                 </div>
+                <div class="fset">
+                  <div class="fset-lg">Default deposit</div>
+                  <div class="deprow">
+                    <span class="radio rperc"><span class="dot"></span> Percentage of total</span>
+                    <span class="depval">50 %</span>
+                    <span class="radio rflat"><span class="dot"></span> Flat amount &pound;&mdash;</span>
+                  </div>
+                </div>
+                <div class="fset">
+                  <div class="chkrow"><span class="tick tShow">&check;</span> Show the price of each blind</div>
+                  <div class="chkrow"><span class="tick tWt">&check;</span> Enable the WT charge <span class="muted">(internal)</span></div>
+                  <div class="chkrow"><span class="tick tRec">&check;</span> Email a receipt when an order is paid in full</div>
+                </div>
+                <div class="frow">
+                  <div class="fld"><label>Email &ldquo;from&rdquo; name</label><div class="box g3"><span class="ph">Your name</span><span class="val">Demo Blinds</span></div></div>
+                  <div class="fld"><label>Reply-to email</label><div class="box g3"><span class="ph">you@&hellip;</span><span class="val">hello@demoblinds.example</span></div></div>
+                </div>
+                <div class="fld qfield"><label>Quote footer</label>
+                  <div class="ta g3"><span class="ph">A line for the bottom of the quote&hellip;</span><span class="val">Thank you for your custom &mdash; 5-year guarantee.</span></div></div>
+                <div class="save">Save quote defaults</div>
                 <div class="caps">
                   <b class="c0"><span class="n">1</span> Your quote prefix and VAT rate.</b>
-                  <b class="c1"><span class="n">2</span> A default deposit, on every quote.</b>
-                  <b class="c2"><span class="n">3</span> Show each blind&rsquo;s price&hellip;</b>
-                  <b class="c3"><span class="n">4</span> &hellip;or hide them &mdash; just the total.</b>
+                  <b class="c1"><span class="n">2</span> A default deposit &mdash; percentage or flat.</b>
+                  <b class="c2"><span class="n">3</span> What the customer sees, WT, and receipts.</b>
+                  <b class="c3"><span class="n">4</span> Your email name, reply-to and footer.</b>
+                  <b class="c4 good"><span class="n">5</span> Save &mdash; all set.</b>
                 </div>
               </div>
             </div>
@@ -655,10 +692,11 @@ JS,
              and your bank &ldquo;How to pay&rdquo; block both change what&rsquo;s on the customer&rsquo;s quote &mdash; so glance at a preview
              after changing them. The <b>WT charge</b> is the opposite: purely internal, never shown.</div></div>',
         'script'  => [
-            ['0:00', 'Quote BRI-1042, VAT 20%.',        'Set the prefix for your quote numbers, and your VAT rate.', 0],
-            ['0:06', 'Deposit line appears.',           'A default deposit — a percentage, or a flat amount — drops onto every quote. You can still change it per job.', 1],
-            ['0:14', 'Line prices highlighted.',        'Choose whether the customer sees a price on each blind…', 2],
-            ['0:20', 'Line prices hidden; total only.', '…or just the overall total. Your call.', 3],
+            ['0:00', 'Prefix + VAT filled.',              'Set the prefix for your quote numbers, and your VAT rate.', 0],
+            ['0:07', 'Deposit: 50% percentage selected.', 'A default deposit that lands on every quote — a percentage, or a flat amount.', 1],
+            ['0:15', 'Three checkboxes set.',             'Choose whether the customer sees each blind\'s price, switch on the internal WT charge if you use it, and the automatic paid-in-full receipt.', 2],
+            ['0:25', 'Email name, reply-to, footer fill.', 'Add your email from-name, a reply-to address, and a footer line for the bottom of the quote.', 3],
+            ['0:33', 'Save; saved toast.',                'Save, and your quote defaults are set.', 4],
         ],
     ],
 
@@ -695,6 +733,7 @@ JS,
                   <div class="fld wide"><label>Account name</label><div class="box filled">Demo Blinds Ltd</div></div>
                   <div class="fld"><label>Sort code</label><div class="box filled">20-00-00</div></div>
                   <div class="fld"><label>Account number</label><div class="box filled">12345678</div></div>
+                  <div class="fld wide"><label>Payment note (optional)</label><div class="box filled">Please use your quote number as the reference</div></div>
                 </div>
                 <div class="htp">
                   <div class="htp-h">How to pay &mdash; bank transfer</div>

@@ -145,6 +145,14 @@ $activeNav = 'help';
       .gd .radio.on .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
       .gd .selectbox{ display:inline-flex; align-items:center; justify-content:space-between; gap:.7rem; min-width:190px; border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.4rem .6rem; font-size:.85rem; color:var(--ink); background:var(--surface); }
       .gd .selectbox::after{ content:"\25BE"; color:var(--faint); font-size:.7rem; }
+      /* a field whose value "types in": .box holds a faint .ph placeholder and a
+         .val that fades over it (guides reveal .val per step). Also a textarea .ta. */
+      .gd .box{ position:relative; }
+      .gd .box .ph{ color:var(--faint); }
+      .gd .box .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; white-space:nowrap; overflow:hidden; }
+      .gd .ta{ position:relative; min-height:44px; border:1px solid var(--line); border-radius:7px; background:var(--panel); padding:.4rem .5rem; font-size:.8rem; color:var(--ink); }
+      .gd .ta .ph{ color:var(--faint); }
+      .gd .ta .val{ position:absolute; inset:0; padding:.4rem .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; }
 
       /* written steps */
       .gd .steps{ list-style:none; padding:0; margin:.2rem 0 .9rem; counter-reset:s; }
