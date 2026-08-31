@@ -183,6 +183,11 @@ $activeNav = 'help';
       /* "Heads up" advisory — for a setting that has wider ramifications. */
       .gd .heads{ display:flex; gap:.55rem; align-items:flex-start; background:color-mix(in srgb,#f59e0b 12%,transparent); border-left:3px solid #f59e0b; border-radius:8px; padding:.6rem .85rem; font-size:.92rem; color:var(--ink); margin:.7rem 0 0; }
       .gd .heads .hi{ font-size:1rem; line-height:1.3; }
+      /* inline error / success banners for import walkthroughs (the slip + the fix) */
+      .gd .errbanner{ display:flex; gap:.5rem; align-items:flex-start; background:var(--err-wash); border-left:3px solid var(--err); border-radius:8px; padding:.5rem .7rem; font-size:.78rem; color:var(--ink); }
+      .gd .errbanner b{ color:var(--err); }
+      .gd .okbanner{ display:flex; gap:.5rem; align-items:center; background:var(--good-wash); border-left:3px solid var(--good); border-radius:8px; padding:.5rem .7rem; font-size:.78rem; color:var(--ink); font-weight:600; }
+      .gd .okbanner b{ color:var(--good); }
       .gd .heads b{ color:#b45309; }
       :root[data-theme="dark"] .gd .heads b{ color:#fbbf24; }
       @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .gd .heads b{ color:#fbbf24; } }
