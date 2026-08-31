@@ -1411,81 +1411,82 @@ JS,
     'products-import-price-tables' => [
         'aud'     => 'admin',
         'section' => 'Products',
-        'title'   => 'Importing price tables',
+        'title'   => 'Building price tables',
         'eyebrow' => 'Products',
-        'blurb'   => 'Upload your width×drop price grids — the format, and fixing the "no bands" error.',
-        'lede'    => 'Load your <b>width &times; drop price grids</b> from one Excel file. The format is simple, and the one common
-                      error &mdash; a missing <b>Band</b> row &mdash; tells you exactly what&rsquo;s wrong.',
+        'blurb'   => 'Fill a price table your way — paste into the grid, import from Excel, or clone another band.',
+        'lede'    => 'More than one way to fill a price table: <b>build the grid by hand</b> and paste the cells in, <b>import</b> a
+                      whole Excel file, or <b>clone</b> another band. Here are the methods (and the fix for the common import error).',
         'open'    => '/admin/products/index.php',
         'css'     => '
           .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
-          .gd .filebox{ display:inline-flex; align-items:center; gap:.5rem; border:1px solid var(--line); border-radius:7px; padding:.3rem .5rem; background:var(--surface); font-size:.8rem; }
-          .gd .choosebtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.2rem .55rem; background:var(--panel); color:var(--ink); font-size:.76rem; }
-          .gd .fn{ color:var(--soft); }
-          .gd .impbtn{ margin-top:.75rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.4rem .8rem; font-size:.8rem; font-weight:700; }
-          .gd .stage[data-step="2"] .impbtn, .gd .stage[data-step="4"] .impbtn{ transform:scale(.97); filter:brightness(1.1); }
-          .gd .err-noband{ display:none; margin-top:.75rem; }
-          .gd .stage[data-step="2"] .err-noband{ display:flex; }
-          .gd .sheetprev{ display:none; margin-top:.75rem; }
-          .gd .stage[data-step="3"] .sheetprev, .gd .stage[data-step="4"] .sheetprev{ display:block; }
-          .gd .sheet{ border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.68rem; max-width:20rem; }
-          .gd .sheet .r{ display:grid; grid-template-columns:repeat(4,1fr); }
-          .gd .sheet .c{ padding:.22rem; text-align:center; border-top:1px solid var(--line); color:var(--soft); }
-          .gd .sheet .band{ grid-column:1/-1; background:var(--accent-wash); color:var(--accent-ink); font-weight:700; text-align:left; padding:.22rem .45rem; }
-          .gd .sheet .hd{ background:var(--panel); color:var(--faint); font-weight:700; }
-          .gd .ok-imported{ display:none; margin-top:.75rem; }
-          .gd .stage[data-step="4"] .ok-imported{ display:flex; }',
+          .gd .ptwrap{ display:none; margin-top:.85rem; }
+          .gd .stage[data-step="3"] .ptwrap, .gd .stage[data-step="4"] .ptwrap{ display:block; }
+          .gd .ptgrid{ display:grid; grid-template-columns:2.7rem repeat(4,1fr); gap:2px; background:var(--line); border:1px solid var(--line); border-radius:8px; padding:2px; max-width:22rem; }
+          .gd .ptc{ background:var(--surface); padding:.24rem; text-align:center; font-size:.7rem; color:var(--ink); }
+          .gd .ptc.hd{ background:var(--panel); color:var(--faint); font-weight:700; }
+          .gd .savebtn2{ margin-top:.85rem; display:inline-flex; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .85rem; font-size:.82rem; font-weight:600; transition:transform .1s, filter .1s; }
+          .gd .stage[data-step="4"] .savebtn2{ transform:scale(.97); filter:brightness(1.2); }
+          .gd .ok-saved{ display:none; margin-top:.75rem; }
+          .gd .stage[data-step="4"] .ok-saved{ display:flex; }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / price-tables / import</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / price-table</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="card-t">Bulk import &mdash; Roller Blind / Standard</div>
-                <p class="ldesc2">Upload a multi-band Excel file of width &times; drop grids. Re-importing replaces that band&rsquo;s prices.</p>
-                <div class="fld"><label>Multi-band file (.xlsx)</label>
-                  <div class="filebox"><span class="choosebtn">Choose File</span> <span class="fn">prices.xlsx</span></div></div>
-                <div class="impbtn">Upload &amp; import &rarr;</div>
-                <div class="errbanner err-noband"><span>&#9888;</span><div><b>No band sections detected.</b> Each band block should start with a row containing &ldquo;Band X&rdquo; in column A.</div></div>
-                <div class="sheetprev">
-                  <div class="sheet">
-                    <div class="r"><span class="c band">Band A</span></div>
-                    <div class="r"><span class="c hd">mm</span><span class="c hd">610</span><span class="c hd">910</span><span class="c hd">1210</span></div>
-                    <div class="r"><span class="c hd">1000</span><span class="c">38</span><span class="c">46</span><span class="c">55</span></div>
-                    <div class="r"><span class="c hd">1500</span><span class="c">46</span><span class="c">57</span><span class="c">68</span></div>
+                <div class="card-t">Price table &mdash; Roller Blind / Band A</div>
+                <p class="ldesc2">Build the grid by hand: set your widths and drops, then paste the prices in.</p>
+                <div class="frow">
+                  <div class="fld"><label>Widths (mm)</label><div class="box f1"><span class="ph">e.g. 600, 900, 1200&hellip;</span><span class="val">600, 900, 1200, 1500</span></div></div>
+                  <div class="fld"><label>Drops (mm)</label><div class="box f2"><span class="ph">e.g. 1000, 1500, 2000&hellip;</span><span class="val">1000, 1500, 2000, 2500</span></div></div>
+                </div>
+                <div class="ptwrap">
+                  <div class="ptgrid">
+                    <span class="ptc hd">mm</span><span class="ptc hd">600</span><span class="ptc hd">900</span><span class="ptc hd">1200</span><span class="ptc hd">1500</span>
+                    <span class="ptc hd">1000</span><span class="ptc">38</span><span class="ptc">44</span><span class="ptc">52</span><span class="ptc">60</span>
+                    <span class="ptc hd">1500</span><span class="ptc">46</span><span class="ptc">55</span><span class="ptc">66</span><span class="ptc">78</span>
+                    <span class="ptc hd">2000</span><span class="ptc">58</span><span class="ptc">70</span><span class="ptc">84</span><span class="ptc">99</span>
+                    <span class="ptc hd">2500</span><span class="ptc">70</span><span class="ptc">85</span><span class="ptc">102</span><span class="ptc">120</span>
                   </div>
                 </div>
-                <div class="okbanner ok-imported"><span>&check;</span> Imported 2 bands into Standard.</div>
+                <div class="savebtn2">Save prices</div>
+                <div class="okbanner ok-saved"><span>&check;</span> Saved 16 price cells.</div>
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> Pick your multi-band Excel file.</b>
-                  <b class="c2 err"><span class="n">2</span> No &ldquo;Band X&rdquo; rows? It won&rsquo;t import.</b>
-                  <b class="c3"><span class="n">3</span> A &ldquo;Band A&rdquo; row above each grid fixes it.</b>
-                  <b class="c4 good"><span class="n">4</span> Re-import &mdash; priced.</b>
+                  <b class="c1"><span class="n">1</span> Set your widths (paste a list).</b>
+                  <b class="c2"><span class="n">2</span> Set your drops &mdash; the grid builds.</b>
+                  <b class="c3"><span class="n">3</span> Paste your prices straight into the cells.</b>
+                  <b class="c4 good"><span class="n">4</span> Save &mdash; table built.</b>
                 </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>On a system&rsquo;s <b>Price tables</b> page, <b>Bulk import (multiple bands)</b> reads one Excel file with all your grids.</p>
+          <p>There&rsquo;s more than one way to fill a price table. Open a band&rsquo;s table from the system&rsquo;s <b>Price tables</b> page,
+             then use whichever suits you:</p>
           <ul class="steps">
-            <li>Lay each band out like this: a row that just says <b>Band A</b> (Band B, etc.) in <b>column A</b>, then a <b>widths</b>
-                row (in mm like <code>610mm</code>, or metres like <code>0.8</code>), then <b>drop + prices</b> across. Stack as many bands as you like.</li>
-            <li>Click <b>Upload &amp; import</b>. If the file has <b>several worksheets</b> with bands (e.g. one per slat size), you&rsquo;ll
-                pick which one goes into this system.</li>
-            <li><b>Re-importing replaces</b> that band&rsquo;s prices &mdash; safe to run again after a price change.</li>
+            <li><b>Build it by hand</b> (shown above) &mdash; set your <b>widths</b> and <b>drops</b> (with <b>+ Width</b> / <b>+ Drop</b>,
+                or paste a whole list into the axis box), then <b>paste your prices</b> straight into the grid. You can paste a
+                <b>whole column</b> from Excel &mdash; click the top cell and paste, and it fills down.</li>
+            <li><b>Import from Excel</b> &mdash; fastest for a full range. <b>Bulk import (multiple bands)</b> reads one file with all your
+                grids (each block starts with a <code>Band X</code> row); if it has several worksheets you pick which one. See the note below.</li>
+            <li><b>Clone another band</b> &mdash; if two bands share the same grid shape (e.g. String vs Tape), open the empty one and click
+                <b>Clone</b> beside a filled band. It copies the whole grid; you just tweak the few cells that differ.</li>
           </ul>
-          <div class="oops"><b>&ldquo;No band sections detected&rdquo;?</b> The file&rsquo;s missing the <b>Band X</b> header rows &mdash; every grid
-             needs a row with <code>Band A</code> (or B, C&hellip;) in column A above it. Add those and re-import. (The reader is forgiving on
-             spelling &mdash; <code>Band A</code>, <code>Price Band A</code>, even a <code>Bnad A</code> typo all work &mdash; but the word must be there.)</div>
-          <p><b>Tip:</b> currency symbols and commas in the prices are stripped automatically, so &pound; signs and thousands separators are fine.</p>',
+          <div class="oops"><b>Excel import says &ldquo;No band sections detected&rdquo;?</b> Each grid in the file needs a <code>Band A</code>
+             (or B, C&hellip;) row in <b>column A</b> above it. Add those and re-import. (Spelling is forgiving &mdash; <code>Band A</code>,
+             <code>Price Band A</code>, even a <code>Bnad A</code> typo &mdash; but the marker must be there. &pound; signs and commas in prices are stripped automatically.)</div>
+          <p><b>Other pricing modes build differently:</b> a <b>width-only</b> product is a simple <b>width &rarr; price</b> list; <b>per-slat</b>
+             is a <b>width &rarr; rate</b> list (with <em>Import width prices</em> / <em>Import per-slat rates</em> buttons); and <b>per m&sup2;</b>
+             is a single <b>&pound;/m&sup2; rate</b> per system &amp; band. Same idea &mdash; type, paste, or import.</p>
+          <p>Whichever way, <b>re-saving or re-importing replaces</b> the prices, so it&rsquo;s safe to redo after a price rise.</p>',
         'script'  => [
-            ['0:00', 'Import form; file chosen.',    'Import your prices as one Excel file — several bands stacked in the sheet.', 1],
-            ['0:07', 'Error: no Band X rows.',       'Miss the Band header and it stops you — no band sections detected. Each block needs a "Band X" row in column A.', 2],
-            ['0:15', 'Correct format shown.',        'So above each grid, put a row that just says Band A, then your widths, then the drops and prices.', 3],
-            ['0:23', 'Imported 2 bands.',            'Re-import, and your bands are in — the product\'s priced.', 4],
+            ['0:00', 'Widths pasted in.',            'You can build a price table right here. Set your widths — type them, or paste a whole list.', 1],
+            ['0:07', 'Drops pasted; grid builds.',   'Then your drops, and the grid takes shape — a cell for every width and drop.', 2],
+            ['0:14', 'Prices pasted into the grid.',  'Now paste your prices straight in — even a whole column from your spreadsheet drops into place.', 3],
+            ['0:22', 'Saved 16 price cells.',        'Save, and the table\'s built. Prefer a file? Import the whole grid from Excel, or clone another band — same result.', 4],
         ],
     ],
 
