@@ -698,4 +698,248 @@ JS,
             ['0:13', 'Reference row highlighted.',        'The quote number goes on as the reference, so payments are easy to match. Leave the fields blank and the block just doesn\'t show.', 2],
         ],
     ],
+
+    'settings-legal' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Terms, privacy & emails',
+        'eyebrow' => 'Settings · Legal',
+        'blurb'   => 'The wording on your quotes, and the email customers get when they accept.',
+        'lede'    => 'The wording that prints on your quotes &mdash; Terms, Privacy &mdash; plus the thank-you email
+                      customers get when they accept. Templates are pre-filled; edit to suit.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .legal-ed{ border:1px solid var(--line); border-radius:10px; padding:.65rem .8rem; font-size:.82rem; background:var(--panel); }
+          .gd .le-h, .gd .lp-h{ font-size:.64rem; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); font-weight:700; margin-bottom:.4rem; }
+          .gd .le-body{ color:var(--soft); line-height:1.55; }
+          .gd .tok{ background:var(--accent-wash); color:var(--accent-ink); border-radius:4px; padding:0 .2rem; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+          .gd .legal-pv{ display:none; border:1px solid var(--line); border-radius:10px; padding:.65rem .8rem; font-size:.82rem; margin-top:.7rem; background:var(--surface); }
+          .gd .lp-body{ color:var(--ink); line-height:1.55; }
+          .gd .stage[data-step="1"] .legal-pv, .gd .stage[data-step="2"] .legal-pv{ display:block; }
+          .gd .thanks{ display:none; margin-top:.7rem; border:1px dashed var(--border-dashed,#cbd5e1); border-radius:10px; padding:.55rem .75rem; font-size:.82rem; color:var(--soft); }
+          .gd .stage[data-step="2"] .thanks{ display:block; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Terms, privacy &amp; thank-you email</div>
+                <div class="legal-ed"><div class="le-h">Terms &amp; Conditions</div>
+                  <div class="le-body">These terms are between <span class="tok">{{company_name}}</span> and
+                    <span class="tok">{{customer_name}}</span> for quote <span class="tok">{{quote_number}}</span>. Goods remain ours until paid in full&hellip;</div></div>
+                <div class="legal-pv"><div class="lp-h">Preview &mdash; example customer</div>
+                  <div class="lp-body">These terms are between <b>Demo Blinds Ltd</b> and <b>Alex Sample</b> for quote <b>BRI-1042</b>. Goods remain ours until paid in full&hellip;</div></div>
+                <div class="thanks">&#9993; <b>Thank-you email</b> &mdash; sent when a customer accepts, using the same placeholders.</div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Edit the ready-made Terms&hellip;</b>
+                  <b class="c1"><span class="n">2</span> &hellip;the preview fills in a real example.</b>
+                  <b class="c2 good"><span class="n">3</span> Plus the thank-you email on accept.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>The <b>Legal</b> tab holds the wording that prints on your quotes, plus the email customers get when they accept.</p>
+          <ul class="steps">
+            <li><b>Terms &amp; Conditions</b> and <b>Privacy Policy</b> come <b>pre-filled with a template</b> &mdash; edit them to
+                suit your business. They print, personalised, at the bottom of the quote PDF and the online quote.</li>
+            <li>The <b>placeholders</b> in curly brackets (e.g. <code>{{company_name}}</code>, <code>{{customer_name}}</code>,
+                <code>{{quote_number}}</code>) fill in automatically on each quote. The <b>Preview</b> under each box shows a real
+                example so you can check it reads right.</li>
+            <li>The <b>thank-you email</b> is sent automatically when a customer accepts a quote &mdash; edit it, or leave it empty to send none.</li>
+          </ul>
+          <p><b>Leave any box empty to show nothing.</b> Then <b>Save terms, privacy &amp; email</b>.</p>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Not legal advice.</b> The templates are a starting point only &mdash;
+             have your Terms and Privacy wording reviewed before you rely on them.</div></div>',
+        'script'  => [
+            ['0:00', 'Terms editor with {{tokens}}.',      'Your Terms and Privacy come ready-written — edit them to suit your business.', 0],
+            ['0:07', 'Preview fills the placeholders.',    'The bits in brackets fill in on each quote, and the preview shows you exactly how it\'ll read.', 1],
+            ['0:15', 'Thank-you email card.',              'There\'s a thank-you email too, sent automatically when a customer accepts.', 2],
+        ],
+    ],
+
+    'settings-colours' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Status colours',
+        'eyebrow' => 'Settings · Status colours',
+        'blurb'   => 'Your traffic-light colours — a colour per job stage, shown everywhere.',
+        'lede'    => 'Your traffic-light system: give each job stage a colour and every job wears it &mdash; on the
+                      calendar and in your orders list &mdash; updating itself as the job moves along.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .stagepills{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.2rem 0 1rem; }
+          .gd .sp{ padding:.15rem .55rem; border-radius:999px; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; }
+          .gd .sp-quote{ background:#6b7280; } .gd .sp-acc{ background:#2563eb; } .gd .sp-ord{ background:#d97706; } .gd .sp-fit{ background:#0d9488; } .gd .sp-paid{ background:#059669; }
+          .gd .calchip{ border:1px solid var(--line); border-radius:8px; padding:.45rem .65rem; font-size:.82rem; color:var(--soft); background:var(--panel); }
+          .gd .job{ display:none; padding:.18rem .55rem; border-radius:6px; font-weight:700; font-size:.76rem; color:#fff; }
+          .gd .stage[data-step="0"] .jb0, .gd .stage[data-step="1"] .jb1, .gd .stage[data-step="2"] .jb2, .gd .stage[data-step="3"] .jb3{ display:inline-block; }
+          .gd .jb0{ background:#6b7280; } .gd .jb1{ background:#2563eb; } .gd .jb2{ background:#d97706; } .gd .jb3{ background:#059669; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Status colours</div>
+                <div class="stagepills"><span class="sp sp-quote">Quote</span><span class="sp sp-acc">Accepted</span><span class="sp sp-ord">Ordered</span><span class="sp sp-fit">Fitted</span><span class="sp sp-paid">Paid</span></div>
+                <div class="calchip">10:00 &middot; Mrs Patel &middot;
+                  <span class="job jb0">Quote</span><span class="job jb1">Accepted</span><span class="job jb2">Ordered</span><span class="job jb3">Paid</span></div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> A colour for each job stage.</b>
+                  <b class="c1"><span class="n">2</span> Jobs wear it on the calendar and orders list.</b>
+                  <b class="c2"><span class="n">3</span> The colour updates as the job moves.</b>
+                  <b class="c3 good"><span class="n">4</span> All the way to paid.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>The <b>Status colours</b> tab is your traffic-light system. Give each job stage a colour and every job wears it everywhere.</p>
+          <ul class="steps">
+            <li>Pick a <b>colour for each stage</b> (Quote, Accepted, Ordered, Fitted, Paid, and so on). The little pill preview updates as you choose.</li>
+            <li>A job shows that colour <b>everywhere it appears</b> &mdash; on the <b>calendar</b> and in your <b>orders list</b> &mdash; so you can read the board at a glance.</li>
+            <li>The colour <b>updates itself</b> as the job moves from stage to stage &mdash; you never recolour anything by hand.</li>
+          </ul>
+          <p>Then <b>Save status colours</b>. The text colour (black or white) is chosen automatically so your labels stay readable on any colour.</p>',
+        'script'  => [
+            ['0:00', 'Stage pills; job = Quote (grey).',   'This is your traffic-light system — a colour for each stage a job goes through.', 0],
+            ['0:06', 'Job = Accepted (blue).',             'A job wears its colour everywhere — on the calendar, and in your orders list.', 1],
+            ['0:12', 'Job = Ordered (amber).',             'And it recolours itself as the job moves along. You don\'t touch a thing.', 2],
+            ['0:18', 'Job = Paid (green).',                'All the way through to paid. One glance tells you where everything is.', 3],
+        ],
+    ],
+
+    'settings-suppliers' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Suppliers',
+        'eyebrow' => 'Settings · Suppliers',
+        'blurb'   => 'Who you order stock from — their order emails and where they ship to.',
+        'lede'    => 'Who you <b>order stock from</b> &mdash; each supplier&rsquo;s order email and your delivery address.
+                      This is what &ldquo;Send to suppliers&rdquo; uses to email your orders.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .sup-addr{ border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:.5rem .65rem; font-size:.8rem; color:var(--soft); margin-bottom:.7rem; }
+          .gd .sup-addr b{ color:var(--ink); }
+          .gd .suptable{ width:100%; border-collapse:collapse; font-size:.8rem; }
+          .gd .suptable th{ text-align:left; font-size:.62rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); padding:.2rem .4rem; }
+          .gd .suptable td{ border-top:1px solid var(--line); padding:.35rem .4rem; color:var(--ink); }
+          .gd .suptable .em{ color:var(--soft); }
+          .gd .suprow-new{ opacity:.45; transition:opacity .2s; }
+          .gd .stage[data-step="1"] .suprow-new, .gd .stage[data-step="2"] .suprow-new{ opacity:1; }
+          .gd .stage[data-step="1"] .suprow-new td, .gd .stage[data-step="2"] .suprow-new td{ background:var(--accent-wash); }
+          .gd .po{ display:none; margin-top:.8rem; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:.5rem .7rem; font-size:.8rem; color:var(--soft); }
+          .gd .stage[data-step="2"] .po{ display:block; }
+          .gd .po .to{ color:var(--accent-ink); font-weight:700; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Suppliers</div>
+                <div class="sup-addr">Delivery address &mdash; <b>Demo Blinds Ltd, Unit 4, Leeds LS1&nbsp;1AA</b> (goes on every supplier order)</div>
+                <table class="suptable"><thead><tr><th>Supplier</th><th>Order email</th></tr></thead>
+                  <tbody>
+                    <tr><td>Louvolite</td><td class="em">orders@louvolite.example</td></tr>
+                    <tr><td>Decora</td><td class="em">trade@decora.example</td></tr>
+                    <tr class="suprow-new"><td>+ Add a supplier</td><td class="em">orders@supplier.com</td></tr>
+                  </tbody></table>
+                <div class="po">&#9993; Purchase order &rarr; <span class="to">orders@louvolite.example</span> &mdash; their lines only (sizes, no customer prices), shipped to your address.</div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Each supplier&rsquo;s order email + where they ship to.</b>
+                  <b class="c1"><span class="n">2</span> Add, rename or remove &mdash; products add them too.</b>
+                  <b class="c2 good"><span class="n">3</span> &ldquo;Send to suppliers&rdquo; emails each their own order.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>The <b>Suppliers</b> tab is who you <b>order stock from</b> (not the fabric library). It fills each product&rsquo;s
+             <em>Order supplier</em> field and drives your purchase orders.</p>
+          <ul class="steps">
+            <li>Set your <b>Delivery address</b> &mdash; where suppliers ship to. It goes on every supplier order.</li>
+            <li>Give each supplier their <b>order email</b> (and account number, if the column shows). <b>Rename</b> one, tick
+                <b>Remove</b> to delete a stray, or add one in the bottom row.</li>
+            <li>Suppliers you set on a product <b>appear here automatically</b>, so the list mostly fills itself.</li>
+          </ul>
+          <p>Then <b>Save suppliers</b>. When you press <b>&ldquo;Send to suppliers&rdquo;</b> on an accepted order, each supplier is
+             emailed only their own lines (sizes, no customer prices), shipped to your delivery address.</p>',
+        'script'  => [
+            ['0:00', 'Delivery address + supplier table.', 'These are the people you order stock from — each one\'s order email, and where they ship to.', 0],
+            ['0:07', 'New supplier row highlighted.',      'Add, rename or remove any of them. And when you set a supplier on a product, it turns up here on its own.', 1],
+            ['0:15', 'Purchase order emailed out.',        'Then "Send to suppliers" on an order emails each of them just their own lines. Sizes, no customer prices.', 2],
+        ],
+    ],
+
+    'settings-backup' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Back up your data',
+        'eyebrow' => 'Settings · Back up data',
+        'blurb'   => 'Download your quotes and orders to keep safe — Excel or PDF.',
+        'lede'    => 'Download a copy of your <b>quotes and orders</b> &mdash; with line items, totals and payments &mdash;
+                      to keep on your own computer. A good habit to get into.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .bk-range{ display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem; }
+          .gd .bk-btns{ display:flex; gap:.5rem; flex-wrap:wrap; }
+          .gd .bk-btn{ border:1px solid var(--line); border-radius:8px; padding:.35rem .7rem; font-size:.8rem; font-weight:600; color:var(--soft); }
+          .gd .bk-btn.pri{ background:var(--accent); color:#fff; border-color:transparent; }
+          .gd .bk-file{ display:none; align-items:center; gap:.5rem; margin-top:.8rem; border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem; font-size:.82rem; background:var(--panel); color:var(--ink); }
+          .gd .stage[data-step="1"] .bk-file, .gd .stage[data-step="2"] .bk-file{ display:flex; }
+          .gd .bk-file .grn{ color:var(--good); font-weight:700; }
+          .gd .bk-since{ display:none; margin-top:.7rem; font-size:.8rem; color:var(--soft); border:1px dashed var(--border-dashed,#cbd5e1); border-radius:8px; padding:.4rem .6rem; }
+          .gd .stage[data-step="2"] .bk-since{ display:block; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Back up your data</div>
+                <div class="bk-range"><span class="pill sel">All time</span><span class="pill">Last 30 days</span><span class="pill">This year</span></div>
+                <div class="bk-btns"><span class="bk-btn pri">&#11015; Download Excel (.xlsx)</span><span class="bk-btn">&#11015; PDF summary</span></div>
+                <div class="bk-file">&#128196; yourblinds-backup.xlsx <span class="grn">&check; downloaded</span></div>
+                <div class="bk-since">&#11015; Changes since last backup (Excel) &mdash; just what&rsquo;s new or changed.</div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Pick a range &mdash; or leave it for everything.</b>
+                  <b class="c1"><span class="n">2</span> Download Excel &mdash; the copy to keep.</b>
+                  <b class="c2 good"><span class="n">3</span> Next time, grab just what changed.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>The <b>Back up data</b> tab downloads a copy of your <b>quotes and orders</b> (with line items, totals and payments)
+             to keep on your own computer.</p>
+          <ul class="steps">
+            <li>Choose a <b>date range</b> &mdash; use <b>All time / Last 30 days / This year</b>, or leave both dates blank for everything.</li>
+            <li><b>Download Excel (.xlsx)</b> is the one to keep. It has two sheets: a <b>Quotes &amp; Orders</b> summary and a full
+                <b>Line items</b> list, so you can open, sort and filter it.</li>
+            <li><b>Download PDF summary</b> gives a printable, one-look version instead.</li>
+            <li>After a full Excel backup, a <b>&ldquo;Changes since last backup&rdquo;</b> option appears &mdash; grab only what&rsquo;s new or changed next time.</li>
+          </ul>
+          <p>Dates filter by <b>order date</b> (accepted, or created if not yet accepted). Do this regularly and keep the file
+             somewhere safe, off the computer.</p>',
+        'script'  => [
+            ['0:00', 'Range presets + download buttons.',  'This downloads your quotes and orders to keep safe. Pick a date range, or leave it for the lot.', 0],
+            ['0:07', 'Excel file downloaded.',             'Download the Excel file — that\'s the one to keep. Two sheets: a summary, and every line.', 1],
+            ['0:14', 'Changes-since-last-backup appears.', 'And once you\'ve taken one, it can hand you just what\'s changed since — quick and easy.', 2],
+        ],
+    ],
 ];

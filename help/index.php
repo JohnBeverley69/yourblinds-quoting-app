@@ -358,15 +358,23 @@ $activeNav = 'help';
         .vid-add input[name="title"] { flex: 1 1 16rem; }
         .vid-add input[name="url"] { flex: 2 1 20rem; }
 
-        .guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.7rem; }
-        .guide-card { display: flex; flex-direction: column; gap: 0.2rem; text-decoration: none;
-            border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; background: var(--bg-card);
-            box-shadow: var(--shadow-sm); transition: border-color 120ms, transform 120ms; }
+        .guide-group { border: 1px solid var(--border); border-radius: 12px; margin: 0 0 0.7rem; background: var(--bg-card); overflow: hidden; }
+        .guide-group > summary { cursor: pointer; list-style: none; padding: 0.7rem 0.95rem; font-weight: 700; font-size: 1rem;
+            color: var(--text-primary); display: flex; align-items: center; gap: 0.55rem; }
+        .guide-group > summary::-webkit-details-marker { display: none; }
+        .guide-group > summary::before { content: "\25B8"; color: var(--text-faint); font-size: 0.8rem; transition: transform 120ms; }
+        .guide-group[open] > summary::before { transform: rotate(90deg); }
+        .gg-count { font-size: 0.75rem; font-weight: 600; color: var(--text-faint); background: var(--bg-subtle-2); border-radius: 999px; padding: 0.05rem 0.5rem; }
+        .gg-tab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); font-weight: 700; padding: 0.5rem 0.95rem 0.3rem; }
+        .guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.6rem; padding: 0 0.95rem 0.75rem; }
+        .gg-tab + .guide-grid { padding-top: 0; }
+        .guide-card { display: flex; flex-direction: column; gap: 0.15rem; text-decoration: none;
+            border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; background: var(--bg-card);
+            transition: border-color 120ms, transform 120ms; }
         .guide-card:hover { border-color: var(--link); transform: translateY(-1px); }
-        .guide-eyebrow { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--link); }
-        .guide-title { font-size: 1.02rem; font-weight: 700; color: var(--text-primary); margin-top: 0.15rem; }
-        .guide-blurb { font-size: 0.875rem; color: var(--text-muted); line-height: 1.45; margin-top: 0.15rem; }
-        .guide-go { font-size: 0.8125rem; font-weight: 600; color: var(--link); margin-top: 0.5rem; }
+        .guide-title { font-size: 0.98rem; font-weight: 700; color: var(--text-primary); }
+        .guide-blurb { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-top: 0.15rem; }
+        .guide-go { font-size: 0.8125rem; font-weight: 600; color: var(--link); margin-top: 0.45rem; }
     </style>
 </head>
 <body>
@@ -447,23 +455,40 @@ $activeNav = 'help';
             </section>
         <?php endif; ?>
 
-        <!-- Guided walkthroughs -->
-        <?php if ($guides): ?>
+        <!-- Guided walkthroughs — grouped by area (collapsible), sub-grouped by tab -->
+        <?php if ($guides):
+            // eyebrow convention is "Area · Tab" (e.g. "Settings · Company").
+            $guidesByArea = [];
+            foreach ($guides as $slug => $gd) {
+                $parts = array_map('trim', explode('·', (string) ($gd['eyebrow'] ?? 'Guides')));
+                $area  = ($parts[0] ?? '') !== '' ? $parts[0] : 'Guides';
+                $tab   = count($parts) > 1 ? (string) end($parts) : '';
+                $guidesByArea[$area][$tab][$slug] = $gd;
+            }
+        ?>
             <section class="section">
                 <h2 class="help-vid-title">Step-by-step guides</h2>
                 <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.7rem">
                     Animated walk-throughs with a voice-over you can play aloud — written for a first-timer.
                 </p>
-                <div class="guide-grid">
-                    <?php foreach ($guides as $slug => $gd): ?>
-                        <a class="guide-card" href="/help/guide.php?g=<?= e(rawurlencode($slug)) ?>">
-                            <span class="guide-eyebrow"><?= e($gd['eyebrow']) ?></span>
-                            <span class="guide-title"><?= e($gd['title']) ?></span>
-                            <span class="guide-blurb"><?= e($gd['blurb'] ?? '') ?></span>
-                            <span class="guide-go">Open guide &rarr;</span>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
+                <?php foreach ($guidesByArea as $area => $tabs):
+                    $areaCount = array_sum(array_map('count', $tabs)); ?>
+                    <details class="guide-group" open>
+                        <summary><?= e($area) ?> <span class="gg-count"><?= (int) $areaCount ?></span></summary>
+                        <?php foreach ($tabs as $tab => $items): ?>
+                            <?php if ($tab !== ''): ?><div class="gg-tab"><?= e($tab) ?></div><?php endif; ?>
+                            <div class="guide-grid">
+                                <?php foreach ($items as $slug => $gd): ?>
+                                    <a class="guide-card" href="/help/guide.php?g=<?= e(rawurlencode($slug)) ?>">
+                                        <span class="guide-title"><?= e($gd['title']) ?></span>
+                                        <span class="guide-blurb"><?= e($gd['blurb'] ?? '') ?></span>
+                                        <span class="guide-go">Open guide &rarr;</span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
+                <?php endforeach; ?>
             </section>
         <?php endif; ?>
 
