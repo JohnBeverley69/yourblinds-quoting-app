@@ -1413,21 +1413,72 @@ JS,
         'section' => 'Products',
         'title'   => 'Building price tables',
         'eyebrow' => 'Products',
-        'blurb'   => 'Fill a price table your way — paste into the grid, import from Excel, or clone another band.',
-        'lede'    => 'More than one way to fill a price table: <b>build the grid by hand</b> and paste the cells in, <b>import</b> a
-                      whole Excel file, or <b>clone</b> another band. Here are the methods (and the fix for the common import error).',
+        'blurb'   => 'The real workflow: clear the sample sizes, paste your widths, drops and prices from Excel, save, clone the next band, then prove it in Live preview.',
+        'lede'    => 'A price table is just <b>your supplier&rsquo;s grid</b> &mdash; every width &times; drop and what it costs.
+                      This is the fast, hand-built way straight from a spreadsheet: <b>set your real sizes</b>, <b>paste the prices</b>,
+                      <b>save</b>, then <b>clone</b> the next band and <b>prove it in Live preview</b>. (Import-from-Excel and the other pricing
+                      modes are covered below too.)',
         'open'    => '/admin/products/index.php',
         'css'     => '
           .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
-          .gd .ptwrap{ display:none; margin-top:.85rem; }
-          .gd .stage[data-step="3"] .ptwrap, .gd .stage[data-step="4"] .ptwrap{ display:block; }
-          .gd .ptgrid{ display:grid; grid-template-columns:2.7rem repeat(4,1fr); gap:2px; background:var(--line); border:1px solid var(--line); border-radius:8px; padding:2px; max-width:22rem; }
-          .gd .ptc{ background:var(--surface); padding:.24rem; text-align:center; font-size:.7rem; color:var(--ink); }
+
+          /* ---- Quick start dialog (steps 1-2) ---- */
+          .gd .qsdlg{ display:none; border:1px solid var(--line); border-radius:10px; padding:.7rem .8rem; background:var(--panel); max-width:24rem; }
+          .gd .stage[data-step="1"] .qsdlg, .gd .stage[data-step="2"] .qsdlg{ display:block; }
+          .gd .qshd{ font-size:.72rem; font-weight:700; color:var(--faint); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.55rem; }
+          .gd .qsrow{ margin-bottom:.55rem; }
+          .gd .qsrow label{ display:block; font-size:.68rem; font-weight:600; color:var(--soft); margin-bottom:.2rem; }
+          .gd .ta2{ position:relative; min-height:1.9rem; border:1px solid var(--line); border-radius:7px; background:var(--surface); padding:.34rem .5rem; font-size:.74rem; color:var(--ink); overflow:hidden; }
+          /* default (sample) sizes — muted, struck through as they are cleared */
+          .gd .ta2 .def{ color:var(--faint); }
+          .gd .stage[data-step="1"] .ta2 .def{ text-decoration:line-through; opacity:.55; }
+          .gd .stage[data-step="2"] .ta2 .def{ display:none; }
+          /* real pasted values roll in at step 2 */
+          .gd .ta2 .rv{ display:none; }
+          .gd .stage[data-step="2"] .ta2 .rv{ display:inline-block; clip-path:inset(0 100% 0 0); animation:gdRoll .8s ease forwards; }
+          .gd .stage[data-step="2"] .ta2{ box-shadow:0 0 0 2px var(--accent-ring, rgba(37,99,235,.35)); }
+          .gd .clearchip{ display:inline-block; margin-top:.15rem; font-size:.64rem; color:var(--faint); border:1px solid var(--line); border-radius:20px; padding:.05rem .5rem; }
+          .gd .stage[data-step="1"] .clearchip{ box-shadow:0 0 0 2px var(--accent-ring, rgba(37,99,235,.35)); color:var(--ink); }
+          .gd .buildbtn{ display:inline-flex; margin-top:.2rem; background:var(--nav); color:#fff; border-radius:8px; padding:.4rem .8rem; font-size:.78rem; font-weight:600; transition:transform .1s, filter .1s; }
+          .gd .stage[data-step="3"] .buildbtn{ transform:scale(.96); filter:brightness(1.25); }
+
+          /* ---- the grid (steps 3-7) ---- */
+          .gd .ptwrap{ display:none; margin-top:.2rem; }
+          .gd .stage[data-step="3"] .ptwrap, .gd .stage[data-step="4"] .ptwrap,
+          .gd .stage[data-step="5"] .ptwrap, .gd .stage[data-step="6"] .ptwrap,
+          .gd .stage[data-step="7"] .ptwrap{ display:block; }
+          .gd .ptgrid{ display:grid; grid-template-columns:2.9rem repeat(4,1fr); gap:2px; background:var(--line); border:1px solid var(--line); border-radius:8px; padding:2px; max-width:23rem; }
+          .gd .ptc{ background:var(--surface); padding:.26rem; text-align:center; font-size:.7rem; color:var(--ink); font-variant-numeric:tabular-nums; }
           .gd .ptc.hd{ background:var(--panel); color:var(--faint); font-weight:700; }
-          .gd .savebtn2{ margin-top:.85rem; display:inline-flex; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .85rem; font-size:.82rem; font-weight:600; transition:transform .1s, filter .1s; }
-          .gd .stage[data-step="4"] .savebtn2{ transform:scale(.97); filter:brightness(1.2); }
-          .gd .ok-saved{ display:none; margin-top:.75rem; }
-          .gd .stage[data-step="4"] .ok-saved{ display:flex; }',
+          /* price numbers are empty until pasted at step 4 */
+          .gd .ptc .pn{ opacity:0; transition:opacity .45s ease; }
+          .gd .stage[data-step="4"] .ptc .pn, .gd .stage[data-step="5"] .ptc .pn,
+          .gd .stage[data-step="6"] .ptc .pn, .gd .stage[data-step="7"] .ptc .pn{ opacity:1; }
+          /* the cell we cross-check in Live preview */
+          .gd .stage[data-step="7"] .ptc.qc{ background:#d1fae5; color:#065f46; font-weight:700; box-shadow:inset 0 0 0 2px #34d399; }
+
+          .gd .savebtn2{ margin-top:.7rem; display:inline-flex; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .85rem; font-size:.82rem; font-weight:600; transition:transform .1s, filter .1s; }
+          .gd .stage[data-step="5"] .savebtn2{ transform:scale(.97); filter:brightness(1.2); }
+          .gd .ok-saved{ display:none; margin-top:.6rem; }
+          .gd .stage[data-step="5"] .ok-saved, .gd .stage[data-step="6"] .ok-saved,
+          .gd .stage[data-step="7"] .ok-saved{ display:flex; }
+
+          /* ---- clone panel (step 6) ---- */
+          .gd .clonep{ display:none; margin-top:.7rem; border:1px dashed var(--line); border-radius:9px; padding:.55rem .7rem; background:var(--panel); max-width:23rem; }
+          .gd .stage[data-step="6"] .clonep{ display:block; }
+          .gd .clonep .ct{ font-size:.74rem; color:var(--ink); margin-bottom:.4rem; }
+          .gd .clonep .ct b{ color:var(--ink); }
+          .gd .clonebtn{ display:inline-flex; align-items:center; gap:.3rem; background:var(--surface); border:1px solid var(--line); border-radius:7px; padding:.32rem .7rem; font-size:.74rem; font-weight:600; color:var(--ink); box-shadow:0 0 0 2px var(--accent-ring, rgba(37,99,235,.3)); }
+
+          /* ---- live-preview qualify card (step 7) ---- */
+          .gd .pvcard{ display:none; margin-top:.7rem; border:1px solid var(--line); border-radius:10px; overflow:hidden; max-width:23rem; }
+          .gd .stage[data-step="7"] .pvcard{ display:block; }
+          .gd .pvhd{ display:flex; align-items:center; gap:.4rem; background:var(--panel); padding:.4rem .65rem; font-size:.72rem; font-weight:700; color:var(--faint); border-bottom:1px solid var(--line); }
+          .gd .pvbody{ padding:.55rem .65rem; }
+          .gd .pvdim{ font-size:.72rem; color:var(--soft); margin-bottom:.45rem; }
+          .gd .pvdim b{ color:var(--ink); }
+          .gd .pvres{ background:#d1fae5; color:#065f46; border-radius:8px; padding:.5rem .65rem; font-size:.76rem; }
+          .gd .pvres .big{ font-size:1rem; font-weight:700; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / price-table</span></div>
@@ -1437,56 +1488,100 @@ JS,
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="card-t">Price table &mdash; Roller Blind / Band A</div>
-                <p class="ldesc2">Build the grid by hand: set your widths and drops, then paste the prices in.</p>
-                <div class="frow">
-                  <div class="fld"><label>Widths (mm)</label><div class="box f1"><span class="ph">e.g. 600, 900, 1200&hellip;</span><span class="val">600, 900, 1200, 1500</span></div></div>
-                  <div class="fld"><label>Drops (mm)</label><div class="box f2"><span class="ph">e.g. 1000, 1500, 2000&hellip;</span><span class="val">1000, 1500, 2000, 2500</span></div></div>
+                <div class="card-t">Price table &mdash; 25mm Venetian / Band: Plain</div>
+                <p class="ldesc2">Set your real sizes, paste the prices from Excel, save &mdash; then clone the next band and prove it.</p>
+
+                <!-- Quick start dialog: sample sizes you clear, then paste your own -->
+                <div class="qsdlg">
+                  <div class="qshd">Quick start &mdash; default grid</div>
+                  <div class="qsrow">
+                    <label>Widths (mm)</label>
+                    <div class="ta2"><span class="def">500, 600, 700, 800, 900, 1000</span><span class="rv">600, 900, 1200, 1500</span></div>
+                    <span class="clearchip">Clear</span>
+                  </div>
+                  <div class="qsrow">
+                    <label>Drops (mm)</label>
+                    <div class="ta2"><span class="def">600, 900, 1200, 1500</span><span class="rv">900, 1200, 1500, 1800</span></div>
+                    <span class="clearchip">Clear</span>
+                  </div>
+                  <div class="buildbtn">Build grid</div>
                 </div>
+
+                <!-- the grid -->
                 <div class="ptwrap">
                   <div class="ptgrid">
                     <span class="ptc hd">mm</span><span class="ptc hd">600</span><span class="ptc hd">900</span><span class="ptc hd">1200</span><span class="ptc hd">1500</span>
-                    <span class="ptc hd">1000</span><span class="ptc">38</span><span class="ptc">44</span><span class="ptc">52</span><span class="ptc">60</span>
-                    <span class="ptc hd">1500</span><span class="ptc">46</span><span class="ptc">55</span><span class="ptc">66</span><span class="ptc">78</span>
-                    <span class="ptc hd">2000</span><span class="ptc">58</span><span class="ptc">70</span><span class="ptc">84</span><span class="ptc">99</span>
-                    <span class="ptc hd">2500</span><span class="ptc">70</span><span class="ptc">85</span><span class="ptc">102</span><span class="ptc">120</span>
+                    <span class="ptc hd">900</span><span class="ptc"><span class="pn">28.40</span></span><span class="ptc"><span class="pn">35.10</span></span><span class="ptc"><span class="pn">42.20</span></span><span class="ptc"><span class="pn">49.90</span></span>
+                    <span class="ptc hd">1200</span><span class="ptc"><span class="pn">32.60</span></span><span class="ptc"><span class="pn">40.80</span></span><span class="ptc qc"><span class="pn">49.32</span></span><span class="ptc"><span class="pn">57.60</span></span>
+                    <span class="ptc hd">1500</span><span class="ptc"><span class="pn">38.10</span></span><span class="ptc"><span class="pn">47.20</span></span><span class="ptc"><span class="pn">56.40</span></span><span class="ptc"><span class="pn">66.10</span></span>
+                    <span class="ptc hd">1800</span><span class="ptc"><span class="pn">43.50</span></span><span class="ptc"><span class="pn">53.90</span></span><span class="ptc"><span class="pn">64.20</span></span><span class="ptc"><span class="pn">75.80</span></span>
+                  </div>
+                  <div class="savebtn2">Save grid</div>
+                  <div class="okbanner ok-saved"><span>&check;</span> Saved 16 price cells.</div>
+                </div>
+
+                <!-- clone the next band -->
+                <div class="clonep">
+                  <div class="ct">Next band: <b>Special effects</b> &mdash; same shape, different prices.</div>
+                  <span class="clonebtn">&#9635; Clone Plain</span>
+                </div>
+
+                <!-- qualify in Live preview -->
+                <div class="pvcard">
+                  <div class="pvhd">&#128065; Live preview</div>
+                  <div class="pvbody">
+                    <div class="pvdim">25mm Venetian &middot; Plain &middot; <b>1200</b> &times; <b>1200</b> mm</div>
+                    <div class="pvres">Base <span class="big">&pound;49.32</span> &middot; markup 100% &middot; sell <b>&pound;98.64</b><br>&check; matches the grid cell exactly.</div>
                   </div>
                 </div>
-                <div class="savebtn2">Save prices</div>
-                <div class="okbanner ok-saved"><span>&check;</span> Saved 16 price cells.</div>
+
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> Set your widths (paste a list).</b>
-                  <b class="c2"><span class="n">2</span> Set your drops &mdash; the grid builds.</b>
-                  <b class="c3"><span class="n">3</span> Paste your prices straight into the cells.</b>
-                  <b class="c4 good"><span class="n">4</span> Save &mdash; table built.</b>
+                  <b class="c1"><span class="n">1</span> Quick start offers sample sizes &mdash; clear them.</b>
+                  <b class="c2"><span class="n">2</span> Paste your real widths &amp; drops from Excel.</b>
+                  <b class="c3"><span class="n">3</span> Build grid &mdash; a cell per width &times; drop.</b>
+                  <b class="c4"><span class="n">4</span> Paste the whole block of prices in.</b>
+                  <b class="c5"><span class="n">5</span> Save grid &mdash; 16 cells saved.</b>
+                  <b class="c6"><span class="n">6</span> Clone the next band, paste what differs.</b>
+                  <b class="c7 good"><span class="n">7</span> Prove it in Live preview.</b>
                 </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>There&rsquo;s more than one way to fill a price table. Open a band&rsquo;s table from the system&rsquo;s <b>Price tables</b> page,
-             then use whichever suits you:</p>
+          <p>A price table is your <b>supplier&rsquo;s grid</b> for one band: every <b>width &times; drop</b> and the trade price at that size.
+             Open a band&rsquo;s table from the system&rsquo;s <b>Price tables</b> page. It starts empty and offers a <b>Quick start</b> grid of
+             sample sizes &mdash; those are just a placeholder, so the first thing to do is <b>clear them and put your own in</b>.</p>
           <ul class="steps">
-            <li><b>Build it by hand</b> (shown above) &mdash; set your <b>widths</b> and <b>drops</b> (with <b>+ Width</b> / <b>+ Drop</b>,
-                or paste a whole list into the axis box), then <b>paste your prices</b> straight into the grid. You can paste a
-                <b>whole column</b> from Excel &mdash; click the top cell and paste, and it fills down.</li>
-            <li><b>Import from Excel</b> &mdash; fastest for a full range. <b>Bulk import (multiple bands)</b> reads one file with all your
-                grids (each block starts with a <code>Band X</code> row); if it has several worksheets you pick which one. See the note below.</li>
-            <li><b>Clone another band</b> &mdash; if two bands share the same grid shape (e.g. String vs Tape), open the empty one and click
-                <b>Clone</b> beside a filled band. It copies the whole grid; you just tweak the few cells that differ.</li>
+            <li><b>Set your real sizes.</b> In Quick start, <b>Clear</b> the sample widths and drops, then <b>paste your own</b> straight from
+                the supplier&rsquo;s spreadsheet &mdash; a whole row or column at a time (drag across in Excel, <kbd>Ctrl</kbd>+<kbd>C</kbd>,
+                click the box, <kbd>Ctrl</kbd>+<kbd>V</kbd>). Click <b>Build grid</b> and you get an empty cell for every width and drop.</li>
+            <li><b>Paste the prices.</b> Back in Excel, select the whole block of prices, copy, then click the first grid cell and paste &mdash;
+                the whole block drops into place (a copied column or range spreads across the cells). Then <b>Save grid</b>.</li>
+            <li><b>Clone the next band.</b> The next band is usually the <em>same shape</em> at different prices (e.g. Plain vs Special effects,
+                String vs Tape). Open the empty band and click <b>Clone</b> beside a filled one &mdash; it copies the whole grid, and you just
+                paste in the one column of prices that differs, then Save.</li>
+            <li><b>Prove it.</b> On the product page, click <b>&#128065; Live preview</b>, pick the band and punch in a size. Check the
+                <b>base price matches the grid cell</b> you can see &mdash; e.g. 1200&times;1200 shows &pound;49.32, and with 100% markup the
+                sell price is &pound;98.64. If it matches, the table&rsquo;s wired up correctly.</li>
           </ul>
-          <div class="oops"><b>Excel import says &ldquo;No band sections detected&rdquo;?</b> Each grid in the file needs a <code>Band A</code>
+          <p><b>Prefer to do it all in Excel?</b> Use <b>Bulk import (multiple bands)</b> &mdash; one file with every band&rsquo;s grid, each
+             block starting with a <code>Band X</code> row in column A. If the file has several worksheets you pick which one.</p>
+          <div class="oops"><b>Import says &ldquo;No band sections detected&rdquo;?</b> Each grid in the file needs a <code>Band A</code>
              (or B, C&hellip;) row in <b>column A</b> above it. Add those and re-import. (Spelling is forgiving &mdash; <code>Band A</code>,
              <code>Price Band A</code>, even a <code>Bnad A</code> typo &mdash; but the marker must be there. &pound; signs and commas in prices are stripped automatically.)</div>
           <p><b>Other pricing modes build differently:</b> a <b>width-only</b> product is a simple <b>width &rarr; price</b> list; <b>per-slat</b>
-             is a <b>width &rarr; rate</b> list (with <em>Import width prices</em> / <em>Import per-slat rates</em> buttons); and <b>per m&sup2;</b>
+             is a <b>drop &rarr; rate</b> list (with <em>Import width prices</em> / <em>Import per-slat rates</em> buttons); and <b>per m&sup2;</b>
              is a single <b>&pound;/m&sup2; rate</b> per system &amp; band. Same idea &mdash; type, paste, or import.</p>
-          <p>Whichever way, <b>re-saving or re-importing replaces</b> the prices, so it&rsquo;s safe to redo after a price rise.</p>',
+          <p>Whichever way, <b>re-saving or re-importing replaces</b> that table&rsquo;s prices, so it&rsquo;s safe to redo after a price rise.
+             And there&rsquo;s no need for a dozen tabs &mdash; it&rsquo;s all one screen; use your browser&rsquo;s <b>Back</b> button to step out.</p>',
         'script'  => [
-            ['0:00', 'Widths pasted in.',            'You can build a price table right here. Set your widths — type them, or paste a whole list.', 1],
-            ['0:07', 'Drops pasted; grid builds.',   'Then your drops, and the grid takes shape — a cell for every width and drop.', 2],
-            ['0:14', 'Prices pasted into the grid.',  'Now paste your prices straight in — even a whole column from your spreadsheet drops into place.', 3],
-            ['0:22', 'Saved 16 price cells.',        'Save, and the table\'s built. Prefer a file? Import the whole grid from Excel, or clone another band — same result.', 4],
+            ['0:00', 'Quick start offers sample sizes.',  'Open the band\'s table and it starts empty. Quick start offers some default sizes, but those aren\'t yours — so clear them out.', 1],
+            ['0:08', 'Your real widths and drops pasted.', 'Now paste your real widths and drops straight from the supplier\'s spreadsheet — a whole row or column at a time.', 2],
+            ['0:16', 'Build grid.',                        'Click Build grid, and you get a cell for every width and drop — empty, waiting for prices.', 3],
+            ['0:23', 'Prices pasted in from Excel.',       'Back in Excel, select the whole block of prices, copy, and paste it straight into the grid. It drops into place.', 4],
+            ['0:31', 'Saved 16 price cells.',              'Click Save grid — sixteen cells saved. That band is done.', 5],
+            ['0:38', 'Clone the next band.',               'The next band is usually the same shape. Don\'t retype it — click Clone, then paste in just the prices that differ.', 6],
+            ['0:46', 'Live preview confirms the price.',   'Finally, prove it. Open Live preview and punch in a size. Twelve hundred by twelve hundred — base forty-nine thirty-two, matching the grid cell exactly. Spot on.', 7],
         ],
     ],
 

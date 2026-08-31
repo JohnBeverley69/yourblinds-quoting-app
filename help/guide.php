@@ -117,13 +117,15 @@ $activeNav = 'help';
       .gd .caps b .n{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; color:var(--accent); font-size:.8rem; }
       .gd .caps b.err{ color:var(--err); }
       .gd .caps b.good{ color:var(--good); }
-      /* caption follows the step: <b class="cN"> shows at data-step="N" (0..5) */
+      /* caption follows the step: <b class="cN"> shows at data-step="N" (0..7) */
       .gd .stage[data-step="0"] .caps b.c0,
       .gd .stage[data-step="1"] .caps b.c1,
       .gd .stage[data-step="2"] .caps b.c2,
       .gd .stage[data-step="3"] .caps b.c3,
       .gd .stage[data-step="4"] .caps b.c4,
-      .gd .stage[data-step="5"] .caps b.c5{ opacity:1; }
+      .gd .stage[data-step="5"] .caps b.c5,
+      .gd .stage[data-step="6"] .caps b.c6,
+      .gd .stage[data-step="7"] .caps b.c7{ opacity:1; }
       @media (prefers-reduced-motion:reduce){
         .gd .hint, .gd .save, .gd .toast, .gd .caps b, .gd [data-anim]{ transition:none !important; }
       }
