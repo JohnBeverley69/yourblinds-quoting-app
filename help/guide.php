@@ -153,6 +153,18 @@ $activeNav = 'help';
       .gd .ta{ position:relative; min-height:44px; border:1px solid var(--line); border-radius:7px; background:var(--panel); padding:.4rem .5rem; font-size:.8rem; color:var(--ink); }
       .gd .ta .ph{ color:var(--faint); }
       .gd .ta .val{ position:absolute; inset:0; padding:.4rem .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; }
+      /* Progressive fill: tag a .box/.ta with fN (f1..f5) = its value types in at
+         step N and stays; while it IS step N the field gets an accent ring + a
+         blinking caret so you can SEE it being filled. Poster (step 0) = all blank. */
+      @keyframes gdCaret{ 50%{ opacity:0; } }
+      .gd .stage:not([data-step="0"]) .f1 .val{ opacity:1; }
+      .gd .stage[data-step="2"] .f2 .val, .gd .stage[data-step="3"] .f2 .val, .gd .stage[data-step="4"] .f2 .val, .gd .stage[data-step="5"] .f2 .val{ opacity:1; }
+      .gd .stage[data-step="3"] .f3 .val, .gd .stage[data-step="4"] .f3 .val, .gd .stage[data-step="5"] .f3 .val{ opacity:1; }
+      .gd .stage[data-step="4"] .f4 .val, .gd .stage[data-step="5"] .f4 .val{ opacity:1; }
+      .gd .stage[data-step="5"] .f5 .val{ opacity:1; }
+      .gd .stage[data-step="1"] .f1, .gd .stage[data-step="2"] .f2, .gd .stage[data-step="3"] .f3, .gd .stage[data-step="4"] .f4, .gd .stage[data-step="5"] .f5{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
+      .gd .stage[data-step="1"] .f1 .val::after, .gd .stage[data-step="2"] .f2 .val::after, .gd .stage[data-step="3"] .f3 .val::after, .gd .stage[data-step="4"] .f4 .val::after, .gd .stage[data-step="5"] .f5 .val::after{ content:""; display:inline-block; width:2px; height:1.05em; background:var(--accent); margin-left:2px; animation:gdCaret .9s steps(1) infinite; }
+      @media (prefers-reduced-motion:reduce){ .gd .f1 .val::after, .gd .f2 .val::after, .gd .f3 .val::after, .gd .f4 .val::after, .gd .f5 .val::after{ animation:none !important; } }
 
       /* written steps */
       .gd .steps{ list-style:none; padding:0; margin:.2rem 0 .9rem; counter-reset:s; }
