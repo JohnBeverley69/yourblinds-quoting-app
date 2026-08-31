@@ -78,6 +78,13 @@ $activeNav = 'help';
       .gd .sec-h h2{ font-size:1.2rem; font-weight:700; margin:0; letter-spacing:-.01em; }
       .gd .sec-h .num{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--accent); font-weight:600; font-size:.9rem; }
       .gd .sec-h p{ margin:0; color:var(--soft); font-size:.86rem; }
+      /* the "Watch it" heading doubles as the play button */
+      .gd .play-head{ cursor:pointer; user-select:none; border-radius:9px; padding:.25rem .4rem; margin:-.25rem -.4rem 1rem; transition:background .12s; }
+      .gd .play-head:hover{ background:var(--accent-wash); }
+      .gd .play-head:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+      .gd .play-head h2{ display:inline-flex; align-items:center; gap:.5rem; }
+      .gd .playicon{ display:inline-flex; align-items:center; justify-content:center; width:1.55rem; height:1.55rem; border-radius:50%; background:var(--accent); color:#fff; font-size:.7rem; }
+      .gd .play-head:hover .playicon{ background:var(--accent-ink); }
 
       /* animated walkthrough */
       .gd .demo-shell{ background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--gd-shadow); overflow:hidden; }
@@ -182,13 +189,15 @@ $activeNav = 'help';
             <?php endif; ?>
 
             <section>
-                <div class="sec-h"><span class="num">01</span><h2>Watch it</h2><p>plays with a voice-over — turn your volume down for quiet</p></div>
+                <div class="sec-h play-head" id="gdWatch" role="button" tabindex="0" aria-label="Play the walkthrough">
+                    <span class="num">01</span><h2><span class="playicon" id="gdIcon">&#9654;</span> Watch it</h2><p>click to play — with the voice-over</p>
+                </div>
                 <?= $g['demo'] ?>
                 <div class="ttsrow">
-                    <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay narration</button>
+                    <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay</button>
                     <label class="vsel"><span>Voice</span><select id="gdVoice"></select></label>
                 </div>
-                <p class="ttsnote">The voice-over plays automatically in <b>Google UK English Female</b> (Chrome / Edge). Some browsers hold the sound until you tap the page first — if you hear nothing, click anywhere or press replay.</p>
+                <p class="ttsnote">Plays with a voice-over in <b>Google UK English Female</b> where your browser has it (Chrome / Edge) — otherwise the nearest British voice. Turn your volume down for quiet.</p>
             </section>
 
             <section>
@@ -205,22 +214,27 @@ $activeNav = 'help';
             var sel = document.getElementById('gdVoice');
             var stage = document.getElementById('gdStage');
             var saveEl = document.querySelector('.gd .save');
+            var watchEl = document.getElementById('gdWatch');
+            var iconEl = document.getElementById('gdIcon');
             var synth = window.speechSynthesis;
             if (!btn) return;
 
-            var STEP_COUNT = 4, idleTimer = null;
             function setStep(n){
                 if (!stage) return;
                 stage.setAttribute('data-step', String(n));
                 if (saveEl && (n === 1 || n === 3)){ saveEl.classList.add('pressed'); setTimeout(function(){ saveEl.classList.remove('pressed'); }, 200); }
             }
-            function stopIdle(){ if (idleTimer){ clearInterval(idleTimer); idleTimer = null; } }
-            function startIdle(){ stopIdle(); var s = 0; setStep(0); idleTimer = setInterval(function(){ s = (s + 1) % STEP_COUNT; setStep(s); }, 2600); }
-            startIdle(); // visuals loop on their own until (and after) narration plays
+            setStep(0); // resting poster — nothing plays until asked (no looping)
 
             if (!synth){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
 
             var playing = false, i = 0, voices = [], spokeAny = false;
+            function setPlaying(on){
+                playing = on;
+                btn.textContent = on ? '⏹ Stop' : '▶ Replay';
+                btn.classList.toggle('speaking', on);
+                if (iconEl) iconEl.textContent = on ? '❚❚' : '▶';
+            }
 
             function loadVoices(){
                 voices = synth.getVoices() || [];
@@ -245,40 +259,26 @@ $activeNav = 'help';
                 u.rate = 1; u.pitch = 1;
                 // Advance the walkthrough as each line BEGINS — this is what keeps
                 // the visuals locked to the voice, whatever its speed.
-                u.onstart = function(){ spokeAny = true; setStep(steps[idx]); btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); };
+                u.onstart = function(){ spokeAny = true; setStep(steps[idx]); if (!playing) setPlaying(true); };
                 u.onend = function(){ i++; speakNext(); };
                 u.onerror = function(){ i++; speakNext(); };
                 synth.speak(u);
             }
-            function play(){ playing = true; i = 0; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); stopIdle(); setStep(0); synth.cancel(); setTimeout(speakNext, 60); }
-            function stop(){ playing = false; btn.textContent = '▶ Replay narration'; btn.classList.remove('speaking'); synth.cancel(); startIdle(); }
-            btn.addEventListener('click', function(){ playing ? stop() : play(); });
+            // Play once through, in sync — no looping. Ends resting on the final step.
+            function play(){ setPlaying(true); i = 0; setStep(0); synth.cancel(); setTimeout(speakNext, 60); }
+            function stop(){ setPlaying(false); synth.cancel(); }
+            function toggle(){ playing ? stop() : play(); }
 
-            // Sound is on by default: try to start narration on load. Browsers that
-            // block autoplay until a user gesture are covered by the first-gesture
-            // fallback below (which fires only if nothing has spoken yet).
-            var autoStarted = false;
-            function autoStart(){
-                if (autoStarted) return; autoStarted = true; play();
-                // If the browser silently blocked autoplay, nothing will have spoken —
-                // let the visuals keep looping until the first tap starts the sound.
-                setTimeout(function(){ if (playing && !spokeAny) startIdle(); }, 1400);
-            }
-            function onFirstGesture(e){
-                document.removeEventListener('pointerdown', onFirstGesture, true);
-                document.removeEventListener('keydown', onFirstGesture, true);
-                var controls = document.querySelector('.gd .ttsrow');
-                if (controls && controls.contains(e.target)) return; // let the button handle itself
-                if (!spokeAny) play();                                // autoplay was blocked — start now
+            btn.addEventListener('click', toggle);
+            // The "Watch it" heading is the play button.
+            if (watchEl){
+                watchEl.addEventListener('click', toggle);
+                watchEl.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); } });
             }
 
             loadVoices();
             if (typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
-            document.addEventListener('pointerdown', onFirstGesture, true);
-            document.addEventListener('keydown', onFirstGesture, true);
             window.addEventListener('pagehide', stop);
-            // Give voices a moment to load so the very first line uses the chosen voice.
-            setTimeout(autoStart, voices.length ? 350 : 700);
         })();
         </script>
     <?php endif; ?>
