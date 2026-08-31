@@ -228,10 +228,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $f['duration_minutes'] = $win['duration'];
                 $slotWindow            = $f['slot_window'];
 
-                $taken = ampm_window_count(
+                $taken  = ampm_window_count(
                     db(), (int) $clientId, $f['appointment_date'], $slotWindow, $id
                 );
-                if ($taken >= $ampmCap) {
+                $winCap = $slotWindow === 'pm' ? (int) $ampm['pm_capacity'] : (int) $ampm['am_capacity'];
+                if ($taken >= $winCap) {
                     $error = ampm_window_label($slotWindow)
                         . ' is fully booked on '
                         . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
@@ -360,7 +361,7 @@ $activeNav = 'calendar';
 // Live capacity for the currently-chosen date (excluding this appointment), so
 // the window hints are correct on first paint. Refreshed via AJAX on date change.
 $ampmAvail = $useAmpm
-    ? ampm_availability(db(), (int) $clientId, (string) $f['appointment_date'], $ampmCap, $id)
+    ? ampm_availability(db(), (int) $clientId, (string) $f['appointment_date'], $id)
     : null;
 ?><!doctype html>
 <html lang="en">
@@ -609,14 +610,14 @@ $ampmAvail = $useAmpm
                                     <span class="ampm-name"><?= e($win['label']) ?>
                                         <span class="ampm-range">(<?= e($win['range']) ?>)</span></span>
                                     <span class="ampm-count" data-window="<?= e($wk) ?>">
-                                        <?= $info['full'] && !$checked ? 'Full' : e($info['remaining'] . ' of ' . $ampmCap . ' left') ?>
+                                        <?= $info['full'] && !$checked ? 'Full' : e($info['remaining'] . ' of ' . $info['capacity'] . ' left') ?>
                                     </span>
                                 </label>
                                 <?php endforeach; ?>
                             </div>
                             <p style="margin:0.4rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
-                                The customer is given this window, never an exact time. Each window holds up to
-                                <?= (int) $ampmCap ?> quote visit<?= $ampmCap === 1 ? '' : 's' ?> per day.
+                                The customer is given this window, never an exact time. Each window holds a set number of
+                                quote visits per day (change the times and limits in Settings → Calendar).
                             </p>
                             <?php if (!empty($appt['cust_email'])): ?>
                             <label class="checkbox-row" for="notify_customer" style="margin-top:0.75rem">
@@ -830,7 +831,7 @@ $ampmAvail = $useAmpm
                 var full = info.full && !isChecked;
                 if (input) input.disabled = full;
                 opt.classList.toggle('is-full', full);
-                if (count) count.textContent = full ? 'Full' : (info.remaining + ' of ' + data.capacity + ' left');
+                if (count) count.textContent = full ? 'Full' : (info.remaining + ' of ' + (info.capacity != null ? info.capacity : data.capacity) + ' left');
             });
             syncSelected();
         }

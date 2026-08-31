@@ -347,8 +347,8 @@ return [
                 </div>
                 <div class="opt opt-slots">
                   <div class="opt-h"><span class="tick t-slots">&check;</span> &#128344; Morning / afternoon booking slots</div>
-                  <small>A window, not an exact time. Bookings per window: <b>4</b></small>
-                  <div class="windows"><span class="win">Morning 9&ndash;1</span><span class="win">Afternoon 1&ndash;5</span></div>
+                  <small>A window, not an exact time &mdash; set your own times &amp; limits.</small>
+                  <div class="windows"><span class="win">Morning 9&ndash;1 &middot; 5/day</span><span class="win">Afternoon 1&ndash;5 &middot; 3/day</span></div>
                 </div>
                 <div class="caps">
                   <b class="c0"><span class="n">1</span> Three quick calendar choices.</b>
@@ -368,10 +368,10 @@ return [
                 it&rsquo;s settled.</li>
             <li><b>&#129517; Navigation app</b> &mdash; when you tap an address on your schedule or the day calendar, it opens
                 in the app you pick here: <b>Google Maps</b> (the default) or <b>Waze</b> if your fitters prefer it for live traffic.</li>
-            <li><b>&#128344; Morning / afternoon booking slots</b> &mdash; for <b>measure (quote) visits</b>, offer
-                <b>Morning (9am&ndash;1pm)</b> or <b>Afternoon (1pm&ndash;5pm)</b> instead of an exact time, so you promise a
-                window. Set <b>bookings per window, per day</b> (e.g. 4) &mdash; once a window is full, it can&rsquo;t be booked.
-                Fittings aren&rsquo;t affected.</li>
+            <li><b>&#128344; Morning / afternoon booking slots</b> &mdash; for <b>measure (quote) visits</b>, offer a
+                <b>Morning</b> or <b>Afternoon</b> window instead of an exact time, so you promise a window, not a specific hour.
+                Set <b>your own times</b> for each window and <b>how many bookings each holds per day</b> (the two can differ &mdash;
+                say 5 mornings but 3 afternoons). Once a window is full it can&rsquo;t be booked. Fittings aren&rsquo;t affected.</li>
           </ul>
           <div class="heads"><span class="hi">&#9888;</span><div><b>Heads up about the money:</b> this shows the figures to
              <b>everyone who can open the calendar</b> &mdash; including people whose logins normally hide costs, like fitters.
@@ -382,7 +382,7 @@ return [
             ['0:00', 'Calendar section.',                 'Your calendar has three little choices. Here they are.', 0],
             ['0:06', 'Money on; job shows figures.',       'Show each job\'s value, what\'s paid, and what\'s left. But careful — everyone who can open the calendar sees it, even fitters. Leave it off if that\'s not what you want.', 1],
             ['0:14', 'Waze selected.',                     'Next, the map app your address links open in. Google Maps, or Waze if your fitters prefer it.', 2],
-            ['0:22', 'Slots on; windows appear.',          'And morning or afternoon windows for measure visits, so you give a window, not an exact time. Set how many fit in each.', 3],
+            ['0:22', 'Slots on; windows appear.',          'And morning or afternoon windows for measure visits, so you give a window, not an exact time. Set your own hours, and how many fit in each.', 3],
             ['0:31', 'Saved.',                             'Each choice saves on its own. That\'s your calendar sorted.', 4],
         ],
     ],

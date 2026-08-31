@@ -53,7 +53,7 @@ if (!$d || $d->format('Y-m-d') !== $date) {
 }
 
 $excludeId = (int) ($_GET['exclude'] ?? 0);
-$avail     = ampm_availability($pdo, $clientId, $date, $cfg['capacity'], $excludeId);
+$avail     = ampm_availability($pdo, $clientId, $date, $excludeId);
 
 $windows = [];
 foreach ($avail as $w => $info) {
@@ -62,12 +62,13 @@ foreach ($avail as $w => $info) {
         'taken'     => $info['taken'],
         'remaining' => $info['remaining'],
         'full'      => $info['full'],
+        'capacity'  => $info['capacity'],   // per-window capacity
     ];
 }
 
 echo json_encode([
     'ok'       => true,
     'enabled'  => true,
-    'capacity' => $cfg['capacity'],
+    'capacity' => $cfg['capacity'],   // legacy top-level (morning) — windows[].capacity is authoritative
     'windows'  => $windows,
 ]);
