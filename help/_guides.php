@@ -1680,6 +1680,196 @@ JS,
         ],
     ],
 
+    'products-options' => [
+        'aud'     => 'admin',
+        'section' => 'Products',
+        'title'   => 'Adding options',
+        'eyebrow' => 'Products',
+        'blurb'   => 'Build the extras a salesperson picks — control type, motor, bottom weight — with prices, follow-on options and measurement boxes.',
+        'lede'    => 'Options are the <b>extras</b> your salesperson picks for each blind &mdash; <em>Control type</em>, <em>Bottom weight</em>,
+                      <em>Motor type</em>, <em>Bracket colour</em>. Each option has <b>choices</b>, each choice can carry a <b>price</b>, and an
+                      option can be set to <b>appear only when</b> another choice is picked. Here&rsquo;s the whole thing, end to end.',
+        'open'    => '/admin/products/index.php',
+        'css'     => '
+          .gd .ldesc2{ color:var(--soft); font-size:.8rem; margin:0 0 .75rem; }
+          /* a statically-filled field (looks like .fld .box, but always shows its value) */
+          .gd .boxv{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel); display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
+          .gd .orow{ display:flex; gap:1.3rem; margin-top:.5rem; }
+          .gd .chkline{ display:inline-flex; align-items:center; gap:.4rem; font-size:.76rem; color:var(--ink); }
+          .gd .osc{ display:none; }
+          .gd .stage[data-step="0"] .scA, .gd .stage[data-step="1"] .scA{ display:block; }
+          .gd .stage[data-step="2"] .scB, .gd .stage[data-step="3"] .scB{ display:block; }
+          .gd .stage[data-step="4"] .scC{ display:block; }
+          .gd .stage[data-step="5"] .scD{ display:block; }
+          .gd .stage[data-step="6"] .scE{ display:block; }
+
+          /* add-option form */
+          .gd .exlabel{ font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin:0 0 .45rem; }
+          .gd .exhelp{ font-size:.68rem; color:var(--faint); margin:.3rem 0 0; }
+          .gd .addbtn{ margin-top:.8rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.4rem .85rem; font-size:.8rem; font-weight:700; }
+
+          /* choices grid */
+          .gd .ogrid{ display:grid; grid-template-columns:1fr 3.4rem 2.4rem 2.4rem 2.4rem; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; max-width:23rem; }
+          .gd .oc{ background:var(--surface); padding:.28rem .3rem; font-size:.68rem; color:var(--ink); text-align:center; }
+          .gd .oc.l{ text-align:left; }
+          .gd .oc.hd{ background:var(--panel); color:var(--faint); font-weight:700; font-size:.62rem; text-transform:uppercase; letter-spacing:.03em; }
+          .gd .oc.newrow{ color:var(--faint); font-style:italic; }
+          .gd .oflat{ opacity:0; transition:opacity .4s; }
+          .gd .stage[data-step="3"] .oflat{ opacity:1; }
+          .gd .stage[data-step="3"] .oc.flatcell{ box-shadow:inset 0 0 0 2px var(--accent); }
+          .gd .otick{ display:inline-block; width:.85rem; height:.85rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:3px; position:relative; vertical-align:middle; }
+          .gd .otick.on{ background:var(--accent); border-color:var(--accent); }
+          .gd .otick.on::after{ content:"\2713"; color:#fff; font-size:.6rem; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+          .gd .gridcols{ font-size:.66rem; color:var(--faint); margin-top:.4rem; }
+
+          /* appears-when list */
+          .gd .awlist{ border:1px solid var(--line); border-radius:8px; padding:.4rem .55rem; background:var(--panel); max-width:20rem; }
+          .gd .awrow{ display:flex; align-items:center; gap:.45rem; font-size:.74rem; color:var(--soft); padding:.16rem 0; }
+          .gd .awrow.on{ color:var(--ink); font-weight:600; }
+
+          /* number-input fieldset */
+          .gd .nfield{ border:1px solid var(--line); border-radius:9px; padding:.55rem .7rem; background:var(--panel); max-width:22rem; }
+          .gd .nlegend{ font-size:.7rem; font-weight:700; color:var(--faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:.4rem; }
+
+          /* quote-builder preview */
+          .gd .pvq{ border:1px solid var(--line); border-radius:10px; overflow:hidden; max-width:22rem; }
+          .gd .pvqhd{ background:var(--panel); padding:.4rem .65rem; font-size:.7rem; font-weight:700; color:var(--faint); border-bottom:1px solid var(--line); }
+          .gd .pvqbody{ padding:.55rem .65rem; display:flex; flex-direction:column; gap:.5rem; }
+          .gd .pvqrow label{ display:block; font-size:.68rem; font-weight:600; color:var(--soft); margin-bottom:.18rem; }
+          .gd .pvqrow .req{ color:#b91c1c; }
+          .gd .pvqchild{ margin-left:.7rem; padding-left:.55rem; border-left:2px solid var(--line); }
+          .gd .pvqsum{ margin-top:.2rem; background:#d1fae5; color:#065f46; border-radius:7px; padding:.4rem .6rem; font-size:.74rem; font-weight:600; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / products / options</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Options &mdash; Roller Blind</div>
+
+                <!-- Scene A: add an option -->
+                <div class="osc scA">
+                  <p class="exlabel">Add an option</p>
+                  <div class="fld"><label>Name</label><div class="box f1"><span class="ph">e.g. Control side</span><span class="val">Control type</span></div></div>
+                  <div class="orow">
+                    <span class="chkline"><span class="tick on">&check;</span> Required</span>
+                    <span class="chkline"><span class="tick">&check;</span> Allow multiple choices</span>
+                  </div>
+                  <p class="exhelp">Examples: Control side, Control type, Draw side, Lining, Motor type, Headrail colour.</p>
+                  <div class="addbtn">Add option</div>
+                </div>
+
+                <!-- Scene B: choices grid -->
+                <div class="osc scB">
+                  <p class="exlabel">Choices for &ldquo;Control type&rdquo;</p>
+                  <div class="ogrid">
+                    <span class="oc hd l">Label</span><span class="oc hd">Flat &pound;</span><span class="oc hd">%</span><span class="oc hd">Default</span><span class="oc hd">Active</span>
+                    <span class="oc l">Cord</span><span class="oc"></span><span class="oc"></span><span class="oc"><span class="otick on"></span></span><span class="oc"><span class="otick on"></span></span>
+                    <span class="oc l">Motorised</span><span class="oc flatcell"><span class="oflat">120.00</span></span><span class="oc"></span><span class="oc"><span class="otick"></span></span><span class="oc"><span class="otick on"></span></span>
+                    <span class="oc l newrow">Type new label and press Enter&hellip;</span><span class="oc"></span><span class="oc"></span><span class="oc"></span><span class="oc"></span>
+                  </div>
+                  <p class="gridcols">&hellip; plus columns for <b>Available on</b> (systems), <b>Bands</b>, <b>&pound;/m</b> and a per-choice width price table.</p>
+                </div>
+
+                <!-- Scene C: appears-when gating -->
+                <div class="osc scC">
+                  <p class="exlabel">Add an option &mdash; Motor type</p>
+                  <div class="fld"><label>Name</label><div class="boxv">Motor type</div></div>
+                  <p class="exlabel" style="margin:.6rem 0 .3rem">Appears when (optional)</p>
+                  <div class="awlist">
+                    <div class="awrow"><span class="otick"></span> Control type = Cord</div>
+                    <div class="awrow on"><span class="otick on"></span> Control type = Motorised</div>
+                  </div>
+                  <p class="exhelp">Shows in the quote builder when <b>any</b> ticked choice is selected. Tick none = always visible.</p>
+                </div>
+
+                <!-- Scene D: number input on a choice -->
+                <div class="osc scD">
+                  <p class="exlabel">Choice &mdash; Motorised</p>
+                  <div class="nfield">
+                    <div class="nlegend">Ask for a number on this choice</div>
+                    <div class="chkline" style="margin-bottom:.5rem"><span class="tick on">&check;</span> Show a number input when this choice is picked</div>
+                    <div class="fld"><label>What to call this field</label><div class="boxv">Cable length (mm)</div></div>
+                    <p class="exhelp">The salesperson types a value alongside. Recorded on the quote line &mdash; it doesn&rsquo;t change the price.</p>
+                  </div>
+                </div>
+
+                <!-- Scene E: quote-builder preview -->
+                <div class="osc scE">
+                  <p class="exlabel">What the salesperson sees</p>
+                  <div class="pvq">
+                    <div class="pvqhd">&#128065; Quote builder</div>
+                    <div class="pvqbody">
+                      <div class="pvqrow"><label>Control type <span class="req">*</span></label><div class="selectbox">Motorised</div></div>
+                      <div class="pvqchild">
+                        <div class="pvqrow"><label>Motor type</label><div class="selectbox">Tubular</div></div>
+                        <div class="pvqrow"><label>Cable length (mm)</label><div class="boxv">3000</div></div>
+                      </div>
+                      <div class="pvqsum">Options: +&pound;120.00</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="caps">
+                  <b class="c1"><span class="n">1</span> Add an option &mdash; name it, mark it required.</b>
+                  <b class="c2"><span class="n">2</span> Add its choices &mdash; set the default.</b>
+                  <b class="c3"><span class="n">3</span> Price a choice, right in the grid.</b>
+                  <b class="c4"><span class="n">4</span> Make an option appear only when&hellip;</b>
+                  <b class="c5"><span class="n">5</span> Capture a measurement alongside.</b>
+                  <b class="c6 good"><span class="n">6</span> That&rsquo;s what the salesperson sees.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p><b>Options</b> (the code and some tooltips call them &ldquo;extras&rdquo;) are the add-ons a salesperson picks per blind &mdash;
+             <em>Control type</em>, <em>Bottom weight</em>, <em>Motor type</em>, <em>Bracket colour</em>. They&rsquo;re separate from a
+             product&rsquo;s <b>fabrics</b> (its colour/material choices). Manage them on the product&rsquo;s <b>Edit</b> page &mdash; the
+             <b>Options</b> section &mdash; or open <b>Full manage &raquo;</b>.</p>
+          <ul class="steps">
+            <li><b>Add the option.</b> Give it a <b>Name</b> (e.g. <em>Control type</em>). <b>Required</b> means the customer must pick one
+                (on by default). <b>Allow multiple choices</b> turns the picker into <b>tick-boxes</b> so they can pick any combination.
+                There&rsquo;s <b>no price on the option itself</b> &mdash; price lives on the choices.</li>
+            <li><b>Add its choices.</b> The choices editor is a <b>live grid</b> &mdash; type a label in the bottom row and press <b>Enter</b>,
+                or use <b>+ Bulk add</b> (one label per line, e.g. <em>Left</em> then <em>Right</em>). No Save button: each cell saves as you
+                Tab or click away. Tick <b>Default</b> for the one that&rsquo;s pre-selected, and <b>Active</b> to show/hide it.</li>
+            <li><b>Price a choice.</b> Each choice can stack up to four price modes, all combined: <b>Flat &pound;</b>, <b>Percent %</b>,
+                <b>Per metre &pound;/m</b> (measured along Width / Drop / Width+Drop / Perimeter), and <b>Price per unit</b> (&times; a Quantity
+                box &mdash; for brackets and fixings). A choice can also have its own <b>width-based price table</b>. Leave them blank for a
+                free choice.</li>
+            <li><b>Make it conditional.</b> Under <b>Appears when</b>, tick one or more parent choices and the option only shows when
+                <b>any</b> of them is picked (e.g. <em>Motor type</em> appears when <em>Control type = Motorised</em>). Tick none = always
+                visible. You can also build these as <b>sub-options</b> from inside a choice.</li>
+            <li><b>Capture a measurement.</b> Tick <b>&ldquo;Also show a number input&rdquo;</b> (on the option) or <b>&ldquo;Ask for a number
+                on this choice&rdquo;</b> and name it (e.g. <em>Cable length (mm)</em>, <em>Top offset (mm)</em>). The salesperson types a value;
+                it&rsquo;s recorded on the line for the supplier docs but <b>doesn&rsquo;t change the price</b>.</li>
+          </ul>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Scope choices where needed.</b> On a choice&rsquo;s full edit page you can limit it
+             to certain <b>systems</b>, <b>bands</b>, or even specific <b>fabrics</b> &mdash; and add a <b>thumbnail image</b> the customer sees
+             when they pick it. Leave the scoping blank and the choice shows everywhere.</div></div>
+          <div class="oops"><b>Common trips &mdash; and what it says:</b>
+             <ul style="margin:.4rem 0 0;padding-left:1.15rem">
+               <li>Typed text in a price cell &rarr; <code>Must be a number.</code> (also <code>Flat surcharge must be a number.</code> on the full edit page).</li>
+               <li>Built a follow-on option but ticked no parent &rarr; <code>Pick at least one parent choice to gate the sub-option.</code></li>
+               <li>Left the name empty &rarr; <code>Name is required.</code></li>
+             </ul></div>
+          <p>Everything flows straight to the <b>quote builder</b>: each option shows as a dropdown (or tick-boxes if multiple), required
+             ones get a red <b>*</b>, the picked choice&rsquo;s <b>thumbnail</b> and any <b>measurement box</b> appear, follow-on options
+             slide in when their trigger is chosen, and the surcharges land on the line. Use <b>&#128065; Live preview</b> on the product page
+             to check it before it goes live.</p>',
+        'script'  => [
+            ['0:00', 'Add option: Control type, required.',   'Options are the extras your salesperson picks — control type, bottom weight, a motor. Add one: give it a name, like Control type, and mark it required.', 1],
+            ['0:09', 'Choices Cord + Motorised; Cord default.', 'Then add its choices — the values to pick from. Type Cord, then Motorised, and tick the one that should be pre-selected as the default.', 2],
+            ['0:18', 'Flat £120 on Motorised.',               'Each choice can carry its own price. Put a flat surcharge on Motorised — a hundred and twenty pounds — right there in the grid. Percent and per-metre work too.', 3],
+            ['0:27', 'Motor type appears when Motorised.',     'Some options only make sense after another is picked. Add Motor type, and set it to appear only when Control type is Motorised.', 4],
+            ['0:36', 'Number box: Cable length (mm).',         'Need a measurement? Turn on a number box — Cable length in millimetres — and the salesperson types it alongside. It is recorded on the line, but doesn\'t change the price.', 5],
+            ['0:46', 'Quote builder shows it all.',            'And here is what they see in the quote builder: pick Motorised, and Motor type and the cable-length box appear, with the hundred-and-twenty-pound surcharge added.', 6],
+        ],
+    ],
+
     'products-combine' => [
         'aud'     => 'admin',
         'section' => 'Products',
