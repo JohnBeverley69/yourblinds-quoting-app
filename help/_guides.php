@@ -874,23 +874,20 @@ JS,
                       calendar and in your orders list &mdash; updating itself as the job moves along.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .scrows{ display:flex; flex-direction:column; gap:.35rem; margin-top:.3rem; }
-          .gd .scrow{ display:flex; align-items:center; gap:.6rem; padding:.24rem .4rem; border-radius:7px; transition:box-shadow .2s, background .2s; }
-          .gd .swatch{ width:26px; height:22px; border-radius:5px; border:1px solid rgba(0,0,0,.18); box-shadow:inset 0 0 0 2px #fff; flex:none; }
-          .gd .pillc{ padding:.12rem .55rem; border-radius:999px; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; }
-          .gd .sw-quote,.gd .pc-quote{ background:#6b7280; }
-          .gd .sw-acc,.gd .pc-acc{ background:#2563eb; }
-          .gd .sw-ord,.gd .pc-ord{ background:#d97706; }
-          .gd .sw-fit,.gd .pc-fit{ background:#0d9488; }
-          .gd .sw-paid,.gd .pc-paid{ background:#059669; }
-          /* the Accepted stage is changed to purple from step 2 on */
+          .gd .scgrp{ margin-bottom:.55rem; }
+          .gd .scgrp-h{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin:.3rem 0 .35rem; }
+          .gd .scards{ display:flex; flex-wrap:wrap; gap:.4rem; }
+          .gd .scard{ display:flex; align-items:center; gap:.4rem; border:1px solid var(--line); border-radius:8px; padding:.3rem .45rem; background:var(--surface); transition:box-shadow .2s, border-color .2s; }
+          .gd .swatch{ width:20px; height:20px; border-radius:4px; border:1px solid rgba(0,0,0,.2); flex:none; }
+          .gd .pillc{ padding:.08rem .45rem; border-radius:999px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#fff; white-space:nowrap; }
+          .gd .sw-acc{ background:#16a34a; } .gd .pc-acc{ background:#16a34a; }
+          /* the Accepted stage is changed to violet from step 2 on */
           .gd .stage[data-step="2"] .sw-acc, .gd .stage[data-step="3"] .sw-acc, .gd .stage[data-step="4"] .sw-acc,
-          .gd .stage[data-step="2"] .pc-acc, .gd .stage[data-step="3"] .pc-acc, .gd .stage[data-step="4"] .pc-acc{ background:#7c3aed; }
-          /* while the picker is open (step 1) highlight the Accepted row + swatch */
-          .gd .stage[data-step="1"] .row-acc{ background:var(--accent-wash); }
-          .gd .stage[data-step="1"] .sw-acc{ box-shadow:inset 0 0 0 2px #fff, 0 0 0 3px var(--accent); }
+          .gd .stage[data-step="2"] .pc-acc, .gd .stage[data-step="3"] .pc-acc, .gd .stage[data-step="4"] .pc-acc{ background:#9333ea; }
+          /* while the picker is open (step 1) highlight the Accepted card */
+          .gd .stage[data-step="1"] .card-acc{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
           /* the colour-picker popup */
-          .gd .picker{ display:none; position:absolute; left:5.4rem; top:5.4rem; z-index:6; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 14px 30px -10px rgba(20,30,45,.4); padding:.5rem; }
+          .gd .picker{ display:none; position:absolute; left:8.5rem; top:4.4rem; z-index:6; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 14px 30px -10px rgba(20,30,45,.4); padding:.5rem; }
           .gd .stage[data-step="1"] .picker{ display:block; }
           .gd .pk-grid{ display:grid; grid-template-columns:repeat(5,18px); gap:5px; }
           .gd .pk-cell{ width:18px; height:18px; border-radius:4px; }
@@ -898,7 +895,7 @@ JS,
           /* the chosen colour applied on a calendar chip (step 3 on) */
           .gd .calchip2{ display:none; margin-top:.9rem; border:1px solid var(--line); border-radius:8px; padding:.45rem .65rem; font-size:.8rem; color:var(--soft); background:var(--panel); }
           .gd .stage[data-step="3"] .calchip2, .gd .stage[data-step="4"] .calchip2{ display:block; }
-          .gd .jobpill{ padding:.14rem .5rem; border-radius:6px; color:#fff; font-weight:700; font-size:.72rem; background:#7c3aed; }
+          .gd .jobpill{ padding:.14rem .5rem; border-radius:6px; color:#fff; font-weight:700; font-size:.72rem; background:#9333ea; }
           .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
           <div class="demo-shell">
@@ -911,19 +908,40 @@ JS,
               <div class="stage" id="gdStage" data-step="0">
                 <div class="toast">&check; Status colours saved</div>
                 <div class="card-t">Status colours</div>
-                <div class="scrows">
-                  <div class="scrow"><span class="swatch sw-quote"></span><span class="pillc pc-quote">Quote</span></div>
-                  <div class="scrow row-acc"><span class="swatch sw-acc"></span><span class="pillc pc-acc">Accepted</span></div>
-                  <div class="scrow"><span class="swatch sw-ord"></span><span class="pillc pc-ord">Ordered</span></div>
-                  <div class="scrow"><span class="swatch sw-fit"></span><span class="pillc pc-fit">Fitted</span></div>
-                  <div class="scrow"><span class="swatch sw-paid"></span><span class="pillc pc-paid">Paid</span></div>
+                <div class="scgrp">
+                  <div class="scgrp-h">Quote stages</div>
+                  <div class="scards">
+                    <div class="scard"><span class="swatch" style="background:#7c3aed"></span><span class="pillc" style="background:#7c3aed">Quote drafted</span></div>
+                    <div class="scard"><span class="swatch" style="background:#f59e0b"></span><span class="pillc" style="background:#f59e0b">Quote sent</span></div>
+                    <div class="scard card-acc"><span class="swatch sw-acc"></span><span class="pillc pc-acc">Accepted</span></div>
+                    <div class="scard"><span class="swatch" style="background:#dc2626"></span><span class="pillc" style="background:#dc2626">Declined</span></div>
+                    <div class="scard"><span class="swatch" style="background:#0891b2"></span><span class="pillc" style="background:#0891b2">Ordered</span></div>
+                  </div>
+                </div>
+                <div class="scgrp">
+                  <div class="scgrp-h">Appointments &amp; job</div>
+                  <div class="scards">
+                    <div class="scard"><span class="swatch" style="background:#2563eb"></span><span class="pillc" style="background:#2563eb">Appointment booked</span></div>
+                    <div class="scard"><span class="swatch" style="background:#6366f1"></span><span class="pillc" style="background:#6366f1">Fitting booked</span></div>
+                    <div class="scard"><span class="swatch" style="background:#0d9488"></span><span class="pillc" style="background:#0d9488">Fitted</span></div>
+                    <div class="scard"><span class="swatch" style="background:#ea580c"></span><span class="pillc" style="background:#ea580c">Invoiced</span></div>
+                    <div class="scard"><span class="swatch" style="background:#475569"></span><span class="pillc" style="background:#475569">Paid</span></div>
+                    <div class="scard"><span class="swatch" style="background:#b91c1c"></span><span class="pillc" style="background:#b91c1c">Cancelled</span></div>
+                    <div class="scard"><span class="swatch" style="background:#9ca3af"></span><span class="pillc" style="background:#9ca3af">No-show</span></div>
+                  </div>
+                </div>
+                <div class="scgrp">
+                  <div class="scgrp-h">Flags</div>
+                  <div class="scards">
+                    <div class="scard"><span class="swatch" style="background:#e11d48"></span><span class="pillc" style="background:#e11d48">Issue</span></div>
+                  </div>
                 </div>
                 <div class="picker">
                   <div class="pk-grid">
                     <span class="pk-cell" style="background:#ef4444"></span><span class="pk-cell" style="background:#f59e0b"></span>
-                    <span class="pk-cell" style="background:#10b981"></span><span class="pk-cell" style="background:#2563eb"></span>
-                    <span class="pk-cell sel" style="background:#7c3aed"></span><span class="pk-cell" style="background:#ec4899"></span>
-                    <span class="pk-cell" style="background:#14b8a6"></span><span class="pk-cell" style="background:#6b7280"></span>
+                    <span class="pk-cell" style="background:#16a34a"></span><span class="pk-cell" style="background:#2563eb"></span>
+                    <span class="pk-cell sel" style="background:#9333ea"></span><span class="pk-cell" style="background:#ec4899"></span>
+                    <span class="pk-cell" style="background:#0d9488"></span><span class="pk-cell" style="background:#475569"></span>
                     <span class="pk-cell" style="background:#84cc16"></span><span class="pk-cell" style="background:#0ea5e9"></span>
                   </div>
                 </div>
@@ -938,10 +956,11 @@ JS,
             </div>
           </div>',
         'body'    => '
-          <p>The <b>Status colours</b> tab is your traffic-light system &mdash; a colour for each stage a job goes through.</p>
+          <p>The <b>Status colours</b> tab is your traffic-light system &mdash; a colour for every stage a job goes through, laid out in
+             groups: <b>Quote stages</b>, <b>Appointments &amp; job</b>, and <b>Flags</b>.</p>
           <ul class="steps">
-            <li>Each stage (Quote, Accepted, Ordered, Fitted, Paid, and so on) has its own <b>colour box</b>. <b>Click a colour box</b>
-                to open the picker and choose any colour you like &mdash; the <b>pill preview</b> beside it updates as you pick.</li>
+            <li>Each status has its own little <b>colour box</b> beside a <b>pill</b> in that colour. <b>Click a colour box</b>
+                to open the picker and choose any colour you like &mdash; the pill updates as you pick.</li>
             <li>That colour then shows <b>everywhere the job appears</b> &mdash; on the <b>calendar</b> and in your <b>orders list</b>
                 &mdash; so you can read the board at a glance.</li>
             <li>The colour <b>updates itself</b> as a job moves from stage to stage &mdash; you never recolour anything by hand.</li>
@@ -1044,16 +1063,27 @@ JS,
                       to keep on your own computer. A good habit to get into.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .bk-range{ display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem; }
+          .gd .bdesc{ color:var(--soft); font-size:.8rem; margin:0 0 .85rem; }
+          .gd .bk-range{ display:flex; align-items:flex-end; gap:.55rem .8rem; flex-wrap:wrap; margin-bottom:.9rem; }
+          .gd .bk-field{ display:flex; flex-direction:column; gap:.18rem; }
+          .gd .bk-field label{ font-size:.66rem; color:var(--faint); font-weight:600; }
+          .gd .datebox{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.24rem .45rem; font-size:.74rem; color:var(--faint); background:var(--surface); min-width:6.6rem; display:inline-flex; align-items:center; justify-content:space-between; gap:.4rem; }
+          .gd .datebox::after{ content:"\1F4C5"; font-size:.72rem; }
+          .gd .bk-presets{ display:flex; gap:.35rem; flex-wrap:wrap; }
+          .gd .bk-btn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.28rem .6rem; font-size:.76rem; font-weight:600; color:var(--soft); background:var(--surface); }
+          .gd .stage[data-step="1"] .pset-30{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
           .gd .bk-btns{ display:flex; gap:.5rem; flex-wrap:wrap; }
-          .gd .bk-btn{ border:1px solid var(--line); border-radius:8px; padding:.35rem .7rem; font-size:.8rem; font-weight:600; color:var(--soft); }
-          .gd .bk-btn.pri{ background:var(--accent); color:#fff; border-color:transparent; }
-          .gd .bk-btn.on{ border-color:var(--accent); color:var(--accent-ink); background:var(--accent-wash); }
-          .gd .bk-file{ display:none; align-items:center; gap:.5rem; margin-top:.8rem; border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem; font-size:.82rem; background:var(--panel); color:var(--ink); }
-          .gd .stage[data-step="1"] .bk-file, .gd .stage[data-step="2"] .bk-file{ display:flex; }
+          .gd .dl{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:8px; padding:.4rem .75rem; font-size:.8rem; font-weight:700; color:var(--ink); background:var(--surface); transition:transform .1s, filter .1s; }
+          .gd .dl.pri{ background:var(--accent); color:#fff; border-color:transparent; }
+          .gd .stage[data-step="2"] .dl.pri{ transform:scale(.97); filter:brightness(1.12); }
+          .gd .bk-file{ display:none; align-items:center; gap:.5rem; margin-top:.75rem; border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem; font-size:.82rem; background:var(--panel); color:var(--ink); }
+          .gd .stage[data-step="2"] .bk-file, .gd .stage[data-step="3"] .bk-file{ display:flex; }
           .gd .bk-file .grn{ color:var(--good); font-weight:700; }
-          .gd .bk-since{ display:none; margin-top:.7rem; font-size:.8rem; color:var(--soft); border:1px dashed var(--border-dashed,#cbd5e1); border-radius:8px; padding:.4rem .6rem; }
-          .gd .stage[data-step="2"] .bk-since{ display:block; }',
+          .gd .bk-since{ display:none; margin-top:.85rem; border:1px solid var(--line); border-radius:8px; padding:.55rem .7rem; font-size:.78rem; color:var(--soft); background:var(--panel); max-width:30rem; }
+          .gd .bk-since b{ color:var(--ink); }
+          .gd .sincebtn{ display:inline-block; margin-top:.45rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.2rem .55rem; font-size:.74rem; font-weight:600; color:var(--soft); }
+          .gd .stage[data-step="3"] .bk-since{ display:block; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+          .gd .bnote{ color:var(--faint); font-size:.72rem; margin-top:.75rem; line-height:1.5; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -1064,14 +1094,21 @@ JS,
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Back up your data</div>
-                <div class="bk-range"><span class="bk-btn on">All time</span><span class="bk-btn">Last 30 days</span><span class="bk-btn">This year</span></div>
-                <div class="bk-btns"><span class="bk-btn pri">&#11015; Download Excel (.xlsx)</span><span class="bk-btn">&#11015; PDF summary</span></div>
+                <p class="bdesc">Download a copy of your quotes and orders (line items, totals and payments) to keep on your own computer.</p>
+                <div class="bk-range">
+                  <div class="bk-field"><label>From</label><span class="datebox">dd/mm/yyyy</span></div>
+                  <div class="bk-field"><label>To</label><span class="datebox">dd/mm/yyyy</span></div>
+                  <div class="bk-presets"><span class="bk-btn pset-all">All time</span><span class="bk-btn pset-30">Last 30 days</span><span class="bk-btn pset-yr">This year</span></div>
+                </div>
+                <div class="bk-btns"><span class="dl pri">&#11015; Download Excel (.xlsx)</span><span class="dl">&#11015; Download PDF summary</span></div>
                 <div class="bk-file">&#128196; yourblinds-backup.xlsx <span class="grn">&check; downloaded</span></div>
-                <div class="bk-since">&#11015; Changes since last backup (Excel) &mdash; just what&rsquo;s new or changed.</div>
+                <div class="bk-since"><b>Last full backup:</b> today. Get just the quotes and orders changed since then:
+                  <span class="sincebtn">&#11015; Changes since last backup (Excel)</span></div>
+                <p class="bnote">The <b>Excel</b> file has two sheets &mdash; a Quotes &amp; Orders summary and a full Line items list. The <b>PDF</b> is a printable summary. Dates filter by order date.</p>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> Pick a range &mdash; or leave it for everything.</b>
-                  <b class="c1"><span class="n">2</span> Download Excel &mdash; the copy to keep.</b>
-                  <b class="c2 good"><span class="n">3</span> Next time, grab just what changed.</b>
+                  <b class="c1"><span class="n">1</span> Pick a range &mdash; or leave it for everything.</b>
+                  <b class="c2"><span class="n">2</span> Download Excel &mdash; the copy to keep.</b>
+                  <b class="c3 good"><span class="n">3</span> Next time, grab just what changed.</b>
                 </div>
               </div>
             </div>
@@ -1089,9 +1126,9 @@ JS,
           <p>Dates filter by <b>order date</b> (accepted, or created if not yet accepted). Do this regularly and keep the file
              somewhere safe, off the computer.</p>',
         'script'  => [
-            ['0:00', 'Range presets + download buttons.',  'This downloads your quotes and orders to keep safe. Pick a date range, or leave it for the lot.', 0],
-            ['0:07', 'Excel file downloaded.',             'Download the Excel file — that\'s the one to keep. Two sheets: a summary, and every line.', 1],
-            ['0:14', 'Changes-since-last-backup appears.', 'And once you\'ve taken one, it can hand you just what\'s changed since — quick and easy.', 2],
+            ['0:00', 'Range: From/To + presets.',          'This downloads your quotes and orders to keep safe. Pick a date range with From and To, or a preset — or leave it for the lot.', 1],
+            ['0:08', 'Excel file downloaded.',             'Download the Excel file — that\'s the one to keep. Two sheets: a summary, and every line.', 2],
+            ['0:15', 'Changes-since-last-backup appears.', 'And once you\'ve taken one, it can hand you just what\'s changed since — quick and easy.', 3],
         ],
     ],
 ];
