@@ -874,13 +874,32 @@ JS,
                       calendar and in your orders list &mdash; updating itself as the job moves along.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .stagepills{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.2rem 0 1rem; }
-          .gd .sp{ padding:.15rem .55rem; border-radius:999px; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; }
-          .gd .sp-quote{ background:#6b7280; } .gd .sp-acc{ background:#2563eb; } .gd .sp-ord{ background:#d97706; } .gd .sp-fit{ background:#0d9488; } .gd .sp-paid{ background:#059669; }
-          .gd .calchip{ border:1px solid var(--line); border-radius:8px; padding:.45rem .65rem; font-size:.82rem; color:var(--soft); background:var(--panel); }
-          .gd .job{ display:none; padding:.18rem .55rem; border-radius:6px; font-weight:700; font-size:.76rem; color:#fff; }
-          .gd .stage[data-step="0"] .jb0, .gd .stage[data-step="1"] .jb1, .gd .stage[data-step="2"] .jb2, .gd .stage[data-step="3"] .jb3{ display:inline-block; }
-          .gd .jb0{ background:#6b7280; } .gd .jb1{ background:#2563eb; } .gd .jb2{ background:#d97706; } .gd .jb3{ background:#059669; }',
+          .gd .scrows{ display:flex; flex-direction:column; gap:.35rem; margin-top:.3rem; }
+          .gd .scrow{ display:flex; align-items:center; gap:.6rem; padding:.24rem .4rem; border-radius:7px; transition:box-shadow .2s, background .2s; }
+          .gd .swatch{ width:26px; height:22px; border-radius:5px; border:1px solid rgba(0,0,0,.18); box-shadow:inset 0 0 0 2px #fff; flex:none; }
+          .gd .pillc{ padding:.12rem .55rem; border-radius:999px; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; }
+          .gd .sw-quote,.gd .pc-quote{ background:#6b7280; }
+          .gd .sw-acc,.gd .pc-acc{ background:#2563eb; }
+          .gd .sw-ord,.gd .pc-ord{ background:#d97706; }
+          .gd .sw-fit,.gd .pc-fit{ background:#0d9488; }
+          .gd .sw-paid,.gd .pc-paid{ background:#059669; }
+          /* the Accepted stage is changed to purple from step 2 on */
+          .gd .stage[data-step="2"] .sw-acc, .gd .stage[data-step="3"] .sw-acc, .gd .stage[data-step="4"] .sw-acc,
+          .gd .stage[data-step="2"] .pc-acc, .gd .stage[data-step="3"] .pc-acc, .gd .stage[data-step="4"] .pc-acc{ background:#7c3aed; }
+          /* while the picker is open (step 1) highlight the Accepted row + swatch */
+          .gd .stage[data-step="1"] .row-acc{ background:var(--accent-wash); }
+          .gd .stage[data-step="1"] .sw-acc{ box-shadow:inset 0 0 0 2px #fff, 0 0 0 3px var(--accent); }
+          /* the colour-picker popup */
+          .gd .picker{ display:none; position:absolute; left:5.4rem; top:5.4rem; z-index:6; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 14px 30px -10px rgba(20,30,45,.4); padding:.5rem; }
+          .gd .stage[data-step="1"] .picker{ display:block; }
+          .gd .pk-grid{ display:grid; grid-template-columns:repeat(5,18px); gap:5px; }
+          .gd .pk-cell{ width:18px; height:18px; border-radius:4px; }
+          .gd .pk-cell.sel{ outline:2px solid var(--ink); outline-offset:1px; }
+          /* the chosen colour applied on a calendar chip (step 3 on) */
+          .gd .calchip2{ display:none; margin-top:.9rem; border:1px solid var(--line); border-radius:8px; padding:.45rem .65rem; font-size:.8rem; color:var(--soft); background:var(--panel); }
+          .gd .stage[data-step="3"] .calchip2, .gd .stage[data-step="4"] .calchip2{ display:block; }
+          .gd .jobpill{ padding:.14rem .5rem; border-radius:6px; color:#fff; font-weight:700; font-size:.72rem; background:#7c3aed; }
+          .gd .stage[data-step="4"] .toast{ opacity:1; transform:none; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
@@ -890,32 +909,49 @@ JS,
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
+                <div class="toast">&check; Status colours saved</div>
                 <div class="card-t">Status colours</div>
-                <div class="stagepills"><span class="sp sp-quote">Quote</span><span class="sp sp-acc">Accepted</span><span class="sp sp-ord">Ordered</span><span class="sp sp-fit">Fitted</span><span class="sp sp-paid">Paid</span></div>
-                <div class="calchip">10:00 &middot; Mrs Patel &middot;
-                  <span class="job jb0">Quote</span><span class="job jb1">Accepted</span><span class="job jb2">Ordered</span><span class="job jb3">Paid</span></div>
+                <div class="scrows">
+                  <div class="scrow"><span class="swatch sw-quote"></span><span class="pillc pc-quote">Quote</span></div>
+                  <div class="scrow row-acc"><span class="swatch sw-acc"></span><span class="pillc pc-acc">Accepted</span></div>
+                  <div class="scrow"><span class="swatch sw-ord"></span><span class="pillc pc-ord">Ordered</span></div>
+                  <div class="scrow"><span class="swatch sw-fit"></span><span class="pillc pc-fit">Fitted</span></div>
+                  <div class="scrow"><span class="swatch sw-paid"></span><span class="pillc pc-paid">Paid</span></div>
+                </div>
+                <div class="picker">
+                  <div class="pk-grid">
+                    <span class="pk-cell" style="background:#ef4444"></span><span class="pk-cell" style="background:#f59e0b"></span>
+                    <span class="pk-cell" style="background:#10b981"></span><span class="pk-cell" style="background:#2563eb"></span>
+                    <span class="pk-cell sel" style="background:#7c3aed"></span><span class="pk-cell" style="background:#ec4899"></span>
+                    <span class="pk-cell" style="background:#14b8a6"></span><span class="pk-cell" style="background:#6b7280"></span>
+                    <span class="pk-cell" style="background:#84cc16"></span><span class="pk-cell" style="background:#0ea5e9"></span>
+                  </div>
+                </div>
+                <div class="calchip2">10:00 &middot; Mrs Patel &middot; <span class="jobpill">Accepted</span></div>
                 <div class="caps">
-                  <b class="c0"><span class="n">1</span> A colour for each job stage.</b>
-                  <b class="c1"><span class="n">2</span> Jobs wear it on the calendar and orders list.</b>
-                  <b class="c2"><span class="n">3</span> The colour updates as the job moves.</b>
-                  <b class="c3 good"><span class="n">4</span> All the way to paid.</b>
+                  <b class="c1"><span class="n">1</span> Click a stage&rsquo;s colour box&hellip;</b>
+                  <b class="c2"><span class="n">2</span> &hellip;pick your colour &mdash; the pill updates.</b>
+                  <b class="c3"><span class="n">3</span> That colour shows everywhere &mdash; calendar, orders.</b>
+                  <b class="c4 good"><span class="n">4</span> Save &mdash; done.</b>
                 </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>The <b>Status colours</b> tab is your traffic-light system. Give each job stage a colour and every job wears it everywhere.</p>
+          <p>The <b>Status colours</b> tab is your traffic-light system &mdash; a colour for each stage a job goes through.</p>
           <ul class="steps">
-            <li>Pick a <b>colour for each stage</b> (Quote, Accepted, Ordered, Fitted, Paid, and so on). The little pill preview updates as you choose.</li>
-            <li>A job shows that colour <b>everywhere it appears</b> &mdash; on the <b>calendar</b> and in your <b>orders list</b> &mdash; so you can read the board at a glance.</li>
-            <li>The colour <b>updates itself</b> as the job moves from stage to stage &mdash; you never recolour anything by hand.</li>
+            <li>Each stage (Quote, Accepted, Ordered, Fitted, Paid, and so on) has its own <b>colour box</b>. <b>Click a colour box</b>
+                to open the picker and choose any colour you like &mdash; the <b>pill preview</b> beside it updates as you pick.</li>
+            <li>That colour then shows <b>everywhere the job appears</b> &mdash; on the <b>calendar</b> and in your <b>orders list</b>
+                &mdash; so you can read the board at a glance.</li>
+            <li>The colour <b>updates itself</b> as a job moves from stage to stage &mdash; you never recolour anything by hand.</li>
           </ul>
-          <p>Then <b>Save status colours</b>. The text colour (black or white) is chosen automatically so your labels stay readable on any colour.</p>',
+          <p>Then <b>Save status colours</b>. The text (black or white) is chosen automatically so your labels stay readable on any colour.</p>',
         'script'  => [
-            ['0:00', 'Stage pills; job = Quote (grey).',   'This is your traffic-light system — a colour for each stage a job goes through.', 0],
-            ['0:06', 'Job = Accepted (blue).',             'A job wears its colour everywhere — on the calendar, and in your orders list.', 1],
-            ['0:12', 'Job = Ordered (amber).',             'And it recolours itself as the job moves along. You don\'t touch a thing.', 2],
-            ['0:18', 'Job = Paid (green).',                'All the way through to paid. One glance tells you where everything is.', 3],
+            ['0:00', 'Colour picker opens on a stage.',    'Each stage has a colour. Click its box to change it.', 1],
+            ['0:06', 'Accepted becomes purple.',           'Pick any colour you like — the pill updates as you go.', 2],
+            ['0:12', 'Calendar chip shows the new colour.', 'That colour then shows everywhere — the calendar and your orders list.', 3],
+            ['0:17', 'Saved.',                             'Save, and you\'re done.', 4],
         ],
     ],
 
