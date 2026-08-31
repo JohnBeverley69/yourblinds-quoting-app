@@ -368,9 +368,9 @@ return [
     'settings-margins' => [
         'aud'     => 'admin',
         'section' => 'Settings',
-        'title'   => 'Markup vs margin',
+        'title'   => 'Default margins',
         'eyebrow' => 'Settings · Quoting',
-        'blurb'   => 'The pricing choice people get wrong — with a live calculator to feel the difference.',
+        'blurb'   => 'Markup vs margin — the pricing choice people get wrong, with a live calculator.',
         'lede'    => 'The choice that trips people up. You set your profit as <b>markup</b> or as <b>margin</b> —
                       and they are <b>not</b> the same number. Mix them up and every quote is priced wrong. Here\'s
                       the difference, plainly, with a calculator to play with.',
