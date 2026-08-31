@@ -128,8 +128,18 @@ $activeNav = 'help';
         .gd .hint, .gd .save, .gd .toast, .gd .caps b, .gd [data-anim]{ transition:none !important; }
       }
 
+      /* reusable scenario bits — guides add the per-step activation in their css */
+      .gd .pill{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:999px; padding:.2rem .6rem; font-size:.76rem; margin-right:.35rem; color:var(--soft); }
+      .gd .pill.sel{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+      .gd .tick{ width:17px; height:17px; border-radius:5px; border:1px solid var(--border-strong,#d1d5db); background:var(--surface); color:transparent; display:inline-flex; align-items:center; justify-content:center; font-size:.66rem; transition:background .2s,color .2s; }
+      .gd .tick.on{ background:var(--accent); color:#fff; }
+      .gd .ex{ display:none; align-items:center; gap:.5rem; font-size:1rem; padding:.55rem .8rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+      .gd .ex .exc{ color:var(--soft); } .gd .ex .exp{ color:var(--good); font-size:.8rem; margin-left:auto; }
+      .gd .ex.danger{ border-color:var(--err); background:var(--err-wash); } .gd .ex.danger .exs{ color:var(--err); }
+
       /* written steps */
       .gd .steps{ list-style:none; padding:0; margin:.2rem 0 .9rem; counter-reset:s; }
+      .gd .prose code, .gd .steps code{ background:var(--bg-subtle-2,#f3f4f6); padding:.05rem .3rem; border-radius:4px; font-size:.85em; }
       .gd .steps li{ position:relative; padding:.4rem 0 .4rem 2rem; border-bottom:1px solid var(--line-2); color:var(--soft); }
       .gd .steps li:last-child{ border-bottom:none; }
       .gd .steps li b{ color:var(--ink); }

@@ -499,4 +499,203 @@ JS,
             ['0:23', 'Margin 90; £100 → £1,000; danger.',     'Ninety percent margin is ten times your cost. Near the top the figures go wild, so pick the one you really mean.', 3],
         ],
     ],
+
+    'settings-measurements' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Measurement units',
+        'eyebrow' => 'Settings · Quoting',
+        'blurb'   => 'The unit your team measures in — mm, cm, m or inches. Change it any time.',
+        'lede'    => 'Just picks the unit your team types and reads sizes in. Sizes are stored the same way
+                      underneath, so it changes nothing about your existing quotes.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .upills{ margin:.3rem 0 .2rem; }
+          .gd .stage[data-step="0"] .umm, .gd .stage[data-step="1"] .ucm, .gd .stage[data-step="2"] .uin{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .exwrap{ min-height:48px; margin-top:.4rem; }
+          .gd .ex .exs{ color:var(--ink); font-size:1.05rem; font-weight:700; }
+          .gd .stage[data-step="0"] .e0, .gd .stage[data-step="1"] .e1, .gd .stage[data-step="2"] .e2{ display:flex; }
+          .gd .tipchip{ margin-top:.7rem; font-size:.78rem; color:var(--soft); background:var(--panel); border:1px dashed var(--border-dashed,#cbd5e1); border-radius:8px; padding:.4rem .6rem; display:inline-block; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Measurements</div>
+                <div class="mlabel" style="font-size:.78rem;color:var(--soft);font-weight:600">Default measurement unit</div>
+                <div class="upills"><span class="pill umm">mm</span><span class="pill ucm">cm</span><span class="pill um">m</span><span class="pill uin">in</span></div>
+                <div class="exwrap">
+                  <div class="ex e0"><span class="exc">Width</span> <b class="exs">1500 mm</b></div>
+                  <div class="ex e1"><span class="exc">Width</span> <b class="exs">150 cm</b></div>
+                  <div class="ex e2"><span class="exc">Width</span> <b class="exs">59 in</b></div>
+                </div>
+                <div class="tipchip">&#128161; Tip: type <b>1.5m</b> or <b>60in</b> straight into a size box for a one-off.</div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Pick the unit your team measures in.</b>
+                  <b class="c1"><span class="n">2</span> Same size &mdash; just shown your way.</b>
+                  <b class="c2"><span class="n">3</span> Type a unit any time for a one-off.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>On the <b>Quoting</b> tab, <b>Measurements</b> sets the unit your team types and reads blind sizes in.</p>
+          <ul class="steps">
+            <li>Choose the <b>Default measurement unit</b> &mdash; <b>mm, cm, m</b> or <b>inches</b>.</li>
+            <li>Sizes are always stored the same way underneath, so you can <b>change this any time</b> without touching existing quotes.</li>
+            <li>On a single quote you can <b>override the unit</b> for that job, or just <b>type a unit directly</b> in a size box
+                (e.g. <code>60in</code>, <code>1.5m</code>) for a one-off.</li>
+          </ul>
+          <p>Then <b>Save unit</b>. That&rsquo;s the whole section.</p>',
+        'script'  => [
+            ['0:00', 'Unit = mm; Width 1500 mm.', 'Pick the unit your team measures in — millimetres, centimetres, metres or inches.', 0],
+            ['0:07', 'Unit = cm; Width 150 cm.',  'It\'s only how sizes show. Underneath everything\'s stored the same, so you can switch whenever you like.', 1],
+            ['0:14', 'Unit = in; Width 59 in.',   'And for a one-off, type the unit right on the quote — like one-point-five metres, or sixty inches.', 2],
+        ],
+    ],
+
+    'settings-quote-defaults' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Quote defaults',
+        'eyebrow' => 'Settings · Quoting',
+        'blurb'   => 'Quote number prefix, VAT, deposit, what the customer sees, receipts and footer.',
+        'lede'    => 'Your quote housekeeping in one place &mdash; the prefix on your quote numbers, your VAT rate,
+                      the deposit that lands on every quote, and what the customer does (and doesn\'t) see.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .mq{ border:1px solid var(--line); border-radius:10px; background:#fff; color:#1c2733; padding:.7rem .85rem; font-size:.82rem; }
+          .gd .mq-h{ display:flex; justify-content:space-between; border-bottom:1px solid #eef2f6; padding-bottom:.4rem; font-weight:700; }
+          .gd .mq-h .qn{ color:#2563eb; }
+          .gd .mq-row{ display:flex; justify-content:space-between; padding:.24rem 0; border-bottom:1px solid #f5f7fa; }
+          .gd .mq-row .p{ color:#5b6b7b; }
+          .gd .mq-tot{ display:flex; justify-content:space-between; padding:.2rem 0; color:#5b6b7b; }
+          .gd .mq-tot.total{ font-weight:800; color:#1c2733; }
+          .gd .mq-dep{ display:none; justify-content:space-between; padding:.25rem 0 0; color:#b45309; font-weight:700; }
+          .gd .stage[data-step="1"] .mq-dep, .gd .stage[data-step="2"] .mq-dep, .gd .stage[data-step="3"] .mq-dep{ display:flex; }
+          .gd .stage[data-step="3"] .mq-row .p{ visibility:hidden; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Quote defaults &mdash; the customer&rsquo;s quote</div>
+                <div class="mq">
+                  <div class="mq-h"><span>Quote <span class="qn">BRI-1042</span></span><span>Demo Blinds Ltd</span></div>
+                  <div class="mq-row"><span>Roller blind &mdash; Kitchen</span><span class="p">&pound;130.00</span></div>
+                  <div class="mq-row"><span>Vertical &mdash; Lounge</span><span class="p">&pound;190.00</span></div>
+                  <div class="mq-tot"><span>Subtotal</span><span>&pound;320.00</span></div>
+                  <div class="mq-tot"><span>VAT 20%</span><span>&pound;64.00</span></div>
+                  <div class="mq-tot total"><span>Total</span><span>&pound;384.00</span></div>
+                  <div class="mq-dep"><span>Deposit (50%)</span><span>&pound;192.00</span></div>
+                </div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Your quote prefix and VAT rate.</b>
+                  <b class="c1"><span class="n">2</span> A default deposit, on every quote.</b>
+                  <b class="c2"><span class="n">3</span> Show each blind&rsquo;s price&hellip;</b>
+                  <b class="c3"><span class="n">4</span> &hellip;or hide them &mdash; just the total.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>On the <b>Quoting</b> tab, <b>Quote defaults</b> is your quote housekeeping. Work down it:</p>
+          <ul class="steps">
+            <li><b>Quote prefix</b> &mdash; the letters in front of your quote numbers (e.g. <code>BRI</code> &rarr; BRI-1042).</li>
+            <li><b>VAT %</b> &mdash; your VAT rate (usually 20). Set it to 0 if you&rsquo;re not VAT-registered.</li>
+            <li><b>Default deposit</b> &mdash; seeded onto every quote when it&rsquo;s accepted. Choose <b>a percentage of the
+                total</b> or <b>a flat &pound; amount</b>. You can still change it on any single quote.</li>
+            <li><b>Show the price of each blind</b> &mdash; ticked, the customer&rsquo;s quote lists a price per blind;
+                unticked, they see only the overall total.</li>
+            <li><b>WT charge (internal)</b> &mdash; adds a discretionary &ldquo;WT&rdquo; box in the quote builder. It goes on
+                <b>before VAT</b> and is <b>completely internal</b> &mdash; the customer never sees the letters &ldquo;WT&rdquo; or a separate line.</li>
+            <li><b>Paid-in-full receipt</b> &mdash; when an order&rsquo;s balance hits zero, the customer is automatically emailed a
+                thank-you receipt (once per order).</li>
+            <li><b>Email &ldquo;from&rdquo; name</b> and <b>Reply-to email</b> &mdash; how your emails to customers are signed, and where their replies land.</li>
+            <li><b>Quote footer</b> &mdash; a line or two printed at the bottom of every quote PDF (a thank-you, a lead time, whatever you like).</li>
+          </ul>
+          <p>Then <b>Save quote defaults</b>.</p>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Two the customer sees:</b> &ldquo;Show the price of each blind&rdquo;
+             and your bank &ldquo;How to pay&rdquo; block both change what&rsquo;s on the customer&rsquo;s quote &mdash; so glance at a preview
+             after changing them. The <b>WT charge</b> is the opposite: purely internal, never shown.</div></div>',
+        'script'  => [
+            ['0:00', 'Quote BRI-1042, VAT 20%.',        'Set the prefix for your quote numbers, and your VAT rate.', 0],
+            ['0:06', 'Deposit line appears.',           'A default deposit — a percentage, or a flat amount — drops onto every quote. You can still change it per job.', 1],
+            ['0:14', 'Line prices highlighted.',        'Choose whether the customer sees a price on each blind…', 2],
+            ['0:20', 'Line prices hidden; total only.', '…or just the overall total. Your call.', 3],
+        ],
+    ],
+
+    'settings-bank' => [
+        'aud'     => 'admin',
+        'section' => 'Settings',
+        'title'   => 'Bank details for payments',
+        'eyebrow' => 'Settings · Quoting',
+        'blurb'   => 'Let customers pay by bank transfer — prints a "How to pay" block on the quote.',
+        'lede'    => 'Enter your bank details once and a <b>&ldquo;How to pay &mdash; bank transfer&rdquo;</b> block prints on the
+                      customer&rsquo;s quote and invoice, with the quote number as the reference.',
+        'open'    => '/admin/settings.php',
+        'css'     => '
+          .gd .bfields{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem .7rem; }
+          .gd .bfields .wide{ grid-column:1 / -1; }
+          .gd .htp{ display:none; margin-top:1rem; border:1px solid #e5e7eb; border-radius:10px; background:#fff; color:#1c2733; padding:.7rem .85rem; font-size:.82rem; }
+          .gd .stage[data-step="1"] .htp, .gd .stage[data-step="2"] .htp{ display:block; }
+          .gd .htp-h{ font-weight:700; margin-bottom:.4rem; }
+          .gd .htp-r{ display:flex; justify-content:space-between; padding:.18rem 0; border-bottom:1px solid #f5f7fa; }
+          .gd .htp-r span{ color:#5b6b7b; }
+          .gd .htp-r.ref{ border-bottom:none; }
+          .gd .stage[data-step="2"] .htp-r.ref{ background:#e5edff; border-radius:6px; padding:.18rem .4rem; }',
+        'demo'    => '
+          <div class="demo-shell">
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="app">
+              <div class="side">
+                <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+              </div>
+              <div class="stage" id="gdStage" data-step="0">
+                <div class="card-t">Bank details for customer payments</div>
+                <div class="bfields">
+                  <div class="fld wide"><label>Account name</label><div class="box filled">Demo Blinds Ltd</div></div>
+                  <div class="fld"><label>Sort code</label><div class="box filled">20-00-00</div></div>
+                  <div class="fld"><label>Account number</label><div class="box filled">12345678</div></div>
+                </div>
+                <div class="htp">
+                  <div class="htp-h">How to pay &mdash; bank transfer</div>
+                  <div class="htp-r"><span>Account name</span><b>Demo Blinds Ltd</b></div>
+                  <div class="htp-r"><span>Sort code</span><b>20-00-00</b></div>
+                  <div class="htp-r"><span>Account no.</span><b>12345678</b></div>
+                  <div class="htp-r ref"><span>Reference</span><b>BRI-1042</b></div>
+                </div>
+                <div class="caps">
+                  <b class="c0"><span class="n">1</span> Add your bank details.</b>
+                  <b class="c1"><span class="n">2</span> They print as a &ldquo;How to pay&rdquo; block.</b>
+                  <b class="c2 good"><span class="n">3</span> Quote number = the payment reference.</b>
+                </div>
+              </div>
+            </div>
+          </div>',
+        'body'    => '
+          <p>On the <b>Quoting</b> tab, <b>Bank details for customer payments</b> lets customers pay you by bank transfer.</p>
+          <ul class="steps">
+            <li>Enter your <b>Account name</b>, <b>Sort code</b> and <b>Account number</b>.</li>
+            <li>Add an optional <b>Payment note</b> &mdash; e.g. &ldquo;Please use your quote number as the reference&rdquo;.</li>
+            <li>These print as a <b>&ldquo;How to pay &mdash; bank transfer&rdquo;</b> block on the customer&rsquo;s quote and invoice,
+                with the <b>quote number</b> suggested as the reference so payments are easy to match.</li>
+          </ul>
+          <p><b>Leave the fields blank to hide the block entirely.</b> Then <b>Save bank details</b>.</p>',
+        'script'  => [
+            ['0:00', 'Bank detail fields filled.',        'Pop in your bank details — account name, sort code and account number.', 0],
+            ['0:07', '"How to pay" block appears.',       'They print on the customer\'s quote as a "How to pay" block, so they can pay by transfer.', 1],
+            ['0:13', 'Reference row highlighted.',        'The quote number goes on as the reference, so payments are easy to match. Leave the fields blank and the block just doesn\'t show.', 2],
+        ],
+    ],
 ];
