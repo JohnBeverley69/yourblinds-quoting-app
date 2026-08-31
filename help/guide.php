@@ -145,26 +145,29 @@ $activeNav = 'help';
       .gd .radio.on .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
       .gd .selectbox{ display:inline-flex; align-items:center; justify-content:space-between; gap:.7rem; min-width:190px; border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.4rem .6rem; font-size:.85rem; color:var(--ink); background:var(--surface); }
       .gd .selectbox::after{ content:"\25BE"; color:var(--faint); font-size:.7rem; }
-      /* a field whose value "types in": .box holds a faint .ph placeholder and a
-         .val that fades over it (guides reveal .val per step). Also a textarea .ta. */
+      /* a field whose value "rolls in": .box holds a faint .ph placeholder and a
+         .val revealed by a left-to-right clip-path wipe. Also a textarea .ta. */
       .gd .box{ position:relative; }
-      .gd .box .ph{ color:var(--faint); }
-      .gd .box .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; white-space:nowrap; overflow:hidden; }
+      .gd .box .ph{ color:var(--faint); transition:opacity .15s; }
+      .gd .box .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem; color:var(--ink); opacity:0; white-space:nowrap; overflow:hidden; }
       .gd .ta{ position:relative; min-height:44px; border:1px solid var(--line); border-radius:7px; background:var(--panel); padding:.4rem .5rem; font-size:.8rem; color:var(--ink); }
-      .gd .ta .ph{ color:var(--faint); }
-      .gd .ta .val{ position:absolute; inset:0; padding:.4rem .5rem; background:var(--panel); color:var(--ink); opacity:0; transition:opacity .25s; }
-      /* Progressive fill: tag a .box/.ta with fN (f1..f5) = its value types in at
-         step N and stays; while it IS step N the field gets an accent ring + a
-         blinking caret so you can SEE it being filled. Poster (step 0) = all blank. */
-      @keyframes gdCaret{ 50%{ opacity:0; } }
-      .gd .stage:not([data-step="0"]) .f1 .val{ opacity:1; }
+      .gd .ta .ph{ color:var(--faint); transition:opacity .15s; }
+      .gd .ta .val{ position:absolute; inset:0; padding:.4rem .5rem; color:var(--ink); opacity:0; }
+      /* Progressive fill: tag a .box/.ta with fN (f1..f5) = its value fills in at
+         step N and stays. WHILE it IS step N the field is highlighted and the value
+         ROLLS IN left-to-right (a calm ~0.8s wipe). Poster (step 0) = all blank. */
+      @keyframes gdRoll{ from{ clip-path: inset(0 100% 0 0); } to{ clip-path: inset(0 0 0 0); } }
+      .gd .stage:not([data-step="0"]) .f1 .ph{ opacity:0; } .gd .stage:not([data-step="0"]) .f1 .val{ opacity:1; }
+      .gd .stage[data-step="2"] .f2 .ph, .gd .stage[data-step="3"] .f2 .ph, .gd .stage[data-step="4"] .f2 .ph, .gd .stage[data-step="5"] .f2 .ph{ opacity:0; }
       .gd .stage[data-step="2"] .f2 .val, .gd .stage[data-step="3"] .f2 .val, .gd .stage[data-step="4"] .f2 .val, .gd .stage[data-step="5"] .f2 .val{ opacity:1; }
+      .gd .stage[data-step="3"] .f3 .ph, .gd .stage[data-step="4"] .f3 .ph, .gd .stage[data-step="5"] .f3 .ph{ opacity:0; }
       .gd .stage[data-step="3"] .f3 .val, .gd .stage[data-step="4"] .f3 .val, .gd .stage[data-step="5"] .f3 .val{ opacity:1; }
+      .gd .stage[data-step="4"] .f4 .ph, .gd .stage[data-step="5"] .f4 .ph{ opacity:0; }
       .gd .stage[data-step="4"] .f4 .val, .gd .stage[data-step="5"] .f4 .val{ opacity:1; }
-      .gd .stage[data-step="5"] .f5 .val{ opacity:1; }
+      .gd .stage[data-step="5"] .f5 .ph{ opacity:0; } .gd .stage[data-step="5"] .f5 .val{ opacity:1; }
       .gd .stage[data-step="1"] .f1, .gd .stage[data-step="2"] .f2, .gd .stage[data-step="3"] .f3, .gd .stage[data-step="4"] .f4, .gd .stage[data-step="5"] .f5{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
-      .gd .stage[data-step="1"] .f1 .val::after, .gd .stage[data-step="2"] .f2 .val::after, .gd .stage[data-step="3"] .f3 .val::after, .gd .stage[data-step="4"] .f4 .val::after, .gd .stage[data-step="5"] .f5 .val::after{ content:""; display:inline-block; width:2px; height:1.05em; background:var(--accent); margin-left:2px; animation:gdCaret .9s steps(1) infinite; }
-      @media (prefers-reduced-motion:reduce){ .gd .f1 .val::after, .gd .f2 .val::after, .gd .f3 .val::after, .gd .f4 .val::after, .gd .f5 .val::after{ animation:none !important; } }
+      .gd .stage[data-step="1"] .f1 .val, .gd .stage[data-step="2"] .f2 .val, .gd .stage[data-step="3"] .f3 .val, .gd .stage[data-step="4"] .f4 .val, .gd .stage[data-step="5"] .f5 .val{ animation: gdRoll .8s ease-out both; }
+      @media (prefers-reduced-motion:reduce){ .gd .box .val, .gd .ta .val{ animation:none !important; } }
 
       /* written steps */
       .gd .steps{ list-style:none; padding:0; margin:.2rem 0 .9rem; counter-reset:s; }
