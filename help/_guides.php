@@ -723,9 +723,9 @@ JS,
             <li><b>Quote footer</b> &mdash; a line or two printed at the bottom of every quote PDF (a thank-you, a lead time, whatever you like).</li>
           </ul>
           <p>Then <b>Save quote defaults</b>.</p>
-          <div class="heads"><span class="hi">&#9888;</span><div><b>Two the customer sees:</b> &ldquo;Show the price of each blind&rdquo;
-             and your bank &ldquo;How to pay&rdquo; block both change what&rsquo;s on the customer&rsquo;s quote &mdash; so glance at a preview
-             after changing them. The <b>WT charge</b> is the opposite: purely internal, never shown.</div></div>',
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Heads up:</b> <b>&ldquo;Show the price of each blind&rdquo;</b> changes what
+             the customer sees &mdash; ticked, their quote lists a price per blind; unticked, they see only the total. Worth a quick
+             preview after you change it. The <b>Wally tax</b> is the opposite: it&rsquo;s internal only, so the customer never sees it.</div></div>',
         'script'  => [
             ['0:00', 'Prefix + VAT typed in.',            'Set the prefix for your quote numbers, and your VAT rate.', 1],
             ['0:07', 'Deposit: 50% percentage selected.', 'A default deposit that lands on every quote — a percentage, or a flat amount.', 2],
