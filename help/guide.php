@@ -97,33 +97,40 @@ $activeNav = 'help';
       .gd .fld label{ display:block; font-size:.64rem; color:var(--faint); font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.2rem; }
       .gd .fld .box{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel); display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
       .gd .req{ color:var(--err); }
-      .gd #nameBox{ position:relative; animation:gdNameErr 13s infinite; }
-      .gd #nameBox .ph{ color:var(--faint); animation:gdPhFade 13s infinite; }
-      .gd #nameBox .val{ position:absolute; left:.5rem; white-space:nowrap; overflow:hidden; width:0; color:var(--ink); animation:gdTypeName 13s infinite; }
-      .gd .hint{ grid-column:1 / -1; font-size:.72rem; color:var(--err); font-weight:600; opacity:0; margin-top:-.2rem; animation:gdHintShow 13s infinite; }
-      .gd .save{ margin-top:1rem; display:inline-flex; align-items:center; gap:.4rem; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .8rem; font-size:.82rem; font-weight:600; animation:gdSavePress 13s infinite; }
-      .gd .toast{ position:absolute; top:.7rem; right:.9rem; background:var(--good-wash); color:var(--good); border:1px solid color-mix(in srgb,var(--good) 35%,transparent); border-radius:8px; padding:.35rem .7rem; font-size:.78rem; font-weight:700; opacity:0; animation:gdToastShow 13s infinite; }
+      /* State-driven walkthrough: the stage's data-step (0..3) is advanced by
+         the narration (or an idle loop), so the visuals stay in sync with the
+         voice. Everything transitions between states rather than running on a
+         fixed timeline. */
+      .gd #nameBox{ position:relative; transition:border-color .25s, box-shadow .25s; }
+      .gd #nameBox .ph{ color:var(--faint); transition:opacity .2s; }
+      .gd #nameBox .val{ position:absolute; left:.5rem; color:var(--ink); opacity:0; transition:opacity .2s; }
+      .gd .hint{ grid-column:1 / -1; font-size:.72rem; color:var(--err); font-weight:600; opacity:0; margin-top:-.2rem; transition:opacity .2s; }
+      .gd .save{ margin-top:1rem; display:inline-flex; align-items:center; gap:.4rem; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .8rem; font-size:.82rem; font-weight:600; transition:transform .12s, filter .12s; }
+      .gd .save.pressed{ transform:scale(.96); filter:brightness(1.25); }
+      .gd .toast{ position:absolute; top:.7rem; right:.9rem; background:var(--good-wash); color:var(--good); border:1px solid color-mix(in srgb,var(--good) 35%,transparent); border-radius:8px; padding:.35rem .7rem; font-size:.78rem; font-weight:700; opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s; }
       .gd .caps{ position:relative; height:2.2rem; margin-top:.4rem; }
-      .gd .caps b{ position:absolute; inset:0; display:flex; align-items:center; gap:.5rem; font-size:.9rem; color:var(--soft); font-weight:500; opacity:0; }
+      .gd .caps b{ position:absolute; inset:0; display:flex; align-items:center; gap:.5rem; font-size:.9rem; color:var(--soft); font-weight:500; opacity:0; transition:opacity .25s; }
       .gd .caps b .n{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; color:var(--accent); font-size:.8rem; }
-      .gd .caps b:nth-child(1){ animation:gdCap1 13s infinite; }
-      .gd .caps b:nth-child(2){ animation:gdCap2 13s infinite; color:var(--err); }
-      .gd .caps b:nth-child(3){ animation:gdCap3 13s infinite; }
-      .gd .caps b:nth-child(4){ animation:gdCap4 13s infinite; color:var(--good); }
+      .gd .caps b.c1{ color:var(--err); }
+      .gd .caps b.c3{ color:var(--good); }
 
-      @keyframes gdTypeName{ 0%,36%{width:0} 45%,100%{width:105px} }
-      @keyframes gdPhFade{ 0%,36%{opacity:1} 40%,100%{opacity:0} }
-      @keyframes gdNameErr{ 0%,25%{border-color:var(--line);box-shadow:none} 27%,44%{border-color:var(--err);box-shadow:0 0 0 3px var(--err-wash)} 48%,100%{border-color:var(--line);box-shadow:none} }
-      @keyframes gdHintShow{ 0%,25%{opacity:0} 28%,44%{opacity:1} 48%,100%{opacity:0} }
-      @keyframes gdSavePress{ 0%,22%{transform:none;filter:none} 24%{transform:scale(.96);filter:brightness(1.25)} 27%,61%{transform:none;filter:none} 63%{transform:scale(.96);filter:brightness(1.25)} 66%,100%{transform:none;filter:none} }
-      @keyframes gdToastShow{ 0%,63%{opacity:0;transform:translateY(6px)} 68%,90%{opacity:1;transform:none} 95%,100%{opacity:0;transform:translateY(6px)} }
-      @keyframes gdCap1{ 0%,20%{opacity:1} 24%,100%{opacity:0} }
-      @keyframes gdCap2{ 0%,25%{opacity:0} 28%,43%{opacity:1} 47%,100%{opacity:0} }
-      @keyframes gdCap3{ 0%,44%{opacity:0} 48%,60%{opacity:1} 64%,100%{opacity:0} }
-      @keyframes gdCap4{ 0%,63%{opacity:0} 68%,92%{opacity:1} 96%,100%{opacity:0} }
+      /* step 1 — Save pressed, name still blank: error border + hint + caption */
+      .gd .stage[data-step="1"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
+      .gd .stage[data-step="1"] .hint{ opacity:1; }
+      /* step 2 & 3 — name filled in: value replaces placeholder */
+      .gd .stage[data-step="2"] #nameBox .ph,
+      .gd .stage[data-step="3"] #nameBox .ph{ opacity:0; }
+      .gd .stage[data-step="2"] #nameBox .val,
+      .gd .stage[data-step="3"] #nameBox .val{ opacity:1; }
+      /* step 3 — saved: toast in */
+      .gd .stage[data-step="3"] .toast{ opacity:1; transform:none; }
+      /* captions follow the step */
+      .gd .stage[data-step="0"] .caps b.c0,
+      .gd .stage[data-step="1"] .caps b.c1,
+      .gd .stage[data-step="2"] .caps b.c2,
+      .gd .stage[data-step="3"] .caps b.c3{ opacity:1; }
       @media (prefers-reduced-motion:reduce){
-        .gd #nameBox,.gd #nameBox .ph,.gd #nameBox .val,.gd .hint,.gd .save,.gd .toast,.gd .caps b{ animation:none !important; }
-        .gd #nameBox .val{ width:105px; } .gd #nameBox .ph{ opacity:0; } .gd .caps b:nth-child(4){ opacity:1; }
+        .gd #nameBox, .gd #nameBox .ph, .gd #nameBox .val, .gd .hint, .gd .save, .gd .toast, .gd .caps b{ transition:none !important; }
       }
 
       /* written steps */
@@ -138,7 +145,7 @@ $activeNav = 'help';
       .gd .oops b{ color:var(--err); }
 
       /* narration */
-      .gd .ttsrow{ display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin-bottom:.7rem; }
+      .gd .ttsrow{ display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin:.9rem 0 .5rem; }
       .gd .ttsbtn{ font:inherit; font-weight:700; cursor:pointer; border:none; border-radius:9px; padding:.5rem 1rem; background:var(--accent); color:#fff; font-size:.9rem; }
       .gd .ttsbtn:hover{ background:var(--accent-ink); }
       .gd .ttsbtn:disabled{ background:var(--line); color:var(--faint); cursor:not-allowed; }
@@ -149,16 +156,7 @@ $activeNav = 'help';
       .gd .vsel{ display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; color:var(--soft); }
       .gd .vsel span{ font-weight:600; }
       .gd .vsel select{ font:inherit; font-size:.82rem; padding:.35rem .5rem; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); max-width:230px; }
-      .gd .script{ border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:var(--gd-shadow); background:var(--surface); margin-top:.8rem; }
-      .gd .script .row{ display:grid; grid-template-columns:78px 1fr 1.35fr; border-bottom:1px solid var(--line); }
-      .gd .script .row:last-child{ border-bottom:none; }
-      .gd .script .row.head{ background:var(--panel); font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); font-weight:700; }
-      .gd .script .row.speaking{ background:var(--accent-wash); }
-      .gd .script .c{ padding:.65rem .8rem; font-size:.9rem; }
-      .gd .script .beat{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; color:var(--accent); font-size:.78rem; border-right:1px solid var(--line); }
-      .gd .script .screen{ color:var(--soft); border-right:1px solid var(--line); font-size:.84rem; }
-      .gd .script .vo{ color:var(--ink); }
-      @media(max-width:620px){ .gd .script .row{ grid-template-columns:1fr; } .gd .script .beat,.gd .script .screen{ border-right:none; } .gd .frow{ grid-template-columns:1fr; } }
+      @media(max-width:620px){ .gd .frow{ grid-template-columns:1fr; } }
     </style>
 </head>
 <body>
@@ -184,42 +182,45 @@ $activeNav = 'help';
             <?php endif; ?>
 
             <section>
-                <div class="sec-h"><span class="num">01</span><h2>Watch it</h2><p>a quick loop of the whole thing — including the slip and the fix</p></div>
+                <div class="sec-h"><span class="num">01</span><h2>Watch it</h2><p>plays with a voice-over — turn your volume down for quiet</p></div>
                 <?= $g['demo'] ?>
+                <div class="ttsrow">
+                    <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay narration</button>
+                    <label class="vsel"><span>Voice</span><select id="gdVoice"></select></label>
+                </div>
+                <p class="ttsnote">The voice-over plays automatically in <b>Google UK English Female</b> (Chrome / Edge). Some browsers hold the sound until you tap the page first — if you hear nothing, click anywhere or press replay.</p>
             </section>
 
             <section>
                 <div class="sec-h"><span class="num">02</span><h2>Step by step</h2></div>
                 <div class="prose"><?= $g['body'] ?></div>
             </section>
-
-            <section>
-                <div class="sec-h"><span class="num">03</span><h2>Listen</h2><p>the voice-over plays on its own — turn your volume down for quiet</p></div>
-                <div class="ttsrow">
-                    <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay narration</button>
-                    <label class="vsel"><span>Voice</span><select id="gdVoice"></select></label>
-                </div>
-                <p class="ttsnote">Reads aloud automatically in <b>Google UK English Female</b> (Chrome / Edge). Prefer quiet? Just turn your volume down. Some browsers hold the sound until you tap the page first — if you hear nothing, click anywhere or press replay.</p>
-                <div class="script">
-                    <div class="row head"><div class="c beat">Beat</div><div class="c screen">On screen</div><div class="c vo">Voiceover</div></div>
-                    <?php foreach ($g['script'] as [$beat, $screen, $vo]): ?>
-                        <div class="row"><div class="c beat"><?= e($beat) ?></div><div class="c screen"><?= e($screen) ?></div><div class="c vo"><?= e($vo) ?></div></div>
-                    <?php endforeach; ?>
-                </div>
-            </section>
         </div>
 
         <script>
         (function(){
             var lines = <?= json_encode(array_map(static fn($r) => $r[2], $g['script']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            var steps = <?= json_encode(array_map(static fn($r) => (int) ($r[3] ?? 0), $g['script'])) ?>;
             var btn = document.getElementById('gdPlay');
             var sel = document.getElementById('gdVoice');
+            var stage = document.getElementById('gdStage');
+            var saveEl = document.querySelector('.gd .save');
             var synth = window.speechSynthesis;
             if (!btn) return;
+
+            var STEP_COUNT = 4, idleTimer = null;
+            function setStep(n){
+                if (!stage) return;
+                stage.setAttribute('data-step', String(n));
+                if (saveEl && (n === 1 || n === 3)){ saveEl.classList.add('pressed'); setTimeout(function(){ saveEl.classList.remove('pressed'); }, 200); }
+            }
+            function stopIdle(){ if (idleTimer){ clearInterval(idleTimer); idleTimer = null; } }
+            function startIdle(){ stopIdle(); var s = 0; setStep(0); idleTimer = setInterval(function(){ s = (s + 1) % STEP_COUNT; setStep(s); }, 2600); }
+            startIdle(); // visuals loop on their own until (and after) narration plays
+
             if (!synth){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
 
-            var rows = Array.prototype.slice.call(document.querySelectorAll('.gd .script .row')).filter(function(r){ return !r.classList.contains('head'); });
-            var playing = false, i = 0, voices = [];
+            var playing = false, i = 0, voices = [], spokeAny = false;
 
             function loadVoices(){
                 voices = synth.getVoices() || [];
@@ -235,29 +236,34 @@ $activeNav = 'help';
                 sel.value = keep && ordered.some(function(v){ return v.name === keep; }) ? keep : (gukf ? gukf.name : (ordered[0] ? ordered[0].name : ''));
             }
             function currentVoice(){ if (!sel) return voices[0]; return voices.filter(function(v){ return v.name === sel.value; })[0] || voices[0]; }
-            function clearHL(){ rows.forEach(function(r){ r.classList.remove('speaking'); }); }
             function speakNext(){
                 if (!playing) return;
                 if (i >= lines.length){ stop(); return; }
-                clearHL();
-                if (rows[i]) rows[i].classList.add('speaking');
-                var u = new SpeechSynthesisUtterance(lines[i]);
+                var idx = i;
+                var u = new SpeechSynthesisUtterance(lines[idx]);
                 var v = currentVoice(); if (v) u.voice = v;
                 u.rate = 1; u.pitch = 1;
-                u.onstart = function(){ spokeAny = true; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); };
+                // Advance the walkthrough as each line BEGINS — this is what keeps
+                // the visuals locked to the voice, whatever its speed.
+                u.onstart = function(){ spokeAny = true; setStep(steps[idx]); btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); };
                 u.onend = function(){ i++; speakNext(); };
                 u.onerror = function(){ i++; speakNext(); };
                 synth.speak(u);
             }
-            function play(){ playing = true; i = 0; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); synth.cancel(); setTimeout(speakNext, 60); }
-            function stop(){ playing = false; btn.textContent = '▶ Replay narration'; btn.classList.remove('speaking'); clearHL(); synth.cancel(); }
+            function play(){ playing = true; i = 0; btn.textContent = '⏹ Stop'; btn.classList.add('speaking'); stopIdle(); setStep(0); synth.cancel(); setTimeout(speakNext, 60); }
+            function stop(){ playing = false; btn.textContent = '▶ Replay narration'; btn.classList.remove('speaking'); synth.cancel(); startIdle(); }
             btn.addEventListener('click', function(){ playing ? stop() : play(); });
 
             // Sound is on by default: try to start narration on load. Browsers that
             // block autoplay until a user gesture are covered by the first-gesture
             // fallback below (which fires only if nothing has spoken yet).
-            var spokeAny = false, autoStarted = false;
-            function autoStart(){ if (autoStarted) return; autoStarted = true; play(); }
+            var autoStarted = false;
+            function autoStart(){
+                if (autoStarted) return; autoStarted = true; play();
+                // If the browser silently blocked autoplay, nothing will have spoken —
+                // let the visuals keep looping until the first tap starts the sound.
+                setTimeout(function(){ if (playing && !spokeAny) startIdle(); }, 1400);
+            }
             function onFirstGesture(e){
                 document.removeEventListener('pointerdown', onFirstGesture, true);
                 document.removeEventListener('keydown', onFirstGesture, true);
