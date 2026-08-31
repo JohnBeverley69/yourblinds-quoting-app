@@ -136,6 +136,15 @@ $activeNav = 'help';
       .gd .ex{ display:none; align-items:center; gap:.5rem; font-size:1rem; padding:.55rem .8rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
       .gd .ex .exc{ color:var(--soft); } .gd .ex .exp{ color:var(--good); font-size:.8rem; margin-left:auto; }
       .gd .ex.danger{ border-color:var(--err); background:var(--err-wash); } .gd .ex.danger .exs{ color:var(--err); }
+      /* controls drawn to MATCH the real app so the help looks the same:
+         radio buttons, dropdown selects, and checkboxes (.tick above). */
+      .gd .radio{ display:inline-flex; align-items:center; gap:.45rem; font-size:.85rem; color:var(--soft); margin-right:1.4rem; }
+      .gd .radio .dot{ width:15px; height:15px; border-radius:50%; border:1.5px solid var(--border-strong,#c7ccd4); display:inline-block; position:relative; box-sizing:border-box; }
+      .gd .radio.on{ color:var(--ink); font-weight:600; }
+      .gd .radio.on .dot{ border-color:var(--accent); }
+      .gd .radio.on .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+      .gd .selectbox{ display:inline-flex; align-items:center; justify-content:space-between; gap:.7rem; min-width:190px; border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.4rem .6rem; font-size:.85rem; color:var(--ink); background:var(--surface); }
+      .gd .selectbox::after{ content:"\25BE"; color:var(--faint); font-size:.7rem; }
 
       /* written steps */
       .gd .steps{ list-style:none; padding:0; margin:.2rem 0 .9rem; counter-reset:s; }

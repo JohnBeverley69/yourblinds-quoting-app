@@ -265,8 +265,9 @@ return [
           .gd .stage[data-step="1"] .jobchip .paid, .gd .stage[data-step="2"] .jobchip .paid, .gd .stage[data-step="3"] .jobchip .paid, .gd .stage[data-step="4"] .jobchip .paid{ display:inline; }
           .gd .pill{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:999px; padding:.18rem .55rem; font-size:.74rem; margin-right:.35rem; color:var(--soft); }
           .gd .pill.sel{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
-          .gd .stage[data-step="2"] .pill-google, .gd .stage[data-step="3"] .pill-google, .gd .stage[data-step="4"] .pill-google{ border-color:var(--line); background:transparent; color:var(--soft); }
-          .gd .stage[data-step="2"] .pill-waze, .gd .stage[data-step="3"] .pill-waze, .gd .stage[data-step="4"] .pill-waze{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .stage[data-step="0"] .rg, .gd .stage[data-step="1"] .rg, .gd .stage[data-step="2"] .rw, .gd .stage[data-step="3"] .rw, .gd .stage[data-step="4"] .rw{ color:var(--ink); font-weight:600; }
+          .gd .stage[data-step="0"] .rg .dot, .gd .stage[data-step="1"] .rg .dot, .gd .stage[data-step="2"] .rw .dot, .gd .stage[data-step="3"] .rw .dot, .gd .stage[data-step="4"] .rw .dot{ border-color:var(--accent); }
+          .gd .stage[data-step="0"] .rg .dot::after, .gd .stage[data-step="1"] .rg .dot::after, .gd .stage[data-step="2"] .rw .dot::after, .gd .stage[data-step="3"] .rw .dot::after, .gd .stage[data-step="4"] .rw .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
           .gd .opens{ display:block; margin-top:.4rem; font-size:.74rem; color:var(--soft); }
           .gd .nn-waze{ display:none; }
           .gd .stage[data-step="2"] .nn-google, .gd .stage[data-step="3"] .nn-google, .gd .stage[data-step="4"] .nn-google{ display:none; }
@@ -293,7 +294,7 @@ return [
                 </div>
                 <div class="opt opt-nav">
                   <div class="opt-h">&#129517; Navigation app</div>
-                  <div style="margin-top:.4rem"><span class="pill pill-google sel">Google Maps</span><span class="pill pill-waze">Waze</span></div>
+                  <div style="margin-top:.5rem"><span class="radio rg"><span class="dot"></span> Google Maps</span><span class="radio rw"><span class="dot"></span> Waze</span></div>
                   <span class="opens">Tap an address &rarr; opens in <b class="nn-google">Google Maps</b><b class="nn-waze">Waze</b></span>
                 </div>
                 <div class="opt opt-slots">
@@ -349,11 +350,11 @@ return [
                       the difference, plainly, with a calculator to play with.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .mlabel{ font-size:.78rem; color:var(--soft); font-weight:600; margin-bottom:.3rem; }
-          .gd .mpills{ margin-bottom:.9rem; }
-          .gd .mpills .pill{ display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:.2rem .7rem; font-size:.78rem; margin-right:.4rem; color:var(--soft); }
-          .gd .stage[data-step="0"] .pmk{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
-          .gd .stage[data-step="1"] .pmg, .gd .stage[data-step="2"] .pmg, .gd .stage[data-step="3"] .pmg{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .mlabel{ font-size:.78rem; color:var(--soft); font-weight:600; margin-bottom:.45rem; }
+          .gd .mradios{ margin-bottom:.9rem; }
+          .gd .stage[data-step="0"] .rmk, .gd .stage:not([data-step="0"]) .rmg{ color:var(--ink); font-weight:600; }
+          .gd .stage[data-step="0"] .rmk .dot, .gd .stage:not([data-step="0"]) .rmg .dot{ border-color:var(--accent); }
+          .gd .stage[data-step="0"] .rmk .dot::after, .gd .stage:not([data-step="0"]) .rmg .dot::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
           .gd .exwrap{ min-height:52px; }
           .gd .ex{ display:none; align-items:center; gap:.5rem; font-size:1rem; padding:.55rem .8rem; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
           .gd .ex .exc{ color:var(--soft); }
@@ -401,7 +402,7 @@ return [
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Default margins</div>
                 <div class="mlabel">Enter your margins as</div>
-                <div class="mpills"><span class="pill pmk">Markup&nbsp;%</span><span class="pill pmg">Margin&nbsp;%</span></div>
+                <div class="mradios"><span class="radio rmk"><span class="dot"></span> Markup&nbsp;%</span><span class="radio rmg"><span class="dot"></span> Margin&nbsp;%</span></div>
                 <div class="exwrap">
                   <div class="ex e0"><span class="exc">Cost &pound;100</span> &rarr; <b class="exs">Sell &pound;150</b> <span class="exp">profit &pound;50</span></div>
                   <div class="ex e1"><span class="exc">Cost &pound;100</span> &rarr; <b class="exs">Sell &pound;200</b> <span class="exp">profit &pound;100</span></div>
@@ -510,8 +511,9 @@ JS,
                       underneath, so it changes nothing about your existing quotes.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          .gd .upills{ margin:.3rem 0 .2rem; }
-          .gd .stage[data-step="0"] .umm, .gd .stage[data-step="1"] .ucm, .gd .stage[data-step="2"] .uin{ border-color:var(--accent); background:var(--accent-wash); color:var(--accent-ink); }
+          .gd .selrow{ margin:.3rem 0 .2rem; }
+          .gd .selectbox span{ display:none; }
+          .gd .stage[data-step="0"] .u0, .gd .stage[data-step="1"] .u1, .gd .stage[data-step="2"] .u2{ display:inline; }
           .gd .exwrap{ min-height:48px; margin-top:.4rem; }
           .gd .ex .exs{ color:var(--ink); font-size:1.05rem; font-weight:700; }
           .gd .stage[data-step="0"] .e0, .gd .stage[data-step="1"] .e1, .gd .stage[data-step="2"] .e2{ display:flex; }
@@ -526,8 +528,8 @@ JS,
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Measurements</div>
-                <div class="mlabel" style="font-size:.78rem;color:var(--soft);font-weight:600">Default measurement unit</div>
-                <div class="upills"><span class="pill umm">mm</span><span class="pill ucm">cm</span><span class="pill um">m</span><span class="pill uin">in</span></div>
+                <div class="mlabel" style="font-size:.78rem;color:var(--soft);font-weight:600;margin-bottom:.4rem">Default measurement unit</div>
+                <div class="selrow"><span class="selectbox"><span class="u0">Millimetres (mm)</span><span class="u1">Centimetres (cm)</span><span class="u2">Inches (in)</span></span></div>
                 <div class="exwrap">
                   <div class="ex e0"><span class="exc">Width</span> <b class="exs">1500 mm</b></div>
                   <div class="ex e1"><span class="exc">Width</span> <b class="exs">150 cm</b></div>
@@ -897,6 +899,7 @@ JS,
           .gd .bk-btns{ display:flex; gap:.5rem; flex-wrap:wrap; }
           .gd .bk-btn{ border:1px solid var(--line); border-radius:8px; padding:.35rem .7rem; font-size:.8rem; font-weight:600; color:var(--soft); }
           .gd .bk-btn.pri{ background:var(--accent); color:#fff; border-color:transparent; }
+          .gd .bk-btn.on{ border-color:var(--accent); color:var(--accent-ink); background:var(--accent-wash); }
           .gd .bk-file{ display:none; align-items:center; gap:.5rem; margin-top:.8rem; border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem; font-size:.82rem; background:var(--panel); color:var(--ink); }
           .gd .stage[data-step="1"] .bk-file, .gd .stage[data-step="2"] .bk-file{ display:flex; }
           .gd .bk-file .grn{ color:var(--good); font-weight:700; }
@@ -912,7 +915,7 @@ JS,
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Back up your data</div>
-                <div class="bk-range"><span class="pill sel">All time</span><span class="pill">Last 30 days</span><span class="pill">This year</span></div>
+                <div class="bk-range"><span class="bk-btn on">All time</span><span class="bk-btn">Last 30 days</span><span class="bk-btn">This year</span></div>
                 <div class="bk-btns"><span class="bk-btn pri">&#11015; Download Excel (.xlsx)</span><span class="bk-btn">&#11015; PDF summary</span></div>
                 <div class="bk-file">&#128196; yourblinds-backup.xlsx <span class="grn">&check; downloaded</span></div>
                 <div class="bk-since">&#11015; Changes since last backup (Excel) &mdash; just what&rsquo;s new or changed.</div>
