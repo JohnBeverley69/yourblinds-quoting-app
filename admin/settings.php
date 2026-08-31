@@ -470,24 +470,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'ampm_slots') {
-        // Morning/afternoon booking slots for quote visits (migrate_ampm_slots.php).
-        $on  = !empty($_POST['feature_ampm_slots']) ? 1 : 0;
-        $cap = (int) ($_POST['ampm_slot_capacity'] ?? 4);
-        if ($cap < 1)   $cap = 1;
-        if ($cap > 99)  $cap = 99;
+        // Morning/afternoon booking slots for quote visits — configurable window
+        // times + per-window capacity (migrate_ampm_slots.php + migrate_ampm_window_config.php).
+        $on    = !empty($_POST['feature_ampm_slots']) ? 1 : 0;
+        $amCap = max(1, min(99, (int) ($_POST['ampm_am_capacity'] ?? 4)));
+        $pmCap = max(1, min(99, (int) ($_POST['ampm_pm_capacity'] ?? 4)));
+        // Normalise a time field to HH:MM:SS; fall back to the default if unparseable.
+        $normTime = static function ($v, string $def): string {
+            if (preg_match('/^([01]?\d|2[0-3]):([0-5]\d)/', trim((string) $v), $m)) {
+                return sprintf('%02d:%02d:00', (int) $m[1], (int) $m[2]);
+            }
+            return $def;
+        };
+        $amS = $normTime($_POST['ampm_am_start'] ?? '', '09:00:00');
+        $amE = $normTime($_POST['ampm_am_end']   ?? '', '13:00:00');
+        $pmS = $normTime($_POST['ampm_pm_start'] ?? '', '13:00:00');
+        $pmE = $normTime($_POST['ampm_pm_end']   ?? '', '17:00:00');
         try {
             db()->prepare(
-                'INSERT INTO client_settings (client_id, feature_ampm_slots, ampm_slot_capacity)
-                 VALUES (?, ?, ?)
+                'INSERT INTO client_settings
+                    (client_id, feature_ampm_slots, ampm_slot_capacity, ampm_am_capacity, ampm_pm_capacity,
+                     ampm_am_start, ampm_am_end, ampm_pm_start, ampm_pm_end)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE feature_ampm_slots = VALUES(feature_ampm_slots),
-                                         ampm_slot_capacity = VALUES(ampm_slot_capacity)'
-            )->execute([$clientId, $on, $cap]);
+                                         ampm_slot_capacity = VALUES(ampm_slot_capacity),
+                                         ampm_am_capacity   = VALUES(ampm_am_capacity),
+                                         ampm_pm_capacity   = VALUES(ampm_pm_capacity),
+                                         ampm_am_start      = VALUES(ampm_am_start),
+                                         ampm_am_end        = VALUES(ampm_am_end),
+                                         ampm_pm_start      = VALUES(ampm_pm_start),
+                                         ampm_pm_end        = VALUES(ampm_pm_end)'
+            // ampm_slot_capacity kept = morning capacity, for pre-migration fallback code.
+            )->execute([$clientId, $on, $amCap, $amCap, $pmCap, $amS, $amE, $pmS, $pmE]);
             $_SESSION['flash_success'] = $on
-                ? "Morning/afternoon booking slots are on ({$cap} per window per day)."
+                ? 'Morning/afternoon booking slots saved.'
                 : 'Morning/afternoon booking slots are off.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
-                . ' — have you run migrate_ampm_slots.php?';
+                . ' — have you run migrate_ampm_window_config.php?';
         }
         header('Location: /admin/settings.php');
         exit;
@@ -947,9 +967,14 @@ $activeNav = 'settings';
             </form>
 
             <?php
-                $ampmOn  = ((int) ($settings['feature_ampm_slots'] ?? 0)) === 1;
-                $ampmCap = (int) ($settings['ampm_slot_capacity'] ?? 4);
-                if ($ampmCap < 1) $ampmCap = 4;
+                $ampmOn = ((int) ($settings['feature_ampm_slots'] ?? 0)) === 1;
+                $amCap  = max(1, (int) ($settings['ampm_am_capacity'] ?? $settings['ampm_slot_capacity'] ?? 4));
+                $pmCap  = max(1, (int) ($settings['ampm_pm_capacity'] ?? $settings['ampm_slot_capacity'] ?? 4));
+                $hm     = static fn ($v, $d) => substr((string) ($v ?? $d), 0, 5); // HH:MM for <input type=time>
+                $amS = $hm($settings['ampm_am_start'] ?? null, '09:00');
+                $amE = $hm($settings['ampm_am_end']   ?? null, '13:00');
+                $pmS = $hm($settings['ampm_pm_start'] ?? null, '13:00');
+                $pmE = $hm($settings['ampm_pm_end']   ?? null, '17:00');
             ?>
             <form method="post" action="/admin/settings.php" class="form" novalidate
                   style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
@@ -963,24 +988,33 @@ $activeNav = 'settings';
                             🕘 Morning / afternoon booking slots
                         </label>
                         <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
-                            When booking a <strong>quote (measure) visit</strong>, offer
-                            <strong>Morning (9am–1pm)</strong> or <strong>Afternoon (1pm–5pm)</strong>
-                            instead of a specific time — so the customer is given a window, never an
-                            exact hour like 10am. Each window can hold the number of bookings below per
-                            day; once it's full it can't be booked. Fittings are unaffected.
+                            When booking a <strong>quote (measure) visit</strong>, offer a <strong>Morning</strong> or
+                            <strong>Afternoon</strong> window instead of an exact time — so the customer is given a window,
+                            never an exact hour. Set each window’s <strong>times</strong> and how many bookings it holds
+                            <strong>per day</strong> below; once a window is full it can’t be booked. Fittings are unaffected.
                         </p>
                     </div>
                 </div>
-                <div class="form-row full">
-                    <div class="form-group" style="max-width:16rem;">
-                        <label for="ampm_slot_capacity" style="font-weight:600;">Bookings per window, per day</label>
-                        <input id="ampm_slot_capacity" name="ampm_slot_capacity" type="number"
-                               min="1" max="99" step="1" value="<?= e((string) $ampmCap) ?>">
-                        <p style="margin:0.35rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
-                            e.g. 4 = up to four quote visits each morning and four each afternoon.
-                        </p>
+                <?php foreach ([
+                        ['Morning',   'ampm_am_start', $amS, 'ampm_am_end', $amE, 'ampm_am_capacity', $amCap],
+                        ['Afternoon', 'ampm_pm_start', $pmS, 'ampm_pm_end', $pmE, 'ampm_pm_capacity', $pmCap],
+                    ] as [$lbl, $sN, $sV, $eN, $eV, $cN, $cV]): ?>
+                <div class="form-row full" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:.75rem 1.25rem;">
+                    <div style="font-weight:600;min-width:5.5rem;padding-bottom:.45rem;"><?= e($lbl) ?></div>
+                    <div class="form-group" style="margin:0;max-width:8rem;">
+                        <label for="<?= e($sN) ?>" style="font-size:.8125rem;">From</label>
+                        <input id="<?= e($sN) ?>" name="<?= e($sN) ?>" type="time" value="<?= e($sV) ?>">
+                    </div>
+                    <div class="form-group" style="margin:0;max-width:8rem;">
+                        <label for="<?= e($eN) ?>" style="font-size:.8125rem;">To</label>
+                        <input id="<?= e($eN) ?>" name="<?= e($eN) ?>" type="time" value="<?= e($eV) ?>">
+                    </div>
+                    <div class="form-group" style="margin:0;max-width:9rem;">
+                        <label for="<?= e($cN) ?>" style="font-size:.8125rem;">Bookings / day</label>
+                        <input id="<?= e($cN) ?>" name="<?= e($cN) ?>" type="number" min="1" max="99" step="1" value="<?= e((string) $cV) ?>">
                     </div>
                 </div>
+                <?php endforeach; ?>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save</button>
                 </div>
