@@ -104,40 +104,28 @@ $activeNav = 'help';
       .gd .fld label{ display:block; font-size:.64rem; color:var(--faint); font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.2rem; }
       .gd .fld .box{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel); display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
       .gd .req{ color:var(--err); }
-      /* State-driven walkthrough: the stage's data-step (0..3) is advanced by
-         the narration (or an idle loop), so the visuals stay in sync with the
-         voice. Everything transitions between states rather than running on a
-         fixed timeline. */
-      .gd #nameBox{ position:relative; transition:border-color .25s, box-shadow .25s; }
-      .gd #nameBox .ph{ color:var(--faint); transition:opacity .2s; }
-      .gd #nameBox .val{ position:absolute; left:.5rem; color:var(--ink); opacity:0; transition:opacity .2s; }
+      /* State-driven walkthrough: the stage's data-step is advanced by the
+         narration, so the visuals stay locked to the voice. The per-scenario
+         visuals (which field lights up on which step) live in each guide's own
+         <style> block (the guide 'css'). The shared bits below are the reusable
+         components + the caption→step mapping every guide uses. */
       .gd .hint{ grid-column:1 / -1; font-size:.72rem; color:var(--err); font-weight:600; opacity:0; margin-top:-.2rem; transition:opacity .2s; }
       .gd .save{ margin-top:1rem; display:inline-flex; align-items:center; gap:.4rem; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .8rem; font-size:.82rem; font-weight:600; transition:transform .12s, filter .12s; }
-      .gd .save.pressed{ transform:scale(.96); filter:brightness(1.25); }
       .gd .toast{ position:absolute; top:.7rem; right:.9rem; background:var(--good-wash); color:var(--good); border:1px solid color-mix(in srgb,var(--good) 35%,transparent); border-radius:8px; padding:.35rem .7rem; font-size:.78rem; font-weight:700; opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s; }
       .gd .caps{ position:relative; height:2.2rem; margin-top:.4rem; }
       .gd .caps b{ position:absolute; inset:0; display:flex; align-items:center; gap:.5rem; font-size:.9rem; color:var(--soft); font-weight:500; opacity:0; transition:opacity .25s; }
       .gd .caps b .n{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; color:var(--accent); font-size:.8rem; }
-      .gd .caps b.c1{ color:var(--err); }
-      .gd .caps b.c3{ color:var(--good); }
-
-      /* step 1 — Save pressed, name still blank: error border + hint + caption */
-      .gd .stage[data-step="1"] #nameBox{ border-color:var(--err); box-shadow:0 0 0 3px var(--err-wash); }
-      .gd .stage[data-step="1"] .hint{ opacity:1; }
-      /* step 2 & 3 — name filled in: value replaces placeholder */
-      .gd .stage[data-step="2"] #nameBox .ph,
-      .gd .stage[data-step="3"] #nameBox .ph{ opacity:0; }
-      .gd .stage[data-step="2"] #nameBox .val,
-      .gd .stage[data-step="3"] #nameBox .val{ opacity:1; }
-      /* step 3 — saved: toast in */
-      .gd .stage[data-step="3"] .toast{ opacity:1; transform:none; }
-      /* captions follow the step */
+      .gd .caps b.err{ color:var(--err); }
+      .gd .caps b.good{ color:var(--good); }
+      /* caption follows the step: <b class="cN"> shows at data-step="N" (0..5) */
       .gd .stage[data-step="0"] .caps b.c0,
       .gd .stage[data-step="1"] .caps b.c1,
       .gd .stage[data-step="2"] .caps b.c2,
-      .gd .stage[data-step="3"] .caps b.c3{ opacity:1; }
+      .gd .stage[data-step="3"] .caps b.c3,
+      .gd .stage[data-step="4"] .caps b.c4,
+      .gd .stage[data-step="5"] .caps b.c5{ opacity:1; }
       @media (prefers-reduced-motion:reduce){
-        .gd #nameBox, .gd #nameBox .ph, .gd #nameBox .val, .gd .hint, .gd .save, .gd .toast, .gd .caps b{ transition:none !important; }
+        .gd .hint, .gd .save, .gd .toast, .gd .caps b, .gd [data-anim]{ transition:none !important; }
       }
 
       /* written steps */
@@ -165,6 +153,11 @@ $activeNav = 'help';
       .gd .vsel select{ font:inherit; font-size:.82rem; padding:.35rem .5rem; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); max-width:230px; }
       @media(max-width:620px){ .gd .frow{ grid-template-columns:1fr; } }
     </style>
+    <?php if (!isset($notFound) && !empty($g['css'])): ?>
+    <style>/* scenario styles for this guide */
+<?= $g['css'] ?>
+    </style>
+    <?php endif; ?>
 </head>
 <body>
 <div class="app-shell">
@@ -213,17 +206,14 @@ $activeNav = 'help';
             var btn = document.getElementById('gdPlay');
             var sel = document.getElementById('gdVoice');
             var stage = document.getElementById('gdStage');
-            var saveEl = document.querySelector('.gd .save');
             var watchEl = document.getElementById('gdWatch');
             var iconEl = document.getElementById('gdIcon');
             var synth = window.speechSynthesis;
             if (!btn) return;
 
-            function setStep(n){
-                if (!stage) return;
-                stage.setAttribute('data-step', String(n));
-                if (saveEl && (n === 1 || n === 3)){ saveEl.classList.add('pressed'); setTimeout(function(){ saveEl.classList.remove('pressed'); }, 200); }
-            }
+            // The engine is generic: it only moves the stage's data-step in time
+            // with the narration. All per-scenario visuals are CSS in the guide.
+            function setStep(n){ if (stage) stage.setAttribute('data-step', String(n)); }
             setStep(0); // resting poster — nothing plays until asked (no looping)
 
             if (!synth){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
