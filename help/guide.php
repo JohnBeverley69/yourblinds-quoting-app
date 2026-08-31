@@ -138,6 +138,12 @@ $activeNav = 'help';
       .gd .prose p{ margin:0 0 .8rem; } .gd .prose p:last-child{ margin-bottom:0; } .gd .prose b{ color:var(--ink); }
       .gd .oops{ background:var(--err-wash); border-left:3px solid var(--err); border-radius:8px; padding:.6rem .85rem; font-size:.94rem; color:var(--ink); margin-top:.4rem; }
       .gd .oops b{ color:var(--err); }
+      /* "Heads up" advisory — for a setting that has wider ramifications. */
+      .gd .heads{ display:flex; gap:.55rem; align-items:flex-start; background:color-mix(in srgb,#f59e0b 12%,transparent); border-left:3px solid #f59e0b; border-radius:8px; padding:.6rem .85rem; font-size:.92rem; color:var(--ink); margin:.7rem 0 0; }
+      .gd .heads .hi{ font-size:1rem; line-height:1.3; }
+      .gd .heads b{ color:#b45309; }
+      :root[data-theme="dark"] .gd .heads b{ color:#fbbf24; }
+      @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .gd .heads b{ color:#fbbf24; } }
 
       /* narration */
       .gd .ttsrow{ display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin:.9rem 0 .5rem; }
