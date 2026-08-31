@@ -1274,7 +1274,8 @@ JS,
                   <span class="wstep ws4"><span class="num">4</span> Price tables</span>
                 </div>
                 <div class="wpanel p1">
-                  <div class="fld"><label>Product name</label><div class="box f1"><span class="ph">e.g. Roller Blind</span><span class="val">Roller Blind</span></div></div>
+                  <div class="fld"><label>Product name</label><div class="box f1"><span class="ph">e.g. Louvolite Roller Blind</span><span class="val">Louvolite Roller Blind</span></div></div>
+                  <div class="fld"><label>What do you call the material this is made of?</label><div class="box f1"><span class="ph">Fabric</span><span class="val">Fabric</span></div></div>
                   <div class="nextbtn">Create &amp; continue &rarr;</div>
                 </div>
                 <div class="wpanel p2">
@@ -1284,16 +1285,21 @@ JS,
                   <div class="nextbtn">Next: fabrics &rarr;</div>
                 </div>
                 <div class="wpanel p3">
-                  <div class="plbl2">Fabrics</div>
+                  <div class="plbl2">Fabrics &mdash; add a band, then paste the names</div>
+                  <div class="frow">
+                    <div class="fld"><label>Band</label><div class="box" style="max-width:8rem"><span class="val">Plain</span></div></div>
+                    <div class="fld"><label>Available on</label><div class="selectbox">All systems (optional)</div></div>
+                  </div>
+                  <div class="fld"><label>Names &mdash; one per line or comma-separated</label><div class="ta"><span class="val">Plain White, Plain Cream, Silver, Anthracite</span></div></div>
                   <div class="fablist">
-                    <div class="fabrow"><span>Sunset White</span><span class="bnd">Band A</span></div>
-                    <div class="fabrow"><span>Dune</span><span class="bnd">Band A</span></div>
-                    <div class="fabrow"><span>Storm Grey</span><span class="bnd">Band B</span></div>
+                    <div class="fabrow"><span>Plain White</span><span class="bnd">Plain</span></div>
+                    <div class="fabrow"><span>Plain Cream</span><span class="bnd">Plain</span></div>
+                    <div class="fabrow"><span>Silver</span><span class="bnd">Plain</span></div>
                   </div>
                   <div class="nextbtn">Next: price tables &rarr;</div>
                 </div>
                 <div class="wpanel p4">
-                  <div class="plbl2">Price tables &mdash; Band A (width &times; drop)</div>
+                  <div class="plbl2">Price tables &mdash; Band: Plain (width &times; drop)</div>
                   <div class="pgrid">
                     <span class="h">mm</span><span class="h">600</span><span class="h">900</span><span class="h">1200</span>
                     <span class="h">1000</span><span>38</span><span>44</span><span>52</span>
@@ -1303,9 +1309,9 @@ JS,
                   <div class="pdone">&check; Price grids imported &mdash; product ready to quote.</div>
                 </div>
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> Name your product.</b>
+                  <b class="c1"><span class="n">1</span> Name it, supplier first &mdash; and the material word.</b>
                   <b class="c2"><span class="n">2</span> Add a system &mdash; a variant, like a slat size.</b>
-                  <b class="c3"><span class="n">3</span> Add your fabrics (name + price band).</b>
+                  <b class="c3"><span class="n">3</span> Add a band (Plain), paste the names.</b>
                   <b class="c4 good"><span class="n">4</span> Import your price grids &mdash; done.</b>
                 </div>
               </div>
@@ -1315,30 +1321,40 @@ JS,
           <p>The <b>setup wizard</b> builds a product in four steps: <b>Name &rarr; Systems &rarr; Fabrics &rarr; Price tables</b>.
              It nudges you through each one, and you can close the tab and pick up where you left off.</p>
           <ul class="steps">
-            <li><b>Name</b> &mdash; give the product a name (e.g. <em>Roller Blind</em>) and create it.</li>
-            <li><b>Systems</b> &mdash; add at least one <b>system</b> (a variant of the product &mdash; <em>Standard</em>, or a slat
-                size like <em>25mm</em>). A product can have several.</li>
-            <li><b>Fabrics</b> &mdash; add the fabrics/slats, each with a <b>price band</b> (the tier that links it to its prices).
-                Paste a whole list, or import from your Fabric Library or a spreadsheet. (Some products &mdash; e.g. headrails &mdash;
-                have no fabric; you can mark it &ldquo;no fabric&rdquo; and skip this step.)</li>
-            <li><b>Price tables</b> &mdash; import your <b>width &times; drop price grids</b>, one per band. This is what makes the product quotable.</li>
+            <li><b>Name</b> &mdash; name the product, and say <b>what you call the material</b> it&rsquo;s made of. That&rsquo;s
+                &ldquo;Fabric&rdquo; for a roller, but for a Venetian it&rsquo;s <em>Colours</em> or <em>Louvres</em> &mdash; not fabric.
+                That word is the one your customer sees in the quote builder, so pick the one that fits the product.</li>
+            <li><b>Systems</b> &mdash; add at least one <b>system</b> (a variant of the product &mdash; <em>Standard</em>, <em>Motorised</em>,
+                or a slat size like <em>25mm</em>). Paste a whole list, <b>one per line</b>. A product can have several.</li>
+            <li><b>Fabrics</b> &mdash; add a <b>band</b> first, then paste the names that sit in it. <b>Name the band for what it is</b>
+                &mdash; <em>Plain</em>, <em>Blackout</em>, <em>Special effects</em> &mdash; you don&rsquo;t have to use A/B/C. Paste the names
+                <b>one per line OR comma-separated</b> &mdash; whichever your list is in. <b>Available on</b> is optional: leave it blank and
+                the band applies to every system, or pick one system to tie it down tight. (Some products &mdash; e.g. headrails &mdash; have
+                no fabric; tick &ldquo;no fabric&rdquo; and skip this step.)</li>
+            <li><b>Price tables</b> &mdash; import your <b>width &times; drop price grids</b>, one per band. This is what makes the product
+                quotable. (See <em>Building price tables</em> for the fast paste-from-Excel method.)</li>
           </ul>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Start the product name with the supplier.</b> The supplier acts like a
+             <b>prefix</b> &mdash; at price-update time the system finds a product&rsquo;s prices by that prefix, so a name like
+             <em>Louvolite Roller Blind</em> updates cleanly when Louvolite send a new price list. Forget it? Don&rsquo;t panic &mdash; it&rsquo;s
+             easily changed afterwards; but getting it right up front saves work later.</div></div>
           <p><b>Tip:</b> on the Fabrics step there&rsquo;s a <em>&ldquo;Price tables first &rarr;&rdquo;</em> shortcut &mdash; import your
              grids first and the <b>bands auto-suggest</b> in the fabric&rsquo;s Band box, so you don&rsquo;t type band names twice.</p>
           <div class="heads"><span class="hi">&#9888;</span><div><b>The #1 thing to get right: the band must match.</b> A fabric&rsquo;s
              <b>band</b> is what links it to its prices &mdash; the <b>same band name must appear on the fabric AND on a price table</b>.
-             Put a fabric on &ldquo;Band A&rdquo; but only import a price table for &ldquo;Band B&rdquo;, and that fabric shows <b>no price</b>
-             (or &ldquo;Needs fabric&rdquo;) in the quote builder. Bands are case- and spelling-sensitive, so &ldquo;Band A&rdquo; and
-             &ldquo;band a&rdquo; are treated as different. Using the <em>&ldquo;Price tables first&rdquo;</em> shortcut avoids this by
+             Put a fabric on &ldquo;Plain&rdquo; but only import a price table for &ldquo;Special effects&rdquo;, and that fabric shows <b>no price</b>
+             (or &ldquo;Needs fabric&rdquo;) in the quote builder. Bands are case- and spelling-sensitive, so &ldquo;Plain&rdquo; and
+             &ldquo;plain&rdquo; are treated as different. Using the <em>&ldquo;Price tables first&rdquo;</em> shortcut avoids this by
              offering you the exact band names to pick.</div></div>
-          <p>Once all four are done, the product is <b>ready to quote</b>. Separate guides cover <b>pricing modes</b>,
-             <b>importing price tables</b>, <b>importing fabrics</b>, and <b>combining products</b> &mdash; and those show the common
+          <p>Once all four are done, the product is <b>ready to quote</b> &mdash; the last touch is its <b>options</b> (the extras a
+             customer picks, like controls or a cassette): see <em>Adding options</em>. Separate guides also cover <b>pricing modes</b>,
+             <b>building price tables</b>, <b>importing fabrics</b>, and <b>combining products</b> &mdash; and those show the common
              input errors and how to fix them.</p>',
         'script'  => [
-            ['0:00', 'Name step; product name fills.',   'The wizard sets up a product in four steps. First, give it a name — here, Roller Blind.', 1],
-            ['0:07', 'Systems step; Standard added.',    'Then add a system — a variant of the product, like Standard, or a slat size. You can add more than one.', 2],
-            ['0:15', 'Fabrics step; fabrics listed.',    'Next your fabrics, each with a price band — the tier that links it to its prices. Paste a list, or import them.', 3],
-            ['0:24', 'Price tables step; grid imported.', 'And finally, import your width-by-drop price grids, one per band. That\'s the product ready to quote.', 4],
+            ['0:00', 'Name + material word.',            'The wizard sets up a product in four steps. Name it — and start the name with the supplier, like Louvolite Roller Blind, because price updates find it by that prefix. Then say what you call the material: Fabric for a roller, Colours for slats.', 1],
+            ['0:13', 'Systems step; Standard added.',    'Add a system — a variant of the product, like Standard, Motorised, or a slat size. Paste a whole list, one per line.', 2],
+            ['0:21', 'Fabrics; band Plain, names pasted.', 'Next, add a band — name it for what it is, like Plain — and paste the names, one per line or comma-separated. Leave "available on" blank for every system, or pick one to tie it down.', 3],
+            ['0:31', 'Price tables step; grid imported.', 'And finally, import your width-by-drop price grids, one per band. That\'s the product ready to quote.', 4],
         ],
     ],
 
@@ -1635,7 +1651,8 @@ JS,
             </div>
           </div>',
         'body'    => '
-          <p>A product&rsquo;s fabrics are its <b>options</b>. Add them from a spreadsheet rather than one at a time.</p>
+          <p>A product&rsquo;s fabrics are its <b>colour / material choices</b> (its extras &mdash; controls, cassettes and the like &mdash;
+             are separate <em>options</em>, covered in <em>Adding options</em>). Add fabrics from a spreadsheet rather than one at a time.</p>
           <ul class="steps">
             <li><b>For one product</b> &mdash; on its <b>Fabrics</b> page, <b>Import from Excel</b>. Download the blank <b>template</b>,
                 fill it in (columns <b>Band*</b>, <b>Fabric name*</b>, Colour, Supplier, Code &mdash; * = required), and upload.
@@ -1644,12 +1661,18 @@ JS,
                 with <b>one sheet per product</b> (columns Name, Colour, Band). Each sheet is matched to a product; you can <b>pick
                 several</b> (Ctrl/Cmd-click) so one shared range feeds every blind that uses it.</li>
           </ul>
+          <p><b>The Band is yours to name.</b> Whatever you type in the <b>Band</b> column is the band &mdash; <b>name it for what it is</b>
+             (<em>Plain</em>, <em>Blackout</em>, <em>Special effects</em>), you don&rsquo;t have to use A/B/C. Just keep it <b>identical</b> to
+             the band on the matching price table (see the heads-up below).</p>
           <div class="oops"><b>&ldquo;Row 3: missing band&rdquo; (or missing name)?</b> Every fabric needs a <b>band</b> and a <b>name</b> &mdash;
              the import lists the exact rows that don&rsquo;t, and the good rows still go in. Fill the gaps and re-import. Always use the
              <b>.xlsx template</b> &mdash; a hand-made CSV with everything crammed into one column won&rsquo;t map to the Band/Name/Colour
              columns and every row will be rejected.</div>
+          <p><b>Just a few to add?</b> You don&rsquo;t need a spreadsheet at all &mdash; the wizard&rsquo;s <b>Fabrics</b> step lets you type a
+             band and <b>paste the names straight in, one per line or comma-separated</b>, and leave <b>Available on</b> blank for every
+             system (or pick one to tie the band to a single system).</p>
           <p>Once a product has at least one fabric and a price table, its <b>&ldquo;Needs fabric&rdquo;</b> flag clears and it&rsquo;s ready to
-             quote. Remember the <b>band on the fabric must match a price-table band</b>, or it shows no price.</p>',
+             quote. Remember the <b>band on the fabric must match a price-table band</b> exactly, or it shows no price.</p>',
         'script'  => [
             ['0:00', 'Import form; template + columns.', 'Add your fabrics from a spreadsheet. Download the template — Band and name are required, colour and code optional.', 1],
             ['0:08', 'Error: Row 3 missing band.',       'Leave a band off a row and it tells you which — some rows had problems, row 3, missing band.', 2],
