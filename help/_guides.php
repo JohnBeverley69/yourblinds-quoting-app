@@ -38,7 +38,7 @@ return [
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
               </div>
-              <div class="stage">
+              <div class="stage" id="gdStage" data-step="0">
                 <div class="toast">&check; Company details saved</div>
                 <div class="card-t">Company details</div>
                 <div class="frow">
@@ -51,10 +51,10 @@ return [
                 </div>
                 <div class="save">Save company details</div>
                 <div class="caps">
-                  <b><span class="n">1</span> Fill in your details…</b>
-                  <b><span class="n">2</span> Company name\'s blank — the one field it won\'t skip.</b>
-                  <b><span class="n">3</span> Pop the name in.</b>
-                  <b><span class="n">4</span> Saved.</b>
+                  <b class="c0"><span class="n">1</span> Filling your details in…</b>
+                  <b class="c1"><span class="n">2</span> Company name\'s blank — the one field it won\'t skip.</b>
+                  <b class="c2"><span class="n">3</span> Pop the name in.</b>
+                  <b class="c3"><span class="n">4</span> Saved.</b>
                 </div>
               </div>
             </div>
@@ -72,12 +72,13 @@ return [
           <p>Then hit <b>Save company details</b> — and that\'s it. You won\'t need to come back here.</p>
           <div class="oops"><b>If you miss the company name</b> and hit Save, the app nudges you rather than
              letting a nameless quote out. Add it, save again — hard to get wrong.</div>',
+        // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
-            ['0:00', 'Settings opens on the Company tab.',            'Let\'s get your company details in — these print on every quote you send.'],
-            ['0:06', 'Cursor fills contact, email, phone.',          'Name, email and phone, so customers can reach a real person.'],
-            ['0:13', 'Clicks Save — company name still blank. Nudge appears.', 'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.'],
-            ['0:20', 'Types the company name into the field.',        'Pop the name in.'],
-            ['0:26', 'Clicks Save. Green "saved" appears.',           'Save again, and your details are done.'],
+            ['0:00', 'Settings opens on the Company tab.',            'Let\'s get your company details in — these print on every quote you send.', 0],
+            ['0:06', 'Cursor fills contact, email, phone.',          'Name, email and phone, so customers can reach a real person.', 0],
+            ['0:13', 'Clicks Save — company name still blank. Nudge appears.', 'Save — and it stops me. I\'ve left the company name blank, and that\'s the one it won\'t allow. Better it catches that than a customer.', 1],
+            ['0:20', 'Types the company name into the field.',        'Pop the name in.', 2],
+            ['0:26', 'Clicks Save. Green "saved" appears.',           'Save again, and your details are done.', 3],
         ],
     ],
 ];
