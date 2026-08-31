@@ -1312,7 +1312,7 @@ $activeNav = 'settings';
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;
                                    font-weight:600;color:#1f3b5b;
                                    text-transform:uppercase;letter-spacing:0.05em">
-                        WT charge (internal)
+                        WT charge — the “Wally tax” (internal)
                     </legend>
                     <label style="display:flex;align-items:flex-start;gap:0.55rem;
                                   font-size:0.9375rem;cursor:pointer">
@@ -1320,15 +1320,15 @@ $activeNav = 'settings';
                                <?= $featureWt ? 'checked' : '' ?>
                                style="margin-top:0.2rem">
                         <span>
-                            Enable the WT charge
+                            Enable the Wally tax <span style="color:#6b7280;font-weight:400">(WT charge)</span>
                             <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
-                                Adds a <strong>WT</strong> box on the quote builder so a salesperson can
-                                add a discretionary charge to a quote. It's <strong>internal only</strong> —
-                                the customer never sees the letters “WT” or a separate line anywhere on
-                                their quote or invoice. The amount is added <strong>before VAT</strong>;
-                                if “Show the price of each blind” is on, it's <strong>spread across the
-                                blind prices</strong> (proportionally) so the figures still add up, otherwise
-                                it simply lifts the total.
+                                A discretionary charge you can quietly add to a quote for a job that's more hassle
+                                than it's worth (an awkward customer, a fiddly fit). Adds a <strong>WT</strong> box
+                                on the quote builder. It's <strong>internal only</strong> — the customer never sees
+                                the letters “WT”, the words “Wally tax”, or a separate line anywhere on their quote
+                                or invoice. The amount is added <strong>before VAT</strong>; if “Show the price of
+                                each blind” is on, it's <strong>spread across the blind prices</strong>
+                                (proportionally) so the figures still add up, otherwise it simply lifts the total.
                             </span>
                         </span>
                     </label>
