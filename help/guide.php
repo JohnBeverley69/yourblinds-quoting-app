@@ -277,6 +277,11 @@ $activeNav = 'help';
             window.addEventListener('pagehide', stop);
         })();
         </script>
+        <?php if (!empty($g['js'])): ?>
+        <script>/* interactive for this guide */
+        <?= $g['js'] ?>
+        </script>
+        <?php endif; ?>
     <?php endif; ?>
     </main>
 </div>
