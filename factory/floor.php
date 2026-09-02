@@ -52,7 +52,10 @@ if ($ready) {
           ORDER BY name"
     )->fetchAll(PDO::FETCH_ASSOC);
 
-    $where = $showMade ? '' : "WHERE bj.status IN ('queued','in_progress')";
+    // Scope the wallboard to THIS factory (owning factory of the blind's product).
+    // Without this the board showed every factory's live floor.
+    $where = "WHERE COALESCE(NULLIF(p.source_client_id,0), p.client_id) = {$MASTER}";
+    if (!$showMade) $where .= " AND bj.status IN ('queued','in_progress')";
     // Soonest-due first, undated last — the order a workshop actually works to.
     $dueSel   = $hasDue ? 'q.due_date' : 'NULL AS due_date';
     $dueOrder = $hasDue ? 'q.due_date IS NULL, q.due_date,' : '';
@@ -66,6 +69,7 @@ if ($ready) {
            JOIN quotes q       ON q.id = bj.quote_id
            JOIN clients c      ON c.id = q.client_id
            JOIN quote_items qi ON qi.id = bj.quote_item_id
+           JOIN products p     ON p.id = bj.product_id
            $where
           ORDER BY $dueOrder q.created_at, q.id, qi.line_no, bj.unit_no
           LIMIT 500"

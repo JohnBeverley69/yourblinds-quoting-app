@@ -17,15 +17,29 @@ require __DIR__ . '/../auth/middleware.php';
 requireFactory();
 
 $pdo = db();
+// White-label: allowance tables are per-factory. Scope every read/write to the
+// acting factory. Degrade to unscoped if the client_id column isn't there yet
+// (migrate_allowance_client.php not run).
+$MASTER = function_exists('current_factory_id') ? current_factory_id()
+        : (function_exists('factory_client_id') ? factory_client_id() : 3);
 
 $hasTable = false;
 try { $pdo->query('SELECT 1 FROM allowance_rows LIMIT 0'); $hasTable = true; }
 catch (Throwable $e) { /* not migrated */ }
+$hasClientCol = false;
+if ($hasTable) {
+    try { $pdo->query('SELECT client_id FROM allowance_rows LIMIT 0'); $hasClientCol = true; }
+    catch (Throwable $e) { /* pre client-scope migration */ }
+}
+$cScope = $hasClientCol ? ' AND client_id = ' . (int) $MASTER : '';
 
-// Existing table names.
+// Existing table names (this factory's).
 $tables = [];
 if ($hasTable) {
-    try { $tables = $pdo->query('SELECT DISTINCT table_name FROM allowance_rows ORDER BY table_name')->fetchAll(PDO::FETCH_COLUMN); }
+    $tSql = 'SELECT DISTINCT table_name FROM allowance_rows'
+          . ($hasClientCol ? ' WHERE client_id = ' . (int) $MASTER : '')
+          . ' ORDER BY table_name';
+    try { $tables = $pdo->query($tSql)->fetchAll(PDO::FETCH_COLUMN); }
     catch (Throwable $e) { /* ignore */ }
 }
 
@@ -54,16 +68,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
             // original key_norm whenever a row's display text is unchanged; only new or
             // edited text earns a freshly-derived key.
             $priorKey = [];
-            $pk = $pdo->prepare('SELECT keys_display, key_norm FROM allowance_rows WHERE table_name = ?');
+            $pk = $pdo->prepare('SELECT keys_display, key_norm FROM allowance_rows WHERE table_name = ?' . $cScope);
             $pk->execute([$table]);
             foreach ($pk->fetchAll(PDO::FETCH_ASSOC) as $pr) {
                 $disp = (string) $pr['keys_display'];
                 if (!array_key_exists($disp, $priorKey)) $priorKey[$disp] = (string) $pr['key_norm'];
             }
-            $pdo->prepare('DELETE FROM allowance_rows WHERE table_name = ?')->execute([$table]);
-            $ins = $pdo->prepare(
-                'INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?)'
-            );
+            $pdo->prepare('DELETE FROM allowance_rows WHERE table_name = ?' . $cScope)->execute([$table]);
+            $ins = $pdo->prepare($hasClientCol
+                ? 'INSERT INTO allowance_rows (client_id, table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?, ?)'
+                : 'INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?)');
             $n = 0;
             foreach ($keysIn as $i => $raw) {
                 $keys = $normKeys((string) $raw);
@@ -71,7 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 if (!$keys || $valRaw === '' || !is_numeric($valRaw)) continue;
                 $display = implode(' · ', $keys);
                 $keyNorm = $priorKey[$display] ?? strtolower(implode('|', $keys));
-                $ins->execute([$table, $keyNorm, $display, (float) $valRaw, $n]);
+                $ins->execute($hasClientCol
+                    ? [(int) $MASTER, $table, $keyNorm, $display, (float) $valRaw, $n]
+                    : [$table, $keyNorm, $display, (float) $valRaw, $n]);
                 $n++;
             }
             $pdo->commit();
@@ -89,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
 $rows = [];
 if ($hasTable && $table !== '') {
     try {
-        $rs = $pdo->prepare('SELECT keys_display, value FROM allowance_rows WHERE table_name = ? ORDER BY seq, id');
+        $rs = $pdo->prepare('SELECT keys_display, value FROM allowance_rows WHERE table_name = ?' . $cScope . ' ORDER BY seq, id');
         $rs->execute([$table]);
         $rows = $rs->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { /* ignore */ }

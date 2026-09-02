@@ -22,10 +22,17 @@ function fx_poll_version(PDO $pdo, string $what, int $master): string
     try {
         if ($what === 'floor') {
             // A blind moving, being released, or finishing — wherever it was scanned.
-            $r = $pdo->query(
-                "SELECT COUNT(*) AS n, COALESCE(MAX(UNIX_TIMESTAMP(updated_at)),0) AS t
-                   FROM factory_blind_streams"
-            )->fetch(PDO::FETCH_ASSOC) ?: ['n' => 0, 't' => 0];
+            // Scoped to THIS factory (owning factory of the blind's product), so one
+            // factory's board doesn't flash "refresh" on another factory's activity.
+            $fs = $pdo->prepare(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(UNIX_TIMESTAMP(s.updated_at)),0) AS t
+                   FROM factory_blind_streams s
+                   JOIN factory_blind_jobs j ON j.id = s.blind_job_id
+                   JOIN products p           ON p.id = j.product_id
+                  WHERE COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?"
+            );
+            $fs->execute([$master]);
+            $r = $fs->fetch(PDO::FETCH_ASSOC) ?: ['n' => 0, 't' => 0];
             return 'f' . (int) $r['n'] . '.' . (int) $r['t'];
         }
 

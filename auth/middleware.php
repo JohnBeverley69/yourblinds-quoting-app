@@ -300,6 +300,34 @@ function current_factory_id(): int
 }
 
 /**
+ * Does this product belong to the acting factory? Owning factory =
+ * COALESCE(source_client_id, client_id). The factory product pickers are already
+ * scoped, but pages take a product_id from the request and use it in build-rule /
+ * route / worksheet queries — so the id itself must be re-verified, or a
+ * hand-crafted request could read or overwrite another factory's data.
+ */
+function factory_owns_product(PDO $pdo, int $productId, ?int $factoryId = null): bool
+{
+    if ($productId <= 0) return false;
+    $fid = $factoryId ?? (function_exists('current_factory_id') ? current_factory_id() : 0);
+    if ($fid <= 0) return false;
+    try {
+        $st = $pdo->prepare('SELECT COALESCE(NULLIF(source_client_id,0), client_id) FROM products WHERE id = ? LIMIT 1');
+        $st->execute([$productId]);
+        $own = $st->fetchColumn();
+        return $own !== false && (int) $own === (int) $fid;
+    } catch (Throwable $e) {
+        // products.source_client_id absent (pre-migration) — fall back to client_id.
+        try {
+            $st = $pdo->prepare('SELECT client_id FROM products WHERE id = ? LIMIT 1');
+            $st->execute([$productId]);
+            $own = $st->fetchColumn();
+            return $own !== false && (int) $own === (int) $fid;
+        } catch (Throwable $e2) { return false; }
+    }
+}
+
+/**
  * Is this login a WORKSTATION — i.e. a process rather than a person?
  *
  * "Vertical Head Rail" owns the vertical's headrail from profile cut to

@@ -54,6 +54,10 @@ try {
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
 if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
+// White-label: the picker is factory-scoped, but product_id comes from the
+// request. Reject an id this factory doesn't own so a hand-crafted request can't
+// read or overwrite another factory's build rules. (0 → every load/save below skips.)
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) $productId = 0;
 $productName = '';
 foreach ($products as $p) { if ((int) $p['id'] === $productId) $productName = (string) $p['name']; }
 
