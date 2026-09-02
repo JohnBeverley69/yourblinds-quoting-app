@@ -132,6 +132,15 @@ if ($isFactoryProduct) {
     } catch (Throwable $e) { /* keep generic label */ }
 }
 
+// White-label: a FACTORY tenant can take OWNERSHIP of a pushed product — detach
+// it from the master so it becomes their own native product (routes to THEIR
+// factory, stops taking master price-pushes). Only offered on a factory account,
+// for a product that genuinely came from another account's master.
+$canDetachToOwn = function_exists('is_factory_client')
+    && is_factory_client((int) $clientId)
+    && $sourceClientId > 0
+    && $sourceClientId !== (int) $clientId;
+
 // Known supplier names for the picker's datalist come from the managed
 // suppliers table ONLY (Settings › Suppliers), with "In House" always offered.
 // That makes Settings the single source of truth — delete a supplier there and
@@ -1118,6 +1127,21 @@ $activeNav = 'products';
                                     When you place an order it routes <strong>straight into their manufacturing</strong> &mdash; there&rsquo;s
                                     <strong>no order supplier to set</strong> here. (Only your <em>own</em> products need a supplier.)
                                 </small>
+                                <?php if ($canDetachToOwn): ?>
+                                    <div style="margin:0.75rem 0 0;padding-top:0.75rem;border-top:1px solid var(--border)">
+                                        <form method="post" action="/admin/products/detach-source.php" style="margin:0"
+                                              data-confirm="Make &quot;<?= e((string) ($f['name'] ?? 'this product')) ?>&quot; your own product? It becomes yours — made in your factory — and stops taking <?= e($factoryLabel) ?> catalogue updates.">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="product_id" value="<?= (int) $id ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary">Make this our own product</button>
+                                        </form>
+                                        <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.4rem">
+                                            You run your own factory, so you can take this over: it becomes <strong>your</strong> product,
+                                            made by you and routed to <strong>your</strong> queue, and stops receiving
+                                            <strong><?= e($factoryLabel) ?></strong> catalogue updates.
+                                        </small>
+                                    </div>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <input id="supplier_name" name="supplier_name" type="text"
                                        maxlength="150" list="supplier-options"
