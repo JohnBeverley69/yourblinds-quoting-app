@@ -229,7 +229,7 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
     $items = $pdo->prepare(
         'SELECT qi.id, qi.quantity, COALESCE(p.source_product_id, p.id) AS master_product_id
            FROM quote_items qi JOIN products p ON p.id = qi.product_id
-          WHERE qi.quote_id = ? AND p.source_client_id = ?
+          WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
           ORDER BY qi.line_no, qi.id'
     );
     $items->execute([$quoteId, $master]);

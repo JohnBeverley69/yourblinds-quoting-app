@@ -250,6 +250,56 @@ function factory_client_id(): int
 }
 
 /**
+ * Is this account a factory? (white-label manufacturing.)
+ *
+ * Historically only Beverley (factory_client_id) was a factory. The is_factory
+ * flag makes it a per-account property so other trade firms can run their own
+ * factory. Degrades gracefully: if the column hasn't been migrated yet, only the
+ * canonical factory counts, so behaviour is identical to before the migration.
+ *
+ * Cached per request per client.
+ */
+function is_factory_client(int $clientId): bool
+{
+    if ($clientId <= 0) return false;
+    static $cache = [];
+    if (array_key_exists($clientId, $cache)) return $cache[$clientId];
+    try {
+        $st = db()->prepare('SELECT is_factory FROM clients WHERE id = ? LIMIT 1');
+        $st->execute([$clientId]);
+        $v = $st->fetchColumn();
+        return $cache[$clientId] = ($v !== false && (int) $v === 1);
+    } catch (Throwable $e) {
+        // is_factory column not migrated yet — only the canonical factory counts.
+        return $cache[$clientId] = ($clientId === factory_client_id());
+    }
+}
+
+/**
+ * The factory this request is acting AS — the owner whose queue, worksheets and
+ * build rules the factory back-office should show.
+ *
+ *   - a factory-account user  → their own account;
+ *   - a super-admin           → the factory they've selected (session), else the
+ *                               canonical Beverley factory as the default.
+ *
+ * Every factory page scopes to this instead of the old global constant, so the
+ * same code serves any number of factories. Falls back to factory_client_id()
+ * so a page can never be left factory-less.
+ */
+function current_factory_id(): int
+{
+    if (function_exists('is_super_admin') && is_super_admin()) {
+        $sel = (int) ($_SESSION['factory_acting_id'] ?? 0);
+        if ($sel > 0 && is_factory_client($sel)) return $sel;
+        return factory_client_id();
+    }
+    $cid = (int) ($_SESSION['client_id'] ?? 0);
+    if (is_factory_client($cid)) return $cid;
+    return factory_client_id();
+}
+
+/**
  * Is this login a WORKSTATION — i.e. a process rather than a person?
  *
  * "Vertical Head Rail" owns the vertical's headrail from profile cut to
@@ -267,7 +317,7 @@ function current_user_is_workstation(): bool
     if ($cache !== null) return $cache;
 
     $user = current_user();
-    if (!$user || (int) ($user['client_id'] ?? 0) !== factory_client_id()) return $cache = false;
+    if (!$user || !is_factory_client((int) ($user['client_id'] ?? 0))) return $cache = false;
     try {
         $st = db()->prepare('SELECT 1 FROM workstation_streams WHERE user_id = ? LIMIT 1');
         $st->execute([(int) $user['user_id']]);
@@ -276,16 +326,16 @@ function current_user_is_workstation(): bool
 }
 
 /**
- * Guard for the factory back-office (factory.yourblinds.uk). Access is
- * Beverley's own people only: the super-admin, OR a user on the factory
- * account carrying the 'factory' role. Scoping to the factory account is
- * what stops a tenant admin self-assigning a 'factory' role to get in.
+ * Guard for the factory back-office (factory.yourblinds.uk). Access is the
+ * super-admin, OR a user on a FACTORY account (is_factory = 1) carrying the
+ * 'factory' role. Requiring the account itself to be a factory is what stops a
+ * plain tenant admin self-assigning a 'factory' role to get in.
  */
 function requireFactory(): void
 {
     requireLogin();
     if (is_super_admin()) return;
-    $onFactoryAccount = (int) ($_SESSION['client_id'] ?? 0) === factory_client_id();
+    $onFactoryAccount = is_factory_client((int) ($_SESSION['client_id'] ?? 0));
     if ($onFactoryAccount && current_user_has_role('factory')) return;
 
     http_response_code(403);
@@ -413,7 +463,7 @@ function redirect_after_login(): void
     // not an admin) land straight on the factory back-office rather than the
     // sales dashboard — so a factory login goes where it's useful.
     if ($user && current_user_has_role('factory')
-        && (int) ($user['client_id'] ?? 0) === factory_client_id()
+        && is_factory_client((int) ($user['client_id'] ?? 0))
         && ($user['role'] ?? '') !== 'admin') {
         // A workstation login IS a process rather than a person — whoever's on
         // that job today uses it. Drop it straight on its scan screen; the

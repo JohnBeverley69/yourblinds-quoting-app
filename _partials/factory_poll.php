@@ -36,7 +36,7 @@ function fx_poll_version(PDO $pdo, string $what, int $master): string
                JOIN quote_items qi ON qi.quote_id = q.id
                JOIN products p     ON p.id = qi.product_id
               WHERE q.status IN ('ordered','fitted','invoiced','paid')
-                AND p.source_client_id = ?"
+                AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?"
         );
         $st->execute([$master]);
         $a = $st->fetch(PDO::FETCH_ASSOC) ?: ['n' => 0, 'mx' => 0];

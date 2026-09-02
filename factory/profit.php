@@ -30,7 +30,7 @@ require __DIR__ . '/../_partials/pricing_engine.php';
 requireSuperAdmin();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 
 // Period: this month / this year / all. Default this year.
 $period = (string) ($_GET['period'] ?? 'year');
@@ -58,7 +58,7 @@ $sql =
        JOIN products p ON p.id = qi.product_id
        LEFT JOIN price_tables tpt   ON tpt.id = qi.price_table_id
        LEFT JOIN product_systems tsys ON tsys.id = tpt.system_id
-      WHERE p.source_client_id = ?
+      WHERE COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
         AND q.status IN ($inPl)
         $dateSql";
 $st = $pdo->prepare($sql);

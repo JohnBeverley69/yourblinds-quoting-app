@@ -81,7 +81,7 @@ function dd_order_lead_days(PDO $pdo, int $quoteId, int $master): ?int
     $st = $pdo->prepare(
         'SELECT DISTINCT COALESCE(p.source_product_id, p.id) AS master_product_id
            FROM quote_items qi JOIN products p ON p.id = qi.product_id
-          WHERE qi.quote_id = ? AND p.source_client_id = ?'
+          WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?'
     );
     $st->execute([$quoteId, $master]);
     $ids = $st->fetchAll(PDO::FETCH_COLUMN);

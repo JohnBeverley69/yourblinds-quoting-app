@@ -17,6 +17,28 @@ $factoryNav   = $factoryNav   ?? '';
 $factoryWide  = $factoryWide  ?? false;
 $fu           = function_exists('current_user') ? current_user() : null;
 
+// Which factory is this? White-label: the shell brands itself with the acting
+// factory's name, not a hardcoded "Beverley". Super-admin also gets a switcher
+// to look at any factory's back-office.
+$factoryActingId = function_exists('current_factory_id')
+    ? current_factory_id()
+    : (function_exists('factory_client_id') ? factory_client_id() : 3);
+$factoryName = 'Factory';
+try {
+    $st = db()->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+    $st->execute([$factoryActingId]);
+    $factoryName = trim((string) $st->fetchColumn()) ?: 'Factory';
+} catch (Throwable $e) { /* fall back to generic */ }
+$factoryIsSuper = function_exists('is_super_admin') && is_super_admin();
+$factoryChoices = [];
+if ($factoryIsSuper) {
+    try {
+        $factoryChoices = db()
+            ->query('SELECT id, company_name FROM clients WHERE is_factory = 1 ORDER BY company_name')
+            ->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $factoryChoices = []; }   // is_factory not migrated yet
+}
+
 // Nav grows as factory features land; the queue is the first.
 $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
@@ -43,7 +65,7 @@ $factoryNavItems += [
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e($factoryTitle) ?> &middot; Beverley Factory</title>
+    <title><?= e($factoryTitle) ?> &middot; <?= e($factoryName) ?></title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         :root { --fac-bar: #1f2a37; --fac-bar-2: #111a24; --fac-accent: #38bdf8; }
@@ -68,6 +90,13 @@ $factoryNavItems += [
         .factory-user { display: flex; align-items: center; gap: 0.9rem; font-size: 0.875rem; color: #b9c6d3; }
         .factory-user a { color: #e5edf5; text-decoration: none; font-weight: 600; }
         .factory-user a:hover { text-decoration: underline; }
+        .factory-switch { margin: 0; }
+        .factory-switch select {
+            font: inherit; font-size: 0.8125rem; color: #e5edf5; cursor: pointer;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 12rem;
+        }
+        .factory-switch select option { color: #111; }
         /* 1200px is a comfortable reading width for forms. Dense tables want the
            whole monitor instead — capping them just hides columns behind a
            scrollbar on a screen that had the room all along. */
@@ -77,13 +106,26 @@ $factoryNavItems += [
 </head>
 <body class="factory-body">
 <header class="factory-topbar">
-    <div class="factory-brand">Beverley <span>Factory</span></div>
+    <div class="factory-brand"><?= e($factoryName) ?> <span>Factory</span></div>
     <nav class="factory-nav">
         <?php foreach ($factoryNavItems as $key => [$href, $label]): ?>
             <a href="<?= e($href) ?>"<?= $factoryNav === $key ? ' class="is-active"' : '' ?>><?= e($label) ?></a>
         <?php endforeach; ?>
     </nav>
     <div class="factory-user">
+        <?php if ($factoryIsSuper && count($factoryChoices) > 1): ?>
+            <form method="post" action="/factory/act-as.php" class="factory-switch" title="View another factory">
+                <?= csrf_field() ?>
+                <input type="hidden" name="return_to" value="<?= e((string) ($_SERVER['REQUEST_URI'] ?? '/factory/incoming-orders.php')) ?>">
+                <select name="factory_id" onchange="this.form.submit()" aria-label="Viewing factory">
+                    <?php foreach ($factoryChoices as $fc): ?>
+                        <option value="<?= (int) $fc['id'] ?>"<?= (int) $fc['id'] === (int) $factoryActingId ? ' selected' : '' ?>>
+                            <?= e((string) $fc['company_name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        <?php endif; ?>
         <span><?= e((string) ($fu['full_name'] ?? 'Factory staff')) ?></span>
         <a href="/auth/logout.php">Log out</a>
     </div>

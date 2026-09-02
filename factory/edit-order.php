@@ -20,7 +20,7 @@ require __DIR__ . '/../auth/middleware.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 $qid    = (int) ($_GET['order'] ?? 0);
 
 // Length-bearing options carry a typed number (user_value), not just a choice.
@@ -40,7 +40,7 @@ $items = [];
 if ($order) {
     $s = $pdo->prepare(
         'SELECT qi.* FROM quote_items qi JOIN products p ON p.id = qi.product_id
-          WHERE qi.quote_id = ? AND p.source_client_id = ? ORDER BY qi.line_no, qi.id'
+          WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ? ORDER BY qi.line_no, qi.id'
     );
     $s->execute([$qid, $MASTER]);
     $items = $s->fetchAll(PDO::FETCH_ASSOC);

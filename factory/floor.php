@@ -24,7 +24,7 @@ require __DIR__ . '/../_partials/factory_poll.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 $ready  = bj_tables_ready($pdo);
 $hasDue = dd_ready($pdo);   // due dates are a later migration — degrade quietly
 

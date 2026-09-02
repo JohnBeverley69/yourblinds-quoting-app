@@ -29,7 +29,7 @@ require __DIR__ . '/../_partials/qr.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 $user   = current_user();
 $userId = (int) ($user['user_id'] ?? 0);
 
