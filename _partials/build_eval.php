@@ -53,11 +53,38 @@ if (!function_exists('build_evaluate')) {
             }
         } catch (Throwable $e) { /* no build_variables */ }
 
-        // Shared allowance tables for LOOKUP()/BESTFIT().
+        // Allowance tables for LOOKUP()/BESTFIT(), scoped to the factory that owns
+        // this product (white-label: owning factory = COALESCE(source_client_id,
+        // client_id)). Beverley products resolve to the canonical factory and all
+        // existing rows backfill there, so the engine loads exactly what it did
+        // before. Pre client-scope migration, load all (old behaviour).
         $allowances = [];
         try {
-            foreach ($pdo->query('SELECT table_name, key_norm, value FROM allowance_rows') as $ar) {
-                $allowances[strtolower((string) $ar['table_name'])][(string) $ar['key_norm']] = (float) $ar['value'];
+            $hasClientCol = false;
+            try { $pdo->query('SELECT client_id FROM allowance_rows LIMIT 0'); $hasClientCol = true; }
+            catch (Throwable $e) { /* pre migration */ }
+
+            if ($hasClientCol) {
+                $fid = null;
+                try {
+                    $fs = $pdo->prepare(
+                        'SELECT COALESCE(NULLIF(source_client_id,0), client_id) FROM products WHERE id = ? LIMIT 1'
+                    );
+                    $fs->execute([$productId]);
+                    $v = $fs->fetchColumn();
+                    if ($v !== false && $v !== null) $fid = (int) $v;
+                } catch (Throwable $e) { /* products.source_client_id absent — leave null */ }
+                if ($fid !== null) {
+                    $as = $pdo->prepare('SELECT table_name, key_norm, value FROM allowance_rows WHERE client_id = ?');
+                    $as->execute([$fid]);
+                    foreach ($as as $ar) {
+                        $allowances[strtolower((string) $ar['table_name'])][(string) $ar['key_norm']] = (float) $ar['value'];
+                    }
+                }
+            } else {
+                foreach ($pdo->query('SELECT table_name, key_norm, value FROM allowance_rows') as $ar) {
+                    $allowances[strtolower((string) $ar['table_name'])][(string) $ar['key_norm']] = (float) $ar['value'];
+                }
             }
         } catch (Throwable $e) { /* allowance_rows not migrated */ }
 

@@ -73,6 +73,10 @@ try {
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
 if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
+// White-label: reject a product_id this factory doesn't own (the picker is
+// scoped, but the id comes from the request). 0 → save skips and delete/update,
+// which require the product_id to match, affect nothing.
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) $productId = 0;
 $productName = '';
 foreach ($products as $p) { if ((int) $p['id'] === $productId) $productName = (string) $p['name']; }
 

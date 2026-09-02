@@ -44,6 +44,9 @@ if ($productId === 0) {
     foreach ($products as $p) { if ($p['name'] === 'Bev Vertical Blinds') { $productId = (int) $p['id']; break; } }
     if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
 }
+// White-label: reject a product_id this factory doesn't own (the picker is scoped,
+// but the id comes from the request).
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) $productId = 0;
 $productName = '';
 foreach ($products as $p) { if ((int) $p['id'] === $productId) $productName = (string) $p['name']; }
 

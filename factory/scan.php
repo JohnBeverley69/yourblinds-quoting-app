@@ -160,7 +160,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     try {
         if (($_POST['_action'] ?? '') === 'pick' && (int) ($_POST['stream_id'] ?? 0) > 0) {
-            $result = $advance((int) $_POST['stream_id']);
+            // White-label: only advance a stream whose blind belongs to this factory
+            // (stream_id is raw POST — IDOR otherwise).
+            $pickId     = (int) $_POST['stream_id'];
+            $pickStream = bj_stream_get($pdo, $pickId);
+            if (!$pickStream || !factory_owns_product($pdo, (int) $pickStream['product_id'], $MASTER)) {
+                $result = ['ok' => false, 'title' => 'Not your blind', 'detail' => 'That blind isn\'t on your floor.'];
+            } else {
+                $result = $advance($pickId);
+            }
         } else {
             $code = (string) ($_POST['code'] ?? '');
             if (trim($code) !== '') $result = $handleScan($code);

@@ -37,6 +37,16 @@ $userId   = (int) ($user['user_id'] ?? 0) ?: null;
 
 if ($streamId <= 0) { header('Location: ' . $backTo); exit; }
 
+// White-label: verify this stream's blind belongs to the acting factory before
+// touching it — stream_id comes straight from POST, so without this a factory
+// user could start/advance/rewind another factory's blind (IDOR).
+$stream = bj_stream_get($pdo, $streamId);
+if (!$stream || !factory_owns_product($pdo, (int) $stream['product_id'], current_factory_id())) {
+    $_SESSION['flash_error'] = 'That blind isn\'t on your floor.';
+    header('Location: ' . $backTo);
+    exit;
+}
+
 try {
     switch ($action) {
         case 'start': bj_stream_start($pdo, $streamId, $userId);   break;

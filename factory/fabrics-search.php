@@ -32,6 +32,19 @@ $limit     = max(1, min(500, (int) ($_GET['limit'] ?? 100)));
 
 if ($productId <= 0 || $clientId <= 0) { echo json_encode(['fabrics' => [], 'error' => 'product_id + client_id required']); exit; }
 
+// White-label isolation: only the ACTING factory's own products. The order editor
+// only ever asks about its own queue's lines, but the endpoint is reachable
+// directly, so verify the product's owning factory (COALESCE(source, client))
+// matches. Degrades open if the source column isn't there (pre-migration).
+try {
+    $ofid = function_exists('current_factory_id') ? (int) current_factory_id()
+          : (function_exists('factory_client_id') ? (int) factory_client_id() : 0);
+    $of = $pdo->prepare('SELECT COALESCE(NULLIF(source_client_id,0), client_id) FROM products WHERE id = ? LIMIT 1');
+    $of->execute([$productId]);
+    $own = $of->fetchColumn();
+    if ($own !== false && (int) $own !== $ofid) { echo json_encode(['fabrics' => [], 'bands' => []]); exit; }
+} catch (Throwable $e) { /* products.source_client_id absent — skip guard */ }
+
 $scopeClause = ''; $scopeParams = [];
 if ($systemId > 0) { $scopeClause = ' AND (system_id IS NULL OR system_id = ?)'; $scopeParams = [$systemId]; }
 

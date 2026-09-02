@@ -39,6 +39,10 @@ if ($ready) {
 }
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+// White-label: reject a product_id this factory doesn't own before any route
+// read/mutation. (0 → the guarded actions below skip; display falls back to the
+// factory's first product.)
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) $productId = 0;
 
 /** Reassign 0..n order to a list of ids. */
 $renumber = static function (PDO $pdo, array $ids): void {
@@ -85,7 +89,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE product_route_steps SET label = ? WHERE id = ? AND product_id = ?')
                     ->execute([$label !== '' ? $label : null, (int) $_POST['step_id'], $productId]);
             }
-        } elseif ($action === 'remove_step') {
+        } elseif ($action === 'remove_step' && $productId > 0) {
             $pdo->prepare('DELETE FROM product_route_steps WHERE id = ? AND product_id = ?')
                 ->execute([(int) $_POST['step_id'], $productId]);
         } elseif ($action === 'move_step' && $productId > 0) {
@@ -105,7 +109,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---- Load for display ------------------------------------------------------
-$products = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? AND name LIKE 'Bev%' ORDER BY name");
+$products = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORDER BY name");
 $products->execute([$MASTER]);
 $products = $products->fetchAll(PDO::FETCH_ASSOC);
 if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
