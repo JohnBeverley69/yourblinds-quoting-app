@@ -1129,12 +1129,15 @@ $activeNav = 'products';
                                 </small>
                                 <?php if ($canDetachToOwn): ?>
                                     <div style="margin:0.75rem 0 0;padding-top:0.75rem;border-top:1px solid var(--border)">
-                                        <form method="post" action="/admin/products/detach-source.php" style="margin:0"
-                                              data-confirm="Make &quot;<?= e((string) ($f['name'] ?? 'this product')) ?>&quot; your own product? It becomes yours — made in your factory — and stops taking <?= e($factoryLabel) ?> catalogue updates.">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="product_id" value="<?= (int) $id ?>">
-                                            <button type="submit" class="btn btn-sm btn-primary">Make this our own product</button>
-                                        </form>
+                                        <?php // Not a nested <form> (invalid HTML — the browser drops it). A submit
+                                              // button that re-targets THIS product form at the detach endpoint via
+                                              // formaction; the surrounding form supplies the CSRF token. ?>
+                                        <input type="hidden" name="product_id" value="<?= (int) $id ?>">
+                                        <button type="submit" class="btn btn-sm btn-primary"
+                                                formaction="/admin/products/detach-source.php" formmethod="post" formnovalidate
+                                                data-confirm-click="Make &quot;<?= e((string) ($f['name'] ?? 'this product')) ?>&quot; your own product? It becomes yours — made in your factory — and stops taking <?= e($factoryLabel) ?> catalogue updates.">
+                                            Make this our own product
+                                        </button>
                                         <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.4rem">
                                             You run your own factory, so you can take this over: it becomes <strong>your</strong> product,
                                             made by you and routed to <strong>your</strong> queue, and stops receiving
