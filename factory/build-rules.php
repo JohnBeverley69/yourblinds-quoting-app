@@ -30,7 +30,7 @@ require __DIR__ . '/../_partials/formula_engine.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 
 /** Normalise pretty math glyphs (−, ×, ÷, dashes, nbsp) to ASCII for the engine. */
 function br_norm_math(string $s): string {
@@ -45,7 +45,7 @@ $products = [];
 try {
     $ps = $pdo->prepare(
         "SELECT id, name FROM products
-          WHERE client_id = ? AND name LIKE 'Bev%'
+          WHERE client_id = ?
           ORDER BY name"
     );
     $ps->execute([$MASTER]);
@@ -367,7 +367,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$hasTable): ?>
     <div class="br-flash err">The <code>build_variables</code> table isn't there yet — run <code>/migrate_build_variables.php</code>.</div>
 <?php elseif (!$products): ?>
-    <div class="br-flash err">No Beverley master products found.</div>
+    <div class="br-flash err">No products found for this factory.</div>
 <?php else: ?>
 <div class="br-grid">
     <!-- Editor -->

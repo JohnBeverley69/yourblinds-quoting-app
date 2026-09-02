@@ -18,7 +18,7 @@ $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 // 'factory' (production back-office) is only offered on the Beverley factory
 // account itself — requireFactory() also scopes access to that client, so the
 // role is meaningless (and hidden) on tenant accounts.
-$isFactoryAccount = function_exists('factory_client_id') && (int) $clientId === factory_client_id();
+$isFactoryAccount = function_exists('is_factory_client') && is_factory_client((int) $clientId);
 if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }

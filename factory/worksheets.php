@@ -25,7 +25,7 @@ require __DIR__ . '/../auth/middleware.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 
 // Order/line detail fields available to drop onto a label. key => [label, sample].
 $ORDER_FIELDS = [
@@ -66,7 +66,7 @@ $ORDER_FIELDS = [
 // Master products.
 $products = [];
 try {
-    $ps = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? AND name LIKE 'Bev%' ORDER BY name");
+    $ps = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORDER BY name");
     $ps->execute([$MASTER]);
     $products = $ps->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) { /* handled in view */ }
@@ -378,7 +378,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$hasTable): ?>
     <div class="ws-flash err">The <code>worksheet_templates</code> table isn't there yet — run <code>/migrate_worksheet_templates.php</code>.</div>
 <?php elseif (!$products): ?>
-    <div class="ws-flash err">No Beverley master products found.</div>
+    <div class="ws-flash err">No products found for this factory.</div>
 <?php else: ?>
 
 <div class="ws-layout">

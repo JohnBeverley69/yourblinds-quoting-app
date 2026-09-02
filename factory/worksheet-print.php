@@ -26,7 +26,7 @@ require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a 
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 $qid    = (int) ($_GET['order'] ?? 0);
 
 $fmtDate = static function (?string $ts): string {
@@ -66,7 +66,7 @@ if ($order) {
                     qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes,
                     COALESCE(p.source_product_id, p.id) AS master_product_id
                FROM quote_items qi JOIN products p ON p.id = qi.product_id
-              WHERE qi.quote_id = ? AND p.source_client_id = ?
+              WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
            ORDER BY qi.line_no, qi.id"
         );
         $li->execute([$qid, $MASTER]);

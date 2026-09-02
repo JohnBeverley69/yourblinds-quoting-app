@@ -23,15 +23,15 @@ require __DIR__ . '/../auth/middleware.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+$MASTER = function_exists('current_factory_id') ? (int) current_factory_id() : 0;
 
-// All master "Bev …" products (including ones with no rules yet, so you can
-// start a product from blank right here).
+// All of this factory's own products (including ones with no rules yet, so you
+// can start a product from blank right here).
 $products = [];
 try {
     $ps = $pdo->prepare(
         "SELECT id, name FROM products
-          WHERE client_id = ? AND name LIKE 'Bev%'
+          WHERE client_id = ?
           ORDER BY name"
     );
     $ps->execute([$MASTER]);

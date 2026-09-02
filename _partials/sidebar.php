@@ -63,10 +63,9 @@ $canSeeAllJobs    = $isAdmin || $_perms['can_view_all_customer_jobs'];
 
 // Show the Factory link only to people who can actually get in — the same test
 // requireFactory() uses. Otherwise the link would just 403. Super-admin, or a
-// factory-role user on the Beverley (factory) account.
-$factoryClientId  = function_exists('factory_client_id') ? factory_client_id() : 3;
+// factory-role user on a factory account (is_factory = 1).
 $canSeeFactory    = $isSuperAdmin
-    || ((int) ($user['client_id'] ?? 0) === $factoryClientId
+    || (function_exists('is_factory_client') && is_factory_client((int) ($user['client_id'] ?? 0))
         && function_exists('current_user_has_role') && current_user_has_role('factory'));
 // Quote History is hidden for users with no quote-related permission
 // (they have nothing to see). Orders stays VISIBLE to everyone in the
@@ -184,6 +183,7 @@ $navSections = [
         'collapsible' => true,
         'items'       => [
             'master-admin'  => ['/master-admin/index.php',          'Master Admin',     $isSuperAdmin],
+            'factories'     => ['/master-admin/factories.php',      'Factories',        $isSuperAdmin],
             'client-emails' => ['/master-admin/client-emails.php',  'Client emails',    $isSuperAdmin],
             'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],
             'monitor'       => ['/master-admin/monitor.php',        'Monitor',          $isSuperAdmin],

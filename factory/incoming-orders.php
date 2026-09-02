@@ -20,7 +20,7 @@ require __DIR__ . '/../_partials/factory_poll.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 
 $PLACED   = ['ordered', 'fitted', 'invoiced', 'paid'];
 $inPlaced = "'" . implode("','", $PLACED) . "'";
@@ -71,7 +71,7 @@ try {
            JOIN products p     ON p.id = qi.product_id
            $fjJoin
           WHERE q.status IN ($inPlaced)
-            AND p.source_client_id = ?
+            AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
        GROUP BY q.id, q.client_id, c.company_name, q.quote_number, q.status,
                 q.created_at, q.customer_reference, q.additional_reference,
                 q.end_customer_name $fjGroup
@@ -92,7 +92,7 @@ try {
                FROM quote_items qi
                JOIN products p ON p.id = qi.product_id
               WHERE qi.quote_id IN ($ph)
-                AND p.source_client_id = ?
+                AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
            ORDER BY qi.quote_id, qi.line_no, qi.id"
         );
         $lStmt->execute([...$ids, $MASTER]);
@@ -231,7 +231,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if ($newCount > 0): ?><span class="io-badge"><?= (int) $newCount ?> new</span><?php endif; ?>
     <input type="search" id="io-search" class="io-search" placeholder="Search order no, customer, ref&hellip;" autocomplete="off">
 </div>
-<p class="io-sub">Placed orders from every trade customer that contain Beverley Blinds Trade lines. Click an order to open its blinds.</p>
+<p class="io-sub">Placed orders that contain <?= e($factoryName) ?> lines. Click an order to open its blinds.</p>
 
 <?php if ($flashOk !== ''): ?><div class="io-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="io-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -239,7 +239,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($loadError !== null): ?>
     <div class="io-empty">Couldn't load orders: <?= e($loadError) ?></div>
 <?php elseif (!$orders): ?>
-    <div class="io-empty">No incoming orders yet. Placed orders containing Beverley lines will appear here — nothing to re-key from Blind Matrix.</div>
+    <div class="io-empty">No incoming orders yet. Placed orders containing <?= e($factoryName) ?> lines will appear here — nothing to re-key.</div>
 <?php else: ?>
     <div class="io-list">
         <div class="io-list-head io-cols">

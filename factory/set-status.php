@@ -36,7 +36,7 @@ const FACTORY_STAGE_LABELS = [
 ];
 
 $pdo     = db();
-$MASTER  = factory_client_id();
+$MASTER  = current_factory_id();
 $quoteId = (int) ($_POST['quote_id'] ?? 0);
 $target  = (string) ($_POST['status'] ?? '');
 $user    = current_user();
@@ -54,7 +54,7 @@ if ($quoteId > 0) {
     $chk = $pdo->prepare(
         "SELECT 1 FROM quote_items qi
            JOIN products p ON p.id = qi.product_id
-          WHERE qi.quote_id = ? AND p.source_client_id = ? LIMIT 1"
+          WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ? LIMIT 1"
     );
     $chk->execute([$quoteId, $MASTER]);
     $isBev = (bool) $chk->fetchColumn();

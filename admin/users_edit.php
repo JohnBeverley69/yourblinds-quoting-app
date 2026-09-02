@@ -27,8 +27,8 @@ if (!$target) {
 }
 
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
-// 'factory' role only on the Beverley factory account (see admin/users.php).
-$isFactoryAccount = function_exists('factory_client_id') && (int) $clientId === factory_client_id();
+// 'factory' role only on factory accounts (is_factory = 1); see admin/users.php.
+$isFactoryAccount = function_exists('is_factory_client') && is_factory_client((int) $clientId);
 if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }

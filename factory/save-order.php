@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: /factory/incoming
 csrf_check();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 $qid    = (int) ($_POST['quote_id'] ?? 0);
 
 $backEdit = '/factory/edit-order.php?order=' . $qid;
@@ -35,7 +35,7 @@ $clientId = (int) $order['client_id'];
 // The order's own Beverley item ids (the only rows we may write to).
 $vi = $pdo->prepare(
     'SELECT qi.id FROM quote_items qi JOIN products p ON p.id = qi.product_id
-      WHERE qi.quote_id = ? AND p.source_client_id = ?'
+      WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?'
 );
 $vi->execute([$qid, $MASTER]);
 $validItems = array_map('intval', $vi->fetchAll(PDO::FETCH_COLUMN));
@@ -80,7 +80,7 @@ if (isset($_POST['del_item'])) {
         $pdo->prepare('DELETE FROM quote_items WHERE id = ?')->execute([$iid]);
         // Renumber the remaining Beverley lines.
         $rs = $pdo->prepare('SELECT qi.id FROM quote_items qi JOIN products p ON p.id = qi.product_id
-                              WHERE qi.quote_id = ? AND p.source_client_id = ? ORDER BY qi.line_no, qi.id');
+                              WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ? ORDER BY qi.line_no, qi.id');
         $rs->execute([$qid, $MASTER]);
         $n = 0;
         $upd = $pdo->prepare('UPDATE quote_items SET line_no = ? WHERE id = ?');
@@ -97,7 +97,7 @@ if (isset($_POST['add_item'])) {
     try {
         $lastId = (int) end($validItems);
         // Highest line among Beverley lines.
-        $mx = $pdo->prepare('SELECT COALESCE(MAX(line_no),0) FROM quote_items qi JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ? AND p.source_client_id = ?');
+        $mx = $pdo->prepare('SELECT COALESCE(MAX(line_no),0) FROM quote_items qi JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?');
         $mx->execute([$qid, $MASTER]);
         $nextLine = (int) $mx->fetchColumn() + 1;
         $srcRow = $pdo->query('SELECT * FROM quote_items WHERE id = ' . $lastId)->fetch(PDO::FETCH_ASSOC);

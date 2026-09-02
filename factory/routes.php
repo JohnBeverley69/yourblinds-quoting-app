@@ -26,7 +26,7 @@ require __DIR__ . '/../_partials/due_dates.php';
 requireFactory();
 
 $pdo    = db();
-$MASTER = factory_client_id();
+$MASTER = current_factory_id();
 
 $ready = true;
 try { $pdo->query('SELECT 1 FROM product_route_steps LIMIT 0'); }
