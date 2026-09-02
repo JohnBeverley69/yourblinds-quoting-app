@@ -83,8 +83,8 @@ function push_catalogue_to_client(
     // and must never reach a tenant — same rule as the size-varying
     // price_table_rows.cost (which the row copy also omits) and the extra-choice
     // cost. Behaviour flags push; costs never do.
-    foreach (['requires_option', 'width_only', 'price_per_slat',
-              'show_colour_field', 'band_label'] as $col) {
+    foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
+              'min_area_m2', 'show_colour_field', 'band_label'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $flagCols[] = $col;
