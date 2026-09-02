@@ -97,6 +97,11 @@ $factoryNavItems += [
             border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 12rem;
         }
         .factory-switch select option { color: #111; }
+        .factory-back {
+            border: 1px solid rgba(255,255,255,0.22); border-radius: 8px;
+            padding: 0.3rem 0.6rem; font-size: 0.8125rem;
+        }
+        .factory-back:hover { background: rgba(255,255,255,0.08); text-decoration: none !important; }
         /* 1200px is a comfortable reading width for forms. Dense tables want the
            whole monitor instead — capping them just hides columns behind a
            scrollbar on a screen that had the room all along. */
@@ -113,6 +118,9 @@ $factoryNavItems += [
         <?php endforeach; ?>
     </nav>
     <div class="factory-user">
+        <?php if (!function_exists('current_user_is_workstation') || !current_user_is_workstation()): ?>
+            <a href="/dashboard/index.php" class="factory-back" title="Back to the main app">&larr; App</a>
+        <?php endif; ?>
         <?php if ($factoryIsSuper && count($factoryChoices) > 1): ?>
             <form method="post" action="/factory/act-as.php" class="factory-switch" title="View another factory">
                 <?= csrf_field() ?>
