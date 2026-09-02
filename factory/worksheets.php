@@ -391,6 +391,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <label style="font-size:0.8rem; color:#64748b; font-weight:600;">Template name</label>
         <input type="text" id="tpl-name" value="<?= e($currentName) ?>" style="width:16rem;">
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;"><input type="checkbox" id="tpl-default" <?= $currentIsDef ? 'checked' : '' ?>> Default for printing</label>
+        <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="Print ONE label for the whole order line, showing the quantity — instead of one label per unit. For fabric-only cuts (e.g. 50 identical slats), where you want a single Qty 50 ticket. Use the Qty field, not Slat/Unit."><input type="checkbox" id="tpl-oneline"> One label per line (qty)</label>
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="QR code size on every label of this worksheet. Smaller frees space — 10mm has tested fine on your stock.">QR size <input type="number" id="tpl-qr" min="6" max="40" step="0.5" style="width:4.2rem;"> mm</label>
         <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
     </div>
@@ -1118,6 +1119,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         sync();
         document.getElementById('f-name').value = document.getElementById('tpl-name').value;
         document.getElementById('f-default').value = document.getElementById('tpl-default').checked ? '1' : '';
+        STATE.one_per_line = !!(document.getElementById('tpl-oneline') || {}).checked;
         document.getElementById('payload').value = JSON.stringify(STATE);
     });
 
@@ -1139,6 +1141,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     ensureSizes();
     render();
     refreshQrInput();
+    (function () { var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = !!STATE.one_per_line; })();
 })();
 </script>
 <?php endif; ?>

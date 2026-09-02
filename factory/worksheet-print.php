@@ -202,12 +202,17 @@ foreach ($lines as $ln) {
     // blinds that are tracked, routed and scanned separately, so each needs its
     // own ticket carrying its own code — a single label saying "qty 3" can't
     // follow three blinds round three different benches.
+    // Default: one label per physical blind. A template can opt into one label
+    // per LINE (layout.one_per_line) — fabric-only slats want a single "Qty 50"
+    // ticket, not 50. Then the label shows order:qty instead of a unit number.
     $qty  = max(1, (int) $ln['quantity']);
-    $tpl     = $loadTemplate($pdo, $masterPid);
+    $tpl        = $loadTemplate($pdo, $masterPid);
+    $onePerLine = is_array($tpl) && !empty($tpl['one_per_line']);
+    $labelCount = $onePerLine ? 1 : $qty;
     $streams = function_exists('bj_streams_ordered') ? bj_streams_ordered($pdo, $masterPid) : [];
-    for ($u = 1; $u <= $qty; $u++) {
+    for ($u = 1; $u <= $labelCount; $u++) {
         $unitVals = [
-            'unit'     => $qty > 1 ? $u . '/' . $qty : '',
+            'unit'     => $onePerLine ? '' : ($qty > 1 ? $u . '/' . $qty : ''),
             'unit_no'  => (string) $u,
             // A per-label code is filled in at render time (each label carries
             // its own part's stream), so this whole-blind code is only a
