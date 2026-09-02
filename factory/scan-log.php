@@ -18,6 +18,14 @@ require __DIR__ . '/../auth/middleware.php';
 requireFactory();
 
 $pdo = db();
+// Scope the log to THIS factory (white-label): a scan belongs to the factory that
+// owns the scanned blind's product (owning factory = COALESCE(source_client_id,
+// client_id)) — the same rule the queue routes on. Without this every factory saw
+// every other factory's scans. Orphan scans (bad code / bad key — no blind to
+// attribute) show only to the canonical factory.
+$MASTER    = function_exists('current_factory_id') ? current_factory_id()
+           : (function_exists('factory_client_id') ? factory_client_id() : 3);
+$CANONICAL = function_exists('factory_client_id') ? factory_client_id() : 3;
 
 $ready = true;
 try { $pdo->query('SELECT 1 FROM factory_scan_log LIMIT 0'); }
@@ -25,15 +33,24 @@ catch (Throwable $e) { $ready = false; }
 
 $rows = [];
 if ($ready) {
-    $rows = $pdo->query(
+    $where  = 'COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?';
+    $params = [$MASTER];
+    if ($MASTER === $CANONICAL) {
+        $where .= ' OR sl.quote_item_id IS NULL';   // unattributable scans → primary factory
+    }
+    $st = $pdo->prepare(
         "SELECT sl.created_at, sl.code, sl.stream_digit, sl.result, sl.detail, sl.source,
                 q.quote_number, qi.line_no, qi.product_name_snapshot
            FROM factory_scan_log sl
            LEFT JOIN quote_items qi ON qi.id = sl.quote_item_id
            LEFT JOIN quotes q       ON q.id = qi.quote_id
+           LEFT JOIN products p     ON p.id = qi.product_id
+          WHERE $where
           ORDER BY sl.id DESC
           LIMIT 300"
-    )->fetchAll(PDO::FETCH_ASSOC);
+    );
+    $st->execute($params);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Each result's pill: [label, text colour, background].
