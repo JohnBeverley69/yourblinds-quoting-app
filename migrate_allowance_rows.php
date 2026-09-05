@@ -69,5 +69,6 @@ if (!$exists) {
 
 echo "Migration complete.\n\n";
 foreach ($ops as $i => $op) echo sprintf("  %2d. %s\n", $i + 1, $op);
-echo "\nBuild-rule formulas can now use LOOKUP(\"table\", keys…). Seed the vertical\n";
-echo "headrail allowances with /seed_vertical_allowances.php.\n";
+echo "\nBuild-rule formulas can now use LOOKUP(\"table\", keys…) / BESTFIT(\"table\", …).\n";
+echo "The best-fit charts are loaded by /seed_vogue_bestfit.php. (The old vertical\n";
+echo "headrail allowance is retired — the headrail cut lives in the H_Cut build rule.)\n";
