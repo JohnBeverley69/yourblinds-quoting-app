@@ -43,6 +43,31 @@ if ($hasTable) {
     catch (Throwable $e) { /* ignore */ }
 }
 
+// Contextual scope: opened from a product's Build Rules page (?product_id=N), show
+// ONLY the charts that product's build rules actually reference — BESTFIT("t",…) /
+// LOOKUP("t",…) — so each product's charts live on its own Build Rules page and can't
+// drift apart from the rules that use them.
+$productId   = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+$productName = '';
+if ($productId > 0 && $hasTable) {
+    try {
+        $ps = $pdo->prepare('SELECT name FROM products WHERE id = ? LIMIT 1');
+        $ps->execute([$productId]);
+        $productName = (string) $ps->fetchColumn();
+        $used = [];
+        $vs = $pdo->prepare('SELECT rows_json FROM build_variables WHERE product_id = ?');
+        $vs->execute([$productId]);
+        foreach ($vs->fetchAll(PDO::FETCH_COLUMN) as $rj) {
+            if (preg_match_all('/(?:BESTFIT|LOOKUP)\(\s*"([^"]+)"/i', (string) $rj, $mm)) {
+                foreach ($mm[1] as $t) $used[strtolower($t)] = true;
+            }
+        }
+        $tables = $used
+            ? array_values(array_filter($tables, static fn ($t) => isset($used[strtolower((string) $t)])))
+            : [];
+    } catch (Throwable $e) { /* leave $tables unscoped on error */ }
+}
+
 $table = trim((string) ($_GET['table'] ?? $_POST['table_name'] ?? ''));
 if ($table === '' && $tables) $table = (string) $tables[0];
 
@@ -97,7 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
         }
     }
-    header('Location: /factory/allowances.php?table=' . urlencode($table));
+    header('Location: /factory/allowances.php?table=' . urlencode($table)
+        . ($productId > 0 ? '&product_id=' . $productId : ''));
     exit;
 }
 
@@ -117,8 +143,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $fmtNum = static fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
 
-$factoryTitle = 'Allowances';
-$factoryNav   = 'allowances';
+$factoryTitle = $productId > 0 ? 'Best fit charts' : 'Allowances';
+$factoryNav   = 'build';   // lives under Build rules now (no standalone Allowances tab)
 require __DIR__ . '/../_partials/factory_head.php';
 ?>
 <style>
@@ -143,9 +169,14 @@ require __DIR__ . '/../_partials/factory_head.php';
 </style>
 
 <div class="al-head">
-    <h1>Allowances</h1>
+    <h1><?= $productId > 0 ? 'Best fit charts' : 'Allowances' ?></h1>
+    <?php if ($productId > 0): ?>
+        <?php if ($productName !== ''): ?><span style="color:var(--text-muted,#667)"><?= e($productName) ?></span><?php endif; ?>
+        <a href="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" style="font-weight:600">&larr; Build rules</a>
+    <?php endif; ?>
     <?php if ($tables): ?>
     <form method="get" action="/factory/allowances.php" style="margin:0">
+        <?php if ($productId > 0): ?><input type="hidden" name="product_id" value="<?= (int) $productId ?>"><?php endif; ?>
         <select name="table" onchange="this.form.submit()">
             <?php foreach ($tables as $t): ?>
                 <option value="<?= e((string) $t) ?>" <?= $t === $table ? 'selected' : '' ?>><?= e((string) $t) ?></option>
@@ -153,12 +184,18 @@ require __DIR__ . '/../_partials/factory_head.php';
         </select>
     </form>
     <?php endif; ?>
+    <?php if ($productId === 0): ?>
     <form method="get" action="/factory/allowances.php" class="al-new">
         <input type="text" name="table" placeholder="new_table_name" style="width:12rem">
         <button type="submit" class="btn primary" style="padding:0.45rem 0.8rem">New table</button>
     </form>
+    <?php endif; ?>
 </div>
+<?php if ($productId > 0): ?>
+<p class="al-sub">The supplier best-fit / lookup charts <strong><?= e($productName ?: 'this product') ?></strong> uses (e.g. the Louvolite truck sizing). Each row is a key combination and its value. These feed the build rules — rarely touched.</p>
+<?php else: ?>
 <p class="al-sub">Named lookup tables the build rules read via <code>LOOKUP("table", key1, key2, …)</code>. Each row is a key combination and its value; keys match in order, case-insensitively. Shared, so one edit updates every formula that uses it.</p>
+<?php endif; ?>
 
 <?php if ($flashOk !== ''): ?><div class="al-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="al-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -173,6 +210,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <form method="post" action="/factory/allowances.php">
         <?= csrf_field() ?>
         <input type="hidden" name="table_name" value="<?= e($table) ?>">
+        <?php if ($productId > 0): ?><input type="hidden" name="product_id" value="<?= (int) $productId ?>"><?php endif; ?>
         <table class="al-rules">
             <thead><tr><th>Keys (system · control · … · Recess/Exact)</th><th style="width:7rem">Value (mm)</th></tr></thead>
             <tbody>

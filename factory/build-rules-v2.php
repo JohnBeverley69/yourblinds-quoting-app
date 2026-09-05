@@ -897,7 +897,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div>
           <div class="cn">Vogue trucks — Louvolite chart</div>
           <p>Look up the width, get the number and size of trucks. Straight from Louvolite's sizing table — rarely touched. (The <em>Trucks</em> and <em>Truck size</em> plumbing below both read this one chart.)</p>
-          <p><a class="chartlink" href="/factory/allowances.php">Edit the truck charts in Allowances →</a></p>
+          <p><a class="chartlink" href="/factory/allowances.php?product_id=<?= (int) $productId ?>">Best fit charts →</a></p>
         </div>
       </div>
       <?php endif; ?>
