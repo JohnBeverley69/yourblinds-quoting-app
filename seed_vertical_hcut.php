@@ -16,7 +16,7 @@ declare(strict_types=1);
  *   No Thrills  (wand only)      12 / 2         20 / 10  (mirrors SlimLine wand)
  *
  *   *  stack  = Left Stack, Right Stack, Split Draw 2 Wands
- *   ** centre = Center Left, Center Right
+ *   ** centre = Centre Left, Centre Right
  *
  * Built as a decision table (System · Control · Wand Options · Exact or Recess).
  * Cord is draw-independent so no Draw column is needed; wand centre rows sit
@@ -78,7 +78,7 @@ foreach ($byWandCentre as $sys => $d) {
     $rows[] = $row($sys, 'Corded', '', 'Recess', $d[0]);
     $rows[] = $row($sys, 'Corded', '', 'Exact',  $d[1]);
     // Wand centre (before the stack catch-all).
-    foreach (['Center Left', 'Center Right'] as $c) {
+    foreach (['Centre Left', 'Centre Right'] as $c) {
         $rows[] = $row($sys, 'Wand', $c, 'Recess', $d[4]);
         $rows[] = $row($sys, 'Wand', $c, 'Exact',  $d[5]);
     }
@@ -94,7 +94,7 @@ $rows[] = $row('Nova', 'Wand',   '', 'Recess', 15);
 $rows[] = $row('Nova', 'Wand',   '', 'Exact',  5);
 
 // No Thrills — wand only, mirrors SlimLine wand.
-foreach (['Center Left', 'Center Right'] as $c) {
+foreach (['Centre Left', 'Centre Right'] as $c) {
     $rows[] = $row('No Thrills', 'Wand', $c, 'Recess', 20);
     $rows[] = $row('No Thrills', 'Wand', $c, 'Exact',  10);
 }
@@ -114,4 +114,4 @@ $upsert->execute([
 
 echo "Seeded H_Cut on product {$productId} (Bev Vertical Blinds) — " . count($rows) . " rows.\n";
 echo "Test: SlimLine/Corded/Recess/Width=1200 → 1170; Nova/Corded/Recess/1200 → 1175;\n";
-echo "SlimLine/Wand/Center Left/Recess/1200 → 1180; SlimLine/Wand/Left Stack/Recess/1200 → 1188.\n";
+echo "SlimLine/Wand/Centre Left/Recess/1200 → 1180; SlimLine/Wand/Left Stack/Recess/1200 → 1188.\n";

@@ -40,7 +40,7 @@ $add = static function (array &$defs, array $keyPrefix, string $basisless, float
 };
 
 // -- Slimline, Wand --
-foreach (['Left Stack'=>[12,2], 'Right Stack'=>[12,2], 'Center Left'=>[20,10], 'Center Right'=>[20,10], 'Split Draw 2 Wands'=>[12,2]] as $draw => $v) {
+foreach (['Left Stack'=>[12,2], 'Right Stack'=>[12,2], 'Centre Left'=>[20,10], 'Centre Right'=>[20,10], 'Split Draw 2 Wands'=>[12,2]] as $draw => $v) {
     $add($defs, ['Slimline', 'Wand'], $draw, (float)$v[0], (float)$v[1]);
 }
 // -- Slimline, Cord and Chain (all draws 30/20) --
@@ -48,7 +48,7 @@ foreach (['R/R','L/L','C/L','C/R','L Ctrl / Right Stack','R Ctrl / Left Stack'] 
     $add($defs, ['Slimline', 'Cord and Chain'], $draw, 30, 20);
 }
 // -- Vouge, Wand --
-foreach (['Left Stack'=>[22,12], 'Right Stack'=>[22,12], 'Center Left'=>[32,22], 'Center Right'=>[32,22], 'Split Draw 2 Wands'=>[22,12]] as $draw => $v) {
+foreach (['Left Stack'=>[22,12], 'Right Stack'=>[22,12], 'Centre Left'=>[32,22], 'Centre Right'=>[32,22], 'Split Draw 2 Wands'=>[22,12]] as $draw => $v) {
     $add($defs, ['Vouge', 'Wand'], $draw, (float)$v[0], (float)$v[1]);
 }
 // -- Vouge, Cord and Chain (all draws 33/23) --

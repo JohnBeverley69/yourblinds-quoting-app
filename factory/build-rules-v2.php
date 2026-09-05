@@ -404,7 +404,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 // ---- Fold each cut into a readable grid ------------------------------------
 // Pivot the Recess/Exact "basis" column into value columns; group the remaining
-// rows, aliasing Center Left/Right -> "Centre" and No Thrills -> its parent
+// rows, aliasing Centre Left/Right -> "Centre" and No Thrills -> its parent
 // system, so ~24 raw rows read as ~8. Each grid cell keeps the comma-joined list
 // of underlying row indices it represents, so one edit fans back to them all.
 $SYSTEM_PARENT = ['no thrills' => 'SlimLine', 'no frills' => 'SlimLine'];
@@ -435,7 +435,7 @@ foreach ($cuts as $c) {
         foreach ($keyCols as $i) {
             $val = trim((string) ($r['cells'][$i] ?? ''));
             if ($i === $sysIdx)  $val = $SYSTEM_PARENT[strtolower($val)] ?? $val;
-            if ($i === $wandIdx) { $lv = strtolower($val); if ($lv === 'center left' || $lv === 'center right') $val = 'Centre'; }
+            if ($i === $wandIdx) { $lv = strtolower($val); if ($lv === 'centre left' || $lv === 'centre right' || $lv === 'center left' || $lv === 'center right') $val = 'Centre'; }
             $keyParts[$i] = $val;
         }
         $gk = implode('|', array_map('strtolower', $keyParts));

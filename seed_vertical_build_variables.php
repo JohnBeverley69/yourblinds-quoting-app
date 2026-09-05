@@ -16,7 +16,7 @@ declare(strict_types=1);
  * Operation → Louvolite table (confirmed against the product's own option names):
  *   Corded, C/L or C/R                       → split  → vogue_split_cord
  *   Corded, anything else                    → 1-way  → vogue_ow_cord
- *   Wand,   Center Left / Center Right        → split  → vogue_split_1wand
+ *   Wand,   Centre Left / Centre Right        → split  → vogue_split_1wand
  *   Wand,   Split Draw 2 Wands                → split  → vogue_split_2wand
  *   Wand,   anything else (Left/Right Stack)  → 1-way  → vogue_ow_wand
  * Rows are first-match-wins, so the split rows sit above the one-way catch-alls,
@@ -78,15 +78,15 @@ $trucksRows = [
     $row('Vogue', 'Corded', 'C / L', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
     $row('Vogue', 'Corded', 'C / R', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
     $row('Vogue', 'Corded', '',      '', 'BESTFIT("vogue_ow_cord", Width, 1)'),
-    $row('Vogue', 'Wand',   '', 'Center Left',        'BESTFIT("vogue_split_1wand", Width, 1)'),
-    $row('Vogue', 'Wand',   '', 'Center Right',       'BESTFIT("vogue_split_1wand", Width, 1)'),
+    $row('Vogue', 'Wand',   '', 'Centre Left',        'BESTFIT("vogue_split_1wand", Width, 1)'),
+    $row('Vogue', 'Wand',   '', 'Centre Right',       'BESTFIT("vogue_split_1wand", Width, 1)'),
     $row('Vogue', 'Wand',   '', 'Split Draw 2 Wands', 'BESTFIT("vogue_split_2wand", Width, 1)'),
     $row('Vogue', 'Wand',   '', '',                   'BESTFIT("vogue_ow_wand", Width, 1)'),
     // Slimline / Nova / No Thrills (System = any, reached only after Vogue).
     $row('', 'Corded', 'C / L', '', 'EVEN(Width / Truck_Spacing)'),
     $row('', 'Corded', 'C / R', '', 'EVEN(Width / Truck_Spacing)'),
-    $row('', 'Wand', '', 'Center Left',        'EVEN(Width / Truck_Spacing)'),
-    $row('', 'Wand', '', 'Center Right',       'EVEN(Width / Truck_Spacing)'),
+    $row('', 'Wand', '', 'Centre Left',        'EVEN(Width / Truck_Spacing)'),
+    $row('', 'Wand', '', 'Centre Right',       'EVEN(Width / Truck_Spacing)'),
     $row('', 'Wand', '', 'Split Draw 2 Wands', 'EVEN(Width / Truck_Spacing)'),
     $row('', '', '', '', 'ROUNDUP(Width / Truck_Spacing)'),
 ];
@@ -96,8 +96,8 @@ $sizeRows = [
     $row('Vogue', 'Corded', 'C / L', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
     $row('Vogue', 'Corded', 'C / R', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
     $row('Vogue', 'Corded', '',      '', 'BESTFIT("vogue_ow_cord", Width, 2)'),
-    $row('Vogue', 'Wand',   '', 'Center Left',        'BESTFIT("vogue_split_1wand", Width, 2)'),
-    $row('Vogue', 'Wand',   '', 'Center Right',       'BESTFIT("vogue_split_1wand", Width, 2)'),
+    $row('Vogue', 'Wand',   '', 'Centre Left',        'BESTFIT("vogue_split_1wand", Width, 2)'),
+    $row('Vogue', 'Wand',   '', 'Centre Right',       'BESTFIT("vogue_split_1wand", Width, 2)'),
     $row('Vogue', 'Wand',   '', 'Split Draw 2 Wands', 'BESTFIT("vogue_split_2wand", Width, 2)'),
     $row('Vogue', 'Wand',   '', '',                   'BESTFIT("vogue_ow_wand", Width, 2)'),
 ];

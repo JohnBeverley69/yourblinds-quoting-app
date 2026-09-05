@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Seed: CH_L (chain length) and C_L (cord/control length) for Bev Vertical Blinds.
  *
  * Same calc across all systems. CH_L (chain) is corded-only. C_L (cord) is on
- * corded blinds AND wand split/centre draws (Center Left/Right, Split Draw 2
+ * corded blinds AND wand split/centre draws (Centre Left/Right, Split Draw 2
  * Wands) — plain wand stacks have neither (no rule → blank on the worksheet).
  * The chain depends on whether a fit height was entered:
  *
@@ -60,8 +60,8 @@ $colCtrl = ['ref' => 'extra:' . $ctrlId, 'label' => 'Control Options'];
 $colWand = ['ref' => 'extra:' . $wandId, 'label' => 'Wand Options'];
 
 // CH_L: chain, Corded only (wand blinds have no chain).
-// C_L: cord — Corded = chain + 2*Width; a WAND split/centre draw (Center Left,
-// Center Right, Split Draw 2 Wands) also has a cord = 2*Width; plain wand
+// C_L: cord — Corded = chain + 2*Width; a WAND split/centre draw (Centre Left,
+// Centre Right, Split Draw 2 Wands) also has a cord = 2*Width; plain wand
 // stacks → no rule → blank. Same across all systems.
 $variables = [
     ['name' => 'CH_L', 'seq' => 11, 'columns' => [$colCtrl], 'rows' => [
@@ -69,8 +69,8 @@ $variables = [
     ]],
     ['name' => 'C_L', 'seq' => 12, 'columns' => [$colCtrl, $colWand], 'rows' => [
         ['cells' => ['Corded', ''],                   'result' => 'CH_L + 2 * Width'],
-        ['cells' => ['Wand', 'Center Left'],          'result' => '2 * Width'],
-        ['cells' => ['Wand', 'Center Right'],         'result' => '2 * Width'],
+        ['cells' => ['Wand', 'Centre Left'],          'result' => '2 * Width'],
+        ['cells' => ['Wand', 'Centre Right'],         'result' => '2 * Width'],
         ['cells' => ['Wand', 'Split Draw 2 Wands'],   'result' => '2 * Width'],
     ]],
 ];
