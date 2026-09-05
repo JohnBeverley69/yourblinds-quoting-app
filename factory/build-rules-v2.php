@@ -156,6 +156,40 @@ $CALC_GLOSS = [
     'Mtrs'  => 'round up  (Drop + 95) × Vanes ÷ 1000',
 ];
 
+// Live "Try a size" formula-variable eval. The client computes the simple cuts
+// itself, but Vanes / Trucks / Truck size need the real engine (BESTFIT / ROUNDUP
+// / EVEN), so evaluate them here against the picked options and return JSON.
+if (($_GET['action'] ?? '') === 'evalbuild') {
+    header('Content-Type: application/json');
+    $numVars = [
+        'Width'      => (float) ($_GET['w'] ?? 0),
+        'Drop'       => (float) ($_GET['d'] ?? 0),
+        'Fit_height' => 0.0,
+        'Quantity'   => 1.0,
+    ];
+    $optSel = [];
+    foreach ((array) ($_GET['opt'] ?? []) as $lab => $val) {
+        // build_evaluate falls back to the lowercased option-group label.
+        $optSel[strtolower(trim((string) $lab))] = (string) $val;
+    }
+    try {
+        $ev  = build_evaluate($pdo, $productId, $numVars, $optSel);
+        $out = [];
+        foreach ($ev['results'] as $r) {
+            $out[] = [
+                'name'     => (string) $r['name'],
+                'friendly' => $FRIENDLY[$r['name']] ?? (string) $r['name'],
+                'ok'       => (bool) $r['ok'],
+                'value'    => $r['value'],
+            ];
+        }
+        echo json_encode(['ok' => true, 'vars' => $out]);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    }
+    exit;
+}
+
 /** Parse a result expression as a cut: "Width − N" / "Drop + N" / bare "Width". */
 $parseCut = static function (string $result): ?array {
     $r = trim($result);
@@ -1040,6 +1074,33 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
     return null;
   }
+  // Vanes / Trucks / Truck size are formula variables (BESTFIT / ROUNDUP / EVEN),
+  // which the browser can't evaluate — ask the real engine and append them under
+  // the cuts. A sequence guard drops responses superseded by a newer keystroke.
+  var TPID = <?= (int) $productId ?>;
+  var evalSeq = 0;
+  var SHOW_VARS = { 'Trucks':1, 'Truck_Size':1, 'Vanes':1 };
+  function fetchBuildVars(w, d){
+    var mySeq = ++evalSeq;
+    var params = 'action=evalbuild&product_id=' + TPID + '&w=' + (w||0) + '&d=' + (d||0);
+    Object.keys(pickers).forEach(function(lab){
+      params += '&opt[' + encodeURIComponent(lab) + ']=' + encodeURIComponent(pickers[lab].value);
+    });
+    fetch('/factory/build-rules-v2.php?' + params)
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (mySeq !== evalSeq || !res || !res.ok) return;   // superseded or failed
+        res.vars.forEach(function(v){
+          if (!SHOW_VARS[v.name]) return;
+          var row = document.createElement('div'); row.className = 'o';
+          var lab = document.createElement('span'); lab.className = 'ol'; lab.textContent = v.friendly;
+          var val = document.createElement('span'); val.className = 'ov';
+          val.textContent = v.ok ? ((typeof v.value === 'number') ? Math.round(v.value * 100) / 100 : v.value) : '—';
+          row.appendChild(lab); row.appendChild(val); outEl.appendChild(row);
+        });
+      })
+      .catch(function(){ /* leave the cuts as-is */ });
+  }
   function recompute(){
     var w = parseInt(document.getElementById('t_w').value,10);
     var d = parseInt(document.getElementById('t_d').value,10);
@@ -1055,6 +1116,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       } else { v.textContent = '—'; }
       row.appendChild(lab); row.appendChild(v); outEl.appendChild(row);
     });
+    fetchBuildVars(w, d);   // append Vanes / Trucks / Truck size (server-computed)
   }
   document.getElementById('t_w').addEventListener('input', recompute);
   document.getElementById('t_d').addEventListener('input', recompute);
