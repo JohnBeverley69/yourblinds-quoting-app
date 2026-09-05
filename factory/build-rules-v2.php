@@ -985,11 +985,26 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 
   if (!CUTS.length) { return; }
 
-  // Build option axes = union of each column's distinct non-blank values across all cuts.
-  var axes = {}; // label -> Set
+  // Real option choices per column label (from product_extra_choices), so the
+  // tester can also exercise draws the rules handle via a blank catch-all row —
+  // one-way Left/Right Stack, Split Draw, cord one-ways — which never appear as
+  // explicit rule values and so are invisible to an axis-from-rules scan alone.
+  var AXIS_VALUES = <?php
+      $axisValues = [];
+      foreach ($optionSources as $os) { $axisValues[(string) $os['label']] = array_values($os['values']); }
+      echo json_encode($axisValues, JSON_UNESCAPED_UNICODE);
+  ?>;
+
+  // Build option axes. Seed each axis from the real choices first (natural order,
+  // so blank-catch-all draws are testable), then fold in any values that only
+  // exist in the rules.
+  var axes = {}; // label -> {value:true}, insertion order preserved
+  CUTS.forEach(function(c){ c.cols.forEach(function(lab){ if (!axes[lab]) axes[lab] = {}; }); });
+  Object.keys(axes).forEach(function(lab){
+    (AXIS_VALUES[lab] || []).forEach(function(v){ if (v) axes[lab][v] = true; });
+  });
   CUTS.forEach(function(c){
     c.cols.forEach(function(lab, ci){
-      if (!axes[lab]) axes[lab] = {};
       c.rows.forEach(function(r){ var v = r.keys[ci]; if (v) axes[lab][v] = true; });
     });
   });
