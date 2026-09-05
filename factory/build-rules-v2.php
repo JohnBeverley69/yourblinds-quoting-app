@@ -77,12 +77,18 @@ try {
 // axis plus each option group and its distinct choice labels. Same shape the old
 // editor uses. Feeds the "depends on" picker in the add-cut form.
 $optionSources = [];
+$axisSys       = [];   // group name => [choice label => system_id|null] — for per-system filtering
+$sysIdByName   = [];   // system name => id (the tester's System picker holds the name)
 if ($productId > 0) {
     try {
-        $ss = $pdo->prepare("SELECT name FROM product_systems WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name");
+        $ss = $pdo->prepare("SELECT id, name FROM product_systems WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name");
         $ss->execute([$productId, $MASTER]);
-        $systems = $ss->fetchAll(PDO::FETCH_COLUMN);
-        if ($systems) $optionSources[] = ['ref' => 'system', 'label' => 'System', 'values' => array_values($systems)];
+        $sysNames = [];
+        foreach ($ss->fetchAll(PDO::FETCH_ASSOC) as $s) {
+            $sysNames[] = (string) $s['name'];
+            $sysIdByName[(string) $s['name']] = (int) $s['id'];
+        }
+        if ($sysNames) $optionSources[] = ['ref' => 'system', 'label' => 'System', 'values' => $sysNames];
     } catch (Throwable $e) { /* none */ }
     try {
         $gs = $pdo->prepare("SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name");
@@ -91,10 +97,29 @@ if ($productId > 0) {
         if ($extraRows) {
             $ids = array_map(static fn ($r) => (int) $r['id'], $extraRows);
             $in  = implode(',', array_fill(0, count($ids), '?'));
-            $cs  = $pdo->prepare("SELECT product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($in) AND active = 1 ORDER BY product_extra_id, sort_order, label");
-            $cs->execute($ids);
+            // system_id scopes a choice to one system (NULL = all). Fall back to a
+            // no-system query on older installs that lack the column.
+            try {
+                $cs = $pdo->prepare("SELECT product_extra_id, label, system_id FROM product_extra_choices WHERE product_extra_id IN ($in) AND active = 1 ORDER BY product_extra_id, sort_order, label");
+                $cs->execute($ids);
+                $hasSys = true;
+            } catch (Throwable $e) {
+                $cs = $pdo->prepare("SELECT product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($in) AND active = 1 ORDER BY product_extra_id, sort_order, label");
+                $cs->execute($ids);
+                $hasSys = false;
+            }
+            $nameById = [];
+            foreach ($extraRows as $er) $nameById[(int) $er['id']] = (string) $er['name'];
             $byExtra = [];
-            foreach ($cs->fetchAll(PDO::FETCH_ASSOC) as $c) { $byExtra[(int) $c['product_extra_id']][(string) $c['label']] = true; }
+            foreach ($cs->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                $eid = (int) $c['product_extra_id'];
+                $lab = (string) $c['label'];
+                $byExtra[$eid][$lab] = true;
+                $gname = $nameById[$eid] ?? '';
+                if ($gname !== '') {
+                    $axisSys[$gname][$lab] = ($hasSys && $c['system_id'] !== null) ? (int) $c['system_id'] : null;
+                }
+            }
             foreach ($extraRows as $er) {
                 $eid = (int) $er['id'];
                 $optionSources[] = ['ref' => 'extra:' . $eid, 'label' => (string) $er['name'], 'values' => array_keys($byExtra[$eid] ?? [])];
@@ -1074,6 +1099,11 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   // gating shows only when one of its parent labels is the current pick elsewhere.
   var AXIS_GATING = <?php echo json_encode($axisGating, JSON_UNESCAPED_UNICODE); ?>;
 
+  // Per-system choice scope: a choice with a system_id shows only when that system
+  // is selected (null/absent = all systems). Mirrors the quote builder.
+  var AXIS_SYS = <?php echo json_encode($axisSys, JSON_UNESCAPED_UNICODE); ?>;      // group -> {choice: system_id|null}
+  var SYS_ID   = <?php echo json_encode($sysIdByName, JSON_UNESCAPED_UNICODE); ?>;  // system name -> id
+
   // Build option axes. Seed each axis from the real choices first (natural order,
   // so blank-catch-all draws are testable), then fold in any values that only
   // exist in the rules.
@@ -1117,6 +1147,26 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   }
   // A hidden axis contributes nothing to the match (its stale value is ignored).
   function pickerValue(lab){ return (pickers[lab] && axisVisible(lab)) ? pickers[lab].value : ''; }
+
+  // Hide choices belonging to a different system than the one selected; if the
+  // current pick no longer fits, drop to the first that does — so SlimLine / Vogue /
+  // Nova each show only their own options.
+  function currentSystemId(){ return pickers['System'] ? (SYS_ID[pickers['System'].value] || 0) : 0; }
+  function applySystemFilter(){
+    var sid = currentSystemId();
+    Object.keys(pickers).forEach(function(lab){
+      if (lab === 'System') return;
+      var sysMap = AXIS_SYS[lab] || {};
+      var sel = pickers[lab], firstOk = null, curOk = false;
+      Array.prototype.forEach.call(sel.options, function(o){
+        var s = sysMap[o.value];                       // undefined/null = all systems
+        var ok = (s === undefined || s === null || s === sid);
+        o.hidden = !ok; o.disabled = !ok;
+        if (ok){ if (firstOk === null) firstOk = o.value; if (o.value === sel.value) curOk = true; }
+      });
+      if (!curOk && firstOk !== null) sel.value = firstOk;
+    });
+  }
 
   var outEl = document.getElementById('t_out');
   function evalCut(c, w, d){
@@ -1167,6 +1217,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   function recompute(){
     var w = parseInt(document.getElementById('t_w').value,10);
     var d = parseInt(document.getElementById('t_d').value,10);
+    applySystemFilter();         // filter choices to the selected system
     applyGating();               // show/hide sub-options to match the current control
     outEl.innerHTML = '';
     CUTS.forEach(function(c){
