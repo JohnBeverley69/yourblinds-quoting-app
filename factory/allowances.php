@@ -58,7 +58,18 @@ if ($productId > 0 && $hasTable) {
         $vs = $pdo->prepare('SELECT rows_json FROM build_variables WHERE product_id = ?');
         $vs->execute([$productId]);
         foreach ($vs->fetchAll(PDO::FETCH_COLUMN) as $rj) {
-            if (preg_match_all('/(?:BESTFIT|LOOKUP)\(\s*"([^"]+)"/i', (string) $rj, $mm)) {
+            // rows_json is JSON (quotes escaped as \"), so decode it and scan the real
+            // formula strings for BESTFIT("table",…) / LOOKUP("table",…).
+            $hay     = (string) $rj;
+            $decoded = json_decode($hay, true);
+            if (is_array($decoded)) {
+                $strs = [];
+                array_walk_recursive($decoded, static function ($v) use (&$strs) {
+                    if (is_string($v)) $strs[] = $v;
+                });
+                if ($strs) $hay = implode("\n", $strs);
+            }
+            if (preg_match_all('/(?:BESTFIT|LOOKUP)\(\s*"([^"]+)"/i', $hay, $mm)) {
                 foreach ($mm[1] as $t) $used[strtolower($t)] = true;
             }
         }
@@ -203,7 +214,9 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$hasTable): ?>
     <div class="al-flash err">The <code>allowance_rows</code> table isn't there yet — run <code>/migrate_allowance_rows.php</code>.</div>
 <?php elseif ($table === ''): ?>
-    <div class="al-card">No allowance tables yet. Create one above, or run <code>/seed_vertical_allowances.php</code> to load the vertical headrail data.</div>
+    <div class="al-card"><?= $productId > 0
+        ? 'This product&rsquo;s build rules don&rsquo;t reference any best-fit or lookup charts.'
+        : 'No allowance tables yet. Create one above.' ?></div>
 <?php else: ?>
 <div class="al-card">
     <h2 style="margin:0 0 0.9rem;font-size:1rem"><?= e($table) ?></h2>
