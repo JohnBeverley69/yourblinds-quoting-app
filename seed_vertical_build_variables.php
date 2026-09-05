@@ -75,16 +75,16 @@ $row = static fn (string $sys, string $ctrl, string $draw, string $wand, string 
 // ---- Trucks: count per system/operation -----------------------------------
 $trucksRows = [
     // Vogue — Louvolite best fit, split rows first then one-way catch-alls.
-    $row('Vogue', 'Corded', 'C / L', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
-    $row('Vogue', 'Corded', 'C / R', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
+    $row('Vogue', 'Corded', 'C/L', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
+    $row('Vogue', 'Corded', 'C/R', '', 'BESTFIT("vogue_split_cord", Width, 1)'),
     $row('Vogue', 'Corded', '',      '', 'BESTFIT("vogue_ow_cord", Width, 1)'),
     $row('Vogue', 'Wand',   '', 'Centre Left',        'BESTFIT("vogue_split_1wand", Width, 1)'),
     $row('Vogue', 'Wand',   '', 'Centre Right',       'BESTFIT("vogue_split_1wand", Width, 1)'),
     $row('Vogue', 'Wand',   '', 'Split Draw 2 Wands', 'BESTFIT("vogue_split_2wand", Width, 1)'),
     $row('Vogue', 'Wand',   '', '',                   'BESTFIT("vogue_ow_wand", Width, 1)'),
     // Slimline / Nova / No Thrills (System = any, reached only after Vogue).
-    $row('', 'Corded', 'C / L', '', 'EVEN(Width / Truck_Spacing)'),
-    $row('', 'Corded', 'C / R', '', 'EVEN(Width / Truck_Spacing)'),
+    $row('', 'Corded', 'C/L', '', 'EVEN(Width / Truck_Spacing)'),
+    $row('', 'Corded', 'C/R', '', 'EVEN(Width / Truck_Spacing)'),
     $row('', 'Wand', '', 'Centre Left',        'EVEN(Width / Truck_Spacing)'),
     $row('', 'Wand', '', 'Centre Right',       'EVEN(Width / Truck_Spacing)'),
     $row('', 'Wand', '', 'Split Draw 2 Wands', 'EVEN(Width / Truck_Spacing)'),
@@ -93,8 +93,8 @@ $trucksRows = [
 
 // ---- Truck_Size: Vogue best-fit carrier size (for "24 x 87mm") -------------
 $sizeRows = [
-    $row('Vogue', 'Corded', 'C / L', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
-    $row('Vogue', 'Corded', 'C / R', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
+    $row('Vogue', 'Corded', 'C/L', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
+    $row('Vogue', 'Corded', 'C/R', '', 'BESTFIT("vogue_split_cord", Width, 2)'),
     $row('Vogue', 'Corded', '',      '', 'BESTFIT("vogue_ow_cord", Width, 2)'),
     $row('Vogue', 'Wand',   '', 'Centre Left',        'BESTFIT("vogue_split_1wand", Width, 2)'),
     $row('Vogue', 'Wand',   '', 'Centre Right',       'BESTFIT("vogue_split_1wand", Width, 2)'),
