@@ -232,22 +232,31 @@ foreach ($alwByClient as $cid => $tables) {
 // ---- Global: spelling drift in stored data ------------------------------------
 $hdr('SPELLING DRIFT IN STORED DATA');
 $spellHits = 0;
-$scan = [
-    ['build_variables', 'rows_json'],
-    ['build_variables', 'columns_json'],
-    ['allowance_rows',  'keys_display'],
-];
-foreach ($scan as [$tbl, $col]) {
-    foreach (['Vouge', 'Center ', 'C / L', 'C / R', 'Cord and Chain'] as $needle) {
-        try {
-            $q = $pdo->prepare("SELECT COUNT(*) FROM `{$tbl}` WHERE `{$col}` LIKE ?");
-            $q->execute(['%' . $needle . '%']);
-            $n = (int) $q->fetchColumn();
-            if ($n > 0) { $spellHits++; $bad("{$tbl}.{$col}: '{$needle}' found in {$n} row(s) — should be the canonical form"); }
-        } catch (Throwable $e) { /* column absent */ }
+$needles = ['Vouge', 'Center ', 'C / L', 'C / R', 'Cord and Chain'];
+// build_variables columns are JSON — slashes are escaped ("C \/ L"), so a raw LIKE
+// misses "C / L". Decode and scan the real text.
+$bvHits = array_fill_keys($needles, 0);
+foreach ($pdo->query('SELECT rows_json, columns_json FROM build_variables') as $r) {
+    foreach (['rows_json', 'columns_json'] as $c) {
+        $dec = json_decode((string) ($r[$c] ?? ''), true);
+        if ($dec === null) continue;
+        $flat = json_encode($dec, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($flat === false) continue;
+        foreach ($needles as $nd) { if (strpos($flat, $nd) !== false) $bvHits[$nd]++; }
     }
 }
-if ($spellHits === 0) $okc('no Vouge / Center / spaced C-slash / "Cord and Chain" in stored data');
+foreach ($needles as $nd) {
+    if ($bvHits[$nd] > 0) { $spellHits++; $bad("build_variables: '{$nd}' in {$bvHits[$nd]} decoded value(s) — should be the canonical form"); }
+}
+try {
+    foreach ($needles as $nd) {
+        $q = $pdo->prepare('SELECT COUNT(*) FROM allowance_rows WHERE keys_display LIKE ?');
+        $q->execute(['%' . $nd . '%']);
+        $n = (int) $q->fetchColumn();
+        if ($n > 0) { $spellHits++; $bad("allowance_rows.keys_display: '{$nd}' in {$n} row(s)"); }
+    }
+} catch (Throwable $e) { /* table/column absent */ }
+if ($spellHits === 0) $okc('no Vouge / Center / spaced C-slash / "Cord and Chain" in stored data (decoded scan)');
 
 // ---- Summary ------------------------------------------------------------------
 $hdr('SUMMARY');
