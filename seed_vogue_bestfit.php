@@ -82,6 +82,11 @@ $T['vogue_split_cord'] = [
     54=>[3819,3923,4027,4131], 56=>[3960,4068,4176,4284], 58=>[4100,4212,4324,4436], 60=>[4241,4357,4473,4589],
     62=>[4382,4502,4622,4742], 64=>[4522,4646,4770,4894], 66=>[4663,4791,4919,5047], 68=>[4803,4935,5067,5199],
     70=>[4944,5080,5216,5352],
+    // Row 72 → 5505mm (Louvolite p.44). The PDF lists only 83=5085 and 89=5505 for
+    // this row; 85/87 are INTERPOLATED (even split between them), flagged to swap for
+    // the real Louvolite figures when available. (Louvolite's split-cord chart has no
+    // row 48 — the 46→50 jump is theirs, not a transcription gap.)
+    72=>[5085,5225,5365,5505],
 ];
 
 $T['vogue_split_1wand'] = [
