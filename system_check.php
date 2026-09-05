@@ -102,7 +102,7 @@ foreach ($bvByProd as $pid => $vars) {
 
     $choicesByExtra = [];   // extraId => set(lower label)
     if ($extras) {
-        $ids = array_map(static fn ($e) => $e['id'], $extras);
+        $ids = array_values(array_map(static fn ($e) => $e['id'], $extras));
         $in  = implode(',', array_fill(0, count($ids), '?'));
         $cs  = $pdo->prepare("SELECT product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($in) AND active = 1");
         $cs->execute($ids);
