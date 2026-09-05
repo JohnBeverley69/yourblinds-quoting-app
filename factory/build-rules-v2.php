@@ -105,6 +105,47 @@ if ($productId > 0) {
 $sourceByRef = [];
 foreach ($optionSources as $os) $sourceByRef[$os['ref']] = $os;
 
+// Parent-choice gating: for each option group, the parent CHOICE LABELS that
+// reveal it (e.g. "Wand Options" → ["Wand"], "Draw Options" → ["Corded"]). Mirrors
+// the quote builder's cascade so the tester only shows the sub-options that match
+// the current control. Keyed by group name to match the axis labels.
+$axisGating = [];
+if ($productId > 0) {
+    $addGate = static function (array $rows) use (&$axisGating) {
+        foreach ($rows as $r) {
+            $lab = (string) ($r['extra_name'] ?? '');
+            $par = (string) ($r['parent_label'] ?? '');
+            if ($lab !== '' && $par !== '' && !in_array($par, $axisGating[$lab] ?? [], true)) {
+                $axisGating[$lab][] = $par;
+            }
+        }
+    };
+    // Junction (an option gated to one or more parent choices).
+    try {
+        $gs = $pdo->prepare(
+            "SELECT e.name AS extra_name, pc.label AS parent_label
+               FROM product_extras e
+               JOIN product_extra_parent_choices j ON j.product_extra_id = e.id
+               JOIN product_extra_choices pc        ON pc.id = j.product_extra_choice_id
+              WHERE e.product_id = ? AND e.client_id = ? AND e.active = 1"
+        );
+        $gs->execute([$productId, $MASTER]);
+        $addGate($gs->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $e) { /* junction absent */ }
+    // Legacy single parent column.
+    try {
+        $gs = $pdo->prepare(
+            "SELECT e.name AS extra_name, pc.label AS parent_label
+               FROM product_extras e
+               JOIN product_extra_choices pc ON pc.id = e.parent_choice_id
+              WHERE e.product_id = ? AND e.client_id = ? AND e.active = 1
+                AND e.parent_choice_id IS NOT NULL"
+        );
+        $gs->execute([$productId, $MASTER]);
+        $addGate($gs->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $e) { /* legacy column absent */ }
+}
+
 // ---- Formula help: valid names + a validator that mirrors the real engine ----
 // The names a formula on THIS product may reference: the built-ins plus every
 // rule on the product. Powers the clickable chips AND the "Check" validation.
@@ -1029,6 +1070,10 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       echo json_encode($axisValues, JSON_UNESCAPED_UNICODE);
   ?>;
 
+  // Parent-choice gating per group (e.g. "Wand Options" → ["Wand"]). An axis with
+  // gating shows only when one of its parent labels is the current pick elsewhere.
+  var AXIS_GATING = <?php echo json_encode($axisGating, JSON_UNESCAPED_UNICODE); ?>;
+
   // Build option axes. Seed each axis from the real choices first (natural order,
   // so blank-catch-all draws are testable), then fold in any values that only
   // exist in the rules.
@@ -1044,6 +1089,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   });
   var axesEl = document.getElementById('t_axes');
   var pickers = {};
+  var wraps = {};
   Object.keys(axes).forEach(function(lab){
     var vals = Object.keys(axes[lab]);
     if (!vals.length) return;
@@ -1052,13 +1098,30 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     var sel = document.createElement('select');
     vals.forEach(function(v){ var o = document.createElement('option'); o.textContent = v; sel.appendChild(o); });
     wrap.appendChild(sel); axesEl.appendChild(wrap);
-    pickers[lab] = sel; sel.addEventListener('change', recompute);
+    pickers[lab] = sel; wraps[lab] = wrap; sel.addEventListener('change', recompute);
   });
+
+  // An axis with parent gating (e.g. Wand Options → "Wand") is only relevant when
+  // one of its parent choice labels is currently picked in another axis — so Corded
+  // reveals Draw Options and hides Wand Options, and vice versa.
+  function axisVisible(lab){
+    var gate = AXIS_GATING[lab];
+    if (!gate || !gate.length) return true;
+    for (var other in pickers){
+      if (pickers.hasOwnProperty(other) && gate.indexOf(pickers[other].value) !== -1) return true;
+    }
+    return false;
+  }
+  function applyGating(){
+    Object.keys(wraps).forEach(function(lab){ wraps[lab].style.display = axisVisible(lab) ? '' : 'none'; });
+  }
+  // A hidden axis contributes nothing to the match (its stale value is ignored).
+  function pickerValue(lab){ return (pickers[lab] && axisVisible(lab)) ? pickers[lab].value : ''; }
 
   var outEl = document.getElementById('t_out');
   function evalCut(c, w, d){
     var sel = {};
-    c.cols.forEach(function(lab){ sel[lab] = pickers[lab] ? pickers[lab].value : ''; });
+    c.cols.forEach(function(lab){ sel[lab] = pickerValue(lab); });
     // First matching row wins; blank key = wildcard.
     for (var i=0;i<c.rows.length;i++){
       var r = c.rows[i], ok = true;
@@ -1084,7 +1147,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     var mySeq = ++evalSeq;
     var params = 'action=evalbuild&product_id=' + TPID + '&w=' + (w||0) + '&d=' + (d||0);
     Object.keys(pickers).forEach(function(lab){
-      params += '&opt[' + encodeURIComponent(lab) + ']=' + encodeURIComponent(pickers[lab].value);
+      params += '&opt[' + encodeURIComponent(lab) + ']=' + encodeURIComponent(pickerValue(lab));
     });
     fetch('/factory/build-rules-v2.php?' + params)
       .then(function(r){ return r.json(); })
@@ -1104,6 +1167,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   function recompute(){
     var w = parseInt(document.getElementById('t_w').value,10);
     var d = parseInt(document.getElementById('t_d').value,10);
+    applyGating();               // show/hide sub-options to match the current control
     outEl.innerHTML = '';
     CUTS.forEach(function(c){
       var res = evalCut(c, w, d);
