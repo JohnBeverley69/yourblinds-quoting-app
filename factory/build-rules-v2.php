@@ -117,7 +117,12 @@ if ($productId > 0) {
                 $byExtra[$eid][$lab] = true;
                 $gname = $nameById[$eid] ?? '';
                 if ($gname !== '') {
-                    $axisSys[$gname][$lab] = ($hasSys && $c['system_id'] !== null) ? (int) $c['system_id'] : null;
+                    // A label can have SEVERAL choices, one per system (e.g. a "Corded"
+                    // choice scoped to SlimLine, Vogue AND Nova). Collect ALL their
+                    // system_ids so the option shows for every system that offers it.
+                    $sid = ($hasSys && $c['system_id'] !== null) ? (int) $c['system_id'] : null;
+                    if (!isset($axisSys[$gname][$lab])) $axisSys[$gname][$lab] = [];
+                    if (!in_array($sid, $axisSys[$gname][$lab], true)) $axisSys[$gname][$lab][] = $sid;
                 }
             }
             foreach ($extraRows as $er) {
@@ -1159,8 +1164,8 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       var sysMap = AXIS_SYS[lab] || {};
       var sel = pickers[lab], firstOk = null, curOk = false;
       Array.prototype.forEach.call(sel.options, function(o){
-        var s = sysMap[o.value];                       // undefined/null = all systems
-        var ok = (s === undefined || s === null || s === sid);
+        var arr = sysMap[o.value];                     // list of system_ids (a null entry = all systems)
+        var ok = !arr || !arr.length || arr.some(function(s){ return s === null || s === sid; });
         o.hidden = !ok; o.disabled = !ok;
         if (ok){ if (firstOk === null) firstOk = o.value; if (o.value === sel.value) curOk = true; }
       });
