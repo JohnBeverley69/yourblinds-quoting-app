@@ -196,7 +196,16 @@ $activeNav = 'products';
                 </div>
             <?php endif; ?>
         </div>
-        <p><a href="/admin/products/price-tables.php?system_id=<?= $systemId ?>" style="font-weight:600">View the priced grid &rarr;</a></p>
+        <p style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.2rem 0 .4rem">
+            <a href="/admin/products/wizard.php?id=<?= $productId ?>"
+               style="font:inherit;font-weight:600;padding:.5rem 1.1rem;border-radius:8px;background:#166534;color:#fff;text-decoration:none">Continue setup &rarr;</a>
+            <a href="/admin/products/price-tables.php?system_id=<?= $systemId ?>" style="font-weight:600;text-decoration:underline">View the priced grid</a>
+            <a href="/admin/products/edit.php?id=<?= $productId ?>" style="font-weight:600;text-decoration:underline">Back to product</a>
+        </p>
+        <p style="color:#667;font-size:.85rem;margin:0">
+            Costs are optional — they track your margin, not the sell price — so this system is priced and ready to quote.
+            <strong>Continue setup</strong> to finish up (and add <strong>Options</strong> like control side or brackets if this product needs them — those are optional too).
+        </p>
     <?php elseif ($stage === 'pick'): ?>
         <form method="post" enctype="multipart/form-data">
             <?= csrf_field() ?><input type="hidden" name="action" value="import"><input type="hidden" name="system_id" value="<?= $systemId ?>">
