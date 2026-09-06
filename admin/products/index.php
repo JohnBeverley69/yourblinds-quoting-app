@@ -145,10 +145,10 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
                 </span>
             <?php endif; ?>
         </td>
-        <td class="num"><a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['option_count'] ?></a></td>
         <td class="num"><a href="/admin/products/systems.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['system_count'] ?></a></td>
-        <td class="num"><a href="/admin/products/extras.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['extra_count'] ?></a></td>
+        <td class="num"><a href="/admin/products/options.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['option_count'] ?></a></td>
         <td class="num"><a href="<?= e($ptHref) ?>"><?= (int) $p['price_table_count'] ?></a></td>
+        <td class="num"><a href="/admin/products/extras.php?product_id=<?= (int) $p['id'] ?>"><?= (int) $p['extra_count'] ?></a></td>
         <?php if ($hasCategories): ?>
             <td>
                 <form method="post" action="/admin/products/set-category.php" style="margin:0">
@@ -386,10 +386,10 @@ $activeNav = 'products';
                                         <th class="drag-col"></th>
                                         <th>Name</th>
                                         <th>Status</th>
-                                        <th class="num">Fabrics</th>
                                         <th class="num">Systems</th>
-                                        <th class="num">Options</th>
+                                        <th class="num">Fabrics</th>
                                         <th class="num">Price tables</th>
+                                        <th class="num">Options</th>
                                         <?php if ($hasCategories): ?><th>Group</th><?php endif; ?>
                                         <th>Updated</th>
                                         <th></th>
