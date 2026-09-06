@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 
 requireAdmin();
 
@@ -337,14 +338,7 @@ $rows = db()->prepare(
     . ($hasFabricGroupCol ? ', fabric_group' : '') . "
        FROM product_options
       WHERE product_id = ? AND client_id = ?
-   ORDER BY
-        CASE
-            WHEN band_code = 'AAA' THEN 1
-            WHEN band_code = 'AA'  THEN 2
-            WHEN band_code = 'A'   THEN 3
-            ELSE 100
-        END,
-        band_code,
+   ORDER BY " . band_sort_sql('band_code') . ",
         sort_order, name, colour"
 );
 $rows->execute([$productId, $clientId]);
@@ -367,7 +361,7 @@ $knownBandsStmt = db()->prepare(
          WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
-     ORDER BY band_code"
+     ORDER BY " . band_sort_sql('band_code')
 );
 $knownBandsStmt->execute([$productId, $clientId, $productId, $clientId]);
 $knownBands = array_map(

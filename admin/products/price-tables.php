@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 
 requireAdmin();
 
@@ -243,7 +244,7 @@ if ($hasPtSortOrder) {
                 (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
            FROM price_tables t
           WHERE t.system_id = ? AND t.client_id = ?
-       ORDER BY t.sort_order, t.band_code"
+       ORDER BY t.sort_order, " . band_sort_sql('t.band_code')
     );
 } else {
     $rows = db()->prepare(
@@ -251,14 +252,7 @@ if ($hasPtSortOrder) {
                 (SELECT COUNT(*) FROM price_table_rows r WHERE r.price_table_id = t.id) AS row_count
            FROM price_tables t
           WHERE t.system_id = ? AND t.client_id = ?
-       ORDER BY
-            CASE
-                WHEN t.band_code = 'AAA' THEN 1
-                WHEN t.band_code = 'AA'  THEN 2
-                WHEN t.band_code = 'A'   THEN 3
-                ELSE 100
-            END,
-            t.band_code"
+       ORDER BY " . band_sort_sql('t.band_code')
     );
 }
 $rows->execute([$systemId, $clientId]);
