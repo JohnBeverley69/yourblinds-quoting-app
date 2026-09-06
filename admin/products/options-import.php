@@ -305,7 +305,15 @@ $activeNav = 'products';
                         View imported <?= e($labelL) ?>s
                     </a>
                 <?php else: ?>
-                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-primary">
+                    <!-- Standalone entry (from the product's Fabrics page, not the
+                         wizard): still offer the onward path, or the page dead-ends
+                         on "View fabrics". The wizard (no &step=) infers the next
+                         step from state — systems if there are none yet, otherwise
+                         price tables. -->
+                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>" class="btn btn-primary">
+                        Continue product setup &rarr;
+                    </a>
+                    <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-secondary">
                         View imported <?= e($labelL) ?>s
                     </a>
                 <?php endif; ?>
