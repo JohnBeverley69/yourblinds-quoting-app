@@ -1020,17 +1020,35 @@ $activeNav = 'wizard';
                 $systemsNeedingImport = array_values($systems ?? []);
             }
             ?>
+            <?php
+                // Step completion + reachability are derived from the PRODUCT'S
+                // ACTUAL STATE, not the current step position. Otherwise jumping
+                // back (e.g. to Name) makes later steps look un-done and strips
+                // their links, stranding you with no way forward. A step is
+                // clickable whenever its prerequisites are met, wherever you are.
+                $stepDone = [
+                    1 => (bool) $product,                                   // named
+                    2 => (int) $systemCount > 0,                            // has a system
+                    3 => $requiresOption ? ((int) $fabricCount > 0) : true, // has fabrics (or none needed)
+                    4 => (bool) ($allFilled ?? false),                      // price tables complete
+                ];
+                $stepReachable = [
+                    1 => (bool) $product,
+                    2 => (bool) $product,                                              // after Name
+                    3 => $product && (int) $systemCount > 0,                           // after Systems
+                    4 => $product && (int) $systemCount > 0
+                         && ((int) $fabricCount > 0 || !$requiresOption),             // after Fabrics
+                ];
+            ?>
             <!-- Stepper -->
             <ol class="wiz-stepper">
                 <?php foreach ($STEPS as $n => [$lbl, $sub]):
-                    // Earlier steps tick once passed; the LAST step ticks when
-                    // its work is actually complete (it's never "passed").
-                    $isDone    = $n < $step || ($n === $lastStep && $allFilled);
-                    $isCurrent = ($n === $step) && !$isDone;
-                    $cls = $isDone ? 'done' : ($isCurrent ? 'current' : '');
-                    // Allow back-navigation only to already-completed
-                    // steps (don't let users skip forward by clicking).
-                    $href = ($isDone && $product)
+                    $isCurrent = ($n === $step);
+                    $isDone    = !empty($stepDone[$n]) && !$isCurrent;
+                    $cls = $isCurrent ? 'current' : ($isDone ? 'done' : '');
+                    // Clickable when the step is reachable (prereqs met) and it's
+                    // not the page we're already on — forward AND back.
+                    $href = (!$isCurrent && !empty($stepReachable[$n]))
                         ? '/admin/products/wizard.php?id=' . $productId . '&step=' . $n
                         : null;
                 ?>
