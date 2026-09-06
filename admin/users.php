@@ -158,15 +158,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                         ->execute([$newUserId]);
                 } catch (Throwable $e) { /* column not present yet — skip */ }
             }
-            // Username-only accounts (no email — e.g. workshop staff) have
-            // nothing to verify, so mark them verified now, or the login
-            // email-verification gate would lock them out. Schema-tolerant.
-            if ($form['email'] === '') {
-                try {
-                    $pdo->query('SELECT email_verified_at FROM client_users LIMIT 0');
-                    $pdo->prepare('UPDATE client_users SET email_verified_at = NOW() WHERE id = ?')->execute([$newUserId]);
-                } catch (Throwable $e) { /* column absent — gate treats as verified anyway */ }
-            }
+            // Admin-added users are trusted: the admin sets their password and
+            // vouches for them, so we mark them verified now and skip the "confirm
+            // your email" round-trip entirely (self sign-up still requires it).
+            // This covers both username-only workshop logins (nothing to verify)
+            // and email users the admin just added — without this, the login
+            // email-verification gate would lock them out with no email sent.
+            // Schema-tolerant.
+            try {
+                $pdo->query('SELECT email_verified_at FROM client_users LIMIT 0');
+                $pdo->prepare('UPDATE client_users SET email_verified_at = NOW() WHERE id = ?')->execute([$newUserId]);
+            } catch (Throwable $e) { /* column absent — gate treats as verified anyway */ }
             $pdo->commit();
             $_SESSION['flash_success'] = 'User added.';
             header('Location: /admin/users.php');
