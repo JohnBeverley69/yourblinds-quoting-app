@@ -787,6 +787,41 @@ $STEPS = [
     4 => ['Price tables', 'Width × drop grids per band / system'],
 ];
 
+// On the wizard landing (step 1, no product yet), offer to RESUME any product
+// that's still mid-setup — otherwise "Setup wizard" from the products list looks
+// like it forgot the product you just made manually and dumps you at "new
+// product". Each resume link opens the wizard for that product, which infers the
+// right step from its state (systems → fabrics → price tables). Most-recent first.
+$resumable = [];
+if ($step === 1 && !$product) {
+    try {
+        $rq = $pdo->prepare(
+            "SELECT p.id, p.name,
+                    (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) AS sys_c,
+                    (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id AND o.active = 1) AS opt_c,
+                    (SELECT COUNT(*) FROM price_tables   t WHERE t.product_id = p.id AND t.active = 1) AS pt_c"
+            . ($hasRequiresOption ? ", COALESCE(p.requires_option, 1) AS req_opt" : ", 1 AS req_opt") . "
+               FROM products p
+              WHERE p.client_id = ? AND p.active = 1
+              ORDER BY p.id DESC"
+        );
+        $rq->execute([$clientId]);
+        foreach ($rq->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $needsFab = (int) $r['req_opt'] === 1;
+            $miss = [];
+            if ((int) $r['sys_c'] === 0)                    $miss[] = 'system';
+            if ($needsFab && (int) $r['opt_c'] === 0)       $miss[] = 'fabric';
+            if ((int) $r['pt_c'] === 0)                     $miss[] = 'price table';
+            if ($miss) {
+                $resumable[] = ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'missing' => $miss];
+            }
+        }
+        $resumable = array_slice($resumable, 0, 8);
+    } catch (Throwable $e) {
+        error_log('wizard resumable list failed: ' . $e->getMessage());
+    }
+}
+
 // Highlight the "Setup wizard" sidebar entry while in the wizard
 // flow, not "Products" — the user is doing focused setup work and
 // the breadcrumb should reflect that. Once they hit "Open product
@@ -1020,6 +1055,32 @@ $activeNav = 'wizard';
 
             <!-- ─── STEP 1: Name ──────────────────────────────────────── -->
             <?php if ($step === 1): ?>
+                <?php if ($resumable): ?>
+                    <!-- Resume mid-setup products so "Setup wizard" from the
+                         products list continues what you were building instead
+                         of only ever starting a new one. -->
+                    <div class="wiz-card" style="margin-bottom:1rem;background:linear-gradient(135deg,#fef3c7 0%,#fffbeb 100%);border-color:#fcd34d">
+                        <h2 style="color:#78350f">Continue an in-progress product</h2>
+                        <p class="lede" style="color:#92400e">
+                            These aren't finished yet — resume and the wizard picks up at the
+                            next thing each one needs. Or start a brand-new product below.
+                        </p>
+                        <div class="wiz-list">
+                            <?php foreach ($resumable as $r): ?>
+                                <div class="wiz-list-item" style="justify-content:space-between;gap:0.75rem">
+                                    <span>
+                                        <strong><?= e($r['name']) ?></strong>
+                                        <span style="color:#92400e;font-size:0.8125rem">
+                                            &mdash; needs <?= e(implode(' + ', $r['missing'])) ?>
+                                        </span>
+                                    </span>
+                                    <a href="/admin/products/wizard.php?id=<?= (int) $r['id'] ?>"
+                                       class="btn btn-secondary btn-sm" style="white-space:nowrap">Resume &rarr;</a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <div class="wiz-card">
                     <h2>What kind of blind are we adding?</h2>
                     <p class="lede">
