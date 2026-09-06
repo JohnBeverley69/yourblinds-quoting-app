@@ -20,6 +20,7 @@ $f = [
     'admin_email'  => '',
     'admin_name'   => '',
     'seed'         => 1,
+    'no_portal'    => 0,
 ];
 $error   = null;
 $summary = null;
@@ -31,23 +32,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['admin_email']  = trim((string) ($_POST['admin_email']  ?? ''));
     $f['admin_name']   = trim((string) ($_POST['admin_name']   ?? ''));
     $f['seed']         = !empty($_POST['seed']) ? 1 : 0;
+    $f['no_portal']    = !empty($_POST['no_portal']) ? 1 : 0;
     $password          = (string) ($_POST['password'] ?? '');
 
+    // A no-portal account (a one-off we invoice/ship to) has NO login, so the
+    // admin-user fields are not required for it.
     if ($f['company_name'] === '') {
         $error = 'Company name is required.';
     } elseif (strlen($f['company_name']) > 150) {
         $error = 'Company name is too long (max 150 chars).';
-    } elseif (!filter_var($f['admin_email'], FILTER_VALIDATE_EMAIL)) {
+    } elseif (!$f['no_portal'] && !filter_var($f['admin_email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'A valid admin email is required.';
-    } elseif ($f['admin_name'] === '') {
+    } elseif (!$f['no_portal'] && $f['admin_name'] === '') {
         $error = 'Admin user full name is required.';
-    } elseif (strlen($password) < 8) {
+    } elseif (!$f['no_portal'] && strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
     } else {
-        // Check email isn't already in client_users (unique).
-        $check = db()->prepare('SELECT 1 FROM client_users WHERE email = ? LIMIT 1');
-        $check->execute([$f['admin_email']]);
-        if ($check->fetchColumn()) {
+        // Check email isn't already in client_users (unique) — only when a login
+        // is actually being created.
+        $emailTaken = false;
+        if (!$f['no_portal']) {
+            $check = db()->prepare('SELECT 1 FROM client_users WHERE email = ? LIMIT 1');
+            $check->execute([$f['admin_email']]);
+            $emailTaken = (bool) $check->fetchColumn();
+        }
+        if ($emailTaken) {
             $error = 'A user with that email already exists. Pick a different email.';
         } else {
             $pdo = db();
@@ -65,22 +74,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO client_settings (client_id) VALUES (?)'
                 )->execute([$newClientId]);
 
-                // 3. Create the admin user. email_verified_at stays NULL → the
-                //    login gate makes them confirm their email first, and we send
-                //    that confirmation link after commit (step below), exactly as
-                //    self sign-up does.
-                $pdo->prepare(
-                    'INSERT INTO client_users
-                       (client_id, email, full_name, password_hash,
-                        role, active, is_super_admin)
-                     VALUES (?, ?, ?, ?, "admin", 1, 0)'
-                )->execute([
-                    $newClientId,
-                    $f['admin_email'],
-                    $f['admin_name'],
-                    password_hash($password, PASSWORD_DEFAULT),
-                ]);
-                $newAdminUserId = (int) $pdo->lastInsertId();
+                // 3. Create the admin user — UNLESS this is a no-portal account (a
+                //    one-off we invoice/ship to, with no one logging in). For a
+                //    portal account, email_verified_at stays NULL → the login gate
+                //    makes them confirm their email first, and we send that link
+                //    after commit (step below), exactly as self sign-up does.
+                $newAdminUserId = null;
+                if (!$f['no_portal']) {
+                    $pdo->prepare(
+                        'INSERT INTO client_users
+                           (client_id, email, full_name, password_hash,
+                            role, active, is_super_admin)
+                         VALUES (?, ?, ?, ?, "admin", 1, 0)'
+                    )->execute([
+                        $newClientId,
+                        $f['admin_email'],
+                        $f['admin_name'],
+                        password_hash($password, PASSWORD_DEFAULT),
+                    ]);
+                    $newAdminUserId = (int) $pdo->lastInsertId();
+                }
 
                 // 4. Optionally seed the catalogue from the master admin's client.
                 if ($f['seed'] === 1) {
@@ -151,23 +164,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
 
-                // ── Confirmation email ──
+                // ── Confirmation email (portal accounts only) ──
                 // The account can't sign in until the admin confirms their email
                 // (email_verified_at is NULL). Send the same "confirm your email"
                 // link self sign-up sends. Best-effort and OUTSIDE the transaction
                 // — a mail hiccup must not undo a created tenant; they can always
-                // use "resend confirmation" from the sign-in page.
+                // use "resend confirmation" from the sign-in page. A no-portal
+                // account has no login, so there's nothing to confirm.
                 $confirmSent = false;
-                try {
-                    $token = verification_create_token($pdo, $newAdminUserId);
-                    $confirmSent = verification_send_email(
-                        $f['admin_email'],
-                        verification_build_url($token),
-                        $f['company_name']
-                    );
-                } catch (Throwable $mailErr) {
-                    error_log('[YourBlinds] new-client confirmation email failed: ' . $mailErr->getMessage());
+                if ($newAdminUserId) {
+                    try {
+                        $token = verification_create_token($pdo, $newAdminUserId);
+                        $confirmSent = verification_send_email(
+                            $f['admin_email'],
+                            verification_build_url($token),
+                            $f['company_name']
+                        );
+                    } catch (Throwable $mailErr) {
+                        error_log('[YourBlinds] new-client confirmation email failed: ' . $mailErr->getMessage());
+                    }
                 }
+
+                $loginNote = $newAdminUserId
+                    ? ($confirmSent
+                        ? ' A confirmation email was sent to ' . $f['admin_email']
+                          . ' — they must click it before they can sign in.'
+                        : ' NOTE: the confirmation email could not be sent to '
+                          . $f['admin_email'] . ' — they can use “resend confirmation”'
+                          . ' on the sign-in page.')
+                    : ' No portal login was created (one-off / invoice-only) — add one later from Trade Accounts if needed.';
 
                 $_SESSION['flash_success'] =
                     'Client "' . $f['company_name'] . '" created'
@@ -184,12 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         : ' (empty catalogue — no seed).')
                     . ' Granted ' . $trialsAdded . '-add-on trial through '
                     . date('j M Y', strtotime($trialExpiry)) . '.'
-                    . ($confirmSent
-                        ? ' A confirmation email was sent to ' . $f['admin_email']
-                          . ' — they must click it before they can sign in.'
-                        : ' NOTE: the confirmation email could not be sent to '
-                          . $f['admin_email'] . ' — they can use “resend confirmation”'
-                          . ' on the sign-in page.');
+                    . $loginNote;
                 header('Location: /master-admin/index.php');
                 exit;
             } catch (Throwable $e) {
@@ -294,32 +314,47 @@ $activeNav = 'master-admin';
                     </div>
                 </div>
 
-                <h3 style="margin:1.5rem 0 0.5rem;font-size:1rem">Initial admin user</h3>
-                <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
-                    The first login for this client. They can add more users via Users once they're in.
-                </p>
-                <div class="form-row cols-2">
-                    <div class="form-group">
-                        <label for="admin_name">Full name <span class="required">*</span></label>
-                        <input id="admin_name" name="admin_name" type="text"
-                               required maxlength="150"
-                               value="<?= e((string) $f['admin_name']) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label for="admin_email">Email <span class="required">*</span></label>
-                        <input id="admin_email" name="admin_email" type="email"
-                               required maxlength="150"
-                               value="<?= e((string) $f['admin_email']) ?>">
-                    </div>
-                </div>
                 <div class="form-row full">
-                    <div class="form-group">
-                        <label for="password">Initial password (8+ chars) <span class="required">*</span></label>
-                        <input id="password" name="password" type="password"
-                               required minlength="8" autocomplete="new-password">
-                        <small style="color:var(--text-faint);font-size:0.8125rem">
-                            Tell them in person, or send via your usual channel. They can change it via Settings once logged in.
-                        </small>
+                    <label style="display:inline-flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-weight:500">
+                        <input type="checkbox" id="no_portal" name="no_portal" value="1"
+                               <?= $f['no_portal'] ? 'checked' : '' ?> style="margin-top:0.2rem">
+                        <span>
+                            <strong>No portal login</strong> &mdash; a one-off we invoice/ship to, with nobody signing in.
+                            <small style="display:block;color:var(--text-faint);font-weight:400;font-size:0.8125rem;margin-top:0.15rem">
+                                Tick to skip the admin user below. You can add a login later from Trade Accounts.
+                            </small>
+                        </span>
+                    </label>
+                </div>
+
+                <div id="portal-fields">
+                    <h3 style="margin:1.5rem 0 0.5rem;font-size:1rem">Initial admin user</h3>
+                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+                        The first login for this client. They can add more users via Users once they're in.
+                    </p>
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label for="admin_name">Full name <span class="required">*</span></label>
+                            <input id="admin_name" name="admin_name" type="text"
+                                   required maxlength="150"
+                                   value="<?= e((string) $f['admin_name']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="admin_email">Email <span class="required">*</span></label>
+                            <input id="admin_email" name="admin_email" type="email"
+                                   required maxlength="150"
+                                   value="<?= e((string) $f['admin_email']) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="password">Initial password (8+ chars) <span class="required">*</span></label>
+                            <input id="password" name="password" type="password"
+                                   required minlength="8" autocomplete="new-password">
+                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                                Tell them in person, or send via your usual channel. They can change it via Settings once logged in.
+                            </small>
+                        </div>
                     </div>
                 </div>
 
@@ -350,5 +385,20 @@ $activeNav = 'master-admin';
         </section>
     </main>
 </div>
+<script>
+(function () {
+    var cb = document.getElementById('no_portal');
+    var box = document.getElementById('portal-fields');
+    if (!cb || !box) return;
+    function sync() {
+        var off = cb.checked;
+        box.hidden = off;
+        // Disable the login inputs when hidden so they aren't required or submitted.
+        box.querySelectorAll('input').forEach(function (i) { i.disabled = off; });
+    }
+    cb.addEventListener('change', sync);
+    sync();
+})();
+</script>
 </body>
 </html>
