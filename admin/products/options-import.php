@@ -298,7 +298,10 @@ $activeNav = 'products';
             <?php endif; ?>
             <p style="display:flex;gap:0.5rem;flex-wrap:wrap">
                 <?php if ($retWiz): ?>
-                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&step=3" class="btn btn-primary">
+                    <!-- No &step= — let the wizard infer the NEXT step from state.
+                         Fabrics were just imported, so it advances to price tables
+                         instead of looping back to the fabrics step it came from. -->
+                    <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>" class="btn btn-primary">
                         Continue in setup wizard &rarr;
                     </a>
                     <a href="/admin/products/options.php?product_id=<?= (int) $productId ?>" class="btn btn-secondary">

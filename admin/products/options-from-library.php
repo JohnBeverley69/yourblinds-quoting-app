@@ -30,8 +30,11 @@ $supplierId = (int) ($_GET['supplier_id'] ?? $_POST['supplier_id'] ?? 0);
 // adding so the flow continues straight to price tables instead of dead-ending
 // on the Fabrics page.
 $ret        = (($_GET['ret'] ?? $_POST['ret'] ?? '') === 'wizard');
+// No &step= — let the wizard infer the next step. Fabrics were just added, so it
+// advances to price tables instead of looping back to the fabrics step (the old
+// &step=3 contradicted this comment and dead-ended on Fabrics).
 $redirect   = $ret
-    ? '/admin/products/wizard.php?id=' . $productId . '&step=3'
+    ? '/admin/products/wizard.php?id=' . $productId
     : '/admin/products/options.php?product_id=' . $productId;
 $error      = null;
 
