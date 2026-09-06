@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
 require __DIR__ . '/../../_partials/units.php';
 require __DIR__ . '/../../_partials/pricing_basis.php';
@@ -326,7 +327,7 @@ $fabStmt = db()->prepare(
             sort_order, active
        FROM product_options
       WHERE product_id = ? AND client_id = ? AND active = 1
-   ORDER BY band_code, sort_order, name'
+   ORDER BY ' . band_sort_sql('band_code') . ', sort_order, name'
 );
 $fabStmt->execute([$id, $clientId]);
 $fabricsByBand = [];
@@ -353,7 +354,7 @@ $knownBandsStmt = db()->prepare(
          WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
-     ORDER BY band_code"
+     ORDER BY " . band_sort_sql('band_code')
 );
 $knownBandsStmt->execute([$id, $clientId, $id, $clientId]);
 $knownBands = array_map(
@@ -425,7 +426,7 @@ if ($hasBandScopingTbl) {
              WHERE product_id = ? AND client_id = ?
          ) x
          WHERE band_code IS NOT NULL AND band_code != ''
-         ORDER BY band_code"
+         ORDER BY " . band_sort_sql('band_code')
     );
     $kbSt->execute([(int) $id, $clientId, (int) $id, $clientId]);
     $knownBands = array_map(
@@ -464,7 +465,7 @@ $ptStmt = db()->prepare(
        FROM price_tables t
        LEFT JOIN product_systems s ON s.id = t.system_id
       WHERE t.product_id = ? AND t.client_id = ? AND t.active = 1
-   ORDER BY s.sort_order, s.name, t.band_code'
+   ORDER BY s.sort_order, s.name, ' . band_sort_sql('t.band_code')
 );
 $ptStmt->execute([$id, $clientId]);
 $priceTablesBySystem = [];

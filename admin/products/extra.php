@@ -20,6 +20,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../../bootstrap.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
 
 requireAdmin();
@@ -297,7 +298,7 @@ if ($hasBandScopingTbl) {
              WHERE product_id = ? AND client_id = ?
          ) x
          WHERE band_code IS NOT NULL AND band_code != ''
-         ORDER BY band_code"
+         ORDER BY " . band_sort_sql('band_code')
     );
     $kbSt->execute([
         (int) $extra['product_id'], $clientId,

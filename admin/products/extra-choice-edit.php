@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
 
 requireAdmin();
@@ -112,7 +113,7 @@ if ($hasFabricScopingTbl) {
     $kfSt = db()->prepare(
         'SELECT id, name, colour, band_code FROM product_options
           WHERE product_id = ? AND client_id = ?
-       ORDER BY band_code, name, colour'
+       ORDER BY ' . band_sort_sql('band_code') . ', name, colour'
     );
     $kfSt->execute([(int) $choice['product_id'], $clientId]);
     $knownFabrics = $kfSt->fetchAll(PDO::FETCH_ASSOC);
@@ -131,7 +132,7 @@ $kbSt = db()->prepare(
          WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
-     ORDER BY band_code"
+     ORDER BY " . band_sort_sql('band_code')
 );
 $kbSt->execute([
     (int) $choice['product_id'], $clientId,
