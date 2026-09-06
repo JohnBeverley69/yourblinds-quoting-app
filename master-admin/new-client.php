@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/billing_helpers.php';
+require_once __DIR__ . '/../_partials/verification.php';
 
 requireSuperAdmin();
 
@@ -64,7 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO client_settings (client_id) VALUES (?)'
                 )->execute([$newClientId]);
 
-                // 3. Create the admin user.
+                // 3. Create the admin user. email_verified_at stays NULL → the
+                //    login gate makes them confirm their email first, and we send
+                //    that confirmation link after commit (step below), exactly as
+                //    self sign-up does.
                 $pdo->prepare(
                     'INSERT INTO client_users
                        (client_id, email, full_name, password_hash,
@@ -76,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $f['admin_name'],
                     password_hash($password, PASSWORD_DEFAULT),
                 ]);
+                $newAdminUserId = (int) $pdo->lastInsertId();
 
                 // 4. Optionally seed the catalogue from the master admin's client.
                 if ($f['seed'] === 1) {
@@ -146,6 +151,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
 
+                // ── Confirmation email ──
+                // The account can't sign in until the admin confirms their email
+                // (email_verified_at is NULL). Send the same "confirm your email"
+                // link self sign-up sends. Best-effort and OUTSIDE the transaction
+                // — a mail hiccup must not undo a created tenant; they can always
+                // use "resend confirmation" from the sign-in page.
+                $confirmSent = false;
+                try {
+                    $token = verification_create_token($pdo, $newAdminUserId);
+                    $confirmSent = verification_send_email(
+                        $f['admin_email'],
+                        verification_build_url($token),
+                        $f['company_name']
+                    );
+                } catch (Throwable $mailErr) {
+                    error_log('[YourBlinds] new-client confirmation email failed: ' . $mailErr->getMessage());
+                }
+
                 $_SESSION['flash_success'] =
                     'Client "' . $f['company_name'] . '" created'
                     . ($summary
@@ -160,7 +183,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . $summary['width_table_rows'] . ' width-table rows.'
                         : ' (empty catalogue — no seed).')
                     . ' Granted ' . $trialsAdded . '-add-on trial through '
-                    . date('j M Y', strtotime($trialExpiry)) . '.';
+                    . date('j M Y', strtotime($trialExpiry)) . '.'
+                    . ($confirmSent
+                        ? ' A confirmation email was sent to ' . $f['admin_email']
+                          . ' — they must click it before they can sign in.'
+                        : ' NOTE: the confirmation email could not be sent to '
+                          . $f['admin_email'] . ' — they can use “resend confirmation”'
+                          . ' on the sign-in page.');
                 header('Location: /master-admin/index.php');
                 exit;
             } catch (Throwable $e) {
