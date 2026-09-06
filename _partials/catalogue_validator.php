@@ -109,6 +109,23 @@ function catalogue_validate_product(int $productId, int $clientId): array
     } catch (Throwable $e) { /* keep true */ }
 
     // ── CRITICAL — product cannot quote ────────────────────────────
+    //
+    // Systems first: everything downstream is set up per system — price tables
+    // are keyed by system, so a product with no system literally can't have one.
+    // Flagged (and inserted) before fabrics/price-tables so it sorts to the top
+    // of the critical list, where the setup order actually starts.
+    $systemCount = $count(
+        'SELECT COUNT(*) FROM product_systems
+          WHERE product_id = ? AND client_id = ? AND active = 1',
+        [$productId, $clientId]
+    );
+    if ($systemCount === 0) {
+        $issue($issues, 'critical', 'no_active_system',
+            'No systems added. Every product needs at least one system (e.g. Standard) — '
+            . 'fabrics can be scoped to it and price tables are set up per system, so start here.',
+            $systemsUrl);
+    }
+
     $fabricCount = $count(
         'SELECT COUNT(*) FROM product_options
           WHERE product_id = ? AND client_id = ? AND active = 1',
