@@ -104,14 +104,24 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
     } else {
         $statusBg = '#fef3c7'; $statusFg = '#78350f';
         $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
+        // Same setup order as the edit-page catalogue health check
+        // (_partials/catalogue_validator.php): systems first — price tables are
+        // per system, so a product with none can't be quoted at all — then
+        // fabrics, then price tables. Keep the two in step.
         $missing = [];
-        if ($needsFabric && (int) $p['option_count'] === 0) $missing[] = 'fabric';
-        if ((int) $p['price_table_count'] === 0) $missing[] = 'price table';
+        if ((int) $p['system_count'] === 0)                     $missing[] = 'system';
+        if ($needsFabric && (int) $p['option_count'] === 0)     $missing[] = 'fabric';
+        if ((int) $p['price_table_count'] === 0)                $missing[] = 'price table';
         $statusLabel = 'Needs ' . implode(' + ', $missing);
-        // Click the pill to jump straight to what's missing: fabrics first, else price tables.
-        $fixHref = ($needsFabric && (int) $p['option_count'] === 0)
-            ? '/admin/products/options.php?product_id=' . (int) $p['id']
-            : $ptHref;
+        // Click the pill to jump straight to what's missing, in that same order:
+        // systems, then fabrics, else price tables.
+        if ((int) $p['system_count'] === 0) {
+            $fixHref = '/admin/products/systems.php?product_id=' . (int) $p['id'];
+        } elseif ($needsFabric && (int) $p['option_count'] === 0) {
+            $fixHref = '/admin/products/options.php?product_id=' . (int) $p['id'];
+        } else {
+            $fixHref = $ptHref;
+        }
     }
     $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
     ?>
