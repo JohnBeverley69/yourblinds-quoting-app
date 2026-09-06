@@ -264,6 +264,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // ── Trade discount actions (buying discount off our trade price) ─────────
+    if ($action === 'td_add' || $action === 'td_delete') {
+        $redirect = '/master-admin/trade-account.php?id=' . $clientId . '#discounts';
+        $whoId    = (int) ($user['user_id'] ?? 0);
+        $whoName  = (string) ($user['full_name'] ?? '');
+
+        $audit = static function (array $row) use ($pdo, $clientId, $whoId, $whoName): void {
+            try {
+                $pdo->prepare(
+                    'INSERT INTO trade_discount_audit
+                       (client_id, product_id, product_name, band_code, old_pct, new_pct, action, changed_by, changed_by_name)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                )->execute([
+                    $clientId, $row['product_id'] ?? null, $row['product_name'] ?? null,
+                    $row['band_code'] ?? null, $row['old_pct'] ?? null, $row['new_pct'] ?? null,
+                    $row['action'], $whoId ?: null, $whoName ?: null,
+                ]);
+            } catch (Throwable $e) { /* audit is best-effort */ }
+        };
+
+        try {
+            if ($action === 'td_add') {
+                $pid  = (int) ($_POST['product_id'] ?? 0);
+                $band = trim((string) ($_POST['band_code'] ?? ''));
+                $bandCode = ($band === '' || strcasecmp($band, 'all') === 0 || $band === '*ALL*') ? null : $band;
+                $pct  = (float) ($_POST['discount_percent'] ?? 0);
+                $pct  = max(0.0, min(100.0, $pct));
+
+                // Product must belong to THIS account.
+                $pc = $pdo->prepare('SELECT name FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+                $pc->execute([$pid, $clientId]);
+                $pname = $pc->fetchColumn();
+                if ($pname === false) {
+                    $_SESSION['flash_error'] = 'Pick a product on this account.';
+                } else {
+                    // One row per (client, product, band) — upsert.
+                    if ($bandCode === null) {
+                        $ex = $pdo->prepare('SELECT id, discount_percent FROM trade_discounts WHERE client_id = ? AND product_id = ? AND band_code IS NULL LIMIT 1');
+                        $ex->execute([$clientId, $pid]);
+                    } else {
+                        $ex = $pdo->prepare('SELECT id, discount_percent FROM trade_discounts WHERE client_id = ? AND product_id = ? AND band_code = ? LIMIT 1');
+                        $ex->execute([$clientId, $pid, $bandCode]);
+                    }
+                    $existing = $ex->fetch(PDO::FETCH_ASSOC);
+                    if ($existing) {
+                        $pdo->prepare('UPDATE trade_discounts SET discount_percent = ?, active = 1 WHERE id = ?')
+                            ->execute([$pct, (int) $existing['id']]);
+                        $audit(['product_id' => $pid, 'product_name' => (string) $pname, 'band_code' => $bandCode,
+                                'old_pct' => (float) $existing['discount_percent'], 'new_pct' => $pct, 'action' => 'update']);
+                        $_SESSION['flash_success'] = 'Discount updated.';
+                    } else {
+                        $pdo->prepare('INSERT INTO trade_discounts (client_id, product_id, band_code, discount_percent, active) VALUES (?, ?, ?, ?, 1)')
+                            ->execute([$clientId, $pid, $bandCode, $pct]);
+                        $audit(['product_id' => $pid, 'product_name' => (string) $pname, 'band_code' => $bandCode,
+                                'old_pct' => null, 'new_pct' => $pct, 'action' => 'add']);
+                        $_SESSION['flash_success'] = 'Discount added.';
+                    }
+                }
+            } else { // td_delete
+                $tid = (int) ($_POST['td_id'] ?? 0);
+                $row = $pdo->prepare(
+                    'SELECT td.id, td.product_id, td.band_code, td.discount_percent, p.name AS product_name
+                       FROM trade_discounts td JOIN products p ON p.id = td.product_id
+                      WHERE td.id = ? AND td.client_id = ? LIMIT 1'
+                );
+                $row->execute([$tid, $clientId]);
+                $d = $row->fetch(PDO::FETCH_ASSOC);
+                if ($d) {
+                    $pdo->prepare('DELETE FROM trade_discounts WHERE id = ? AND client_id = ?')->execute([$tid, $clientId]);
+                    $audit(['product_id' => (int) $d['product_id'], 'product_name' => (string) $d['product_name'],
+                            'band_code' => $d['band_code'], 'old_pct' => (float) $d['discount_percent'], 'new_pct' => null, 'action' => 'delete']);
+                    $_SESSION['flash_success'] = 'Discount removed.';
+                } else {
+                    $_SESSION['flash_error'] = 'Discount not found.';
+                }
+            }
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save discount: ' . $e->getMessage()
+                . ' (has /migrate_trade_discounts.php been run?)';
+        }
+        header('Location: ' . $redirect);
+        exit;
+    }
+
     header('Location: /master-admin/trade-account.php?id=' . $clientId);
     exit;
 }
@@ -301,7 +385,71 @@ $countOf = static function (string $sql, int $id) use ($pdo): int {
     catch (Throwable $e) { return 0; }
 };
 $productCount  = $countOf('SELECT COUNT(*) FROM products WHERE client_id = ?', $clientId);
-$discountCount = $countOf('SELECT COUNT(*) FROM client_discounts WHERE client_id = ?', $clientId);
+
+// ── Trade discounts (buying discount off our trade price) ────────────────────
+$tdReady = false;
+try {
+    $s = $pdo->prepare("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' LIMIT 1");
+    $s->execute();
+    $tdReady = $s->fetchColumn() !== false;
+} catch (Throwable $e) { /* not migrated yet */ }
+
+$accProducts    = [];   // id => name (this account's products)
+$productBands   = [];   // id => [band codes]
+$tradeDiscounts = [];   // rows for this account
+$tdAudit        = [];   // recent change history
+if ($tdReady) {
+    try {
+        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY sort_order, name');
+        $ps->execute([$clientId]);
+    } catch (Throwable $e) {
+        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY name');
+        $ps->execute([$clientId]);
+    }
+    foreach ($ps->fetchAll(PDO::FETCH_ASSOC) as $p) $accProducts[(int) $p['id']] = (string) $p['name'];
+
+    if ($accProducts) {
+        $pids = array_keys($accProducts);
+        $ph   = implode(',', array_fill(0, count($pids), '?'));
+        try {
+            $bs = $pdo->prepare(
+                "SELECT product_id, band_code FROM (
+                    SELECT product_id, band_code FROM product_options WHERE client_id = ? AND product_id IN ($ph)
+                    UNION
+                    SELECT product_id, band_code FROM price_tables   WHERE client_id = ? AND product_id IN ($ph)
+                 ) x WHERE band_code IS NOT NULL AND band_code <> ''"
+            );
+            $bs->execute(array_merge([$clientId], $pids, [$clientId], $pids));
+            foreach ($bs->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $productBands[(int) $r['product_id']][(string) $r['band_code']] = true;
+            }
+        } catch (Throwable $e) { /* leave empty */ }
+        // Band sort: premium A-runs first (AAA, AA, A), then alphabetical.
+        $bandCmp = static function (string $a, string $b): int {
+            $aA = (bool) preg_match('/^A+$/i', $a);
+            $bA = (bool) preg_match('/^A+$/i', $b);
+            if ($aA && $bA) return strlen($b) <=> strlen($a);
+            if ($aA !== $bA) return $aA ? -1 : 1;
+            return strcmp($a, $b);
+        };
+        foreach ($productBands as $pid => $set) {
+            $list = array_keys($set);
+            usort($list, $bandCmp);
+            $productBands[$pid] = $list;
+        }
+    }
+
+    $ds = $pdo->prepare('SELECT id, product_id, band_code, discount_percent, active FROM trade_discounts WHERE client_id = ? ORDER BY product_id');
+    $ds->execute([$clientId]);
+    $tradeDiscounts = $ds->fetchAll(PDO::FETCH_ASSOC);
+
+    try {
+        $as = $pdo->prepare('SELECT product_name, band_code, old_pct, new_pct, action, changed_by_name, changed_at FROM trade_discount_audit WHERE client_id = ? ORDER BY changed_at DESC, id DESC LIMIT 30');
+        $as->execute([$clientId]);
+        $tdAudit = $as->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* no audit table */ }
+}
+$discountCount = count($tradeDiscounts);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -575,8 +723,140 @@ $activeNav = 'trade-accounts';
                 </form>
             </details>
         </section>
+
+        <!-- Discounts — buying discount off our trade price, per product / band -->
+        <section class="section" id="discounts">
+            <h2 class="section-title" style="margin:0 0 0.4rem">Discounts</h2>
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem;max-width:70ch">
+                The buying discount this account gets off <strong>our trade price</strong>, per <strong>product</strong> and
+                optional <strong>material group</strong> (band; <em>All</em> = every band). Add as many rows as you need.
+            </p>
+
+            <?php if (!$tdReady): ?>
+                <div class="alert alert-error" role="alert">
+                    The discounts table isn't set up yet — run
+                    <a href="/migrate_trade_discounts.php"><code>/migrate_trade_discounts.php</code></a> (super-admin), then reload.
+                </div>
+            <?php else: ?>
+                <!-- Add / update a discount -->
+                <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0 0 1rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="td_add">
+                    <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                    <div class="action-row" style="align-items:flex-end">
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Discount %</div>
+                            <input type="number" name="discount_percent" step="0.01" min="0" max="100" required placeholder="25" style="width:6rem">
+                        </div>
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Product</div>
+                            <select id="td-product" name="product_id" required style="min-width:16rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">— choose a product —</option>
+                                <?php foreach ($accProducts as $pid => $pname): ?>
+                                    <option value="<?= (int) $pid ?>"><?= e((string) $pname) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Material Group</div>
+                            <select id="td-band" name="band_code" style="min-width:10rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Add discount</button>
+                    </div>
+                    <?php if (!$accProducts): ?>
+                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.4rem 0 0">This account has no products yet — seed/push its catalogue first.</p>
+                    <?php endif; ?>
+                </form>
+
+                <?php if ($tradeDiscounts): ?>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th style="text-align:right">Discount %</th><th>Product</th><th>Material Group</th><th></th></tr></thead>
+                            <tbody>
+                                <?php foreach ($tradeDiscounts as $d):
+                                    $pn = $accProducts[(int) $d['product_id']] ?? ('#' . (int) $d['product_id']);
+                                    $bg = ($d['band_code'] ?? '') === '' ? 'All' : (string) $d['band_code'];
+                                ?>
+                                    <tr>
+                                        <td style="text-align:right;font-variant-numeric:tabular-nums"><?= number_format((float) $d['discount_percent'], 2) ?></td>
+                                        <td><?= e((string) $pn) ?></td>
+                                        <td><?= e($bg) ?></td>
+                                        <td style="text-align:right">
+                                            <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0;display:inline"
+                                                  data-confirm="Remove the <?= e(number_format((float) $d['discount_percent'], 2)) ?>% discount on <?= e((string) $pn) ?> (<?= e($bg) ?>)?">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="td_delete">
+                                                <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                                                <input type="hidden" name="td_id" value="<?= (int) $d['id'] ?>">
+                                                <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <p style="color:var(--text-faint);margin:0">No discounts set for this account yet.</p>
+                <?php endif; ?>
+
+                <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.75rem 0 0">
+                    <strong>Note:</strong> recording discounts here doesn't change any live prices yet — the pricing engine
+                    starts applying them in the next update (kept separate so nothing moves unexpectedly).
+                </p>
+
+                <?php if ($tdAudit): ?>
+                    <details style="margin-top:0.75rem">
+                        <summary style="cursor:pointer;font-weight:600;color:var(--link);font-size:0.875rem">Change history</summary>
+                        <div class="table-wrap" style="margin-top:0.5rem">
+                            <table class="table">
+                                <thead><tr><th>When</th><th>Change</th><th>Product</th><th>Group</th><th>By</th></tr></thead>
+                                <tbody>
+                                    <?php foreach ($tdAudit as $a):
+                                        $ba = ($a['band_code'] ?? '') === '' ? 'All' : (string) $a['band_code'];
+                                        $change = $a['action'] === 'delete'
+                                            ? ('removed ' . number_format((float) ($a['old_pct'] ?? 0), 2) . '%')
+                                            : ($a['action'] === 'update'
+                                                ? (number_format((float) ($a['old_pct'] ?? 0), 2) . '% → ' . number_format((float) ($a['new_pct'] ?? 0), 2) . '%')
+                                                : ('set ' . number_format((float) ($a['new_pct'] ?? 0), 2) . '%'));
+                                    ?>
+                                        <tr>
+                                            <td style="white-space:nowrap"><?= e(date('j M Y H:i', strtotime((string) $a['changed_at']))) ?></td>
+                                            <td><?= e($change) ?></td>
+                                            <td><?= e((string) ($a['product_name'] ?? '')) ?></td>
+                                            <td><?= e($ba) ?></td>
+                                            <td><?= e((string) ($a['changed_by_name'] ?? '')) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                <?php endif; ?>
+            <?php endif; ?>
+        </section>
     </main>
 </div>
+<?php if ($tdReady): ?>
+<script>
+(function () {
+    var PRODUCT_BANDS = <?= json_encode($productBands, JSON_UNESCAPED_UNICODE) ?>;
+    var prod = document.getElementById('td-product');
+    var band = document.getElementById('td-band');
+    if (!prod || !band) return;
+    prod.addEventListener('change', function () {
+        var bands = PRODUCT_BANDS[prod.value] || [];
+        band.innerHTML = '';
+        var all = document.createElement('option'); all.value = ''; all.textContent = 'All'; band.appendChild(all);
+        bands.forEach(function (b) {
+            var o = document.createElement('option'); o.value = b; o.textContent = b; band.appendChild(o);
+        });
+    });
+})();
+</script>
+<?php endif; ?>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
