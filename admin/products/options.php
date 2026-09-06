@@ -885,7 +885,7 @@ $activeNav = 'products';
             <a href="/admin/products/edit.php?id=<?= (int) $productId ?>"
                class="btn btn-secondary">Back to product</a>
             <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=4"
-               class="btn btn-primary">Next: set up price tables &rarr;</a>
+               class="btn btn-primary">Next: price tables &rarr;</a>
         </div>
     </main>
 </div>

@@ -294,11 +294,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $added++;
                         $nextSort++;
                     } catch (Throwable $e) {
-                        $skipped++;
+                        // A genuine duplicate (same name already on this product)
+                        // is a soft skip. ANY other error (a schema/constraint
+                        // problem) must NOT masquerade as "duplicate" — surface it,
+                        // or a system that silently fails to save looks to the user
+                        // like it saved when it didn't.
+                        $em = $e->getMessage();
+                        if (stripos($em, 'uniq_system_per_product') !== false
+                            || stripos($em, 'Duplicate entry') !== false) {
+                            $skipped++;
+                        } else {
+                            throw $e;
+                        }
                     }
                 }
                 $msg = "Added $added system" . ($added === 1 ? '' : 's') . '.';
-                if ($skipped > 0) $msg .= " Skipped $skipped (likely duplicates).";
+                if ($skipped > 0) $msg .= " Skipped $skipped (already on this product).";
                 $_SESSION['flash_success'] = $msg;
                 header('Location: /admin/products/wizard.php?id=' . $productId . '&step=2');
                 exit;
@@ -674,6 +685,7 @@ if ($product) {
 //     is the price-band key — without it, no pricing).
 $priceTables   = [];
 $missingCombos = [];
+$bandedFabricCount = 0;
 if ($product && $step === 4) {
     // NOTE: no implicit auto-create here. The previous "create
     // stubs on first visit" heuristic couldn't distinguish "tenant
@@ -747,6 +759,20 @@ if ($product && $step === 4) {
             $clientId,
         ]);
         $missingCombos = $missingStmt->fetchAll();
+    }
+
+    // How many active fabrics actually carry a band code. Lets step 4 tell
+    // "no systems" apart from "fabrics have no bands" — the missing-combos list
+    // (systems × banded-fabrics) comes back empty in BOTH cases, so it can't be
+    // used to diagnose which, and the old copy always blamed the bands.
+    if ($requiresOption) {
+        $bfStmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM product_options
+              WHERE product_id = ? AND client_id = ? AND active = 1
+                AND band_code IS NOT NULL AND band_code != ''"
+        );
+        $bfStmt->execute([$productId, $clientId]);
+        $bandedFabricCount = (int) $bfStmt->fetchColumn();
     }
 }
 
@@ -1492,7 +1518,12 @@ $activeNav = 'wizard';
                         <div class="icon">📋</div>
                         <h2 style="color:#78350f">One thing left — price tables</h2>
                         <p style="color:#92400e">
-                            <?php if ($totalTables === 0 && !$requiresOption): ?>
+                            <?php if ($totalTables === 0 && $systemCount === 0): ?>
+                                This product has no <strong>systems</strong> yet, and
+                                price tables are set up per system — so there's nothing
+                                to price against. Add at least one system on the
+                                <strong>Systems</strong> step, then come back here.
+                            <?php elseif ($totalTables === 0 && !$requiresOption): ?>
                                 This is a no-fabric product, so it needs one price
                                 grid per system. Create them below, then fill in the
                                 width × drop prices.
@@ -1504,11 +1535,12 @@ $activeNav = 'wizard';
                                 <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s
                                 afterwards — the band box will suggest the bands
                                 you just imported.
-                            <?php elseif ($totalTables === 0 && empty($missingCombos)): ?>
-                                Your fabrics don't have band codes yet — go back
-                                to step 3 and add at least one band (A, B, C…).
-                                Price tables are keyed by band, so we need that
-                                first.
+                            <?php elseif ($totalTables === 0 && $bandedFabricCount === 0): ?>
+                                Your <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?>s
+                                don't have band codes yet — open the
+                                <strong>Fabrics</strong> step and give each a band
+                                (A, B, C…). Price tables are keyed by band, so we
+                                need that first.
                             <?php elseif ($totalTables === 0 && $pricePerDrop): ?>
                                 Import your rate sheet below (quickest), or create the
                                 empty tables and enter the rates by hand.
@@ -1528,6 +1560,17 @@ $activeNav = 'wizard';
                                 to set up, listed below.
                             <?php endif; ?>
                         </p>
+                        <?php if ($totalTables === 0 && $systemCount === 0): ?>
+                            <p style="margin:0.75rem 0 0">
+                                <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=2"
+                                   class="btn btn-primary">Add a system &rarr;</a>
+                            </p>
+                        <?php elseif ($totalTables === 0 && $requiresOption && $bandedFabricCount === 0 && empty($systemsNeedingImport)): ?>
+                            <p style="margin:0.75rem 0 0">
+                                <a href="/admin/products/wizard.php?id=<?= (int) $productId ?>&amp;step=3"
+                                   class="btn btn-primary">Add bands on the Fabrics step &rarr;</a>
+                            </p>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
