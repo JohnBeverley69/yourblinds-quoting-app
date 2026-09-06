@@ -759,6 +759,12 @@ $activeNav = 'products';
                     <button type="button" id="setband-btn" class="btn btn-secondary btn-sm" disabled>
                         Set band on selected
                     </button>
+                    <span style="color:var(--text-faint)">&middot;</span>
+                    <input type="text" id="setsupplier-input" maxlength="150" placeholder="supplier"
+                           style="width:9rem;padding:.25rem .4rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;background:var(--bg-input)">
+                    <button type="button" id="setsupplier-btn" class="btn btn-secondary btn-sm" disabled>
+                        Set supplier on selected
+                    </button>
                     <span class="selected-count" id="bulk-count">No rows selected</span>
                     <span style="color:var(--text-faint);font-size:0.8125rem">
                         &middot; Tip: tick one, then <strong>Shift</strong>-click another to select everything between.
@@ -895,6 +901,8 @@ $activeNav = 'products';
     var counter  = document.getElementById('bulk-count');
     var setBtn   = document.getElementById('setband-btn');
     var setInput = document.getElementById('setband-input');
+    var setSupBtn   = document.getElementById('setsupplier-btn');
+    var setSupInput = document.getElementById('setsupplier-input');
 
     // ── Filter search ───────────────────────────────────────────
     //
@@ -976,6 +984,7 @@ $activeNav = 'products';
         var visBoxes = visibleRowBoxes();
         btn.disabled = n === 0;
         if (setBtn) setBtn.disabled = n === 0;
+        if (setSupBtn) setSupBtn.disabled = n === 0;
         if (n === 0) {
             counter.textContent = 'No rows selected';
         } else {
@@ -1036,6 +1045,23 @@ $activeNav = 'products';
         hidden.value = setInput ? setInput.value.trim() : '';
         form.appendChild(hidden);
         form.action = '/admin/products/option-set-band.php';
+        form.submit();
+    });
+
+    // Bulk set-supplier: post the selected ids to option-set-supplier.php with a
+    // supplier name. The reason this exists: an imported file with no Supplier
+    // column — select all, type it once, apply to all. Empty clears, so confirm.
+    if (setSupBtn) setSupBtn.addEventListener('click', function () {
+        var ids = checkedIds();
+        if (!ids.length) { alert('Tick the fabrics you want to set a supplier on first.'); return; }
+        var val = setSupInput ? setSupInput.value.trim() : '';
+        if (val === '' && !confirm('No supplier typed — clear the supplier on ' + ids.length + ' selected fabric' + (ids.length === 1 ? '' : 's') + '?')) return;
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'supplier_name';
+        hidden.value = val;
+        form.appendChild(hidden);
+        form.action = '/admin/products/option-set-supplier.php';
         form.submit();
     });
 
