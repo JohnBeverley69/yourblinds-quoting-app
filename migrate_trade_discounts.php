@@ -37,6 +37,14 @@ $tableExists = static function (string $t) use ($pdo): bool {
     $s->execute([$t]);
     return $s->fetchColumn() !== false;
 };
+$colExists = static function (string $t, string $c) use ($pdo): bool {
+    $s = $pdo->prepare(
+        "SELECT 1 FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1"
+    );
+    $s->execute([$t, $c]);
+    return $s->fetchColumn() !== false;
+};
 
 $ops = [];
 
@@ -46,6 +54,7 @@ if (!$tableExists('trade_discounts')) {
             id               INT AUTO_INCREMENT PRIMARY KEY,
             client_id        INT           NOT NULL,
             product_id       INT           NOT NULL,
+            system_id        INT           NULL,          -- NULL = All systems
             band_code        VARCHAR(64)   NULL,          -- NULL = All materials/bands
             discount_percent DOUBLE        NOT NULL DEFAULT 0,
             active           TINYINT       NOT NULL DEFAULT 1,
@@ -59,6 +68,10 @@ if (!$tableExists('trade_discounts')) {
     $ops[] = 'Created table trade_discounts.';
 } else {
     $ops[] = 'Table trade_discounts already exists — skipped.';
+    if (!$colExists('trade_discounts', 'system_id')) {
+        $pdo->exec('ALTER TABLE trade_discounts ADD COLUMN system_id INT NULL AFTER product_id');
+        $ops[] = 'Added trade_discounts.system_id (NULL = All systems).';
+    }
 }
 
 if (!$tableExists('trade_discount_audit')) {
@@ -68,6 +81,8 @@ if (!$tableExists('trade_discount_audit')) {
             client_id        INT           NOT NULL,
             product_id       INT           NULL,
             product_name     VARCHAR(150)  NULL,
+            system_id        INT           NULL,
+            system_name      VARCHAR(150)  NULL,
             band_code        VARCHAR(64)   NULL,
             old_pct          DOUBLE        NULL,
             new_pct          DOUBLE        NULL,
@@ -81,6 +96,11 @@ if (!$tableExists('trade_discount_audit')) {
     $ops[] = 'Created table trade_discount_audit.';
 } else {
     $ops[] = 'Table trade_discount_audit already exists — skipped.';
+    if (!$colExists('trade_discount_audit', 'system_id')) {
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN system_id INT NULL AFTER product_name');
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN system_name VARCHAR(150) NULL AFTER system_id');
+        $ops[] = 'Added trade_discount_audit.system_id / system_name.';
+    }
 }
 
 echo "Migration complete.\n\n";
