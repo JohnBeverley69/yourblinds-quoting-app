@@ -1201,13 +1201,14 @@ $activeNav = 'products';
                                        <?= (int) $f['requires_option'] === 0 ? 'checked' : '' ?>
                                        style="margin-top:0.1875rem">
                                 <span>
-                                    <strong>This product has no <?= e(strtolower((string) $f['option_label'])) ?>s (e.g. headrail only, track, spares).</strong>
+                                    <strong>No <?= e(strtolower((string) $f['option_label'])) ?> to choose (headrail only, track, spares).</strong>
                                     <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
-                                        Tick this for a product with nothing to pick on the
-                                        <?= e(strtolower((string) $f['option_label'])) ?> axis — it's priced on
-                                        system &times; size alone. The quote builder and InstaPrice
-                                        hide the band/<?= e(strtolower((string) $f['option_label'])) ?> pickers, and
-                                        you just need one price table per system (no bands).
+                                        This is about <em>what the customer picks</em>. Tick it when there's
+                                        nothing to choose — no <?= e(strtolower((string) $f['option_label'])) ?>,
+                                        colour or material — so the quote builder and InstaPrice hide the
+                                        band/<?= e(strtolower((string) $f['option_label'])) ?> pickers and you
+                                        use one price table per system (no bands). It's still sized normally
+                                        (width &times; drop) unless you also tick <em>width only</em> below.
                                     </small>
                                 </span>
                             </label>
@@ -1228,12 +1229,16 @@ $activeNav = 'products';
                                        <?= (int) $f['width_only'] === 1 ? 'checked' : '' ?>
                                        style="margin-top:0.1875rem">
                                 <span>
-                                    <strong>Priced by width only (no drop) — e.g. a headrail or track.</strong>
+                                    <strong>Sized by width only — no drop (e.g. a headrail cut to length).</strong>
                                     <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
-                                        The price depends on width alone. The quote builder and
-                                        InstaPrice hide the Drop field, and each price table is a
-                                        single width &rarr; price list. Load one with the
-                                        <strong>width-only importer</strong> on the price-tables page.
+                                        This is about <em>how it's sized</em> — separate from the box above.
+                                        Tick it when the price depends on width alone: the Drop field is
+                                        hidden and each price table is a single width &rarr; price list (load
+                                        it with the <strong>width-only importer</strong> on the price-tables
+                                        page). Independent of <?= e(strtolower((string) $f['option_label'])) ?>s —
+                                        a product can be width-only and still have
+                                        <?= e(strtolower((string) $f['option_label'])) ?>s, or have none and
+                                        still be sized by width &times; drop.
                                     </small>
                                 </span>
                             </label>
