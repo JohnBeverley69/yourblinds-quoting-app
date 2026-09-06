@@ -47,20 +47,41 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     // -----------------------------------------------------------------------
     // 1. products
     // -----------------------------------------------------------------------
+    // Behaviour flags that change how a product quotes/prices must ride along
+    // with the product, or a seeded tenant silently diverges from the master —
+    // e.g. a no-fabric headrail/shutter loses requires_option=0, falls to the
+    // column default, and gets wrongly flagged "Needs fabric" until a push
+    // re-syncs it. This is the SAME flag set catalogue_push.php carries (costs
+    // are deliberately never copied). Schema-tolerant: skip any column a schema
+    // predating its migration doesn't have yet.
+    $flagCols = [];
+    foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
+              'min_area_m2', 'show_colour_field', 'band_label'] as $col) {
+        try {
+            $pdo->query("SELECT $col FROM products LIMIT 1");
+            $flagCols[] = $col;
+        } catch (Throwable $e) { /* column absent on this schema — skip */ }
+    }
+
+    $selCols = array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $flagCols);
     $sel = $pdo->prepare(
-        'SELECT id, name, option_label, sort_order, active
+        'SELECT ' . implode(', ', $selCols) . '
            FROM products WHERE client_id = ? ORDER BY id'
     );
     $sel->execute([$sourceClientId]);
+
+    $insCols = array_merge(['client_id', 'name', 'option_label', 'sort_order', 'active'], $flagCols);
     $ins = $pdo->prepare(
-        'INSERT INTO products (client_id, name, option_label, sort_order, active)
-         VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO products (' . implode(', ', $insCols) . ')
+         VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
     );
     foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $ins->execute([
+        $vals = [
             $newClientId, $r['name'], $r['option_label'],
             (int) $r['sort_order'], (int) $r['active'],
-        ]);
+        ];
+        foreach ($flagCols as $col) { $vals[] = $r[$col]; } // pass through as-is (NULL ok)
+        $ins->execute($vals);
         $productMap[(int) $r['id']] = (int) $pdo->lastInsertId();
         $summary['products']++;
     }
