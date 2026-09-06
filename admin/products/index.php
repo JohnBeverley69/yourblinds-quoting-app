@@ -296,11 +296,10 @@ $activeNav = 'products';
                     <span aria-hidden="true">✨</span>
                     Setup wizard
                 </a>
-                <a href="/admin/products/options-bulk-import.php" class="btn btn-secondary"
-                   style="display:inline-flex;align-items:center;gap:0.4375rem">
-                    <span aria-hidden="true">📥</span>
-                    Bulk import fabrics
-                </a>
+                <!-- "Bulk import fabrics" (one workbook → many products) moved to
+                     Master Admin → Fabric Library, where it sits with the other
+                     fabric tools and its purpose is explained. It didn't belong
+                     next to "New product" — nothing to import into on first setup. -->
                 <a href="/admin/products/new.php" class="btn btn-primary">+ New product</a>
             </div>
         </div>
