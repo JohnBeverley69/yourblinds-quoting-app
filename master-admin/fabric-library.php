@@ -454,6 +454,25 @@ $activeNav = 'fabric-library';
             </section>
         <?php else: ?>
 
+        <!-- Bulk import fabrics ACROSS PRODUCTS. Moved here from the Products
+             page: it's a catalogue-setup tool and belongs with the other fabric
+             tools, but it's a different job from the library import above — the
+             explanation spells out which is which. -->
+        <section class="section" style="background:#eff6ff;border:1px solid #bfdbfe">
+            <h2 class="section-title" style="margin:0 0 0.5rem">Bulk import fabrics across products</h2>
+            <p style="color:#1e40af;font-size:0.9375rem;line-height:1.55;margin:0 0 0.625rem;max-width:70ch">
+                Two fabric imports live on this page &mdash; they fill different things:
+            </p>
+            <ul style="color:#1e3a8a;font-size:0.9rem;line-height:1.6;margin:0 0 1rem;padding-left:1.1rem;max-width:72ch">
+                <li><strong>Import fabrics</strong> (top-right button) fills <strong>this library</strong> &mdash;
+                    the reusable master list of cloth, filed per manufacturer. Products then <em>pull from</em> it.</li>
+                <li><strong>Bulk import fabrics across products</strong> (below) takes one workbook with
+                    <strong>one sheet per product</strong> and loads those fabrics <strong>straight into the matching
+                    products</strong>, skipping the library. Use it for a supplier's full fabric file.</li>
+            </ul>
+            <a href="/admin/products/options-bulk-import.php" class="btn btn-primary">Bulk import fabrics across products &rarr;</a>
+        </section>
+
         <!-- Add a manufacturer -->
         <section class="section">
             <h2 class="section-title" style="margin:0 0 0.75rem">Add a fabric manufacturer</h2>
