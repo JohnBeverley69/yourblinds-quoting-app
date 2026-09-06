@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/band_sort.php';
 
 requireFactory();
 
@@ -52,7 +53,7 @@ if ($systemId > 0) { $scopeClause = ' AND (system_id IS NULL OR system_id = ?)';
 if (($_GET['bands'] ?? '') !== '' && ($_GET['bands'] ?? '0') !== '0') {
     $st = $pdo->prepare("SELECT DISTINCT band_code FROM product_options
                           WHERE product_id = ? AND client_id = ? AND active = 1 $scopeClause
-                       ORDER BY band_code");
+                       ORDER BY " . band_sort_sql('band_code'));
     $st->execute(array_merge([$productId, $clientId], $scopeParams));
     echo json_encode(['bands' => array_values(array_filter($st->fetchAll(PDO::FETCH_COLUMN), static fn ($b) => (string) $b !== ''))]);
     exit;
@@ -79,7 +80,7 @@ if ($q === '') {
     $st = $pdo->prepare("SELECT id, band_code, supplier_name, name, colour, code
                            FROM product_options
                           WHERE product_id = ? AND client_id = ? AND active = 1 $whereWords $scopeClause $bandClause
-                       ORDER BY band_code, supplier_name, name, colour LIMIT $limit");
+                       ORDER BY " . band_sort_sql('band_code') . ", supplier_name, name, colour LIMIT $limit");
     $st->execute(array_merge($params, $scopeParams, $bandParams));
 }
 

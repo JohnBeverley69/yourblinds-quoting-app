@@ -35,6 +35,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../../bootstrap.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
 
 requireAdmin();
@@ -626,7 +627,7 @@ if ($product && $step >= 3) {
            FROM product_options o
            LEFT JOIN product_systems s ON s.id = o.system_id
           WHERE o.product_id = ? AND o.client_id = ? AND o.active = 1
-          ORDER BY o.band_code, o.name'
+          ORDER BY ' . band_sort_sql('o.band_code') . ', o.name'
     );
     $fabSt->execute([$productId, $clientId]);
     $fabrics = $fabSt->fetchAll();
@@ -654,7 +655,7 @@ if ($product) {
              WHERE product_id = ? AND client_id = ?
          ) x
          WHERE band_code IS NOT NULL AND band_code != ''
-         ORDER BY band_code"
+         ORDER BY " . band_sort_sql('band_code')
     );
     $bandSt->execute([$productId, $clientId, $productId, $clientId]);
     $knownBands = array_map(
@@ -704,7 +705,7 @@ if ($product && $step === 4) {
            JOIN product_systems s ON s.id = t.system_id
           WHERE t.product_id = ? AND t.client_id = ? AND t.active = 1
             AND s.active = 1
-          ORDER BY s.sort_order, s.name, t.band_code"
+          ORDER BY s.sort_order, s.name, " . band_sort_sql('t.band_code')
     );
     $combosStmt->execute([$productId, $clientId]);
     $priceTables = $combosStmt->fetchAll();
@@ -752,7 +753,7 @@ if ($product && $step === 4) {
                      AND t.client_id  = ?
                      AND t.active     = 1
                 )
-              ORDER BY s.sort_order, s.name, po.band_code"
+              ORDER BY s.sort_order, s.name, " . band_sort_sql('po.band_code')
         );
         $missingStmt->execute([
             $productId, $clientId,

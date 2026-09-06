@@ -28,6 +28,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../../bootstrap.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
 
 requireAdmin();
@@ -80,8 +81,7 @@ if ($sourceId > 0) {
                FROM product_options
               WHERE product_id = ? AND client_id = ? AND active = 1
               GROUP BY band_code
-              ORDER BY CASE band_code WHEN 'AAA' THEN 1 WHEN 'AA' THEN 2
-                       WHEN 'A' THEN 3 ELSE 100 END, band_code"
+              ORDER BY " . band_sort_sql('band_code')
         );
         $bStmt->execute([$sourceId, $clientId]);
         $sourceBands = $bStmt->fetchAll();
@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
             "SELECT * FROM product_options
               WHERE product_id = ? AND client_id = ? AND active = 1
                 AND band_code IN ($bandPh)
-              ORDER BY band_code, sort_order, name"
+              ORDER BY " . band_sort_sql('band_code') . ", sort_order, name"
         );
         $srcStmt->execute(array_merge([$sourceId, $clientId], $wantBands));
         $srcRows = $srcStmt->fetchAll(PDO::FETCH_ASSOC);

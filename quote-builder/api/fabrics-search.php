@@ -22,6 +22,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/band_sort.php';
 
 requireLogin();
 
@@ -135,7 +136,7 @@ if ($q === '') {
             $whereWords
             $scopeClause
             $bandClause
-       ORDER BY band_code, supplier_name, name, colour
+       ORDER BY " . band_sort_sql('band_code') . ", supplier_name, name, colour
           LIMIT $limit"
     );
     $st->execute(array_merge($params, $scopeParams, $bandParams));

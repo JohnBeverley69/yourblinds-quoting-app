@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/band_sort.php';
 
 requireSuperAdmin();
 
@@ -239,7 +240,7 @@ $kStmt = $pdo->prepare(
          WHERE product_id = ? AND client_id = ?
      ) x
      WHERE band_code IS NOT NULL AND band_code != ''
-     ORDER BY band_code"
+     ORDER BY " . band_sort_sql('band_code')
 );
 $kStmt->execute([$productId, $prodClientId, $productId, $prodClientId]);
 $known = $kStmt->fetchAll(PDO::FETCH_COLUMN);
