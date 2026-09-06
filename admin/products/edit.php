@@ -1045,16 +1045,16 @@ $activeNav = 'products';
                 Setting this product up
             </h2>
             <p style="margin:0 0 0.875rem;color:#0c4a6e;font-size:0.875rem;line-height:1.5">
-                A product needs at least one fabric / option and one price table before salespeople
-                can raise quotes against it. Systems and Options are how you handle variants and
-                customer choices.
+                A product needs at least one system, one fabric / option, and one price table before
+                salespeople can raise quotes against it — set up in that order (price tables are keyed
+                by system). Options are the extra choices a customer makes per blind.
             </p>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.625rem">
                 <?= $tile(
                     'Systems',
                     '/admin/products/systems.php?product_id=' . (int) $id,
                     $sysCount,
-                    'Add if this blind has style variants (motorised/corded, slat sizes, etc.). Skip if not.',
+                    'At least one is required (e.g. Standard) — price tables are set up per system. Add more for variants (motorised/corded, slat sizes).',
                     'click to manage'
                 ) ?>
                 <?php if ((int) $f['requires_option'] === 1): ?>
@@ -1067,17 +1067,17 @@ $activeNav = 'products';
                     ) ?>
                 <?php endif; ?>
                 <?= $tile(
-                    'Options',
-                    '/admin/products/extras.php?product_id=' . (int) $id,
-                    $extCount,
-                    'Add the things the salesperson picks per blind (control side, bracket colour, etc.). Optional.',
-                    'click to manage'
-                ) ?>
-                <?= $tile(
                     'Price tables',
                     $priceTablesHref,
                     $ptCount,
                     'Width × drop pricing grids per band. At least one is needed to quote.',
+                    'click to manage'
+                ) ?>
+                <?= $tile(
+                    'Options',
+                    '/admin/products/extras.php?product_id=' . (int) $id,
+                    $extCount,
+                    'Add the things the salesperson picks per blind (control side, bracket colour, etc.). Optional.',
                     'click to manage'
                 ) ?>
             </div>
