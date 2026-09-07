@@ -2418,10 +2418,12 @@ $activeNav = 'products';
                                                    inputmode="decimal"
                                                    name="cells[<?= (int) $w ?>_<?= (int) $d ?>]"
                                                    value="<?= $val === null ? '' : e(number_format((float) $val, 2, '.', '')) ?>">
-                                            <?php if ($showCost):
+                                            <?php if ($showCost || $psIsSupplier):
                                                 // Two ways to reach cost + margin, depending on what this
-                                                // grid holds. Supplier grids derive both from the discount;
-                                                // our own grids read the cost stored beside the price.
+                                                // grid holds. Supplier grids derive both from the discount
+                                                // (the account's OWN buying cost + margin — shown to the
+                                                // account, not just master admin); our own grids read the
+                                                // stored manufacturing cost (master-admin only, via $showCost).
                                                 $c = $p = $sell = null; $marg = null; $tip = '';
                                                 if ($psIsSupplier) {
                                                     $list = (float) ($val ?? 0);
@@ -2430,9 +2432,8 @@ $activeNav = 'products';
                                                         $sell = $c    * (1 + $psMarkPct / 100);   // what we charge
                                                         $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
                                                         $tip  = 'list £' . number_format($list, 2)
-                                                              . ' less ' . rtrim(rtrim(number_format($psEffDisc, 2, '.', ''), '0'), '.') . '% = cost'
-                                                              . ' · plus ' . rtrim(rtrim(number_format($psMarkPct, 2, '.', ''), '0'), '.') . '% = our price'
-                                                              . ' · margin (master admin only)';
+                                                              . ' less ' . rtrim(rtrim(number_format($psEffDisc, 2, '.', ''), '0'), '.') . '% buying discount = your cost'
+                                                              . ' · plus ' . rtrim(rtrim(number_format($psMarkPct, 2, '.', ''), '0'), '.') . '% markup = your price · your margin';
                                                     }
                                                 } else {
                                                     $cost = $matrixByCost["$w|$d"] ?? null;
