@@ -41,6 +41,7 @@ $ORDER_FIELDS = [
     'post_code'    => ['Post code',    'AB1 2CD'],
     'cust_ref'     => ['Cust ref',     'REF123'],
     'line_no'      => ['Line no',      '1/2'],
+    'blind_seq'    => ['Blind no',     '3 of 48'],
     'system'       => ['System',       'SlimLine'],
     'colour'       => ['Colour',       'White'],
     'hd_colour'    => ['Headrail colour', 'Black'],

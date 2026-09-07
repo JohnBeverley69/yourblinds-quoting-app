@@ -231,6 +231,25 @@ foreach ($lines as $ln) {
     }
 }
 
+// ---- Global per-blind numbering across the whole order ----------------------
+// Every PHYSICAL blind (a per-blind ticket, not a one-per-line "Qty N" ticket)
+// gets a running "N of M" so a 48-blind order numbers its tickets 1..48 of 48,
+// regardless of how the lines/quantities were entered (one qty-48 line or 48
+// separate lines). Exposed as order:blind_no (N), order:blind_total (M) and
+// order:blind_seq ("N of M"). The old order:line_no ("1/1") is the LINE number,
+// which is identical on every label of a single multi-qty line.
+$blindTotal = 0;
+foreach ($rendered as $r) { if (empty($r['template']['one_per_line'])) $blindTotal++; }
+$blindNo = 0;
+foreach ($rendered as &$r) {
+    $perBlind = empty($r['template']['one_per_line']);
+    if ($perBlind) $blindNo++;
+    $r['ctx']['blind_no']    = $perBlind ? (string) $blindNo : '';
+    $r['ctx']['blind_total'] = (string) $blindTotal;
+    $r['ctx']['blind_seq']   = $perBlind ? ($blindNo . ' of ' . $blindTotal) : '';
+}
+unset($r);
+
 /**
  * The context for one LABEL of a blind, with its QR pointing at that label's
  * part. A label's position IS its stream position: on a vertical, label 0 (the
@@ -522,8 +541,11 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
+    .sheet-page { position:absolute; right:4mm; bottom:2mm; font:600 10px system-ui,sans-serif; color:#94a3b8; }
     @media print {
-        body { background:#fff; } .toolbar { display:none; } .sheet { margin:0; box-shadow:none; }
+        body { background:#fff; } .toolbar { display:none; } .sheet-page { display:none; }
+        .sheet { margin:0; box-shadow:none; page-break-after:always; break-after:page; }
+        .sheet:last-child { page-break-after:auto; break-after:auto; }
         @page { size:A4 portrait; margin:0; }
     }
 </style></head>
@@ -539,17 +561,23 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     </span>
     <button onclick="window.print()">Print</button>
 </div>
-<div class="sheet"><div id="sheet-inner">
-<?php $headerFldsStyle = $labelTypeStyle($headerBlock, $fs + 1.5, 1.05); ?>
+<?php
+$headerFldsStyle = $labelTypeStyle($headerBlock, $fs + 1.5, 1.05);
+// One A4 sheet holds the header + up to $rowCap rows; split the blinds across as
+// many sheets as needed (48 blinds / 10 = 5 sheets), each a full page.
+$sheets    = array_chunk($diecutBlinds, $rowCap);
+$sheetTotal = count($sheets);
+foreach ($sheets as $si => $sheetBlinds): ?>
+<div class="sheet"><div class="sheet-inner">
 <?php foreach ($cols as $ci => $x): ?>
     <div class="dc-label dc-large<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($topPad) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($largeH) ?>mm;">
         <div class="flds" style="<?= e($headerFldsStyle) ?>"><?= $renderFields($headerFields, $orderVals, []) ?></div>
     </div>
-    <?php for ($k = 0; $k < $rowCap; $k++): $r = $diecutBlinds[$k]; $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
+    <?php foreach ($sheetBlinds as $k => $r): $lab = ($r['template']['labels'] ?? [])[$ci] ?? null; $t = $firstSmallTop + $k * $smallH; ?>
         <div class="dc-label dc-small<?= $ol ?>" style="left:<?= $mm($x) ?>mm; top:<?= $mm($t) ?>mm; width:<?= $mm($labelW) ?>mm; height:<?= $mm($smallH) ?>mm;">
             <div class="flds" style="<?= e($labelTypeStyle(is_array($lab) ? $lab : [], $fs, 1.05)) ?>"><?= $lab ? $renderFields($lab['fields'] ?? [], $labelCtx($r, $ci), $r['computed']) : '' ?></div>
         </div>
-    <?php endfor; ?>
+    <?php endforeach; ?>
 <?php endforeach; ?>
 <?php if ($cal): ?>
     <?php foreach ([[5, 5], [205, 5], [5, 285], [205, 285]] as [$cx, $cy]): ?>
@@ -561,15 +589,16 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     <div class="mk-v" style="left:150mm; top:8mm; height:4mm;"></div>
     <div class="cal-txt" style="left:152mm; top:8.4mm;">= 100 mm</div>
 <?php endif; ?>
+    <?php if ($sheetTotal > 1): ?><div class="sheet-page">Sheet <?= $si + 1 ?> of <?= $sheetTotal ?></div><?php endif; ?>
 </div></div>
-<?php if ($dieCount > $rowCap): ?><div style="position:fixed; bottom:6px; left:16px; color:#fbbf24; font-size:13px;">Note: <?= (int) $dieCount ?> die-cut blinds on this order — only the first <?= (int) $rowCap ?> fit one sheet.</div><?php endif; ?>
+<?php endforeach; ?>
 <script>
 (function () {
-    var inner = document.getElementById('sheet-inner');
+    var inners = document.querySelectorAll('.sheet-inner');   // one per A4 sheet — nudge them together
     var iox = document.getElementById('ox'), ioy = document.getElementById('oy');
     var ox = parseFloat(localStorage.getItem('lblNudgeX') || '0') || 0;
     var oy = parseFloat(localStorage.getItem('lblNudgeY') || '0') || 0;
-    function apply() { inner.style.transform = 'translate(' + ox + 'mm,' + oy + 'mm)'; iox.value = ox; ioy.value = oy; localStorage.setItem('lblNudgeX', ox); localStorage.setItem('lblNudgeY', oy); }
+    function apply() { inners.forEach(function (inner) { inner.style.transform = 'translate(' + ox + 'mm,' + oy + 'mm)'; }); iox.value = ox; ioy.value = oy; localStorage.setItem('lblNudgeX', ox); localStorage.setItem('lblNudgeY', oy); }
     iox.addEventListener('input', function () { ox = parseFloat(iox.value) || 0; apply(); });
     ioy.addEventListener('input', function () { oy = parseFloat(ioy.value) || 0; apply(); });
     document.querySelectorAll('[data-nx]').forEach(function (b) { b.addEventListener('click', function () { ox = Math.round((ox + parseFloat(b.dataset.nx)) * 10) / 10; apply(); }); });
