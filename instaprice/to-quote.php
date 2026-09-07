@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
+$clientId = (int) $user['client_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $perms    = current_user_permissions();
 

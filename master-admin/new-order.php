@@ -2,34 +2,41 @@
 declare(strict_types=1);
 
 /**
- * "New order / quote" launcher (super-admin). Pick WHO the quote is for, then drop
- * into the normal quote builder acting as them:
- *   - an existing trade account (searchable)  → build as them; their pricing +
- *     discounts apply and the quote lands in their portal.
- *   - a new customer with no account          → either a quick quote under
- *     Beverley, or open a trade account first (then quote as the new account).
+ * "New order / quote" launcher (super-admin). Raise a Beverley quote and choose
+ * who it's FOR:
+ *   - an existing trade account  → the quote is OWNED by Beverley but the customer
+ *     is the account (details auto-filled), and pricing uses the account's trade
+ *     discount (pe_calculate_item's $forAccountId). It's your quote, sent TO them.
+ *   - a new customer with no account → a quick Beverley quote, or open a trade
+ *     account first (new-client.php?after=quote) then quote for it.
  *
- * The "acting as" itself lives in the session (auth/middleware.php). Every quote-
- * owning + pricing path reads acting_client_id(), so nothing here needs to touch
- * the builder beyond setting the flag and redirecting.
+ * No "acting as" — the super-admin stays themselves; only the quote records which
+ * account it's for (quotes.account_client_id) so the discount + customer resolve.
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/_helpers_new_order.php';
 
 requireSuperAdmin();
 
-$user = current_user();
-
-// Stop acting (also reachable from the sidebar banner).
-if (($_GET['stop'] ?? '') !== '') {
-    clear_acting_client();
-    $_SESSION['flash_success'] = 'Stopped acting — back on your own account.';
-    header('Location: /master-admin/new-order.php');
-    exit;
-}
+$user       = current_user();
+$factoryCid = (int) $user['client_id'];   // the quote is owned by the factory (Beverley)
 
 $error = null;
+
+// Auto-start a quote for a freshly-created account (new-client.php?after=quote
+// redirects here). GET so it's a clean landing.
+if (($_GET['auto'] ?? '') === '1' && (int) ($_GET['account'] ?? 0) > 0) {
+    try {
+        $res = no_create_account_quote(db(), $factoryCid, (int) $_GET['account'], (int) $user['user_id']);
+        header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
+        exit;
+    } catch (Throwable $e) {
+        $error = 'Could not start the quote: ' . $e->getMessage();
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $mode = (string) ($_POST['mode'] ?? '');
@@ -38,18 +45,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $aid = (int) ($_POST['account_id'] ?? 0);
         if ($aid <= 0) {
             $error = 'Pick a credit account from the list first.';
-        } elseif (!set_acting_client($aid)) {
-            $error = 'That account could not be selected — pick one from the list.';
         } else {
-            header('Location: /quote-builder/new.php');
-            exit;
+            try {
+                $res = no_create_account_quote(db(), $factoryCid, $aid, (int) $user['user_id']);
+                header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
+                exit;
+            } catch (Throwable $e) {
+                $error = $e->getMessage();
+            }
         }
     } elseif ($mode === 'new_quick') {
-        clear_acting_client();   // a straight Beverley quote
         header('Location: /quote-builder/new.php');
         exit;
     } elseif ($mode === 'new_account') {
-        clear_acting_client();   // new-client.php will set acting on success
         header('Location: /master-admin/new-client.php?after=quote');
         exit;
     } else {
@@ -57,19 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$flash = $_SESSION['flash_success'] ?? null;
-unset($_SESSION['flash_success']);
-
 // Trade accounts = every active client that isn't the factory's own account.
-$own      = (int) $user['client_id'];
 $accounts = [];
 try {
     $st = db()->prepare('SELECT id, company_name FROM clients WHERE id <> ? AND active = 1 ORDER BY company_name');
-    $st->execute([$own]);
+    $st->execute([$factoryCid]);
     $accounts = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) { /* empty list handled in view */ }
-
-$acting = acting_client();
 
 $activeNav = '';
 ?><!doctype html>
@@ -80,13 +82,11 @@ $activeNav = '';
     <title>New order &middot; Master admin</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
-        .no-choice { border:1px solid var(--border); border-radius:12px; padding:1rem 1.15rem; margin:0 0 1rem; background:var(--bg-subtle,#f8fafc); }
+        .no-choice { border:1px solid var(--border); border-radius:12px; padding:0.9rem 1.1rem; margin:0 0 0.85rem; background:var(--bg-subtle,#f8fafc); }
         .no-choice > label.head { display:flex; gap:0.6rem; align-items:flex-start; font-weight:700; cursor:pointer; }
-        .no-choice .body { margin:0.6rem 0 0 1.8rem; display:none; }
+        .no-choice .body { margin:0.55rem 0 0 1.8rem; display:none; }
         .no-choice input.pick:checked ~ .body { display:block; }
-        .no-choice .sub { display:flex; gap:0.5rem; align-items:flex-start; margin:0.5rem 0; font-weight:400; cursor:pointer; }
         .no-choice .hint { color:var(--text-faint); font-size:0.85rem; font-weight:400; margin:0.15rem 0 0 1.8rem; }
-        .no-actions { margin-left:1.8rem; }
     </style>
 </head>
 <body>
@@ -99,28 +99,19 @@ $activeNav = '';
                 <h1 class="page-title">New order</h1>
                 <p class="page-subtitle">
                     <a href="/master-admin/index.php">&larr; Master Admin</a>
-                    &middot; raise a quote or order on behalf of a trade account, or for a new customer.
+                    &middot; raise a quote for a trade account (their pricing, sent to them) or a new customer.
                 </p>
             </div>
         </div>
 
-        <?php if ($flash !== null): ?><div class="alert alert-success" role="status"><?= e((string) $flash) ?></div><?php endif; ?>
         <?php if ($error !== null): ?><div class="alert alert-error" role="alert"><?= e($error) ?></div><?php endif; ?>
-
-        <?php if ($acting): ?>
-            <div class="alert" role="status" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e">
-                You're currently quoting as <strong><?= e($acting['name']) ?></strong>.
-                <a href="/quote-builder/new.php" style="font-weight:700">Continue their quote</a>
-                &middot; <a href="/master-admin/new-order.php?stop=1">Stop</a>
-            </div>
-        <?php endif; ?>
 
         <!-- For a credit account -->
         <section class="section">
             <h2 class="section-title" style="margin:0 0 0.4rem">Quote for a credit account</h2>
-            <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 0.9rem;max-width:70ch">
-                Pick the trade account this quote is for. The builder opens acting as them — their discounts and
-                pricing apply automatically, and the finished quote appears in their own portal.
+            <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 0.9rem;max-width:72ch">
+                Pick the account this quote is for. Their name and address fill in as the customer, and their
+                trade discount is applied to the price &mdash; so the quote shows what they pay you.
             </p>
             <form method="post" action="/master-admin/new-order.php" class="form" novalidate>
                 <?= csrf_field() ?>
@@ -148,9 +139,7 @@ $activeNav = '';
         <!-- For a new customer with no account -->
         <section class="section">
             <h2 class="section-title" style="margin:0 0 0.4rem">Quote for a new customer</h2>
-            <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 0.9rem;max-width:70ch">
-                Someone who isn't set up as a credit account yet.
-            </p>
+            <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 0.9rem;max-width:72ch">Someone who isn't set up as a credit account yet.</p>
             <form method="post" action="/master-admin/new-order.php" novalidate>
                 <?= csrf_field() ?>
                 <div class="no-choice">
@@ -158,16 +147,16 @@ $activeNav = '';
                         <input type="radio" class="pick" name="mode" value="new_quick" checked>
                         <span>Just quote it (under Beverley Blinds Trade)</span>
                     </label>
-                    <div class="hint">A straight quote at your standard pricing — the customer's name goes on the quote. Best for one-off / cash enquiries.</div>
-                    <div class="body"><div class="no-actions"><button type="submit" class="btn btn-primary">Start quote &rarr;</button></div></div>
+                    <div class="hint">A straight quote at your standard pricing — the customer's name goes on the quote.</div>
+                    <div class="body"><button type="submit" class="btn btn-primary">Start quote &rarr;</button></div>
                 </div>
                 <div class="no-choice">
                     <label class="head">
                         <input type="radio" class="pick" name="mode" value="new_account">
-                        <span>Open a trade account for them first, then quote as them</span>
+                        <span>Open a trade account for them first, then quote them</span>
                     </label>
-                    <div class="hint">Creates the account (name + login), then drops you into a quote acting as them — so it's their quote from the start.</div>
-                    <div class="body"><div class="no-actions"><button type="submit" class="btn btn-primary">Open account &amp; quote &rarr;</button></div></div>
+                    <div class="hint">Creates the account, then drops you into a quote for it (their trade pricing from the start).</div>
+                    <div class="body"><button type="submit" class="btn btn-primary">Open account &amp; quote &rarr;</button></div>
                 </div>
             </form>
         </section>
@@ -175,7 +164,6 @@ $activeNav = '';
 </div>
 <script>
 (function () {
-    // Account typeahead: map the picked name back to its client id.
     var search = document.getElementById('account_search');
     var hidden = document.getElementById('account_id');
     var list   = document.getElementById('account-options');

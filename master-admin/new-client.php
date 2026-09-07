@@ -186,11 +186,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // Came from the "New order" launcher (open account → then quote)?
-                // Start acting as the brand-new account and jump into the builder.
-                if (($_GET['after'] ?? '') === 'quote' && function_exists('set_acting_client')
-                    && set_acting_client($newClientId)) {
-                    $_SESSION['flash_success'] = 'Account "' . $f['company_name'] . '" created — now quoting as them.';
-                    header('Location: /quote-builder/new.php');
+                // Hand off to the launcher to start a quote FOR the new account.
+                if (($_GET['after'] ?? '') === 'quote') {
+                    $_SESSION['flash_success'] = 'Account "' . $f['company_name'] . '" created — starting their quote.';
+                    header('Location: /master-admin/new-order.php?account=' . $newClientId . '&auto=1');
                     exit;
                 }
 

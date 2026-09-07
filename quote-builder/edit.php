@@ -10,7 +10,7 @@ require __DIR__ . '/../_partials/pricing_basis.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
+$clientId = (int) $user['client_id'];
 // Markup vs margin — only relabels the admin internal-cost hint below.
 $pricingBasis = pricing_basis_for(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';
@@ -2921,7 +2921,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             drop:       dropIn.value,
             quantity:   qtyIn.value || '1',
             round_up:   '1',
-            unit:       measureUnit
+            unit:       measureUnit,
+            // Factory quote raised FOR a trade account → price the preview with
+            // their buying discount (server honours it for super-admins only).
+            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>'
         });
         // Per-blind override (cost-viewers only — fields absent otherwise).
         // markup_override is the hidden, already-converted MARKUP value;

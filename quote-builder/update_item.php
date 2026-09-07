@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
+$clientId = (int) $user['client_id'];
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $itemId   = (int) ($_POST['item_id']  ?? 0);
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
@@ -149,7 +149,7 @@ if ($canCosts) {
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $priced = pe_calculate_item($pdo, $clientId, $input);
+    $priced = pe_calculate_item($pdo, $clientId, $input, (int) ($quote['account_client_id'] ?? 0));
     if (isset($priced['error'])) {
         $pdo->rollBack();
         qb_flash_redirect(
