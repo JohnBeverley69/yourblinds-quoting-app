@@ -173,6 +173,78 @@ function qb_generate_quote_number(int $clientId): string
     return sprintf('%s-%s-%04d', $prefix, $year, $next);
 }
 
+/* ── Wholesale-price capture (Phase 2A) ──────────────────────────────────────
+ * The pricing engine computes the wholesale (trade) breakdown for every line and
+ * option, but the save paths historically discarded it. These helpers persist it
+ * onto the saved rows so the wholesale A/R (delivery notes / invoices / statements)
+ * can bill accounts at the trade price. Done as a post-insert UPDATE so the
+ * critical INSERT column lists stay untouched, and gated on the columns being
+ * present so an un-migrated DB is a silent no-op (run migrate_wholesale_capture.php).
+ * Never blocks a save — capture is best-effort.
+ */
+function qb_wholesale_capture_ready(PDO $pdo): bool
+{
+    static $ready = null;
+    if ($ready !== null) return $ready;
+    try {
+        $s = $pdo->prepare(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'quote_items'
+                AND COLUMN_NAME = 'trade_price_per_blind' LIMIT 1"
+        );
+        $s->execute();
+        return $ready = ($s->fetchColumn() !== false);
+    } catch (Throwable $e) {
+        return $ready = false;
+    }
+}
+
+/**
+ * Persist a line's trade breakdown. $src may be the engine's $priced return or a
+ * duplicated source row — both use the column names trade_price_per_blind /
+ * trade_discount_percent / trade_discount_amount.
+ */
+function qb_capture_line_wholesale(PDO $pdo, int $quoteItemId, array $src): void
+{
+    if ($quoteItemId <= 0 || !qb_wholesale_capture_ready($pdo)) return;
+    $num = static fn ($v) => ($v === null || $v === '') ? null : round((float) $v, 2);
+    try {
+        $pdo->prepare(
+            'UPDATE quote_items
+                SET trade_price_per_blind = ?, trade_discount_percent = ?, trade_discount_amount = ?
+              WHERE id = ?'
+        )->execute([
+            $num($src['trade_price_per_blind']  ?? null),
+            $num($src['trade_discount_percent'] ?? null),
+            $num($src['trade_discount_amount']  ?? null),
+            $quoteItemId,
+        ]);
+    } catch (Throwable $e) { /* best-effort — never block a save */ }
+}
+
+/**
+ * Persist one option's wholesale amount + Components-promo breakdown. $ex may be
+ * an engine extras_applied row or a duplicated source row — both use the column
+ * names trade_amount / promo_discount_percent / promo_discount_amount.
+ */
+function qb_capture_extra_wholesale(PDO $pdo, int $extraRowId, array $ex): void
+{
+    if ($extraRowId <= 0 || !qb_wholesale_capture_ready($pdo)) return;
+    $num = static fn ($v) => ($v === null || $v === '') ? null : round((float) $v, 2);
+    try {
+        $pdo->prepare(
+            'UPDATE quote_item_extras
+                SET trade_amount = ?, promo_discount_percent = ?, promo_discount_amount = ?
+              WHERE id = ?'
+        )->execute([
+            $num($ex['trade_amount']           ?? null),
+            $num($ex['promo_discount_percent'] ?? null),
+            $num($ex['promo_discount_amount']  ?? null),
+            $extraRowId,
+        ]);
+    } catch (Throwable $e) { /* best-effort */ }
+}
+
 /**
  * Random 64-char hex token for the customer-facing accept URL.
  * Stored on quotes.public_token (UNIQUE).
