@@ -517,6 +517,20 @@ function pe_apply_extra(
         }
     }
 
+    // 5b. Extra (Components) promotion — our buying discount on THIS option/
+    //     choice, from trade_promotions targeting an extra. Reduces the extra's
+    //     amount BEFORE the options markup, mirroring the base trade discount so
+    //     it's a genuine cut in what the account buys the add-on at. best-wins;
+    //     0 (none / pre-migration) leaves the amount untouched — regression-safe.
+    $extraTradeAmt = round($amount, 2);   // extra buying amount before our promo
+    $extraPromoPct = pe_extra_promotion_for_line($pdo, $clientId, $productId, (int) $extra['id'], (int) $choice['id']);
+    $extraPromoAmt = 0.0;
+    if ($extraPromoPct > 0 && $amount > 0) {
+        $newAmount     = $amount * (1 - $extraPromoPct / 100.0);
+        $extraPromoAmt = round($extraTradeAmt - round($newAmount, 2), 2);
+        $amount        = $newAmount;
+    }
+
     // 6. Apply the options markup. Per-choice override wins if set
     //    (including 0, which explicitly opts out); otherwise the
     //    tenant-wide default kicks in. The migration backfills
@@ -580,6 +594,12 @@ function pe_apply_extra(
         'choice_label'        => (string) $choice['label'],
         'mode'                => $primary,
         'amount_applied'      => round($amount, 2),
+        // Components-promotion breakdown for the wholesale invoice (trade →
+        // discount → discounted on the add-on). With no promo: trade_amount
+        // equals the pre-markup amount, discount 0.
+        'trade_amount'            => $extraTradeAmt,
+        'promo_discount_percent'  => round($extraPromoPct, 2),
+        'promo_discount_amount'   => $extraPromoAmt,
         'cost_snapshot'       => $costSnapshot,
         'length_input_label'  => $extra['length_input_label']
                                  ?? ($choice['length_input_label'] ?? null),
@@ -797,6 +817,42 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
     } catch (Throwable $e) { /* trade_promotions absent — skip */ }
 
     return max(0.0, min(100.0, $best));
+}
+
+/**
+ * Best EXTRA (Components) promotion % for an option/choice on a line — from
+ * trade_promotions rows that TARGET an extra (extra_id set). Matches by product,
+ * extra and, if the promotion names one, a specific choice; honours the account
+ * scope (this account or global) + date window. Promotions store MASTER ids
+ * (chosen from our catalogue), so match the line's own id OR its source id
+ * (source_product_id / source_extra_id / source_choice_id) — that's how a global
+ * promotion reaches every account's mirrored copy. Missing table/column or no
+ * match returns 0.0 (extra amount unchanged).
+ */
+function pe_extra_promotion_for_line(PDO $pdo, int $clientId, int $productId, int $extraId, int $choiceId): float
+{
+    try {
+        $masterProduct = $productId; $masterExtra = $extraId; $masterChoice = $choiceId;
+        try { $q = $pdo->prepare('SELECT COALESCE(NULLIF(source_product_id,0), id) FROM products WHERE id = ? LIMIT 1'); $q->execute([$productId]); $r = $q->fetchColumn(); if ($r !== false && $r !== null) $masterProduct = (int) $r; } catch (Throwable $e) {}
+        try { $q = $pdo->prepare('SELECT COALESCE(NULLIF(source_extra_id,0), id) FROM product_extras WHERE id = ? LIMIT 1'); $q->execute([$extraId]); $r = $q->fetchColumn(); if ($r !== false && $r !== null) $masterExtra = (int) $r; } catch (Throwable $e) {}
+        try { $q = $pdo->prepare('SELECT COALESCE(NULLIF(source_choice_id,0), id) FROM product_extra_choices WHERE id = ? LIMIT 1'); $q->execute([$choiceId]); $r = $q->fetchColumn(); if ($r !== false && $r !== null) $masterChoice = (int) $r; } catch (Throwable $e) {}
+
+        $sp = $pdo->prepare(
+            'SELECT MAX(discount_percent) FROM trade_promotions
+              WHERE extra_id IS NOT NULL AND active = 1
+                AND (product_id = ? OR product_id = ?)
+                AND (extra_id = ? OR extra_id = ?)
+                AND (choice_id IS NULL OR choice_id = ? OR choice_id = ?)
+                AND (client_id IS NULL OR client_id = ?)
+                AND (starts_on IS NULL OR starts_on <= CURDATE())
+                AND (ends_on   IS NULL OR ends_on   >= CURDATE())'
+        );
+        $sp->execute([$productId, $masterProduct, $extraId, $masterExtra, $choiceId, $masterChoice, $clientId]);
+        $v = $sp->fetchColumn();
+        return ($v !== false && $v !== null) ? max(0.0, min(100.0, (float) $v)) : 0.0;
+    } catch (Throwable $e) {
+        return 0.0;   // trade_promotions / source columns absent — no extra promo
+    }
 }
 
 // ---------------------------------------------------------------------------
