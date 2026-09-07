@@ -145,3 +145,86 @@ function ar_render_delivery_note(array $ctx, array $items): ?string
 
     return ar_pdf_bytes($html);
 }
+
+/**
+ * Invoice / credit-note PDF (priced, VAT). $ctx: factory (Beverley clients row),
+ * doc_title ('INVOICE'|'CREDIT NOTE'), doc_number, issue_date, due_date (invoice),
+ * bill_to (newline block), order_ref, vat_percent, notes, bank (newline block),
+ * watermark (e.g. 'VOID'). $items: rows with description, width_mm, drop_mm,
+ * quantity, unit_net, line_net. $totals: [subtotal, vat, total]. Credit notes pass
+ * positive amounts and doc_title 'CREDIT NOTE'.
+ */
+function ar_render_invoice(array $ctx, array $items, array $totals): ?string
+{
+    $e   = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $nl2 = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
+    $mm  = static fn ($v) => ($v === null || $v === '' || (int) $v === 0) ? '' : (string) ((int) $v) . 'mm';
+    $money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
+    $title = strtoupper((string) ($ctx['doc_title'] ?? 'INVOICE'));
+
+    $rows = '';
+    $n = 0;
+    foreach ($items as $it) {
+        $n++;
+        $size = trim($mm($it['width_mm'] ?? null) . (($it['drop_mm'] ?? null) ? ' &times; ' . $mm($it['drop_mm']) : ''));
+        $rows .= '<tr>'
+              . '<td class="num">' . $n . '</td>'
+              . '<td>' . $e($it['description'] ?? '') . ($size !== '' ? '<br><span class="muted">' . $size . '</span>' : '') . '</td>'
+              . '<td class="num">' . (int) ($it['quantity'] ?? 1) . '</td>'
+              . '<td class="rt">' . $money($it['unit_net'] ?? 0) . '</td>'
+              . '<td class="rt">' . $money($it['line_net'] ?? 0) . '</td>'
+              . '</tr>';
+    }
+
+    $vatPct = rtrim(rtrim(number_format((float) ($ctx['vat_percent'] ?? 20), 2), '0'), '.');
+    $bank   = trim((string) ($ctx['bank'] ?? ''));
+
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
+        . '.top{width:100%;margin-bottom:10px}.top td{vertical-align:top;padding:0}'
+        . '.title{font-size:22px;font-weight:bold;color:#111827;margin:0 0 2px;text-align:right}'
+        . '.meta{font-size:11px;color:#374151;text-align:right;line-height:1.5}'
+        . '.cols{width:100%;margin:8px 0 12px}.cols td{vertical-align:top;width:50%;padding:0}'
+        . '.box-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:2px}'
+        . '.box{font-size:11px;line-height:1.4}'
+        . 'table.items{width:100%;border-collapse:collapse;margin-top:6px}'
+        . 'table.items th{background:#1f3b5b;color:#fff;font-size:10px;text-align:left;padding:6px 7px}'
+        . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
+        . 'table.items td.num,table.items th.num{text-align:center;width:30px}'
+        . 'table.items td.rt,table.items th.rt{text-align:right;width:76px}'
+        . '.muted{color:#6b7280;font-size:10px}'
+        . 'table.tot{width:46%;margin-left:54%;margin-top:8px;border-collapse:collapse}'
+        . 'table.tot td{padding:4px 7px;font-size:11px}table.tot td.rt{text-align:right}'
+        . 'table.tot tr.grand td{font-weight:bold;font-size:13px;border-top:2px solid #1f3b5b}'
+        . '.foot{margin-top:16px;font-size:10px;color:#374151;line-height:1.5}'
+        . '.wm{position:fixed;top:44%;left:0;width:100%;text-align:center;font-size:90px;font-weight:bold;color:#f3d0d0;transform:rotate(-20deg);z-index:-1}'
+        . '</style></head><body>'
+        . ((string) ($ctx['watermark'] ?? '') !== '' ? '<div class="wm">' . $e($ctx['watermark']) . '</div>' : '')
+        . '<table class="top"><tr>'
+        . '<td style="width:55%">' . ar_letterhead_html($ctx['factory'] ?? []) . '</td>'
+        . '<td style="width:45%"><div class="title">' . $e($title) . '</div><div class="meta">'
+        . ((string) ($ctx['doc_number'] ?? '') !== '' ? '<strong>' . $e($ctx['doc_number']) . '</strong><br>' : '')
+        . 'Date: ' . $e($ctx['issue_date'] ?? '') . '<br>'
+        . ((string) ($ctx['due_date'] ?? '') !== '' ? 'Due: ' . $e($ctx['due_date']) . '<br>' : '')
+        . ((string) ($ctx['order_ref'] ?? '') !== '' ? 'Order ref: ' . $e($ctx['order_ref']) : '')
+        . '</div></td></tr></table>'
+        . '<table class="cols"><tr>'
+        . '<td><div class="box-label">' . ($title === 'CREDIT NOTE' ? 'Credit to' : 'Bill to') . '</div><div class="box">'
+        . ((string) ($ctx['bill_to'] ?? '') !== '' ? $nl2($ctx['bill_to']) : '<span class="muted">— no address —</span>')
+        . '</div></td><td></td></tr></table>'
+        . '<table class="items"><thead><tr>'
+        . '<th class="num">#</th><th>Description</th><th class="num">Qty</th><th class="rt">Unit (net)</th><th class="rt">Net</th>'
+        . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<table class="tot">'
+        . '<tr><td>Subtotal (net)</td><td class="rt">' . $money($totals['subtotal'] ?? 0) . '</td></tr>'
+        . '<tr><td>VAT @ ' . $vatPct . '%</td><td class="rt">' . $money($totals['vat'] ?? 0) . '</td></tr>'
+        . '<tr class="grand"><td>Total</td><td class="rt">' . $money($totals['total'] ?? 0) . '</td></tr>'
+        . '</table>'
+        . '<div class="foot">'
+        . ((string) ($ctx['notes'] ?? '') !== '' ? $e($ctx['notes']) . '<br>' : '')
+        . ($bank !== '' ? '<strong>Payment</strong><br>' . $nl2($bank) : '')
+        . '</div>'
+        . '</body></html>';
+
+    return ar_pdf_bytes($html);
+}

@@ -204,3 +204,54 @@ function ar_account_options(PDO $pdo, int $factoryId): array
         return [];
     }
 }
+
+/**
+ * Build snapshot invoice lines from a placed order's factory-owned lines — one line
+ * per blind, net wholesale: unit_net = base_price + Σ option trade_amount. Returns
+ * ['lines' => [...], 'uncaptured' => bool]. `uncaptured` is true when a PRICED option
+ * has no captured trade_amount (a pre-2A order) — the caller should refuse to invoice
+ * so retail never leaks in. Each line carries the trade→discount→net display fields.
+ */
+function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): array
+{
+    $src   = ar_order_lines_for_doc($pdo, $factoryId, $quoteId);
+    $lines = []; $uncaptured = false; $so = 0;
+    foreach ($src as $ln) {
+        $qty    = max(1, (int) $ln['quantity']);
+        $optNet = 0.0;
+        foreach ($ln['extras_rows'] ?? [] as $ex) {
+            $ta      = $ex['trade_amount'];
+            $applied = (float) ($ex['amount_applied'] ?? 0);
+            if ($ta === null) { if ($applied > 0) $uncaptured = true; continue; }
+            $optNet += (float) $ta;
+        }
+        $unitNet  = round((float) $ln['base_price'] + $optNet, 2);
+        $lineNet  = round($unitNet * $qty, 2);
+        $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['base_price']) + $optNet, 2);
+
+        $desc = trim((string) $ln['product_name_snapshot']);
+        if (($ln['system_name_snapshot'] ?? '') !== '') $desc .= ' — ' . $ln['system_name_snapshot'];
+        $fab = trim(implode(' / ', array_filter([
+            (string) $ln['fabric_name_snapshot'], (string) $ln['fabric_colour_snapshot'],
+        ], static fn ($s) => trim($s) !== '')));
+        if ($fab !== '') $desc .= ', ' . $fab;
+        if (!empty($ln['options'])) $desc .= ' (' . implode(', ', $ln['options']) . ')';
+
+        $lines[] = [
+            'source_quote_id'      => $quoteId,
+            'source_quote_item_id' => (int) $ln['id'],
+            'line_type'            => 'blind',
+            'description'          => $desc,
+            'width_mm'             => $ln['width_mm'],
+            'drop_mm'              => $ln['drop_mm'],
+            'quantity'             => $qty,
+            'unit_net'             => $unitNet,
+            'line_net'             => $lineNet,
+            'list_trade_unit'      => $listUnit,
+            'discount_percent'     => $ln['trade_discount_percent'],
+            'discount_amount'      => $ln['trade_discount_amount'],
+            'sort_order'           => $so++,
+        ];
+    }
+    return ['lines' => $lines, 'uncaptured' => $uncaptured];
+}
