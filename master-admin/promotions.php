@@ -35,14 +35,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
     $action = (string) ($_POST['_action'] ?? '');
     try {
         if ($action === 'promo_add') {
-            $name  = trim((string) ($_POST['name'] ?? ''));
-            $cid   = (int) ($_POST['client_id'] ?? 0);      // 0 = global
-            $pid   = (int) ($_POST['product_id'] ?? 0);
-            $sid   = (int) ($_POST['system_id'] ?? 0);      // 0 = All
-            $band  = trim((string) ($_POST['band_code'] ?? ''));
-            $pct   = max(0.0, min(100.0, (float) ($_POST['discount_percent'] ?? 0)));
-            $start = trim((string) ($_POST['starts_on'] ?? ''));
-            $end   = trim((string) ($_POST['ends_on'] ?? ''));
+            $name   = trim((string) ($_POST['name'] ?? ''));
+            $pid    = (int) ($_POST['product_id'] ?? 0);
+            $sid    = (int) ($_POST['system_id'] ?? 0);      // 0 = All
+            $band   = trim((string) ($_POST['band_code'] ?? ''));
+            $pct    = max(0.0, min(100.0, (float) ($_POST['discount_percent'] ?? 0)));
+            $start  = trim((string) ($_POST['starts_on'] ?? ''));
+            $end    = trim((string) ($_POST['ends_on'] ?? ''));
+            $global = !empty($_POST['acct_global']);
+            $selIds = array_values(array_unique(array_filter(
+                array_map('intval', (array) ($_POST['client_ids'] ?? [])),
+                static fn ($n) => $n > 0
+            )));
 
             // Product must be one of OUR master products.
             $pc = $pdo->prepare('SELECT 1 FROM products WHERE id = ? AND client_id = ? LIMIT 1');
@@ -51,14 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 $_SESSION['flash_error'] = 'Pick a product from the master catalogue.';
             } elseif ($start !== '' && $end !== '' && $end < $start) {
                 $_SESSION['flash_error'] = 'The end date is before the start date.';
+            } elseif (!$global && !$selIds) {
+                $_SESSION['flash_error'] = 'Tick "All accounts", or choose at least one account.';
             } else {
                 // Optional scopes, validated.
-                $clientId = null;
-                if ($cid > 0) {
-                    $cc = $pdo->prepare('SELECT 1 FROM clients WHERE id = ? LIMIT 1');
-                    $cc->execute([$cid]);
-                    if ($cc->fetchColumn()) $clientId = $cid;
-                }
                 $systemId = null;
                 if ($sid > 0) {
                     $sc = $pdo->prepare('SELECT 1 FROM product_systems WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1');
@@ -67,18 +67,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 }
                 $bandCode = ($band === '' || strcasecmp($band, 'all') === 0) ? null : $band;
 
-                $pdo->prepare(
-                    'INSERT INTO trade_promotions
-                       (name, client_id, product_id, system_id, band_code, discount_percent, starts_on, ends_on, active, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
-                )->execute([
-                    $name !== '' ? mb_substr($name, 0, 150) : null,
-                    $clientId, $pid, $systemId, $bandCode, $pct,
-                    $start !== '' ? $start : null,
-                    $end   !== '' ? $end   : null,
-                    (int) ($user['user_id'] ?? 0) ?: null,
-                ]);
-                $_SESSION['flash_success'] = 'Promotion added.';
+                // Targets: one promotion row per account (NULL = global). "All
+                // accounts" ticked wins and collapses to a single global row.
+                $targets = [];
+                if ($global) {
+                    $targets = [null];
+                } else {
+                    $ph2 = implode(',', array_fill(0, count($selIds), '?'));
+                    $vc  = $pdo->prepare("SELECT id FROM clients WHERE id IN ($ph2)");
+                    $vc->execute($selIds);
+                    $targets = array_map('intval', $vc->fetchAll(PDO::FETCH_COLUMN));
+                }
+
+                if (!$targets) {
+                    $_SESSION['flash_error'] = 'None of the chosen accounts were found.';
+                } else {
+                    $ins = $pdo->prepare(
+                        'INSERT INTO trade_promotions
+                           (name, client_id, product_id, system_id, band_code, discount_percent, starts_on, ends_on, active, created_by)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+                    );
+                    $nameVal = $name !== '' ? mb_substr($name, 0, 150) : null;
+                    $sVal    = $start !== '' ? $start : null;
+                    $eVal    = $end   !== '' ? $end   : null;
+                    $by      = (int) ($user['user_id'] ?? 0) ?: null;
+                    foreach ($targets as $t) {
+                        $ins->execute([$nameVal, $t, $pid, $systemId, $bandCode, $pct, $sVal, $eVal, $by]);
+                    }
+                    $n = count($targets);
+                    $_SESSION['flash_success'] = $global
+                        ? 'Promotion added (all accounts).'
+                        : 'Promotion added to ' . $n . ' account' . ($n === 1 ? '' : 's') . '.';
+                }
             }
         } elseif ($action === 'promo_delete') {
             $id = (int) ($_POST['id'] ?? 0);
@@ -249,18 +269,27 @@ $statusOf = static function (array $p) use ($today): array {
             <form method="post" action="/master-admin/promotions.php">
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="promo_add">
+
+                <div style="margin-bottom:0.85rem">
+                    <div class="lbl" style="margin-bottom:0.3rem">Accounts</div>
+                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:600;margin-bottom:0.45rem;cursor:pointer">
+                        <input type="checkbox" id="acct-global" name="acct_global" value="1"> All accounts (global)
+                    </label>
+                    <div id="acct-list" style="display:flex;flex-wrap:wrap;gap:0.4rem 1.25rem;max-height:8.5rem;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;background:var(--bg-card)">
+                        <?php foreach ($accounts as $a): if ((int) $a['id'] === $myClient) continue; ?>
+                            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.875rem;cursor:pointer">
+                                <input type="checkbox" class="acct-cb" name="client_ids[]" value="<?= (int) $a['id'] ?>">
+                                <?= e((string) $a['company_name']) ?>
+                            </label>
+                        <?php endforeach; ?>
+                        <?php if (count($accounts) <= 1): ?><span style="color:var(--text-faint);font-size:0.8125rem">No other accounts yet.</span><?php endif; ?>
+                    </div>
+                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.35rem 0 0">Tick <strong>All accounts</strong> for a global promotion, or pick one or more accounts.</p>
+                </div>
+
                 <div class="action-row">
                     <div><div class="lbl">Name (optional)</div><input type="text" name="name" maxlength="150" placeholder="Autumn Verticals" style="min-width:12rem"></div>
                     <div><div class="lbl">Discount %</div><input type="number" name="discount_percent" step="0.01" min="0" max="100" required placeholder="20" style="width:6rem"></div>
-                    <div>
-                        <div class="lbl">Accounts</div>
-                        <select name="client_id" style="min-width:12rem">
-                            <option value="">All accounts (global)</option>
-                            <?php foreach ($accounts as $a): if ((int) $a['id'] === $myClient) continue; ?>
-                                <option value="<?= (int) $a['id'] ?>"><?= e((string) $a['company_name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
                     <div>
                         <div class="lbl">Product</div>
                         <select id="pr-product" name="product_id" required style="min-width:14rem">
@@ -341,6 +370,18 @@ $statusOf = static function (array $p) use ($today): array {
 (function () {
     var BANDS   = <?= json_encode($prodBands, JSON_UNESCAPED_UNICODE) ?>;
     var SYSTEMS = <?= json_encode($prodSystems, JSON_UNESCAPED_UNICODE) ?>;
+    // "All accounts" vs individual account checkboxes.
+    var acctGlobal = document.getElementById('acct-global');
+    var acctList   = document.getElementById('acct-list');
+    if (acctGlobal && acctList) {
+        var cbs = acctList.querySelectorAll('.acct-cb');
+        acctGlobal.addEventListener('change', function () {
+            cbs.forEach(function (c) { c.disabled = acctGlobal.checked; if (acctGlobal.checked) c.checked = false; });
+            acctList.style.opacity = acctGlobal.checked ? '0.5' : '1';
+        });
+        cbs.forEach(function (c) { c.addEventListener('change', function () { if (c.checked) acctGlobal.checked = false; }); });
+    }
+
     var prod = document.getElementById('pr-product');
     var band = document.getElementById('pr-band');
     var sys  = document.getElementById('pr-system');
