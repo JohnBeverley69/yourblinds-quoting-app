@@ -787,6 +787,32 @@ function pe_col_exists(PDO $pdo, string $table, string $col): bool
 }
 
 /**
+ * Is this product one of the FACTORY's own (a product the factory pushed to the
+ * account — source_client_id = the factory, or a native factory product)? The
+ * supplier trade discount (trade_discounts) only applies to these; a product the
+ * account sources from another supplier, or its own, is never touched. Cached
+ * per-request. Missing source_client_id column / factory id ⇒ false (no trade
+ * discount applied — the safe direction).
+ */
+function pe_is_factory_product(PDO $pdo, int $productId): bool
+{
+    static $cache = [];
+    if (isset($cache[$productId])) return $cache[$productId];
+    $fid = function_exists('factory_client_id')
+        ? (int) factory_client_id()
+        : (int) (function_exists('env') ? (env('FACTORY_CLIENT_ID', '3') ?? 3) : 3);
+    if ($fid <= 0) return $cache[$productId] = false;
+    try {
+        $st = $pdo->prepare('SELECT COALESCE(NULLIF(source_client_id, 0), client_id) FROM products WHERE id = ? LIMIT 1');
+        $st->execute([$productId]);
+        $owner = $st->fetchColumn();
+        return $cache[$productId] = ($owner !== false && $owner !== null && (int) $owner === $fid);
+    } catch (Throwable $e) {
+        return $cache[$productId] = false;
+    }
+}
+
+/**
  * Best TRADE (buying) discount % for a line — our deal off the trade price,
  * from BOTH the standing per-account `trade_discounts` and the time-boxed
  * `trade_promotions` (which can be global, i.e. client_id NULL). Scoped by
@@ -1159,8 +1185,13 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //     $basePrice completely untouched — so prices are byte-identical to
     //     before this step existed. $tradePriceUnit / $tradeDiscount* are carried
     //     out for the wholesale invoice's "trade → discount → discounted" columns.
+    //     Only the FACTORY's own products carry a supplier trade discount — a
+    //     product the account sources elsewhere (or its own) is never touched,
+    //     so its own buying discount / retail discount is left entirely alone.
     $tradeBandCode  = ($requiresOption && $fabric) ? (string) $fabric['band_code'] : null;
-    $tradeDiscPct   = pe_trade_discount_for_line($pdo, $clientId, $productId, $systemId, $tradeBandCode);
+    $tradeDiscPct   = pe_is_factory_product($pdo, $productId)
+        ? pe_trade_discount_for_line($pdo, $clientId, $productId, $systemId, $tradeBandCode)
+        : 0.0;
     $tradePriceUnit = round($basePrice, 2);   // trade price per blind, before our discount
     $tradeDiscAmt   = 0.0;
     if ($tradeDiscPct > 0) {
@@ -1227,6 +1258,17 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     }
     if (isset($input['discount_override']) && is_numeric($input['discount_override'])) {
         $discount = max(0.0, (float) $input['discount_override']);
+    }
+
+    // "Supplier's trade discount wins": for a factory (supplier) product the trade
+    // discount already came off the base at step 5b and IS the account's buying
+    // discount. The tenant's own client_discounts buying discount is the SAME deal,
+    // so don't stack it on top — drop it to 0 for this line. Only supplier lines
+    // are affected (their discount is a buying discount); a product the account
+    // sources elsewhere never has a trade discount, so its discount is untouched.
+    // The `own` branch's discount is a retail discount — left alone.
+    if ($tradeDiscPct > 0 && ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
+        $discount = 0.0;
     }
 
     // 8. Sell price + line total.
