@@ -1321,6 +1321,17 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         $discount = 0.0;
     }
 
+    // Quoting a factory product FOR a trade account (a wholesale quote sent TO
+    // them): they pay the TRADE price — the base minus their buying discount,
+    // plus extras — with NO retail markup and no reseller discount. The markup is
+    // the account's own margin on resale, which has nothing to do with what they
+    // buy from us. So zero both for the account line; the base already carries
+    // their trade discount from step 5b.
+    if ($forAccountId > 0) {
+        $markup   = 0.0;
+        $discount = 0.0;
+    }
+
     // 8. Sell price + line total.
     //
     //    Order matches how the tenant thinks about it:
