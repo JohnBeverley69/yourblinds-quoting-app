@@ -1410,6 +1410,36 @@ $activeNav = 'products';
                         } catch (Throwable $e) { /* migration not yet run */ }
                         // Show the default in the tenant's basis (markup or margin).
                         $_tenantDefaultShown = markup_to_display($_tenantDefaultMarkup, $pricingBasis);
+
+                        // Supplier trade discount on THIS product (read-only here — set by
+                        // the supplier in master admin). Where it applies, the engine uses
+                        // it as THE buying discount and ignores the field below, so we show
+                        // it read-only to match. Best-wins per system; all-bands only (band-
+                        // specific deals live on the Trade terms page). Degrades silently.
+                        $_isFactoryProduct = function_exists('factory_owns_product')
+                            ? factory_owns_product(db(), (int) $id) : false;
+                        $_tradeDiscBySys = []; $_tradeDiscAll = 0.0;
+                        if ($_isFactoryProduct) {
+                            try {
+                                $_tdEx = '';
+                                try { $_c = db()->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = 'extra_id' LIMIT 1"); $_c->execute(); if ($_c->fetchColumn() !== false) $_tdEx = ' AND extra_id IS NULL'; } catch (Throwable $e) {}
+                                $_td = db()->prepare(
+                                    "SELECT system_id, MAX(discount_percent) AS pct FROM trade_discounts
+                                      WHERE client_id = ? AND product_id = ? AND active = 1 AND band_code IS NULL" . $_tdEx . "
+                                   GROUP BY system_id"
+                                );
+                                $_td->execute([$clientId, (int) $id]);
+                                foreach ($_td->fetchAll(PDO::FETCH_ASSOC) as $_r) {
+                                    $_p = (float) $_r['pct']; if ($_p <= 0) continue;
+                                    if ($_r['system_id'] === null) $_tradeDiscAll = $_p;
+                                    else $_tradeDiscBySys[(int) $_r['system_id']] = $_p;
+                                }
+                            } catch (Throwable $e) { /* no trade_discounts — leave editable */ }
+                        }
+                        $_effTradeDisc = static function (?int $sysId) use ($_tradeDiscAll, $_tradeDiscBySys): float {
+                            $s = ($sysId !== null && isset($_tradeDiscBySys[$sysId])) ? $_tradeDiscBySys[$sysId] : 0.0;
+                            return max($_tradeDiscAll, $s);
+                        };
                     ?>
                     <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                         <?= e(ucfirst($basisWord)) ?> and discount can be tuned per system (premium / motorised /
@@ -1471,9 +1501,15 @@ $activeNav = 'products';
                                             <?php endif; ?>
                                         </td>
                                         <td class="num">
-                                            <input type="number" step="0.01" min="0"
-                                                   name="discount[<?= (int) $s['id'] ?>]"
-                                                   value="<?= e((string) ($f['discount'][$key] ?? '0.00')) ?>">
+                                            <?php $ptd = $_effTradeDisc((int) $s['id']); if ($ptd > 0): ?>
+                                                <span style="color:#065f46;font-weight:700"><?= number_format($ptd, 2) ?>%</span>
+                                                <div style="font-size:0.6875rem;color:var(--text-faint);margin-top:0.125rem;line-height:1.2">from your supplier</div>
+                                                <input type="hidden" name="discount[<?= (int) $s['id'] ?>]" value="0">
+                                            <?php else: ?>
+                                                <input type="number" step="0.01" min="0"
+                                                       name="discount[<?= (int) $s['id'] ?>]"
+                                                       value="<?= e((string) ($f['discount'][$key] ?? '0.00')) ?>">
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -1506,9 +1542,15 @@ $activeNav = 'products';
                             </div>
                             <div class="form-group">
                                 <label for="discount_no_sys">Discount %</label>
-                                <input id="discount_no_sys" name="discount" type="number"
-                                       step="0.01" min="0"
-                                       value="<?= e((string) ($f['discount'][''] ?? '0.00')) ?>">
+                                <?php $ptd = $_effTradeDisc(null); if ($ptd > 0): ?>
+                                    <div><span style="color:#065f46;font-weight:700"><?= number_format($ptd, 2) ?>%</span>
+                                        <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.1875rem">from your supplier</small></div>
+                                    <input type="hidden" name="discount" value="0">
+                                <?php else: ?>
+                                    <input id="discount_no_sys" name="discount" type="number"
+                                           step="0.01" min="0"
+                                           value="<?= e((string) ($f['discount'][''] ?? '0.00')) ?>">
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endif; ?>
