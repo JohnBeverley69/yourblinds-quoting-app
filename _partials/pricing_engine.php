@@ -1260,14 +1260,14 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         $discount = max(0.0, (float) $input['discount_override']);
     }
 
-    // "Supplier's trade discount wins": for a factory (supplier) product the trade
-    // discount already came off the base at step 5b and IS the account's buying
-    // discount. The tenant's own client_discounts buying discount is the SAME deal,
-    // so don't stack it on top — drop it to 0 for this line. Only supplier lines
-    // are affected (their discount is a buying discount); a product the account
-    // sources elsewhere never has a trade discount, so its discount is untouched.
-    // The `own` branch's discount is a retail discount — left alone.
-    if ($tradeDiscPct > 0 && ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
+    // "Supplier's trade discount wins": when the supplier's trade discount applies
+    // to this line (only ever a FACTORY-owned product — gated at step 5b), it is THE
+    // discount for that line. Drop the tenant's per-product client_discounts to 0 so
+    // it can't stack on top — uniform across both price_source branches, so a factory
+    // product configured as 'own' behaves the same as one configured as 'supplier'.
+    // A product the account sources elsewhere never has a trade discount ($tradeDiscPct
+    // stays 0), so its own discount is completely untouched.
+    if ($tradeDiscPct > 0) {
         $discount = 0.0;
     }
 
