@@ -770,17 +770,28 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
     } catch (Throwable $e) { /* trade_discounts absent — skip */ }
 
     // Time-boxed promotions (this account or global), within their date window.
+    // A GLOBAL promotion keys on the MASTER product, so match the line product's
+    // own id OR its source_product_id (the master it was pushed from) — that's
+    // how one promotion reaches every account's mirrored copy.
     try {
+        $masterPid = $productId;
+        try {
+            $mp = $pdo->prepare('SELECT COALESCE(NULLIF(source_product_id, 0), id) FROM products WHERE id = ? LIMIT 1');
+            $mp->execute([$productId]);
+            $r = $mp->fetchColumn();
+            if ($r !== false && $r !== null) $masterPid = (int) $r;
+        } catch (Throwable $e) { /* products.source_product_id absent — use own id */ }
+
         $sp = $pdo->prepare(
             'SELECT MAX(discount_percent) FROM trade_promotions
-              WHERE product_id = ? AND active = 1
+              WHERE (product_id = ? OR product_id = ?) AND active = 1
                 AND (client_id IS NULL OR client_id = ?)
                 AND (system_id IS NULL OR system_id = ?)
                 AND (band_code IS NULL OR band_code = ?)
                 AND (starts_on IS NULL OR starts_on <= CURDATE())
                 AND (ends_on   IS NULL OR ends_on   >= CURDATE())'
         );
-        $sp->execute([$productId, $clientId, $systemId, $band]);
+        $sp->execute([$productId, $masterPid, $clientId, $systemId, $band]);
         $v = $sp->fetchColumn();
         if ($v !== false && $v !== null) $best = max($best, (float) $v);
     } catch (Throwable $e) { /* trade_promotions absent — skip */ }
