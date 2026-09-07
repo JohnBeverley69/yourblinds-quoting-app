@@ -2991,6 +2991,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <?php endif; ?>
             }
             if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
+            // Trade (buying) discount from the supplier — already baked into the base above.
+            if (data.trade_discount_percent > 0) {
+                bits.push('trade discount ' + Number(data.trade_discount_percent).toFixed(2) + '% (−£' + Number(data.trade_discount_amount || 0).toFixed(2) + '/blind)');
+            }
             <?php endif; ?>
             // Rounded-up cell size used to be shown here ("rounded up
             // to 1600 × 2000 mm") — trade users found it noisy / not
