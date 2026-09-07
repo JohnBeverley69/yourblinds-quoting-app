@@ -270,39 +270,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $whoId    = (int) ($user['user_id'] ?? 0);
         $whoName  = (string) ($user['full_name'] ?? '');
 
-        // system_id column present? (added by the updated migration) — degrade
-        // gracefully to product/band only on an older schema.
-        $tdHasSys = false;
-        try {
-            $cs = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = 'system_id' LIMIT 1");
-            $cs->execute();
-            $tdHasSys = $cs->fetchColumn() !== false;
-        } catch (Throwable $e) { /* keep false */ }
-
-        $audit = static function (array $row) use ($pdo, $clientId, $whoId, $whoName, $tdHasSys): void {
+        // Optional columns present? (added by successive migrations) — degrade
+        // gracefully on an older schema.
+        $colHas = static function (string $c) use ($pdo): bool {
             try {
+                $s = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = ? LIMIT 1");
+                $s->execute([$c]);
+                return $s->fetchColumn() !== false;
+            } catch (Throwable $e) { return false; }
+        };
+        $tdHasSys   = $colHas('system_id');
+        $tdHasExtra = $colHas('extra_id');
+
+        // Column-aware audit insert (system + extras columns only when present).
+        $audit = static function (array $row) use ($pdo, $clientId, $whoId, $whoName, $tdHasSys, $tdHasExtra): void {
+            try {
+                $cols = ['client_id', 'product_id', 'product_name'];
+                $vals = [$clientId, $row['product_id'] ?? null, $row['product_name'] ?? null];
                 if ($tdHasSys) {
-                    $pdo->prepare(
-                        'INSERT INTO trade_discount_audit
-                           (client_id, product_id, product_name, system_id, system_name, band_code, old_pct, new_pct, action, changed_by, changed_by_name)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                    )->execute([
-                        $clientId, $row['product_id'] ?? null, $row['product_name'] ?? null,
-                        $row['system_id'] ?? null, $row['system_name'] ?? null,
-                        $row['band_code'] ?? null, $row['old_pct'] ?? null, $row['new_pct'] ?? null,
-                        $row['action'], $whoId ?: null, $whoName ?: null,
-                    ]);
-                } else {
-                    $pdo->prepare(
-                        'INSERT INTO trade_discount_audit
-                           (client_id, product_id, product_name, band_code, old_pct, new_pct, action, changed_by, changed_by_name)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                    )->execute([
-                        $clientId, $row['product_id'] ?? null, $row['product_name'] ?? null,
-                        $row['band_code'] ?? null, $row['old_pct'] ?? null, $row['new_pct'] ?? null,
-                        $row['action'], $whoId ?: null, $whoName ?: null,
-                    ]);
+                    $cols[] = 'system_id';   $vals[] = $row['system_id']   ?? null;
+                    $cols[] = 'system_name'; $vals[] = $row['system_name'] ?? null;
                 }
+                $cols[] = 'band_code'; $vals[] = $row['band_code'] ?? null;
+                if ($tdHasExtra) {
+                    $cols[] = 'extra_id';     $vals[] = $row['extra_id']     ?? null;
+                    $cols[] = 'extra_name';   $vals[] = $row['extra_name']   ?? null;
+                    $cols[] = 'choice_id';    $vals[] = $row['choice_id']    ?? null;
+                    $cols[] = 'choice_label'; $vals[] = $row['choice_label'] ?? null;
+                }
+                $cols = array_merge($cols, ['old_pct', 'new_pct', 'action', 'changed_by', 'changed_by_name']);
+                $vals = array_merge($vals, [$row['old_pct'] ?? null, $row['new_pct'] ?? null, $row['action'], $whoId ?: null, $whoName ?: null]);
+                $qs = implode(', ', array_fill(0, count($cols), '?'));
+                $pdo->prepare('INSERT INTO trade_discount_audit (' . implode(', ', $cols) . ') VALUES (' . $qs . ')')->execute($vals);
             } catch (Throwable $e) { /* audit is best-effort */ }
         };
 
@@ -336,8 +335,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // One row per (client, product, system, band) — upsert. Build the
-                // NULL-aware WHERE for the two optional axes.
+                // Components (option/choice) target — validate against this account's
+                // catalogue. A Components discount is keyed on the option/choice and
+                // ignores system/band (it discounts the add-on itself), so choosing an
+                // option clears those axes.
+                $extraId    = null; $extraName   = null;
+                $choiceId   = null; $choiceLabel = null;
+                if ($tdHasExtra) {
+                    $eid = (int) ($_POST['extra_id'] ?? 0);
+                    if ($eid > 0) {
+                        $ec = $pdo->prepare('SELECT name FROM product_extras WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1');
+                        $ec->execute([$eid, $pid, $clientId]);
+                        $en = $ec->fetchColumn();
+                        if ($en !== false) {
+                            $extraId = $eid; $extraName = (string) $en;
+                            $cid = (int) ($_POST['choice_id'] ?? 0);
+                            if ($cid > 0) {
+                                $cc = $pdo->prepare('SELECT label FROM product_extra_choices WHERE id = ? AND product_extra_id = ? LIMIT 1');
+                                $cc->execute([$cid, $eid]);
+                                $cl = $cc->fetchColumn();
+                                if ($cl !== false) { $choiceId = $cid; $choiceLabel = (string) $cl; }
+                            }
+                            $systemId = null; $systemName = null; $bandCode = null;
+                        }
+                    }
+                }
+
+                // One row per (client, product, system, band[, extra, choice]) — upsert.
+                // Build the NULL-aware WHERE across every optional axis present.
                 $where  = 'client_id = ? AND product_id = ?';
                 $params = [$clientId, $pid];
                 if ($tdHasSys) {
@@ -346,13 +371,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $where .= $bandCode === null ? ' AND band_code IS NULL' : ' AND band_code = ?';
                 if ($bandCode !== null) $params[] = $bandCode;
+                if ($tdHasExtra) {
+                    $where .= $extraId === null ? ' AND extra_id IS NULL' : ' AND extra_id = ?';
+                    if ($extraId !== null) $params[] = $extraId;
+                    $where .= $choiceId === null ? ' AND choice_id IS NULL' : ' AND choice_id = ?';
+                    if ($choiceId !== null) $params[] = $choiceId;
+                }
 
                 $ex = $pdo->prepare("SELECT id, discount_percent FROM trade_discounts WHERE $where LIMIT 1");
                 $ex->execute($params);
                 $existing = $ex->fetch(PDO::FETCH_ASSOC);
 
                 $auditRow = ['product_id' => $pid, 'product_name' => (string) $pname,
-                             'system_id' => $systemId, 'system_name' => $systemName, 'band_code' => $bandCode];
+                             'system_id' => $systemId, 'system_name' => $systemName, 'band_code' => $bandCode,
+                             'extra_id' => $extraId, 'extra_name' => $extraName,
+                             'choice_id' => $choiceId, 'choice_label' => $choiceLabel];
 
                 if ($existing) {
                     $pdo->prepare('UPDATE trade_discounts SET discount_percent = ?, active = 1 WHERE id = ?')
@@ -360,21 +393,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $audit($auditRow + ['old_pct' => (float) $existing['discount_percent'], 'new_pct' => $pct, 'action' => 'update']);
                     $_SESSION['flash_success'] = 'Discount updated.';
                 } else {
-                    if ($tdHasSys) {
-                        $pdo->prepare('INSERT INTO trade_discounts (client_id, product_id, system_id, band_code, discount_percent, active) VALUES (?, ?, ?, ?, ?, 1)')
-                            ->execute([$clientId, $pid, $systemId, $bandCode, $pct]);
-                    } else {
-                        $pdo->prepare('INSERT INTO trade_discounts (client_id, product_id, band_code, discount_percent, active) VALUES (?, ?, ?, ?, 1)')
-                            ->execute([$clientId, $pid, $bandCode, $pct]);
-                    }
+                    // Build the INSERT to match the schema present.
+                    $cols = ['client_id', 'product_id'];
+                    $vals = [$clientId, $pid];
+                    if ($tdHasSys)   { $cols[] = 'system_id'; $vals[] = $systemId; }
+                    $cols[] = 'band_code'; $vals[] = $bandCode;
+                    if ($tdHasExtra) { $cols[] = 'extra_id';  $vals[] = $extraId;
+                                       $cols[] = 'choice_id'; $vals[] = $choiceId; }
+                    $cols[] = 'discount_percent'; $vals[] = $pct;
+                    $cols[] = 'active';           $vals[] = 1;
+                    $qs = implode(', ', array_fill(0, count($cols), '?'));
+                    $pdo->prepare('INSERT INTO trade_discounts (' . implode(', ', $cols) . ') VALUES (' . $qs . ')')->execute($vals);
                     $audit($auditRow + ['old_pct' => null, 'new_pct' => $pct, 'action' => 'add']);
                     $_SESSION['flash_success'] = 'Discount added.';
                 }
             } else { // td_delete
                 $tid = (int) ($_POST['td_id'] ?? 0);
                 $selCols = 'td.id, td.product_id, td.band_code, td.discount_percent, p.name AS product_name'
-                         . ($tdHasSys ? ', td.system_id, s.name AS system_name' : '');
-                $selJoin = $tdHasSys ? ' LEFT JOIN product_systems s ON s.id = td.system_id' : '';
+                         . ($tdHasSys ? ', td.system_id, s.name AS system_name' : '')
+                         . ($tdHasExtra ? ', td.extra_id, td.choice_id, pe.name AS extra_name, pec.label AS choice_label' : '');
+                $selJoin = ($tdHasSys ? ' LEFT JOIN product_systems s ON s.id = td.system_id' : '')
+                         . ($tdHasExtra ? ' LEFT JOIN product_extras pe ON pe.id = td.extra_id LEFT JOIN product_extra_choices pec ON pec.id = td.choice_id' : '');
                 $row = $pdo->prepare(
                     "SELECT $selCols FROM trade_discounts td JOIN products p ON p.id = td.product_id$selJoin
                       WHERE td.id = ? AND td.client_id = ? LIMIT 1"
@@ -385,7 +424,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare('DELETE FROM trade_discounts WHERE id = ? AND client_id = ?')->execute([$tid, $clientId]);
                     $audit(['product_id' => (int) $d['product_id'], 'product_name' => (string) $d['product_name'],
                             'system_id' => $d['system_id'] ?? null, 'system_name' => $d['system_name'] ?? null,
-                            'band_code' => $d['band_code'], 'old_pct' => (float) $d['discount_percent'], 'new_pct' => null, 'action' => 'delete']);
+                            'band_code' => $d['band_code'],
+                            'extra_id' => $d['extra_id'] ?? null, 'extra_name' => $d['extra_name'] ?? null,
+                            'choice_id' => $d['choice_id'] ?? null, 'choice_label' => $d['choice_label'] ?? null,
+                            'old_pct' => (float) $d['discount_percent'], 'new_pct' => null, 'action' => 'delete']);
                     $_SESSION['flash_success'] = 'Discount removed.';
                 } else {
                     $_SESSION['flash_error'] = 'Discount not found.';
@@ -515,17 +557,25 @@ try {
 } catch (Throwable $e) { /* not migrated yet */ }
 
 $tdHasSys = false;
+$tdHasExtra = false;
 if ($tdReady) {
     try {
         $cs = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = 'system_id' LIMIT 1");
         $cs->execute();
         $tdHasSys = $cs->fetchColumn() !== false;
     } catch (Throwable $e) { /* older schema — product/band only */ }
+    try {
+        $ce = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = 'extra_id' LIMIT 1");
+        $ce->execute();
+        $tdHasExtra = $ce->fetchColumn() !== false;
+    } catch (Throwable $e) { /* older schema — no Components discounts */ }
 }
 
 $accProducts    = [];   // id => name (this account's products)
 $productBands   = [];   // id => [band codes]
 $productSystems = [];   // id => [{id,name}]
+$productExtras  = [];   // product_id => [{id,name}]   (options, for Components discounts)
+$extraChoices   = [];   // extra_id    => [{id,label}]
 $tradeDiscounts = [];   // rows for this account
 $tdAudit        = [];   // recent change history
 if ($tdReady) {
@@ -579,11 +629,34 @@ if ($tdReady) {
         foreach ($ss->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $productSystems[(int) $r['product_id']][] = ['id' => (int) $r['id'], 'name' => (string) $r['name']];
         }
+
+        // Options (extras) + their choices — for Components discounts.
+        if ($tdHasExtra) {
+            try {
+                $es = $pdo->prepare("SELECT id, product_id, name FROM product_extras WHERE client_id = ? AND product_id IN ($ph) AND active = 1 ORDER BY sort_order, name");
+                $es->execute(array_merge([$clientId], $pids));
+                $extraIds = [];
+                foreach ($es->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $productExtras[(int) $r['product_id']][] = ['id' => (int) $r['id'], 'name' => (string) $r['name']];
+                    $extraIds[] = (int) $r['id'];
+                }
+                if ($extraIds) {
+                    $eph = implode(',', array_fill(0, count($extraIds), '?'));
+                    $cs2 = $pdo->prepare("SELECT id, product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($eph) AND active = 1 ORDER BY sort_order, label");
+                    $cs2->execute($extraIds);
+                    foreach ($cs2->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                        $extraChoices[(int) $r['product_extra_id']][] = ['id' => (int) $r['id'], 'label' => (string) $r['label']];
+                    }
+                }
+            } catch (Throwable $e) { /* leave empty */ }
+        }
     }
 
     $selCols = 'td.id, td.product_id, td.band_code, td.discount_percent, td.active'
-             . ($tdHasSys ? ', td.system_id, s.name AS system_name' : '');
-    $selJoin = $tdHasSys ? ' LEFT JOIN product_systems s ON s.id = td.system_id' : '';
+             . ($tdHasSys ? ', td.system_id, s.name AS system_name' : '')
+             . ($tdHasExtra ? ', td.extra_id, td.choice_id, pe.name AS extra_name, pec.label AS choice_label' : '');
+    $selJoin = ($tdHasSys ? ' LEFT JOIN product_systems s ON s.id = td.system_id' : '')
+             . ($tdHasExtra ? ' LEFT JOIN product_extras pe ON pe.id = td.extra_id LEFT JOIN product_extra_choices pec ON pec.id = td.choice_id' : '');
     $ds = $pdo->prepare("SELECT $selCols FROM trade_discounts td$selJoin WHERE td.client_id = ? ORDER BY td.product_id");
     $ds->execute([$clientId]);
     $tradeDiscounts = $ds->fetchAll(PDO::FETCH_ASSOC);
@@ -917,9 +990,11 @@ $activeNav = 'trade-accounts';
         <!-- Discounts — buying discount off our trade price, per product / band -->
         <section class="section" id="discounts">
             <h2 class="section-title" style="margin:0 0 0.4rem">Discounts</h2>
-            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem;max-width:70ch">
-                The buying discount this account gets off <strong>our trade price</strong>, per <strong>product</strong> and
-                optional <strong>material group</strong> (band; <em>All</em> = every band). Add as many rows as you need.
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem;max-width:74ch">
+                The buying discount this account gets off <strong>our trade price</strong>. Set it on the
+                <strong>product price</strong> (optionally by system / material group), or — with <em>Applies to →
+                An option</em> — on a specific <strong>option/choice</strong> (a Components discount, e.g. a standing
+                deal on motors). Add as many rows as you need.
             </p>
 
             <?php if (!$tdReady): ?>
@@ -947,20 +1022,43 @@ $activeNav = 'trade-accounts';
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <?php if ($tdHasSys): ?>
+                        <?php if ($tdHasExtra): ?>
                         <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Applies to</div>
+                            <select id="td-target" style="min-width:11rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="product">Product price</option>
+                                <option value="extra">An option (extra)</option>
+                            </select>
+                        </div>
+                        <?php endif; ?>
+                        <?php if ($tdHasSys): ?>
+                        <div id="td-sys-wrap">
                             <div class="lbl" style="margin-bottom:0.2rem">System</div>
                             <select id="td-system" name="system_id" style="min-width:10rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
                                 <option value="">All</option>
                             </select>
                         </div>
                         <?php endif; ?>
-                        <div>
+                        <div id="td-band-wrap">
                             <div class="lbl" style="margin-bottom:0.2rem">Material Group</div>
                             <select id="td-band" name="band_code" style="min-width:10rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
                                 <option value="">All</option>
                             </select>
                         </div>
+                        <?php if ($tdHasExtra): ?>
+                        <div id="td-extra-wrap" hidden>
+                            <div class="lbl" style="margin-bottom:0.2rem">Option</div>
+                            <select id="td-extra" name="extra_id" style="min-width:12rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">— choose option —</option>
+                            </select>
+                        </div>
+                        <div id="td-choice-wrap" hidden>
+                            <div class="lbl" style="margin-bottom:0.2rem">Choice</div>
+                            <select id="td-choice" name="choice_id" style="min-width:11rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">All choices</option>
+                            </select>
+                        </div>
+                        <?php endif; ?>
                         <button type="submit" class="btn btn-primary btn-sm">Add discount</button>
                     </div>
                     <?php if (!$accProducts): ?>
@@ -971,21 +1069,37 @@ $activeNav = 'trade-accounts';
                 <?php if ($tradeDiscounts): ?>
                     <div class="table-wrap">
                         <table class="table">
-                            <thead><tr><th style="text-align:right">Discount %</th><th>Product</th><?php if ($tdHasSys): ?><th>System</th><?php endif; ?><th>Material Group</th><th></th></tr></thead>
+                            <thead><tr><th style="text-align:right">Discount %</th><th>Product</th><th>Applies to</th><th></th></tr></thead>
                             <tbody>
                                 <?php foreach ($tradeDiscounts as $d):
                                     $pn = $accProducts[(int) $d['product_id']] ?? ('#' . (int) $d['product_id']);
                                     $bg = ($d['band_code'] ?? '') === '' ? 'All' : (string) $d['band_code'];
                                     $sy = ($d['system_name'] ?? '') !== '' ? (string) $d['system_name'] : 'All';
+                                    $isExtra = $tdHasExtra && !empty($d['extra_id']);
+                                    $orphan  = false;
+                                    if ($isExtra) {
+                                        if (($d['extra_name'] ?? null) === null) $orphan = true;
+                                        elseif (!empty($d['choice_id']) && ($d['choice_label'] ?? null) === null) $orphan = true;
+                                        $appliesTo = 'Option: ' . (string) ($d['extra_name'] ?? ('#' . (int) $d['extra_id']));
+                                        if (!empty($d['choice_id'])) $appliesTo .= ' → ' . (string) ($d['choice_label'] ?? ('#' . (int) $d['choice_id']));
+                                    } else {
+                                        $appliesTo = 'Price · ' . $sy . ' · ' . $bg;
+                                    }
                                 ?>
-                                    <tr>
+                                    <tr<?= $orphan ? ' style="background:#fef2f2"' : '' ?>>
                                         <td style="text-align:right;font-variant-numeric:tabular-nums"><?= number_format((float) $d['discount_percent'], 2) ?></td>
                                         <td><?= e((string) $pn) ?></td>
-                                        <?php if ($tdHasSys): ?><td><?= e($sy) ?></td><?php endif; ?>
-                                        <td><?= e($bg) ?></td>
+                                        <td>
+                                            <?php if ($orphan): ?>
+                                                <span title="The option or choice this discount targeted no longer exists (deleted, or re-created with a new id). It applies no discount — delete it and re-add against the current option." style="display:inline-block;padding:0.05rem 0.45rem;font-size:0.68rem;font-weight:700;border-radius:999px;background:#fee2e2;color:#b91c1c">⚠ option no longer exists — re-add</span>
+                                                <br><span style="color:var(--text-faint);font-size:0.8125rem"><?= e($appliesTo) ?></span>
+                                            <?php else: ?>
+                                                <?= e($appliesTo) ?>
+                                            <?php endif; ?>
+                                        </td>
                                         <td style="text-align:right">
                                             <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0;display:inline"
-                                                  data-confirm="Remove the <?= e(number_format((float) $d['discount_percent'], 2)) ?>% discount on <?= e((string) $pn) ?> (<?= e($bg) ?>)?">
+                                                  data-confirm="Remove the <?= e(number_format((float) $d['discount_percent'], 2)) ?>% discount on <?= e((string) $pn) ?> (<?= e($appliesTo) ?>)?">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="_action" value="td_delete">
                                                 <input type="hidden" name="id" value="<?= (int) $clientId ?>">
@@ -1003,8 +1117,9 @@ $activeNav = 'trade-accounts';
                 <?php endif; ?>
 
                 <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.75rem 0 0">
-                    <strong>Note:</strong> recording discounts here doesn't change any live prices yet — the pricing engine
-                    starts applying them in the next update (kept separate so nothing moves unexpectedly).
+                    <strong>Note:</strong> these apply <strong>live</strong> — the pricing engine reads them on every
+                    quote. Base and option (Components) discounts are separate; where a standing discount and a
+                    time-boxed promotion both apply, the account gets the <strong>larger</strong> (never both stacked).
                 </p>
 
                 <?php if ($tdAudit): ?>
@@ -1012,11 +1127,17 @@ $activeNav = 'trade-accounts';
                         <summary style="cursor:pointer;font-weight:600;color:var(--link);font-size:0.875rem">Change history</summary>
                         <div class="table-wrap" style="margin-top:0.5rem">
                             <table class="table">
-                                <thead><tr><th>When</th><th>Change</th><th>Product</th><?php if ($tdHasSys): ?><th>System</th><?php endif; ?><th>Group</th><th>By</th></tr></thead>
+                                <thead><tr><th>When</th><th>Change</th><th>Product</th><th>Applies to</th><th>By</th></tr></thead>
                                 <tbody>
                                     <?php foreach ($tdAudit as $a):
                                         $ba = ($a['band_code'] ?? '') === '' ? 'All' : (string) $a['band_code'];
                                         $sy = ($a['system_name'] ?? '') !== '' ? (string) $a['system_name'] : 'All';
+                                        if (!empty($a['extra_id'])) {
+                                            $applies = 'Option: ' . (string) ($a['extra_name'] ?? ('#' . (int) $a['extra_id']));
+                                            if (!empty($a['choice_id'])) $applies .= ' → ' . (string) ($a['choice_label'] ?? ('#' . (int) $a['choice_id']));
+                                        } else {
+                                            $applies = 'Price · ' . $sy . ' · ' . $ba;
+                                        }
                                         $change = $a['action'] === 'delete'
                                             ? ('removed ' . number_format((float) ($a['old_pct'] ?? 0), 2) . '%')
                                             : ($a['action'] === 'update'
@@ -1027,8 +1148,7 @@ $activeNav = 'trade-accounts';
                                             <td style="white-space:nowrap"><?= e(date('j M Y H:i', strtotime((string) $a['changed_at']))) ?></td>
                                             <td><?= e($change) ?></td>
                                             <td><?= e((string) ($a['product_name'] ?? '')) ?></td>
-                                            <?php if ($tdHasSys): ?><td><?= e($sy) ?></td><?php endif; ?>
-                                            <td><?= e($ba) ?></td>
+                                            <td><?= e($applies) ?></td>
                                             <td><?= e((string) ($a['changed_by_name'] ?? '')) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -1156,10 +1276,43 @@ $activeNav = 'trade-accounts';
 (function () {
     var PRODUCT_BANDS   = <?= json_encode($productBands, JSON_UNESCAPED_UNICODE) ?>;
     var PRODUCT_SYSTEMS = <?= json_encode($productSystems, JSON_UNESCAPED_UNICODE) ?>;
-    var prod = document.getElementById('td-product');
-    var band = document.getElementById('td-band');
-    var sys  = document.getElementById('td-system');
+    var PRODUCT_EXTRAS  = <?= json_encode($productExtras, JSON_UNESCAPED_UNICODE) ?>;
+    var EXTRA_CHOICES   = <?= json_encode($extraChoices, JSON_UNESCAPED_UNICODE) ?>;
+    var prod   = document.getElementById('td-product');
+    var band   = document.getElementById('td-band');
+    var sys    = document.getElementById('td-system');
+    var extra  = document.getElementById('td-extra');
+    var choice = document.getElementById('td-choice');
+    var target = document.getElementById('td-target');
+    var sysWrap    = document.getElementById('td-sys-wrap');
+    var bandWrap   = document.getElementById('td-band-wrap');
+    var extraWrap  = document.getElementById('td-extra-wrap');
+    var choiceWrap = document.getElementById('td-choice-wrap');
     if (!prod) return;
+
+    function fillChoices() {
+        if (!choice) return;
+        choice.innerHTML = '<option value="">All choices</option>';
+        ((extra && EXTRA_CHOICES[extra.value]) ? EXTRA_CHOICES[extra.value] : []).forEach(function (c) {
+            var o = document.createElement('option'); o.value = c.id; o.textContent = c.label; choice.appendChild(o);
+        });
+    }
+    function fillExtras() {
+        if (!extra) return;
+        extra.innerHTML = '<option value="">— choose option —</option>';
+        ((PRODUCT_EXTRAS[prod.value]) ? PRODUCT_EXTRAS[prod.value] : []).forEach(function (x) {
+            var o = document.createElement('option'); o.value = x.id; o.textContent = x.name; extra.appendChild(o);
+        });
+        fillChoices();
+    }
+    function applyTarget() {
+        var isExtra = target && target.value === 'extra';
+        if (sysWrap)    sysWrap.hidden    = isExtra;
+        if (bandWrap)   bandWrap.hidden   = isExtra;
+        if (extraWrap)  extraWrap.hidden  = !isExtra;
+        if (choiceWrap) choiceWrap.hidden = !isExtra;
+    }
+
     prod.addEventListener('change', function () {
         if (band) {
             var bands = PRODUCT_BANDS[prod.value] || [];
@@ -1173,7 +1326,11 @@ $activeNav = 'trade-accounts';
             var asy = document.createElement('option'); asy.value = ''; asy.textContent = 'All'; sys.appendChild(asy);
             systems.forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sys.appendChild(o); });
         }
+        fillExtras();
     });
+    if (extra)  extra.addEventListener('change', fillChoices);
+    if (target) target.addEventListener('change', applyTarget);
+    applyTarget();
 })();
 </script>
 <?php endif; ?>

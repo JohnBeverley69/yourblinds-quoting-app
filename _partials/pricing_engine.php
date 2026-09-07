@@ -517,13 +517,14 @@ function pe_apply_extra(
         }
     }
 
-    // 5b. Extra (Components) promotion — our buying discount on THIS option/
-    //     choice, from trade_promotions targeting an extra. Reduces the extra's
+    // 5b. Extra (Components) buying discount on THIS option/choice — the best of
+    //     the account's standing trade_discounts and any time-boxed promotion
+    //     targeting the extra (best-wins, never stacked). Reduces the extra's
     //     amount BEFORE the options markup, mirroring the base trade discount so
-    //     it's a genuine cut in what the account buys the add-on at. best-wins;
+    //     it's a genuine cut in what the account buys the add-on at.
     //     0 (none / pre-migration) leaves the amount untouched — regression-safe.
-    $extraTradeAmt = round($amount, 2);   // extra buying amount before our promo
-    $extraPromoPct = pe_extra_promotion_for_line($pdo, $clientId, $productId, (int) $extra['id'], (int) $choice['id']);
+    $extraTradeAmt = round($amount, 2);   // extra buying amount before our discount
+    $extraPromoPct = pe_extra_trade_discount_for_line($pdo, $clientId, $productId, (int) $extra['id'], (int) $choice['id']);
     $extraPromoAmt = 0.0;
     if ($extraPromoPct > 0 && $amount > 0) {
         $newAmount     = $amount * (1 - $extraPromoPct / 100.0);
@@ -762,6 +763,30 @@ function pe_discount_for_system(PDO $pdo, int $clientId, int $productId, ?int $s
 }
 
 /**
+ * Does $col exist on $table? Cached per-request (static) so the INFORMATION_SCHEMA
+ * probe runs once, not once per quote line. Used to keep engine lookups byte-identical
+ * on a database that hasn't run a newer migration yet (a missing column simply means
+ * the newer filter is skipped rather than throwing inside a swallowing try/catch).
+ */
+function pe_col_exists(PDO $pdo, string $table, string $col): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $col;
+    if (isset($cache[$key])) return $cache[$key];
+    try {
+        $st = $pdo->prepare(
+            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+        );
+        $st->execute([$table, $col]);
+        $exists = $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        $exists = false;
+    }
+    return $cache[$key] = $exists;
+}
+
+/**
  * Best TRADE (buying) discount % for a line — our deal off the trade price,
  * from BOTH the standing per-account `trade_discounts` and the time-boxed
  * `trade_promotions` (which can be global, i.e. client_id NULL). Scoped by
@@ -776,11 +801,15 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
     $band = ($bandCode !== null && $bandCode !== '') ? $bandCode : null;
     $best = 0.0;
 
-    // Standing per-account discounts.
+    // Standing per-account discounts. Once trade_discounts carries extra_id
+    // (Components discounts), those rows must NOT touch the base price — filter
+    // them out. Added conditionally so a pre-migration DB (no extra_id column)
+    // behaves byte-identically instead of throwing inside this try/catch.
     try {
+        $extraFilter = pe_col_exists($pdo, 'trade_discounts', 'extra_id') ? ' AND extra_id IS NULL' : '';
         $st = $pdo->prepare(
             'SELECT MAX(discount_percent) FROM trade_discounts
-              WHERE client_id = ? AND product_id = ? AND active = 1
+              WHERE client_id = ? AND product_id = ? AND active = 1' . $extraFilter . '
                 AND (system_id IS NULL OR system_id = ?)
                 AND (band_code IS NULL OR band_code = ?)'
         );
@@ -857,6 +886,44 @@ function pe_extra_promotion_for_line(PDO $pdo, int $clientId, int $productId, in
     } catch (Throwable $e) {
         return 0.0;   // trade_promotions / source columns absent — no extra promo
     }
+}
+
+/**
+ * Best EXTRA (Components) buying discount % for an option/choice on a line —
+ * the symmetric partner of pe_trade_discount_for_line() for the base. Consults
+ * BOTH layers and returns the single largest (best-discount-wins, never stacked):
+ *   • standing per-account `trade_discounts` (extra_id set) — always-on, THIS
+ *     account only (never global), matched on the account's OWN option/choice ids
+ *     (standing discounts are set against this account's own catalogue rows);
+ *   • time-boxed `trade_promotions` (extra_id set) via pe_extra_promotion_for_line()
+ *     — can be global, source-id aware, honours the date window.
+ * Missing table/column or no match contributes 0, so with none set the extra
+ * amount is unchanged (regression-safe).
+ */
+function pe_extra_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, int $extraId, int $choiceId): float
+{
+    $best = 0.0;
+
+    // Standing per-account Components discount (own ids only; gated so a
+    // pre-migration DB without extra_id skips the query rather than throwing).
+    if (pe_col_exists($pdo, 'trade_discounts', 'extra_id')) {
+        try {
+            $st = $pdo->prepare(
+                'SELECT MAX(discount_percent) FROM trade_discounts
+                  WHERE extra_id IS NOT NULL AND active = 1
+                    AND client_id = ? AND product_id = ? AND extra_id = ?
+                    AND (choice_id IS NULL OR choice_id = ?)'
+            );
+            $st->execute([$clientId, $productId, $extraId, $choiceId]);
+            $v = $st->fetchColumn();
+            if ($v !== false && $v !== null) $best = max($best, (float) $v);
+        } catch (Throwable $e) { /* trade_discounts absent — skip */ }
+    }
+
+    // Time-boxed Components promotion (this account or global).
+    $best = max($best, pe_extra_promotion_for_line($pdo, $clientId, $productId, $extraId, $choiceId));
+
+    return max(0.0, min(100.0, $best));
 }
 
 // ---------------------------------------------------------------------------

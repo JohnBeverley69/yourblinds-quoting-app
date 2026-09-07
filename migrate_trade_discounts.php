@@ -56,13 +56,16 @@ if (!$tableExists('trade_discounts')) {
             product_id       INT           NOT NULL,
             system_id        INT           NULL,          -- NULL = All systems
             band_code        VARCHAR(64)   NULL,          -- NULL = All materials/bands
+            extra_id         INT           NULL,          -- set = a Components (option) discount
+            choice_id        INT           NULL,          -- set = one choice; NULL w/ extra_id = whole option
             discount_percent DOUBLE        NOT NULL DEFAULT 0,
             active           TINYINT       NOT NULL DEFAULT 1,
             notes            VARCHAR(255)  NULL,
             created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             KEY idx_td_client (client_id),
-            KEY idx_td_client_product (client_id, product_id)
+            KEY idx_td_client_product (client_id, product_id),
+            KEY idx_td_extra (extra_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
     $ops[] = 'Created table trade_discounts.';
@@ -71,6 +74,12 @@ if (!$tableExists('trade_discounts')) {
     if (!$colExists('trade_discounts', 'system_id')) {
         $pdo->exec('ALTER TABLE trade_discounts ADD COLUMN system_id INT NULL AFTER product_id');
         $ops[] = 'Added trade_discounts.system_id (NULL = All systems).';
+    }
+    if (!$colExists('trade_discounts', 'extra_id')) {
+        $pdo->exec('ALTER TABLE trade_discounts ADD COLUMN extra_id INT NULL AFTER band_code');
+        $pdo->exec('ALTER TABLE trade_discounts ADD COLUMN choice_id INT NULL AFTER extra_id');
+        $pdo->exec('ALTER TABLE trade_discounts ADD KEY idx_td_extra (extra_id)');
+        $ops[] = 'Added trade_discounts.extra_id / choice_id (Components discounts).';
     }
 }
 
@@ -84,6 +93,10 @@ if (!$tableExists('trade_discount_audit')) {
             system_id        INT           NULL,
             system_name      VARCHAR(150)  NULL,
             band_code        VARCHAR(64)   NULL,
+            extra_id         INT           NULL,
+            extra_name       VARCHAR(150)  NULL,
+            choice_id        INT           NULL,
+            choice_label     VARCHAR(150)  NULL,
             old_pct          DOUBLE        NULL,
             new_pct          DOUBLE        NULL,
             action           VARCHAR(20)   NOT NULL,      -- add | update | delete
@@ -100,6 +113,13 @@ if (!$tableExists('trade_discount_audit')) {
         $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN system_id INT NULL AFTER product_name');
         $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN system_name VARCHAR(150) NULL AFTER system_id');
         $ops[] = 'Added trade_discount_audit.system_id / system_name.';
+    }
+    if (!$colExists('trade_discount_audit', 'extra_id')) {
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN extra_id INT NULL AFTER band_code');
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN extra_name VARCHAR(150) NULL AFTER extra_id');
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN choice_id INT NULL AFTER extra_name');
+        $pdo->exec('ALTER TABLE trade_discount_audit ADD COLUMN choice_label VARCHAR(150) NULL AFTER choice_id');
+        $ops[] = 'Added trade_discount_audit.extra_id / extra_name / choice_id / choice_label.';
     }
 }
 
