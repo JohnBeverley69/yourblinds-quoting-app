@@ -275,16 +275,24 @@ $statusOf = static function (array $p) use ($today): array {
                     <label style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:600;margin-bottom:0.45rem;cursor:pointer">
                         <input type="checkbox" id="acct-global" name="acct_global" value="1"> All accounts (global)
                     </label>
-                    <div id="acct-list" style="display:flex;flex-wrap:wrap;gap:0.4rem 1.25rem;max-height:8.5rem;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;background:var(--bg-card)">
-                        <?php foreach ($accounts as $a): if ((int) $a['id'] === $myClient) continue; ?>
-                            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.875rem;cursor:pointer">
-                                <input type="checkbox" class="acct-cb" name="client_ids[]" value="<?= (int) $a['id'] ?>">
-                                <?= e((string) $a['company_name']) ?>
-                            </label>
-                        <?php endforeach; ?>
-                        <?php if (count($accounts) <= 1): ?><span style="color:var(--text-faint);font-size:0.8125rem">No other accounts yet.</span><?php endif; ?>
+                    <div id="acct-picker">
+                        <div style="display:flex;gap:0.6rem;align-items:center;margin-bottom:0.4rem;flex-wrap:wrap">
+                            <input type="search" id="acct-search" placeholder="Filter accounts&hellip;" autocomplete="off"
+                                   style="flex:1 1 16rem;max-width:22rem;padding:0.35rem 0.55rem;border:1px solid var(--border-strong);border-radius:7px;font:inherit;background:var(--bg-input)">
+                            <span id="acct-count" style="font-size:0.8125rem;color:var(--text-faint)">0 selected</span>
+                            <button type="button" id="acct-clear" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0" hidden>Clear</button>
+                        </div>
+                        <div id="acct-list" style="display:flex;flex-wrap:wrap;gap:0.4rem 1.25rem;max-height:10rem;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;background:var(--bg-card)">
+                            <?php foreach ($accounts as $a): if ((int) $a['id'] === $myClient) continue; ?>
+                                <label class="acct-item" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.875rem;cursor:pointer">
+                                    <input type="checkbox" class="acct-cb" name="client_ids[]" value="<?= (int) $a['id'] ?>">
+                                    <?= e((string) $a['company_name']) ?>
+                                </label>
+                            <?php endforeach; ?>
+                            <?php if (count($accounts) <= 1): ?><span style="color:var(--text-faint);font-size:0.8125rem">No other accounts yet.</span><?php endif; ?>
+                        </div>
                     </div>
-                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.35rem 0 0">Tick <strong>All accounts</strong> for a global promotion, or pick one or more accounts.</p>
+                    <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.35rem 0 0">Tick <strong>All accounts</strong> for a global promotion, or filter and pick one or more.</p>
                 </div>
 
                 <div class="action-row">
@@ -370,16 +378,39 @@ $statusOf = static function (array $p) use ($today): array {
 (function () {
     var BANDS   = <?= json_encode($prodBands, JSON_UNESCAPED_UNICODE) ?>;
     var SYSTEMS = <?= json_encode($prodSystems, JSON_UNESCAPED_UNICODE) ?>;
-    // "All accounts" vs individual account checkboxes.
+    // "All accounts" vs a filterable multi-select of individual accounts.
     var acctGlobal = document.getElementById('acct-global');
+    var acctPicker = document.getElementById('acct-picker');
     var acctList   = document.getElementById('acct-list');
+    var acctSearch = document.getElementById('acct-search');
+    var acctCount  = document.getElementById('acct-count');
+    var acctClear  = document.getElementById('acct-clear');
     if (acctGlobal && acctList) {
-        var cbs = acctList.querySelectorAll('.acct-cb');
+        var cbs   = Array.prototype.slice.call(acctList.querySelectorAll('.acct-cb'));
+        var items = Array.prototype.slice.call(acctList.querySelectorAll('.acct-item'));
+        function updateCount() {
+            var n = cbs.filter(function (c) { return c.checked; }).length;
+            if (acctCount) acctCount.textContent = n + ' selected';
+            if (acctClear) acctClear.hidden = (n === 0);
+        }
         acctGlobal.addEventListener('change', function () {
-            cbs.forEach(function (c) { c.disabled = acctGlobal.checked; if (acctGlobal.checked) c.checked = false; });
-            acctList.style.opacity = acctGlobal.checked ? '0.5' : '1';
+            if (acctGlobal.checked) { cbs.forEach(function (c) { c.checked = false; }); updateCount(); }
+            if (acctPicker) acctPicker.hidden = acctGlobal.checked;   // hide the list when global
         });
-        cbs.forEach(function (c) { c.addEventListener('change', function () { if (c.checked) acctGlobal.checked = false; }); });
+        cbs.forEach(function (c) { c.addEventListener('change', function () {
+            if (c.checked) acctGlobal.checked = false;
+            updateCount();
+        }); });
+        if (acctSearch) acctSearch.addEventListener('input', function () {
+            var q = (acctSearch.value || '').trim().toLowerCase();
+            items.forEach(function (it) {
+                it.style.display = (q === '' || it.textContent.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+        if (acctClear) acctClear.addEventListener('click', function () {
+            cbs.forEach(function (c) { c.checked = false; }); updateCount();
+        });
+        updateCount();
     }
 
     var prod = document.getElementById('pr-product');
