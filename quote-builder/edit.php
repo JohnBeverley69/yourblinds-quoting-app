@@ -10,7 +10,7 @@ require __DIR__ . '/../_partials/pricing_basis.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 // Markup vs margin — only relabels the admin internal-cost hint below.
 $pricingBasis = pricing_basis_for(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';

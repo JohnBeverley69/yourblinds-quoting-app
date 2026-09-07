@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 
