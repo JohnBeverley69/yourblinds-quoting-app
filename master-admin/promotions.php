@@ -39,6 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
             $pid    = (int) ($_POST['product_id'] ?? 0);
             $sid    = (int) ($_POST['system_id'] ?? 0);      // 0 = All
             $band   = trim((string) ($_POST['band_code'] ?? ''));
+            $target = (string) ($_POST['target'] ?? 'product');   // 'product' | 'extra'
+            $eid    = (int) ($_POST['extra_id'] ?? 0);
+            $chid   = (int) ($_POST['choice_id'] ?? 0);      // 0 = all choices
             $pct    = max(0.0, min(100.0, (float) ($_POST['discount_percent'] ?? 0)));
             $start  = trim((string) ($_POST['starts_on'] ?? ''));
             $end    = trim((string) ($_POST['ends_on'] ?? ''));
@@ -48,24 +51,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 static fn ($n) => $n > 0
             )));
 
+            $hasExtraCol = false;
+            try { $cec = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_promotions' AND COLUMN_NAME = 'extra_id' LIMIT 1"); $cec->execute(); $hasExtraCol = $cec->fetchColumn() !== false; } catch (Throwable $e) {}
+            $isExtra = ($target === 'extra' && $hasExtraCol);
+
             // Product must be one of OUR master products.
             $pc = $pdo->prepare('SELECT 1 FROM products WHERE id = ? AND client_id = ? LIMIT 1');
             $pc->execute([$pid, $myClient]);
-            if (!$pc->fetchColumn()) {
+            $productOk = (bool) $pc->fetchColumn();
+
+            // Validate the option/choice for a Components promotion.
+            $extraId = null; $choiceId = null; $extraErr = null;
+            if ($isExtra) {
+                $ec = $pdo->prepare('SELECT 1 FROM product_extras WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1');
+                $ec->execute([$eid, $pid, $myClient]);
+                if ($eid <= 0 || !$ec->fetchColumn()) {
+                    $extraErr = 'Pick an option that belongs to this product.';
+                } else {
+                    $extraId = $eid;
+                    if ($chid > 0) {
+                        $cc = $pdo->prepare('SELECT 1 FROM product_extra_choices WHERE id = ? AND product_extra_id = ? LIMIT 1');
+                        $cc->execute([$chid, $eid]);
+                        if ($cc->fetchColumn()) $choiceId = $chid;
+                    }
+                }
+            }
+
+            if (!$productOk) {
                 $_SESSION['flash_error'] = 'Pick a product from the master catalogue.';
             } elseif ($start !== '' && $end !== '' && $end < $start) {
                 $_SESSION['flash_error'] = 'The end date is before the start date.';
             } elseif (!$global && !$selIds) {
                 $_SESSION['flash_error'] = 'Tick "All accounts", or choose at least one account.';
+            } elseif ($extraErr !== null) {
+                $_SESSION['flash_error'] = $extraErr;
             } else {
-                // Optional scopes, validated.
-                $systemId = null;
-                if ($sid > 0) {
-                    $sc = $pdo->prepare('SELECT 1 FROM product_systems WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1');
-                    $sc->execute([$sid, $pid, $myClient]);
-                    if ($sc->fetchColumn()) $systemId = $sid;
+                // System/band apply to the base price only, never to a Components
+                // promotion (an extra is priced on its own axis).
+                $systemId = null; $bandCode = null;
+                if (!$isExtra) {
+                    if ($sid > 0) {
+                        $sc = $pdo->prepare('SELECT 1 FROM product_systems WHERE id = ? AND product_id = ? AND client_id = ? LIMIT 1');
+                        $sc->execute([$sid, $pid, $myClient]);
+                        if ($sc->fetchColumn()) $systemId = $sid;
+                    }
+                    $bandCode = ($band === '' || strcasecmp($band, 'all') === 0) ? null : $band;
                 }
-                $bandCode = ($band === '' || strcasecmp($band, 'all') === 0) ? null : $band;
 
                 // Targets: one promotion row per account (NULL = global). "All
                 // accounts" ticked wins and collapses to a single global row.
@@ -82,17 +113,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
                 if (!$targets) {
                     $_SESSION['flash_error'] = 'None of the chosen accounts were found.';
                 } else {
-                    $ins = $pdo->prepare(
-                        'INSERT INTO trade_promotions
-                           (name, client_id, product_id, system_id, band_code, discount_percent, starts_on, ends_on, active, created_by)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
-                    );
+                    $ins = $hasExtraCol
+                        ? $pdo->prepare('INSERT INTO trade_promotions (name, client_id, product_id, system_id, band_code, extra_id, choice_id, discount_percent, starts_on, ends_on, active, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+                        : $pdo->prepare('INSERT INTO trade_promotions (name, client_id, product_id, system_id, band_code, discount_percent, starts_on, ends_on, active, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)');
                     $nameVal = $name !== '' ? mb_substr($name, 0, 150) : null;
                     $sVal    = $start !== '' ? $start : null;
                     $eVal    = $end   !== '' ? $end   : null;
                     $by      = (int) ($user['user_id'] ?? 0) ?: null;
                     foreach ($targets as $t) {
-                        $ins->execute([$nameVal, $t, $pid, $systemId, $bandCode, $pct, $sVal, $eVal, $by]);
+                        if ($hasExtraCol) {
+                            $ins->execute([$nameVal, $t, $pid, $systemId, $bandCode, $extraId, $choiceId, $pct, $sVal, $eVal, $by]);
+                        } else {
+                            $ins->execute([$nameVal, $t, $pid, $systemId, $bandCode, $pct, $sVal, $eVal, $by]);
+                        }
                     }
                     $n = count($targets);
                     $_SESSION['flash_success'] = $global
@@ -121,11 +154,23 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
+// Components (extras) promotions available? (extra_id column present)
+$tpHasExtra = false;
+if ($ready) {
+    try {
+        $ce = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_promotions' AND COLUMN_NAME = 'extra_id' LIMIT 1");
+        $ce->execute();
+        $tpHasExtra = $ce->fetchColumn() !== false;
+    } catch (Throwable $e) { /* base-only */ }
+}
+
 // ── Data ─────────────────────────────────────────────────────────────────────
-$products = [];     // master products: id => name
-$prodBands = [];    // id => [bands]
-$prodSystems = [];  // id => [{id,name}]
-$accounts = [];     // clients for the scope dropdown
+$products = [];      // master products: id => name
+$prodBands = [];     // id => [bands]
+$prodSystems = [];   // id => [{id,name}]
+$prodExtras = [];    // product_id => [{id,name}]  (options)
+$extraChoices = [];  // extra_id  => [{id,label}]
+$accounts = [];      // clients for the scope dropdown
 $promos = [];
 if ($ready) {
     try {
@@ -164,18 +209,41 @@ if ($ready) {
             $ss->execute(array_merge([$myClient], $pids));
             foreach ($ss->fetchAll(PDO::FETCH_ASSOC) as $r) $prodSystems[(int) $r['product_id']][] = ['id' => (int) $r['id'], 'name' => (string) $r['name']];
         } catch (Throwable $e) { /* leave empty */ }
+
+        // Options (extras) + their choices — for Components promotions.
+        if ($tpHasExtra) {
+            try {
+                $es = $pdo->prepare("SELECT id, product_id, name FROM product_extras WHERE client_id = ? AND product_id IN ($ph) AND active = 1 ORDER BY sort_order, name");
+                $es->execute(array_merge([$myClient], $pids));
+                $extraIds = [];
+                foreach ($es->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $prodExtras[(int) $r['product_id']][] = ['id' => (int) $r['id'], 'name' => (string) $r['name']];
+                    $extraIds[] = (int) $r['id'];
+                }
+                if ($extraIds) {
+                    $eph = implode(',', array_fill(0, count($extraIds), '?'));
+                    $cs = $pdo->prepare("SELECT id, product_extra_id, label FROM product_extra_choices WHERE product_extra_id IN ($eph) AND active = 1 ORDER BY sort_order, label");
+                    $cs->execute($extraIds);
+                    foreach ($cs->fetchAll(PDO::FETCH_ASSOC) as $r) $extraChoices[(int) $r['product_extra_id']][] = ['id' => (int) $r['id'], 'label' => (string) $r['label']];
+                }
+            } catch (Throwable $e) { /* leave empty */ }
+        }
     }
 
     $accounts = $pdo->query('SELECT id, company_name FROM clients ORDER BY company_name')->fetchAll(PDO::FETCH_ASSOC);
     $accName  = [];
     foreach ($accounts as $a) $accName[(int) $a['id']] = (string) $a['company_name'];
 
+    $extraSel  = $tpHasExtra ? ', pe.name AS extra_name, pec.label AS choice_label' : '';
+    $extraJoin = $tpHasExtra
+        ? ' LEFT JOIN product_extras pe ON pe.id = tp.extra_id LEFT JOIN product_extra_choices pec ON pec.id = tp.choice_id'
+        : '';
     $promos = $pdo->query(
-        'SELECT tp.*, p.name AS product_name, s.name AS system_name
+        "SELECT tp.*, p.name AS product_name, s.name AS system_name$extraSel
            FROM trade_promotions tp
       LEFT JOIN products p        ON p.id = tp.product_id
-      LEFT JOIN product_systems s ON s.id = tp.system_id
-       ORDER BY tp.active DESC, tp.ends_on IS NULL, tp.ends_on, tp.product_id'
+      LEFT JOIN product_systems s ON s.id = tp.system_id$extraJoin
+       ORDER BY tp.active DESC, tp.ends_on IS NULL, tp.ends_on, tp.product_id"
     )->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -192,11 +260,22 @@ for ($i = 0; $i < count($active); $i++) {
     for ($j = $i + 1; $j < count($active); $j++) {
         $a = $active[$i]; $b = $active[$j];
         if ((int) $a['product_id'] !== (int) $b['product_id']) continue;
-        $sysOk   = ($a['system_id'] === null || $b['system_id'] === null || (int) $a['system_id'] === (int) $b['system_id']);
-        $bandOk  = (($a['band_code'] ?? '') === '' || ($b['band_code'] ?? '') === '' || (string) $a['band_code'] === (string) $b['band_code']);
+        // A Components (extra) promotion and a base-price promotion never
+        // collide — they discount different things.
+        $aExtra = $tpHasExtra && !empty($a['extra_id']);
+        $bExtra = $tpHasExtra && !empty($b['extra_id']);
+        if ($aExtra !== $bExtra) continue;
+        if ($aExtra) {
+            if ((int) $a['extra_id'] !== (int) $b['extra_id']) continue;   // different options
+            $targetOk = (empty($a['choice_id']) || empty($b['choice_id']) || (int) $a['choice_id'] === (int) $b['choice_id']);
+        } else {
+            $sysOk    = ($a['system_id'] === null || $b['system_id'] === null || (int) $a['system_id'] === (int) $b['system_id']);
+            $bandOk   = (($a['band_code'] ?? '') === '' || ($b['band_code'] ?? '') === '' || (string) $a['band_code'] === (string) $b['band_code']);
+            $targetOk = $sysOk && $bandOk;
+        }
         $scopeOk = ($a['client_id'] === null || $b['client_id'] === null || (int) $a['client_id'] === (int) $b['client_id']);
         $dateOk  = $overlap($a['starts_on'], $a['ends_on'], $b['starts_on'], $b['ends_on']);
-        if ($sysOk && $bandOk && $scopeOk && $dateOk) {
+        if ($targetOk && $scopeOk && $dateOk) {
             $conflicts[(int) $a['id']][] = (int) $b['id'];
             $conflicts[(int) $b['id']][] = (int) $a['id'];
         }
@@ -257,8 +336,8 @@ $statusOf = static function (array $p) use ($today): array {
         <?php if ($conflicts): ?>
             <div class="alert" role="alert" style="background:#fffbeb;border:1px solid #fde68a;color:#78350f">
                 <strong>&#9888; Overlapping promotions.</strong>
-                <?= count($conflicts) ?> promotion<?= count($conflicts) === 1 ? '' : 's' ?> overlap another on the same product /
-                system / band and date window. The price still resolves to the <strong>largest</strong> applicable % (best-wins),
+                <?= count($conflicts) ?> promotion<?= count($conflicts) === 1 ? '' : 's' ?> overlap another that could apply to the
+                same line (same product + scope, within the same dates). The price still resolves to the <strong>largest</strong> applicable % (best-wins),
                 but you may want to tidy these up. Overlapping rows are highlighted below.
             </div>
         <?php endif; ?>
@@ -307,8 +386,21 @@ $statusOf = static function (array $p) use ($today): array {
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div><div class="lbl">System</div><select id="pr-system" name="system_id" style="min-width:9rem"><option value="">All</option></select></div>
-                    <div><div class="lbl">Material Group</div><select id="pr-band" name="band_code" style="min-width:8rem"><option value="">All</option></select></div>
+                    <?php if ($tpHasExtra): ?>
+                    <div>
+                        <div class="lbl">Applies to</div>
+                        <select id="tp-target" name="target" style="min-width:11rem">
+                            <option value="product">Product price</option>
+                            <option value="extra">An option (extra)</option>
+                        </select>
+                    </div>
+                    <?php endif; ?>
+                    <div id="tp-sys-wrap"><div class="lbl">System</div><select id="pr-system" name="system_id" style="min-width:9rem"><option value="">All</option></select></div>
+                    <div id="tp-band-wrap"><div class="lbl">Material Group</div><select id="pr-band" name="band_code" style="min-width:8rem"><option value="">All</option></select></div>
+                    <?php if ($tpHasExtra): ?>
+                    <div id="tp-extra-wrap" hidden><div class="lbl">Option</div><select id="pr-extra" name="extra_id" style="min-width:12rem"><option value="">— choose option —</option></select></div>
+                    <div id="tp-choice-wrap" hidden><div class="lbl">Choice</div><select id="pr-choice" name="choice_id" style="min-width:11rem"><option value="">All choices</option></select></div>
+                    <?php endif; ?>
                     <div><div class="lbl">Start</div><input type="date" name="starts_on"></div>
                     <div><div class="lbl">End</div><input type="date" name="ends_on"></div>
                     <button type="submit" class="btn btn-primary btn-sm">Add promotion</button>
@@ -329,12 +421,20 @@ $statusOf = static function (array $p) use ($today): array {
                 <div class="table-wrap">
                     <table class="table">
                         <thead>
-                            <tr><th>Status</th><th style="text-align:right">%</th><th>Product</th><th>System</th><th>Band</th><th>Accounts</th><th>Runs</th><th></th></tr>
+                            <tr><th>Status</th><th style="text-align:right">%</th><th>Product</th><th>Applies to</th><th>Accounts</th><th>Runs</th><th></th></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($promos as $p):
                                 [$slabel, $scolour] = $statusOf($p);
                                 $hasConflict = isset($conflicts[(int) $p['id']]);
+                                if ($tpHasExtra && !empty($p['extra_id'])) {
+                                    $appliesTo = 'Option: ' . (string) ($p['extra_name'] ?? ('#' . (int) $p['extra_id']));
+                                    if (!empty($p['choice_id'])) $appliesTo .= ' → ' . (string) ($p['choice_label'] ?? ('#' . (int) $p['choice_id']));
+                                } else {
+                                    $sy = ($p['system_name'] ?? '') !== '' ? (string) $p['system_name'] : 'All';
+                                    $bd = ($p['band_code']  ?? '') !== '' ? (string) $p['band_code']  : 'All';
+                                    $appliesTo = 'Price · ' . $sy . ' · ' . $bd;
+                                }
                             ?>
                                 <tr class="<?= $hasConflict ? 'conflict' : '' ?>">
                                     <td>
@@ -343,8 +443,7 @@ $statusOf = static function (array $p) use ($today): array {
                                     </td>
                                     <td style="text-align:right;font-variant-numeric:tabular-nums"><?= number_format((float) $p['discount_percent'], 2) ?></td>
                                     <td><?= e((string) ($p['product_name'] ?? ('#' . (int) $p['product_id']))) ?><?php if (($p['name'] ?? '') !== ''): ?><br><span style="color:var(--text-faint);font-size:0.8125rem"><?= e((string) $p['name']) ?></span><?php endif; ?></td>
-                                    <td><?= e(($p['system_name'] ?? '') !== '' ? (string) $p['system_name'] : 'All') ?></td>
-                                    <td><?= e(($p['band_code'] ?? '') !== '' ? (string) $p['band_code'] : 'All') ?></td>
+                                    <td><?= e($appliesTo) ?></td>
                                     <td><?= $p['client_id'] === null ? 'All (global)' : e($accName[(int) $p['client_id']] ?? ('#' . (int) $p['client_id'])) ?></td>
                                     <td style="white-space:nowrap"><?= e($fmtDate($p['starts_on'])) ?> &ndash; <?= e($fmtDate($p['ends_on'])) ?></td>
                                     <td style="text-align:right;white-space:nowrap">
@@ -413,20 +512,51 @@ $statusOf = static function (array $p) use ($today): array {
         updateCount();
     }
 
-    var prod = document.getElementById('pr-product');
-    var band = document.getElementById('pr-band');
-    var sys  = document.getElementById('pr-system');
-    if (!prod) return;
-    prod.addEventListener('change', function () {
-        if (band) {
-            band.innerHTML = '<option value="">All</option>';
-            (BANDS[prod.value] || []).forEach(function (b) { var o = document.createElement('option'); o.value = b; o.textContent = b; band.appendChild(o); });
-        }
-        if (sys) {
-            sys.innerHTML = '<option value="">All</option>';
-            (SYSTEMS[prod.value] || []).forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sys.appendChild(o); });
-        }
+    var EXTRAS  = <?= json_encode($prodExtras, JSON_UNESCAPED_UNICODE) ?>;
+    var CHOICES = <?= json_encode($extraChoices, JSON_UNESCAPED_UNICODE) ?>;
+
+    var prod       = document.getElementById('pr-product');
+    var band       = document.getElementById('pr-band');
+    var sys        = document.getElementById('pr-system');
+    var extra      = document.getElementById('pr-extra');
+    var choice     = document.getElementById('pr-choice');
+    var target     = document.getElementById('tp-target');
+    var sysWrap    = document.getElementById('tp-sys-wrap');
+    var bandWrap   = document.getElementById('tp-band-wrap');
+    var extraWrap  = document.getElementById('tp-extra-wrap');
+    var choiceWrap = document.getElementById('tp-choice-wrap');
+
+    function fillChoices() {
+        if (!choice) return;
+        choice.innerHTML = '<option value="">All choices</option>';
+        ((extra && CHOICES[extra.value]) ? CHOICES[extra.value] : []).forEach(function (c) {
+            var o = document.createElement('option'); o.value = c.id; o.textContent = c.label; choice.appendChild(o);
+        });
+    }
+    function fillExtras() {
+        if (!extra) return;
+        extra.innerHTML = '<option value="">— choose option —</option>';
+        ((prod && EXTRAS[prod.value]) ? EXTRAS[prod.value] : []).forEach(function (x) {
+            var o = document.createElement('option'); o.value = x.id; o.textContent = x.name; extra.appendChild(o);
+        });
+        fillChoices();
+    }
+    function applyTarget() {
+        var isExtra = target && target.value === 'extra';
+        if (sysWrap)    sysWrap.hidden    = isExtra;
+        if (bandWrap)   bandWrap.hidden   = isExtra;
+        if (extraWrap)  extraWrap.hidden  = !isExtra;
+        if (choiceWrap) choiceWrap.hidden = !isExtra;
+    }
+
+    if (prod) prod.addEventListener('change', function () {
+        if (band) { band.innerHTML = '<option value="">All</option>'; (BANDS[prod.value] || []).forEach(function (b) { var o = document.createElement('option'); o.value = b; o.textContent = b; band.appendChild(o); }); }
+        if (sys)  { sys.innerHTML  = '<option value="">All</option>'; (SYSTEMS[prod.value] || []).forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sys.appendChild(o); }); }
+        fillExtras();
     });
+    if (extra)  extra.addEventListener('change', fillChoices);
+    if (target) target.addEventListener('change', applyTarget);
+    applyTarget();
 })();
 </script>
 <?php endif; ?>
