@@ -185,6 +185,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                // Came from the "New order" launcher (open account → then quote)?
+                // Hand off to the launcher to start a quote FOR the new account.
+                if (($_GET['after'] ?? '') === 'quote') {
+                    $_SESSION['flash_success'] = 'Account "' . $f['company_name'] . '" created — starting their quote.';
+                    header('Location: /master-admin/new-order.php?account=' . $newClientId . '&auto=1');
+                    exit;
+                }
+
                 $loginNote = $newAdminUserId
                     ? ($confirmSent
                         ? ' A confirmation email was sent to ' . $f['admin_email']

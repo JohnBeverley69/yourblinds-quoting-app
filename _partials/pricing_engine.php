@@ -304,7 +304,8 @@ function pe_apply_extra(
     int   $widthMm,
     float $basePrice,
     ?float $userValue = null,
-    ?int  $dropMm = null
+    ?int  $dropMm = null,
+    int   $forAccountId = 0
 ): array {
     // 1. Verify the extra belongs to this product + tenant. Option-level
     //    system scope no longer exists in this model — an option appears
@@ -524,7 +525,8 @@ function pe_apply_extra(
     //     it's a genuine cut in what the account buys the add-on at.
     //     0 (none / pre-migration) leaves the amount untouched — regression-safe.
     $extraTradeAmt = round($amount, 2);   // extra buying amount before our discount
-    $extraPromoPct = pe_extra_trade_discount_for_line($pdo, $clientId, $productId, (int) $extra['id'], (int) $choice['id']);
+    $extraDiscClientId = $forAccountId > 0 ? $forAccountId : $clientId;   // account's deal when quoting on their behalf
+    $extraPromoPct = pe_extra_trade_discount_for_line($pdo, $extraDiscClientId, $productId, (int) $extra['id'], (int) $choice['id']);
     $extraPromoAmt = 0.0;
     if ($extraPromoPct > 0 && $amount > 0) {
         $newAmount     = $amount * (1 - $extraPromoPct / 100.0);
@@ -879,6 +881,43 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
 }
 
 /**
+ * Best standing trade (buying) discount an ACCOUNT has, matched by MASTER product
+ * — for when a super-admin quotes a factory product ON BEHALF OF the account (a
+ * factory-owned quote sent TO them). The account's discount is stored against its
+ * OWN mirrored copy of the product; a factory quote line carries the factory's
+ * master product. Both resolve to the same master id (COALESCE(source_product_id,
+ * id)), so we match on that instead of an exact product_id. System is matched as
+ * "All" (NULL) or an exact id — a system-specific discount set against a mirrored
+ * system id won't cross to the master, so those stay account-portal only for now.
+ * Best-wins; 0.0 when none / pre-mirroring schema. Isolated to this flow, so
+ * ordinary pricing is untouched.
+ */
+function pe_account_trade_discount_for_master(PDO $pdo, int $accountId, int $lineProductId, ?int $systemId, ?string $bandCode): float
+{
+    $band = ($bandCode !== null && $bandCode !== '') ? $bandCode : null;
+    try {
+        if (!pe_col_exists($pdo, 'products', 'source_product_id')) return 0.0;
+        $extraFilter = pe_col_exists($pdo, 'trade_discounts', 'extra_id') ? ' AND td.extra_id IS NULL' : '';
+        $st = $pdo->prepare(
+            'SELECT MAX(td.discount_percent)
+               FROM trade_discounts td
+               JOIN products p  ON p.id = td.product_id
+               JOIN products lp ON lp.id = ?
+              WHERE td.client_id = ? AND td.active = 1' . $extraFilter . '
+                AND COALESCE(NULLIF(p.source_product_id, 0), p.id)
+                    = COALESCE(NULLIF(lp.source_product_id, 0), lp.id)
+                AND (td.system_id IS NULL OR td.system_id = ?)
+                AND (td.band_code IS NULL OR td.band_code = ?)'
+        );
+        $st->execute([$lineProductId, $accountId, $systemId, $band]);
+        $v = $st->fetchColumn();
+        return ($v !== false && $v !== null) ? max(0.0, min(100.0, (float) $v)) : 0.0;
+    } catch (Throwable $e) {
+        return 0.0;
+    }
+}
+
+/**
  * Best EXTRA (Components) promotion % for an option/choice on a line — from
  * trade_promotions rows that TARGET an extra (extra_id set). Matches by product,
  * extra and, if the promotion names one, a specific choice; honours the account
@@ -981,8 +1020,13 @@ function pe_extra_trade_discount_for_line(PDO $pdo, int $clientId, int $productI
  *
  * On any resolution failure, returns ['error' => '<human-readable message>'].
  */
-function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
+function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccountId = 0): array
 {
+    // $forAccountId: when a super-admin quotes ON BEHALF OF a trade account (a
+    // factory quote sent TO that account), the per-account BUYING discount to
+    // apply is the ACCOUNT's, not the factory's own. It only steers the trade-
+    // discount lookup (step 5b, base + extras); the base price, extras and markup
+    // stay the quoting client's. 0 = ordinary quote — byte-identical to before.
     $productId = (int) ($input['product_id'] ?? 0);
     $systemId  = (isset($input['system_id']) && (int) $input['system_id'] > 0)
                ? (int) $input['system_id'] : null;
@@ -1189,9 +1233,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
     //     product the account sources elsewhere (or its own) is never touched,
     //     so its own buying discount / retail discount is left entirely alone.
     $tradeBandCode  = ($requiresOption && $fabric) ? (string) $fabric['band_code'] : null;
-    $tradeDiscPct   = pe_is_factory_product($pdo, $productId)
-        ? pe_trade_discount_for_line($pdo, $clientId, $productId, $systemId, $tradeBandCode)
-        : 0.0;
+    if (!pe_is_factory_product($pdo, $productId)) {
+        $tradeDiscPct = 0.0;
+    } elseif ($forAccountId > 0) {
+        // Quoting on the account's behalf: their discount is saved against THEIR
+        // mirrored copy of the product, so match by master product id.
+        $tradeDiscPct = pe_account_trade_discount_for_master($pdo, $forAccountId, $productId, $systemId, $tradeBandCode);
+    } else {
+        $tradeDiscPct = pe_trade_discount_for_line($pdo, $clientId, $productId, $systemId, $tradeBandCode);
+    }
     $tradePriceUnit = round($basePrice, 2);   // trade price per blind, before our discount
     $tradeDiscAmt   = 0.0;
     if ($tradeDiscPct > 0) {
@@ -1230,7 +1280,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
 
         $applied = pe_apply_extra(
             $pdo, $clientId, $productId, $systemId, $eid, $cid,
-            $widthMm, $basePrice, $userValue, $dropMm
+            $widthMm, $basePrice, $userValue, $dropMm, $forAccountId
         );
         if (isset($applied['error'])) {
             return ['error' => $applied['error']];

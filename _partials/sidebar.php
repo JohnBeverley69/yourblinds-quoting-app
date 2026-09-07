@@ -317,6 +317,16 @@ window.addEventListener('pageshow', function (e) {
                 InstaPrice
             </a>
         </div>
+        <?php if ($isSuperAdmin && $hasQuotes): ?>
+            <!-- Super-admin: raise a quote for a trade account (their pricing,
+                 sent to them) or a new customer, via the "who for?" launcher. -->
+            <div class="sidebar-cta" style="padding-top:0.375rem">
+                <a href="/master-admin/new-order.php" class="sidebar-cta-btn">
+                    <span aria-hidden="true">&#128221;</span>
+                    New order
+                </a>
+            </div>
+        <?php endif; ?>
 
         <nav class="app-sidebar-nav">
 <?php foreach ($navSections as $section):

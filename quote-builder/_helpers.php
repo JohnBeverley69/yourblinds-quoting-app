@@ -911,13 +911,17 @@ function qb_create_measure_from_quote(PDO $pdo, int $quoteId, ?int $assignedUser
  * by the manual form submit and the "Start quote" calendar shortcut that
  * creates a quote straight from an appointment without the confirm screen.
  */
-function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $appointmentId, int $userId): array
+function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $appointmentId, int $userId, int $accountClientId = 0): array
 {
+    // $accountClientId > 0 => a factory quote raised FOR a trade account (via the
+    // "New order" launcher). The account is the customer, so we don't spawn a
+    // separate one-off customer record, and we tag the quote with the account.
     $pdo->beginTransaction();
     try {
         // If no existing customer picked but a name was entered, auto-create a
         // customer record so the same person is findable on the next quote.
-        if ((int) ($f['customer_id'] ?? 0) === 0 && (string) $f['end_customer_name'] !== '') {
+        // Skipped for an account quote — the account itself is the customer.
+        if ($accountClientId === 0 && (int) ($f['customer_id'] ?? 0) === 0 && (string) $f['end_customer_name'] !== '') {
             $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
             $custIns = $pdo->prepare(
                 'INSERT INTO customers
@@ -994,6 +998,15 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
             }
         }
         $newId = (int) $pdo->lastInsertId();
+
+        // Tag the quote with the trade account it's for (factory "New order"
+        // flow). Guarded post-insert so it degrades cleanly pre-migration.
+        if ($accountClientId > 0) {
+            try {
+                $pdo->prepare('UPDATE quotes SET account_client_id = ? WHERE id = ?')
+                    ->execute([$accountClientId, $newId]);
+            } catch (Throwable $e) { /* column absent (pre-migration) — ignore */ }
+        }
 
         // Link the originating measure appointment to this quote so its
         // calendar entry tracks the quote's progress. Only fills an as-yet-

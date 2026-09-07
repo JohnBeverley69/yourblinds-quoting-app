@@ -39,6 +39,11 @@ header('Cache-Control: no-store');
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// When a super-admin is previewing a line on a factory quote raised FOR a trade
+// account, price with the account's buying discount so the live preview matches
+// what gets saved. Super-admin only (read-only price probe otherwise); 0 = normal.
+$forAccountId = is_super_admin() ? (int) ($_GET['account_id'] ?? 0) : 0;
+
 // Free-text width / drop, parsed via the shared dimension parser. A bare
 // number is read in the caller's unit (the quote / tenant setting, passed
 // as &unit=); explicit suffixes still override. Defaults to mm.
@@ -130,7 +135,7 @@ if ($canCosts) {
     if (isset($_GET['discount_override']) && is_numeric($_GET['discount_override'])) $input['discount_override'] = (float) $_GET['discount_override'];
 }
 
-$result = pe_calculate_item(db(), $clientId, $input);
+$result = pe_calculate_item(db(), $clientId, $input, $forAccountId);
 if (isset($result['error'])) {
     $result['stage'] = 'engine';
 }

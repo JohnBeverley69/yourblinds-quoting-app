@@ -149,7 +149,7 @@ if ($canCosts) {
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $priced = pe_calculate_item($pdo, $clientId, $input);
+    $priced = pe_calculate_item($pdo, $clientId, $input, (int) ($quote['account_client_id'] ?? 0));
     if (isset($priced['error'])) {
         $pdo->rollBack();
         qb_flash_redirect(
