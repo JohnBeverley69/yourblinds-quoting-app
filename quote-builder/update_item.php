@@ -219,6 +219,7 @@ try {
         $note !== '' ? $note : null,
         $itemId, $quoteId,
     ]);
+    qb_capture_line_wholesale($pdo, $itemId, $priced);   // Phase 2A wholesale capture
 
     // Replace extras: easier than diff'ing — drop them all and reinsert.
     $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id = ?')
@@ -245,6 +246,7 @@ try {
                     $ex['cost_snapshot'] ?? 0,
                     $ex['user_value']    ?? null,
                 ]);
+                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
             }
         } catch (Throwable $e) {
             $insE = $pdo->prepare(
@@ -263,6 +265,7 @@ try {
                     $ex['mode'], $ex['amount_applied'],
                     $ex['cost_snapshot'] ?? 0,
                 ]);
+                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
             }
         }
     }

@@ -205,6 +205,7 @@ try {
         $note !== '' ? $note : null,
     ]);
     $newItemId = (int) $pdo->lastInsertId();
+    qb_capture_line_wholesale($pdo, $newItemId, $priced);   // Phase 2A wholesale capture
 
     // Insert one row per applied extra. cost_snapshot freezes the
     // wholesale cost. user_value snapshots the user-typed length / spec
@@ -230,6 +231,7 @@ try {
                     $ex['cost_snapshot'] ?? 0,
                     $ex['user_value']    ?? null,
                 ]);
+                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
             }
         } catch (Throwable $e) {
             $insE = $pdo->prepare(
@@ -248,6 +250,7 @@ try {
                     $ex['mode'], $ex['amount_applied'],
                     $ex['cost_snapshot'] ?? 0,
                 ]);
+                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
             }
         }
     }

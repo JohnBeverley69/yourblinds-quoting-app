@@ -104,15 +104,16 @@ try {
         $src['notes'],
     ]);
     $newItemId = (int) $pdo->lastInsertId();
+    // Carry the source line's wholesale (trade) breakdown to the clone, verbatim
+    // like amount_applied — the user re-prices on the next Save (Phase 2A).
+    qb_capture_line_wholesale($pdo, $newItemId, $src);
 
     // Copy the source's selected extras so the clone keeps the same
     // option choices. mode + amount_applied carry through verbatim
-    // because we're not re-pricing yet.
+    // because we're not re-pricing yet. SELECT * so the wholesale columns
+    // (trade_amount…) come across too when present (pre-migration: absent).
     $exSt = $pdo->prepare(
-        'SELECT product_extra_id, extra_name_snapshot,
-                product_extra_choice_id, choice_label_snapshot,
-                mode, amount_applied
-           FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
+        'SELECT * FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
     );
     $exSt->execute([$itemId]);
     $insE = $pdo->prepare(
@@ -130,6 +131,7 @@ try {
             $ex['product_extra_choice_id'], $ex['choice_label_snapshot'],
             $ex['mode'], $ex['amount_applied'],
         ]);
+        qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
     }
 
     qb_recompute_totals($quoteId);
