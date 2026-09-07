@@ -285,6 +285,7 @@ $activeNav = 'instaprice';
         if (dimLabel) dimLabel.textContent = 'Dimensions (' + unitSfx() + ')';
     }
     var lastBase = null, lastExtras = 0;
+    var lastTradePct = 0, lastTradeAmt = 0;   // supplier trade (buying) discount, per blind
     var ratesDirty = true;            // reset disc/markup to the system's defaults on next price
     var curDisc = null, curMarkup = null;   // remember overrides across panel rebuilds
     var previewSeq = 0;               // guards against out-of-order preview responses
@@ -726,7 +727,7 @@ $activeNav = 'instaprice';
     function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 250); }
 
     function setPriceIdle(msg, isError) {
-        lastBase = null;
+        lastBase = null; lastTradePct = 0; lastTradeAmt = 0;
         priceBox.className = 'ip-price ' + (isError ? 'is-error' : 'is-idle');
         priceBox.textContent = msg;
         if (toQuoteBtn) toQuoteBtn.disabled = true;
@@ -770,6 +771,8 @@ $activeNav = 'instaprice';
             if (data.error) { setPriceIdle(data.error, true); return; }
             lastBase   = Number(data.base_price);
             lastExtras = Number(data.extras_total || 0);
+            lastTradePct = Number(data.trade_discount_percent || 0);
+            lastTradeAmt = Number(data.trade_discount_amount || 0);
             var engineDisc   = Number(data.discount_percent || 0);
             var engineMarkup = Number(data.markup_percent || 0);
             var panelExists  = !!document.getElementById('ip-disc');
@@ -796,7 +799,8 @@ $activeNav = 'instaprice';
     function renderPricePanel(discDefault, markupDefault) {
         priceBox.className = 'ip-price';
         priceBox.innerHTML =
-            '<div class="ip-row"><span class="lbl">Price</span><span class="val" id="ip-base">—</span></div>'
+            '<div class="ip-row" id="ip-trade-row" hidden><span class="lbl" style="color:#065f46">Trade discount</span><span class="val" id="ip-trade" style="color:#065f46"></span></div>'
+          + '<div class="ip-row"><span class="lbl">Price</span><span class="val" id="ip-base">—</span></div>'
           + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
@@ -833,6 +837,17 @@ $activeNav = 'instaprice';
         var total = round2(sellPer * qty);
 
         document.getElementById('ip-base').textContent = money(pricePer);
+        // Supplier trade discount — informational; the Price above already reflects it.
+        var tradeRow = document.getElementById('ip-trade-row');
+        if (tradeRow) {
+            if (lastTradePct > 0) {
+                document.getElementById('ip-trade').textContent =
+                    lastTradePct.toFixed(2) + '% (−' + money(round2(lastTradeAmt * qty)) + ')';
+                tradeRow.hidden = false;
+            } else {
+                tradeRow.hidden = true;
+            }
+        }
         document.getElementById('ip-disc-price').textContent = money(discountedPer);
         // Headline the TOTAL (qty × unit) in bold; show the single price as
         // the small grey supporting line. For qty 1 the total IS the single

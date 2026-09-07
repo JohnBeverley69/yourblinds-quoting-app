@@ -172,6 +172,7 @@ $navSections = [
             'products' => ['/admin/products/index.php', 'Products', $isAdmin],
             'users'    => ['/admin/users.php',          'Users',    $isAdmin],
             'settings' => ['/admin/settings.php',       'Settings', $isAdmin],
+            'trade-terms' => ['/admin/trade-terms.php', 'Trade terms', $isAdmin],
             'billing'  => ['/billing/index.php',        'Billing',  $isAdmin],
         ],
     ],

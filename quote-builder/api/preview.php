@@ -141,10 +141,14 @@ if (isset($result['error'])) {
 // the raw API response carried them to anyone logged in. The front-end
 // doesn't read these fields, so removing them changes nothing it needs.
 if (!$canCosts && !isset($result['error'])) {
-    unset($result['cost_price_per_blind'], $result['extras_cost_total']);
+    unset(
+        $result['cost_price_per_blind'], $result['extras_cost_total'],
+        // Trade (buying) discount reveals the account's wholesale cost — cost-viewers only.
+        $result['trade_price_per_blind'], $result['trade_discount_percent'], $result['trade_discount_amount']
+    );
     if (!empty($result['extras_applied']) && is_array($result['extras_applied'])) {
         foreach ($result['extras_applied'] as &$exRow) {
-            if (is_array($exRow)) unset($exRow['cost_snapshot']);
+            if (is_array($exRow)) unset($exRow['cost_snapshot'], $exRow['trade_amount'], $exRow['promo_discount_percent'], $exRow['promo_discount_amount']);
         }
         unset($exRow);
     }
