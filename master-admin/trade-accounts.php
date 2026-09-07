@@ -46,7 +46,7 @@ $tableExists = static function (string $table) use ($pdo): bool {
 };
 
 $hasCreated   = $colExists('clients', 'created_at');
-$hasDiscounts = $tableExists('client_discounts');
+$hasDiscounts = $tableExists('trade_discounts');
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -63,7 +63,7 @@ try {
                    (SELECT MAX(u.last_login_at) FROM client_users u WHERE u.client_id = c.id) AS last_login,
                    (SELECT COUNT(*) FROM products p WHERE p.client_id = c.id) AS products,
                    ' . ($hasDiscounts
-                        ? '(SELECT COUNT(*) FROM client_discounts d WHERE d.client_id = c.id) AS discounts'
+                        ? '(SELECT COUNT(*) FROM trade_discounts d WHERE d.client_id = c.id) AS discounts'
                         : '0 AS discounts') . '
               FROM clients c
           ORDER BY c.company_name';
