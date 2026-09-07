@@ -255,3 +255,173 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
     }
     return ['lines' => $lines, 'uncaptured' => $uncaptured];
 }
+
+/**
+ * Create a delivery note (header + snapshot lines) for a validated placed order,
+ * with a gap-free DN number. $dispatched stamps it dispatched at creation (the
+ * one-step "print & invoice" flow); otherwise it's left 'draft'. Returns
+ * ['id'=>int,'number'=>string]. Throws RuntimeException (no owned lines) or
+ * PDOException. Runs in the caller's transaction if one is open, else its own.
+ * The caller owns order validation and user-facing messaging.
+ */
+function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $dispatched = false): array
+{
+    $lines = ar_order_lines_for_doc($pdo, $factory, $quoteId);
+    if (!$lines) throw new RuntimeException('This order has no Beverley-owned lines to deliver.');
+
+    $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
+    $ac->execute([$accountId]);
+    $acc  = $ac->fetch(PDO::FETCH_ASSOC) ?: [];
+    $addr = ar_account_address_block($acc);
+
+    $ownTxn = !$pdo->inTransaction();
+    if ($ownTxn) $pdo->beginTransaction();
+    try {
+        $dnId = 0; $num = '';
+        for ($try = 1; $try <= 3; $try++) {
+            $num = ar_next_number($pdo, $factory, 'DN', 'factory_ar_delivery_notes', 'dn_number');
+            try {
+                $ins = $pdo->prepare(
+                    "INSERT INTO factory_ar_delivery_notes
+                       (factory_client_id, account_client_id, dn_number, source_quote_id, status, dispatched_at, delivery_address, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $ins->execute([
+                    $factory, $accountId, $num, $quoteId,
+                    $dispatched ? 'dispatched' : 'draft',
+                    $dispatched ? date('Y-m-d H:i:s') : null,
+                    $addr !== '' ? $addr : null,
+                    $userId ?: null,
+                ]);
+                $dnId = (int) $pdo->lastInsertId();
+                break;
+            } catch (PDOException $e) {
+                if ($e->getCode() === '23000' && $try < 3) continue;   // number taken — retry
+                throw $e;
+            }
+        }
+
+        $insL = $pdo->prepare(
+            "INSERT INTO factory_ar_delivery_note_lines
+               (delivery_note_id, source_quote_item_id, product_name, system_name, fabric,
+                band_code, width_mm, drop_mm, quantity, room, options_snapshot, line_notes, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        $so = 0;
+        foreach ($lines as $ln) {
+            $fabric = trim(implode(' / ', array_filter([
+                (string) $ln['fabric_name_snapshot'],
+                (string) $ln['fabric_colour_snapshot'],
+                (string) $ln['fabric_code_snapshot'],
+            ], static fn ($s) => trim($s) !== '')));
+            $opts = implode("\n", $ln['options'] ?? []);
+            $insL->execute([
+                $dnId, (int) $ln['id'],
+                $ln['product_name_snapshot'] ?: null, $ln['system_name_snapshot'] ?: null,
+                $fabric !== '' ? $fabric : null, $ln['fabric_band_snapshot'] ?: null,
+                $ln['width_mm'], $ln['drop_mm'], (int) $ln['quantity'],
+                $ln['room_name'] ?: null, $opts !== '' ? $opts : null, $ln['notes'] ?: null, $so++,
+            ]);
+        }
+
+        if ($ownTxn) $pdo->commit();
+        return ['id' => $dnId, 'number' => $num];
+    } catch (Throwable $e) {
+        if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Create an invoice (header + snapshot lines + order link) for a validated placed
+ * order, with a gap-free INV number, per-document VAT @20%, due +30 days. $send
+ * stamps it 'sent' at creation (the one-step flow auto-sends); otherwise 'raised'.
+ * Returns ['id'=>int,'number'=>string,'total'=>float]. Throws RuntimeException on
+ * a business problem (no owned lines; a priced option with no captured wholesale
+ * price — an uncaptured pre-2A order) or PDOException. Runs in the caller's
+ * transaction if open, else its own. The caller MUST have guarded against
+ * double-invoicing (see factory_ar_invoice_orders) before calling.
+ */
+function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $send = false): array
+{
+    $built = ar_invoice_lines_from_order($pdo, $factory, $quoteId);
+    if (!$built['lines'])     throw new RuntimeException('This order has no Beverley-owned lines to invoice.');
+    if ($built['uncaptured']) throw new RuntimeException('This order predates wholesale-price capture — re-save its lines in the quote before invoicing (a priced option has no wholesale price).');
+
+    $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
+    $ac->execute([$accountId]);
+    $acc    = $ac->fetch(PDO::FETCH_ASSOC) ?: [];
+    $billTo = ar_account_address_block($acc);
+    if (($acc['vat_number'] ?? '') !== '') $billTo .= "\nVAT No. " . $acc['vat_number'];
+    $vatPct = 20.00;
+
+    $subtotal = 0.0;
+    foreach ($built['lines'] as $l) $subtotal += (float) $l['line_net'];
+    $subtotal = round($subtotal, 2);
+    $vat      = round($subtotal * $vatPct / 100, 2);
+    $total    = round($subtotal + $vat, 2);
+    $status   = $send ? 'sent' : 'raised';
+
+    $ownTxn = !$pdo->inTransaction();
+    if ($ownTxn) $pdo->beginTransaction();
+    try {
+        $invId = 0; $num = '';
+        for ($try = 1; $try <= 3; $try++) {
+            $num = ar_next_number($pdo, $factory, 'INV', 'factory_ar_invoices', 'inv_number');
+            try {
+                $ins = $pdo->prepare(
+                    "INSERT INTO factory_ar_invoices
+                       (factory_client_id, account_client_id, inv_number, status, issue_date, due_date, sent_at,
+                        vat_percent, subtotal, vat, total, bill_to_snapshot, created_by)
+                     VALUES (?, ?, ?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $ins->execute([
+                    $factory, $accountId, $num, $status, $send ? date('Y-m-d H:i:s') : null,
+                    $vatPct, $subtotal, $vat, $total, $billTo !== '' ? $billTo : null, $userId ?: null,
+                ]);
+                $invId = (int) $pdo->lastInsertId();
+                break;
+            } catch (PDOException $e) {
+                if ($e->getCode() === '23000' && $try < 3) continue;
+                throw $e;
+            }
+        }
+
+        $insL = $pdo->prepare(
+            "INSERT INTO factory_ar_invoice_lines
+               (invoice_id, source_quote_id, source_quote_item_id, line_type, description,
+                width_mm, drop_mm, quantity, unit_net, line_net, list_trade_unit, discount_percent, discount_amount, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        foreach ($built['lines'] as $l) {
+            $insL->execute([
+                $invId, $l['source_quote_id'], $l['source_quote_item_id'], $l['line_type'], $l['description'],
+                $l['width_mm'], $l['drop_mm'], $l['quantity'], $l['unit_net'], $l['line_net'],
+                $l['list_trade_unit'], $l['discount_percent'], $l['discount_amount'], $l['sort_order'],
+            ]);
+        }
+        $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id) VALUES (?, ?)')->execute([$invId, $quoteId]);
+
+        if ($ownTxn) $pdo->commit();
+        return ['id' => $invId, 'number' => $num, 'total' => $total];
+    } catch (Throwable $e) {
+        if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/** A non-void invoice number covering this order, or '' if not yet invoiced. */
+function ar_order_invoice_number(PDO $pdo, int $quoteId): string
+{
+    try {
+        $st = $pdo->prepare(
+            "SELECT i.inv_number FROM factory_ar_invoice_orders io
+               JOIN factory_ar_invoices i ON i.id = io.invoice_id
+              WHERE io.quote_id = ? AND i.status <> 'void' LIMIT 1"
+        );
+        $st->execute([$quoteId]);
+        return (string) ($st->fetchColumn() ?: '');
+    } catch (Throwable $e) {
+        return '';
+    }
+}

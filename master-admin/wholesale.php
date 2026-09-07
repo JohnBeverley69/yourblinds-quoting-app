@@ -12,6 +12,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
+require_once __DIR__ . '/../_partials/app_settings.php';
 
 requireSuperAdmin();
 
@@ -41,60 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $order = $q->fetch(PDO::FETCH_ASSOC);
             if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
 
-            $lines = ar_order_lines_for_doc($pdo, $factory, $qid);
-            if (!$lines) throw new RuntimeException('This order has no Beverley-owned lines to deliver.');
-
-            $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
-            $ac->execute([(int) $order['client_id']]);
-            $acc  = $ac->fetch(PDO::FETCH_ASSOC) ?: [];
-            $addr = ar_account_address_block($acc);
-
-            $pdo->beginTransaction();
-
-            // Insert header with a gap-free number; retry on the unique collision.
-            $dnId = 0; $num = '';
-            for ($try = 1; $try <= 3; $try++) {
-                $num = ar_next_number($pdo, $factory, 'DN', 'factory_ar_delivery_notes', 'dn_number');
-                try {
-                    $ins = $pdo->prepare(
-                        "INSERT INTO factory_ar_delivery_notes
-                           (factory_client_id, account_client_id, dn_number, source_quote_id, status, delivery_address, created_by)
-                         VALUES (?, ?, ?, ?, 'draft', ?, ?)"
-                    );
-                    $ins->execute([$factory, (int) $order['client_id'], $num, $qid, $addr !== '' ? $addr : null, (int) ($user['user_id'] ?? 0) ?: null]);
-                    $dnId = (int) $pdo->lastInsertId();
-                    break;
-                } catch (PDOException $e) {
-                    if ($e->getCode() === '23000' && $try < 3) continue;   // number taken — retry
-                    throw $e;
-                }
-            }
-
-            $insL = $pdo->prepare(
-                "INSERT INTO factory_ar_delivery_note_lines
-                   (delivery_note_id, source_quote_item_id, product_name, system_name, fabric,
-                    band_code, width_mm, drop_mm, quantity, room, options_snapshot, line_notes, sort_order)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            $so = 0;
-            foreach ($lines as $ln) {
-                $fabric = trim(implode(' / ', array_filter([
-                    (string) $ln['fabric_name_snapshot'],
-                    (string) $ln['fabric_colour_snapshot'],
-                    (string) $ln['fabric_code_snapshot'],
-                ], static fn ($s) => trim($s) !== '')));
-                $opts = implode("\n", $ln['options'] ?? []);
-                $insL->execute([
-                    $dnId, (int) $ln['id'],
-                    $ln['product_name_snapshot'] ?: null, $ln['system_name_snapshot'] ?: null,
-                    $fabric !== '' ? $fabric : null, $ln['fabric_band_snapshot'] ?: null,
-                    $ln['width_mm'], $ln['drop_mm'], (int) $ln['quantity'],
-                    $ln['room_name'] ?: null, $opts !== '' ? $opts : null, $ln['notes'] ?: null, $so++,
-                ]);
-            }
-
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Delivery note ' . $num . ' created (draft). View/print it below, then mark it dispatched.';
+            $dn = ar_create_delivery_note($pdo, $factory, $qid, (int) $order['client_id'], (int) ($user['user_id'] ?? 0), false);
+            $_SESSION['flash_success'] = 'Delivery note ' . $dn['number'] . ' created (draft). View/print it below, then mark it dispatched.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not raise delivery note: ' . $e->getMessage();
@@ -134,76 +83,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
 
             // Guard: don't double-invoice an order (a non-void invoice already covers it).
-            $dup = $pdo->prepare(
-                "SELECT i.inv_number FROM factory_ar_invoice_orders io
-                   JOIN factory_ar_invoices i ON i.id = io.invoice_id
-                  WHERE io.quote_id = ? AND i.status <> 'void' LIMIT 1"
-            );
-            $dup->execute([$qid]);
-            if ($existingInv = $dup->fetchColumn()) {
+            if ($existingInv = ar_order_invoice_number($pdo, $qid)) {
                 throw new RuntimeException('Order already invoiced on ' . $existingInv . ' (void it first to re-invoice).');
             }
 
-            $built = ar_invoice_lines_from_order($pdo, $factory, $qid);
-            if (!$built['lines']) throw new RuntimeException('This order has no Beverley-owned lines to invoice.');
-            if ($built['uncaptured']) throw new RuntimeException('This order predates wholesale-price capture — re-save its lines in the quote before invoicing (a priced option has no wholesale price).');
-
-            // Account bill-to snapshot + VAT / terms.
-            $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
-            $ac->execute([(int) $order['client_id']]);
-            $acc  = $ac->fetch(PDO::FETCH_ASSOC) ?: [];
-            $billTo = ar_account_address_block($acc);
-            if (($acc['vat_number'] ?? '') !== '') $billTo .= "\nVAT No. " . $acc['vat_number'];
-            $vatPct = 20.00;
-
-            $subtotal = 0.0;
-            foreach ($built['lines'] as $l) $subtotal += (float) $l['line_net'];
-            $subtotal = round($subtotal, 2);
-            $vat      = round($subtotal * $vatPct / 100, 2);
-            $total    = round($subtotal + $vat, 2);
-
-            $pdo->beginTransaction();
-
-            $invId = 0; $num = '';
-            for ($try = 1; $try <= 3; $try++) {
-                $num = ar_next_number($pdo, $factory, 'INV', 'factory_ar_invoices', 'inv_number');
-                try {
-                    $ins = $pdo->prepare(
-                        "INSERT INTO factory_ar_invoices
-                           (factory_client_id, account_client_id, inv_number, status, issue_date, due_date,
-                            vat_percent, subtotal, vat, total, bill_to_snapshot, created_by)
-                         VALUES (?, ?, ?, 'raised', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), ?, ?, ?, ?, ?, ?)"
-                    );
-                    $ins->execute([$factory, (int) $order['client_id'], $num, $vatPct, $subtotal, $vat, $total, $billTo !== '' ? $billTo : null, (int) ($user['user_id'] ?? 0) ?: null]);
-                    $invId = (int) $pdo->lastInsertId();
-                    break;
-                } catch (PDOException $e) {
-                    if ($e->getCode() === '23000' && $try < 3) continue;
-                    throw $e;
-                }
-            }
-
-            $insL = $pdo->prepare(
-                "INSERT INTO factory_ar_invoice_lines
-                   (invoice_id, source_quote_id, source_quote_item_id, line_type, description,
-                    width_mm, drop_mm, quantity, unit_net, line_net, list_trade_unit, discount_percent, discount_amount, sort_order)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            foreach ($built['lines'] as $l) {
-                $insL->execute([
-                    $invId, $l['source_quote_id'], $l['source_quote_item_id'], $l['line_type'], $l['description'],
-                    $l['width_mm'], $l['drop_mm'], $l['quantity'], $l['unit_net'], $l['line_net'],
-                    $l['list_trade_unit'], $l['discount_percent'], $l['discount_amount'], $l['sort_order'],
-                ]);
-            }
-            $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id) VALUES (?, ?)')->execute([$invId, $qid]);
-
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Invoice ' . $num . ' raised (£' . number_format($total, 2) . '). View/send it below.';
+            $inv = ar_create_invoice($pdo, $factory, $qid, (int) $order['client_id'], (int) ($user['user_id'] ?? 0), false);
+            $_SESSION['flash_success'] = 'Invoice ' . $inv['number'] . ' raised (£' . number_format($inv['total'], 2) . '). View/send it below.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not raise invoice: ' . $e->getMessage();
         }
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
+    // One-step commit: dispatch the delivery note AND create + send the invoice in a
+    // single action. Idempotent per order — a reprint or a duplicate delivery note
+    // never re-invoices (the non-void-invoice guard below fires once). Used by the
+    // "Print DN & invoice" button when auto-invoice mode is on.
+    if ($action === 'deliver_invoice') {
+        $qid = (int) ($_POST['quote_id'] ?? 0);
+        try {
+            if (!$dnReady)  throw new RuntimeException('Run /migrate_ar_delivery_notes.php first.');
+            if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
+
+            $q = $pdo->prepare(
+                "SELECT id, quote_number, client_id FROM quotes
+                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND client_id <> ? LIMIT 1"
+            );
+            $q->execute([$qid, $factory]);
+            $order = $q->fetch(PDO::FETCH_ASSOC);
+            if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
+            $accId = (int) $order['client_id'];
+
+            $pdo->beginTransaction();
+
+            // 1) Ensure a dispatched delivery note exists (reuse the newest live one).
+            $ex = $pdo->prepare(
+                "SELECT id, dn_number, status FROM factory_ar_delivery_notes
+                  WHERE source_quote_id = ? AND factory_client_id = ? AND status <> 'cancelled'
+               ORDER BY id DESC LIMIT 1"
+            );
+            $ex->execute([$qid, $factory]);
+            $dnRow = $ex->fetch(PDO::FETCH_ASSOC);
+            if ($dnRow) {
+                $dnNum = (string) $dnRow['dn_number'];
+                if ($dnRow['status'] === 'draft') {
+                    $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW() WHERE id = ? AND factory_client_id = ?")
+                        ->execute([(int) $dnRow['id'], $factory]);
+                }
+            } else {
+                $dn    = ar_create_delivery_note($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), true);
+                $dnNum = $dn['number'];
+            }
+
+            // 2) Create + send the invoice — once. If already invoiced (non-void), skip
+            //    silently: this is the reprint / duplicate case the user called out.
+            $invNum = ar_order_invoice_number($pdo, $qid);
+            if ($invNum === '') {
+                $inv    = ar_create_invoice($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), true);
+                $invNum = $inv['number'];
+                $msg    = 'Delivery note ' . $dnNum . ' dispatched · invoice ' . $invNum . ' created & sent (£' . number_format($inv['total'], 2) . ').';
+            } else {
+                $msg = 'Delivery note ' . $dnNum . ' dispatched. Order was already invoiced on ' . $invNum . ' — no second invoice raised.';
+            }
+
+            $pdo->commit();
+            $_SESSION['flash_success'] = $msg;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not print & invoice: ' . $e->getMessage();
+        }
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
+    // Flip the delivery-note flow mode (one-step auto-invoice vs two-step manual).
+    if ($action === 'wh_mode') {
+        $mode = (string) ($_POST['mode'] ?? '');
+        $ok = app_setting_set('wholesale_dn_auto_invoice', $mode === 'two_step' ? '0' : '1');
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
+            ? ($mode === 'two_step'
+                ? 'Switched to two-step: raise a delivery note, then invoice separately.'
+                : 'Switched to one-step: printing a delivery note creates & sends the invoice automatically.')
+            : "Couldn't save the setting — run /migrate_app_settings.php (super-admin) and try again.";
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
@@ -338,9 +299,12 @@ $invoices = [];
 if ($invReady) {
     try {
         $is = $pdo->prepare(
-            "SELECT i.*, c.company_name AS account_name
+            "SELECT i.*, c.company_name AS account_name,
+                    io.quote_id AS order_quote_id, q.quote_number AS order_number
                FROM factory_ar_invoices i
                JOIN clients c ON c.id = i.account_client_id
+          LEFT JOIN factory_ar_invoice_orders io ON io.invoice_id = i.id
+          LEFT JOIN quotes q ON q.id = io.quote_id
               WHERE i.factory_client_id = ?
            ORDER BY i.id DESC LIMIT 100"
         );
@@ -384,6 +348,58 @@ $invPill = static function (string $s): array {
         : ['Raised', '#92400e', '#fef3c7'])));
 };
 
+// ── Unify: index every document by the order it belongs to ───────────────────
+$dnByOrder = [];
+foreach ($notes as $dn) {
+    $oid = (int) ($dn['source_quote_id'] ?? 0);
+    if ($oid) $dnByOrder[$oid][] = $dn;
+}
+$invByOrder = [];
+foreach ($invoices as $inv) {
+    $oid = (int) ($inv['order_quote_id'] ?? 0);
+    if ($oid) $invByOrder[$oid][] = $inv;
+}
+$cnByInvoice = [];
+foreach ($creditNotes as $cn) {
+    $iid = (int) ($cn['against_invoice_id'] ?? 0);
+    if ($iid) $cnByInvoice[$iid][] = $cn;
+}
+
+// One-step (auto-invoice on DN print) is the default; two-step is the manual fallback.
+$autoInvoice = app_setting_get('wholesale_dn_auto_invoice', '1') === '1';
+
+/**
+ * The live (non-void) invoice covering an order, or null. Void invoices remain
+ * visible in the expander but don't set the order's stage.
+ */
+$liveInvoiceFor = static function (int $qid) use ($invByOrder) {
+    foreach ($invByOrder[$qid] ?? [] as $iv) if ($iv['status'] !== 'void') return $iv;
+    return null;
+};
+
+/**
+ * Derive an order's lifecycle stage from the documents raised against it.
+ * Returns [key, label, textColour, bgColour] — drives the status pill + row tint.
+ */
+$orderStage = static function (int $qid) use ($dnByOrder, $liveInvoiceFor, $cnByInvoice): array {
+    if ($iv = $liveInvoiceFor($qid)) {
+        foreach ($cnByInvoice[(int) $iv['id']] ?? [] as $cn) {
+            if ($cn['status'] !== 'void') return ['credited', 'Credited', '#6b21a8', '#f3e8ff'];
+        }
+        if ($iv['status'] === 'paid') return ['paid',     'Paid',     '#065f46', '#d1fae5'];
+        if ($iv['status'] === 'sent') return ['invoiced', 'Invoiced', '#1e40af', '#dbeafe'];
+        return ['inv_raised', 'Invoiced (draft)', '#92400e', '#fef3c7'];
+    }
+    $delivered = false; $draft = false;
+    foreach ($dnByOrder[$qid] ?? [] as $dn) {
+        if ($dn['status'] === 'dispatched') $delivered = true;
+        elseif ($dn['status'] === 'draft')  $draft = true;
+    }
+    if ($delivered) return ['delivered', 'Delivered', '#0f766e', '#ccfbf1'];
+    if ($draft)     return ['dn_draft',  'DN draft',  '#92400e', '#fef3c7'];
+    return ['ordered', 'Ordered', '#3730a3', '#e0e7ff'];
+};
+
 $activeNav = 'wholesale';
 ?><!doctype html>
 <html lang="en">
@@ -396,9 +412,40 @@ $activeNav = 'wholesale';
         .wh-filter { display:flex; gap:0.625rem; align-items:flex-end; flex-wrap:wrap; margin:0 0 0.75rem; }
         .wh-filter label { font-size:0.75rem; color:var(--text-faint); display:block; margin-bottom:0.15rem; }
         .wh-filter select, .wh-filter input { padding:0.4rem 0.55rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); }
-        .wh-pill { display:inline-block; padding:0.05rem 0.5rem; font-size:0.7rem; font-weight:700; border-radius:999px; }
+        .wh-pill { display:inline-block; padding:0.05rem 0.5rem; font-size:0.7rem; font-weight:700; border-radius:999px; white-space:nowrap; }
         .wh-money { font-variant-numeric:tabular-nums; text-align:right; }
         .wh-muted { color:var(--text-faint); font-size:0.8125rem; }
+
+        /* Mode toggle */
+        .wh-mode { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin:0 0 1rem; padding:0.6rem 0.8rem;
+                   background:var(--bg-subtle,#f8fafc); border:1px solid var(--border); border-radius:10px; font-size:0.85rem; }
+        .wh-seg { display:inline-flex; border:1px solid var(--border-strong); border-radius:999px; overflow:hidden; }
+        .wh-seg button { border:0; background:transparent; padding:0.3rem 0.85rem; font:inherit; font-size:0.8rem; cursor:pointer; color:var(--text-faint); }
+        .wh-seg button.on { background:var(--accent,#2563eb); color:#fff; font-weight:700; }
+
+        /* Dense order grid (BM-style: one row per order) */
+        .wh-orders { width:100%; border-collapse:collapse; font-size:0.83rem; }
+        .wh-orders thead th { text-align:left; font-size:0.68rem; letter-spacing:0.04em; text-transform:uppercase;
+                              color:var(--text-faint); font-weight:700; padding:0.4rem 0.55rem; border-bottom:2px solid var(--border-strong); white-space:nowrap; }
+        .wh-orders tbody td { padding:0.4rem 0.55rem; border-bottom:1px solid var(--border); vertical-align:middle; }
+        .wh-orders .wh-row > td { border-left:3px solid transparent; }
+        .wh-orders .wh-row:hover > td { background:var(--bg-hover,#f1f5f9); }
+        .wh-orders .wh-num { font-weight:700; white-space:nowrap; }
+        .wh-orders .wh-caret { background:none; border:0; cursor:pointer; color:var(--text-faint); font-size:0.9rem; line-height:1; padding:0.1rem 0.25rem; transition:transform .12s; }
+        .wh-orders .wh-caret[aria-expanded="true"] { transform:rotate(90deg); }
+        .wh-filters input, .wh-filters select { width:100%; box-sizing:border-box; padding:0.28rem 0.4rem; font:inherit; font-size:0.78rem;
+                              border:1px solid var(--border); border-radius:6px; background:var(--bg-input); }
+        .wh-filters td { padding:0.3rem 0.4rem 0.55rem; border-bottom:2px solid var(--border-strong); }
+        .wh-orders tr[hidden] { display:none; }
+        .wh-detail > td { background:var(--bg-subtle,#f8fafc); padding:0.7rem 1rem 0.9rem 1.6rem; border-bottom:1px solid var(--border); }
+        .wh-doc { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; padding:0.28rem 0; font-size:0.82rem; }
+        .wh-doc + .wh-doc { border-top:1px dashed var(--border); }
+        .wh-doc .wh-dnum { font-weight:700; min-width:8.5rem; }
+        .wh-act { background:none; border:0; padding:0; font:inherit; font-size:0.82rem; cursor:pointer; color:var(--link); text-decoration:underline; }
+        .wh-act.danger { color:#b91c1c; }
+        .wh-link { color:var(--link); font-size:0.82rem; text-decoration:underline; }
+        .wh-primary { display:inline-flex; margin:0; }
+        .wh-none { text-align:center; color:var(--text-faint); padding:1.2rem; }
     </style>
 </head>
 <body>
@@ -425,17 +472,33 @@ $activeNav = 'wholesale';
             </div>
         <?php endif; ?>
 
-        <!-- Placed orders → raise a delivery note -->
+        <!-- Delivery-note flow mode -->
+        <form method="post" action="/master-admin/wholesale.php" class="wh-mode">
+            <?= csrf_field() ?>
+            <input type="hidden" name="_action" value="wh_mode">
+            <strong style="font-weight:700">Delivery-note flow:</strong>
+            <span class="wh-seg">
+                <button type="submit" name="mode" value="one_step" class="<?= $autoInvoice ? 'on' : '' ?>">One-step · print &amp; invoice</button>
+                <button type="submit" name="mode" value="two_step" class="<?= $autoInvoice ? '' : 'on' ?>">Two-step · manual</button>
+            </span>
+            <span class="wh-muted" style="font-size:0.8rem">
+                <?= $autoInvoice
+                    ? 'Printing a delivery note dispatches it and creates &amp; sends the invoice automatically (once per order).'
+                    : 'Raise a delivery note, then raise and send the invoice yourself.' ?>
+            </span>
+        </form>
+
+        <!-- One order, one row: its whole lifecycle -->
         <section class="section">
-            <h2 class="section-title" style="margin:0 0 0.4rem">Placed orders</h2>
-            <p class="wh-muted" style="margin:0 0 0.75rem;max-width:74ch">
-                Orders your trade accounts have placed that contain your products. Raise a delivery note to send with the
-                goods (specs only, no prices); invoicing follows.
+            <h2 class="section-title" style="margin:0 0 0.4rem">Orders</h2>
+            <p class="wh-muted" style="margin:0 0 0.75rem;max-width:78ch">
+                Every trade-account order that contains your products, with the delivery note, invoice and any credit note
+                raised against it. Open a row (&#9656;) for the documents and their actions.
             </p>
 
             <form method="get" action="/master-admin/wholesale.php" class="wh-filter">
                 <div>
-                    <label>Account</label>
+                    <label>Load account</label>
                     <select name="account">
                         <option value="">All accounts</option>
                         <?php foreach ($accounts as $a): ?>
@@ -445,40 +508,211 @@ $activeNav = 'wholesale';
                 </div>
                 <div><label>From</label><input type="date" name="from" value="<?= e($fFrom) ?>"></div>
                 <div><label>To</label><input type="date" name="to" value="<?= e($fTo) ?>"></div>
-                <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+                <button type="submit" class="btn btn-secondary btn-sm">Load</button>
                 <?php if ($fAccount || $fFrom !== '' || $fTo !== ''): ?>
                     <a href="/master-admin/wholesale.php" class="wh-muted" style="margin-left:0.25rem">clear</a>
                 <?php endif; ?>
             </form>
 
             <div class="table-wrap">
-                <table class="table">
-                    <thead><tr><th>Order</th><th>Account</th><th>Placed</th><th class="wh-money">Lines</th><th class="wh-money">Wholesale</th><th>Delivery notes</th><th></th></tr></thead>
-                    <tbody>
+                <table class="wh-orders">
+                    <thead>
+                        <tr>
+                            <th style="width:1.4rem"></th>
+                            <th>Order</th><th>Account</th><th>Placed</th>
+                            <th class="wh-money">Qty</th><th class="wh-money">Wholesale</th>
+                            <th>Status</th><th style="text-align:right">Action</th>
+                        </tr>
+                        <tr class="wh-filters">
+                            <td></td>
+                            <td><input id="f-order" type="text" placeholder="Filter…" oninput="whFilter()"></td>
+                            <td><input id="f-account" type="text" placeholder="Filter…" oninput="whFilter()"></td>
+                            <td></td><td></td><td></td>
+                            <td>
+                                <select id="f-status" onchange="whFilter()">
+                                    <option value="">All</option>
+                                    <option value="ordered">Ordered</option>
+                                    <option value="dn_draft">DN draft</option>
+                                    <option value="delivered">Delivered</option>
+                                    <option value="inv_raised">Invoiced (draft)</option>
+                                    <option value="invoiced">Invoiced</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="credited">Credited</option>
+                                </select>
+                            </td>
+                            <td></td>
+                        </tr>
+                    </thead>
+                    <tbody id="wh-body">
                         <?php if (!$orders): ?>
-                            <tr><td colspan="7" class="table-empty">No placed trade-account orders<?= $fAccount || $fFrom !== '' || $fTo !== '' ? ' for this filter' : '' ?>.</td></tr>
-                        <?php else: foreach ($orders as $o): ?>
-                            <tr>
-                                <td><strong><?= e((string) ($o['quote_number'] ?: ('#' . (int) $o['id']))) ?></strong><br><span class="wh-muted"><?= e(ucfirst((string) $o['status'])) ?></span></td>
+                            <tr><td colspan="8" class="wh-none">No placed trade-account orders<?= $fAccount || $fFrom !== '' || $fTo !== '' ? ' for this filter' : '' ?>.</td></tr>
+                        <?php else: foreach ($orders as $o):
+                            $qid   = (int) $o['id'];
+                            $ordNo = (string) ($o['quote_number'] ?: ('#' . $qid));
+                            [$sKey, $sLbl, $sFg, $sBg] = $orderStage($qid);
+
+                            $dns = $dnByOrder[$qid] ?? [];
+                            $ivs = $invByOrder[$qid] ?? [];
+                            $cns = [];
+                            foreach ($ivs as $iv) foreach ($cnByInvoice[(int) $iv['id']] ?? [] as $c) $cns[] = $c;
+
+                            $liveInv = $liveInvoiceFor($qid);
+                            $liveDn  = null;
+                            foreach ($dns as $d) { if ($d['status'] !== 'cancelled') { $liveDn = $d; break; } }
+                            $dnDispatched = false;
+                            foreach ($dns as $d) { if ($d['status'] === 'dispatched') { $dnDispatched = true; break; } }
+                            $dnDraftLive = ($liveDn && $liveDn['status'] === 'draft');
+                            $hasDocs = $dns || $ivs;
+                        ?>
+                            <tr class="wh-row" data-order="<?= e(strtolower($ordNo)) ?>" data-account="<?= e(strtolower((string) $o['account_name'])) ?>" data-status="<?= e($sKey) ?>">
+                                <td style="border-left-color:<?= $sFg ?>">
+                                    <button type="button" class="wh-caret" aria-expanded="false" aria-label="Show documents" onclick="whToggle(this)">&#9656;</button>
+                                </td>
+                                <td class="wh-num"><?= e($ordNo) ?></td>
                                 <td><?= e((string) $o['account_name']) ?></td>
                                 <td style="white-space:nowrap"><?= $fmtD($o['created_at']) ?></td>
-                                <td class="wh-money"><?= (int) $o['bev_lines'] ?> <span class="wh-muted">/ <?= (int) $o['bev_qty'] ?> blinds</span></td>
+                                <td class="wh-money"><?= (int) $o['bev_qty'] ?></td>
                                 <td class="wh-money"><?= $money($o['wholesale_total']) ?></td>
-                                <td><?= (int) $o['dn_count'] > 0 ? (int) $o['dn_count'] . ' raised' : '<span class="wh-muted">—</span>' ?></td>
+                                <td><span class="wh-pill" style="background:<?= $sBg ?>;color:<?= $sFg ?>"><?= e($sLbl) ?></span></td>
                                 <td style="text-align:right;white-space:nowrap">
-                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.4rem"
-                                          <?= (int) $o['dn_count'] > 0 ? 'data-confirm="A delivery note already exists for this order. Raise another?"' : '' ?>>
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="_action" value="dn_raise">
-                                        <input type="hidden" name="quote_id" value="<?= (int) $o['id'] ?>">
-                                        <button type="submit" class="btn btn-secondary btn-sm" <?= $dnReady ? '' : 'disabled' ?>>Delivery note</button>
-                                    </form>
-                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.4rem">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="_action" value="inv_raise">
-                                        <input type="hidden" name="quote_id" value="<?= (int) $o['id'] ?>">
-                                        <button type="submit" class="btn btn-primary btn-sm" <?= $invReady ? '' : 'disabled' ?>>Raise invoice</button>
-                                    </form>
+                                    <?php if ($autoInvoice): ?>
+                                        <?php if (!$liveInv): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="deliver_invoice">
+                                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                <button type="submit" class="btn btn-primary btn-sm" <?= ($dnReady && $invReady) ? '' : 'disabled' ?>>Print DN &amp; invoice</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <a class="wh-link" href="/master-admin/invoice-pdf.php?id=<?= (int) $liveInv['id'] ?>" target="_blank">Invoice PDF</a>
+                                        <?php endif; ?>
+                                    <?php else: /* two-step */ ?>
+                                        <?php if (!$liveInv && !$liveDn): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="dn_raise">
+                                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                <button type="submit" class="btn btn-secondary btn-sm" <?= $dnReady ? '' : 'disabled' ?>>Raise delivery note</button>
+                                            </form>
+                                        <?php elseif (!$liveInv && $dnDraftLive): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="dn_dispatch">
+                                                <input type="hidden" name="dn_id" value="<?= (int) $liveDn['id'] ?>">
+                                                <button type="submit" class="btn btn-secondary btn-sm">Mark dispatched</button>
+                                            </form>
+                                        <?php elseif (!$liveInv && $dnDispatched): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="inv_raise">
+                                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                <button type="submit" class="btn btn-primary btn-sm" <?= $invReady ? '' : 'disabled' ?>>Raise invoice</button>
+                                            </form>
+                                        <?php elseif ($liveInv && $liveInv['status'] === 'raised'): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="inv_send">
+                                                <input type="hidden" name="inv_id" value="<?= (int) $liveInv['id'] ?>">
+                                                <button type="submit" class="btn btn-primary btn-sm">Mark sent</button>
+                                            </form>
+                                        <?php elseif ($liveInv): ?>
+                                            <a class="wh-link" href="/master-admin/invoice-pdf.php?id=<?= (int) $liveInv['id'] ?>" target="_blank">Invoice PDF</a>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <tr class="wh-detail" hidden>
+                                <td colspan="8">
+                                    <?php if (!$hasDocs): ?>
+                                        <span class="wh-muted">No documents raised yet.</span>
+                                    <?php else: ?>
+                                        <?php foreach ($dns as $d): [$dl, $df, $db] = $dnPill((string) $d['status']); ?>
+                                            <div class="wh-doc">
+                                                <span class="wh-dnum"><?= e((string) $d['dn_number']) ?></span>
+                                                <span class="wh-pill" style="background:<?= $db ?>;color:<?= $df ?>"><?= e($dl) ?></span>
+                                                <span class="wh-muted"><?= $d['status'] === 'dispatched' ? $fmtD($d['dispatched_at']) : $fmtD($d['created_at']) ?></span>
+                                                <a class="wh-link" href="/master-admin/delivery-note-pdf.php?id=<?= (int) $d['id'] ?>" target="_blank">View / print</a>
+                                                <?php if ($d['status'] === 'draft'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="dn_dispatch">
+                                                        <input type="hidden" name="dn_id" value="<?= (int) $d['id'] ?>">
+                                                        <button type="submit" class="wh-act">Mark dispatched</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                                <?php if ($d['status'] !== 'cancelled'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Cancel delivery note <?= e((string) $d['dn_number']) ?>?">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="dn_cancel">
+                                                        <input type="hidden" name="dn_id" value="<?= (int) $d['id'] ?>">
+                                                        <button type="submit" class="wh-act danger">Cancel</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+
+                                        <?php foreach ($ivs as $iv): [$il, $if, $ib] = $invPill((string) $iv['status']); ?>
+                                            <div class="wh-doc">
+                                                <span class="wh-dnum"><?= e((string) $iv['inv_number']) ?></span>
+                                                <span class="wh-pill" style="background:<?= $ib ?>;color:<?= $if ?>"><?= e($il) ?></span>
+                                                <span class="wh-money" style="min-width:5rem"><?= $money($iv['total']) ?></span>
+                                                <a class="wh-link" href="/master-admin/invoice-pdf.php?id=<?= (int) $iv['id'] ?>" target="_blank">View / print</a>
+                                                <?php if ($iv['status'] === 'raised'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="inv_send">
+                                                        <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
+                                                        <button type="submit" class="wh-act">Mark sent</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                                <?php if ($iv['status'] !== 'void' && $iv['status'] !== 'paid'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Void invoice <?= e((string) $iv['inv_number']) ?>? Its number is kept; raise a fresh invoice to replace it.">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="inv_void">
+                                                        <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
+                                                        <button type="submit" class="wh-act danger">Void</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                                <?php if ($cnReady && $iv['status'] !== 'void'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Raise a full credit note for <?= e((string) $iv['inv_number']) ?> (£<?= e(number_format((float) $iv['total'], 2)) ?>)?">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="cn_raise">
+                                                        <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
+                                                        <button type="submit" class="wh-act">Credit note</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+
+                                        <?php foreach ($cns as $c): $cvoid = $c['status'] === 'void'; ?>
+                                            <div class="wh-doc">
+                                                <span class="wh-dnum"><?= e((string) $c['cn_number']) ?></span>
+                                                <span class="wh-pill" style="background:<?= $cvoid ? '#e5e7eb' : '#f3e8ff' ?>;color:<?= $cvoid ? '#6b7280' : '#6b21a8' ?>"><?= $cvoid ? 'Void' : 'Credit' ?></span>
+                                                <span class="wh-money" style="min-width:5rem">&minus;<?= $money($c['total']) ?></span>
+                                                <a class="wh-link" href="/master-admin/credit-note-pdf.php?id=<?= (int) $c['id'] ?>" target="_blank">View / print</a>
+                                                <?php if (!$cvoid): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Void credit note <?= e((string) $c['cn_number']) ?>?">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="cn_void">
+                                                        <input type="hidden" name="cn_id" value="<?= (int) $c['id'] ?>">
+                                                        <button type="submit" class="wh-act danger">Void</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+
+                                        <?php if ($dnReady): ?>
+                                            <div class="wh-doc" style="border-top:1px dashed var(--border)">
+                                                <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Raise another delivery note for order <?= e($ordNo) ?>? This does not create a second invoice.">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="_action" value="dn_raise">
+                                                    <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                    <button type="submit" class="wh-act">+ Duplicate delivery note</button>
+                                                </form>
+                                                <span class="wh-muted">(reprints don't re-invoice)</span>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; endif; ?>
@@ -486,149 +720,35 @@ $activeNav = 'wholesale';
                 </table>
             </div>
         </section>
-
-        <!-- Delivery notes raised -->
-        <section class="section">
-            <h2 class="section-title" style="margin:0 0 0.6rem">Delivery notes</h2>
-            <?php if (!$notes): ?>
-                <p class="wh-muted" style="margin:0">No delivery notes raised yet.</p>
-            <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead><tr><th>Number</th><th>Account</th><th>Order</th><th>Status</th><th>Date</th><th></th></tr></thead>
-                        <tbody>
-                            <?php foreach ($notes as $dn): [$lbl, $fg, $bg] = $dnPill((string) $dn['status']); ?>
-                                <tr>
-                                    <td><strong><?= e((string) $dn['dn_number']) ?></strong></td>
-                                    <td><?= e((string) $dn['account_name']) ?></td>
-                                    <td><?= e((string) ($dn['order_number'] ?: '—')) ?></td>
-                                    <td><span class="wh-pill" style="background:<?= $bg ?>;color:<?= $fg ?>"><?= e($lbl) ?></span></td>
-                                    <td style="white-space:nowrap"><?= $dn['status'] === 'dispatched' ? $fmtD($dn['dispatched_at']) : $fmtD($dn['created_at']) ?></td>
-                                    <td style="text-align:right;white-space:nowrap">
-                                        <a href="/master-admin/delivery-note-pdf.php?id=<?= (int) $dn['id'] ?>" target="_blank" style="color:var(--link);font-size:0.8125rem;text-decoration:underline">View PDF</a>
-                                        <?php if ($dn['status'] === 'draft'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="dn_dispatch">
-                                                <input type="hidden" name="dn_id" value="<?= (int) $dn['id'] ?>">
-                                                <button type="submit" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Mark dispatched</button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if ($dn['status'] !== 'cancelled'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
-                                                  data-confirm="Cancel delivery note <?= e((string) $dn['dn_number']) ?>?">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="dn_cancel">
-                                                <input type="hidden" name="dn_id" value="<?= (int) $dn['id'] ?>">
-                                                <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Cancel</button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        <!-- Invoices raised -->
-        <section class="section">
-            <h2 class="section-title" style="margin:0 0 0.6rem">Invoices</h2>
-            <?php if (!$invReady): ?>
-                <div class="alert alert-error" role="alert">
-                    Invoicing isn't set up yet — run
-                    <a href="/migrate_ar_invoices.php"><code>/migrate_ar_invoices.php</code></a> (super-admin), then reload.
-                </div>
-            <?php elseif (!$invoices): ?>
-                <p class="wh-muted" style="margin:0">No invoices raised yet.</p>
-            <?php else: ?>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead><tr><th>Number</th><th>Account</th><th>Issued</th><th>Due</th><th class="wh-money">Total</th><th>Status</th><th></th></tr></thead>
-                        <tbody>
-                            <?php foreach ($invoices as $inv): [$lbl, $fg, $bg] = $invPill((string) $inv['status']); ?>
-                                <tr>
-                                    <td><strong><?= e((string) $inv['inv_number']) ?></strong></td>
-                                    <td><?= e((string) $inv['account_name']) ?></td>
-                                    <td style="white-space:nowrap"><?= $fmtD($inv['issue_date']) ?></td>
-                                    <td style="white-space:nowrap"><?= $fmtD($inv['due_date']) ?></td>
-                                    <td class="wh-money"><?= $money($inv['total']) ?></td>
-                                    <td><span class="wh-pill" style="background:<?= $bg ?>;color:<?= $fg ?>"><?= e($lbl) ?></span></td>
-                                    <td style="text-align:right;white-space:nowrap">
-                                        <a href="/master-admin/invoice-pdf.php?id=<?= (int) $inv['id'] ?>" target="_blank" style="color:var(--link);font-size:0.8125rem;text-decoration:underline">View PDF</a>
-                                        <?php if ($inv['status'] === 'raised'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="inv_send">
-                                                <input type="hidden" name="inv_id" value="<?= (int) $inv['id'] ?>">
-                                                <button type="submit" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Mark sent</button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if ($inv['status'] !== 'void' && $inv['status'] !== 'paid'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
-                                                  data-confirm="Void invoice <?= e((string) $inv['inv_number']) ?>? Its number is kept; raise a fresh invoice to replace it.">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="inv_void">
-                                                <input type="hidden" name="inv_id" value="<?= (int) $inv['id'] ?>">
-                                                <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Void</button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if ($cnReady && $inv['status'] !== 'void'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
-                                                  data-confirm="Raise a full credit note for <?= e((string) $inv['inv_number']) ?> (£<?= e(number_format((float) $inv['total'], 2)) ?>)?">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="_action" value="cn_raise">
-                                                <input type="hidden" name="inv_id" value="<?= (int) $inv['id'] ?>">
-                                                <button type="submit" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Credit note</button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        <!-- Credit notes -->
-        <?php if ($cnReady && $creditNotes): ?>
-        <section class="section">
-            <h2 class="section-title" style="margin:0 0 0.6rem">Credit notes</h2>
-            <div class="table-wrap">
-                <table class="table">
-                    <thead><tr><th>Number</th><th>Account</th><th>Against</th><th>Issued</th><th class="wh-money">Total</th><th>Status</th><th></th></tr></thead>
-                    <tbody>
-                        <?php foreach ($creditNotes as $cn): $void = $cn['status'] === 'void'; ?>
-                            <tr>
-                                <td><strong><?= e((string) $cn['cn_number']) ?></strong></td>
-                                <td><?= e((string) $cn['account_name']) ?></td>
-                                <td><?= e((string) ($cn['against_number'] ?: '—')) ?></td>
-                                <td style="white-space:nowrap"><?= $fmtD($cn['issue_date']) ?></td>
-                                <td class="wh-money">&minus;<?= $money($cn['total']) ?></td>
-                                <td><span class="wh-pill" style="background:<?= $void ? '#e5e7eb' : '#d1fae5' ?>;color:<?= $void ? '#6b7280' : '#065f46' ?>"><?= $void ? 'Void' : 'Issued' ?></span></td>
-                                <td style="text-align:right;white-space:nowrap">
-                                    <a href="/master-admin/credit-note-pdf.php?id=<?= (int) $cn['id'] ?>" target="_blank" style="color:var(--link);font-size:0.8125rem;text-decoration:underline">View PDF</a>
-                                    <?php if (!$void): ?>
-                                        <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
-                                              data-confirm="Void credit note <?= e((string) $cn['cn_number']) ?>?">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="_action" value="cn_void">
-                                            <input type="hidden" name="cn_id" value="<?= (int) $cn['id'] ?>">
-                                            <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Void</button>
-                                        </form>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        <?php endif; ?>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
+<script>
+function whToggle(btn){
+    var row = btn.closest('tr');
+    var detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains('wh-detail')) return;
+    var open = detail.hidden;            // currently hidden → open it
+    detail.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function whFilter(){
+    var o = (document.getElementById('f-order').value || '').toLowerCase();
+    var a = (document.getElementById('f-account').value || '').toLowerCase();
+    var s = document.getElementById('f-status').value || '';
+    document.querySelectorAll('#wh-body .wh-row').forEach(function(row){
+        var show = (!o || (row.dataset.order || '').indexOf(o) >= 0)
+                && (!a || (row.dataset.account || '').indexOf(a) >= 0)
+                && (!s || row.dataset.status === s);
+        row.hidden = !show;
+        var detail = row.nextElementSibling;
+        if (detail && detail.classList.contains('wh-detail') && !show) {
+            detail.hidden = true;
+            var caret = row.querySelector('.wh-caret');
+            if (caret) caret.setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+</script>
 </body>
 </html>
