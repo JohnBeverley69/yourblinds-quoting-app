@@ -33,6 +33,11 @@ $tableExists = static function (string $t) use ($pdo): bool {
     $s->execute([$t]);
     return $s->fetchColumn() !== false;
 };
+$colExists = static function (string $t, string $c) use ($pdo): bool {
+    $s = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1");
+    $s->execute([$t, $c]);
+    return $s->fetchColumn() !== false;
+};
 
 $ops = [];
 
@@ -45,6 +50,8 @@ if (!$tableExists('trade_promotions')) {
             product_id         INT          NOT NULL,
             system_id          INT          NULL,       -- NULL = All systems
             band_code          VARCHAR(64)  NULL,       -- NULL = All bands
+            extra_id           INT          NULL,       -- set = a Components (option) promotion
+            choice_id          INT          NULL,       -- set = one choice; NULL w/ extra_id = whole option
             discount_percent   DOUBLE       NOT NULL DEFAULT 0,
             starts_on          DATE         NULL,       -- NULL = no start bound
             ends_on            DATE         NULL,       -- NULL = no end bound
@@ -55,12 +62,19 @@ if (!$tableExists('trade_promotions')) {
             updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             KEY idx_tp_product (product_id),
             KEY idx_tp_client  (client_id),
+            KEY idx_tp_extra   (extra_id),
             KEY idx_tp_window  (active, starts_on, ends_on)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
     $ops[] = 'Created table trade_promotions.';
 } else {
     $ops[] = 'Table trade_promotions already exists — skipped.';
+    if (!$colExists('trade_promotions', 'extra_id')) {
+        $pdo->exec('ALTER TABLE trade_promotions ADD COLUMN extra_id INT NULL AFTER band_code');
+        $pdo->exec('ALTER TABLE trade_promotions ADD COLUMN choice_id INT NULL AFTER extra_id');
+        $pdo->exec('ALTER TABLE trade_promotions ADD KEY idx_tp_extra (extra_id)');
+        $ops[] = 'Added trade_promotions.extra_id / choice_id (Components promotions).';
+    }
 }
 
 echo "Migration complete.\n\n";
