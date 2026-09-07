@@ -741,6 +741,31 @@ function pe_discount_for_system(PDO $pdo, int $clientId, int $productId, ?int $s
     return ($val !== false && $val !== null) ? (float) $val : 0.0;
 }
 
+/**
+ * Best TRADE (buying) discount % for a line — our per-account deal off the
+ * trade price, from the trade_discounts table. Scoped by product and, optionally,
+ * system + band (Material Group): a row with system_id / band_code NULL means
+ * "all systems" / "all bands". Among every applicable row we take the LARGEST %
+ * (best-discount-wins). A missing table/column (not migrated yet) or no matching
+ * row returns 0.0 — so with no trade discount set, the price is unchanged.
+ */
+function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?int $systemId, ?string $bandCode): float
+{
+    try {
+        $st = $pdo->prepare(
+            'SELECT MAX(discount_percent) FROM trade_discounts
+              WHERE client_id = ? AND product_id = ? AND active = 1
+                AND (system_id IS NULL OR system_id = ?)
+                AND (band_code IS NULL OR band_code = ?)'
+        );
+        $st->execute([$clientId, $productId, $systemId, ($bandCode !== null && $bandCode !== '') ? $bandCode : null]);
+        $val = $st->fetchColumn();
+        return ($val !== false && $val !== null) ? max(0.0, min(100.0, (float) $val)) : 0.0;
+    } catch (Throwable $e) {
+        return 0.0;   // trade_discounts absent / pre-migration — no trade discount
+    }
+}
+
 // ---------------------------------------------------------------------------
 // High-level entry point
 // ---------------------------------------------------------------------------
@@ -964,6 +989,26 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
         $basePrice = (float) $row['price'];
     }
 
+    // 5b. Trade (buying) discount — our per-account deal off the trade price,
+    //     scoped by product / system / band (Material Group). Reduces the trade
+    //     price BEFORE extras and the tenant's own markup, so it lands as a
+    //     genuine cut in what they buy at. Best-discount-wins.
+    //
+    //     CRITICAL: when no trade discount applies (empty table, no matching row,
+    //     pre-migration) pe_trade_discount_for_line() returns 0 and we leave
+    //     $basePrice completely untouched — so prices are byte-identical to
+    //     before this step existed. $tradePriceUnit / $tradeDiscount* are carried
+    //     out for the wholesale invoice's "trade → discount → discounted" columns.
+    $tradeBandCode  = ($requiresOption && $fabric) ? (string) $fabric['band_code'] : null;
+    $tradeDiscPct   = pe_trade_discount_for_line($pdo, $clientId, $productId, $systemId, $tradeBandCode);
+    $tradePriceUnit = round($basePrice, 2);   // trade price per blind, before our discount
+    $tradeDiscAmt   = 0.0;
+    if ($tradeDiscPct > 0) {
+        $discountedBaseUnit = $basePrice * (1 - $tradeDiscPct / 100);
+        $tradeDiscAmt = round($tradePriceUnit - round($discountedBaseUnit, 2), 2);
+        $basePrice    = $discountedBaseUnit;
+    }
+
     // 6. Apply extras. Each $sel may now carry a `user_value` (typed
     //    length / count / etc.) — pass through to pe_apply_extra so it
     //    can snapshot the value alongside the choice.
@@ -1114,8 +1159,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input): array
                ))
         ),
 
-        // Pricing breakdown
-        'base_price'         => round($basePrice, 2),
+        // Pricing breakdown. base_price is the trade price AFTER our trade
+        // (buying) discount; trade_price_per_blind is the price before it, and
+        // trade_discount_amount the £ off — the three columns the wholesale
+        // invoice shows (trade → discount → discounted). With no trade discount
+        // these are just: trade_price == base_price, amount 0, percent 0.
+        'base_price'             => round($basePrice, 2),
+        'trade_price_per_blind'  => $tradePriceUnit,
+        'trade_discount_percent' => round($tradeDiscPct, 2),
+        'trade_discount_amount'  => $tradeDiscAmt,
         'extras_applied'     => $extrasApplied,   // ready for quote_item_extras INSERTs
         'extras_total'       => $extrasTotal,
         'subtotal_per_blind' => $subtotalPerBlind,
