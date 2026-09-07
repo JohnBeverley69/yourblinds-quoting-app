@@ -399,6 +399,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // ── Commission actions (config only — the statement/report is Phase 2) ──
+    if (in_array($action, ['comm_add', 'comm_delete', 'consultant_add', 'comm_notify'], true)) {
+        $redirect = '/master-admin/trade-account.php?id=' . $clientId . '#commission';
+        try {
+            if ($action === 'consultant_add') {
+                $name = trim((string) ($_POST['consultant_name'] ?? ''));
+                $mail = trim((string) ($_POST['consultant_email'] ?? ''));
+                if ($name === '') {
+                    $_SESSION['flash_error'] = 'Consultant name is required.';
+                } elseif ($mail !== '' && !filter_var($mail, FILTER_VALIDATE_EMAIL)) {
+                    $_SESSION['flash_error'] = 'That consultant email isn\'t valid.';
+                } else {
+                    $pdo->prepare('INSERT INTO sales_consultants (name, email, active) VALUES (?, ?, 1)')
+                        ->execute([mb_substr($name, 0, 150), $mail !== '' ? $mail : null]);
+                    $_SESSION['flash_success'] = 'Sales consultant "' . $name . '" added.';
+                }
+            } elseif ($action === 'comm_add') {
+                $cid = (int) ($_POST['consultant_id'] ?? 0);
+                $pid = (int) ($_POST['product_id'] ?? 0);   // 0 = All
+                $pct = max(0.0, min(100.0, (float) ($_POST['commission_percent'] ?? 0)));
+
+                // Consultant must exist.
+                $cc = $pdo->prepare('SELECT 1 FROM sales_consultants WHERE id = ? LIMIT 1');
+                $cc->execute([$cid]);
+                if (!$cc->fetchColumn()) {
+                    $_SESSION['flash_error'] = 'Pick a sales consultant (add one first if the list is empty).';
+                } else {
+                    // Product (optional) must belong to this account.
+                    $productId = null;
+                    if ($pid > 0) {
+                        $pc = $pdo->prepare('SELECT 1 FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+                        $pc->execute([$pid, $clientId]);
+                        if ($pc->fetchColumn()) $productId = $pid;
+                    }
+                    // One row per (client, consultant, product) — upsert.
+                    if ($productId === null) {
+                        $ex = $pdo->prepare('SELECT id FROM trade_commissions WHERE client_id = ? AND consultant_id = ? AND product_id IS NULL LIMIT 1');
+                        $ex->execute([$clientId, $cid]);
+                    } else {
+                        $ex = $pdo->prepare('SELECT id FROM trade_commissions WHERE client_id = ? AND consultant_id = ? AND product_id = ? LIMIT 1');
+                        $ex->execute([$clientId, $cid, $productId]);
+                    }
+                    $exId = $ex->fetchColumn();
+                    if ($exId !== false) {
+                        $pdo->prepare('UPDATE trade_commissions SET commission_percent = ?, active = 1 WHERE id = ?')->execute([$pct, (int) $exId]);
+                        $_SESSION['flash_success'] = 'Commission updated.';
+                    } else {
+                        $pdo->prepare('INSERT INTO trade_commissions (client_id, consultant_id, product_id, commission_percent, active) VALUES (?, ?, ?, ?, 1)')
+                            ->execute([$clientId, $cid, $productId, $pct]);
+                        $_SESSION['flash_success'] = 'Commission added.';
+                    }
+                }
+            } elseif ($action === 'comm_delete') {
+                $tcId = (int) ($_POST['tc_id'] ?? 0);
+                $pdo->prepare('DELETE FROM trade_commissions WHERE id = ? AND client_id = ?')->execute([$tcId, $clientId]);
+                $_SESSION['flash_success'] = 'Commission removed.';
+            } elseif ($action === 'comm_notify') {
+                $to = !empty($_POST['notify']) ? 1 : 0;
+                $pdo->prepare('UPDATE clients SET notify_consultant_orders = ? WHERE id = ?')->execute([$to, $clientId]);
+                $_SESSION['flash_success'] = $to ? 'Consultant will be emailed on trade-portal orders.' : 'Consultant order emails turned off.';
+            }
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save commission: ' . $e->getMessage()
+                . ' (has /migrate_commissions.php been run?)';
+        }
+        header('Location: ' . $redirect);
+        exit;
+    }
+
     header('Location: /master-admin/trade-account.php?id=' . $clientId);
     exit;
 }
@@ -526,6 +595,51 @@ if ($tdReady) {
     } catch (Throwable $e) { /* no audit table */ }
 }
 $discountCount = count($tradeDiscounts);
+
+// ── Commission (config only; the statement/report is Phase 2) ────────────────
+$commReady = false;
+try {
+    $s = $pdo->prepare("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_commissions' LIMIT 1");
+    $s->execute();
+    $commReady = $s->fetchColumn() !== false;
+} catch (Throwable $e) { /* not migrated yet */ }
+
+$consultants      = [];   // active reps for the dropdown
+$tradeCommissions = [];   // rows for this account
+$notifyConsultant = 0;    // clients.notify_consultant_orders
+if ($commReady) {
+    // Account products (also loaded by the discounts block; load here if that was skipped).
+    if (!$accProducts) {
+        try {
+            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY sort_order, name');
+            $ps2->execute([$clientId]);
+        } catch (Throwable $e) {
+            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY name');
+            $ps2->execute([$clientId]);
+        }
+        foreach ($ps2->fetchAll(PDO::FETCH_ASSOC) as $p) $accProducts[(int) $p['id']] = (string) $p['name'];
+    }
+    try {
+        $consultants = $pdo->query('SELECT id, name, email FROM sales_consultants WHERE active = 1 ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* no consultants table */ }
+    try {
+        $tcq = $pdo->prepare(
+            'SELECT tc.id, tc.consultant_id, tc.product_id, tc.commission_percent,
+                    sc.name AS consultant_name, p.name AS product_name
+               FROM trade_commissions tc
+               JOIN sales_consultants sc ON sc.id = tc.consultant_id
+          LEFT JOIN products p ON p.id = tc.product_id
+              WHERE tc.client_id = ? ORDER BY sc.name, p.name'
+        );
+        $tcq->execute([$clientId]);
+        $tradeCommissions = $tcq->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* leave empty */ }
+    try {
+        $nf = $pdo->prepare('SELECT notify_consultant_orders FROM clients WHERE id = ?');
+        $nf->execute([$clientId]);
+        $notifyConsultant = (int) ($nf->fetchColumn() ?: 0);
+    } catch (Throwable $e) { /* column not present */ }
+}
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -923,6 +1037,116 @@ $activeNav = 'trade-accounts';
                         </div>
                     </details>
                 <?php endif; ?>
+            <?php endif; ?>
+        </section>
+
+        <!-- Commission — a rep + rate on this account's turnover (config only) -->
+        <section class="section" id="commission">
+            <h2 class="section-title" style="margin:0 0 0.4rem">Commission</h2>
+            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem;max-width:72ch">
+                The sales consultant who introduced this account and the <strong>commission %</strong> they earn on its
+                turnover, per <strong>product</strong> (<em>All</em> = every product). The commission <strong>statement</strong>
+                (turnover &times; %) comes with the accounts package &mdash; this just records who gets what.
+            </p>
+
+            <?php if (!$commReady): ?>
+                <div class="alert alert-error" role="alert">
+                    The commission tables aren't set up yet — run
+                    <a href="/migrate_commissions.php"><code>/migrate_commissions.php</code></a> (super-admin), then reload.
+                </div>
+            <?php else: ?>
+                <!-- Add / update a commission -->
+                <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0 0 1rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="comm_add">
+                    <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                    <div class="action-row" style="align-items:flex-end">
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Commission %</div>
+                            <input type="number" name="commission_percent" step="0.01" min="0" max="100" required placeholder="1" style="width:6rem">
+                        </div>
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Sales Consultant</div>
+                            <select name="consultant_id" required style="min-width:12rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">— choose —</option>
+                                <?php foreach ($consultants as $c): ?>
+                                    <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="lbl" style="margin-bottom:0.2rem">Product</div>
+                            <select name="product_id" style="min-width:14rem;padding:0.35rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);font:inherit">
+                                <option value="">All</option>
+                                <?php foreach ($accProducts as $pid => $pname): ?>
+                                    <option value="<?= (int) $pid ?>"><?= e((string) $pname) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" <?= $consultants ? '' : 'disabled title="Add a consultant first"' ?>>Add commission</button>
+                    </div>
+                    <?php if (!$consultants): ?>
+                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.4rem 0 0">No sales consultants yet — add one below first.</p>
+                    <?php endif; ?>
+                </form>
+
+                <?php if ($tradeCommissions): ?>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th style="text-align:right">Commission %</th><th>Sales Consultant</th><th>Product</th><th></th></tr></thead>
+                            <tbody>
+                                <?php foreach ($tradeCommissions as $tc):
+                                    $pn = ($tc['product_name'] ?? '') !== '' ? (string) $tc['product_name'] : 'All';
+                                ?>
+                                    <tr>
+                                        <td style="text-align:right;font-variant-numeric:tabular-nums"><?= number_format((float) $tc['commission_percent'], 2) ?></td>
+                                        <td><?= e((string) ($tc['consultant_name'] ?? '')) ?></td>
+                                        <td><?= e($pn) ?></td>
+                                        <td style="text-align:right">
+                                            <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0;display:inline"
+                                                  data-confirm="Remove the <?= e(number_format((float) $tc['commission_percent'], 2)) ?>% commission for <?= e((string) ($tc['consultant_name'] ?? '')) ?> on <?= e($pn) ?>?">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="comm_delete">
+                                                <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                                                <input type="hidden" name="tc_id" value="<?= (int) $tc['id'] ?>">
+                                                <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <p style="color:var(--text-faint);margin:0">No commission set for this account yet.</p>
+                <?php endif; ?>
+
+                <!-- Email the consultant on trade-portal orders -->
+                <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0.75rem 0 0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="comm_notify">
+                    <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                    <label style="display:inline-flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--text-primary);cursor:pointer">
+                        <input type="checkbox" name="notify" value="1" onchange="this.form.submit()" <?= $notifyConsultant ? 'checked' : '' ?>>
+                        Email the consultant when this account places orders through the trade portal
+                    </label>
+                </form>
+
+                <!-- Add a consultant -->
+                <details style="margin-top:0.75rem">
+                    <summary style="cursor:pointer;font-weight:600;color:var(--link);font-size:0.875rem">+ Add a sales consultant</summary>
+                    <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin-top:0.6rem">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="consultant_add">
+                        <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+                        <div class="action-row">
+                            <input type="text" name="consultant_name" placeholder="Consultant name (e.g. SS)" required style="min-width:12rem">
+                            <input type="email" name="consultant_email" placeholder="Email (optional)" style="min-width:14rem">
+                            <button type="submit" class="btn btn-secondary btn-sm">Add consultant</button>
+                        </div>
+                        <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.4rem 0 0">Consultants are shared across all accounts — add once, assign anywhere.</p>
+                    </form>
+                </details>
             <?php endif; ?>
         </section>
     </main>
