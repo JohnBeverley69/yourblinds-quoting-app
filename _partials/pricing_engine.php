@@ -742,15 +742,21 @@ function pe_discount_for_system(PDO $pdo, int $clientId, int $productId, ?int $s
 }
 
 /**
- * Best TRADE (buying) discount % for a line — our per-account deal off the
- * trade price, from the trade_discounts table. Scoped by product and, optionally,
- * system + band (Material Group): a row with system_id / band_code NULL means
- * "all systems" / "all bands". Among every applicable row we take the LARGEST %
- * (best-discount-wins). A missing table/column (not migrated yet) or no matching
- * row returns 0.0 — so with no trade discount set, the price is unchanged.
+ * Best TRADE (buying) discount % for a line — our deal off the trade price,
+ * from BOTH the standing per-account `trade_discounts` and the time-boxed
+ * `trade_promotions` (which can be global, i.e. client_id NULL). Scoped by
+ * product and, optionally, system + band (Material Group): a NULL system_id /
+ * band_code means "all systems" / "all bands". Promotions also honour their
+ * date window. Across every applicable row from both tables we take the LARGEST
+ * % (best-discount-wins, never stacked). A missing table (not migrated) or no
+ * matching row contributes nothing, so with none set the price is unchanged.
  */
 function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?int $systemId, ?string $bandCode): float
 {
+    $band = ($bandCode !== null && $bandCode !== '') ? $bandCode : null;
+    $best = 0.0;
+
+    // Standing per-account discounts.
     try {
         $st = $pdo->prepare(
             'SELECT MAX(discount_percent) FROM trade_discounts
@@ -758,12 +764,28 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
                 AND (system_id IS NULL OR system_id = ?)
                 AND (band_code IS NULL OR band_code = ?)'
         );
-        $st->execute([$clientId, $productId, $systemId, ($bandCode !== null && $bandCode !== '') ? $bandCode : null]);
-        $val = $st->fetchColumn();
-        return ($val !== false && $val !== null) ? max(0.0, min(100.0, (float) $val)) : 0.0;
-    } catch (Throwable $e) {
-        return 0.0;   // trade_discounts absent / pre-migration — no trade discount
-    }
+        $st->execute([$clientId, $productId, $systemId, $band]);
+        $v = $st->fetchColumn();
+        if ($v !== false && $v !== null) $best = max($best, (float) $v);
+    } catch (Throwable $e) { /* trade_discounts absent — skip */ }
+
+    // Time-boxed promotions (this account or global), within their date window.
+    try {
+        $sp = $pdo->prepare(
+            'SELECT MAX(discount_percent) FROM trade_promotions
+              WHERE product_id = ? AND active = 1
+                AND (client_id IS NULL OR client_id = ?)
+                AND (system_id IS NULL OR system_id = ?)
+                AND (band_code IS NULL OR band_code = ?)
+                AND (starts_on IS NULL OR starts_on <= CURDATE())
+                AND (ends_on   IS NULL OR ends_on   >= CURDATE())'
+        );
+        $sp->execute([$productId, $clientId, $systemId, $band]);
+        $v = $sp->fetchColumn();
+        if ($v !== false && $v !== null) $best = max($best, (float) $v);
+    } catch (Throwable $e) { /* trade_promotions absent — skip */ }
+
+    return max(0.0, min(100.0, $best));
 }
 
 // ---------------------------------------------------------------------------
