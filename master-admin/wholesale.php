@@ -21,6 +21,7 @@ $factory = ar_factory_id();
 
 $dnReady  = ar_table_ready($pdo, 'factory_ar_delivery_notes');
 $invReady = ar_table_ready($pdo, 'factory_ar_invoices');
+$cnReady  = ar_table_ready($pdo, 'factory_ar_credit_notes');
 
 // ── POST handlers ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -226,6 +227,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
+    if ($action === 'cn_raise') {
+        $invId = (int) ($_POST['inv_id'] ?? 0);
+        $reason = trim((string) ($_POST['reason'] ?? '')) ?: null;
+        try {
+            if (!$cnReady) throw new RuntimeException('Run /migrate_ar_credit_notes.php first.');
+
+            $iv = $pdo->prepare('SELECT * FROM factory_ar_invoices WHERE id = ? AND factory_client_id = ? LIMIT 1');
+            $iv->execute([$invId, $factory]);
+            $inv = $iv->fetch(PDO::FETCH_ASSOC);
+            if (!$inv) throw new RuntimeException('Invoice not found.');
+            if ($inv['status'] === 'void') throw new RuntimeException('That invoice is void — nothing to credit.');
+
+            $il = $pdo->prepare('SELECT * FROM factory_ar_invoice_lines WHERE invoice_id = ? ORDER BY sort_order, id');
+            $il->execute([$invId]);
+            $invLines = $il->fetchAll(PDO::FETCH_ASSOC);
+            if (!$invLines) throw new RuntimeException('That invoice has no lines to credit.');
+
+            $pdo->beginTransaction();
+
+            $cnId = 0; $num = '';
+            for ($try = 1; $try <= 3; $try++) {
+                $num = ar_next_number($pdo, $factory, 'CN', 'factory_ar_credit_notes', 'cn_number');
+                try {
+                    $ins = $pdo->prepare(
+                        "INSERT INTO factory_ar_credit_notes
+                           (factory_client_id, account_client_id, cn_number, against_invoice_id, status, issue_date,
+                            reason, vat_percent, subtotal, vat, total, settle_mode, bill_to_snapshot, created_by)
+                         VALUES (?, ?, ?, ?, 'issued', CURDATE(), ?, ?, ?, ?, ?, 'credit', ?, ?)"
+                    );
+                    $ins->execute([
+                        $factory, (int) $inv['account_client_id'], $num, $invId, $reason,
+                        (float) $inv['vat_percent'], (float) $inv['subtotal'], (float) $inv['vat'], (float) $inv['total'],
+                        $inv['bill_to_snapshot'], (int) ($user['user_id'] ?? 0) ?: null,
+                    ]);
+                    $cnId = (int) $pdo->lastInsertId();
+                    break;
+                } catch (PDOException $e) {
+                    if ($e->getCode() === '23000' && $try < 3) continue;
+                    throw $e;
+                }
+            }
+
+            $insL = $pdo->prepare(
+                "INSERT INTO factory_ar_credit_note_lines
+                   (credit_note_id, source_invoice_line_id, description, width_mm, drop_mm, quantity, unit_net, line_net, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            $so = 0;
+            foreach ($invLines as $l) {
+                $insL->execute([
+                    $cnId, (int) $l['id'], $l['description'], $l['width_mm'], $l['drop_mm'],
+                    (int) $l['quantity'], (float) $l['unit_net'], (float) $l['line_net'], $so++,
+                ]);
+            }
+
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Credit note ' . $num . ' raised against ' . $inv['inv_number'] . ' (£' . number_format((float) $inv['total'], 2) . ').';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not raise credit note: ' . $e->getMessage();
+        }
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
+    if ($action === 'cn_void') {
+        $cnId = (int) ($_POST['cn_id'] ?? 0);
+        try {
+            $pdo->prepare("UPDATE factory_ar_credit_notes SET status = 'void', voided_at = NOW() WHERE id = ? AND factory_client_id = ? AND status <> 'void'")
+                ->execute([$cnId, $factory]);
+            $_SESSION['flash_success'] = 'Credit note voided.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not void credit note: ' . $e->getMessage();
+        }
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
     header('Location: /master-admin/wholesale.php'); exit;
 }
 
@@ -269,6 +346,22 @@ if ($invReady) {
         );
         $is->execute([$factory]);
         $invoices = $is->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* leave empty */ }
+}
+
+$creditNotes = [];
+if ($cnReady) {
+    try {
+        $cs = $pdo->prepare(
+            "SELECT cn.*, c.company_name AS account_name, i.inv_number AS against_number
+               FROM factory_ar_credit_notes cn
+               JOIN clients c ON c.id = cn.account_client_id
+          LEFT JOIN factory_ar_invoices i ON i.id = cn.against_invoice_id
+              WHERE cn.factory_client_id = ?
+           ORDER BY cn.id DESC LIMIT 100"
+        );
+        $cs->execute([$factory]);
+        $creditNotes = $cs->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { /* leave empty */ }
 }
 
@@ -481,6 +574,15 @@ $activeNav = 'wholesale';
                                                 <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Void</button>
                                             </form>
                                         <?php endif; ?>
+                                        <?php if ($cnReady && $inv['status'] !== 'void'): ?>
+                                            <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
+                                                  data-confirm="Raise a full credit note for <?= e((string) $inv['inv_number']) ?> (£<?= e(number_format((float) $inv['total'], 2)) ?>)?">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="cn_raise">
+                                                <input type="hidden" name="inv_id" value="<?= (int) $inv['id'] ?>">
+                                                <button type="submit" style="background:none;border:0;color:var(--link);cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Credit note</button>
+                                            </form>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -489,6 +591,42 @@ $activeNav = 'wholesale';
                 </div>
             <?php endif; ?>
         </section>
+
+        <!-- Credit notes -->
+        <?php if ($cnReady && $creditNotes): ?>
+        <section class="section">
+            <h2 class="section-title" style="margin:0 0 0.6rem">Credit notes</h2>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr><th>Number</th><th>Account</th><th>Against</th><th>Issued</th><th class="wh-money">Total</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($creditNotes as $cn): $void = $cn['status'] === 'void'; ?>
+                            <tr>
+                                <td><strong><?= e((string) $cn['cn_number']) ?></strong></td>
+                                <td><?= e((string) $cn['account_name']) ?></td>
+                                <td><?= e((string) ($cn['against_number'] ?: '—')) ?></td>
+                                <td style="white-space:nowrap"><?= $fmtD($cn['issue_date']) ?></td>
+                                <td class="wh-money">&minus;<?= $money($cn['total']) ?></td>
+                                <td><span class="wh-pill" style="background:<?= $void ? '#e5e7eb' : '#d1fae5' ?>;color:<?= $void ? '#6b7280' : '#065f46' ?>"><?= $void ? 'Void' : 'Issued' ?></span></td>
+                                <td style="text-align:right;white-space:nowrap">
+                                    <a href="/master-admin/credit-note-pdf.php?id=<?= (int) $cn['id'] ?>" target="_blank" style="color:var(--link);font-size:0.8125rem;text-decoration:underline">View PDF</a>
+                                    <?php if (!$void): ?>
+                                        <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0 0 0 0.6rem"
+                                              data-confirm="Void credit note <?= e((string) $cn['cn_number']) ?>?">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="cn_void">
+                                            <input type="hidden" name="cn_id" value="<?= (int) $cn['id'] ?>">
+                                            <button type="submit" style="background:none;border:0;color:#b91c1c;cursor:pointer;font-size:0.8125rem;text-decoration:underline;padding:0">Void</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <?php endif; ?>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
