@@ -305,6 +305,8 @@ $statusOf = static function (array $p) use ($today): array {
         .pill { display:inline-block; padding:0.05rem 0.5rem; font-size:0.7rem; font-weight:700; border-radius:999px; }
         .conflict { background:#fffbeb; }
         .conflict-tag { display:inline-block; margin-left:0.4rem; padding:0.05rem 0.45rem; font-size:0.68rem; font-weight:700; border-radius:999px; background:#fef3c7; color:#92400e; }
+        .orphan { background:#fef2f2; }
+        .orphan-tag { display:inline-block; padding:0.05rem 0.45rem; font-size:0.68rem; font-weight:700; border-radius:999px; background:#fee2e2; color:#b91c1c; }
     </style>
 </head>
 <body>
@@ -427,7 +429,16 @@ $statusOf = static function (array $p) use ($today): array {
                             <?php foreach ($promos as $p):
                                 [$slabel, $scolour] = $statusOf($p);
                                 $hasConflict = isset($conflicts[(int) $p['id']]);
+                                // Orphaned: the targeted option/choice was deleted (or
+                                // deleted-and-recreated, giving it a new id), so the join
+                                // returns no name. The promotion is now inert.
+                                $orphan = false;
                                 if ($tpHasExtra && !empty($p['extra_id'])) {
+                                    if (($p['extra_name'] ?? null) === null) {
+                                        $orphan = true;
+                                    } elseif (!empty($p['choice_id']) && ($p['choice_label'] ?? null) === null) {
+                                        $orphan = true;
+                                    }
                                     $appliesTo = 'Option: ' . (string) ($p['extra_name'] ?? ('#' . (int) $p['extra_id']));
                                     if (!empty($p['choice_id'])) $appliesTo .= ' → ' . (string) ($p['choice_label'] ?? ('#' . (int) $p['choice_id']));
                                 } else {
@@ -436,14 +447,21 @@ $statusOf = static function (array $p) use ($today): array {
                                     $appliesTo = 'Price · ' . $sy . ' · ' . $bd;
                                 }
                             ?>
-                                <tr class="<?= $hasConflict ? 'conflict' : '' ?>">
+                                <tr class="<?= $orphan ? 'orphan' : ($hasConflict ? 'conflict' : '') ?>">
                                     <td>
                                         <span class="pill" style="background:<?= $scolour === 'var(--text-faint)' ? 'var(--bg-subtle-2)' : ($scolour === '#065f46' ? '#d1fae5' : '#dbeafe') ?>;color:<?= $scolour ?>"><?= e($slabel) ?></span>
                                         <?php if ($hasConflict): ?><span class="conflict-tag" title="Overlaps another promotion">overlap</span><?php endif; ?>
                                     </td>
                                     <td style="text-align:right;font-variant-numeric:tabular-nums"><?= number_format((float) $p['discount_percent'], 2) ?></td>
                                     <td><?= e((string) ($p['product_name'] ?? ('#' . (int) $p['product_id']))) ?><?php if (($p['name'] ?? '') !== ''): ?><br><span style="color:var(--text-faint);font-size:0.8125rem"><?= e((string) $p['name']) ?></span><?php endif; ?></td>
-                                    <td><?= e($appliesTo) ?></td>
+                                    <td>
+                                        <?php if ($orphan): ?>
+                                            <span class="orphan-tag" title="The option or choice this promotion targeted no longer exists (it was deleted, or deleted and re-created with a new id). This promotion no longer applies any discount — delete it and re-create it against the current option.">⚠ option no longer exists — re-create</span>
+                                            <br><span style="color:var(--text-faint);font-size:0.8125rem"><?= e($appliesTo) ?></span>
+                                        <?php else: ?>
+                                            <?= e($appliesTo) ?>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= $p['client_id'] === null ? 'All (global)' : e($accName[(int) $p['client_id']] ?? ('#' . (int) $p['client_id'])) ?></td>
                                     <td style="white-space:nowrap"><?= e($fmtDate($p['starts_on'])) ?> &ndash; <?= e($fmtDate($p['ends_on'])) ?></td>
                                     <td style="text-align:right;white-space:nowrap">
