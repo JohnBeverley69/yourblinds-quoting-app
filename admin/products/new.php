@@ -65,6 +65,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $newProductId = (int) $pdo->lastInsertId();
 
+            // Default a NEW product to the "supplier price list" model (most of the
+            // catalogue is bought in — its grid is the supplier's trade list, and
+            // ours = list − buying discount + margin). Column-guarded; existing
+            // products are never touched. The user switches it to "our price list"
+            // on the Edit page for anything we manufacture ourselves.
+            try {
+                $pdo->prepare('UPDATE products SET price_source = ? WHERE id = ?')
+                    ->execute(['supplier', $newProductId]);
+            } catch (Throwable $e) { /* price_source column not migrated — leave default */ }
+
             // Audit
             require_once __DIR__ . '/../../_partials/catalogue_audit.php';
             catalogue_audit_log(

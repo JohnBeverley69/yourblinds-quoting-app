@@ -226,6 +226,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ins->execute($insVals);
             $newId = (int) $pdo->lastInsertId();
 
+            // Default a NEW product to the "supplier price list" model (see new.php).
+            // Column-guarded; existing products untouched.
+            try {
+                $pdo->prepare('UPDATE products SET price_source = ? WHERE id = ?')
+                    ->execute(['supplier', $newId]);
+            } catch (Throwable $e) { /* price_source column not migrated — leave default */ }
+
             header('Location: /admin/products/wizard.php?id=' . $newId . '&step=2');
             exit;
         }

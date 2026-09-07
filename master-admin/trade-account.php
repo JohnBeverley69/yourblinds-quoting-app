@@ -41,6 +41,14 @@ $colExists = static function (string $table, string $col) use ($pdo): bool {
 };
 $hasCreated = $colExists('clients', 'created_at');
 
+// Trade discounts / commissions only apply to the FACTORY's own products (the
+// ones this account buys from us) — a product it sources elsewhere is off-limits.
+// Degrades to no restriction if the source_client_id column isn't present.
+$facId  = (int) (function_exists('factory_client_id') ? factory_client_id() : 3);
+$facOwn = $colExists('products', 'source_client_id')
+    ? ' AND COALESCE(NULLIF(source_client_id, 0), client_id) = ' . $facId
+    : '';
+
 // ── POST handlers ───────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -313,8 +321,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pct  = (float) ($_POST['discount_percent'] ?? 0);
                 $pct  = max(0.0, min(100.0, $pct));
 
-                // Product must belong to THIS account.
-                $pc = $pdo->prepare('SELECT name FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+                // Product must belong to THIS account AND be one of ours (factory).
+                $pc = $pdo->prepare('SELECT name FROM products WHERE id = ? AND client_id = ?' . $facOwn . ' LIMIT 1');
                 $pc->execute([$pid, $clientId]);
                 $pname = $pc->fetchColumn();
                 if ($pname === false) {
@@ -471,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Product (optional) must belong to this account.
                     $productId = null;
                     if ($pid > 0) {
-                        $pc = $pdo->prepare('SELECT 1 FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+                        $pc = $pdo->prepare('SELECT 1 FROM products WHERE id = ? AND client_id = ?' . $facOwn . ' LIMIT 1');
                         $pc->execute([$pid, $clientId]);
                         if ($pc->fetchColumn()) $productId = $pid;
                     }
@@ -580,10 +588,10 @@ $tradeDiscounts = [];   // rows for this account
 $tdAudit        = [];   // recent change history
 if ($tdReady) {
     try {
-        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY sort_order, name');
+        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ?' . $facOwn . ' ORDER BY sort_order, name');
         $ps->execute([$clientId]);
     } catch (Throwable $e) {
-        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY name');
+        $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ?' . $facOwn . ' ORDER BY name');
         $ps->execute([$clientId]);
     }
     foreach ($ps->fetchAll(PDO::FETCH_ASSOC) as $p) $accProducts[(int) $p['id']] = (string) $p['name'];
@@ -684,10 +692,10 @@ if ($commReady) {
     // Account products (also loaded by the discounts block; load here if that was skipped).
     if (!$accProducts) {
         try {
-            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY sort_order, name');
+            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ?' . $facOwn . ' ORDER BY sort_order, name');
             $ps2->execute([$clientId]);
         } catch (Throwable $e) {
-            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY name');
+            $ps2 = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ?' . $facOwn . ' ORDER BY name');
             $ps2->execute([$clientId]);
         }
         foreach ($ps2->fetchAll(PDO::FETCH_ASSOC) as $p) $accProducts[(int) $p['id']] = (string) $p['name'];
