@@ -1637,6 +1637,28 @@ if ($psIsSupplier) {
     $psMarkPct = pe_markup_for_system  (db(), (int) $clientId, (int) $table['product_id'], (int) $table['system_id']);
 }
 
+// Supplier TRADE discount on this product/system — set by the supplier in master
+// admin. Where it applies, the engine uses IT as the buying discount and ignores the
+// tenant's own client_discounts, so the terms panel shows it read-only and the per-cell
+// cost/margin uses it. Best-wins, all-bands only (band-specific deals live on Trade
+// terms). $psEffDisc is the buying discount actually in force. Degrades silently.
+$psTradeDisc = 0.0;
+if (function_exists('factory_owns_product') && factory_owns_product(db(), (int) $table['product_id'])) {
+    try {
+        $psTdEx = '';
+        try { $psC = db()->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trade_discounts' AND COLUMN_NAME = 'extra_id' LIMIT 1"); $psC->execute(); if ($psC->fetchColumn() !== false) $psTdEx = ' AND extra_id IS NULL'; } catch (Throwable $e) {}
+        $psTd = db()->prepare(
+            "SELECT MAX(discount_percent) FROM trade_discounts
+              WHERE client_id = ? AND product_id = ? AND active = 1 AND band_code IS NULL
+                AND (system_id IS NULL OR system_id = ?)" . $psTdEx
+        );
+        $psTd->execute([(int) $clientId, (int) $table['product_id'], (int) $table['system_id']]);
+        $psV = $psTd->fetchColumn();
+        if ($psV !== false && $psV !== null) $psTradeDisc = max(0.0, (float) $psV);
+    } catch (Throwable $e) { /* no trade_discounts — leave editable */ }
+}
+$psEffDisc = $psTradeDisc > 0 ? $psTradeDisc : $psDiscPct;
+
 $isEmpty = !$matrixWidths && !$matrixDrops;
 
 // "Quick start" grid for empty tables.
@@ -2047,10 +2069,18 @@ $activeNav = 'products';
                     <label for="tt-disc" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
                         Buying discount %
                     </label>
+                    <?php if ($psTradeDisc > 0): ?>
+                        <div style="width:8rem;padding:0.4rem 0.55rem;font-weight:700;color:#065f46">
+                            <?= rtrim(rtrim(number_format($psTradeDisc, 2, '.', ''), '0'), '.') ?>%
+                            <span style="display:block;font-size:0.68rem;font-weight:400;color:var(--text-faint)">from your supplier</span>
+                        </div>
+                        <input type="hidden" name="discount_percent" value="0">
+                    <?php else: ?>
                     <input id="tt-disc" name="discount_percent" type="number"
                            min="0" max="99.99" step="0.01" inputmode="decimal"
                            value="<?= e($ptDiscShown) ?>" placeholder="0"
                            style="width:8rem;padding:0.4rem 0.55rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-input);color:var(--text-body);font:inherit">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="tt-mark" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
@@ -2396,11 +2426,11 @@ $activeNav = 'products';
                                                 if ($psIsSupplier) {
                                                     $list = (float) ($val ?? 0);
                                                     if ($list > 0) {
-                                                        $c    = $list * (1 - $psDiscPct / 100);   // what we pay
+                                                        $c    = $list * (1 - $psEffDisc / 100);   // what we pay
                                                         $sell = $c    * (1 + $psMarkPct / 100);   // what we charge
                                                         $marg = $sell > 0 ? ($sell - $c) / $sell * 100 : null;
                                                         $tip  = 'list £' . number_format($list, 2)
-                                                              . ' less ' . rtrim(rtrim(number_format($psDiscPct, 2, '.', ''), '0'), '.') . '% = cost'
+                                                              . ' less ' . rtrim(rtrim(number_format($psEffDisc, 2, '.', ''), '0'), '.') . '% = cost'
                                                               . ' · plus ' . rtrim(rtrim(number_format($psMarkPct, 2, '.', ''), '0'), '.') . '% = our price'
                                                               . ' · margin (master admin only)';
                                                     }
