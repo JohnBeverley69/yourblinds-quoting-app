@@ -37,10 +37,16 @@ $dupGroups = static function (int $eid) use ($pdo): array {
 
 // ── Whole-catalogue scan (no product_id) ────────────────────────────────────
 if (($_GET['product_id'] ?? '') === '') {
-    $ps = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY sort_order, name');
-    $ps->execute([$factory]);
+    $all = ($_GET['all'] ?? '') === '1';   // include tenant mirrors, not just factory masters
+    if ($all) {
+        $ps = $pdo->query('SELECT id, name, client_id FROM products ORDER BY client_id, sort_order, name');
+    } else {
+        $ps = $pdo->prepare('SELECT id, name, client_id FROM products WHERE client_id = ? ORDER BY sort_order, name');
+        $ps->execute([$factory]);
+    }
     $products = $ps->fetchAll(PDO::FETCH_ASSOC);
-    echo "Duplicate-label choice scan — factory #$factory master products (" . count($products) . ")\n";
+    echo 'Duplicate-label choice scan — ' . ($all ? 'ALL products incl. mirrors' : "factory #$factory master products")
+       . ' (' . count($products) . ")\n";
     echo str_repeat('=', 70) . "\n";
     $dirty = 0;
     foreach ($products as $p) {
@@ -55,7 +61,7 @@ if (($_GET['product_id'] ?? '') === '') {
         }
         if ($hits) {
             $dirty++;
-            echo "\n#$pid  {$p['name']}\n";
+            echo "\n#$pid  {$p['name']}  (client {$p['client_id']})\n";
             foreach ($hits as $h) echo "   - $h\n";
         }
     }
