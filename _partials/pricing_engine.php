@@ -802,9 +802,13 @@ function pe_trade_discount_for_line(PDO $pdo, int $clientId, int $productId, ?in
             if ($r !== false && $r !== null) $masterPid = (int) $r;
         } catch (Throwable $e) { /* products.source_product_id absent — use own id */ }
 
+        // extra_id IS NULL keeps this to BASE-price promotions only — a Components
+        // (option/choice) promotion must NOT discount the blind's base price; it's
+        // applied to the extra itself in pe_extra_promotion_for_line().
         $sp = $pdo->prepare(
             'SELECT MAX(discount_percent) FROM trade_promotions
               WHERE (product_id = ? OR product_id = ?) AND active = 1
+                AND extra_id IS NULL
                 AND (client_id IS NULL OR client_id = ?)
                 AND (system_id IS NULL OR system_id = ?)
                 AND (band_code IS NULL OR band_code = ?)
