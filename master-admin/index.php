@@ -137,9 +137,10 @@ $activeNav = 'master-admin';
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Master Admin</h1>
+                <h1 class="page-title">Master Admin &mdash; Overview</h1>
                 <p class="page-subtitle">
-                    Per-client feature flags + tenant management. Tick to enable an add-on for a client.
+                    Per-client feature flags + platform tools. Tick to enable an add-on for a client.
+                    To view, edit or <strong>add accounts</strong>, go to <a href="/master-admin/trade-accounts.php">Trade Accounts</a>.
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -147,7 +148,7 @@ $activeNav = 'master-admin';
                 <a href="/master-admin/pricing.php" class="btn btn-secondary">Pricing</a>
                 <a href="/master-admin/subscriptions.php" class="btn btn-secondary">Subscriptions</a>
                 <a href="/master-admin/backup.php" class="btn btn-secondary">Backup &amp; restore</a>
-                <a href="/master-admin/new-client.php" class="btn btn-primary">+ New client</a>
+                <a href="/master-admin/trade-accounts.php" class="btn btn-primary">Trade Accounts &rarr;</a>
             </div>
         </div>
 
