@@ -294,25 +294,6 @@ window.addEventListener('pageshow', function (e) {
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
-        <?php $__acting = function_exists('acting_client') ? acting_client() : null; ?>
-        <?php if ($__acting): ?>
-            <!-- Act-as banner — a super-admin is building a quote on behalf of a
-                 trade account. Shown on every page so it can never be forgotten. -->
-            <div style="margin:0 0.75rem 0.5rem;padding:0.6rem 0.75rem;border-radius:10px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;font-size:0.8125rem;line-height:1.35">
-                <div style="font-weight:700">Quoting as <?= e($__acting['name']) ?></div>
-                <div style="margin-top:0.2rem"><a href="/master-admin/new-order.php?stop=1" style="color:#92400e;text-decoration:underline">Stop &amp; return to your account</a></div>
-            </div>
-        <?php endif; ?>
-        <?php if ($isSuperAdmin): ?>
-            <!-- Super-admin: raise a quote/order on behalf of a trade account
-                 (or a new customer) via the "who for?" launcher. -->
-            <div class="sidebar-cta">
-                <a href="/master-admin/new-order.php" class="sidebar-cta-btn">
-                    <span aria-hidden="true">&#128221;</span>
-                    New order
-                </a>
-            </div>
-        <?php endif; ?>
         <?php if ($hasQuotes && $canCreateQuotes): ?>
             <!-- Primary CTA — pinned at the top of the sidebar so
                  raising a new quote is one click from any page.
