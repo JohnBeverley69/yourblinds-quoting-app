@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $unit     = (string) ($_POST['unit'] ?? '');
 

@@ -29,7 +29,7 @@ require __DIR__ . '/../mailer.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 

@@ -28,7 +28,7 @@ csrf_check();
 $user     = current_user();
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 $backUrl  = '/quote-builder/edit.php?id=' . $quoteId;

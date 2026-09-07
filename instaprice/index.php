@@ -24,7 +24,7 @@ require __DIR__ . '/../_partials/pricing_basis.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = acting_client_id();   // super-admin 'act as account' aware (own client otherwise)
 // Markup vs margin. The breakdown panel still computes in markup; this only
 // changes how the editable rate is labelled / typed (pricing_basis.php).
 $pricingBasis = pricing_basis_for(db(), $clientId);
