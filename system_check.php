@@ -258,6 +258,40 @@ try {
 } catch (Throwable $e) { /* table/column absent */ }
 if ($spellHits === 0) $okc('no Vouge / Center / spaced C-slash / "Cord and Chain" in stored data (decoded scan)');
 
+// ---- Global: duplicate-label option choices -----------------------------------
+// The same label added twice to one option (e.g. "Corded" ×3). The builder shows
+// each in the dropdown; the engine treats same-label choices as one, so they pile
+// up unnoticed. Nearly always accidental — flag them so they get cleaned up.
+$hdr('DUPLICATE OPTION CHOICES');
+$dupHits = 0;
+try {
+    $dq = $pdo->query(
+        "SELECT e.product_id AS pid, p.name AS pname, e.name AS ename,
+                TRIM(c.label) AS lbl, COUNT(*) AS n
+           FROM product_extra_choices c
+           JOIN product_extras e ON e.id = c.product_extra_id
+           JOIN products p       ON p.id = e.product_id
+          GROUP BY c.product_extra_id, TRIM(c.label)
+         HAVING n > 1
+          ORDER BY e.product_id, e.name, lbl"
+    );
+    $byProduct = [];
+    foreach ($dq as $r) {
+        $dupHits++;
+        $pid = (int) $r['pid'];
+        $byProduct[$pid] = true;
+        $bad("Product #{$pid} '{$r['pname']}' · option '{$r['ename']}' has '{$r['lbl']}' ×{$r['n']} — duplicate choice");
+    }
+    if ($dupHits > 0) {
+        echo "      -> clean each product with /migrate_dedup_vertical_choices.php?product_id=N,\n";
+        echo "         then push (for 'Bev' mirrors). Affected products: " . implode(', ', array_keys($byProduct)) . "\n";
+    } else {
+        $okc('no duplicate-label option choices on any product');
+    }
+} catch (Throwable $e) {
+    $okc('duplicate-choice scan skipped (option tables absent)');
+}
+
 // ---- Summary ------------------------------------------------------------------
 $hdr('SUMMARY');
 echo $ISSUES === 0

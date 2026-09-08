@@ -117,6 +117,7 @@
         confirm.disabled = true;
         var added = 0;
         var failed = 0;
+        var skipped = 0;   // labels already on the option — skipped, not duplicated
         for (var i = 0; i < lines.length; i++) {
             var label = lines[i].substring(0, 150);
             var fd = new FormData();
@@ -131,6 +132,7 @@
                 });
                 var data = await r.json();
                 if (data && data.ok) added++;
+                else if (data && data.duplicate) skipped++;   // already exists — don't add a dupe
                 else failed++;
             } catch (err) {
                 failed++;
@@ -143,6 +145,8 @@
         // matches the way other bulk-adds work in this codebase.
         if (added > 0) {
             window.location.reload();
+        } else if (skipped > 0 && failed === 0) {
+            alert('Nothing added — ' + skipped + (skipped === 1 ? ' label already existed.' : ' labels already existed.'));
         } else if (failed > 0) {
             alert('Could not add the choices — ' + failed + ' attempt'
                 + (failed === 1 ? '' : 's') + ' failed.');
