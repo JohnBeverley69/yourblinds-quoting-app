@@ -268,7 +268,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($tenant) ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
-                    <span class="cnt"><?= (int) $o['bev_lines'] ?> blind<?= (int) $o['bev_lines'] === 1 ? '' : 's' ?></span>
+                    <span class="cnt"><?= (int) $o['bev_qty'] ?> blind<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?></span>
                     <span class="stat">
                         <?php if ($stagePill !== null): ?>
                             <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>"><?= e($stagePill[0]) ?></span>
