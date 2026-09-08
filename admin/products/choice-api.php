@@ -179,29 +179,6 @@ try {
             if ($label === '')             throw new RuntimeException('Label is required.');
             if (strlen($label) > 150)      throw new RuntimeException('Label too long (150 max).');
 
-            // Duplicate-label guard — a choice with this label already exists on
-            // this option. Almost always accidental (that's how "Corded ×3" piled
-            // up). Soft, not a hard block: reply 409 with duplicate:true so the
-            // editor can confirm; re-sending with allow_duplicate=1 proceeds (for a
-            // deliberate per-system duplicate). The clone/duplicate action bypasses
-            // this by design.
-            if (empty($_POST['allow_duplicate'])) {
-                $dupSt = $pdo->prepare(
-                    'SELECT COUNT(*) FROM product_extra_choices
-                      WHERE product_extra_id = ? AND LOWER(TRIM(label)) = LOWER(?)'
-                );
-                $dupSt->execute([$extraId, $label]);
-                if ((int) $dupSt->fetchColumn() > 0) {
-                    http_response_code(409);
-                    echo json_encode([
-                        'ok'        => false,
-                        'duplicate' => true,
-                        'error'     => 'A choice called "' . $label . '" already exists in this option. Add it again anyway?',
-                    ]);
-                    break;
-                }
-            }
-
             // Accept system_ids[] (multi-select on the new-row, the
             // common case) or system_id (single, for any older clients
             // / scripts). Each entry becomes one row.
@@ -232,6 +209,33 @@ try {
             }
             if (empty($systemIdsToStore)) {
                 $systemIdsToStore = [null]; // defensive
+            }
+
+            // Duplicate-label guard — the same label already on this option AT one
+            // of the system scopes being added. A same-label choice on a DIFFERENT
+            // system (e.g. "Black" on Vogue vs Nova) is a legitimate per-system
+            // option, so ONLY an exact (label + system) match warns. Soft: reply 409
+            // duplicate:true; the editor confirms and re-sends allow_duplicate=1.
+            // The clone action bypasses this by design.
+            if (empty($_POST['allow_duplicate'])) {
+                foreach ($systemIdsToStore as $sid) {
+                    if ($sid === null) {
+                        $dq = $pdo->prepare('SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ? AND LOWER(TRIM(label)) = LOWER(?) AND system_id IS NULL');
+                        $dq->execute([$extraId, $label]);
+                    } else {
+                        $dq = $pdo->prepare('SELECT COUNT(*) FROM product_extra_choices WHERE product_extra_id = ? AND LOWER(TRIM(label)) = LOWER(?) AND system_id = ?');
+                        $dq->execute([$extraId, $label, $sid]);
+                    }
+                    if ((int) $dq->fetchColumn() > 0) {
+                        http_response_code(409);
+                        echo json_encode([
+                            'ok'        => false,
+                            'duplicate' => true,
+                            'error'     => 'A choice called "' . $label . '" already exists in this option for that system. Add it again anyway?',
+                        ]);
+                        break 2;   // out of the foreach AND the switch
+                    }
+                }
             }
 
             // Insert one row per chosen system. sort_order increments so
