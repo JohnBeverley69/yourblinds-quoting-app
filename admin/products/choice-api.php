@@ -179,6 +179,29 @@ try {
             if ($label === '')             throw new RuntimeException('Label is required.');
             if (strlen($label) > 150)      throw new RuntimeException('Label too long (150 max).');
 
+            // Duplicate-label guard — a choice with this label already exists on
+            // this option. Almost always accidental (that's how "Corded ×3" piled
+            // up). Soft, not a hard block: reply 409 with duplicate:true so the
+            // editor can confirm; re-sending with allow_duplicate=1 proceeds (for a
+            // deliberate per-system duplicate). The clone/duplicate action bypasses
+            // this by design.
+            if (empty($_POST['allow_duplicate'])) {
+                $dupSt = $pdo->prepare(
+                    'SELECT COUNT(*) FROM product_extra_choices
+                      WHERE product_extra_id = ? AND LOWER(TRIM(label)) = LOWER(?)'
+                );
+                $dupSt->execute([$extraId, $label]);
+                if ((int) $dupSt->fetchColumn() > 0) {
+                    http_response_code(409);
+                    echo json_encode([
+                        'ok'        => false,
+                        'duplicate' => true,
+                        'error'     => 'A choice called "' . $label . '" already exists in this option. Add it again anyway?',
+                    ]);
+                    break;
+                }
+            }
+
             // Accept system_ids[] (multi-select on the new-row, the
             // common case) or system_id (single, for any older clients
             // / scripts). Each entry becomes one row.

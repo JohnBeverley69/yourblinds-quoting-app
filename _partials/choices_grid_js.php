@@ -575,30 +575,42 @@
         var label = newLabel.value.trim();
         if (label === '') return Promise.resolve();
 
-        var fd = new FormData();
-        fd.append('label', label);
-        if (!newSystemAll.checked) {
-            newSystemOnes.forEach(function (cb) {
-                if (cb.checked) fd.append('system_ids[]', cb.value);
+        newRow.classList.add('is-saving');
+
+        // POST the create; allowDup=true re-sends past the duplicate-label guard.
+        function send(allowDup) {
+            var fd = new FormData();
+            fd.append('label', label);
+            if (!newSystemAll.checked) {
+                newSystemOnes.forEach(function (cb) {
+                    if (cb.checked) fd.append('system_ids[]', cb.value);
+                });
+            }
+            fd.append('action',   'create');
+            fd.append('extra_id', String(extraId));
+            if (allowDup) fd.append('allow_duplicate', '1');
+
+            return fetch(endpoint, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRF-Token': csrfToken },
+                credentials: 'same-origin'
+            }).then(function (r) {
+                return r.json().then(function (data) {
+                    if (!data.ok) {
+                        // Same label already on this option — confirm before a duplicate.
+                        if (data.duplicate && !allowDup) {
+                            if (window.confirm(data.error)) return send(true);
+                            var c = new Error('Duplicate not added.'); c.cancelled = true; throw c;
+                        }
+                        throw new Error(data.error || 'Unknown error.');
+                    }
+                    return data;
+                });
             });
         }
 
-        newRow.classList.add('is-saving');
-
-        fd.append('action',   'create');
-        fd.append('extra_id', String(extraId));
-
-        return fetch(endpoint, {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-CSRF-Token': csrfToken },
-            credentials: 'same-origin'
-        }).then(function (r) {
-            return r.json().then(function (data) {
-                if (!data.ok) throw new Error(data.error || 'Unknown error.');
-                return data;
-            });
-        }).then(function (data) {
+        return send(false).then(function (data) {
             newRow.classList.remove('is-saving');
             newRow.classList.add('just-saved');
             setTimeout(function () { newRow.classList.remove('just-saved'); }, 700);
@@ -617,6 +629,7 @@
             if (focusNext) newLabel.focus();
         }).catch(function (err) {
             newRow.classList.remove('is-saving');
+            if (err && err.cancelled) { flashIndicator('Cancelled'); return; }
             newRow.classList.add('is-error');
             flashIndicator(err.message || 'Could not add', true);
             setTimeout(function () { newRow.classList.remove('is-error'); }, 2000);
