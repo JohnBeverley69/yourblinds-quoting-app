@@ -123,6 +123,16 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
     }
 })();
 
+// Does a supplier have any quote SENT to this account (a factory "New order"
+// raised for them, quotes.account_client_id = this client)? Cheap indexed check,
+// uncached so a freshly-sent quote surfaces the nav entry straight away.
+$hasSupplierQuotes = false;
+try {
+    $sq = db()->prepare("SELECT 1 FROM quotes WHERE account_client_id = ? AND status <> 'draft' LIMIT 1");
+    $sq->execute([(int) ($user['client_id'] ?? 0)]);
+    $hasSupplierQuotes = (bool) $sq->fetchColumn();
+} catch (Throwable $e) { $hasSupplierQuotes = false; }   // account_client_id column absent pre-migration
+
 // [href, label, visible]. Order = display order. Calendar is the de-facto
 // landing page (login redirects there); a separate "Dashboard" link was
 // just a placeholder pointing at /admin/index.php and got removed.
@@ -154,6 +164,10 @@ $navSections = [
             'pipeline'      => ['/orders/pipeline.php',        'Pipeline',      $hasQuotes && $isStaff],
             'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
             'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
+            // Quotes a supplier has sent THIS account (the factory "New order"
+            // flow) — shown only when there are any, so ordinary tenants who
+            // never receive supplier quotes don't see the entry.
+            'supplier-quotes' => ['/admin/supplier-quotes.php', 'Supplier quotes', $hasQuotes && $hasSupplierQuotes && $isStaff],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
             // Labelled "Payments" (not "Accounts") so first-time users
             // don't mistake it for login/staff-account management — they'd
