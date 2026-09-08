@@ -146,7 +146,7 @@ try {
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.fabric_code_snapshot,
                 qi.fabric_band_snapshot, qi.width_mm, qi.drop_mm, qi.quantity,
                 qi.room_name, qi.notes,
-                p.supplier_name AS product_supplier'
+                p.supplier_name AS product_supplier, p.client_id AS product_client'
         . ($productsHasSource ? ', p.source_client_id AS product_source' : '') .
         ' FROM quote_items qi
       LEFT JOIN products p ON p.id = qi.product_id
@@ -211,12 +211,14 @@ $groups   = [];   // name => ['items'=>[], 'qty'=>int]
 $mfgItems = [];   // manufacturing lines (auto-routed to the factory)
 $mfgQty   = 0;
 foreach ($lines as $ln) {
-    // Manufacturing only applies to OTHER tenants buying our catalogue — the
-    // factory account itself uses the normal supplier flow (it never orders
-    // from itself), so exclude it explicitly.
-    $sup   = trim((string) ($ln['product_supplier'] ?? ''));
-    $isMfg = $sup === '' && $factoryId > 0 && $clientId !== $factoryId
-             && (int) ($ln['product_source'] ?? 0) === $factoryId;
+    // A FACTORY-OWNED product with no external supplier routes straight to our
+    // manufacturing queue, whoever placed the order: a tenant buying our
+    // catalogue (source_client_id = factory) OR the factory itself raising an
+    // order for a trade account via "New order" (its own product, client_id =
+    // factory). Factory-owned = COALESCE(NULLIF(source_client_id,0), client_id).
+    $sup       = trim((string) ($ln['product_supplier'] ?? ''));
+    $prodOwner = (int) ($ln['product_source'] ?? 0) ?: (int) ($ln['product_client'] ?? 0);
+    $isMfg     = $sup === '' && $factoryId > 0 && $prodOwner === $factoryId;
     if ($isMfg) {
         $mfgItems[] = $ln;
         $mfgQty    += (int) ($ln['quantity'] ?? 1);
