@@ -28,8 +28,39 @@ $canRespond = $isAdmin || !empty($_perms['can_create_orders']) || !empty($_perms
 // ── Accept / decline (scoped to quotes sent to THIS account) ────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    require_once __DIR__ . '/../mailer.php';
     $action = (string) ($_POST['action'] ?? '');
     $qid    = (int) ($_POST['quote_id'] ?? 0);
+
+    // Tell the supplier the account answered — best-effort, honours the global
+    // email pause inside mailer_send(), never blocks the response.
+    $notifySupplier = static function (int $quoteId, string $verb): void {
+        try {
+            $st = db()->prepare(
+                "SELECT (SELECT email FROM client_users
+                          WHERE client_id = q.client_id AND active = 1
+                       ORDER BY (role = 'admin') DESC, id LIMIT 1) AS sup_email,
+                        acc.company_name AS acc_name,
+                        q.quote_number, q.total, q.public_token
+                   FROM quotes q
+              LEFT JOIN clients acc ON acc.id = q.account_client_id
+                  WHERE q.id = ? LIMIT 1"
+            );
+            $st->execute([$quoteId]);
+            $n = $st->fetch(PDO::FETCH_ASSOC);
+            $email = trim((string) ($n['sup_email'] ?? ''));
+            if (!$n || !filter_var($email, FILTER_VALIDATE_EMAIL)) return;
+            $acc = trim((string) ($n['acc_name'] ?? '')) ?: 'A trade account';
+            $qno = (string) $n['quote_number'];
+            $appUrl = trim((string) (function_exists('env') ? (env('APP_URL', '') ?? '') : ''));
+            $link   = ($appUrl !== '' ? rtrim($appUrl, '/') : '')
+                    . '/quote-history/public.php?token=' . urlencode((string) $n['public_token']);
+            $subject = $acc . ' has ' . $verb . ' quote ' . $qno;
+            $body    = $acc . ' has ' . $verb . ' your quote ' . $qno
+                     . ' (£' . number_format((float) $n['total'], 2) . ").\n\nView it: " . $link . "\n";
+            mailer_send($email, $subject, $body);
+        } catch (Throwable $e) { /* best-effort */ }
+    };
 
     if (!$canRespond) {
         $_SESSION['flash_error'] = "You don't have permission to accept or decline quotes.";
@@ -52,10 +83,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'accept') {
                 db()->prepare("UPDATE quotes SET status = 'accepted', accepted_at = NOW() WHERE id = ? AND account_client_id = ?")
                     ->execute([$qid, $clientId]);
+                $notifySupplier($qid, 'accepted');
                 $_SESSION['flash_success'] = 'Accepted ' . $row['quote_number'] . ' — it now shows as accepted on your supplier\'s side.';
             } else {
                 db()->prepare("UPDATE quotes SET status = 'declined' WHERE id = ? AND account_client_id = ?")
                     ->execute([$qid, $clientId]);
+                $notifySupplier($qid, 'declined');
                 $_SESSION['flash_success'] = 'Declined ' . $row['quote_number'] . '.';
             }
         } catch (Throwable $e) {
