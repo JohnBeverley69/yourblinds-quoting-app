@@ -1753,6 +1753,19 @@ $activeNav = 'settings';
                 backup (no dates) is what the “since last backup” option counts from.
             </p>
         </section>
+        <?php if (function_exists('is_super_admin') && is_super_admin()): ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">System check</h2>
+            </div>
+            <p style="color:var(--text-secondary);margin:0 0 1rem;max-width:42rem">
+                A read-only health scan of the catalogue — build rules, options, best-fit
+                tables and worksheet templates — and a check for <strong>duplicate option
+                choices</strong>. It changes nothing; run it after any product or option edit.
+            </p>
+            <a href="/system_check.php" target="_blank" rel="noopener" class="btn btn-primary">Run system check &#8599;</a>
+        </section>
+        <?php endif; ?>
         </div><!-- /tab: backup -->
         </div><!-- /settings-panels -->
     </main>

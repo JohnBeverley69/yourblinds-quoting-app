@@ -40,14 +40,24 @@ $pdo->beginTransaction();
 try {
     foreach ($extras as $ex) {
         $eid = (int) $ex['id'];
-        $cs = $pdo->prepare('SELECT id, label FROM product_extra_choices WHERE product_extra_id = ? ORDER BY id');
+        $cs = $pdo->prepare('SELECT id, label, system_id FROM product_extra_choices WHERE product_extra_id = ? ORDER BY id');
         $cs->execute([$eid]);
         $rows = $cs->fetchAll(PDO::FETCH_ASSOC);
 
-        $byLabel = [];
-        foreach ($rows as $r) { $byLabel[trim((string) $r['label'])][] = (int) $r['id']; }
+        // Group by label AND system scope. A same-label choice on a DIFFERENT
+        // system (e.g. "Black" on Vogue vs Nova) is a legitimate per-system
+        // option, NOT a duplicate — only merge choices that share both.
+        $byKey = [];
+        foreach ($rows as $r) {
+            $key = strtolower(trim((string) $r['label'])) . '|'
+                 . ($r['system_id'] === null ? 'ALL' : (string) (int) $r['system_id']);
+            if (!isset($byKey[$key])) $byKey[$key] = ['label' => trim((string) $r['label']), 'ids' => []];
+            $byKey[$key]['ids'][] = (int) $r['id'];
+        }
 
-        foreach ($byLabel as $label => $ids) {
+        foreach ($byKey as $grp) {
+            $ids   = $grp['ids'];
+            $label = $grp['label'];
             if (count($ids) < 2) continue;
             sort($ids);                 // lowest id first
             $survivor = array_shift($ids);

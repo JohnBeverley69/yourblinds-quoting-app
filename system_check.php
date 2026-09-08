@@ -259,19 +259,22 @@ try {
 if ($spellHits === 0) $okc('no Vouge / Center / spaced C-slash / "Cord and Chain" in stored data (decoded scan)');
 
 // ---- Global: duplicate-label option choices -----------------------------------
-// The same label added twice to one option (e.g. "Corded" ×3). The builder shows
-// each in the dropdown; the engine treats same-label choices as one, so they pile
-// up unnoticed. Nearly always accidental — flag them so they get cleaned up.
+// The same label added twice to one option AT THE SAME system scope (e.g.
+// "Corded" ×3, all "all systems"). A same-label choice on a DIFFERENT system
+// (e.g. "Black" on Vogue vs Nova) is a legitimate per-system option and is NOT
+// flagged. True duplicates pile up unnoticed (the engine treats same-label as
+// one) — flag them so they get cleaned up.
 $hdr('DUPLICATE OPTION CHOICES');
 $dupHits = 0;
 try {
     $dq = $pdo->query(
         "SELECT e.product_id AS pid, p.name AS pname, e.name AS ename,
-                TRIM(c.label) AS lbl, COUNT(*) AS n
+                TRIM(c.label) AS lbl, s.name AS sysname, COUNT(*) AS n
            FROM product_extra_choices c
            JOIN product_extras e ON e.id = c.product_extra_id
            JOIN products p       ON p.id = e.product_id
-          GROUP BY c.product_extra_id, TRIM(c.label)
+      LEFT JOIN product_systems s ON s.id = c.system_id
+          GROUP BY c.product_extra_id, TRIM(c.label), c.system_id
          HAVING n > 1
           ORDER BY e.product_id, e.name, lbl"
     );
@@ -280,7 +283,8 @@ try {
         $dupHits++;
         $pid = (int) $r['pid'];
         $byProduct[$pid] = true;
-        $bad("Product #{$pid} '{$r['pname']}' · option '{$r['ename']}' has '{$r['lbl']}' ×{$r['n']} — duplicate choice");
+        $scope = $r['sysname'] !== null ? "system '{$r['sysname']}'" : 'all systems';
+        $bad("Product #{$pid} '{$r['pname']}' · option '{$r['ename']}' has '{$r['lbl']}' ×{$r['n']} on {$scope} — duplicate choice");
     }
     if ($dupHits > 0) {
         echo "      -> clean each product with /migrate_dedup_vertical_choices.php?product_id=N,\n";
