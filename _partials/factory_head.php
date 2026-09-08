@@ -18,8 +18,17 @@ $factoryWide  = $factoryWide  ?? false;
 $fu           = function_exists('current_user') ? current_user() : null;
 
 // Which factory is this? White-label: the shell brands itself with the acting
-// factory's name, not a hardcoded "Beverley". Super-admin also gets a switcher
-// to look at any factory's back-office.
+// factory's name, not a hardcoded "Beverley". A super-admin manages their OWN
+// factory only — drop any stale "acting as another factory" selection so the
+// shell can never get stuck on a sibling factory (the switcher below is scoped
+// to the own factory and hides once there's a single choice).
+$factoryIsSuper = function_exists('is_super_admin') && is_super_admin();
+$factoryOwnId   = (int) ($fu['client_id'] ?? 0);
+if ($factoryIsSuper && $factoryOwnId > 0
+    && isset($_SESSION['factory_acting_id'])
+    && (int) $_SESSION['factory_acting_id'] !== $factoryOwnId) {
+    unset($_SESSION['factory_acting_id']);
+}
 $factoryActingId = function_exists('current_factory_id')
     ? current_factory_id()
     : (function_exists('factory_client_id') ? factory_client_id() : 3);
@@ -29,13 +38,16 @@ try {
     $st->execute([$factoryActingId]);
     $factoryName = trim((string) $st->fetchColumn()) ?: 'Factory';
 } catch (Throwable $e) { /* fall back to generic */ }
-$factoryIsSuper = function_exists('is_super_admin') && is_super_admin();
+// Switcher choices: the user's OWN factory only — a super-admin manages their
+// own factory, not sibling factories. (It used to list EVERY is_factory client,
+// which leaked other factories like Very Nice into Beverley's dropdown.) With a
+// single choice the switcher hides itself (the count() > 1 gate in the header).
 $factoryChoices = [];
-if ($factoryIsSuper) {
+if ($factoryIsSuper && $factoryOwnId > 0) {
     try {
-        $factoryChoices = db()
-            ->query('SELECT id, company_name FROM clients WHERE is_factory = 1 ORDER BY company_name')
-            ->fetchAll(PDO::FETCH_ASSOC);
+        $fcSt = db()->prepare('SELECT id, company_name FROM clients WHERE id = ? AND is_factory = 1');
+        $fcSt->execute([$factoryOwnId]);
+        $factoryChoices = $fcSt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { $factoryChoices = []; }   // is_factory not migrated yet
 }
 
