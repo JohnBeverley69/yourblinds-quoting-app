@@ -43,16 +43,42 @@ $fmtVal = static function ($v): string {
 // ---- Order header (trade customer) ----------------------------------------
 $order = null;
 try {
+    // The "customer" on the ticket is the ACCOUNT the order is for. For a factory
+    // quote raised on an account's behalf (account_client_id set — the "New order"
+    // flow) that's the account (e.g. Blind Corner), not the factory that owns the
+    // quote; for an account-placed order it's the owning client. COALESCE picks the
+    // account's company + address when present, else the owning client's.
     $q = $pdo->prepare(
         "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
-                q.end_customer_name, q.client_id,
-                c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone
-           FROM quotes q JOIN clients c ON c.id = q.client_id
+                q.end_customer_name, q.client_id, q.account_client_id,
+                COALESCE(ac.company_name, c.company_name) AS company_name,
+                COALESCE(ac.address1, c.address1)         AS address1,
+                COALESCE(ac.address2, c.address2)         AS address2,
+                COALESCE(ac.town, c.town)                 AS town,
+                COALESCE(ac.county, c.county)             AS county,
+                COALESCE(ac.postcode, c.postcode)         AS postcode,
+                COALESCE(ac.phone, c.phone)               AS phone
+           FROM quotes q
+           JOIN clients c  ON c.id = q.client_id
+      LEFT JOIN clients ac ON ac.id = q.account_client_id
           WHERE q.id = ? LIMIT 1"
     );
     $q->execute([$qid]);
     $order = $q->fetch(PDO::FETCH_ASSOC) ?: null;
-} catch (Throwable $e) { /* handled below */ }
+} catch (Throwable $e) {
+    // Pre-migration install without quotes.account_client_id — fall back.
+    try {
+        $q = $pdo->prepare(
+            "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
+                    q.end_customer_name, q.client_id,
+                    c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone
+               FROM quotes q JOIN clients c ON c.id = q.client_id
+              WHERE q.id = ? LIMIT 1"
+        );
+        $q->execute([$qid]);
+        $order = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e2) { /* handled below */ }
+}
 
 // ---- Beverley lines --------------------------------------------------------
 $lines = [];
@@ -425,6 +451,8 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 <div class="toolbar">
     <b>Roll label</b>
     <span class="note">Order <?= $ono ?> · <?= count($rollBlinds) ?> roller label<?= count($rollBlinds) === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> saved for this computer. Font &amp; line spacing are set per label in the Worksheets editor.</span>
+    <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
+    <a href="/factory/incoming-orders.php">&larr; Factory orders</a>
     <span class="nudge"><span class="lbl">Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5">&#9654;</button>
         <button type="button" data-ny="-0.5">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5">&#9660;</button>
@@ -554,6 +582,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     <b>Die-cut label print</b>
     <span class="note">Order <?= $ono ?> · <?= (int) $dieCount ?> die-cut blind<?= $dieCount === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b>, margins <b>None</b>. Lay the plain print over the label stock to check it lands right.</span>
     <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
+    <a href="/factory/incoming-orders.php">&larr; Factory orders</a>
     <span class="nudge"><span>Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5" title="left">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5" title="right">&#9654;</button>
         <button type="button" data-ny="-0.5" title="up">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5" title="down">&#9660;</button>
@@ -662,6 +691,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 </style>
 
 <div class="wp-bar">
+    <a class="btn" href="/factory/incoming-orders.php" style="text-decoration:none">&larr; Factory orders</a>
     <h1>Worksheet</h1>
     <?php if ($order): ?>
         <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e((string) ($order['company_name'] ?? '')) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
