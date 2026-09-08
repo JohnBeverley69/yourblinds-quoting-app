@@ -81,6 +81,12 @@ try {
     // Bev Vertical Blind Head Rail Only (#119): only Corded was damaged.
     $ensure(119, 'Control Options', 'Corded', $ONTO);
 
+    // Very Nice Blinds' OWN (non-Bev) vertical products — a push never touches
+    // these, so they're restored directly. Only Corded was damaged (their wand
+    // draws stayed "all systems").
+    $ensure(6021, 'Control Options', 'Corded', $ONTO);
+    $ensure(6026, 'Control Options', 'Corded', $ONTO);
+
     $pdo->commit();
 } catch (Throwable $e) {
     $pdo->rollBack();
