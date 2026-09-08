@@ -371,24 +371,31 @@ require __DIR__ . '/../_partials/factory_head.php';
         var text = document.getElementById('io-news-text');
         var btn  = document.getElementById('io-news-btn');
         if (!news || !btn) return;
+        var baseTitle = document.title;
         btn.addEventListener('click', function () { location.reload(); });
 
-        setInterval(function () {
-            if (document.hidden) return;              // don't poll a screen nobody's looking at
+        // Poll a cheap version string. When it differs from what we loaded with,
+        // OFFER a refresh (never take one — the buttons here start production, and
+        // a page that reloads under a hand puts that click on the wrong order).
+        // Polls even when the tab is hidden and badges the count into the tab
+        // title, so a bench that's left this open in the background still gets
+        // told a new order has landed — no sound, no auto-reload.
+        function check() {
             fetch('/factory/poll.php?what=incoming', { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (j) {
                     if (!j || !j.v || j.v === 'x' || j.v === mine) return;
-                    // Say what changed if we can tell: the count is the first number.
                     var a = (mine.match(/^i(\d+)/) || [])[1], b = (j.v.match(/^i(\d+)/) || [])[1];
                     var n = (a !== undefined && b !== undefined) ? (parseInt(b, 10) - parseInt(a, 10)) : 0;
                     text.textContent = n > 0
                         ? (n === 1 ? '1 new order has come in.' : n + ' new orders have come in.')
                         : 'Orders have changed.';
                     news.hidden = false;
+                    document.title = (n > 0 ? '(' + n + ') ' : '● ') + baseTitle;
                 })
                 .catch(function () { /* offline / blip — say nothing */ });
-        }, 20000);
+        }
+        setInterval(check, 20000);
     })();
 
     var search = document.getElementById('io-search');
