@@ -199,6 +199,7 @@ $navSections = [
             'supplier-import' => ['/master-admin/supplier-import.php', 'Supplier import',  $isSuperAdmin],
             'supplier-requests' => ['/master-admin/supplier-requests.php', 'Supplier requests', $isSuperAdmin],
             'spell-check'   => ['/master-admin/spell-check.php',    'Spell-check',       $isSuperAdmin],
+            'system-check'  => ['/system_check.php',                'System check',      $isSuperAdmin],
             'pricing'       => ['/master-admin/pricing.php',        'Pricing',          $isSuperAdmin],
             'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
             'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
