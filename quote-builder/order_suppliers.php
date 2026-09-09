@@ -217,8 +217,14 @@ foreach ($lines as $ln) {
     // order for a trade account via "New order" (its own product, client_id =
     // factory). Factory-owned = COALESCE(NULLIF(source_client_id,0), client_id).
     $sup       = trim((string) ($ln['product_supplier'] ?? ''));
+    // "In House" is the app's own marker for a product you make yourself
+    // (Settings › Suppliers offers it; the product edit says "Use In House for
+    // products you make yourself"), so treat it exactly like a blank supplier —
+    // otherwise a made-in-house line is grouped as an external supplier and
+    // wrongly demands a shipping address. Match blank / "In House" / "In-House".
+    $noSupplier = $sup === '' || strtolower(preg_replace('/[\s\-]+/', '', $sup)) === 'inhouse';
     $prodOwner = (int) ($ln['product_source'] ?? 0) ?: (int) ($ln['product_client'] ?? 0);
-    $isMfg     = $sup === '' && $factoryId > 0 && $prodOwner === $factoryId;
+    $isMfg     = $noSupplier && $factoryId > 0 && $prodOwner === $factoryId;
     if ($isMfg) {
         $mfgItems[] = $ln;
         $mfgQty    += (int) ($ln['quantity'] ?? 1);
