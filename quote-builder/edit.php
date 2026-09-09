@@ -1440,6 +1440,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                     <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
+                            <?php
+                                // Agreed-price override: the customer-facing "Discount" that
+                                // brings the natural line prices down to the pinned total.
+                                // Derived (lines + WT) − stored subtotal, so it needs no extra
+                                // column here and always reconciles with the totals below.
+                                $olItemsTotal = 0.0;
+                                foreach ($items as $__it) { $olItemsTotal += (float) ($__it['line_total'] ?? 0); }
+                                $olPreNet   = round($olItemsTotal + $wtAmount, 2);
+                                $olDiscount = round($olPreNet - (float) $quote['subtotal'], 2);
+                                $olOverride = (array_key_exists('price_override', $quote) && $quote['price_override'] !== null)
+                                    ? round((float) $quote['price_override'], 2) : null;
+                                $olActive   = ($olOverride !== null) || abs($olDiscount) >= 0.01;
+                            ?>
+                            <?php if ($olActive && abs($olDiscount) >= 0.01): ?>
+                                <tr class="totals-row" style="color:#047857">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">
+                                        <?= $olDiscount >= 0 ? 'Discount' : 'Price adjustment' ?>
+                                        <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(to agreed price)</span>
+                                    </td>
+                                    <td class="num"><?= ($olDiscount >= 0 ? '&minus;' : '+') . e(qb_fmt_money(abs($olDiscount))) ?></td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
                             <?php if ((float) $quote['vat_percent'] > 0): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
@@ -1457,6 +1480,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
                                 <?php if ($editable): ?><td></td><?php endif; ?>
                             </tr>
+                            <?php if ($editable): ?>
+                                <tr class="totals-row">
+                                    <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;vertical-align:middle">
+                                        Override total <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(agreed inc-VAT price — blank to clear)</span>
+                                    </td>
+                                    <td class="num">
+                                        <form method="post" action="/quote-builder/save_override.php"
+                                              style="display:inline-flex;gap:0.25rem;align-items:center;justify-content:flex-end;margin:0">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                            <span>£</span>
+                                            <input type="number" name="price_override" step="0.01" min="0"
+                                                   value="<?= $olOverride !== null ? e(number_format($olOverride, 2, '.', '')) : '' ?>"
+                                                   placeholder="<?= e(number_format((float) $quote['total'], 2, '.', '')) ?>"
+                                                   style="width:6rem;padding:0.2rem 0.35rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:right">
+                                            <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.8125rem">Set</button>
+                                        </form>
+                                    </td>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
                             <?php
                                 // QA #002: before a quote is accepted (no deposit stored yet)
                                 // show the deposit that WILL be due, so office staff aren't left
