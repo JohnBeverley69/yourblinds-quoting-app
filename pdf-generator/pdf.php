@@ -531,6 +531,17 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 </tbody>
 <tfoot>
 <?php $spacer = $colCount - 2; ?>
+<?php
+// Agreed-price override → a customer-facing "Discount" bringing the natural line
+// prices (which include WT) down to the pinned total. Derived, so it always
+// reconciles with the Subtotal/Total below.
+$olPreNet = $wt;
+foreach ($items as $__it) $olPreNet += (float) $__it['line_total'];
+$olDiscount = round($olPreNet - (float) $quote['subtotal'], 2);
+?>
+<?php if ($showLinePrices && abs($olDiscount) >= 0.01): ?>
+<tr><td colspan="<?= $spacer ?>"></td><td class="label"><?= $olDiscount >= 0 ? 'Discount' : 'Price adjustment' ?></td><td class="val"><?= ($olDiscount >= 0 ? '&minus;' : '+') . $money(abs($olDiscount)) ?></td></tr>
+<?php endif; ?>
 <?php if ((float) ($quote['vat_percent'] ?? 0) > 0): ?>
 <tr><td colspan="<?= $spacer ?>"></td><td class="label">Subtotal</td><td class="val"><?= $money($quote['subtotal']) ?></td></tr>
 <tr><td colspan="<?= $spacer ?>"></td><td class="label">VAT (<?= e($vatPct) ?>%)</td><td class="val"><?= $money($quote['vat']) ?></td></tr>

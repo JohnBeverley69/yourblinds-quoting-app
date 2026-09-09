@@ -110,19 +110,27 @@ function qb_recompute_totals(int $quoteId): void
     $itemsTotal = round((float) $sumSt->fetchColumn(), 2);
 
     // vat_percent + the internal WT charge (added PRE-VAT, so it sits inside
-    // the price). wt_amount may be absent on pre-migration schemas → treat 0.
-    $rateSt = $pdo->prepare('SELECT vat_percent, wt_amount FROM quotes WHERE id = ?');
-    try {
-        $rateSt->execute([$quoteId]);
-        $row = $rateSt->fetch() ?: [];
-    } catch (Throwable $e) {
-        // wt_amount column missing — fall back to vat only.
-        $r2 = $pdo->prepare('SELECT vat_percent FROM quotes WHERE id = ?');
-        $r2->execute([$quoteId]);
-        $row = ['vat_percent' => $r2->fetchColumn(), 'wt_amount' => 0];
+    // the price) + the optional agreed-price override. Later columns may be
+    // absent on pre-migration schemas, so widen the SELECT progressively.
+    $row = null;
+    foreach ([
+        'SELECT vat_percent, wt_amount, price_override FROM quotes WHERE id = ?',
+        'SELECT vat_percent, wt_amount FROM quotes WHERE id = ?',
+        'SELECT vat_percent FROM quotes WHERE id = ?',
+    ] as $sql) {
+        try {
+            $st = $pdo->prepare($sql);
+            $st->execute([$quoteId]);
+            $row = $st->fetch() ?: [];
+            break;
+        } catch (Throwable $e) { /* column missing — try a narrower SELECT */ }
     }
-    $vatPct = (float) ($row['vat_percent'] ?? 0);
-    $wt     = round((float) ($row['wt_amount'] ?? 0), 2);
+    $row      = $row ?: [];
+    $vatPct   = (float) ($row['vat_percent'] ?? 0);
+    $wt       = round((float) ($row['wt_amount'] ?? 0), 2);
+    $override = array_key_exists('price_override', $row) && $row['price_override'] !== null
+        ? round((float) $row['price_override'], 2)
+        : null;
 
     // Subtotal INCLUDES the WT so customer-facing Subtotal + VAT = Total always
     // reconciles (and the per-blind prices, with WT spread across them, sum to
@@ -131,6 +139,16 @@ function qb_recompute_totals(int $quoteId): void
     $subtotal = round($itemsTotal + $wt, 2);
     $vat      = round($subtotal * $vatPct / 100, 2);
     $total    = round($subtotal + $vat, 2);
+
+    // Agreed-price override: the salesperson has pinned the final INC-VAT total.
+    // Work net + VAT backwards out of it so Subtotal + VAT = Total still holds
+    // exactly; the gap vs the natural line prices surfaces to the customer as a
+    // "Discount" line (derived where the totals render, from lines+WT − subtotal).
+    if ($override !== null && $override >= 0) {
+        $total    = $override;
+        $subtotal = $vatPct > 0 ? round($override / (1 + $vatPct / 100), 2) : $override;
+        $vat      = round($override - $subtotal, 2);
+    }
 
     $pdo->prepare('UPDATE quotes SET subtotal = ?, vat = ?, total = ? WHERE id = ?')
         ->execute([$subtotal, $vat, $total, $quoteId]);
