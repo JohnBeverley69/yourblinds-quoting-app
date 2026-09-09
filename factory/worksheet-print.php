@@ -43,14 +43,20 @@ $fmtVal = static function ($v): string {
 // ---- Order header (trade customer) ----------------------------------------
 $order = null;
 try {
-    // The "customer" on the ticket is the ACCOUNT the order is for. For a factory
-    // quote raised on an account's behalf (account_client_id set — the "New order"
-    // flow) that's the account (e.g. Blind Corner), not the factory that owns the
-    // quote; for an account-placed order it's the owning client. COALESCE picks the
-    // account's company + address when present, else the owning client's.
+    // The "customer" on the ticket is who the order is FOR. Three cases:
+    //   • account order (account_client_id set — the "New order" flow) → the trade
+    //     account, e.g. Blind Corner (ac.*).
+    //   • the factory's OWN retail quote (client_id = factory, no account) → the
+    //     END CUSTOMER named on the quote (handled just after the fetch below) —
+    //     NOT the factory itself.
+    //   • a tenant/retailer's order → the owning client (c.*).
+    // COALESCE here covers account-vs-owning-client; the end-customer override runs
+    // after, so we also pull the quote's end_customer_* address fields.
     $q = $pdo->prepare(
         "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
-                q.end_customer_name, q.client_id, q.account_client_id,
+                q.end_customer_name, q.end_customer_address1, q.end_customer_address2,
+                q.end_customer_town, q.end_customer_county, q.end_customer_postcode, q.end_customer_phone,
+                q.client_id, q.account_client_id,
                 COALESCE(ac.company_name, c.company_name) AS company_name,
                 COALESCE(ac.address1, c.address1)         AS address1,
                 COALESCE(ac.address2, c.address2)         AS address2,
@@ -70,7 +76,9 @@ try {
     try {
         $q = $pdo->prepare(
             "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
-                    q.end_customer_name, q.client_id,
+                    q.end_customer_name, q.end_customer_address1, q.end_customer_address2,
+                    q.end_customer_town, q.end_customer_county, q.end_customer_postcode, q.end_customer_phone,
+                    q.client_id,
                     c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone
                FROM quotes q JOIN clients c ON c.id = q.client_id
               WHERE q.id = ? LIMIT 1"
@@ -78,6 +86,24 @@ try {
         $q->execute([$qid]);
         $order = $q->fetch(PDO::FETCH_ASSOC) ?: null;
     } catch (Throwable $e2) { /* handled below */ }
+}
+
+// For the FACTORY's OWN retail quote (no trade account) the "customer" is the end
+// customer named on the quote — not the factory itself. Without this the ticket
+// shows the factory ("Beverley Blinds Trade") + our unit address instead of e.g.
+// "John Beverley, Nuns Park Avenue". Account orders (ac) and tenant orders (c)
+// are untouched; only a factory-owned, account-less quote with an end customer.
+if ($order
+    && (int) ($order['account_client_id'] ?? 0) === 0
+    && (int) ($order['client_id'] ?? 0) === (int) $MASTER
+    && trim((string) ($order['end_customer_name'] ?? '')) !== '') {
+    $order['company_name'] = trim((string) $order['end_customer_name']);
+    $order['address1']     = (string) ($order['end_customer_address1'] ?? '');
+    $order['address2']     = (string) ($order['end_customer_address2'] ?? '');
+    $order['town']         = (string) ($order['end_customer_town'] ?? '');
+    $order['county']       = (string) ($order['end_customer_county'] ?? '');
+    $order['postcode']     = (string) ($order['end_customer_postcode'] ?? '');
+    $order['phone']        = (string) ($order['end_customer_phone'] ?? '');
 }
 
 // ---- Beverley lines --------------------------------------------------------
