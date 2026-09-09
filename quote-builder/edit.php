@@ -1483,7 +1483,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <?php if ($editable): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;vertical-align:middle">
-                                        Override total <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(agreed inc-VAT price — blank to clear)</span>
+                                        Override price <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(agreed price ex VAT — VAT added on top; blank to clear)</span>
                                     </td>
                                     <td class="num">
                                         <form method="post" action="/quote-builder/save_override.php"
@@ -1493,7 +1493,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <span>£</span>
                                             <input type="number" name="price_override" step="0.01" min="0"
                                                    value="<?= $olOverride !== null ? e(number_format($olOverride, 2, '.', '')) : '' ?>"
-                                                   placeholder="<?= e(number_format((float) $quote['total'], 2, '.', '')) ?>"
+                                                   placeholder="<?= e(number_format((float) $quote['subtotal'], 2, '.', '')) ?>"
                                                    style="width:6rem;padding:0.2rem 0.35rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:right">
                                             <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.8125rem">Set</button>
                                         </form>

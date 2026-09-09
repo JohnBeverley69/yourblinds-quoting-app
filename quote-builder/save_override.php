@@ -70,4 +70,4 @@ qb_recompute_totals($quoteId);
 
 qb_flash_redirect($backUrl, 'success', $clear
     ? 'Price override cleared — totals back to the calculated price.'
-    : 'Price set to ' . qb_fmt_money((float) $override) . ' (inc VAT) — the difference shows as a discount.');
+    : 'Price set to ' . qb_fmt_money((float) $override) . ' + VAT — the difference shows as a discount.');

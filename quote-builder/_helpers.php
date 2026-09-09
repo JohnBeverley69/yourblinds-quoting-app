@@ -140,14 +140,14 @@ function qb_recompute_totals(int $quoteId): void
     $vat      = round($subtotal * $vatPct / 100, 2);
     $total    = round($subtotal + $vat, 2);
 
-    // Agreed-price override: the salesperson has pinned the final INC-VAT total.
-    // Work net + VAT backwards out of it so Subtotal + VAT = Total still holds
-    // exactly; the gap vs the natural line prices surfaces to the customer as a
-    // "Discount" line (derived where the totals render, from lines+WT − subtotal).
+    // Agreed-price override: the salesperson has pinned the net (ex-VAT) price;
+    // VAT is added on top. Subtotal + VAT = Total still holds exactly, and the
+    // gap vs the natural line prices surfaces to the customer as a "Discount"
+    // line (derived where the totals render, from lines+WT − subtotal).
     if ($override !== null && $override >= 0) {
-        $total    = $override;
-        $subtotal = $vatPct > 0 ? round($override / (1 + $vatPct / 100), 2) : $override;
-        $vat      = round($override - $subtotal, 2);
+        $subtotal = $override;
+        $vat      = round($override * $vatPct / 100, 2);
+        $total    = round($subtotal + $vat, 2);
     }
 
     $pdo->prepare('UPDATE quotes SET subtotal = ?, vat = ?, total = ? WHERE id = ?')
