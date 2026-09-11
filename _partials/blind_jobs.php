@@ -246,13 +246,32 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
          VALUES (?, ?, ?, ?, ?, 'queued', NOW())"
     );
 
+    // A product whose worksheet template is "one per line" (e.g. Vertical Fabric
+    // Only — one job of N slats, not N blinds) gets a SINGLE floor job for the
+    // whole line, not one per unit. Same flag the worksheet reads, so the ticket
+    // and the floor job agree. Cached per master product.
+    $tplCache      = [];
+    $isOnePerLine = static function (int $pid) use ($pdo, &$tplCache): bool {
+        if (array_key_exists($pid, $tplCache)) return $tplCache[$pid];
+        $flag = false;
+        try {
+            $ts = $pdo->prepare('SELECT layout_json FROM worksheet_templates WHERE product_id = ? ORDER BY is_default DESC, id LIMIT 1');
+            $ts->execute([$pid]);
+            $row = $ts->fetch(PDO::FETCH_ASSOC);
+            if ($row) { $tpl = json_decode((string) $row['layout_json'], true); $flag = is_array($tpl) && !empty($tpl['one_per_line']); }
+        } catch (Throwable $e) { $flag = false; }
+        return $tplCache[$pid] = $flag;
+    };
+
     $created = 0;
     foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $it) {
         $pid   = (int) $it['master_product_id'];
         $byStr = bj_route_by_stream($pdo, $pid);
         $qty   = max(1, (int) $it['quantity']);
+        // Fabric-only (one-per-line): one job covering the whole line.
+        $unitCap = $isOnePerLine($pid) ? 1 : $qty;
 
-        for ($unit = 1; $unit <= $qty; $unit++) {
+        for ($unit = 1; $unit <= $unitCap; $unit++) {
             $insJob->execute([$quoteId, (int) $it['id'], $unit, $pid]);
             $isNew = $insJob->rowCount() > 0;
             if ($isNew) $created++;
