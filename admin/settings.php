@@ -311,6 +311,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: feature_wt not saved (run migrate_wt_charge.php): ' . $e->getMessage());
             }
+            // Auto-place in-house orders on accept (migrate_auto_place_inhouse.php).
+            try {
+                db()->prepare('UPDATE client_settings SET auto_place_inhouse = ? WHERE client_id = ?')
+                    ->execute([isset($_POST['auto_place_inhouse']) ? 1 : 0, $clientId]);
+            } catch (Throwable $e) {
+                error_log('settings: auto_place_inhouse not saved (run migrate_auto_place_inhouse.php): ' . $e->getMessage());
+            }
             // Auto paid-in-full receipt on/off (migrate_auto_receipt.php).
             try {
                 db()->prepare('UPDATE client_settings SET feature_auto_receipt = ? WHERE client_id = ?')
@@ -1363,6 +1370,32 @@ $activeNav = 'settings';
                                 or invoice. The amount is added <strong>before VAT</strong>; if “Show the price of
                                 each blind” is on, it's <strong>spread across the blind prices</strong>
                                 (proportionally) so the figures still add up, otherwise it simply lifts the total.
+                            </span>
+                        </span>
+                    </label>
+                </fieldset>
+
+                <?php $autoPlaceInhouse = !isset($settings['auto_place_inhouse']) || !empty($settings['auto_place_inhouse']); ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Auto-place in-house orders
+                    </legend>
+                    <label style="display:flex;align-items:flex-start;gap:0.55rem;
+                                  font-size:0.9375rem;cursor:pointer">
+                        <input type="checkbox" name="auto_place_inhouse" value="1"
+                               <?= $autoPlaceInhouse ? 'checked' : '' ?>
+                               style="margin-top:0.2rem">
+                        <span>
+                            Send in-house orders straight to the workshop when accepted
+                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                                When a quote is accepted and <strong>every</strong> blind on it is one you make
+                                yourself (no bought-in supplier items), it skips the separate “Place order” step and
+                                goes <strong>straight to the factory queue</strong>. Quotes that contain any
+                                bought-in / supplier line are unaffected — those still need the manual
+                                <em>Place order</em> so the supplier gets emailed.
                             </span>
                         </span>
                     </label>
