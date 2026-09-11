@@ -1168,7 +1168,14 @@ if ($oneDimEditor) {
                     </h1>
                     <p class="page-subtitle"><?= e($introTxt) ?></p>
                 </div>
-                <a href="<?= e($importHref) ?>" class="btn btn-secondary"><?= e($importLabel) ?></a>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <a href="<?= e($importHref) ?>" class="btn btn-secondary"><?= e($importLabel) ?></a>
+                    <?php if ($costEditable): ?>
+                        <a href="/admin/products/price-cost-import.php?system_id=<?= (int) $table['system_id'] ?>&amp;band_code=<?= e(urlencode((string) $table['band_code'])) ?>"
+                           class="btn btn-secondary"
+                           title="Overlay your cost onto just this band's prices (super-admin only)">Import cost (this band)</a>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <?php if ($flashMsg !== null): ?>
