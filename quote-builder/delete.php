@@ -49,6 +49,13 @@ try {
         ->execute([$quoteId, $clientId]);
 } catch (Throwable $e) { /* table absent — nothing to clean */ }
 
+// Remove the order's calendar appointments (e.g. the pending fitting seeded on
+// accept) so deleting the order doesn't leave a phantom fitting behind. Keyed on
+// quote_id (globally unique) so it covers the whole order regardless of account.
+try {
+    db()->prepare('DELETE FROM appointments WHERE quote_id = ?')->execute([$quoteId]);
+} catch (Throwable $e) { /* appointments table absent — nothing to clean */ }
+
 // Tenant-scoped delete. ON DELETE CASCADE on quote_items + quote_item_extras
 // cleans up the children automatically.
 db()->prepare('DELETE FROM quotes WHERE id = ? AND client_id = ?')
