@@ -182,11 +182,69 @@ try {
         }
     }
 
+    // Auto-place in-house orders: when a quote is accepted and EVERY blind on it
+    // is one we make ourselves (a factory-owned product with no external supplier
+    // — blank or "In House"), skip the manual "Place order" step and advance it
+    // straight to 'ordered', which is the status the factory queue pulls from.
+    // Off if the tenant switched it off (client_settings.auto_place_inhouse = 0);
+    // never fires when any line is a bought-in/supplier product (those still need
+    // the manual send so the supplier gets emailed). Best-effort inside the txn.
+    $autoPlaceMsg = '';
+    if ($target === 'accepted') {
+        try {
+            $factoryId = (int) factory_client_id();
+            $auto = 1;
+            try {
+                $s = $pdo->prepare('SELECT auto_place_inhouse FROM client_settings WHERE client_id = ? LIMIT 1');
+                $s->execute([$clientId]);
+                $v = $s->fetchColumn();
+                $auto = ($v === false || $v === null) ? 1 : (int) $v;   // column absent/unset → default on
+            } catch (Throwable $e) { $auto = 1; }
+            if ($auto === 1 && $factoryId > 0) {
+                // Pure in-house? at least one line, and EVERY line is a factory-owned
+                // product with no external supplier. Mirrors order_suppliers' $isMfg.
+                $chk = $pdo->prepare(
+                    "SELECT COUNT(*) AS total,
+                            SUM(CASE WHEN (p.supplier_name IS NULL OR TRIM(p.supplier_name) = ''
+                                           OR LOWER(REPLACE(REPLACE(p.supplier_name, ' ', ''), '-', '')) = 'inhouse')
+                                      AND COALESCE(NULLIF(p.source_client_id, 0), p.client_id) = ?
+                                     THEN 1 ELSE 0 END) AS mfg
+                       FROM quote_items qi JOIN products p ON p.id = qi.product_id
+                      WHERE qi.quote_id = ?"
+                );
+                $chk->execute([$factoryId, $quoteId]);
+                $c     = $chk->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'mfg' => 0];
+                $total = (int) $c['total'];
+                $mfg   = (int) $c['mfg'];
+                if ($total > 0 && $mfg === $total) {
+                    $adv = $pdo->prepare(
+                        "UPDATE quotes SET status = 'ordered'
+                          WHERE id = ? AND client_id = ? AND status = 'accepted'"
+                    );
+                    $adv->execute([$quoteId, $clientId]);
+                    if ($adv->rowCount() > 0) {
+                        $target = 'ordered';   // reflect it in the flash below
+                        require_once __DIR__ . '/../_partials/due_dates.php';
+                        try {
+                            $due = dd_stamp_order($pdo, $quoteId, $factoryId);
+                            if ($due !== null && $dueMsg === '') {
+                                $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
+                            }
+                        } catch (Throwable $e) { /* stamp optional */ }
+                        $autoPlaceMsg = ' Sent straight to the workshop — all in-house, no supplier order needed.';
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('Auto-place in-house on accept skipped for quote ' . $quoteId . ': ' . $e->getMessage());
+        }
+    }
+
     $pdo->commit();
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
-        'Status: ' . $target . '.' . $dueMsg . $appointmentMsg
+        'Status: ' . $target . '.' . $dueMsg . $appointmentMsg . $autoPlaceMsg
     );
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

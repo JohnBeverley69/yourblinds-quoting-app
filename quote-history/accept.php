@@ -106,6 +106,46 @@ if ($action === 'accept') {
     // accepts. Idempotent — repeat accepts don't multiply appointments.
     qb_create_appointment_from_quote($pdo, (int) $quote['id']);
 
+    // Auto-place in-house orders on accept — same rule as the staff-side accept
+    // (change_status.php): if the tenant has it on and every blind is a factory-owned
+    // product with no external supplier, advance straight to 'ordered' so it drops
+    // into the factory queue. Best-effort; never blocks the customer's acceptance.
+    try {
+        $acClient  = (int) $quote['client_id'];
+        $acQuote   = (int) $quote['id'];
+        $factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+        $auto = 1;
+        try {
+            $s = $pdo->prepare('SELECT auto_place_inhouse FROM client_settings WHERE client_id = ? LIMIT 1');
+            $s->execute([$acClient]);
+            $v = $s->fetchColumn();
+            $auto = ($v === false || $v === null) ? 1 : (int) $v;   // absent/unset → default on
+        } catch (Throwable $e) { $auto = 1; }
+        if ($auto === 1 && $factoryId > 0) {
+            $chk = $pdo->prepare(
+                "SELECT COUNT(*) AS total,
+                        SUM(CASE WHEN (p.supplier_name IS NULL OR TRIM(p.supplier_name) = ''
+                                       OR LOWER(REPLACE(REPLACE(p.supplier_name, ' ', ''), '-', '')) = 'inhouse')
+                                  AND COALESCE(NULLIF(p.source_client_id, 0), p.client_id) = ?
+                                 THEN 1 ELSE 0 END) AS mfg
+                   FROM quote_items qi JOIN products p ON p.id = qi.product_id
+                  WHERE qi.quote_id = ?"
+            );
+            $chk->execute([$factoryId, $acQuote]);
+            $c = $chk->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'mfg' => 0];
+            if ((int) $c['total'] > 0 && (int) $c['mfg'] === (int) $c['total']) {
+                $adv = $pdo->prepare("UPDATE quotes SET status = 'ordered' WHERE id = ? AND status = 'accepted'");
+                $adv->execute([$acQuote]);
+                if ($adv->rowCount() > 0) {
+                    require_once __DIR__ . '/../_partials/due_dates.php';
+                    try { dd_stamp_order($pdo, $acQuote, $factoryId); } catch (Throwable $e) { /* optional */ }
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Auto-place in-house on public accept skipped for quote ' . (int) $quote['id'] . ': ' . $e->getMessage());
+    }
+
     // Thank-you email to the customer — best-effort, never blocks acceptance
     // (mailer_send logs its own failures). Sent once: a second submit bounces
     // at the status guard above before reaching here. The body is the tenant's
