@@ -433,7 +433,10 @@ function qb_allowed_transitions(string $current): array
         case 'declined':  return ['draft'];
         case 'ordered':   return ['fitted', 'invoiced', 'draft'];
         case 'fitted':    return ['invoiced', 'ordered', 'draft'];
-        case 'invoiced':  return ['paid', 'draft'];
+        // 'paid' is NOT a manual transition — a job becomes paid only when the
+        // recorded deposit + payments cover the total (qb_settle_if_paid marks it
+        // automatically). So "paid" always means the money is accounted for.
+        case 'invoiced':  return ['draft'];
         case 'paid':      return [];
     }
     return ['draft'];
