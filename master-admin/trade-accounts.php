@@ -170,12 +170,13 @@ $activeNav = 'trade-accounts';
                             <th style="text-align:right">Discounts</th>
                             <th>Last login</th>
                             <th style="text-align:right">Products</th>
+                            <th style="text-align:right">A/R</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (!$accounts && $loadError === null): ?>
-                            <tr><td colspan="8" class="table-empty">No accounts yet.</td></tr>
+                            <tr><td colspan="9" class="table-empty">No accounts yet.</td></tr>
                         <?php else: foreach ($accounts as $a):
                             $ll       = $a['last_login'] ? strtotime((string) $a['last_login']) : 0;
                             $hasLogin = (int) $a['users'] > 0;
@@ -205,6 +206,11 @@ $activeNav = 'trade-accounts';
                                 <td style="text-align:right"><?= (int) $a['discounts'] ?: '&mdash;' ?></td>
                                 <td title="<?= $ll ? e(date('j M Y H:i', $ll)) : 'never' ?>"><?= e($fmtAgo($a['last_login'] ? (string) $a['last_login'] : null)) ?></td>
                                 <td style="text-align:right"><?= number_format((int) $a['products']) ?></td>
+                                <td style="text-align:right;white-space:nowrap">
+                                    <a href="/master-admin/record-payment.php?account_id=<?= (int) $a['id'] ?>" title="Payments &amp; balance">Payments</a>
+                                    &middot;
+                                    <a href="/master-admin/statement.php?account_id=<?= (int) $a['id'] ?>" title="Account statement">Statement</a>
+                                </td>
                                 <td style="text-align:right"><a href="/master-admin/trade-account.php?id=<?= (int) $a['id'] ?>">Manage &rarr;</a></td>
                             </tr>
                         <?php endforeach; endif; ?>
