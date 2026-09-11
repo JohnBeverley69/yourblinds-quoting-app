@@ -2036,6 +2036,11 @@ $activeNav = 'products';
                     </a>
                 </p>
             </div>
+            <?php if ($costEditable): ?>
+                <a href="/admin/products/price-cost-import.php?system_id=<?= (int) $table['system_id'] ?>&amp;band_code=<?= e(urlencode((string) $table['band_code'])) ?>"
+                   class="btn btn-secondary"
+                   title="Overlay your cost onto just this band's prices (super-admin only)">Import cost (this band)</a>
+            <?php endif; ?>
         </div>
 
         <?php /* What these numbers ARE. Stated up front because entering a
