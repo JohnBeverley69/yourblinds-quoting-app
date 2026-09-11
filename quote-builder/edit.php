@@ -788,11 +788,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         && in_array((string) $quote['status'], ['ordered', 'fitted', 'invoiced', 'paid'], true);
                 ?>
                 <?php if ($canInvoice): ?>
+                    <?php
+                        // Already invoiced/paid = an invoice was already emailed. Make a
+                        // second send a deliberate "Resend" with a clear warning, so a
+                        // stray click can't send the customer two invoices.
+                        $invSent    = in_array((string) $quote['status'], ['invoiced', 'paid'], true);
+                        $invConfirm = $invSent
+                            ? 'This invoice has already been sent. Send it to the customer AGAIN?'
+                            : 'Email this invoice to the customer now? This also marks the job as Invoiced.';
+                    ?>
                     <form method="post" action="/pdf-generator/send_invoice.php" style="display:inline;margin:0"
-                          onsubmit="return confirm('Email this invoice to the customer now? This also marks the job as Invoiced.');">
+                          onsubmit="return confirm('<?= e($invConfirm) ?>');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= (int) $quote['id'] ?>">
-                        <button type="submit" class="btn btn-secondary">🧾 Send invoice</button>
+                        <?php if ($invSent): ?><input type="hidden" name="resend" value="1"><?php endif; ?>
+                        <button type="submit" class="btn btn-secondary">🧾 <?= $invSent ? 'Resend invoice' : 'Send invoice' ?></button>
                     </form>
                 <?php endif; ?>
             </div>
