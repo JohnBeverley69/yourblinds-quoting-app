@@ -784,7 +784,10 @@ $activeNav = 'trade-accounts';
                     <?php endif; ?>
                 </p>
             </div>
-            <div>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <?php if ($clientId !== $myClient): ?>
+                    <a href="/master-admin/record-payment.php?account_id=<?= (int) $clientId ?>" class="btn btn-secondary" title="Record payments and see this account's outstanding balance">Payments &amp; balance</a>
+                <?php endif; ?>
                 <form method="post" action="/master-admin/trade-account.php?id=<?= (int) $clientId ?>" style="margin:0"
                       <?php if ($isActive): ?>data-confirm="Deactivate <?= e((string) $acc['company_name']) ?>? Their logins won't be able to sign in until you re-activate."<?php endif; ?>>
                     <?= csrf_field() ?>

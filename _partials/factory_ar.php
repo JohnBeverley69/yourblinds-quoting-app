@@ -425,3 +425,190 @@ function ar_order_invoice_number(PDO $pdo, int $quoteId): string
         return '';
     }
 }
+
+/* ── Phase 2D: payments received + allocations ──────────────────────────── */
+
+/** Payments feature ready? (both tables migrated) */
+function ar_payments_ready(PDO $pdo): bool
+{
+    return ar_table_ready($pdo, 'factory_ar_payments')
+        && ar_table_ready($pdo, 'factory_ar_payment_allocations');
+}
+
+/**
+ * Open (unsettled) invoices for an account, oldest first — for payment allocation.
+ * balance = total − amount_paid − credits-against-it (non-void). Only balance > 0.
+ */
+function ar_open_invoices(PDO $pdo, int $factory, int $accountId): array
+{
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return [];
+    $st = $pdo->prepare(
+        "SELECT i.id, i.inv_number, i.issue_date, i.due_date, i.total, i.amount_paid,
+                COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
+                           WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'), 0) AS credited
+           FROM factory_ar_invoices i
+          WHERE i.factory_client_id = ? AND i.account_client_id = ? AND i.status <> 'void'
+          ORDER BY (i.issue_date IS NULL), i.issue_date, i.id"
+    );
+    $st->execute([$factory, $accountId]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $bal = round((float) $r['total'] - (float) $r['amount_paid'] - (float) $r['credited'], 2);
+        if ($bal > 0.004) { $r['balance'] = $bal; $out[] = $r; }
+    }
+    return $out;
+}
+
+/**
+ * Account A/R summary (all non-void): invoiced, credited, paid, outstanding.
+ * outstanding = invoiced − paid − credited. Credit notes (any, incl. standalone
+ * account credits) reduce what the account owes.
+ */
+function ar_account_balance(PDO $pdo, int $factory, int $accountId): array
+{
+    $z = ['invoiced' => 0.0, 'credited' => 0.0, 'paid' => 0.0, 'outstanding' => 0.0];
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return $z;
+    $i = $pdo->prepare(
+        "SELECT COALESCE(SUM(total),0) AS invoiced, COALESCE(SUM(amount_paid),0) AS paid
+           FROM factory_ar_invoices
+          WHERE factory_client_id = ? AND account_client_id = ? AND status <> 'void'"
+    );
+    $i->execute([$factory, $accountId]);
+    $row = $i->fetch(PDO::FETCH_ASSOC) ?: [];
+    $z['invoiced'] = round((float) ($row['invoiced'] ?? 0), 2);
+    $z['paid']     = round((float) ($row['paid'] ?? 0), 2);
+    if (ar_table_ready($pdo, 'factory_ar_credit_notes')) {
+        $c = $pdo->prepare(
+            "SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes
+              WHERE factory_client_id = ? AND account_client_id = ? AND status <> 'void'"
+        );
+        $c->execute([$factory, $accountId]);
+        $z['credited'] = round((float) $c->fetchColumn(), 2);
+    }
+    $z['outstanding'] = round($z['invoiced'] - $z['paid'] - $z['credited'], 2);
+    return $z;
+}
+
+/** Payments recorded for an account, newest first (with allocated total). */
+function ar_account_payments(PDO $pdo, int $factory, int $accountId): array
+{
+    if (!ar_table_ready($pdo, 'factory_ar_payments')) return [];
+    $st = $pdo->prepare(
+        "SELECT p.*, COALESCE((SELECT SUM(a.amount) FROM factory_ar_payment_allocations a
+                                WHERE a.payment_id = p.id), 0) AS allocated
+           FROM factory_ar_payments p
+          WHERE p.factory_client_id = ? AND p.account_client_id = ?
+          ORDER BY p.payment_date DESC, p.id DESC"
+    );
+    $st->execute([$factory, $accountId]);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Recompute an invoice's amount_paid cache + status from its (non-void) allocations. */
+function ar_recompute_invoice_paid(PDO $pdo, int $invoiceId): void
+{
+    $ps = $pdo->prepare(
+        "SELECT COALESCE(SUM(a.amount),0)
+           FROM factory_ar_payment_allocations a
+           JOIN factory_ar_payments p ON p.id = a.payment_id
+          WHERE a.invoice_id = ? AND p.voided_at IS NULL"
+    );
+    $ps->execute([$invoiceId]);
+    $paid = round((float) $ps->fetchColumn(), 2);
+
+    $iv = $pdo->prepare("SELECT total, sent_at, status FROM factory_ar_invoices WHERE id = ? LIMIT 1");
+    $iv->execute([$invoiceId]);
+    $row = $iv->fetch(PDO::FETCH_ASSOC);
+    if (!$row || (string) $row['status'] === 'void') return;   // never touch a void invoice
+
+    $cred = 0.0;
+    if (ar_table_ready($pdo, 'factory_ar_credit_notes')) {
+        $c = $pdo->prepare("SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes WHERE against_invoice_id = ? AND status <> 'void'");
+        $c->execute([$invoiceId]);
+        $cred = round((float) $c->fetchColumn(), 2);
+    }
+    $netDue = round((float) $row['total'] - $cred, 2);
+    if ($netDue <= 0.004 || $paid >= $netDue - 0.004) {
+        $status = 'paid';
+    } elseif ($paid > 0.004) {
+        $status = 'part_paid';
+    } else {
+        $status = !empty($row['sent_at']) ? 'sent' : 'raised';
+    }
+    $pdo->prepare("UPDATE factory_ar_invoices SET amount_paid = ?, status = ? WHERE id = ?")
+        ->execute([$paid, $status, $invoiceId]);
+}
+
+/**
+ * Record a payment from an account and allocate it across invoices.
+ *   $allocations = [invoiceId => amount, …]  (only >0 entries applied)
+ * Returns ['id','number','allocated','amount']. Own-transaction-aware. Each
+ * allocation is checked to belong to a non-void invoice for this factory+account.
+ */
+function ar_create_payment(PDO $pdo, int $factory, int $accountId, string $date, string $method,
+                           float $amount, string $reference, string $notes, array $allocations, int $userId): array
+{
+    $amount = round(max(0.0, $amount), 2);
+    $ownTxn = !$pdo->inTransaction();
+    if ($ownTxn) $pdo->beginTransaction();
+    try {
+        $payId = 0; $num = '';
+        for ($try = 1; $try <= 3; $try++) {
+            $num = ar_next_number($pdo, $factory, 'PAY', 'factory_ar_payments', 'pay_number');
+            try {
+                $pdo->prepare(
+                    "INSERT INTO factory_ar_payments
+                       (factory_client_id, account_client_id, pay_number, payment_date, method, amount, reference, notes, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                )->execute([
+                    $factory, $accountId, $num, $date, $method, $amount,
+                    $reference !== '' ? $reference : null, $notes !== '' ? $notes : null, $userId ?: null,
+                ]);
+                $payId = (int) $pdo->lastInsertId();
+                break;
+            } catch (PDOException $e) {
+                if ($e->getCode() === '23000' && $try < 3) continue;
+                throw $e;
+            }
+        }
+        $insA = $pdo->prepare("INSERT INTO factory_ar_payment_allocations (payment_id, invoice_id, amount) VALUES (?, ?, ?)");
+        $chk  = $pdo->prepare("SELECT 1 FROM factory_ar_invoices WHERE id = ? AND factory_client_id = ? AND account_client_id = ? AND status <> 'void' LIMIT 1");
+        $allocated = 0.0; $touched = [];
+        foreach ($allocations as $invId => $amt) {
+            $invId = (int) $invId; $amt = round((float) $amt, 2);
+            if ($invId <= 0 || $amt <= 0.004) continue;
+            $chk->execute([$invId, $factory, $accountId]);
+            if (!$chk->fetchColumn()) continue;
+            $insA->execute([$payId, $invId, $amt]);
+            $allocated += $amt; $touched[$invId] = true;
+        }
+        foreach (array_keys($touched) as $invId) ar_recompute_invoice_paid($pdo, $invId);
+        if ($ownTxn) $pdo->commit();
+        return ['id' => $payId, 'number' => $num, 'allocated' => round($allocated, 2), 'amount' => $amount];
+    } catch (Throwable $e) {
+        if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/** Void a payment (keeps the row for audit) and recompute the invoices it touched. */
+function ar_void_payment(PDO $pdo, int $factory, int $payId, string $reason = ''): void
+{
+    $ownTxn = !$pdo->inTransaction();
+    if ($ownTxn) $pdo->beginTransaction();
+    try {
+        $g = $pdo->prepare("SELECT id FROM factory_ar_payments WHERE id = ? AND factory_client_id = ? AND voided_at IS NULL LIMIT 1");
+        $g->execute([$payId, $factory]);
+        if (!$g->fetchColumn()) { if ($ownTxn) $pdo->commit(); return; }
+        $inv = $pdo->prepare("SELECT DISTINCT invoice_id FROM factory_ar_payment_allocations WHERE payment_id = ?");
+        $inv->execute([$payId]);
+        $ids = array_map(static fn ($r) => (int) $r['invoice_id'], $inv->fetchAll(PDO::FETCH_ASSOC));
+        $pdo->prepare("UPDATE factory_ar_payments SET voided_at = NOW(), void_reason = ? WHERE id = ?")
+            ->execute([$reason !== '' ? substr($reason, 0, 255) : null, $payId]);
+        foreach ($ids as $invId) ar_recompute_invoice_paid($pdo, $invId);
+        if ($ownTxn) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
