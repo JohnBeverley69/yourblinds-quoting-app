@@ -205,11 +205,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $invLines = $il->fetchAll(PDO::FETCH_ASSOC);
             if (!$invLines) throw new RuntimeException('That invoice has no lines to credit.');
 
+            // The credit note carries the ORDER's number (CN-<order>) so it lines up
+            // with its invoice/DN for the account. Fall back to the CN sequence if the
+            // invoice has no order link.
+            $cnQuoteId = 0;
+            try {
+                $qo = $pdo->prepare('SELECT quote_id FROM factory_ar_invoice_orders WHERE invoice_id = ? LIMIT 1');
+                $qo->execute([$invId]);
+                $cnQuoteId = (int) $qo->fetchColumn();
+            } catch (Throwable $e) { $cnQuoteId = 0; }
+
             $pdo->beginTransaction();
 
             $cnId = 0; $num = '';
             for ($try = 1; $try <= 3; $try++) {
-                $num = ar_next_number($pdo, $factory, 'CN', 'factory_ar_credit_notes', 'cn_number');
+                $num = $cnQuoteId > 0
+                    ? ar_order_doc_number($pdo, $factory, $cnQuoteId, 'CN', 'factory_ar_credit_notes', 'cn_number')
+                    : ar_next_number($pdo, $factory, 'CN', 'factory_ar_credit_notes', 'cn_number');
                 try {
                     $ins = $pdo->prepare(
                         "INSERT INTO factory_ar_credit_notes
