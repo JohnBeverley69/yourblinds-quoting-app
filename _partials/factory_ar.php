@@ -56,6 +56,35 @@ function ar_next_number(PDO $pdo, int $factoryId, string $prefix, string $table,
     return sprintf('%s-%s-%04d', $prefix, $year, $next);
 }
 
+/**
+ * Order-aligned document number: PREFIX-<order number> (e.g. INV-ABC-2026-0001),
+ * so the invoice / delivery note / credit note carry the ORDER's own number and a
+ * trade account can reconcile them against the order at a glance instead of three
+ * separate running series. A second document of the same type for the same order
+ * (a void-and-reissue, or a further credit note) gets a "-2", "-3" … suffix so the
+ * number stays unique. $table/$col are internal constants (never user input); the
+ * caller still retries on a UNIQUE collision (a race just bumps the suffix).
+ */
+function ar_order_doc_number(PDO $pdo, int $factoryId, int $quoteId, string $prefix, string $table, string $col): string
+{
+    $q = $pdo->prepare('SELECT quote_number FROM quotes WHERE id = ? LIMIT 1');
+    $q->execute([$quoteId]);
+    $qn = trim((string) ($q->fetchColumn() ?: ''));
+    if ($qn === '') $qn = (string) $quoteId;                 // fallback: bare id
+    $base = $prefix . '-' . $qn;
+
+    $exists = static function (string $num) use ($pdo, $factoryId, $table, $col): bool {
+        $s = $pdo->prepare("SELECT 1 FROM $table WHERE factory_client_id = ? AND $col = ? LIMIT 1");
+        $s->execute([$factoryId, $num]);
+        return (bool) $s->fetchColumn();
+    };
+    if (!$exists($base)) return $base;
+    for ($i = 2; ; $i++) {
+        $cand = $base . '-' . $i;
+        if (!$exists($cand)) return $cand;
+    }
+}
+
 /** Snapshot of the account's ship-to address as a newline block. */
 function ar_account_address_block(array $acc): string
 {
@@ -279,7 +308,7 @@ function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $acco
     try {
         $dnId = 0; $num = '';
         for ($try = 1; $try <= 3; $try++) {
-            $num = ar_next_number($pdo, $factory, 'DN', 'factory_ar_delivery_notes', 'dn_number');
+            $num = ar_order_doc_number($pdo, $factory, $quoteId, 'DN', 'factory_ar_delivery_notes', 'dn_number');
             try {
                 $ins = $pdo->prepare(
                     "INSERT INTO factory_ar_delivery_notes
@@ -367,7 +396,7 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
     try {
         $invId = 0; $num = '';
         for ($try = 1; $try <= 3; $try++) {
-            $num = ar_next_number($pdo, $factory, 'INV', 'factory_ar_invoices', 'inv_number');
+            $num = ar_order_doc_number($pdo, $factory, $quoteId, 'INV', 'factory_ar_invoices', 'inv_number');
             try {
                 $ins = $pdo->prepare(
                     "INSERT INTO factory_ar_invoices
