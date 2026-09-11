@@ -39,6 +39,27 @@ $system = $sysStmt->fetch(PDO::FETCH_ASSOC);
 if (!$system) { http_response_code(404); echo '<h1>System not found</h1>'; exit; }
 $productId = (int) $system['product_id'];
 
+// Optional single-band scope. With ?band_code=<code> (the "Import cost (this
+// band)" button on a band's price screen) cost is overlaid onto just that one
+// band, ignoring any other bands in the file. Empty = the original whole-system
+// behaviour (every band found in the file).
+$bandCode   = strtoupper(trim((string) ($_GET['band_code'] ?? $_POST['band_code'] ?? '')));
+$singleBand = $bandCode !== '';
+
+// From the parsed bands, keep only the one we're importing into: prefer an exact
+// band-code match; else, if the file holds exactly one band, treat it as this one.
+$pickBand = static function (array $bands) use ($bandCode): array {
+    foreach ($bands as $b) {
+        if (strtoupper((string) ($b['code'] ?? '')) === $bandCode) return [$b];
+    }
+    if (count($bands) === 1) {
+        $only = $bands[array_key_first($bands)];
+        $only['code'] = $bandCode;   // remap the lone band to the target
+        return [$only];
+    }
+    return [];
+};
+
 $error = null; $summary = null; $stage = 'upload'; $pickSheets = [];
 
 /** A sheet's rows as ptp_parse_band_blocks wants them — STORED values, no recalc. */
@@ -149,8 +170,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ];
                 }
             }
+            if ($singleBand) {
+                // Reduce each sheet to just the band we're importing into.
+                $only = [];
+                foreach ($sheetsWithBands as $sw) {
+                    $picked = $pickBand($sw['bands']);
+                    if ($picked) {
+                        $only[] = [
+                            'name'  => $sw['name'],
+                            'bands' => $picked,
+                            'cells' => count($picked[array_key_first($picked)]['cells']),
+                        ];
+                    }
+                }
+                $sheetsWithBands = $only;
+            }
             if (!$sheetsWithBands) {
-                $error = 'No band sections found. Each band should start with "Band X" in column A.';
+                $error = $singleBand
+                    ? 'Could not find Band ' . $bandCode . ' in the file. Give the cost sheet a "Band '
+                      . $bandCode . '" header row, or upload a sheet that holds just that one band.'
+                    : 'No band sections found. Each band should start with "Band X" in column A.';
             } elseif (count($sheetsWithBands) === 1) {
                 try { $summary = $overlayCost($sheetsWithBands[0]['bands']); $summary['margin'] = $marginStats(); }
                 catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
@@ -179,8 +218,8 @@ $activeNav = 'products';
     <main class="app-main">
 <div style="max-width:760px;margin:0 auto;padding:1rem;font-family:system-ui,sans-serif;">
     <p style="margin:0 0 .3rem"><a href="/admin/products/edit.php?id=<?= $productId ?>">&larr; <?= e((string) $system['product_name']) ?></a></p>
-    <h1 style="font-size:1.5rem;margin:0 0 .3rem">Import costs</h1>
-    <p style="color:#667;margin:0 0 1.2rem"><?= e((string) $system['product_name']) ?> &middot; <?= e((string) $system['system_name']) ?> &mdash; overlays your cost onto this system's price grid, so <strong>margin = price − cost</strong> at every size.</p>
+    <h1 style="font-size:1.5rem;margin:0 0 .3rem">Import costs<?= $singleBand ? ' &middot; Band ' . e($bandCode) : '' ?></h1>
+    <p style="color:#667;margin:0 0 1.2rem"><?= e((string) $system['product_name']) ?> &middot; <?= e((string) $system['system_name']) ?><?= $singleBand ? ' &middot; Band ' . e($bandCode) : '' ?> &mdash; overlays your cost onto <?= $singleBand ? 'just this band' : "this system's price grid" ?>, so <strong>margin = price − cost</strong> at every size.</p>
 
     <?php if ($error): ?><div style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:.7rem 1rem;border-radius:10px;margin:0 0 1rem"><?= e($error) ?></div><?php endif; ?>
 
@@ -209,6 +248,7 @@ $activeNav = 'products';
     <?php elseif ($stage === 'pick'): ?>
         <form method="post" enctype="multipart/form-data">
             <?= csrf_field() ?><input type="hidden" name="action" value="import"><input type="hidden" name="system_id" value="<?= $systemId ?>">
+            <?php if ($singleBand): ?><input type="hidden" name="band_code" value="<?= e($bandCode) ?>"><?php endif; ?>
             <input type="hidden" name="payloads" value="<?= e(json_encode($pickSheets)) ?>">
             <p>Several sheets look like cost grids. Which one holds the <strong>costs</strong>?</p>
             <?php foreach ($pickSheets as $i => $sh): ?>
@@ -222,7 +262,8 @@ $activeNav = 'products';
     <?php else: ?>
         <form method="post" enctype="multipart/form-data">
             <?= csrf_field() ?><input type="hidden" name="system_id" value="<?= $systemId ?>">
-            <p>Upload the same workbook as your prices — this reads the <strong>cost</strong> sheet. Import the sell prices first if you haven't; cost attaches to them.</p>
+            <?php if ($singleBand): ?><input type="hidden" name="band_code" value="<?= e($bandCode) ?>"><?php endif; ?>
+            <p>Upload the same workbook as your prices — this reads the <strong>cost</strong> sheet<?= $singleBand ? ', and applies <strong>only Band ' . e($bandCode) . '</strong> (any other bands in the file are ignored)' : '' ?>. Import the sell prices first if you haven't; cost attaches to them.</p>
             <p style="margin:1rem 0"><input type="file" name="file" accept=".xlsx,.xlsm,.xls,.csv,.ods" required></p>
             <button type="submit" style="font:inherit;font-weight:600;padding:.5rem 1.1rem;border:none;border-radius:8px;background:#166534;color:#fff;cursor:pointer">Upload &amp; read costs</button>
         </form>
