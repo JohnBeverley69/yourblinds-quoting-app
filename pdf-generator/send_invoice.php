@@ -53,6 +53,15 @@ if (!in_array((string) $quote['status'], ['ordered', 'fitted', 'invoiced', 'paid
     qb_flash_redirect($backUrl, 'error', 'You can invoice once the job is ordered — move it to Ordered first.');
 }
 
+// Duplicate-send guard: an 'invoiced'/'paid' job has already had its invoice
+// emailed, so a further send must be a deliberate resend (?resend=1 from the
+// "Resend invoice" button + its confirm) — otherwise a stray click would send
+// the customer a second invoice with no warning.
+if (in_array((string) $quote['status'], ['invoiced', 'paid'], true) && empty($_POST['resend'])) {
+    qb_flash_redirect($backUrl, 'error',
+        'Invoice ' . $quote['quote_number'] . ' has already been sent. Use "Resend invoice" if you really need to send it again.');
+}
+
 if (!class_exists(\Dompdf\Dompdf::class)) {
     qb_flash_redirect($backUrl, 'error', 'PDF generator not installed. Run "composer install" to add dompdf/dompdf.');
 }
