@@ -3,7 +3,7 @@ declare(strict_types=1);
 /** TEMP read-only: inspect a quote's paid state + payments. Delete after use. */
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/auth/middleware.php';
-requireSuperAdmin();
+requireLogin();
 header('Content-Type: text/plain; charset=utf-8');
 $pdo = db();
 
