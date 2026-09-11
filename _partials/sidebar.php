@@ -187,6 +187,7 @@ $navSections = [
             'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade Accounts',  $isSuperAdmin],
             'promotions'    => ['/master-admin/promotions.php',     'Promotions',       $isSuperAdmin],
             'wholesale'     => ['/master-admin/wholesale.php',      'Wholesale',        $isSuperAdmin],
+            'commissions'   => ['/master-admin/commissions.php',    'Commissions',      $isSuperAdmin],
             'factories'     => ['/master-admin/factories.php',      'Factories',        $isSuperAdmin],
             'client-emails' => ['/master-admin/client-emails.php',  'Client emails',    $isSuperAdmin],
             'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],

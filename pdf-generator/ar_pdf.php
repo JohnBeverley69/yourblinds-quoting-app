@@ -304,3 +304,63 @@ function ar_render_statement(array $ctx, array $data): ?string
 
     return ar_pdf_bytes($html);
 }
+
+/**
+ * Render a COMMISSION STATEMENT for a sales consultant (internal). Beverley
+ * letterhead + a table of (account, product, invoiced turnover, rate, commission)
+ * and the total due. $ctx: factory, consultant_name, from, to, statement_date,
+ * watermark. $data: rows[{account_name,product_name,turnover,percent,commission}], total.
+ */
+function ar_render_commission(array $ctx, array $data): ?string
+{
+    $e     = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
+    $pct   = static fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.') . '%';
+    $fmtD  = static function ($d) { $t = $d ? strtotime((string) $d) : false; return $t ? date('j M Y', $t) : ''; };
+
+    $rows = '';
+    foreach (($data['rows'] ?? []) as $r) {
+        $rows .= '<tr>'
+              . '<td>' . $e($r['account_name'] ?? '') . '</td>'
+              . '<td>' . $e($r['product_name'] ?? '') . '</td>'
+              . '<td class="rt">' . $money($r['turnover'] ?? 0) . '</td>'
+              . '<td class="rt">' . $pct($r['percent'] ?? 0) . '</td>'
+              . '<td class="rt">' . $money($r['commission'] ?? 0) . '</td>'
+              . '</tr>';
+    }
+    if ($rows === '') $rows = '<tr><td colspan="5" style="color:#6b7280">No commission rules or turnover in this period.</td></tr>';
+
+    $period = ((string) ($ctx['from'] ?? '') !== '' ? $e($fmtD($ctx['from'])) . ' &ndash; ' : 'To ') . $e($fmtD($ctx['to'] ?? ''));
+
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
+        . '.top{width:100%;margin-bottom:10px}.top td{vertical-align:top;padding:0}'
+        . '.title{font-size:20px;font-weight:bold;color:#111827;margin:0 0 2px;text-align:right}'
+        . '.meta{font-size:11px;color:#374151;text-align:right;line-height:1.5}'
+        . '.box-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin:8px 0 2px}'
+        . 'table.items{width:100%;border-collapse:collapse;margin-top:6px}'
+        . 'table.items th{background:#1f3b5b;color:#fff;font-size:10px;text-align:left;padding:6px 7px}'
+        . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
+        . 'table.items td.rt,table.items th.rt{text-align:right;width:82px}'
+        . 'table.due{width:46%;margin-left:54%;margin-top:8px;border-collapse:collapse}'
+        . 'table.due td{padding:5px 7px;font-size:13px;font-weight:bold;border-top:2px solid #1f3b5b}'
+        . 'table.due td.rt{text-align:right}'
+        . '.foot{margin-top:16px;font-size:10px;color:#6b7280;line-height:1.5}'
+        . '</style></head><body>'
+        . '<table class="top"><tr>'
+        . '<td style="width:55%">' . ar_letterhead_html($ctx['factory'] ?? []) . '</td>'
+        . '<td style="width:45%"><div class="title">COMMISSION STATEMENT</div><div class="meta">'
+        . 'Date: ' . $e($fmtD($ctx['statement_date'] ?? date('Y-m-d'))) . '<br>'
+        . 'Period: ' . $period
+        . '</div></td></tr></table>'
+        . '<div class="box-label">Sales consultant</div>'
+        . '<div style="font-size:13px;font-weight:bold">' . $e($ctx['consultant_name'] ?? '') . '</div>'
+        . '<table class="items"><thead><tr>'
+        . '<th>Account</th><th>Product</th><th class="rt">Turnover (net)</th><th class="rt">Rate</th><th class="rt">Commission</th>'
+        . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<table class="due"><tr><td>Total commission</td><td class="rt">' . $money($data['total'] ?? 0) . '</td></tr></table>'
+        . '<div class="foot">Commission is calculated on invoiced net turnover (ex VAT) in the period shown.</div>'
+        . '</body></html>';
+
+    return ar_pdf_bytes($html);
+}

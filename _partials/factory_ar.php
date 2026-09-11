@@ -692,3 +692,89 @@ function ar_statement(PDO $pdo, int $factory, int $accountId, string $from = '',
     return ['from' => $fromD, 'to' => $to, 'opening' => round($opening, 2),
             'rows' => $rows, 'closing' => round($running, 2)];
 }
+
+/**
+ * Commission statement for a consultant over a period (2E). For each of the
+ * consultant's active trade_commissions rows, turnover = the account's INVOICED
+ * net (issue_date in period, non-void invoices) for that product — or ALL products
+ * when the rule's product is NULL — and commission = turnover × %. Products matched
+ * by MASTER id on both sides (the rule's product may be a mirrored copy).
+ *   $from '' = from the beginning; $to '' = today.
+ * Returns ['from','to','rows'=>[{account_id,account_name,product_name,turnover,percent,commission}],'total'].
+ */
+function ar_commission_statement(PDO $pdo, int $factory, int $consultantId, string $from = '', string $to = ''): array
+{
+    $out = ['from' => null, 'to' => date('Y-m-d'), 'rows' => [], 'total' => 0.0];
+    if (!ar_table_ready($pdo, 'trade_commissions') || !ar_table_ready($pdo, 'factory_ar_invoices')) return $out;
+
+    $to    = ($to !== '' && strtotime($to)) ? date('Y-m-d', strtotime($to)) : date('Y-m-d');
+    $fromD = ($from !== '' && strtotime($from)) ? date('Y-m-d', strtotime($from)) : null;
+    $out['from'] = $fromD; $out['to'] = $to;
+
+    $rc = $pdo->prepare(
+        "SELECT tc.client_id, tc.product_id, tc.commission_percent, c.company_name
+           FROM trade_commissions tc JOIN clients c ON c.id = tc.client_id
+          WHERE tc.consultant_id = ? AND tc.active = 1
+       ORDER BY c.company_name, (tc.product_id IS NULL) DESC, tc.product_id"
+    );
+    $rc->execute([$consultantId]);
+    $rules = $rc->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rules) return $out;
+
+    // Per-account invoiced turnover for the period: total + by master product id.
+    $accCache = [];
+    $loadAcc = function (int $accountId) use ($pdo, $factory, $fromD, $to, &$accCache): array {
+        if (isset($accCache[$accountId])) return $accCache[$accountId];
+        $cond   = "i.factory_client_id = ? AND i.account_client_id = ? AND i.status <> 'void'";
+        $params = [$factory, $accountId];
+        if ($fromD !== null) { $cond .= " AND COALESCE(i.issue_date, DATE(i.created_at)) >= ?"; $params[] = $fromD; }
+        $cond .= " AND COALESCE(i.issue_date, DATE(i.created_at)) <= ?"; $params[] = $to;
+
+        $t = $pdo->prepare("SELECT COALESCE(SUM(il.line_net),0)
+                              FROM factory_ar_invoices i JOIN factory_ar_invoice_lines il ON il.invoice_id = i.id
+                             WHERE $cond");
+        $t->execute($params);
+        $total = round((float) $t->fetchColumn(), 2);
+
+        $b = $pdo->prepare("SELECT COALESCE(p.source_product_id, p.id) mpid, COALESCE(SUM(il.line_net),0) net
+                              FROM factory_ar_invoices i
+                              JOIN factory_ar_invoice_lines il ON il.invoice_id = i.id
+                              JOIN quote_items qi ON qi.id = il.source_quote_item_id
+                              JOIN products p ON p.id = qi.product_id
+                             WHERE $cond GROUP BY mpid");
+        $b->execute($params);
+        $byP = [];
+        foreach ($b->fetchAll(PDO::FETCH_ASSOC) as $r) $byP[(int) $r['mpid']] = round((float) $r['net'], 2);
+        return $accCache[$accountId] = ['total' => $total, 'byP' => $byP];
+    };
+
+    $masterOf = function (int $pid) use ($pdo): array {
+        $s = $pdo->prepare("SELECT COALESCE(source_product_id, id) mid, name FROM products WHERE id = ? LIMIT 1");
+        $s->execute([$pid]);
+        $r = $s->fetch(PDO::FETCH_ASSOC);
+        return $r ? [(int) $r['mid'], (string) $r['name']] : [0, ''];
+    };
+
+    foreach ($rules as $rule) {
+        $acc = $loadAcc((int) $rule['client_id']);
+        $pct = (float) $rule['commission_percent'];
+        if ($rule['product_id'] === null) {
+            $turnover = $acc['total'];
+            $pname    = 'All products';
+        } else {
+            [$mid, $pname] = $masterOf((int) $rule['product_id']);
+            $turnover      = $acc['byP'][$mid] ?? 0.0;
+        }
+        $comm = round($turnover * $pct / 100, 2);
+        $out['rows'][] = [
+            'account_id'   => (int) $rule['client_id'],
+            'account_name' => (string) $rule['company_name'],
+            'product_name' => $pname,
+            'turnover'     => round($turnover, 2),
+            'percent'      => $pct,
+            'commission'   => $comm,
+        ];
+        $out['total'] = round($out['total'] + $comm, 2);
+    }
+    return $out;
+}
