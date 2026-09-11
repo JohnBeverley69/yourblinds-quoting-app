@@ -145,6 +145,9 @@ $activeNav = 'wholesale';
                 <h1 class="page-title">Payments &mdash; <?= e((string) $account['company_name']) ?></h1>
                 <p class="page-subtitle">Record payments received and allocate them across this account's invoices.</p>
             </div>
+            <div>
+                <a href="/master-admin/statement.php?account_id=<?= (int) $accountId ?>" class="btn btn-secondary">Statement</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?><div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div><?php endif; ?>

@@ -228,3 +228,79 @@ function ar_render_invoice(array $ctx, array $items, array $totals): ?string
 
     return ar_pdf_bytes($html);
 }
+
+/**
+ * Render an account STATEMENT — Beverley letterhead + a ledger of the account's
+ * invoices (charges), credit notes and payments (credits) with a running balance,
+ * opening and closing. $ctx: factory, bill_to, statement_date, from, to, watermark,
+ * bank, notes. $data: opening, rows[{date,type,ref,charge,credit,balance}], closing.
+ */
+function ar_render_statement(array $ctx, array $data): ?string
+{
+    $e     = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $nl2   = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
+    $money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
+    $fmtD  = static function ($d) { $t = $d ? strtotime((string) $d) : false; return $t ? date('j M Y', $t) : ''; };
+
+    $opening = (float) ($data['opening'] ?? 0);
+    $closing = (float) ($data['closing'] ?? 0);
+    $bank    = trim((string) ($ctx['bank'] ?? ''));
+
+    $rows = '<tr class="op"><td>' . $e($fmtD($ctx['from'] ?? '')) . '</td><td></td><td>Opening balance</td>'
+          . '<td class="rt"></td><td class="rt"></td><td class="rt">' . $money($opening) . '</td></tr>';
+    foreach (($data['rows'] ?? []) as $r) {
+        $rows .= '<tr>'
+              . '<td>' . $e($fmtD($r['date'])) . '</td>'
+              . '<td>' . $e($r['ref'] ?? '') . '</td>'
+              . '<td>' . $e($r['type'] ?? '') . '</td>'
+              . '<td class="rt">' . (($r['charge'] ?? 0) > 0 ? $money($r['charge']) : '') . '</td>'
+              . '<td class="rt">' . (($r['credit'] ?? 0) > 0 ? $money($r['credit']) : '') . '</td>'
+              . '<td class="rt">' . $money($r['balance'] ?? 0) . '</td>'
+              . '</tr>';
+    }
+
+    $period = ((string) ($ctx['from'] ?? '') !== '' ? $e($fmtD($ctx['from'])) . ' &ndash; ' : 'To ')
+            . $e($fmtD($ctx['to'] ?? ''));
+
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
+        . '.top{width:100%;margin-bottom:10px}.top td{vertical-align:top;padding:0}'
+        . '.title{font-size:22px;font-weight:bold;color:#111827;margin:0 0 2px;text-align:right}'
+        . '.meta{font-size:11px;color:#374151;text-align:right;line-height:1.5}'
+        . '.cols{width:100%;margin:8px 0 12px}.cols td{vertical-align:top;width:50%;padding:0}'
+        . '.box-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:2px}'
+        . '.box{font-size:11px;line-height:1.4}'
+        . 'table.items{width:100%;border-collapse:collapse;margin-top:6px}'
+        . 'table.items th{background:#1f3b5b;color:#fff;font-size:10px;text-align:left;padding:6px 7px}'
+        . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
+        . 'table.items td.rt,table.items th.rt{text-align:right;width:74px}'
+        . 'table.items tr.op td{background:#f3f6fa;font-style:italic}'
+        . 'table.due{width:46%;margin-left:54%;margin-top:8px;border-collapse:collapse}'
+        . 'table.due td{padding:5px 7px;font-size:13px;font-weight:bold;border-top:2px solid #1f3b5b}'
+        . 'table.due td.rt{text-align:right}'
+        . '.foot{margin-top:16px;font-size:10px;color:#374151;line-height:1.5}'
+        . '.wm{position:fixed;top:44%;left:0;width:100%;text-align:center;font-size:90px;font-weight:bold;color:#f3d0d0;transform:rotate(-20deg);z-index:-1}'
+        . '</style></head><body>'
+        . ((string) ($ctx['watermark'] ?? '') !== '' ? '<div class="wm">' . $e($ctx['watermark']) . '</div>' : '')
+        . '<table class="top"><tr>'
+        . '<td style="width:55%">' . ar_letterhead_html($ctx['factory'] ?? []) . '</td>'
+        . '<td style="width:45%"><div class="title">STATEMENT</div><div class="meta">'
+        . 'Date: ' . $e($fmtD($ctx['statement_date'] ?? date('Y-m-d'))) . '<br>'
+        . 'Period: ' . $period
+        . '</div></td></tr></table>'
+        . '<table class="cols"><tr>'
+        . '<td><div class="box-label">Account</div><div class="box">'
+        . ((string) ($ctx['bill_to'] ?? '') !== '' ? $nl2($ctx['bill_to']) : '<span class="box-label">— no address —</span>')
+        . '</div></td><td></td></tr></table>'
+        . '<table class="items"><thead><tr>'
+        . '<th>Date</th><th>Reference</th><th>Type</th><th class="rt">Charges</th><th class="rt">Payments / credits</th><th class="rt">Balance</th>'
+        . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<table class="due"><tr><td>Balance due</td><td class="rt">' . $money($closing) . '</td></tr></table>'
+        . '<div class="foot">'
+        . ((string) ($ctx['notes'] ?? '') !== '' ? $e($ctx['notes']) . '<br>' : '')
+        . ($bank !== '' ? '<strong>Payment</strong><br>' . $nl2($bank) : '')
+        . '</div>'
+        . '</body></html>';
+
+    return ar_pdf_bytes($html);
+}

@@ -476,7 +476,15 @@ function ar_account_balance(PDO $pdo, int $factory, int $accountId): array
     $i->execute([$factory, $accountId]);
     $row = $i->fetch(PDO::FETCH_ASSOC) ?: [];
     $z['invoiced'] = round((float) ($row['invoiced'] ?? 0), 2);
-    $z['paid']     = round((float) ($row['paid'] ?? 0), 2);
+    $z['paid']     = round((float) ($row['paid'] ?? 0), 2);   // fallback: allocated, pre-payments-table
+    // Prefer TOTAL money received (payments), so unallocated payment sitting as
+    // credit on account correctly reduces the outstanding — not just allocations.
+    if (ar_payments_ready($pdo)) {
+        $p = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM factory_ar_payments
+                             WHERE factory_client_id = ? AND account_client_id = ? AND voided_at IS NULL");
+        $p->execute([$factory, $accountId]);
+        $z['paid'] = round((float) $p->fetchColumn(), 2);
+    }
     if (ar_table_ready($pdo, 'factory_ar_credit_notes')) {
         $c = $pdo->prepare(
             "SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes
@@ -611,4 +619,76 @@ function ar_void_payment(PDO $pdo, int $factory, int $payId, string $reason = ''
         if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
         throw $e;
     }
+}
+
+/**
+ * Account statement for a period. Ledger of non-void invoices (charge), credit
+ * notes (credit) and payments (credit) by document date, with a running balance.
+ *   $from '' = from the beginning (opening 0);  $to '' = today.
+ * Returns ['from','to','opening','rows'=>[{date,type,ref,charge,credit,balance}],'closing'].
+ * With $from='' and $to=today, 'closing' equals ar_account_balance()['outstanding'].
+ */
+function ar_statement(PDO $pdo, int $factory, int $accountId, string $from = '', string $to = ''): array
+{
+    $to    = ($to !== '' && strtotime($to)) ? date('Y-m-d', strtotime($to)) : date('Y-m-d');
+    $fromD = ($from !== '' && strtotime($from)) ? date('Y-m-d', strtotime($from)) : null;
+
+    $tx = [];   // ['date','type','ref','amount'] — amount signed (+charge, −credit)
+    $add = static function (string $type, array $rows, int $sign) use (&$tx) {
+        foreach ($rows as $r) {
+            $tx[] = ['date' => (string) $r['d'], 'type' => $type, 'ref' => (string) $r['ref'],
+                     'amount' => $sign * round((float) $r['amt'], 2)];
+        }
+    };
+    if (ar_table_ready($pdo, 'factory_ar_invoices')) {
+        $s = $pdo->prepare("SELECT inv_number ref, COALESCE(issue_date, DATE(created_at)) d, total amt
+                              FROM factory_ar_invoices
+                             WHERE factory_client_id = ? AND account_client_id = ? AND status <> 'void'");
+        $s->execute([$factory, $accountId]);
+        $add('Invoice', $s->fetchAll(PDO::FETCH_ASSOC), 1);
+    }
+    if (ar_table_ready($pdo, 'factory_ar_credit_notes')) {
+        $s = $pdo->prepare("SELECT cn_number ref, COALESCE(issue_date, DATE(created_at)) d, total amt
+                              FROM factory_ar_credit_notes
+                             WHERE factory_client_id = ? AND account_client_id = ? AND status <> 'void'");
+        $s->execute([$factory, $accountId]);
+        $add('Credit note', $s->fetchAll(PDO::FETCH_ASSOC), -1);
+    }
+    if (ar_table_ready($pdo, 'factory_ar_payments')) {
+        $s = $pdo->prepare("SELECT pay_number ref, payment_date d, amount amt
+                              FROM factory_ar_payments
+                             WHERE factory_client_id = ? AND account_client_id = ? AND voided_at IS NULL");
+        $s->execute([$factory, $accountId]);
+        $add('Payment', $s->fetchAll(PDO::FETCH_ASSOC), -1);
+    }
+
+    // Date ascending; within a day, charges (positive) before credits (negative).
+    usort($tx, static function ($a, $b) {
+        $c = strcmp((string) $a['date'], (string) $b['date']);
+        return $c !== 0 ? $c : ($b['amount'] <=> $a['amount']);
+    });
+
+    $opening = 0.0;
+    foreach ($tx as $t) {
+        if ($fromD !== null && (string) $t['date'] < $fromD) $opening = round($opening + $t['amount'], 2);
+    }
+
+    $rows = []; $running = $opening;
+    foreach ($tx as $t) {
+        $d = (string) $t['date'];
+        if ($fromD !== null && $d < $fromD) continue;   // folded into opening
+        if ($d > $to) continue;                          // outside the period
+        $running = round($running + $t['amount'], 2);
+        $rows[] = [
+            'date'    => $d,
+            'type'    => $t['type'],
+            'ref'     => $t['ref'],
+            'charge'  => $t['amount'] > 0 ? $t['amount'] : 0.0,
+            'credit'  => $t['amount'] < 0 ? -$t['amount'] : 0.0,
+            'balance' => $running,
+        ];
+    }
+
+    return ['from' => $fromD, 'to' => $to, 'opening' => round($opening, 2),
+            'rows' => $rows, 'closing' => round($running, 2)];
 }
