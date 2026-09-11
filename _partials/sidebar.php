@@ -155,11 +155,12 @@ $navSections = [
             'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
             'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
             'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
-            // Labelled "Payments" (not "Accounts") so first-time users
-            // don't mistake it for login/staff-account management — they'd
-            // click here first to create employee logins (Tyler). The nav
-            // key + route stay 'accounts' to avoid churn.
-            'accounts'      => ['/accounts/index.php',         'Payments',      $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+            // Labelled "Customer payments" (not "Accounts") so first-time
+            // users don't mistake it for login/staff-account management, AND
+            // so it's unmistakably the tenant's OWN customers' payments — not
+            // the wholesale/trade-account A/R that now lives in its own
+            // section below. The nav key + route stay 'accounts' to avoid churn.
+            'accounts'      => ['/accounts/index.php',         'Customer payments', $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
             // The production back-office — its own app, but a link here so it's
             // reachable without typing the URL. Only shown to those who can enter.
             'factory'       => ['/factory/incoming-orders.php', 'Factory',      $canSeeFactory],
@@ -177,17 +178,32 @@ $navSections = [
         ],
     ],
     [
-        // Super-admin only. Collapsed by default — six entries that
-        // only one user sees, no need to clutter the sidebar with
-        // them all expanded.
+        // Wholesale / trade-accounts workspace (super-admin only). Grouped
+        // together and ordered by the trade lifecycle: pick the account →
+        // its orders/invoices/credit notes → commission earned on them.
+        // Kept EXPANDED (not collapsible) — it's a primary daily workspace
+        // for the factory owner, not a rarely-touched config block.
+        //
+        // Payments & balance and Statements are reached one-click PER ACCOUNT
+        // from the Trade accounts list (the list is the picker), so they're
+        // deliberately not separate menu items here.
+        'name'  => 'Wholesale',
+        'items' => [
+            'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts',    $isSuperAdmin],
+            'wholesale'      => ['/master-admin/wholesale.php',      'Orders & invoices', $isSuperAdmin],
+            'commissions'    => ['/master-admin/commissions.php',    'Commissions',       $isSuperAdmin],
+        ],
+    ],
+    [
+        // Super-admin only. Collapsed by default — platform / catalogue ops
+        // that only one user sees, no need to clutter the sidebar with them
+        // all expanded. (Trade accounts, Wholesale & Commissions moved out
+        // to the dedicated "Wholesale" section above.)
         'name'        => 'Master admin',
         'collapsible' => true,
         'items'       => [
             'master-admin'  => ['/master-admin/index.php',          'Overview',         $isSuperAdmin],
-            'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade Accounts',  $isSuperAdmin],
             'promotions'    => ['/master-admin/promotions.php',     'Promotions',       $isSuperAdmin],
-            'wholesale'     => ['/master-admin/wholesale.php',      'Wholesale',        $isSuperAdmin],
-            'commissions'   => ['/master-admin/commissions.php',    'Commissions',      $isSuperAdmin],
             'factories'     => ['/master-admin/factories.php',      'Factories',        $isSuperAdmin],
             'client-emails' => ['/master-admin/client-emails.php',  'Client emails',    $isSuperAdmin],
             'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],
