@@ -63,6 +63,9 @@ if (isset($_POST['del_order'])) {
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')->execute([$qid]);
         $pdo->prepare('DELETE FROM quote_items WHERE quote_id = ?')->execute([$qid]);
+        // Remove the order's calendar appointments (e.g. the pending fitting) so
+        // deleting the order doesn't leave phantom fittings on the account's calendar.
+        $pdo->prepare('DELETE FROM appointments WHERE quote_id = ?')->execute([$qid]);
         $pdo->prepare('DELETE FROM quotes WHERE id = ?')->execute([$qid]);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete order: ' . $e->getMessage()); }
