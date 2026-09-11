@@ -341,8 +341,36 @@ if ($canSeeProfit) {
     $args = array_merge([$clientId], $wonStatuses, $mgDateParams, $mgUserParams);
     $st->execute($args);
     $row = $st->fetch() ?: null;
+
+    // Agreed-price override: a quote with price_override set has a reduced net
+    // total (quotes.subtotal) that the per-line sell prices above do NOT reflect,
+    // so sell_total overstates revenue and margin. Subtract the override discount —
+    // the gap between each overridden quote's line-sell sum and its stored
+    // (post-override) subtotal — so the margin reflects the price actually agreed.
+    // (A negative "discount" = an agreed price ABOVE list, which correctly lifts it.)
+    $overrideDisc = 0.0;
+    try {
+        $od = $pdo->prepare(
+            "SELECT COALESCE(SUM(t.line_sell - t.subtotal), 0) AS d
+               FROM (
+                    SELECT q.subtotal AS subtotal,
+                           COALESCE(SUM(qi.sell_price * qi.quantity), 0) AS line_sell
+                      FROM quotes q
+                      JOIN quote_items qi ON qi.quote_id = q.id
+                     WHERE q.client_id = ?
+                       AND q.status IN ($inWon)
+                       AND q.price_override IS NOT NULL
+                       $mgDate
+                       $mgUser
+                  GROUP BY q.id, q.subtotal
+               ) t"
+        );
+        $od->execute($args);
+        $overrideDisc = (float) $od->fetchColumn();
+    } catch (Throwable $e) { /* price_override column absent (pre-migration) → no adjustment */ }
+
     if ($row) {
-        $sell = (float) $row['sell_total'];
+        $sell = (float) $row['sell_total'] - $overrideDisc;
         $cost = (float) $row['cost_basis'];
         $marginData = [
             'margin'         => max(0.0, $sell - $cost),
