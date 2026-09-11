@@ -1581,7 +1581,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <h2 class="section-title">Deposit</h2>
             </div>
 
-            <?php if ($depositPaidAt): ?>
+            <?php // A zero deposit isn't a payment — don't show it as "paid £0.00". ?>
+            <?php if ($depositPaidAt && (float) $depositAmount > 0.004): ?>
                 <p style="background:#d1fae5;color:#065f46;
                           padding:0.5rem 0.75rem;border-radius:8px;
                           margin:0 0 0.75rem;font-size:0.9375rem;font-weight:600">

@@ -91,11 +91,14 @@ if ($action === 'save_amount') {
 // suggestion in the UI) and it's logged as received.
 if ($action === 'record_paid') {
     $raw = trim((string) ($_POST['deposit_amount'] ?? ''));
-    if (!is_numeric($raw) || (float) $raw < 0) {
+    // A deposit "paid" must be an actual amount — a £0 deposit isn't a payment and
+    // must never stamp deposit_paid_at (that's what showed "Deposit paid £0.00" and
+    // helped a job look paid with no money). If there's no deposit, don't record one.
+    if (!is_numeric($raw) || (float) $raw <= 0) {
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
             'error',
-            'Deposit must be a non-negative number.'
+            'Enter the deposit amount the customer paid (more than £0).'
         );
     }
     $amt = round((float) $raw, 2);
@@ -127,6 +130,13 @@ if ($action === 'mark_paid') {
             '/quote-builder/edit.php?id=' . $quoteId,
             'success',
             'Deposit marked unpaid.'
+        );
+    } elseif ((float) ($quote['deposit_amount'] ?? 0) <= 0.004) {
+        // Nothing to mark paid — a £0 deposit isn't a payment.
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId,
+            'error',
+            'Set a deposit amount first — a £0 deposit can\'t be marked paid.'
         );
     } else {
         db()->prepare(
