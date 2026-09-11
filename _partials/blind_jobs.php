@@ -74,12 +74,17 @@ function bj_route_steps(PDO $pdo, int $productId): array
     static $cache = [];
     if (isset($cache[$productId])) return $cache[$productId];
     try {
+        // LEFT JOIN, not INNER: a route step built on the Routes page is saved
+        // with station_id = NULL (that page never assigns a station), and there is
+        // no stations-management UI to set one. An INNER JOIN dropped every such
+        // step, so ANY user-built route was invisible to the floor ("no route").
+        // The step's own label drives the floor; the station is optional metadata.
         $st = $pdo->prepare(
             "SELECT rs.id, rs.seq, rs.station_id, rs.label,
                     COALESCE(NULLIF(rs.stream, ''), 'main') AS stream,
-                    s.name AS station, s.is_outsourced
+                    s.name AS station, COALESCE(s.is_outsourced, 0) AS is_outsourced
                FROM product_route_steps rs
-               JOIN factory_stations s ON s.id = rs.station_id
+          LEFT JOIN factory_stations s ON s.id = rs.station_id
               WHERE rs.product_id = ? AND rs.active = 1
               ORDER BY rs.seq, rs.id"
         );
@@ -287,7 +292,8 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
             }
             foreach ($byStr as $stream => $list) {
                 $f = $list[0];
-                $insStream->execute([$jobId, (string) $stream, (int) $f['id'], (int) $f['station_id'], (int) $f['seq']]);
+                $stationId = $f['station_id'] !== null ? (int) $f['station_id'] : null;   // station-less steps are allowed
+                $insStream->execute([$jobId, (string) $stream, (int) $f['id'], $stationId, (int) $f['seq']]);
             }
         }
     }
