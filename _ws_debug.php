@@ -44,4 +44,15 @@ foreach ($li->fetchAll(PDO::FETCH_ASSOC) as $ln) {
     $numVars = ['Width' => (float) $ln['width_mm'], 'Drop' => (float) $ln['drop_mm'], 'Quantity' => (float) $ln['quantity']];
     $eval = build_evaluate($pdo, (int) $ln['master_pid'], $numVars, $optSel);
     echo "  build_evaluate vars: " . json_encode($eval['vars'] ?? []) . "\n\n";
+
+    // Worksheet template field sources for this product's master.
+    $t = $pdo->prepare('SELECT layout_json FROM worksheet_templates WHERE product_id = ? ORDER BY is_default DESC, id LIMIT 1');
+    $t->execute([(int) $ln['master_pid']]);
+    $tpl = json_decode((string) ($t->fetchColumn() ?: ''), true);
+    echo "  TEMPLATE one_per_line=" . var_export($tpl['one_per_line'] ?? null, true) . "\n";
+    echo "  HEADER fields: " . json_encode(array_map(static fn($f)=>[$f['source']??'',$f['caption']??''], $tpl['header'] ?? [])) . "\n";
+    foreach (($tpl['labels'] ?? []) as $li => $lab) {
+        echo "  LABEL[$li] '" . ($lab['title'] ?? '') . "': "
+           . json_encode(array_map(static fn($f)=>[$f['source']??'',$f['caption']??''], $lab['fields'] ?? [])) . "\n";
+    }
 }
