@@ -83,13 +83,60 @@ if ($action === 'clean') {
     exit;
 }
 
+/* ── INVOICE + AGE (invoice the existing dummies, spread invoice dates) ──── */
+if ($action === 'invoice_aging') {
+    // Spread issue dates so the aged-debtor buckets all light up (due = issue+30).
+    $offsets = [5, 45, 75, 105, 140, 12, 55, 85, 120, 200];   // days ago
+    $ids = $pdo->prepare('SELECT id, company_name FROM clients WHERE company_name LIKE ? ORDER BY company_name');
+    $ids->execute([$NAME_PREFIX . '%']);
+    $accs = $ids->fetchAll(PDO::FETCH_ASSOC);
+    if (!$accs) { echo "No dummy accounts — run ?action=seed first.\n"; exit; }
+
+    $i = 0; $done = [];
+    foreach ($accs as $a) {
+        $accId = (int) $a['id'];
+        $q = $pdo->prepare(
+            "SELECT id, quote_number FROM quotes
+              WHERE account_client_id = ? AND status IN ('ordered','fitted','invoiced','paid')
+              ORDER BY id LIMIT 1"
+        );
+        $q->execute([$accId]);
+        $order = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$order) { $i++; continue; }
+        $qid = (int) $order['id'];
+
+        try {
+            $invNum = ar_order_invoice_number($pdo, $qid);
+            if ($invNum === '') {
+                $inv    = ar_create_invoice($pdo, $factory, $qid, $accId, $userId, true);
+                $invNum = $inv['number'];
+            }
+            // Backdate the invoice so it falls into a chosen age bucket.
+            $off  = $offsets[$i % count($offsets)];
+            $iss  = date('Y-m-d', strtotime("-{$off} days"));
+            $due  = date('Y-m-d', strtotime("-{$off} days +30 days"));
+            $pdo->prepare("UPDATE factory_ar_invoices SET issue_date = ?, due_date = ?
+                            WHERE factory_client_id = ? AND account_client_id = ? AND inv_number = ?")
+                ->execute([$iss, $due, $factory, $accId, $invNum]);
+            $late = (int) floor((time() - strtotime($due)) / 86400);
+            $done[] = "  {$a['company_name']} → {$invNum}, issued {$iss} (" . ($late > 0 ? "{$late}d overdue" : 'current') . ")";
+        } catch (Throwable $e) {
+            $done[] = "  ! {$a['company_name']}: " . $e->getMessage();
+        }
+        $i++;
+    }
+    echo implode("\n", $done) . "\n\nInvoiced + aged " . count($done) . " dummy account(s). See /master-admin/statement-run.php\n";
+    exit;
+}
+
 /* ─────────────────────────── SEED ──────────────────────────────────────── */
 if ($action !== 'seed') {
     echo "Wholesale stress test.\n\n";
-    echo "  ?action=seed         create 10 dummy accounts + placed orders\n";
-    echo "  ?action=seed&docs=1  ...and raise a DN + invoice for each\n";
-    echo "  ?action=seed&n=5     ...choose how many accounts\n";
-    echo "  ?action=clean        remove everything this made\n";
+    echo "  ?action=seed            create 10 dummy accounts + placed orders\n";
+    echo "  ?action=seed&docs=1     ...and raise a DN + invoice for each\n";
+    echo "  ?action=seed&n=5        ...choose how many accounts\n";
+    echo "  ?action=invoice_aging   invoice the existing dummies + spread dates for aging\n";
+    echo "  ?action=clean           remove everything this made\n";
     exit;
 }
 
