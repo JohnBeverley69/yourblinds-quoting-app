@@ -29,20 +29,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['_action'] ?? '');
 
+    // Resolve an order's trade account the same way discovery does: the account's
+    // own quote (client_id = account) OR a Beverley "New order" quote tagged with
+    // account_client_id. Loading + the account passed to doc creation both use it.
+    $acctExpr = ar_account_expr($pdo, '');
+
     if ($action === 'dn_raise') {
         $qid = (int) ($_POST['quote_id'] ?? 0);
         try {
             if (!$dnReady) throw new RuntimeException('Run /migrate_ar_delivery_notes.php first.');
 
             $q = $pdo->prepare(
-                "SELECT id, quote_number, client_id FROM quotes
-                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND client_id <> ? LIMIT 1"
+                "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
+                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND {$acctExpr} <> ? LIMIT 1"
             );
             $q->execute([$qid, $factory]);
             $order = $q->fetch(PDO::FETCH_ASSOC);
             if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
 
-            $dn = ar_create_delivery_note($pdo, $factory, $qid, (int) $order['client_id'], (int) ($user['user_id'] ?? 0), false);
+            $dn = ar_create_delivery_note($pdo, $factory, $qid, (int) $order['account_id'], (int) ($user['user_id'] ?? 0), false);
             $_SESSION['flash_success'] = 'Delivery note ' . $dn['number'] . ' created (draft). View/print it below, then mark it dispatched.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -75,8 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
 
             $q = $pdo->prepare(
-                "SELECT id, quote_number, client_id FROM quotes
-                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND client_id <> ? LIMIT 1"
+                "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
+                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND {$acctExpr} <> ? LIMIT 1"
             );
             $q->execute([$qid, $factory]);
             $order = $q->fetch(PDO::FETCH_ASSOC);
@@ -87,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Order already invoiced on ' . $existingInv . ' (void it first to re-invoice).');
             }
 
-            $inv = ar_create_invoice($pdo, $factory, $qid, (int) $order['client_id'], (int) ($user['user_id'] ?? 0), false);
+            $inv = ar_create_invoice($pdo, $factory, $qid, (int) $order['account_id'], (int) ($user['user_id'] ?? 0), false);
             $_SESSION['flash_success'] = 'Invoice ' . $inv['number'] . ' raised (£' . number_format($inv['total'], 2) . '). View/send it below.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -107,13 +112,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
 
             $q = $pdo->prepare(
-                "SELECT id, quote_number, client_id FROM quotes
-                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND client_id <> ? LIMIT 1"
+                "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
+                  WHERE id = ? AND status IN ('ordered','fitted','invoiced','paid') AND {$acctExpr} <> ? LIMIT 1"
             );
             $q->execute([$qid, $factory]);
             $order = $q->fetch(PDO::FETCH_ASSOC);
             if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
-            $accId = (int) $order['client_id'];
+            $accId = (int) $order['account_id'];
 
             $pdo->beginTransaction();
 
