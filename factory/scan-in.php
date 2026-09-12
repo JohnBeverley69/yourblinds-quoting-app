@@ -131,4 +131,15 @@ try {
 $result = $res['ok'] ? (!empty($res['already']) ? 'already' : 'ok') : 'not_found';
 $log($result, $res['detail'] ?? null, $code, $parsed, $source);
 
+// Opportunistic retention: occasionally drop scans older than the configured
+// window so the log can't grow without bound. Rare (≈2% of scans) and indexed
+// (idx_scan_time), so it costs a scan almost nothing. 0/absent = keep forever.
+// Never let housekeeping break or slow a scan — the reply is already decided.
+try {
+    $retain = (int) fx_kv_get($pdo, 'scan_log_retention_days', '0');
+    if ($retain > 0 && random_int(1, 50) === 1) {
+        $pdo->prepare('DELETE FROM factory_scan_log WHERE created_at < (NOW() - INTERVAL ? DAY)')->execute([$retain]);
+    }
+} catch (Throwable $e) { /* housekeeping must never affect a scan */ }
+
 $reply($res['ok'] ? 200 : 404, ($res['ok'] ? 'OK ' : 'ERR ') . $res['title'] . ' — ' . $res['detail']);
