@@ -305,6 +305,139 @@ function ar_render_statement(array $ctx, array $data): ?string
     return ar_pdf_bytes($html);
 }
 
+/* ── Open-item statement (BM style) + combined run ──────────────────────── */
+
+/** Shared <style> inner CSS for the open-item statement (single + combined). */
+function ar_statement_bm_styles(): string
+{
+    return 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
+        . '.stmt-page{padding:0 0 4px}'
+        . '.top{width:100%;margin-bottom:10px}.top td{vertical-align:top;padding:0}'
+        . '.title{font-size:22px;font-weight:bold;color:#111827;margin:0 0 2px;text-align:right}'
+        . '.meta{font-size:11px;color:#374151;text-align:right;line-height:1.6}'
+        . '.cols{width:100%;margin:8px 0 12px}.cols td{vertical-align:top;padding:0}'
+        . '.box-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:2px}'
+        . '.box{font-size:11px;line-height:1.4}'
+        . 'table.items{width:100%;border-collapse:collapse;margin-top:4px}'
+        . 'table.items th{background:#1f3b5b;color:#fff;font-size:9.5px;text-align:left;padding:6px 7px}'
+        . 'table.items td{border-bottom:1px solid #e5e7eb;padding:5px 7px;font-size:10.5px;vertical-align:top}'
+        . 'table.items td.rt,table.items th.rt{text-align:right}'
+        . 'table.items tr.tot td{font-weight:bold;border-top:2px solid #1f3b5b;border-bottom:none;background:#f3f6fa}'
+        . 'table.age{width:100%;border-collapse:collapse;margin-top:14px}'
+        . 'table.age th{background:#e8edf3;color:#1f3b5b;font-size:9px;text-transform:uppercase;letter-spacing:.4px;text-align:right;padding:5px 7px;border:1px solid #cdd7e3}'
+        . 'table.age th.first{text-align:left}'
+        . 'table.age td{text-align:right;padding:6px 7px;font-size:11px;border:1px solid #cdd7e3;font-weight:bold}'
+        . 'table.age td.first{text-align:left;font-weight:normal;color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:.4px}'
+        . 'table.age td.od{color:#b91c1c}'
+        . '.foot{margin-top:16px;font-size:10px;color:#374151;line-height:1.5}';
+}
+
+/**
+ * Build ONE account's open-item statement as an inner-body fragment (no <html>).
+ * $ctx: factory, account_name, acc_ref, bill_to, statement_date, to.
+ * $data: invoices[{issue_date,due_date,inv_number,order_ref,customer_ref,total,paid,outstanding}],
+ *        total_outstanding, aging{current,d30,d60,d90,d90plus,total}.
+ * $break = start on a new page (for the stacked combined run).
+ */
+function ar_statement_bm_body(array $ctx, array $data, bool $break = false): string
+{
+    $e     = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $nl2   = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
+    $money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
+    $fmtD  = static function ($d) { $t = $d ? strtotime((string) $d) : false; return $t ? date('j M Y', $t) : ''; };
+
+    $inv = $data['invoices'] ?? [];
+    $rows = '';
+    if (!$inv) {
+        $rows = '<tr><td colspan="7" style="color:#6b7280;font-style:italic">No outstanding invoices.</td></tr>';
+    } else {
+        foreach ($inv as $r) {
+            $rows .= '<tr>'
+                . '<td>' . $e($fmtD($r['issue_date'] ?? '')) . '</td>'
+                . '<td>' . $e($r['inv_number'] ?? '') . '</td>'
+                . '<td>' . $e($r['order_ref'] ?? '') . '</td>'
+                . '<td>' . $e($r['customer_ref'] ?? '') . '</td>'
+                . '<td class="rt">' . $money($r['total'] ?? 0) . '</td>'
+                . '<td class="rt">' . $money($r['paid'] ?? 0) . '</td>'
+                . '<td class="rt">' . $money($r['outstanding'] ?? 0) . '</td>'
+                . '</tr>';
+        }
+    }
+    $rows .= '<tr class="tot"><td colspan="6" class="rt">Total outstanding</td>'
+           . '<td class="rt">' . $money($data['total_outstanding'] ?? 0) . '</td></tr>';
+
+    $a = $data['aging'] ?? [];
+    $ageCell = static function ($v) use ($money) {
+        $od = (float) $v > 0.004;
+        return '<td class="' . ($od ? 'od' : '') . '">' . ($od ? $money($v) : '&mdash;') . '</td>';
+    };
+
+    $style = $break ? ' style="page-break-before:always"' : '';
+    return '<div class="stmt-page"' . $style . '>'
+        . '<table class="top"><tr>'
+        . '<td style="width:55%">' . ar_letterhead_html($ctx['factory'] ?? []) . '</td>'
+        . '<td style="width:45%"><div class="title">STATEMENT</div><div class="meta">'
+        . 'As at: ' . $e($fmtD($ctx['statement_date'] ?? date('Y-m-d')))
+        . '</div></td></tr></table>'
+        . '<table class="cols"><tr>'
+        . '<td style="width:60%"><div class="box-label">To</div><div class="box">'
+        . ((string) ($ctx['bill_to'] ?? '') !== '' ? $nl2($ctx['bill_to']) : '<span class="box-label">— no address —</span>')
+        . '</div></td>'
+        . '<td style="width:40%;text-align:right"><div class="box-label">Account ref</div>'
+        . '<div class="box">' . $e($ctx['acc_ref'] ?? '') . '</div></td>'
+        . '</tr></table>'
+        . '<table class="items"><thead><tr>'
+        . '<th>Invoice Date</th><th>Invoice No</th><th>Order Ref</th><th>Your Reference</th>'
+        . '<th class="rt">Amount</th><th class="rt">Paid</th><th class="rt">Outstanding</th>'
+        . '</tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<table class="age"><thead><tr>'
+        . '<th class="first">Aged (days overdue)</th><th>Current</th><th>1&ndash;30</th><th>31&ndash;60</th><th>61&ndash;90</th><th>90+</th><th>Total</th>'
+        . '</tr></thead><tbody><tr>'
+        . '<td class="first">Outstanding</td>'
+        . $ageCell($a['current'] ?? 0)
+        . $ageCell($a['d30'] ?? 0)
+        . $ageCell($a['d60'] ?? 0)
+        . $ageCell($a['d90'] ?? 0)
+        . $ageCell($a['d90plus'] ?? 0)
+        . '<td>' . $money($a['total'] ?? 0) . '</td>'
+        . '</tr></tbody></table>'
+        . '<div class="foot">'
+        . ((string) ($ctx['notes'] ?? '') !== '' ? $e($ctx['notes']) . '<br>' : '')
+        . (trim((string) ($ctx['bank'] ?? '')) !== '' ? '<strong>Payment</strong><br>' . $nl2($ctx['bank']) : '')
+        . '</div>'
+        . '</div>';
+}
+
+/** One account's open-item statement as a complete PDF. */
+function ar_render_statement_bm(array $ctx, array $data): ?string
+{
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . ar_statement_bm_styles() . '</style></head><body>'
+        . ar_statement_bm_body($ctx, $data, false)
+        . '</body></html>';
+    return ar_pdf_bytes($html);
+}
+
+/**
+ * Every account's statement stacked into ONE PDF (the run), one per page.
+ * $statements = [['ctx'=>[...], 'data'=>[...]], …] (from ar_statement_bundle()).
+ */
+function ar_render_statements_bm_combined(array $statements): ?string
+{
+    $body = '';
+    $first = true;
+    foreach ($statements as $s) {
+        $body .= ar_statement_bm_body($s['ctx'] ?? [], $s['data'] ?? [], !$first);
+        $first = false;
+    }
+    if ($body === '') $body = '<div class="stmt-page" style="padding:20px;color:#6b7280">No accounts with an outstanding balance.</div>';
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+        . ar_statement_bm_styles() . '</style></head><body>'
+        . $body
+        . '</body></html>';
+    return ar_pdf_bytes($html);
+}
+
 /**
  * Render a COMMISSION STATEMENT for a sales consultant (internal). Beverley
  * letterhead + a table of (account, product, invoiced turnover, rate, commission)

@@ -759,6 +759,202 @@ function ar_statement(PDO $pdo, int $factory, int $accountId, string $from = '',
             'rows' => $rows, 'closing' => round($running, 2)];
 }
 
+/* ── Statement run (open-item statements + aged debtors) ─────────────────── */
+
+/**
+ * OPEN-ITEM view of an account's unpaid invoices as at a date — the BM statement
+ * table. One row per non-void invoice with issue_date <= $asAt that STILL has an
+ * amount outstanding (paid/credited AS AT that date, so a past-dated run is
+ * historically correct). Columns mirror BM: date, invoice no, order ref, the
+ * account's own customer reference, amount, paid, outstanding.
+ *   Returns ['rows'=>[{issue_date,due_date,inv_number,order_ref,customer_ref,total,paid,outstanding}],
+ *            'total_outstanding'=>float].
+ */
+function ar_statement_invoices(PDO $pdo, int $factory, int $accountId, string $asAt = ''): array
+{
+    $res = ['rows' => [], 'total_outstanding' => 0.0];
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return $res;
+    $toD = ($asAt !== '' && strtotime($asAt)) ? date('Y-m-d', strtotime($asAt)) : date('Y-m-d');
+
+    $hasPay = ar_payments_ready($pdo);
+    $hasCN  = ar_table_ready($pdo, 'factory_ar_credit_notes');
+    // customer_reference may not exist pre-migrate_order_references — probe once.
+    $hasCustRef = false;
+    try { $pdo->query('SELECT customer_reference FROM quotes LIMIT 0'); $hasCustRef = true; }
+    catch (Throwable $e) { $hasCustRef = false; }
+
+    // Paid/credited AS AT $asAt (bounded by payment/credit date) so a back-dated
+    // statement doesn't count money that arrived later.
+    $paidSub = $hasPay
+        ? "COALESCE((SELECT SUM(a.amount) FROM factory_ar_payment_allocations a
+                       JOIN factory_ar_payments p ON p.id = a.payment_id
+                      WHERE a.invoice_id = i.id AND p.voided_at IS NULL AND p.payment_date <= ?),0)"
+        : '0';
+    $credSub = $hasCN
+        ? "COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
+                      WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'
+                        AND COALESCE(cn.issue_date, DATE(cn.created_at)) <= ?),0)"
+        : '0';
+    $refSub  = "(SELECT q.quote_number FROM factory_ar_invoice_orders io
+                   JOIN quotes q ON q.id = io.quote_id WHERE io.invoice_id = i.id ORDER BY io.id LIMIT 1)";
+    $custSub = $hasCustRef
+        ? "(SELECT q.customer_reference FROM factory_ar_invoice_orders io
+              JOIN quotes q ON q.id = io.quote_id WHERE io.invoice_id = i.id ORDER BY io.id LIMIT 1)"
+        : 'NULL';
+
+    // Placeholder order follows SQL text: SELECT subqueries first (paid, cred),
+    // then the WHERE (factory, account, asAt).
+    $params = [];
+    if ($hasPay) $params[] = $toD;
+    if ($hasCN)  $params[] = $toD;
+    $params[] = $factory; $params[] = $accountId; $params[] = $toD;
+
+    $sql = "SELECT i.id, i.inv_number, i.issue_date, i.due_date, i.total,
+                   $paidSub AS paid, $credSub AS credited,
+                   $refSub AS order_ref, $custSub AS customer_ref
+              FROM factory_ar_invoices i
+             WHERE i.factory_client_id = ? AND i.account_client_id = ? AND i.status <> 'void'
+               AND COALESCE(i.issue_date, DATE(i.created_at)) <= ?
+             ORDER BY (i.issue_date IS NULL), i.issue_date, i.id";
+    try {
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+    } catch (Throwable $e) {
+        return $res;
+    }
+
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $total = round((float) $r['total'], 2);
+        $settled = round((float) $r['paid'] + (float) $r['credited'], 2);   // BM "Paid" = payments + credits
+        $out     = round($total - $settled, 2);
+        if ($out <= 0.004) continue;                                         // open-item: only what's owed
+        $res['rows'][] = [
+            'issue_date'   => (string) ($r['issue_date'] ?? ''),
+            'due_date'     => (string) ($r['due_date'] ?? ''),
+            'inv_number'   => (string) $r['inv_number'],
+            'order_ref'    => (string) ($r['order_ref'] ?? ''),
+            'customer_ref' => (string) ($r['customer_ref'] ?? ''),
+            'total'        => $total,
+            'paid'         => $settled,
+            'outstanding'  => $out,
+        ];
+        $res['total_outstanding'] = round($res['total_outstanding'] + $out, 2);
+    }
+    return $res;
+}
+
+/**
+ * Aged-debtor buckets for an account as at a date — DAYS OVERDUE against each open
+ * invoice's due date (Current = not yet due). Buckets: current, 1-30, 31-60, 61-90,
+ * 90+. Same open-item set as ar_statement_invoices(), so the statement and the
+ * debtors report always reconcile. A missing due_date falls back to issue_date+30.
+ *   Returns ['current','d30','d60','d90','d90plus','total'].
+ */
+function ar_aging(PDO $pdo, int $factory, int $accountId, string $asAt = ''): array
+{
+    $z = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0, 'd90plus' => 0.0, 'total' => 0.0];
+    $asD  = ($asAt !== '' && strtotime($asAt)) ? date('Y-m-d', strtotime($asAt)) : date('Y-m-d');
+    $asTs = strtotime($asD . ' 23:59:59');
+    foreach (ar_statement_invoices($pdo, $factory, $accountId, $asD)['rows'] as $r) {
+        if ((string) $r['due_date'] !== '' && strtotime((string) $r['due_date'])) {
+            $dueTs = strtotime((string) $r['due_date']);
+        } elseif ((string) $r['issue_date'] !== '' && strtotime((string) $r['issue_date'])) {
+            $dueTs = strtotime((string) $r['issue_date'] . ' +30 days');
+        } else {
+            $dueTs = $asTs;                                   // undateable → treat as current
+        }
+        $late = (int) floor(($asTs - $dueTs) / 86400);
+        $amt  = (float) $r['outstanding'];
+        if     ($late <= 0)  $z['current'] += $amt;
+        elseif ($late <= 30) $z['d30']     += $amt;
+        elseif ($late <= 60) $z['d60']     += $amt;
+        elseif ($late <= 90) $z['d90']     += $amt;
+        else                 $z['d90plus'] += $amt;
+    }
+    foreach (['current','d30','d60','d90','d90plus'] as $k) $z[$k] = round($z[$k], 2);
+    $z['total'] = round($z['current'] + $z['d30'] + $z['d60'] + $z['d90'] + $z['d90plus'], 2);
+    return $z;
+}
+
+/**
+ * Every trade account that has an outstanding balance as at a date, biggest debtor
+ * first — drives the statement run (who gets a statement) and the aged-debtors
+ * report. Accounts with nothing owed are dropped.
+ *   Returns [{account_id, name, email, aging}] where aging is ar_aging()'s shape.
+ */
+function ar_statement_accounts(PDO $pdo, int $factory, string $asAt = ''): array
+{
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return [];
+    $st = $pdo->prepare(
+        "SELECT DISTINCT account_client_id FROM factory_ar_invoices
+          WHERE factory_client_id = ? AND status <> 'void' AND account_client_id <> ?"
+    );
+    $st->execute([$factory, $factory]);
+    $ids = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+
+    $out = [];
+    $nm  = $pdo->prepare('SELECT company_name, email FROM clients WHERE id = ? LIMIT 1');
+    foreach ($ids as $accId) {
+        $aging = ar_aging($pdo, $factory, $accId, $asAt);
+        if ($aging['total'] <= 0.004) continue;
+        $nm->execute([$accId]);
+        $c = $nm->fetch(PDO::FETCH_ASSOC) ?: [];
+        $out[] = [
+            'account_id' => $accId,
+            'name'       => (string) ($c['company_name'] ?? ('Account ' . $accId)),
+            'email'      => (string) ($c['email'] ?? ''),
+            'aging'      => $aging,
+        ];
+    }
+    usort($out, static fn ($a, $b) => $b['aging']['total'] <=> $a['aging']['total']);
+    return $out;
+}
+
+/**
+ * Assemble the render context + data for ONE account's open-item statement, so the
+ * single PDF, the combined run PDF and the screen all build it identically.
+ *   Returns ['ctx'=>[...], 'data'=>['invoices'=>[...],'total_outstanding'=>,'aging'=>[...]]]
+ *   or null if the account isn't a valid trade account.
+ */
+function ar_statement_bundle(PDO $pdo, int $factory, int $accountId, string $asAt = ''): ?array
+{
+    if ($accountId <= 0 || $accountId === $factory) return null;
+    $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
+    $ac->execute([$accountId]);
+    $acc = $ac->fetch(PDO::FETCH_ASSOC);
+    if (!$acc) return null;
+
+    $fac = [];
+    try {
+        $fs = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
+        $fs->execute([$factory]);
+        $fac = $fs->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) { /* letterhead degrades */ }
+
+    $billTo = ar_account_address_block($acc);
+    if (($acc['vat_number'] ?? '') !== '') $billTo .= "\nVAT No. " . $acc['vat_number'];
+
+    $inv   = ar_statement_invoices($pdo, $factory, $accountId, $asAt);
+    $aging = ar_aging($pdo, $factory, $accountId, $asAt);
+    $toD   = ($asAt !== '' && strtotime($asAt)) ? date('Y-m-d', strtotime($asAt)) : date('Y-m-d');
+
+    return [
+        'ctx' => [
+            'factory'        => $fac,
+            'account_name'   => (string) ($acc['company_name'] ?? ''),
+            'acc_ref'        => (string) ($acc['company_name'] ?? ('A' . $accountId)),   // Stage 1: name as ref
+            'bill_to'        => $billTo,
+            'statement_date' => $toD,
+            'to'             => $toD,
+        ],
+        'data' => [
+            'invoices'          => $inv['rows'],
+            'total_outstanding' => $inv['total_outstanding'],
+            'aging'             => $aging,
+        ],
+    ];
+}
+
 /**
  * Commission statement for a consultant over a period (2E). For each of the
  * consultant's active trade_commissions rows, turnover = the account's INVOICED
