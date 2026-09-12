@@ -74,17 +74,15 @@ function bj_route_steps(PDO $pdo, int $productId): array
     static $cache = [];
     if (isset($cache[$productId])) return $cache[$productId];
     try {
-        // LEFT JOIN, not INNER: a route step built on the Routes page is saved
-        // with station_id = NULL (that page never assigns a station), and there is
-        // no stations-management UI to set one. An INNER JOIN dropped every such
-        // step, so ANY user-built route was invisible to the floor ("no route").
-        // The step's own label drives the floor; the station is optional metadata.
+        // A stage is just: stream + label, in order. There is no "station" —
+        // the old factory_stations table was retired; the step's own label
+        // drives the floor. (station_id is kept on the row as inert legacy
+        // metadata, always NULL, so the scan-progression writes below are
+        // untouched.)
         $st = $pdo->prepare(
             "SELECT rs.id, rs.seq, rs.station_id, rs.label,
-                    COALESCE(NULLIF(rs.stream, ''), 'main') AS stream,
-                    s.name AS station, COALESCE(s.is_outsourced, 0) AS is_outsourced
+                    COALESCE(NULLIF(rs.stream, ''), 'main') AS stream
                FROM product_route_steps rs
-          LEFT JOIN factory_stations s ON s.id = rs.station_id
               WHERE rs.product_id = ? AND rs.active = 1
               ORDER BY rs.seq, rs.id"
         );
@@ -205,14 +203,13 @@ function bj_complete_by_code(PDO $pdo, int $itemId, int $unitNo, int $streamDigi
     return ['ok' => true, 'title' => $ref, 'detail' => $detail];
 }
 
-/** A route step's display label (its own label, else the station name), or ''. */
+/** A route step's display label (its own label), or ''. */
 function bj_step_label(array $list, ?int $stepId): string
 {
     if ($stepId === null) return '';
     foreach ($list as $s) {
         if ((int) $s['id'] === $stepId) {
-            $l = trim((string) ($s['label'] ?? ''));
-            return $l !== '' ? $l : trim((string) ($s['station'] ?? ''));
+            return trim((string) ($s['label'] ?? ''));
         }
     }
     return '';

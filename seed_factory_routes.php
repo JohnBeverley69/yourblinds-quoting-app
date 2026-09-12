@@ -2,13 +2,18 @@
 declare(strict_types=1);
 
 /**
- * Seed: initial production stations + the three confirmed routes (roller,
- * vertical, pleated). Everything is editable afterwards on the factory Routes
- * screen — this just populates day one. Idempotent (upsert by name; routes
- * rebuilt for the three seeded products only, others left untouched).
+ * Seed: the three confirmed routes (roller, vertical, pleated). Everything is
+ * editable afterwards on the factory Routes screen — this just populates day
+ * one. Idempotent (routes rebuilt for the three seeded products only, others
+ * left untouched).
  *
  * Run via web: /seed_factory_routes.php (super-admin). Needs the tables from
  * /migrate_factory_routes.php.
+ *
+ * NOTE: the old "stations" concept was retired — a stage is now just
+ * stream + label, in order. The station name in each tuple below is kept only
+ * as a human hint of which bench does the work; it is not stored (station_id
+ * is written NULL).
  */
 
 require_once __DIR__ . '/bootstrap.php';
@@ -19,39 +24,8 @@ $pdo = db();
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $MASTER = function_exists('factory_client_id') ? factory_client_id() : 3;
 
-// ---- Stations (upsert by name) --------------------------------------------
-$stations = [
-    ['Safety Saw',          0],
-    ['Pleated Cutter',      0],
-    ['Pleated Bench',       0],
-    ['Roller Fabric Table', 0],
-    ['Bottom Bar Bench',    0],
-    ['Headrail Bench',      0],
-    ['VB1 Machine',         0],
-    ['Sew / Weld',          0],
-    ['Weighting & Linking', 0],
-    ['Outsourced',          1],   // is_outsourced
-];
-$findStation = $pdo->prepare('SELECT id FROM factory_stations WHERE client_id = ? AND name = ? LIMIT 1');
-$insStation  = $pdo->prepare('INSERT INTO factory_stations (client_id, name, sort_order, is_outsourced, active) VALUES (?, ?, ?, ?, 1)');
-$stationId = [];
-$seq = 0;
-foreach ($stations as [$name, $outsourced]) {
-    $findStation->execute([$MASTER, $name]);
-    $id = (int) $findStation->fetchColumn();
-    if ($id === 0) {
-        $insStation->execute([$MASTER, $name, $seq, $outsourced]);
-        $id = (int) $pdo->lastInsertId();
-        echo "  + station: {$name}\n";
-    } else {
-        echo "  = station exists: {$name}\n";
-    }
-    $stationId[$name] = $id;
-    $seq++;
-}
-
 // ---- Routes (rebuilt for the three seeded products) -----------------------
-// [station, label, stream]. Steps sharing a stream run in order; different
+// [bench hint, label, stream]. Steps sharing a stream run in order; different
 // streams run alongside each other and imply nothing about one another.
 // 'main' = a single line, which is roller and pleated: John confirmed the saw
 // work really does have to finish before the fabric table starts on those.
@@ -88,9 +62,11 @@ $delSteps    = $pdo->prepare('DELETE FROM product_route_steps WHERE product_id =
 $hasStream = true;
 try { $pdo->query('SELECT stream FROM product_route_steps LIMIT 0'); }
 catch (Throwable $e) { $hasStream = false; }
+// station_id is written NULL — the retired "stations" concept; a stage is
+// stream + label. The column is kept as inert legacy metadata.
 $insStep = $hasStream
-    ? $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, stream, active) VALUES (?, ?, ?, ?, ?, 1)')
-    : $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, ?, ?, 1)');
+    ? $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, stream, active) VALUES (?, ?, NULL, ?, ?, 1)')
+    : $pdo->prepare('INSERT INTO product_route_steps (product_id, seq, station_id, label, active) VALUES (?, ?, NULL, ?, 1)');
 if (!$hasStream) echo "  ! product_route_steps.stream is missing — run /migrate_route_streams.php to split the vertical.\n";
 
 foreach ($routes as $productName => $steps) {
@@ -100,15 +76,15 @@ foreach ($routes as $productName => $steps) {
     $delSteps->execute([$pid]);
     $s = 0;
     $streams = [];
-    foreach ($steps as [$stationName, $label, $stream]) {
+    foreach ($steps as [$benchHint, $label, $stream]) {
         $streams[$stream] = true;
         $hasStream
-            ? $insStep->execute([$pid, $s++, $stationId[$stationName], $label, $stream])
-            : $insStep->execute([$pid, $s++, $stationId[$stationName], $label]);
+            ? $insStep->execute([$pid, $s++, $label, $stream])
+            : $insStep->execute([$pid, $s++, $label]);
     }
     $note = ($hasStream && count($streams) > 1) ? ' in ' . count($streams) . ' parallel streams (' . implode(', ', array_keys($streams)) . ')' : '';
     echo "  route: {$productName} — " . count($steps) . " stages{$note}\n";
 }
 
-echo "\nDone — " . count($stationId) . " stations, " . count($routes) . " routes seeded.\n";
+echo "\nDone — " . count($routes) . " routes seeded.\n";
 echo "Edit anytime on the factory Routes screen. Other products have no route yet — assign them there.\n";
