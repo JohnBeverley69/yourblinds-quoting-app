@@ -191,6 +191,7 @@ $navSections = [
         'items' => [
             'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts',    $isSuperAdmin],
             'wholesale'      => ['/master-admin/wholesale.php',      'Orders & invoices', $isSuperAdmin],
+            'statement-run'  => ['/master-admin/statement-run.php',  'Statements',        $isSuperAdmin],
             'commissions'    => ['/master-admin/commissions.php',    'Commissions',       $isSuperAdmin],
         ],
     ],
