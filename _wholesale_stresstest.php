@@ -121,8 +121,9 @@ for ($i = 1; $i <= $n; $i++) {
     $ex->execute([$label]);
     if ($ex->fetchColumn()) { $already++; continue; }
 
-    $pdo->beginTransaction();
     try {
+        // (No outer transaction — no_create_account_quote() and
+        // qb_recompute_totals() manage their own; wrapping them would nest.)
         // 1) the dummy no-portal account
         $pdo->prepare(
             "INSERT INTO clients (company_name, contact_name, email, phone, address1, town, county, postcode, active)
@@ -172,7 +173,6 @@ for ($i = 1; $i <= $n; $i++) {
         //    which is irrelevant to the A/R flow under test)
         qb_recompute_totals($qid);
         $pdo->prepare("UPDATE quotes SET status = 'ordered' WHERE id = ?")->execute([$qid]);
-        $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         echo "  ! {$label}: FAILED — " . $e->getMessage() . "\n";
