@@ -14,10 +14,56 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/factory_kv.php';
 
 requireFactory();
 
 $pdo = db();
+
+// Maintenance (delete/auto-prune) is a super-admin action — a bench (factory-role)
+// login can watch the log but must not be able to wipe it.
+$isSuper = function_exists('is_super_admin') && is_super_admin();
+
+// Retention windows offered in the UI (days). Kept in one list so the POST
+// validation and the dropdowns can't drift apart.
+$RETAIN_OPTS = [30, 90, 180, 365];
+
+// Super-admin maintenance actions (POST + CSRF): delete by age, clear all, or set
+// the auto-prune window. Post/redirect/get so the 15s auto-refresh can't replay a
+// delete.
+if ($isSuper && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    $act = (string) ($_POST['_action'] ?? '');
+    try {
+        if ($act === 'prune_age') {
+            $days = (int) ($_POST['days'] ?? 0);
+            if (in_array($days, $RETAIN_OPTS, true)) {
+                $st = $pdo->prepare('DELETE FROM factory_scan_log WHERE created_at < (NOW() - INTERVAL ? DAY)');
+                $st->execute([$days]);
+                $_SESSION['flash_success'] = 'Deleted ' . $st->rowCount() . ' scan' . ($st->rowCount() === 1 ? '' : 's') . ' older than ' . $days . ' days.';
+            }
+        } elseif ($act === 'clear_all') {
+            $n = (int) $pdo->exec('DELETE FROM factory_scan_log');
+            $_SESSION['flash_success'] = 'Cleared the scan log (' . $n . ' row' . ($n === 1 ? '' : 's') . ' removed).';
+        } elseif ($act === 'save_retention') {
+            $days = (int) ($_POST['retention_days'] ?? 0);
+            if ($days === 0 || in_array($days, $RETAIN_OPTS, true)) {
+                fx_kv_set($pdo, 'scan_log_retention_days', (string) $days);
+                $_SESSION['flash_success'] = $days === 0
+                    ? 'Auto-delete turned off — scans are kept until you clear them.'
+                    : 'Scans will now delete automatically once they are older than ' . $days . ' days.';
+            }
+        }
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = 'Could not update the scan log: ' . $e->getMessage();
+    }
+    header('Location: /factory/scan-log.php');
+    exit;
+}
+
+$flashOk  = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // Scope the log to THIS factory (white-label): a scan belongs to the factory that
 // owns the scanned blind's product (owning factory = COALESCE(source_client_id,
 // client_id)) — the same rule the queue routes on. Without this every factory saw
@@ -51,6 +97,15 @@ if ($ready) {
     );
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Total logged rows + the current auto-prune window, for the maintenance panel.
+$totalRows     = 0;
+$retentionDays = 0;
+if ($ready) {
+    try { $totalRows = (int) $pdo->query('SELECT COUNT(*) FROM factory_scan_log')->fetchColumn(); }
+    catch (Throwable $e) { $totalRows = 0; }
+    $retentionDays = (int) fx_kv_get($pdo, 'scan_log_retention_days', '0');
 }
 
 // Each result's pill: [label, text colour, background].
@@ -93,6 +148,21 @@ require __DIR__ . '/../_partials/factory_head.php';
   .respill { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:.15rem .55rem; border-radius:999px; white-space:nowrap; }
   .sl-bar { display:flex; gap:.9rem; align-items:baseline; margin:0 0 1rem; }
   .sl-refresh { font-size:.85rem; color:var(--text-muted,#667); }
+  .sl-flash { border-radius:10px; padding:.6rem .9rem; margin:0 0 1rem; font-size:.9rem; }
+  .sl-flash.ok  { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+  .sl-flash.err { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+  .sl-maint { border:1px solid var(--border,#e5e7eb); border-radius:12px; background:var(--bg-card,#fff); margin:0 0 1.1rem; }
+  .sl-maint > summary { cursor:pointer; padding:.7rem .9rem; font-weight:600; font-size:.92rem; list-style:none; display:flex; gap:.6rem; align-items:center; }
+  .sl-maint > summary::-webkit-details-marker { display:none; }
+  .sl-maint > summary::before { content:'⚙'; opacity:.6; }
+  .sl-maint .count { color:var(--text-faint,#94a3b8); font-weight:400; }
+  .sl-maint-body { padding:.2rem .9rem 1rem; display:flex; flex-direction:column; gap:1rem; border-top:1px solid var(--border,#eef1f5); }
+  .sl-mrow { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+  .sl-mrow label { font-size:.85rem; color:var(--text-muted,#667); }
+  .sl-maint select { font:inherit; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-input,#fff); }
+  .sl-maint .btn { font:inherit; font-size:.85rem; font-weight:600; cursor:pointer; border-radius:8px; padding:.4rem .8rem; border:1px solid var(--border-strong,#cbd5e1); background:var(--bg-subtle,#f8fafc); color:inherit; }
+  .sl-maint .btn.danger { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+  .sl-maint .hint { font-size:.8rem; color:var(--text-faint,#94a3b8); margin:0; }
 </style>
 
 <div class="sl-bar">
@@ -100,6 +170,50 @@ require __DIR__ . '/../_partials/factory_head.php';
     <span class="sl-refresh" id="sl-refresh">live &mdash; refreshes every 15s</span>
 </div>
 <p class="sl-sub">Every scan the benches send, newest first. The <strong>scanner</strong> column is the id baked into each scanner's URL, so you can see which bench a scan came from without anyone logging in.</p>
+
+<?php if ($flashOk !== null): ?><div class="sl-flash ok" role="status"><?= e((string) $flashOk) ?></div><?php endif; ?>
+<?php if ($flashErr !== null): ?><div class="sl-flash err" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
+
+<?php if ($isSuper && $ready): ?>
+    <!-- Housekeeping (super-admin). Collapsed by default; while it's open the
+         15s auto-refresh pauses so a reload can't interrupt a click. Scan rows
+         are pure diagnostics — nothing reads history for correctness — so
+         deleting old ones is safe. -->
+    <details class="sl-maint">
+        <summary>Housekeeping <span class="count"><?= number_format($totalRows) ?> scan<?= $totalRows === 1 ? '' : 's' ?> logged<?= $retentionDays > 0 ? ' · auto-deleting after ' . (int) $retentionDays . ' days' : ' · kept forever' ?></span></summary>
+        <div class="sl-maint-body">
+            <form method="post" class="sl-mrow">
+                <?= csrf_field() ?><input type="hidden" name="_action" value="save_retention">
+                <label for="sl-ret">Auto-delete scans older than</label>
+                <select name="retention_days" id="sl-ret">
+                    <option value="0"<?= $retentionDays === 0 ? ' selected' : '' ?>>Never (keep forever)</option>
+                    <?php foreach ($RETAIN_OPTS as $d): ?>
+                        <option value="<?= $d ?>"<?= $retentionDays === $d ? ' selected' : '' ?>><?= $d ?> days</option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn" type="submit">Save</button>
+                <p class="hint" style="flex-basis:100%;margin:.1rem 0 0">Set-and-forget: old scans are then tidied away automatically as new ones come in.</p>
+            </form>
+
+            <form method="post" class="sl-mrow">
+                <?= csrf_field() ?><input type="hidden" name="_action" value="prune_age">
+                <label for="sl-prune">Delete now — scans older than</label>
+                <select name="days" id="sl-prune">
+                    <?php foreach ($RETAIN_OPTS as $d): ?>
+                        <option value="<?= $d ?>"<?= $d === 90 ? ' selected' : '' ?>><?= $d ?> days</option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn" type="submit">Delete these</button>
+            </form>
+
+            <form method="post" class="sl-mrow" onsubmit="return confirm('Delete every logged scan? This clears the whole scan log and can\'t be undone.');">
+                <?= csrf_field() ?><input type="hidden" name="_action" value="clear_all">
+                <button class="btn danger" type="submit">Clear the entire scan log</button>
+                <span class="hint">Removes all <?= number_format($totalRows) ?> rows. Production is unaffected — this is just the log.</span>
+            </form>
+        </div>
+    </details>
+<?php endif; ?>
 
 <?php if (!$ready): ?>
     <div class="sl-empty">Scan logging isn't set up yet &mdash; run <code>/migrate_factory_scan_in.php</code>.</div>
@@ -135,7 +249,12 @@ require __DIR__ . '/../_partials/factory_head.php';
 // (unlike the floor) it's safe to just reload.
 (function () {
     if (document.querySelector('.sl-empty')) return;   // nothing to watch yet
-    setInterval(function () { if (!document.hidden) location.reload(); }, 15000);
+    setInterval(function () {
+        if (document.hidden) return;
+        // Don't reload out from under a super-admin using the housekeeping panel.
+        if (document.querySelector('.sl-maint[open]')) return;
+        location.reload();
+    }, 15000);
 })();
 </script>
 
