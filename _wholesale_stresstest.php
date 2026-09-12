@@ -96,14 +96,14 @@ if ($action !== 'seed') {
 $n     = max(1, min(50, (int) ($_GET['n'] ?? 10)));
 $docs  = (string) ($_GET['docs'] ?? '') === '1';
 
-// Template line: a real factory-owned quote_items row WITH wholesale capture and
-// no extras (so a cloned line is a clean, fully-captured invoice line).
+// Template line: any real factory-owned quote_items row (for a valid full column
+// set). The clone never copies extras and overrides the wholesale-capture cols
+// itself, so it lands as a clean, fully-captured, extra-free invoice line
+// regardless of the template's own capture/extras state.
 $tplSt = $pdo->prepare(
     "SELECT qi.* FROM quote_items qi
        JOIN products p ON p.id = qi.product_id
       WHERE COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
-        AND qi.trade_price_per_blind IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM quote_item_extras e WHERE e.quote_item_id = qi.id)
       ORDER BY qi.id DESC LIMIT 1"
 );
 $tplSt->execute([$factory]);
