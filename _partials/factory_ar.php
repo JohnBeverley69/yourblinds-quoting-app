@@ -99,17 +99,53 @@ function ar_account_address_block(array $acc): string
 }
 
 /**
+ * SQL expression resolving a quote's TRADE ACCOUNT, for wholesale A/R discovery.
+ *
+ * Two ways an order reaches a trade account:
+ *   - the account's OWN portal quote     → client_id = the account
+ *   - a Beverley "New order" quote FOR    → client_id = factory, and the account
+ *     the account (no-portal one-offs)      is tagged in account_client_id
+ * So the account is account_client_id when set, else client_id. This one
+ * expression handles all three quote shapes with NO factory id inline —
+ *   portal account quote  → account_client_id NULL → client_id (= account)  [in]
+ *   Beverley RETAIL quote → account_client_id NULL → client_id (= factory)  [out, `<> factory`]
+ *   Beverley → account    → account_client_id set  → the account            [in]
+ * Falls back to plain client_id on a DB that predates the column, so callers
+ * that add it are byte-identical pre-migration. The expression carries no
+ * placeholders, so it drops into existing SQL without disturbing bind order.
+ *
+ * @param string $prefix column prefix incl. dot — 'q.' (default) or '' for an unaliased `quotes`.
+ */
+function ar_account_expr(PDO $pdo, string $prefix = 'q.'): string
+{
+    static $has = null;
+    if ($has === null) {
+        try { $pdo->query('SELECT account_client_id FROM quotes LIMIT 0'); $has = true; }
+        catch (Throwable $e) { $has = false; }
+    }
+    return $has
+        ? "COALESCE(NULLIF({$prefix}account_client_id, 0), {$prefix}client_id)"
+        : "{$prefix}client_id";
+}
+
+/**
  * Placed trade-account orders that contain ≥1 factory-owned line, newest first.
  * Each row: quote id/number/status/date, account id + name, bev_lines, bev_qty,
  * wholesale_total (base×qty + Σ option trade_amount), and dn_count (delivery notes
  * already raised for this order). $accountId / $from / $to are optional filters.
+ *
+ * "Account" is resolved via ar_account_expr(), so Beverley-raised orders FOR an
+ * account (client_id = factory, account tagged in account_client_id) are included
+ * and grouped under the account — not just the account's own portal quotes.
  */
 function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?string $from = null, ?string $to = null): array
 {
     $in     = "'" . implode("','", ar_placed_statuses()) . "'";
+    $acct   = ar_account_expr($pdo, 'q.');                                   // effective trade account
     $ownSub = 'COALESCE(NULLIF(p2.source_client_id,0), p2.client_id) = ?';   // options subquery (p2)
-    // Placeholders bind in SQL text order: [1] subquery ownership, [2] client<>,
-    // [optional account/from/to], [last] main ownership.
+    // Placeholders bind in SQL text order: [1] subquery ownership, [2] account<>,
+    // [optional account/from/to], [last] main ownership. ($acct carries no
+    // placeholders, so interpolating it doesn't shift this order.)
     $args = [$factoryId];   // [1] options-subquery ownership
 
     $dnReady = ar_table_ready($pdo, 'factory_ar_delivery_notes');
@@ -117,15 +153,15 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
         ? "(SELECT COUNT(*) FROM factory_ar_delivery_notes dn WHERE dn.source_quote_id = q.id AND dn.status <> 'cancelled')"
         : '0';
 
-    $where = "q.status IN ($in) AND q.client_id <> ?";
-    $args[] = $factoryId;   // [2] exclude the factory's own quotes
-    if ($accountId) { $where .= ' AND q.client_id = ?'; $args[] = $accountId; }
+    $where = "q.status IN ($in) AND {$acct} <> ?";
+    $args[] = $factoryId;   // [2] exclude the factory's own (retail) quotes
+    if ($accountId) { $where .= " AND {$acct} = ?"; $args[] = $accountId; }
     if ($from !== null && $from !== '') { $where .= ' AND q.created_at >= ?';                       $args[] = $from; }
     if ($to   !== null && $to   !== '') { $where .= ' AND q.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; $args[] = $to; }
 
     $sql =
         "SELECT q.id, q.quote_number, q.status, q.created_at,
-                q.client_id AS account_id, c.company_name AS account_name,
+                {$acct} AS account_id, c.company_name AS account_name,
                 COUNT(qi.id)                  AS bev_lines,
                 COALESCE(SUM(qi.quantity), 0) AS bev_qty,
                 COALESCE(SUM(qi.base_price * qi.quantity), 0)
@@ -136,11 +172,11 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
                                WHERE qi2.quote_id = q.id AND $ownSub), 0) AS wholesale_total,
                 $dnSel AS dn_count
            FROM quotes q
-           JOIN clients c      ON c.id = q.client_id
+           JOIN clients c      ON c.id = {$acct}
            JOIN quote_items qi ON qi.quote_id = q.id
            JOIN products p     ON p.id = qi.product_id
           WHERE $where AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
-       GROUP BY q.id, q.quote_number, q.status, q.created_at, q.client_id, c.company_name
+       GROUP BY q.id, q.quote_number, q.status, q.created_at, {$acct}, c.company_name
        ORDER BY q.created_at DESC, q.id DESC
           LIMIT 500";
     $args[] = $factoryId;   // [last] main-filter ownership
@@ -215,15 +251,16 @@ function ar_order_lines_for_doc(PDO $pdo, int $factoryId, int $quoteId): array
 /** Trade accounts (non-factory clients) that have ≥1 placed factory-owned order. */
 function ar_account_options(PDO $pdo, int $factoryId): array
 {
-    $in = "'" . implode("','", ar_placed_statuses()) . "'";
+    $in   = "'" . implode("','", ar_placed_statuses()) . "'";
+    $acct = ar_account_expr($pdo, 'q.');
     try {
         $st = $pdo->prepare(
-            "SELECT DISTINCT q.client_id AS id, c.company_name AS name
+            "SELECT DISTINCT {$acct} AS id, c.company_name AS name
                FROM quotes q
-               JOIN clients c      ON c.id = q.client_id
+               JOIN clients c      ON c.id = {$acct}
                JOIN quote_items qi ON qi.quote_id = q.id
                JOIN products p     ON p.id = qi.product_id
-              WHERE q.status IN ($in) AND q.client_id <> ?
+              WHERE q.status IN ($in) AND {$acct} <> ?
                 AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
            ORDER BY c.company_name"
         );
