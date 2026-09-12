@@ -955,6 +955,53 @@ function ar_statement_bundle(PDO $pdo, int $factory, int $accountId, string $asA
     ];
 }
 
+/* ── Statement run Stage 2: bulk-email send log ─────────────────────────── */
+
+/** The statement-email send log table exists? */
+function ar_statement_email_ready(PDO $pdo): bool
+{
+    return ar_table_ready($pdo, 'factory_ar_statement_emails');
+}
+
+/**
+ * Latest send status per account for a given run date — [account_id => status]
+ * ('sent'|'failed'|'skipped'). Drives the "already emailed" indicator and the
+ * double-send guard.
+ */
+function ar_statement_emailed_map(PDO $pdo, int $factory, string $periodTo): array
+{
+    if (!ar_statement_email_ready($pdo)) return [];
+    $d = ($periodTo !== '' && strtotime($periodTo)) ? date('Y-m-d', strtotime($periodTo)) : date('Y-m-d');
+    $st = $pdo->prepare(
+        "SELECT e.account_client_id, e.status
+           FROM factory_ar_statement_emails e
+           JOIN (SELECT account_client_id, MAX(id) AS mid
+                   FROM factory_ar_statement_emails
+                  WHERE factory_client_id = ? AND period_to = ? GROUP BY account_client_id) last
+             ON last.mid = e.id"
+    );
+    $st->execute([$factory, $d]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(int) $r['account_client_id']] = (string) $r['status'];
+    return $out;
+}
+
+/** Record one statement-email outcome (audit + double-send guard). */
+function ar_log_statement_email(PDO $pdo, int $factory, int $accountId, string $periodTo,
+                                string $toEmail, float $closing, string $status, int $userId): void
+{
+    if (!ar_statement_email_ready($pdo)) return;
+    $d = ($periodTo !== '' && strtotime($periodTo)) ? date('Y-m-d', strtotime($periodTo)) : date('Y-m-d');
+    try {
+        $pdo->prepare(
+            "INSERT INTO factory_ar_statement_emails
+               (factory_client_id, account_client_id, period_to, to_email, closing, status, sent_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )->execute([$factory, $accountId, $d, $toEmail !== '' ? $toEmail : null,
+                    round($closing, 2), $status, $userId ?: null]);
+    } catch (Throwable $e) { /* logging must never break a run */ }
+}
+
 /**
  * Commission statement for a consultant over a period (2E). For each of the
  * consultant's active trade_commissions rows, turnover = the account's INVOICED

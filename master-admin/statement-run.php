@@ -17,11 +17,91 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
+require_once __DIR__ . '/../_partials/app_settings.php';
+require_once __DIR__ . '/../mailer.php';
+require_once __DIR__ . '/../pdf-generator/ar_pdf.php';
 
 requireSuperAdmin();
 
 $pdo     = db();
 $factory = ar_factory_id();
+$user    = current_user();
+$userId  = (int) ($user['user_id'] ?? 0);
+
+$emailPaused = function_exists('app_setting_on') && app_setting_on('email_paused');
+
+// ── Bulk-email handler ──────────────────────────────────────────────────────
+// Emails each owing account its OWN statement PDF, logs every outcome, and won't
+// re-send an account already sent for this run date (unless "resend"). Refuses
+// outright while emails are paused, so a click can't silently drop 60 statements.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'email_all') {
+    csrf_check();
+    $pAsAt = trim((string) ($_POST['to'] ?? ''));
+    if ($pAsAt === '' || !strtotime($pAsAt)) $pAsAt = date('Y-m-d');
+    $pAsAt  = date('Y-m-d', strtotime($pAsAt));
+    $backTo = '/master-admin/statement-run.php?to=' . urlencode($pAsAt);
+
+    if ($emailPaused) {
+        $_SESSION['flash_error'] = 'Emails are paused (testing mode) — nothing was sent. Turn the pause off in Master admin to send statements for real.';
+        header('Location: ' . $backTo); exit;
+    }
+    if (!ar_statement_email_ready($pdo)) {
+        $_SESSION['flash_error'] = 'Run /migrate_ar_statement_emails.php first (the send log).';
+        header('Location: ' . $backTo); exit;
+    }
+
+    @set_time_limit(0);
+    $resend  = !empty($_POST['resend']);
+    $already = ar_statement_emailed_map($pdo, $factory, $pAsAt);
+    $facName = '';
+    try {
+        $fs = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $fs->execute([$factory]); $facName = (string) ($fs->fetchColumn() ?: '');
+    } catch (Throwable $e) { /* subject falls back */ }
+    $fmtAsAt = date('j M Y', strtotime($pAsAt));
+
+    $sent = 0; $noEmail = 0; $skip = 0; $fail = 0;
+    foreach (ar_statement_accounts($pdo, $factory, $pAsAt) as $a) {
+        $accId   = (int) $a['account_id'];
+        $email   = trim((string) $a['email']);
+        $closing = (float) $a['aging']['total'];
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            ar_log_statement_email($pdo, $factory, $accId, $pAsAt, $email, $closing, 'skipped', $userId);
+            $noEmail++; continue;
+        }
+        if (!$resend && ($already[$accId] ?? '') === 'sent') { $skip++; continue; }
+
+        $bundle = ar_statement_bundle($pdo, $factory, $accId, $pAsAt);
+        $pdf    = $bundle !== null ? ar_render_statement_bm($bundle['ctx'], $bundle['data']) : null;
+        if ($pdf === null) {
+            ar_log_statement_email($pdo, $factory, $accId, $pAsAt, $email, $closing, 'failed', $userId);
+            $fail++; continue;
+        }
+
+        $subject = 'Statement' . ($facName !== '' ? ' from ' . $facName : '') . ' — as at ' . $fmtAsAt;
+        $body  = "Hello,\n\nPlease find your account statement attached, as at {$fmtAsAt}.\n";
+        $body .= 'Balance outstanding: £' . number_format($closing, 2) . ".\n";
+        $body .= "\nIf you have any questions about your account please reply to this email.\n\nKind regards,\n" . ($facName !== '' ? $facName : 'Accounts');
+        $fname = 'Statement-' . preg_replace('/[^A-Za-z0-9._-]/', '_', (string) ($bundle['ctx']['account_name'] ?? 'account')) . '-' . $pAsAt . '.pdf';
+
+        $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $fname, 'mime' => 'application/pdf']);
+        ar_log_statement_email($pdo, $factory, $accId, $pAsAt, $email, $closing, $ok ? 'sent' : 'failed', $userId);
+        $ok ? $sent++ : $fail++;
+    }
+
+    $bits = [];
+    $bits[] = $sent . ' sent';
+    if ($skip)    $bits[] = $skip . ' already sent (skipped)';
+    if ($noEmail) $bits[] = $noEmail . ' no email';
+    if ($fail)    $bits[] = $fail . ' failed';
+    $_SESSION['flash_success'] = 'Statement run — ' . implode(', ', $bits) . '.';
+    header('Location: ' . $backTo); exit;
+}
+
+$flashOk  = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 // "As at" date — default today. (Month-end, e.g. last day of the previous month,
 // is the usual statement date; the owner picks it here.)
@@ -31,6 +111,9 @@ $asAt = date('Y-m-d', strtotime($asAt));
 
 $ready    = ar_table_ready($pdo, 'factory_ar_invoices');
 $accounts = $ready ? ar_statement_accounts($pdo, $factory, $asAt) : [];
+$emailedMap = $ready ? ar_statement_emailed_map($pdo, $factory, $asAt) : [];
+$emailable  = 0;   // owing accounts with a valid email
+foreach ($accounts as $a) { if (filter_var(trim((string) $a['email']), FILTER_VALIDATE_EMAIL)) $emailable++; }
 
 // Column totals for the footer.
 $tot = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0, 'd90plus' => 0.0, 'total' => 0.0];
@@ -74,6 +157,7 @@ $activeNav = 'statement-run';
         .sr-name a { font-weight:700; color:var(--text-primary); text-decoration:none; }
         .sr-name a:hover { text-decoration:underline; }
         .sr-pill { display:inline-block; margin-left:0.4rem; padding:0.05rem 0.45rem; font-size:0.65rem; font-weight:700; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em; background:#fef3c7; color:#92400e; }
+        .sr-pill.sr-sent { background:#d1fae5; color:#065f46; }
     </style>
 </head>
 <body>
@@ -90,9 +174,30 @@ $activeNav = 'statement-run';
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
-                <a href="/master-admin/statement-run-pdf.php?<?= e($runQs) ?>" class="btn btn-primary" target="_blank" rel="noopener">Download combined PDF</a>
+                <a href="/master-admin/statement-run-pdf.php?<?= e($runQs) ?>" class="btn btn-secondary" target="_blank" rel="noopener">Download combined PDF</a>
+                <?php if ($ready && $accounts): ?>
+                    <?php if ($emailPaused): ?>
+                        <button type="button" class="btn btn-primary" disabled title="Emails are paused in Master admin — turn the pause off to send.">Email statements (paused)</button>
+                    <?php else: ?>
+                        <form method="post" action="/master-admin/statement-run.php" style="margin:0"
+                              onsubmit="return confirm('Email a statement to <?= (int) $emailable ?> account<?= $emailable === 1 ? '' : 's' ?> with an email on file?\n\nEach gets their own statement PDF. Accounts already emailed for this date are skipped.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_action" value="email_all">
+                            <input type="hidden" name="to" value="<?= e($asAt) ?>">
+                            <button type="submit" class="btn btn-primary"<?= $emailable === 0 ? ' disabled title="No accounts have an email on file"' : '' ?>>Email statements (<?= (int) $emailable ?>)</button>
+                        </form>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
         </div>
+
+        <?php if ($flashOk !== null): ?><div class="alert alert-success" role="status"><?= e((string) $flashOk) ?></div><?php endif; ?>
+        <?php if ($flashErr !== null): ?><div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
+        <?php if ($emailPaused): ?>
+            <div class="alert" role="status" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">
+                📧 Outgoing emails are <strong>paused</strong> (testing mode). Statements can be previewed and printed, but the <strong>Email statements</strong> button is disabled until you turn the pause off in Master admin.
+            </div>
+        <?php endif; ?>
 
         <?php if (!$ready): ?>
             <div class="alert alert-error" role="alert">Wholesale invoicing isn't set up yet &mdash; run the A/R migrations first.</div>
@@ -138,6 +243,7 @@ $activeNav = 'statement-run';
                                 <td class="sr-name">
                                     <a href="/master-admin/statement-run-pdf.php?account_id=<?= (int) $a['account_id'] ?>&amp;<?= e($runQs) ?>" target="_blank" rel="noopener"><?= e($a['name']) ?></a>
                                     <?php if (trim((string) $a['email']) === ''): ?><span class="sr-pill" title="No email on file — include in the printed batch">no email</span><?php endif; ?>
+                                    <?php if (($emailedMap[(int) $a['account_id']] ?? '') === 'sent'): ?><span class="sr-pill sr-sent" title="Statement emailed for this date">emailed</span><?php endif; ?>
                                 </td>
                                 <?= $cell($ag['current']) ?>
                                 <?= $cell($ag['d30']) ?>
@@ -163,8 +269,8 @@ $activeNav = 'statement-run';
             </div>
             <p style="color:var(--text-faint);font-size:0.85rem;margin:0.75rem 0 0">
                 <strong>Download combined PDF</strong> gives you all <?= count($accounts) ?> statements in one file (one per page) to print or file.
-                <?php if ($noEmail): ?><?= (int) $noEmail ?> account<?= $noEmail === 1 ? '' : 's' ?> have no email &mdash; they'll always need the printed copy.<?php endif; ?>
-                Emailing each account its own statement is coming next.
+                <strong>Email statements</strong> sends each account with an email their own statement PDF (<?= (int) $emailable ?> of <?= count($accounts) ?> have one) &mdash; already-sent accounts are skipped, and every send is logged.
+                <?php if ($noEmail): ?><?= (int) $noEmail ?> account<?= $noEmail === 1 ? '' : 's' ?> have no email &mdash; use the printed batch for those.<?php endif; ?>
             </p>
             <?php endif; ?>
         </section>
