@@ -54,6 +54,22 @@ function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote
         return null;
     }
 
+    // Trade order? The "for" block should be the linked trade account (its live
+    // Contact / Company / address), not the retail end_customer_* snapshot.
+    // Retail quotes (no account link) are untouched.
+    $pdfTradeAccount = null;
+    if ((int) ($quote['account_client_id'] ?? 0) > 0) {
+        try {
+            $accSt = $pdo->prepare(
+                'SELECT company_name, contact_name, email, phone,
+                        address1, address2, town, county, postcode
+                   FROM clients WHERE id = ? LIMIT 1'
+            );
+            $accSt->execute([(int) $quote['account_client_id']]);
+            $pdfTradeAccount = $accSt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Throwable $e) { $pdfTradeAccount = null; }
+    }
+
     // Money received so far + balance, via the shared helper so these match
     // the calendar / Payments panel exactly (deposit isn't double-counted).
     $pdfMoney   = function_exists('calendar_money_for_quotes')
@@ -327,13 +343,39 @@ function pdf_quote_html(array $quote, array $items, array $extrasByItem): string
         (string) ($quote['trade_county']   ?? ''),
     ], static fn ($s) => trim((string) $s) !== ''));
 
-    // End-customer address block.
-    $custLines = array_values(array_filter([
-        (string) ($quote['end_customer_address1'] ?? ''),
-        (string) ($quote['end_customer_address2'] ?? ''),
-        trim(((string) ($quote['end_customer_town'] ?? '')) . ' ' . ((string) ($quote['end_customer_postcode'] ?? ''))),
-        (string) ($quote['end_customer_county']   ?? ''),
-    ], static fn ($s) => trim((string) $s) !== ''));
+    // End-customer address block. For a trade order this is the linked
+    // account's address; for retail it's the quote's end_customer_* snapshot.
+    if ($pdfTradeAccount !== null) {
+        $custLines = array_values(array_filter([
+            (string) ($pdfTradeAccount['address1'] ?? ''),
+            (string) ($pdfTradeAccount['address2'] ?? ''),
+            trim(((string) ($pdfTradeAccount['town'] ?? '')) . ' ' . ((string) ($pdfTradeAccount['postcode'] ?? ''))),
+            (string) ($pdfTradeAccount['county']   ?? ''),
+        ], static fn ($s) => trim((string) $s) !== ''));
+    } else {
+        $custLines = array_values(array_filter([
+            (string) ($quote['end_customer_address1'] ?? ''),
+            (string) ($quote['end_customer_address2'] ?? ''),
+            trim(((string) ($quote['end_customer_town'] ?? '')) . ' ' . ((string) ($quote['end_customer_postcode'] ?? ''))),
+            (string) ($quote['end_customer_county']   ?? ''),
+        ], static fn ($s) => trim((string) $s) !== ''));
+    }
+
+    // The "for" name + contact line — trade order shows Contact — Company,
+    // retail shows the end customer with their email/phone.
+    if ($pdfTradeAccount !== null) {
+        $pdfCustName = trim((string) ($pdfTradeAccount['contact_name'] ?? '')) !== ''
+            ? trim((string) $pdfTradeAccount['contact_name']) . ' — ' . (string) ($pdfTradeAccount['company_name'] ?? '')
+            : (string) ($pdfTradeAccount['company_name'] ?? '');
+        $pdfCustEmail = (string) ($pdfTradeAccount['email'] ?? '');
+        $pdfCustPhone = (string) ($pdfTradeAccount['phone'] ?? '');
+        $pdfCustRef   = trim((string) ($quote['customer_reference'] ?? ''));
+    } else {
+        $pdfCustName  = (string) ($quote['end_customer_name'] ?? '');
+        $pdfCustEmail = (string) ($quote['end_customer_email'] ?? '');
+        $pdfCustPhone = (string) ($quote['end_customer_phone'] ?? '');
+        $pdfCustRef   = '';
+    }
 
     $vatPct = $quote['vat_percent'] !== null
         ? rtrim(rtrim(number_format((float) $quote['vat_percent'], 2, '.', ''), '0'), '.')
@@ -422,16 +464,19 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 
 <div class="customer">
 <div class="label"><?= e($docLabel) ?> for</div>
-<div class="name"><?= e((string) $quote['end_customer_name']) ?></div>
+<div class="name"><?= e($pdfCustName) ?></div>
 <?php if ($custLines): ?>
 <div class="addr"><?= e(implode("\n", $custLines)) ?></div>
 <?php endif; ?>
-<?php if (!empty($quote['end_customer_email']) || !empty($quote['end_customer_phone'])): ?>
+<?php if ($pdfCustEmail !== '' || $pdfCustPhone !== ''): ?>
 <div class="contact">
-<?php if (!empty($quote['end_customer_email'])): ?><?= e((string) $quote['end_customer_email']) ?><?php endif; ?>
-<?php if (!empty($quote['end_customer_email']) && !empty($quote['end_customer_phone'])): ?> &middot; <?php endif; ?>
-<?php if (!empty($quote['end_customer_phone'])): ?><?= e((string) $quote['end_customer_phone']) ?><?php endif; ?>
+<?php if ($pdfCustEmail !== ''): ?><?= e($pdfCustEmail) ?><?php endif; ?>
+<?php if ($pdfCustEmail !== '' && $pdfCustPhone !== ''): ?> &middot; <?php endif; ?>
+<?php if ($pdfCustPhone !== ''): ?><?= e($pdfCustPhone) ?><?php endif; ?>
 </div>
+<?php endif; ?>
+<?php if ($pdfCustRef !== ''): ?>
+<div class="contact">Ref: <?= e($pdfCustRef) ?></div>
 <?php endif; ?>
 </div>
 

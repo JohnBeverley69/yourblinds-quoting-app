@@ -52,6 +52,7 @@ if (!$canSeeAllQuotes) {
     }
 }
 $editable = qb_is_editable($quote);
+$isSuperAdmin = is_super_admin();
 
 // Hoisted up from the Payments-panel block so the sticky header bar
 // can also use it (to show the "Take payment" shortcut when relevant).
@@ -221,6 +222,29 @@ foreach ($customers as $c) {
     ];
 }
 $selectedCustomerLabel = $customerLabels[(int) ($quote['customer_id'] ?? 0)] ?? '';
+
+// Trade order? A quote tagged with account_client_id is raised FOR a trade
+// account (a `clients` row) — the "customer" is that account, not a retail
+// person. We show its live details (Company / Contact / Phone / Mobile /
+// Email / Address) read-only, so the single source of truth stays the trade
+// account itself, and let the order carry a per-order customer reference.
+// Retail quotes (no account link) keep the editable end_customer_* panel.
+$accountClientId = (int) ($quote['account_client_id'] ?? 0);
+$tradeAccount    = null;
+if ($accountClientId > 0) {
+    try {
+        $hasAccMobile = false;
+        try { db()->query('SELECT `mobile` FROM clients LIMIT 0'); $hasAccMobile = true; } catch (Throwable $e) {}
+        $accSel = 'SELECT id, company_name, contact_name, email, phone,'
+                . ($hasAccMobile ? ' mobile,' : '')
+                . ' address1, address2, town, county, postcode
+                     FROM clients WHERE id = ? LIMIT 1';
+        $accSt = db()->prepare($accSel);
+        $accSt->execute([$accountClientId]);
+        $tradeAccount = $accSt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) { $tradeAccount = null; }
+}
+$isTradeOrder = $tradeAccount !== null;
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -855,6 +879,69 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
 
+            <?php if ($isTradeOrder):
+                $accAddr = array_filter([
+                    (string) ($tradeAccount['address1'] ?? ''),
+                    (string) ($tradeAccount['address2'] ?? ''),
+                    (string) ($tradeAccount['town']     ?? ''),
+                    (string) ($tradeAccount['county']   ?? ''),
+                    (string) ($tradeAccount['postcode'] ?? ''),
+                ], static fn ($s) => trim($s) !== '');
+                $accCompany = (string) ($tradeAccount['company_name'] ?? '');
+                $accContact = (string) ($tradeAccount['contact_name'] ?? '');
+                $accEmail   = (string) ($tradeAccount['email']  ?? '');
+                $accPhone   = (string) ($tradeAccount['phone']  ?? '');
+                $accMobile  = (string) ($tradeAccount['mobile'] ?? '');
+            ?>
+                <div class="trade-account-card"
+                     style="border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;background:var(--surface-2,rgba(0,0,0,0.02))">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.75rem">
+                        <span style="display:inline-flex;align-items:center;gap:0.5rem">
+                            <span style="font-size:0.7rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#fff;background:#2563eb;padding:0.15rem 0.5rem;border-radius:999px">Trade account</span>
+                            <strong style="font-size:1.05rem"><?= e($accCompany) ?></strong>
+                        </span>
+                        <?php if ($isSuperAdmin ?? false): ?>
+                            <a href="/master-admin/trade-account.php?id=<?= (int) $accountClientId ?>"
+                               style="font-size:0.8125rem;white-space:nowrap">Manage account →</a>
+                        <?php endif; ?>
+                    </div>
+                    <div class="form-row cols-3" style="gap:0.75rem 1.5rem">
+                        <?php if ($accContact !== ''): ?>
+                            <div><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Contact</div><div><?= e($accContact) ?></div></div>
+                        <?php endif; ?>
+                        <?php if ($accPhone !== ''): ?>
+                            <div><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Phone</div><div><?= e($accPhone) ?></div></div>
+                        <?php endif; ?>
+                        <?php if ($accMobile !== ''): ?>
+                            <div><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Mobile</div><div><?= e($accMobile) ?></div></div>
+                        <?php endif; ?>
+                        <?php if ($accEmail !== ''): ?>
+                            <div><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Email</div><div><?= e($accEmail) ?></div></div>
+                        <?php endif; ?>
+                        <?php if (!empty($accAddr)): ?>
+                            <div style="grid-column:1/-1"><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Address</div><div><?= e(implode(', ', $accAddr)) ?></div></div>
+                        <?php endif; ?>
+                    </div>
+                    <p style="font-size:0.8125rem;color:var(--text-faint);margin:0.75rem 0 0">
+                        These details come from the trade account<?= ($isSuperAdmin ?? false) ? ' — edit them there, not here.' : '.' ?>
+                    </p>
+                </div>
+
+                <div class="form-row cols-2" style="margin-top:1rem">
+                    <div class="form-group">
+                        <label for="customer_reference">Customer reference <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
+                        <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
+                               <?= !$editable ? 'readonly' : '' ?>
+                               value="<?= e((string) ($quote['customer_reference'] ?? '')) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="additional_reference">Additional reference <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <input id="additional_reference" name="additional_reference" type="text" maxlength="100"
+                               <?= !$editable ? 'readonly' : '' ?>
+                               value="<?= e((string) ($quote['additional_reference'] ?? '')) ?>">
+                    </div>
+                </div>
+            <?php else: ?>
             <details class="customer-collapse"<?= $startOpen ? ' open' : '' ?>>
                 <summary>
                     <?php if ($hasCustomer): ?>
@@ -988,6 +1075,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
             </details>
+            <?php endif; ?>
 
             <!-- Quote notes lives OUTSIDE <details> so it stays visible
                  even when the customer summary is collapsed. Still inside
@@ -1836,9 +1924,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             //   0044 7123 ... → 447123...
             //   34 600 ...    → 34600... (Spanish, kept as-is)
             // WhatsApp goes to the MOBILE; fall back to the phone for older
-            // records saved before the mobile field existed.
-            $rawPhone = (string) ($quote['end_customer_mobile'] ?? '');
-            if (trim($rawPhone) === '') $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
+            // records saved before the mobile field existed. For a trade order
+            // the customer is the linked account, so use its live mobile/phone.
+            if ($isTradeOrder) {
+                $rawPhone = (string) ($tradeAccount['mobile'] ?? '');
+                if (trim($rawPhone) === '') $rawPhone = (string) ($tradeAccount['phone'] ?? '');
+            } else {
+                $rawPhone = (string) ($quote['end_customer_mobile'] ?? '');
+                if (trim($rawPhone) === '') $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
+            }
             $digits   = preg_replace('/[^0-9]/', '', $rawPhone);
             if ($digits === '') {
                 $waPhone = '';
@@ -1852,11 +1946,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             // Only enables WhatsApp when the trade user has explicitly ticked
             // "has WhatsApp" on the customer; otherwise a tap of the wa.me
-            // link could land on a "user not on WhatsApp" error page.
-            $waEnabled = $waPhone !== '' && !empty($quote['has_whatsapp']);
+            // link could land on a "user not on WhatsApp" error page. For a
+            // trade order the account's Mobile field IS the WhatsApp number, so
+            // a present mobile is enough.
+            if ($isTradeOrder) {
+                $waEnabled = $waPhone !== '' && trim((string) ($tradeAccount['mobile'] ?? '')) !== '';
+            } else {
+                $waEnabled = $waPhone !== '' && !empty($quote['has_whatsapp']);
+            }
 
             // WhatsApp message body. Plain text — wa.me will URL-encode it.
-            $waMessage = "Hi " . ((string) $quote['end_customer_name'])
+            $waGreetName = $isTradeOrder
+                ? (trim((string) ($tradeAccount['contact_name'] ?? '')) ?: (string) ($tradeAccount['company_name'] ?? ''))
+                : (string) $quote['end_customer_name'];
+            $waMessage = "Hi " . $waGreetName
                        . ", here's your quote " . (string) $quote['quote_number']
                        . " from " . (string) $user['company_name'] . ":\n"
                        . $publicUrl;
@@ -1869,9 +1972,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 Email the PDF and a link the customer can click to accept the quote online.
                 <?php if ($waEnabled): ?>
                     Or share the same link via WhatsApp.
+                <?php elseif ($waPhone === '' && $isTradeOrder): ?>
+                    Add a mobile number to the trade account to enable WhatsApp sharing.
                 <?php elseif ($waPhone === ''): ?>
                     Add a phone number to the customer details above to enable WhatsApp sharing.
-                <?php else: ?>
+                <?php elseif (!$isTradeOrder): ?>
                     Tick "Customer has WhatsApp on this number" above to enable WhatsApp sharing.
                 <?php endif; ?>
             </p>

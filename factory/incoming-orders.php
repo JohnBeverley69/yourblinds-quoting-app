@@ -59,6 +59,8 @@ $fjOrder = $hasFactoryJobs
 try {
     $oStmt = $pdo->prepare(
         "SELECT q.id, q.client_id, c.company_name AS tenant,
+                q.account_client_id,
+                ac.company_name AS account_company, ac.contact_name AS account_contact,
                 q.quote_number, q.status, q.created_at,
                 q.customer_reference, q.additional_reference,
                 q.end_customer_name,
@@ -66,13 +68,15 @@ try {
                 COALESCE(SUM(qi.quantity), 0) AS bev_qty
                 $fjSelect
            FROM quotes q
-           JOIN clients c      ON c.id = q.client_id
-           JOIN quote_items qi ON qi.quote_id = q.id
-           JOIN products p     ON p.id = qi.product_id
+           JOIN clients c       ON c.id = q.client_id
+           LEFT JOIN clients ac ON ac.id = q.account_client_id
+           JOIN quote_items qi  ON qi.quote_id = q.id
+           JOIN products p      ON p.id = qi.product_id
            $fjJoin
           WHERE q.status IN ($inPlaced)
             AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
-       GROUP BY q.id, q.client_id, c.company_name, q.quote_number, q.status,
+       GROUP BY q.id, q.client_id, c.company_name, q.account_client_id,
+                ac.company_name, ac.contact_name, q.quote_number, q.status,
                 q.created_at, q.customer_reference, q.additional_reference,
                 q.end_customer_name $fjGroup
        ORDER BY {$fjOrder}q.created_at DESC
@@ -250,6 +254,11 @@ require __DIR__ . '/../_partials/factory_head.php';
             $lines    = $linesBy[$qid] ?? [];
             $ref      = (string) ($o['quote_number'] ?? ('#' . $qid));
             $tenant   = (string) ($o['tenant'] ?? 'Unknown account');
+            // For a trade order (raised FOR an account) the real customer is the
+            // linked account, not the factory that owns the quote. Show that.
+            $accCompany = trim((string) ($o['account_company'] ?? ''));
+            $accContact = trim((string) ($o['account_contact'] ?? ''));
+            $custLabel  = $accCompany !== '' ? $accCompany : $tenant;
             $status   = (string) ($o['status'] ?? '');
             $custRef  = trim((string) ($o['customer_reference'] ?? ''));
             $addRef   = trim((string) ($o['additional_reference'] ?? ''));
@@ -261,12 +270,12 @@ require __DIR__ . '/../_partials/factory_head.php';
             $next      = $STAGE_NEXT[$stage] ?? null;
             $prev      = $STAGE_PREV[$stage] ?? null;
             $prog      = $floorProg[$qid] ?? null;   // ['total'=>, 'done'=>] once on the floor
-            $searchKey = strtolower(trim($ref . ' ' . $tenant . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
+            $searchKey = strtolower(trim($ref . ' ' . $custLabel . ' ' . $accContact . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
             <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
-                    <span class="cust"><?= e($tenant) ?></span>
+                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
                     <span class="cnt"><?= (int) $o['bev_qty'] ?> blind<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?></span>
                     <span class="stat">

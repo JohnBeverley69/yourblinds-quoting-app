@@ -40,6 +40,7 @@ $colExists = static function (string $table, string $col) use ($pdo): bool {
     } catch (Throwable $e) { return false; }
 };
 $hasCreated = $colExists('clients', 'created_at');
+$hasMobile  = $colExists('clients', 'mobile');
 
 // Trade discounts / commissions only apply to the FACTORY's own products (the
 // ones this account buys from us) — a product it sources elsewhere is off-limits.
@@ -71,17 +72,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_error'] = 'Company name is required.';
         } else {
             try {
-                $pdo->prepare(
-                    'UPDATE clients
-                        SET company_name = ?, contact_name = ?, email = ?, phone = ?,
-                            vat_number = ?, address1 = ?, address2 = ?, town = ?,
-                            county = ?, postcode = ?
-                      WHERE id = ?'
-                )->execute([
+                $mobileCol = $hasMobile ? ' mobile = ?,' : '';
+                $params = [
                     mb_substr($company, 0, 150),
                     trim((string) ($_POST['contact_name'] ?? '')) ?: null,
                     trim((string) ($_POST['email']        ?? '')) ?: null,
                     trim((string) ($_POST['phone']        ?? '')) ?: null,
+                ];
+                if ($hasMobile) {
+                    $params[] = trim((string) ($_POST['mobile'] ?? '')) ?: null;
+                }
+                array_push(
+                    $params,
                     trim((string) ($_POST['vat_number']   ?? '')) ?: null,
                     trim((string) ($_POST['address1']     ?? '')) ?: null,
                     trim((string) ($_POST['address2']     ?? '')) ?: null,
@@ -89,7 +91,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     trim((string) ($_POST['county']       ?? '')) ?: null,
                     trim((string) ($_POST['postcode']     ?? '')) ?: null,
                     $clientId,
-                ]);
+                );
+                $pdo->prepare(
+                    'UPDATE clients
+                        SET company_name = ?, contact_name = ?, email = ?, phone = ?,' . $mobileCol . '
+                            vat_number = ?, address1 = ?, address2 = ?, town = ?,
+                            county = ?, postcode = ?
+                      WHERE id = ?'
+                )->execute($params);
                 // If we just renamed our OWN client, refresh the session copy.
                 if ($clientId === $myClient) $_SESSION['company_name'] = $company;
                 $_SESSION['flash_success'] = 'Account details saved.';
@@ -525,6 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Load the account ────────────────────────────────────────────────────────
 $sel = 'SELECT id, company_name, contact_name, email, phone, vat_number,
                address1, address2, town, county, postcode, active, logo_path'
+     . ($hasMobile ? ', mobile' : '')
      . ($hasCreated ? ', created_at' : '') . '
           FROM clients WHERE id = ? LIMIT 1';
 $st = $pdo->prepare($sel);
@@ -833,8 +843,12 @@ $activeNav = 'trade-accounts';
                         <input id="email" name="email" type="email" maxlength="190" value="<?= e((string) ($acc['email'] ?? '')) ?>">
                     </div>
                     <div>
-                        <label for="phone">Phone</label>
+                        <label for="phone">Phone <span style="color:#9ca3af;font-weight:400">(landline)</span></label>
                         <input id="phone" name="phone" type="text" maxlength="60" value="<?= e((string) ($acc['phone'] ?? '')) ?>">
+                    </div>
+                    <div>
+                        <label for="mobile">Mobile <span style="color:#9ca3af;font-weight:400">(WhatsApp)</span></label>
+                        <input id="mobile" name="mobile" type="text" maxlength="40" value="<?= e((string) ($acc['mobile'] ?? '')) ?>">
                     </div>
                     <div>
                         <label for="vat_number">VAT number</label>
