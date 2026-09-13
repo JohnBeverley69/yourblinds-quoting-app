@@ -325,6 +325,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: feature_auto_receipt not saved (run migrate_auto_receipt.php): ' . $e->getMessage());
             }
+            // New-order notification address (migrate_order_notify_email.php).
+            // Emailed when a customer accepts a quote online. Empty clears it;
+            // an invalid address is ignored (kept as-is) rather than saved.
+            if (isset($_POST['order_notify_email'])) {
+                $one = trim((string) $_POST['order_notify_email']);
+                if ($one === '' || filter_var($one, FILTER_VALIDATE_EMAIL)) {
+                    try {
+                        db()->prepare('UPDATE client_settings SET order_notify_email = ? WHERE client_id = ?')
+                            ->execute([$one === '' ? null : $one, $clientId]);
+                    } catch (Throwable $e) {
+                        error_log('settings: order_notify_email not saved (run migrate_order_notify_email.php): ' . $e->getMessage());
+                    }
+                }
+            }
             // Default sale type for the "New" launcher — factory only
             // (migrate_sale_type.php). Only accept the two valid values.
             if (is_super_admin() && isset($_POST['default_sale_type'])) {
@@ -1410,6 +1424,26 @@ $activeNav = 'settings';
                     </label>
                 </fieldset>
                 <?php endif; ?>
+
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        New order alerts
+                    </legend>
+                    <label style="display:block;font-size:0.9375rem">
+                        Email me when a customer accepts a quote online
+                        <input type="email" name="order_notify_email" maxlength="190"
+                               value="<?= e((string) ($settings['order_notify_email'] ?? '')) ?>"
+                               placeholder="orders@yourbusiness.co.uk"
+                               style="display:block;margin-top:0.4rem;width:100%;max-width:22rem;padding:0.4rem 0.6rem;border:1px solid #d1d5db;border-radius:6px">
+                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                            When a customer clicks <em>Accept</em> on a quote link you sent them, we'll email this
+                            address to let you know a new order has come in. Leave blank to turn it off.
+                        </span>
+                    </label>
+                </fieldset>
 
                 <?php $autoPlaceInhouse = !isset($settings['auto_place_inhouse']) || !empty($settings['auto_place_inhouse']); ?>
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
