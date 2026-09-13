@@ -43,12 +43,25 @@ $quote    = qb_load_quote_or_404($quoteId, $clientId);
 // Recording an actual PAID deposit (record_paid / mark_paid) stays an
 // accepted-order activity — you can't take money on a draft.
 $isOrderState = in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced'], true);
+$hasPaidDeposit = !empty($quote['deposit_paid_at']);
 if ($action === 'save_amount') {
     if (!$isOrderState && !in_array((string) $quote['status'], ['draft', 'sent'], true)) {
         qb_flash_redirect(
             '/quote-builder/edit.php?id=' . $quoteId,
             'error',
             'This quote can no longer be edited.'
+        );
+    }
+} elseif ($action === 'mark_paid') {
+    // Toggling a deposit paid/unpaid is an order activity — EXCEPT un-marking an
+    // already-paid deposit, which must always be possible so a deposit recorded
+    // in error can be reversed even on a declined/draft quote (otherwise it's
+    // stuck and blocks deletion).
+    if (!$isOrderState && !$hasPaidDeposit) {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId,
+            'error',
+            'A deposit can be recorded once the quote has been accepted.'
         );
     }
 } elseif (!$isOrderState) {
