@@ -58,6 +58,7 @@ try {
                 q.end_customer_town, q.end_customer_county, q.end_customer_postcode, q.end_customer_phone,
                 q.client_id, q.account_client_id,
                 COALESCE(ac.company_name, c.company_name) AS company_name,
+                ac.contact_name                           AS contact_name,
                 COALESCE(ac.address1, c.address1)         AS address1,
                 COALESCE(ac.address2, c.address2)         AS address2,
                 COALESCE(ac.town, c.town)                 AS town,
@@ -170,10 +171,18 @@ $addr = trim(implode(', ', array_filter([
     trim((string) ($order['town'] ?? '')),
     trim((string) ($order['county'] ?? '')),
 ])), ', ');
+// Trade orders carry a contact person on the account — show "Contact — Company"
+// so the workshop knows who to ask for; tenant/retail orders have no contact and
+// stay as the company/customer name alone.
+$company = (string) ($order['company_name'] ?? '');
+$contact = trim((string) ($order['contact_name'] ?? ''));
+$customerLine = $contact !== '' ? ($contact . ' — ' . $company) : $company;
 $orderVals = $order ? [
     'order_no'   => (string) ($order['quote_number'] ?? ('#' . $qid)),
     'order_date' => $fmtDate($order['created_at'] ?? null),
-    'customer'   => (string) ($order['company_name'] ?? ''),
+    'customer'   => $customerLine,
+    'company'    => $company,
+    'contact'    => $contact,
     'address'    => $addr,   // whole address on one line (kept for existing templates)
     // …and the pieces, so an address block can be built line-by-line on the header.
     'address1'   => (string) ($order['address1'] ?? ''),
@@ -720,7 +729,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <a class="btn" href="/factory/incoming-orders.php" style="text-decoration:none">&larr; Factory orders</a>
     <h1>Worksheet</h1>
     <?php if ($order): ?>
-        <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e((string) ($order['company_name'] ?? '')) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
+        <span class="wp-note">Order <?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?> · <?= e($customerLine) ?> · <?= (int) $totalLines ?> line<?= $totalLines === 1 ? '' : 's' ?></span>
         <span style="flex:1"></span>
         <?php // A mixed order shows BOTH — each prints only its own products, on its own printer. ?>
         <?php if ($hasDiecut): ?>

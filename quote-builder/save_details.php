@@ -29,6 +29,28 @@ if (!qb_is_editable($quote)) {
     );
 }
 
+// Trade order (raised FOR a trade account): the customer IS the linked
+// account, whose details are managed on the account itself — this panel only
+// captures the per-order references. Save just those and stop; don't touch the
+// end_customer_* snapshot or demand a customer name that isn't on this form.
+if ((int) ($quote['account_client_id'] ?? 0) > 0) {
+    $emptyToNull = static function (string $k): ?string {
+        $v = trim((string) ($_POST[$k] ?? ''));
+        return $v === '' ? null : mb_substr($v, 0, 100);
+    };
+    db()->prepare(
+        'UPDATE quotes SET customer_reference = ?, additional_reference = ?, notes = ?
+          WHERE id = ? AND client_id = ?'
+    )->execute([
+        $emptyToNull('customer_reference'),
+        $emptyToNull('additional_reference'),
+        (function () { $v = trim((string) ($_POST['notes'] ?? '')); return $v === '' ? null : $v; })(),
+        $quoteId,
+        $clientId,
+    ]);
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Order details saved.');
+}
+
 $name = trim((string) ($_POST['end_customer_name'] ?? ''));
 if ($name === '') {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Customer name is required.');
