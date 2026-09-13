@@ -11,7 +11,7 @@ $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
 
 $customer = [
-    'name' => '', 'email' => '', 'phone' => '',
+    'name' => '', 'email' => '', 'phone' => '', 'mobile' => '',
     'address1' => '', 'address2' => '',
     'town' => '', 'county' => '', 'postcode' => '',
     'notes' => '',
@@ -22,7 +22,7 @@ $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    foreach (['name','email','phone','address1','address2','town','county','postcode','notes'] as $k) {
+    foreach (['name','email','phone','mobile','address1','address2','town','county','postcode','notes'] as $k) {
         $customer[$k] = trim((string) ($_POST[$k] ?? ''));
     }
     $customer['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
@@ -60,15 +60,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $stmt = db()->prepare(
             'INSERT INTO customers
-              (client_id, name, email, phone, has_whatsapp,
+              (client_id, name, email, phone, mobile, has_whatsapp,
                address1, address2, town, county, postcode, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $clientId,
             $customer['name'],
             $customer['email']    !== '' ? $customer['email']    : null,
             $customer['phone']    !== '' ? $customer['phone']    : null,
+            $customer['mobile']   !== '' ? $customer['mobile']   : null,
             (int) $customer['has_whatsapp'],
             $customer['address1'] !== '' ? $customer['address1'] : null,
             $customer['address2'] !== '' ? $customer['address2'] : null,
@@ -176,13 +177,18 @@ $activeNav = 'customers';
                                value="<?= e($customer['email']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="phone">Phone</label>
+                        <label for="phone">Phone <span style="color:#9ca3af;font-weight:400">(landline)</span></label>
                         <input id="phone" name="phone" type="tel" maxlength="50" autocomplete="tel"
                                value="<?= e($customer['phone']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="mobile">Mobile</label>
+                        <input id="mobile" name="mobile" type="tel" maxlength="40" autocomplete="tel"
+                               value="<?= e($customer['mobile']) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
                             <input type="checkbox" name="has_whatsapp" value="1"
                                    <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
-                            Customer has WhatsApp on this number
+                            Mobile is on WhatsApp
                         </label>
                     </div>
                 </div>
