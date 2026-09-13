@@ -40,7 +40,7 @@ $pdo = db();
 
 $qStmt = $pdo->prepare(
     'SELECT q.id, q.status, q.end_customer_name, q.client_id,
-            q.end_customer_email, q.quote_number, q.public_token,
+            q.end_customer_email, q.quote_number, q.public_token, q.total,
             c.company_name AS trade_company_name
        FROM quotes q
        JOIN clients c ON c.id = q.client_id
@@ -187,6 +187,45 @@ if ($action === 'accept') {
 
             mailer_send($custEmail, $subject, $body);
         }
+    }
+
+    // Notify the BUSINESS that a new order has come in — to the address they set
+    // in Settings (client_settings.order_notify_email). Only online acceptances
+    // reach here. Best-effort: a missing column, no address, or a send failure
+    // never blocks the customer's acceptance. Guarded so it's a no-op until
+    // migrate_order_notify_email.php has run.
+    try {
+        $notifyTo = '';
+        try {
+            $nStmt = $pdo->prepare('SELECT order_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
+            $nStmt->execute([(int) $quote['client_id']]);
+            $notifyTo = trim((string) ($nStmt->fetchColumn() ?: ''));
+        } catch (Throwable $e) { /* column absent (pre-migration) — skip */ }
+
+        if ($notifyTo !== '' && filter_var($notifyTo, FILTER_VALIDATE_EMAIL)) {
+            $appUrl   = trim((string) (env('APP_URL', '') ?? ''));
+            $orderUrl = ($appUrl !== '' ? rtrim($appUrl, '/') : '')
+                . '/quote-builder/edit.php?id=' . (int) $quote['id'];
+            $custName = trim((string) ($quote['end_customer_name'] ?? '')) !== ''
+                ? (string) $quote['end_customer_name'] : 'A customer';
+            $qNum     = (string) $quote['quote_number'];
+            $total    = '£' . number_format((float) ($quote['total'] ?? 0), 2);
+
+            $nSubject = sprintf('New order — %s accepted (%s)', $qNum, $custName);
+            $nBodyLines = [
+                'Good news — a new order has come in.',
+                '',
+                $custName . ' has accepted quote ' . $qNum . '.',
+                'Order total: ' . $total . '.',
+            ];
+            if ($orderUrl !== '') {
+                $nBodyLines[] = '';
+                $nBodyLines[] = 'Open the order: ' . $orderUrl;
+            }
+            mailer_send($notifyTo, $nSubject, implode("\n", $nBodyLines));
+        }
+    } catch (Throwable $e) {
+        error_log('New-order notification skipped for quote ' . (int) $quote['id'] . ': ' . $e->getMessage());
     }
 
     $_SESSION['flash_success'] = 'Quote accepted. Thanks!';
