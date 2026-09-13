@@ -1693,8 +1693,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $depositPrefill = $depositAmount !== null
                 ? (float) $depositAmount
                 : ($depositSuggestion !== null ? $depositSuggestion : null);
+            // Show the full deposit panel (with Mark unpaid) whenever a deposit
+            // has actually been PAID — even on a declined/draft quote — so a
+            // wrongly-recorded deposit can always be reversed. Without this a
+            // declined quote with a paid deposit is a dead-end: no control to
+            // un-pay it, and the paid deposit blocks deleting the quote.
+            $hasPaidDeposit = $depositPaidAt !== null && (float) $depositAmount > 0.004;
         ?>
-        <?php if ($quoteIsOrder): ?>
+        <?php if ($quoteIsOrder || $hasPaidDeposit): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
