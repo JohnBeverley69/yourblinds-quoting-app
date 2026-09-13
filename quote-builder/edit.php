@@ -1972,11 +1972,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 Email the PDF and a link the customer can click to accept the quote online.
                 <?php if ($waEnabled): ?>
                     Or share the same link via WhatsApp.
-                <?php elseif ($waPhone === '' && $isTradeOrder): ?>
+                <?php elseif ($isTradeOrder): ?>
                     Add a mobile number to the trade account to enable WhatsApp sharing.
                 <?php elseif ($waPhone === ''): ?>
                     Add a phone number to the customer details above to enable WhatsApp sharing.
-                <?php elseif (!$isTradeOrder): ?>
+                <?php else: ?>
                     Tick "Customer has WhatsApp on this number" above to enable WhatsApp sharing.
                 <?php endif; ?>
             </p>
