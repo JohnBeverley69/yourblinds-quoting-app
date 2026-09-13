@@ -245,6 +245,12 @@ try {
 
     $pdo->commit();
 
+    // The order just landed in a factory queue → email the factory (once).
+    if ($target === 'ordered') {
+        require_once __DIR__ . '/../_partials/factory_notify.php';
+        factory_notify_new_order($pdo, $quoteId);
+    }
+
     // "Save as order" flow: the accept succeeded. If it didn't already
     // auto-place straight to the factory (pure in-house → 'ordered'), send the
     // user on to the Place-order screen where bought-in lines get emailed to
