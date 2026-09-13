@@ -400,6 +400,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($advancedToOrdered) {
                 require_once __DIR__ . '/../_partials/due_dates.php';
                 dd_stamp_order(db(), $quoteId, factory_client_id());
+                // Placed → email the factory a new order has landed (once).
+                require_once __DIR__ . '/../_partials/factory_notify.php';
+                factory_notify_new_order(db(), $quoteId);
             }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());
