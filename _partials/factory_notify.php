@@ -55,13 +55,22 @@ function factory_notify_new_order(PDO $pdo, int $quoteId): void
         // order already gets the accept notification, so skip to avoid a double.
         if ($factoryId <= 0 || $factoryId === (int) $q['client_id']) return;
 
-        // The factory's notification address.
+        // The factory's notification address — the dedicated factory_notify_email
+        // if set, else the general order_notify_email. Each guarded so a missing
+        // column just falls through.
         $notifyTo = '';
         try {
-            $ns = $pdo->prepare('SELECT order_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
+            $ns = $pdo->prepare('SELECT factory_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
             $ns->execute([$factoryId]);
             $notifyTo = trim((string) ($ns->fetchColumn() ?: ''));
-        } catch (Throwable $e) { return; }   // column absent — nothing to send to
+        } catch (Throwable $e) { /* column absent — try the general one */ }
+        if ($notifyTo === '') {
+            try {
+                $ns = $pdo->prepare('SELECT order_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
+                $ns->execute([$factoryId]);
+                $notifyTo = trim((string) ($ns->fetchColumn() ?: ''));
+            } catch (Throwable $e) { return; }   // neither column — nothing to send to
+        }
         if ($notifyTo === '' || !filter_var($notifyTo, FILTER_VALIDATE_EMAIL)) return;
 
         // "from <business>" — the trade account/tenant who placed it, plus the

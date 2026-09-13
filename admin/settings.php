@@ -339,6 +339,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
+            // Factory "new order received" address (migrate_factory_notify_email.php)
+            // — factory only. Emailed when a trade order lands in the factory queue.
+            if (is_super_admin() && isset($_POST['factory_notify_email'])) {
+                $fne = trim((string) $_POST['factory_notify_email']);
+                if ($fne === '' || filter_var($fne, FILTER_VALIDATE_EMAIL)) {
+                    try {
+                        db()->prepare('UPDATE client_settings SET factory_notify_email = ? WHERE client_id = ?')
+                            ->execute([$fne === '' ? null : $fne, $clientId]);
+                    } catch (Throwable $e) {
+                        error_log('settings: factory_notify_email not saved (run migrate_factory_notify_email.php): ' . $e->getMessage());
+                    }
+                }
+            }
             // Default sale type for the "New" launcher — factory only
             // (migrate_sale_type.php). Only accept the two valid values.
             if (is_super_admin() && isset($_POST['default_sale_type'])) {
@@ -1444,6 +1457,28 @@ $activeNav = 'settings';
                         </span>
                     </label>
                 </fieldset>
+
+                <?php if (is_super_admin()): ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Factory — new order received
+                    </legend>
+                    <label style="display:block;font-size:0.9375rem">
+                        Email the factory when a trade order lands in the queue
+                        <input type="email" name="factory_notify_email" maxlength="190"
+                               value="<?= e((string) ($settings['factory_notify_email'] ?? '')) ?>"
+                               placeholder="factory@yourbusiness.co.uk"
+                               style="display:block;margin-top:0.4rem;width:100%;max-width:22rem;padding:0.4rem 0.6rem;border:1px solid #d1d5db;border-radius:6px">
+                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                            When one of your trade accounts places an order that you manufacture, we'll email this
+                            address so the workshop knows a job has come in. Leave blank to use the address above.
+                        </span>
+                    </label>
+                </fieldset>
+                <?php endif; ?>
 
                 <?php $autoPlaceInhouse = !isset($settings['auto_place_inhouse']) || !empty($settings['auto_place_inhouse']); ?>
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
