@@ -434,7 +434,15 @@ $hasDiecut = $diecutBlinds !== [];
 // 102x76mm), not the vertical A4 die-cut sheet. Per-computer nudge + font.
 if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $ff = static fn (string $k, float $d): float => isset($_GET[$k]) && is_numeric($_GET[$k]) ? (float) $_GET[$k] : $d;
-    $LW = $ff('w', 102); $LH = $ff('h', 76); $fs = $ff('fs', 9);
+    // Label size + font default come from the roller template's OWN label (set in
+    // the Worksheets editor), so changing the size there actually changes what
+    // prints. Falls back to the 102x76 thermal-roll default when the template has
+    // no explicit size; a URL ?w=&h=&fs= still overrides (the on-screen tools).
+    $rollLab = $rollBlinds[0]['template']['labels'][0] ?? null;
+    $labDim  = static fn (string $k, float $d): float =>
+        (is_array($rollLab) && isset($rollLab[$k]) && is_numeric($rollLab[$k]) && (float) $rollLab[$k] > 0)
+            ? (float) $rollLab[$k] : $d;
+    $LW = $ff('w', $labDim('w', 102)); $LH = $ff('h', $labDim('h', 76)); $fs = $ff('fs', $labDim('fs', 9));
     $linesOn = (($_GET['lines'] ?? '1') !== '0');
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 
