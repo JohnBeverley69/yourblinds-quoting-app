@@ -245,7 +245,7 @@ $activeNav = '';
                                 <input id="contact_name" name="contact_name" type="text" maxlength="150" value="<?= e($m['contact_name']) ?>">
                             </div>
                         </div>
-                        <div class="form-row cols-3">
+                        <div class="form-row cols-epm">
                             <div class="form-group">
                                 <label for="email">Email</label>
                                 <input id="email" name="email" type="email" maxlength="150" value="<?= e($m['email']) ?>">

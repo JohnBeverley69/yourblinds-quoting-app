@@ -530,6 +530,8 @@ a { color: var(--link); }
 }
 .form-row.full { grid-template-columns: 1fr; }
 .form-row.cols-3 { grid-template-columns: 2fr 2fr 1fr; }
+/* Email / Phone / Mobile contact row: email wide, phone & mobile equal. */
+.form-row.cols-epm { grid-template-columns: 2fr 1fr 1fr; }
 
 .form-group label {
     display: block;
@@ -840,5 +842,6 @@ select optgroup {
     .app-main { padding: 1.25rem; padding-top: 3.75rem; }
     .page-title { font-size: 1.25rem; }
     .form-row,
-    .form-row.cols-3 { grid-template-columns: 1fr; }
+    .form-row.cols-3,
+    .form-row.cols-epm { grid-template-columns: 1fr; }
 }
