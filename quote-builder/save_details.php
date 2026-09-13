@@ -58,7 +58,7 @@ $hasWhatsapp = !empty($_POST['has_whatsapp']) ? 1 : 0;
 $u = db()->prepare(
     'UPDATE quotes
         SET customer_id = ?,
-            end_customer_name = ?, end_customer_email = ?, end_customer_phone = ?,
+            end_customer_name = ?, end_customer_email = ?, end_customer_phone = ?, end_customer_mobile = ?,
             has_whatsapp = ?,
             end_customer_address1 = ?, end_customer_address2 = ?,
             end_customer_town = ?, end_customer_county = ?, end_customer_postcode = ?,
@@ -70,6 +70,7 @@ $u->execute([
     $name,
     $emptyToNull('end_customer_email'),
     $emptyToNull('end_customer_phone'),
+    $emptyToNull('end_customer_mobile'),
     $hasWhatsapp,
     $emptyToNull('end_customer_address1'),
     $emptyToNull('end_customer_address2'),

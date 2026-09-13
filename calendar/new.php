@@ -68,6 +68,7 @@ $f = [
     'customer_name'             => '',
     'email'                     => '',
     'phone'                     => '',
+    'mobile'                    => '',
     'has_whatsapp'              => 0,
     'installation_address1'     => '',
     'installation_address2'     => '',
@@ -193,15 +194,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 1) Customer record. Customer's address = installation address.
                 $cstmt = $pdo->prepare(
                     'INSERT INTO customers
-                       (client_id, name, email, phone, has_whatsapp,
+                       (client_id, name, email, phone, mobile, has_whatsapp,
                         address1, address2, town, county, postcode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $cstmt->execute([
                     $clientId,
                     $f['customer_name'],
                     $f['email'] !== '' ? $f['email'] : null,
                     $f['phone'] !== '' ? $f['phone'] : null,
+                    $f['mobile'] !== '' ? $f['mobile'] : null,
                     $f['has_whatsapp'],
                     $f['installation_address1'] !== '' ? $f['installation_address1'] : null,
                     $f['installation_address2'] !== '' ? $f['installation_address2'] : null,
@@ -443,14 +445,20 @@ $ampmAvail = $ampmOn
                                    value="<?= e((string) $f['email']) ?>">
                         </div>
                         <div class="form-group">
-                            <label for="phone">Phone</label>
+                            <label for="phone">Phone <span style="color:var(--text-muted);font-weight:400">(landline)</span></label>
                             <input id="phone" name="phone" type="tel" maxlength="50"
                                    autocomplete="tel"
                                    value="<?= e((string) $f['phone']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="mobile">Mobile</label>
+                            <input id="mobile" name="mobile" type="tel" maxlength="40"
+                                   autocomplete="tel"
+                                   value="<?= e((string) $f['mobile']) ?>">
                             <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:var(--text-muted);cursor:pointer">
                                 <input type="checkbox" id="has_whatsapp" name="has_whatsapp" value="1"
                                        <?= (int) $f['has_whatsapp'] === 1 ? 'checked' : '' ?>>
-                                Customer has WhatsApp on this number
+                                Mobile is on WhatsApp
                             </label>
                         </div>
                     </div>

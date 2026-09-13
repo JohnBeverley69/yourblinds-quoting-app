@@ -920,15 +920,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                value="<?= e((string) ($quote['end_customer_email'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="end_customer_phone">Phone</label>
+                        <label for="end_customer_phone">Phone <span style="color:var(--text-faint);font-weight:400">(landline)</span></label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
                                <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="end_customer_mobile">Mobile</label>
+                        <input id="end_customer_mobile" name="end_customer_mobile" type="tel" maxlength="40"
+                               <?= !$editable ? 'readonly' : '' ?>
+                               value="<?= e((string) ($quote['end_customer_mobile'] ?? '')) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:var(--text-muted);<?= !$editable ? 'cursor:default' : 'cursor:pointer' ?>">
                             <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
                                    <?= !empty($quote['has_whatsapp']) ? 'checked' : '' ?>
                                    <?= !$editable ? 'disabled' : '' ?>>
-                            Customer has WhatsApp on this number
+                            Mobile is on WhatsApp
                         </label>
                     </div>
                 </div>
@@ -1829,7 +1835,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             //   +44 7123 ...  → 447123...
             //   0044 7123 ... → 447123...
             //   34 600 ...    → 34600... (Spanish, kept as-is)
-            $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
+            // WhatsApp goes to the MOBILE; fall back to the phone for older
+            // records saved before the mobile field existed.
+            $rawPhone = (string) ($quote['end_customer_mobile'] ?? '');
+            if (trim($rawPhone) === '') $rawPhone = (string) ($quote['end_customer_phone'] ?? '');
             $digits   = preg_replace('/[^0-9]/', '', $rawPhone);
             if ($digits === '') {
                 $waPhone = '';

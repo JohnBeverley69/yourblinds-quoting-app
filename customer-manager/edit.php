@@ -33,7 +33,7 @@ unset($_SESSION['flash_success']);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $fields = ['name','email','phone','address1','address2','town','county','postcode','notes'];
+    $fields = ['name','email','phone','mobile','address1','address2','town','county','postcode','notes'];
     $input  = [];
     foreach ($fields as $f) {
         $input[$f] = trim((string) ($_POST[$f] ?? ''));
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $upd = db()->prepare(
             'UPDATE customers
-                SET name = ?, email = ?, phone = ?, has_whatsapp = ?,
+                SET name = ?, email = ?, phone = ?, mobile = ?, has_whatsapp = ?,
                     address1 = ?, address2 = ?,
                     town = ?, county = ?, postcode = ?, notes = ?
               WHERE id = ? AND client_id = ?'
@@ -56,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input['name'],
             $input['email']    !== '' ? $input['email']    : null,
             $input['phone']    !== '' ? $input['phone']    : null,
+            $input['mobile']   !== '' ? $input['mobile']   : null,
             (int) $input['has_whatsapp'],
             $input['address1'] !== '' ? $input['address1'] : null,
             $input['address2'] !== '' ? $input['address2'] : null,
@@ -146,13 +147,18 @@ $activeNav = 'customers';
                                value="<?= e((string) ($customer['email'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="phone">Phone</label>
+                        <label for="phone">Phone <span style="color:#9ca3af;font-weight:400">(landline)</span></label>
                         <input id="phone" name="phone" type="tel" maxlength="50" autocomplete="tel"
                                value="<?= e((string) ($customer['phone'] ?? '')) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="mobile">Mobile</label>
+                        <input id="mobile" name="mobile" type="tel" maxlength="40" autocomplete="tel"
+                               value="<?= e((string) ($customer['mobile'] ?? '')) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
                             <input type="checkbox" name="has_whatsapp" value="1"
                                    <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
-                            Customer has WhatsApp on this number
+                            Mobile is on WhatsApp
                         </label>
                     </div>
                 </div>

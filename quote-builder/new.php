@@ -30,6 +30,7 @@ $f = [
     'end_customer_name'     => '',
     'end_customer_email'    => '',
     'end_customer_phone'    => '',
+    'end_customer_mobile'   => '',
     'end_customer_address1' => '',
     'end_customer_address2' => '',
     'end_customer_town'     => '',
@@ -59,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
                     a.installation_address1, a.installation_address2,
                     a.installation_town, a.installation_county, a.installation_postcode,
                     c.name AS cust_name, c.email AS cust_email,
-                    c.phone AS cust_phone, c.has_whatsapp AS cust_whatsapp,
+                    c.phone AS cust_phone, c.mobile AS cust_mobile, c.has_whatsapp AS cust_whatsapp,
                     c.address1 AS cust_addr1, c.address2 AS cust_addr2,
                     c.town AS cust_town, c.county AS cust_county,
                     c.postcode AS cust_postcode
@@ -75,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
             $f['end_customer_name']     = (string) ($appt['cust_name']    ?? '');
             $f['end_customer_email']    = (string) ($appt['cust_email']   ?? '');
             $f['end_customer_phone']    = (string) ($appt['cust_phone']   ?? '');
+            $f['end_customer_mobile']   = (string) ($appt['cust_mobile']  ?? '');
             $f['has_whatsapp']          = !empty($appt['cust_whatsapp']) ? 1 : 0;
             // Prefer the appointment's installation address (the
             // physical place where the blinds go) since that's what
@@ -116,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['end_customer_name']     = trim((string) ($_POST['end_customer_name']     ?? ''));
     $f['end_customer_email']    = trim((string) ($_POST['end_customer_email']    ?? ''));
     $f['end_customer_phone']    = trim((string) ($_POST['end_customer_phone']    ?? ''));
+    $f['end_customer_mobile']   = trim((string) ($_POST['end_customer_mobile']   ?? ''));
     $f['end_customer_address1'] = trim((string) ($_POST['end_customer_address1'] ?? ''));
     $f['end_customer_address2'] = trim((string) ($_POST['end_customer_address2'] ?? ''));
     $f['end_customer_town']     = trim((string) ($_POST['end_customer_town']     ?? ''));
@@ -128,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // fields the user left empty — keeps the link but lets edits flow.
     if ($f['customer_id'] > 0) {
         $cs = db()->prepare(
-            'SELECT name, email, phone, has_whatsapp,
+            'SELECT name, email, phone, mobile, has_whatsapp,
                     address1, address2, town, county, postcode
                FROM customers WHERE id = ? AND client_id = ? LIMIT 1'
         );
@@ -140,6 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($f['end_customer_name']     === '') $f['end_customer_name']     = (string) $cust['name'];
             if ($f['end_customer_email']    === '') $f['end_customer_email']    = (string) ($cust['email']    ?? '');
             if ($f['end_customer_phone']    === '') $f['end_customer_phone']    = (string) ($cust['phone']    ?? '');
+            if ($f['end_customer_mobile']   === '') $f['end_customer_mobile']   = (string) ($cust['mobile']   ?? '');
             if ($f['end_customer_address1'] === '') $f['end_customer_address1'] = (string) ($cust['address1'] ?? '');
             if ($f['end_customer_address2'] === '') $f['end_customer_address2'] = (string) ($cust['address2'] ?? '');
             if ($f['end_customer_town']     === '') $f['end_customer_town']     = (string) ($cust['town']     ?? '');
@@ -184,7 +188,7 @@ $pcFlag->execute([$clientId]);
 $postcodeLookupEnabled = (int) $pcFlag->fetchColumn() === 1;
 
 $custStmt = db()->prepare(
-    'SELECT id, name, email, phone, has_whatsapp,
+    'SELECT id, name, email, phone, mobile, has_whatsapp,
             address1, address2, town, county, postcode
        FROM customers
       WHERE client_id = ? ORDER BY name LIMIT 500'
@@ -209,6 +213,7 @@ foreach ($customers as $c) {
         'name'         => (string) $c['name'],
         'email'        => (string) ($c['email']    ?? ''),
         'phone'        => (string) ($c['phone']    ?? ''),
+        'mobile'       => (string) ($c['mobile']   ?? ''),
         'has_whatsapp' => !empty($c['has_whatsapp']) ? '1' : '',
         'address1'     => (string) ($c['address1'] ?? ''),
         'address2'     => (string) ($c['address2'] ?? ''),
@@ -272,6 +277,7 @@ $activeNav = 'order-history';
                                         data-name="<?= e($d['name']) ?>"
                                         data-email="<?= e($d['email']) ?>"
                                         data-phone="<?= e($d['phone']) ?>"
+                                        data-mobile="<?= e($d['mobile']) ?>"
                                         data-has_whatsapp="<?= e($d['has_whatsapp']) ?>"
                                         data-address1="<?= e($d['address1']) ?>"
                                         data-address2="<?= e($d['address2']) ?>"
@@ -295,20 +301,25 @@ $activeNav = 'order-history';
                     </div>
                 </div>
 
-                <div class="form-row cols-2">
+                <div class="form-row cols-3">
                     <div class="form-group">
                         <label for="end_customer_email">Email</label>
                         <input id="end_customer_email" name="end_customer_email" type="email" maxlength="150"
                                value="<?= e((string) $f['end_customer_email']) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="end_customer_phone">Phone</label>
+                        <label for="end_customer_phone">Phone <span style="color:#9ca3af;font-weight:400">(landline)</span></label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
                                value="<?= e((string) $f['end_customer_phone']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="end_customer_mobile">Mobile</label>
+                        <input id="end_customer_mobile" name="end_customer_mobile" type="tel" maxlength="40"
+                               value="<?= e((string) $f['end_customer_mobile']) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
                             <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
                                    <?= !empty($f['has_whatsapp']) ? 'checked' : '' ?>>
-                            Customer has WhatsApp on this number
+                            Mobile is on WhatsApp
                         </label>
                     </div>
                 </div>
@@ -391,7 +402,7 @@ $activeNav = 'order-history';
     var dataList = document.getElementById('customer-options');
     if (!search || !hidden || !dataList) return;
 
-    var FIELDS = ['name','email','phone','address1','address2','town','county','postcode'];
+    var FIELDS = ['name','email','phone','mobile','address1','address2','town','county','postcode'];
 
     function setField(suffix, value) {
         var el = document.getElementById(

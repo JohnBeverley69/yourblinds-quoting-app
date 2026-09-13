@@ -946,15 +946,16 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
             $emptyToNull = static fn (string $v) => $v === '' ? null : $v;
             $custIns = $pdo->prepare(
                 'INSERT INTO customers
-                   (client_id, name, email, phone, has_whatsapp,
+                   (client_id, name, email, phone, mobile, has_whatsapp,
                     address1, address2, town, county, postcode)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $custIns->execute([
                 $clientId,
                 (string) $f['end_customer_name'],
                 $emptyToNull((string) $f['end_customer_email']),
                 $emptyToNull((string) $f['end_customer_phone']),
+                $emptyToNull((string) ($f['end_customer_mobile'] ?? '')),
                 (int) $f['has_whatsapp'],
                 $emptyToNull((string) $f['end_customer_address1']),
                 $emptyToNull((string) $f['end_customer_address2']),
@@ -983,13 +984,13 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                 $st = $pdo->prepare(
                     'INSERT INTO quotes
                       (client_id, quote_number, customer_id,
-                       end_customer_name, end_customer_email, end_customer_phone, has_whatsapp,
+                       end_customer_name, end_customer_email, end_customer_phone, end_customer_mobile, has_whatsapp,
                        end_customer_address1, end_customer_address2,
                        end_customer_town, end_customer_county, end_customer_postcode,
                        status, vat_percent, notes,
                        public_token, created_by_user_id)
                      VALUES
-                      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                        "draft", ?, ?, ?, ?)'
                 );
                 $st->execute([
@@ -999,6 +1000,7 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                     (string) $f['end_customer_name'],
                     (string) $f['end_customer_email']    !== '' ? (string) $f['end_customer_email']    : null,
                     (string) $f['end_customer_phone']    !== '' ? (string) $f['end_customer_phone']    : null,
+                    (string) ($f['end_customer_mobile'] ?? '') !== '' ? (string) $f['end_customer_mobile'] : null,
                     (int) $f['has_whatsapp'],
                     (string) $f['end_customer_address1'] !== '' ? (string) $f['end_customer_address1'] : null,
                     (string) $f['end_customer_address2'] !== '' ? (string) $f['end_customer_address2'] : null,
