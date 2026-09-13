@@ -56,6 +56,9 @@ $fjOrder = $hasFactoryJobs
             WHEN 'made' THEN 3 WHEN 'dispatched' THEN 4 ELSE 5 END, "
     : '';
 
+require_once __DIR__ . '/../_partials/bought_in.php';
+$mpJoin  = bought_in_master_join('p', 'mp');
+$inHouse = bought_in_inhouse_predicate('mp');   // true = made here (goes to floor)
 try {
     $oStmt = $pdo->prepare(
         "SELECT q.id, q.client_id, c.company_name AS tenant,
@@ -65,13 +68,15 @@ try {
                 q.customer_reference, q.additional_reference,
                 q.end_customer_name,
                 COUNT(qi.id)                  AS bev_lines,
-                COALESCE(SUM(qi.quantity), 0) AS bev_qty
+                COALESCE(SUM(CASE WHEN $inHouse THEN qi.quantity ELSE 0 END), 0)     AS bev_qty,
+                COALESCE(SUM(CASE WHEN NOT ($inHouse) THEN qi.quantity ELSE 0 END), 0) AS boughtin_qty
                 $fjSelect
            FROM quotes q
            JOIN clients c       ON c.id = q.client_id
            LEFT JOIN clients ac ON ac.id = q.account_client_id
            JOIN quote_items qi  ON qi.quote_id = q.id
            JOIN products p      ON p.id = qi.product_id
+           $mpJoin
            $fjJoin
           WHERE q.status IN ($inPlaced)
             AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?

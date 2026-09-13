@@ -228,10 +228,18 @@ function bj_step_label(array $list, ?int $stepId): string
  */
 function bj_release_order(PDO $pdo, int $quoteId, int $master): int
 {
+    require_once __DIR__ . '/bought_in.php';
+    // Only MADE-in-house lines go to the production floor. A bought-in line (its
+    // master product carries a real supplier, e.g. a PF Venetian from Hunter
+    // Douglas) is ORDERED, not cut — so it never gets a make-job, and the floor
+    // counts / "N of M made" / worksheets all stay honest (they read these jobs).
     $items = $pdo->prepare(
         'SELECT qi.id, qi.quantity, COALESCE(p.source_product_id, p.id) AS master_product_id
-           FROM quote_items qi JOIN products p ON p.id = qi.product_id
+           FROM quote_items qi
+           JOIN products p ON p.id = qi.product_id
+           ' . bought_in_master_join('p', 'mp') . '
           WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
+            AND ' . bought_in_inhouse_predicate('mp') . '
           ORDER BY qi.line_no, qi.id'
     );
     $items->execute([$quoteId, $master]);
