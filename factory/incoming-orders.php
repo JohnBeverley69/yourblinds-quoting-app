@@ -127,6 +127,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // Production stages: pill [label, text colour, bg], the next action label, and
 // the previous stage (for a one-step rewind).
 $STAGE_META = [
+    'new'           => ['New',           '#b91c1c', '#fee2e2'],   // not yet received — stands out
     'received'      => ['Received',     '#1e40af', '#dbeafe'],
     'in_production' => ['In production', '#92600a', '#fef3c7'],
     'made'          => ['Made',          '#166534', '#dcfce7'],
@@ -184,6 +185,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-list-head { padding: 0.55rem 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint, #94a3b8); font-weight: 600; border-bottom: 1px solid var(--border, #e5e7eb); background: var(--bg-subtle, #f8fafc); }
     .io-list-head span:last-child { text-align: right; }
     .io-item { border-bottom: 1px solid var(--border, #e5e7eb); }
+    /* A not-yet-received order: a red left rail + a faint tint so it's obvious
+       at a glance which orders are new and need actioning. */
+    .io-item.is-new { border-left: 4px solid #dc2626; background: #fef4f4; }
+    [data-theme="dark"] .io-item.is-new { background: rgba(220,38,38,0.10); }
     .io-item:last-child { border-bottom: none; }
     .io-summary { padding: 0.55rem 1rem; cursor: pointer; }
     .io-summary:hover { background: var(--bg-subtle, #f8fafc); }
@@ -275,7 +280,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             $prog      = $floorProg[$qid] ?? null;   // ['total'=>, 'done'=>] once on the floor
             $searchKey = strtolower(trim($ref . ' ' . $custLabel . ' ' . $accContact . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
-            <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>">
+            <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?><?= $stage === 'new' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
@@ -386,12 +391,22 @@ require __DIR__ . '/../_partials/factory_head.php';
         var baseTitle = document.title;
         btn.addEventListener('click', function () { location.reload(); });
 
+        // Track when the user last touched the page. A reload that lands while
+        // someone is clicking "Start production" would put that click on the
+        // wrong row — so we only auto-refresh when they've been idle for a few
+        // seconds. While they're actively working we fall back to the OFFER
+        // banner and let them refresh when they're ready.
+        var lastTouch = 0;
+        ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) {
+            document.addEventListener(ev, function () { lastTouch = Date.now(); }, true);
+        });
+        var IDLE_MS = 4000;
+
         // Poll a cheap version string. When it differs from what we loaded with,
-        // OFFER a refresh (never take one — the buttons here start production, and
-        // a page that reloads under a hand puts that click on the wrong order).
-        // Polls even when the tab is hidden and badges the count into the tab
-        // title, so a bench that's left this open in the background still gets
-        // told a new order has landed — no sound, no auto-reload.
+        // a new order (or a status move) has landed. If the operator is idle we
+        // just refresh so the new order appears on its own, colour-coded; if
+        // they're mid-click we show the OFFER banner instead. Works in a hidden
+        // background tab too (badges the count into the tab title).
         function check() {
             fetch('/factory/poll.php?what=incoming', { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
@@ -399,6 +414,15 @@ require __DIR__ . '/../_partials/factory_head.php';
                     if (!j || !j.v || j.v === 'x' || j.v === mine) return;
                     var a = (mine.match(/^i(\d+)/) || [])[1], b = (j.v.match(/^i(\d+)/) || [])[1];
                     var n = (a !== undefined && b !== undefined) ? (parseInt(b, 10) - parseInt(a, 10)) : 0;
+
+                    // Safe to auto-refresh: nobody's touched the page recently, or
+                    // it's a hidden background tab. New orders then just appear.
+                    if (document.hidden || (Date.now() - lastTouch) > IDLE_MS) {
+                        location.reload();
+                        return;
+                    }
+
+                    // Busy — offer, don't force.
                     text.textContent = n > 0
                         ? (n === 1 ? '1 new order has come in.' : n + ' new orders have come in.')
                         : 'Orders have changed.';
