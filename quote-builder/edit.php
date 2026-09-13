@@ -1019,7 +1019,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
 
-                <div class="form-row cols-2">
+                <div class="form-row cols-epm">
                     <div class="form-group">
                         <label for="end_customer_email">Email</label>
                         <input id="end_customer_email" name="end_customer_email" type="email" maxlength="150"

@@ -170,7 +170,7 @@ $activeNav = 'customers';
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row cols-epm">
                     <div class="form-group">
                         <label for="email">Email</label>
                         <input id="email" name="email" type="email" maxlength="150" autocomplete="email"
