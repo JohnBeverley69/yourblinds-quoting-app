@@ -255,10 +255,13 @@ require __DIR__ . '/../_partials/factory_head.php';
             $ref      = (string) ($o['quote_number'] ?? ('#' . $qid));
             $tenant   = (string) ($o['tenant'] ?? 'Unknown account');
             // For a trade order (raised FOR an account) the real customer is the
-            // linked account, not the factory that owns the quote. Show that.
+            // linked account, not the factory that owns the quote. For a one-off
+            // (no account) fall back to the end-customer name so the row isn't
+            // just labelled "Beverley Blinds Trade" (the owning tenant).
             $accCompany = trim((string) ($o['account_company'] ?? ''));
             $accContact = trim((string) ($o['account_contact'] ?? ''));
-            $custLabel  = $accCompany !== '' ? $accCompany : $tenant;
+            $endCustName = trim((string) ($o['end_customer_name'] ?? ''));
+            $custLabel  = $accCompany !== '' ? $accCompany : ($endCustName !== '' ? $endCustName : $tenant);
             $status   = (string) ($o['status'] ?? '');
             $custRef  = trim((string) ($o['customer_reference'] ?? ''));
             $addRef   = trim((string) ($o['additional_reference'] ?? ''));

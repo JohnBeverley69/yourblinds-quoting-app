@@ -790,6 +790,26 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                    class="btn btn-secondary">
                     Download PDF
                 </a>
+                <?php
+                    // "Save as order" — place the job now: accept it, then route
+                    // to the Place-order screen (bought-in lines get emailed to
+                    // their suppliers, Beverley lines go to the factory). Shown
+                    // on a not-yet-ordered quote that has at least one line, to
+                    // order-level users. Distinct from "Send as quote" (email the
+                    // customer an accept link, below).
+                    $canPlaceOrder = ($isAdmin || !empty($_perms['can_create_orders']))
+                        && !empty($items)
+                        && in_array((string) $quote['status'], ['draft', 'sent'], true);
+                ?>
+                <?php if ($canPlaceOrder): ?>
+                    <form method="post" action="/quote-builder/change_status.php">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                        <input type="hidden" name="target_status" value="accepted">
+                        <input type="hidden" name="then_place" value="1">
+                        <button type="submit" class="btn btn-primary">📦 Save as order</button>
+                    </form>
+                <?php endif; ?>
                 <?php foreach ($transitions as $t): ?>
                     <?php if (!qb_user_can_change_to($isAdmin, $_perms, $t)) continue; ?>
                     <form method="post" action="/quote-builder/change_status.php">
