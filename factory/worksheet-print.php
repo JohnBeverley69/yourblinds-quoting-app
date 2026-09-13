@@ -89,14 +89,14 @@ try {
     } catch (Throwable $e2) { /* handled below */ }
 }
 
-// For the FACTORY's OWN retail quote (no trade account) the "customer" is the end
-// customer named on the quote — not the factory itself. Without this the ticket
-// shows the factory ("Beverley Blinds Trade") + our unit address instead of e.g.
-// "John Beverley, Nuns Park Avenue". Account orders (ac) and tenant orders (c)
-// are untouched; only a factory-owned, account-less quote with an end customer.
+// For ANY retail quote (no trade account) the "customer" on the ticket is the end
+// customer named on the quote — the person the blind is for — not the business
+// that owns the quote. Without this a tenant's order (e.g. ABC Blinds selling to
+// Tyler Smith) shows "ABC Blinds" instead of "Tyler Smith", and the factory's own
+// retail shows "Beverley Blinds Trade" instead of the customer. Trade-ACCOUNT
+// orders (account_client_id set) are untouched — there the account IS the customer.
 if ($order
     && (int) ($order['account_client_id'] ?? 0) === 0
-    && (int) ($order['client_id'] ?? 0) === (int) $MASTER
     && trim((string) ($order['end_customer_name'] ?? '')) !== '') {
     $order['company_name'] = trim((string) $order['end_customer_name']);
     $order['address1']     = (string) ($order['end_customer_address1'] ?? '');
@@ -426,6 +426,38 @@ foreach ($rendered as $r) {
     if ((string) ($r['template']['stock'] ?? '') === 'roll-102x76') $rollBlinds[] = $r;
     else                                                            $diecutBlinds[] = $r;
 }
+
+// Number each print RUN on its own. Rollers print on the thermal roll and
+// verticals on the die-cut sheet as SEPARATE jobs, so their "X of Y" must be
+// scoped to their own run — otherwise a 3-blind order (1 vertical + 2 rollers)
+// numbers across the whole order, the lone vertical reads "1 of 3", and the bench
+// hunts for two blinds that are on the other printer. Renumber line_no + blind_seq
+// within each group so the vertical reads "1 of 1" and the rollers "1 of 2"/"2 of 2".
+$renumberRun = static function (array $group): array {
+    $lineIdx = [];   // item_id => sequential line number within this run
+    foreach ($group as $g) {
+        $id = (int) ($g['item_id'] ?? 0);
+        if (!isset($lineIdx[$id])) $lineIdx[$id] = count($lineIdx) + 1;
+    }
+    $lineTotal  = max(1, count($lineIdx));
+    $blindTotal = 0;
+    foreach ($group as $g) { if (empty($g['template']['one_per_line'])) $blindTotal++; }
+    $blindNo = 0;
+    foreach ($group as &$g) {
+        $id = (int) ($g['item_id'] ?? 0);
+        $g['ctx']['line_no'] = ($lineIdx[$id] ?? 1) . '/' . $lineTotal;
+        $perBlind = empty($g['template']['one_per_line']);
+        if ($perBlind) $blindNo++;
+        $g['ctx']['blind_no']    = $perBlind ? (string) $blindNo : '';
+        $g['ctx']['blind_total'] = (string) $blindTotal;
+        $g['ctx']['blind_seq']   = $perBlind ? ($blindNo . ' of ' . $blindTotal) : '';
+    }
+    unset($g);
+    return $group;
+};
+$rollBlinds   = $renumberRun($rollBlinds);
+$diecutBlinds = $renumberRun($diecutBlinds);
+
 $hasRoll   = $rollBlinds   !== [];
 $hasDiecut = $diecutBlinds !== [];
 
