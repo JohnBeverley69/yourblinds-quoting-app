@@ -20,6 +20,9 @@ $user     = current_user();
 $clientId = (int) $user['client_id'];
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $target   = trim((string) ($_POST['target_status'] ?? ''));
+// "Save as order": accept, then continue to the Place-order (supplier) screen
+// unless it auto-placed straight to the factory (pure in-house).
+$thenPlace = !empty($_POST['then_place']);
 
 $quote = qb_load_quote_or_404($quoteId, $clientId);
 $current = (string) $quote['status'];
@@ -241,6 +244,21 @@ try {
     }
 
     $pdo->commit();
+
+    // "Save as order" flow: the accept succeeded. If it didn't already
+    // auto-place straight to the factory (pure in-house → 'ordered'), send the
+    // user on to the Place-order screen where bought-in lines get emailed to
+    // their suppliers and Beverley lines are handed to manufacturing (that
+    // screen makes the final accepted → ordered step). Pure in-house is already
+    // placed, so just report it.
+    if ($thenPlace && $target === 'accepted') {
+        qb_flash_redirect(
+            '/quote-builder/order_suppliers.php?id=' . $quoteId,
+            'success',
+            'Order accepted — place it below (suppliers get emailed their lines).'
+        );
+    }
+
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'success',
