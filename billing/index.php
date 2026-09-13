@@ -284,9 +284,11 @@ $activeNav = 'billing';
                 <span style="color:var(--text-faint);font-size:0.875rem;flex:1 1 100%">
                     <?php if ($monthlyTotal > 0): ?>
                         Billed monthly in GBP through PayPal<?= $vatPct > 0 ? ', plus VAT' : '' ?>. Cancel any time.
-                    <?php else: ?>
+                    <?php elseif ($currentTierCode === 'free'): ?>
                         You're on the free <strong>Bronze</strong> plan. Add a paid tier below any time —
                         billed monthly in GBP through PayPal<?= $vatPct > 0 ? ' (prices + VAT)' : '' ?>.
+                    <?php else: ?>
+                        You're on <strong><?= e($currentTierName) ?></strong>, complimentary — free of charge, with every feature of the tier included.
                     <?php endif; ?>
                 </span>
             </div>
