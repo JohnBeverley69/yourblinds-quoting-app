@@ -394,6 +394,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;"><input type="checkbox" id="tpl-default" <?= $currentIsDef ? 'checked' : '' ?>> Default for printing</label>
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="Print ONE label for the whole order line, showing the quantity — instead of one label per unit. For fabric-only cuts (e.g. 50 identical slats), where you want a single Qty 50 ticket. Use the Qty field, not Slat/Unit."><input type="checkbox" id="tpl-oneline"> One label per line (qty)</label>
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="QR code size on every label of this worksheet. Smaller frees space — 10mm has tested fine on your stock.">QR size <input type="number" id="tpl-qr" min="6" max="40" step="0.5" style="width:4.2rem;"> mm</label>
+        <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="Roll of labels = one label per blind on a thermal roll, no order header (rollers). A4 die-cut sheet = an order header once at the top, then labels below (verticals).">Stock
+            <select id="tpl-stock" style="font:inherit; padding:0.2rem 0.3rem;">
+                <option value="a4-diecut">A4 die-cut sheet</option>
+                <option value="roll-102x76">Roll of labels</option>
+            </select></label>
         <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
     </div>
 
@@ -516,7 +521,13 @@ require __DIR__ . '/../_partials/factory_head.php';
         ]
     };
 
-    var STATE = LAYOUT && LAYOUT.header ? LAYOUT
+    // Preserve an existing template as-is — including its `stock`. A roll
+    // template is label-only (no header), so the old `LAYOUT.header` test wrongly
+    // fell through to the a4-diecut default and SILENTLY converted rolls to A4 on
+    // open+save. Keep the layout whenever it has a header OR labels; ensureSizes()
+    // fills any missing header default without touching the stock.
+    var STATE = (LAYOUT && typeof LAYOUT === 'object' && (LAYOUT.header || (LAYOUT.labels && LAYOUT.labels.length)))
+              ? LAYOUT
               : { stock: 'a4-diecut', header: { w: 170, h: 22, fields: [] }, labels: [] };
 
     // Which sections are folded (UI only — not saved). Keyed 'header' / 'label-<i>'.
@@ -646,11 +657,14 @@ require __DIR__ . '/../_partials/factory_head.php';
         qrLast(STATE.header.fields);
         STATE.labels.forEach(function (l) { qrLast(l.fields); });
         var html = '';
-        // Header section.
-        html += '<div class="sec' + (collapsed['header'] ? ' is-collapsed' : '') + '" data-sec="header">';
-        html += '<div class="sec-top">' + caret() + '<span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h, STATE.header.fs, STATE.header.lh) + '</div>';
-        html += '<div class="sec-body"><div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>' + addFieldControl() + '</div>';
-        html += '</div>';
+        // Header section — only for the A4 die-cut sheet. A roll of labels is
+        // label-only (one label per blind on a thermal roll, no order header).
+        if (STATE.stock !== 'roll-102x76') {
+            html += '<div class="sec' + (collapsed['header'] ? ' is-collapsed' : '') + '" data-sec="header">';
+            html += '<div class="sec-top">' + caret() + '<span class="tag">Order header</span><span class="ws-hint">prints once at the top</span>' + sizeCtl(STATE.header.w, STATE.header.h, STATE.header.fs, STATE.header.lh) + '</div>';
+            html += '<div class="sec-body"><div class="flds">' + fieldsBlock(STATE.header.fields) + '</div>' + addFieldControl() + '</div>';
+            html += '</div>';
+        }
         // Label sections.
         STATE.labels.forEach(function (lab, li) {
             html += '<div class="sec' + (collapsed['label-' + li] ? ' is-collapsed' : '') + '" data-sec="label" data-li="' + li + '">';
@@ -935,8 +949,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         sync();
         var pv = document.getElementById('preview');
         var html = '';
-        html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
-        html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"', STATE.header.fs, STATE.header.lh, STATE.qr);
+        // No order header on a roll of labels — it's label-only.
+        if (STATE.stock !== 'roll-102x76') {
+            html += '<div class="pv-cap">Order header · ' + STATE.header.w + ' × ' + STATE.header.h + ' mm</div>';
+            html += labelBox(STATE.header.w, STATE.header.h, inlineFields(STATE.header.fields, null, true), 'data-sec="header"', STATE.header.fs, STATE.header.lh, STATE.qr);
+        }
         html += '<div class="pv-badge">▼ one row per blind — sample shows two (drag on the first row) ▼</div>';
         [ '1/2', '2/2' ].forEach(function (ln, ri) {
             var interactive = (ri === 0);   // only the first sample row is draggable
@@ -1137,6 +1154,23 @@ require __DIR__ . '/../_partials/factory_head.php';
     (function () {
         var q = document.getElementById('tpl-qr');
         if (q) q.addEventListener('input', function () { STATE.qr = num(q.value, STATE.qr); renderPreview(); });
+    })();
+
+    // Stock selector: A4 die-cut sheet (header + labels) vs roll of labels
+    // (label-only). Changing it re-applies the stock's defaults and re-renders,
+    // which shows/hides the Order header. This is also how a template is made a
+    // roll in the first place — the print splits rollers onto the thermal roll
+    // by this exact value ('roll-102x76').
+    (function () {
+        var st = document.getElementById('tpl-stock');
+        if (!st) return;
+        st.value = (STATE.stock === 'roll-102x76') ? 'roll-102x76' : 'a4-diecut';
+        st.addEventListener('change', function () {
+            STATE.stock = st.value;
+            ensureSizes();
+            refreshQrInput();
+            render();
+        });
     })();
 
     ensureSizes();
