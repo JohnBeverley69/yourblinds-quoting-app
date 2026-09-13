@@ -478,7 +478,14 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $linesOn = (($_GET['lines'] ?? '1') !== '0');
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 
-    $qrMm = $ff('qr', is_numeric($layoutQr) ? (float) $layoutQr : 20);   // roller: 102x76mm thermal, room to spare
+    // QR size from the ROLLER template's own setting (set in the Worksheets
+    // editor) — not the first blind of a mixed order, which could be a vertical.
+    // Falls back to any template qr, then the 20mm roll default; URL ?qr= wins.
+    $rollTpl = $rollBlinds[0]['template'] ?? [];
+    $rollQr  = (is_array($rollTpl) && isset($rollTpl['qr']) && is_numeric($rollTpl['qr']) && (float) $rollTpl['qr'] > 0)
+        ? (float) $rollTpl['qr']
+        : (is_numeric($layoutQr) ? (float) $layoutQr : 20);
+    $qrMm = $ff('qr', $rollQr);   // roller: 102x76mm thermal, room to spare
 
     $renderFields = static function (array $fields, array $ctx, array $computed) use ($renderLineFields, $fieldHtml, $qrMm): string {
         return $renderLineFields($fields, $ctx, $computed, $fieldHtml, $qrMm);
@@ -600,7 +607,13 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
 
     // 12mm on the die-cut: 20% above the 10mm John proved on the real stock with
     // a hard thumb rub, and the label is only 21mm tall. Override with ?qr=
-    $qrMm = $ff('qr', is_numeric($layoutQr) ? (float) $layoutQr : 12);
+    // QR from the die-cut template's own setting (not the first blind of a mixed
+    // order); falls back to any template qr, then 12mm; URL ?qr= wins.
+    $dieTpl = $diecutBlinds[0]['template'] ?? [];
+    $dieQr  = (is_array($dieTpl) && isset($dieTpl['qr']) && is_numeric($dieTpl['qr']) && (float) $dieTpl['qr'] > 0)
+        ? (float) $dieTpl['qr']
+        : (is_numeric($layoutQr) ? (float) $layoutQr : 12);
+    $qrMm = $ff('qr', $dieQr);
 
     $renderFields = static function (array $fields, array $ctx, array $computed) use ($renderLineFields, $fieldHtml, $qrMm): string {
         return $renderLineFields($fields, $ctx, $computed, $fieldHtml, $qrMm);
