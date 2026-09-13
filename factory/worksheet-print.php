@@ -474,7 +474,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $labDim  = static fn (string $k, float $d): float =>
         (is_array($rollLab) && isset($rollLab[$k]) && is_numeric($rollLab[$k]) && (float) $rollLab[$k] > 0)
             ? (float) $rollLab[$k] : $d;
-    $LW = $ff('w', $labDim('w', 102)); $LH = $ff('h', $labDim('h', 76)); $fs = $ff('fs', $labDim('fs', 9));
+    $LW = $ff('w', $labDim('w', 101)); $LH = $ff('h', $labDim('h', 152)); $fs = $ff('fs', $labDim('fs', 9));
     $linesOn = (($_GET['lines'] ?? '1') !== '0');
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 
@@ -485,10 +485,118 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     $rollQr  = (is_array($rollTpl) && isset($rollTpl['qr']) && is_numeric($rollTpl['qr']) && (float) $rollTpl['qr'] > 0)
         ? (float) $rollTpl['qr']
         : (is_numeric($layoutQr) ? (float) $layoutQr : 20);
-    $qrMm = $ff('qr', $rollQr);   // roller: 102x76mm thermal, room to spare
+    $qrMm = $ff('qr', $rollQr);   // roller: 101x152mm thermal roll, room to spare
 
     $renderFields = static function (array $fields, array $ctx, array $computed) use ($renderLineFields, $fieldHtml, $qrMm): string {
         return $renderLineFields($fields, $ctx, $computed, $fieldHtml, $qrMm);
+    };
+
+    // Pull the first non-blank option value from a list of candidate opt: keys
+    // (option group names are lower-cased in $ctx). Placeholder "no value"
+    // selections are treated as blank so empty boxes stay clean — but real
+    // negatives like "No" / "No Fascia" / "No Scallop" are kept (the bench needs
+    // to see them). Candidate lists let a box read whichever of several system
+    // options fed it (e.g. Senses vs Louvolite colour, or the two Fixings options).
+    $rlVal = static function (array $ctx, array $keys): string {
+        $skip = ['none', 'not needed', 'none required', 'not applicable', 'n/a', 'na',
+                 'please select', 'select', 'not required', 'select braid type'];
+        foreach ($keys as $k) {
+            $v = trim((string) ($ctx[$k] ?? ''));
+            if ($v === '' || in_array(strtolower($v), $skip, true)) continue;
+            return $v;
+        }
+        return '';
+    };
+
+    // The roller roll label — a boxed, ruled grid modelled on the workshop's
+    // Excel label, driven by the order's real option values with the SYSTEM
+    // option names as captions. Optional rows (braid/pole/safety, motor extras)
+    // collapse out when empty so a plain chain roller stays compact, and expand
+    // for a motorised blind. Bracket Covers prints Yes/No only.
+    $rollerLabelHtml = static function (array $ctx, array $computed, array $bottomFields = []) use ($rlVal, $qrMm, $fieldText): string {
+        $e    = static fn ($s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+        $cell = static function (string $cap, string $val, float $w, string $cls = '') use ($e): string {
+            return '<div class="rc' . ($cls !== '' ? ' ' . $cls : '') . '" style="flex:' . $w . '">'
+                 . '<span class="rcap">' . $e($cap) . '</span>'
+                 . '<span class="rval">' . $e($val) . '</span></div>';
+        };
+        // A computed build variable (cut size), tidied: mm numbers show as integers;
+        // "" (Fascia_Cut on open fascia, Chain_Length on non-chain) stays blank.
+        $cv = static function (string $name) use ($computed): string {
+            $v = $computed[$name] ?? null;
+            if ($v === null) return '';
+            if (is_numeric($v)) return rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
+            return trim((string) $v);
+        };
+        $name = trim((string) ($ctx['customer'] ?? ''));
+        if ($name === '') $name = trim((string) ($ctx['company'] ?? ''));
+        $ref      = trim((string) ($ctx['cust_ref'] ?? ''));
+        $orderNo  = trim((string) ($ctx['order_no'] ?? ''));
+        $orderCel = $ref !== '' ? ($orderNo . ' · ' . $ref) : $orderNo;
+        $w = trim((string) ($ctx['width'] ?? '')); $d = trim((string) ($ctx['drop'] ?? ''));
+        $size = ($w !== '' || $d !== '') ? ($w . ' × ' . $d) : '';
+        $meas = $rlVal($ctx, ['opt:exact or recess', 'recess_exact']);
+        $fh   = trim((string) ($ctx['fit_height'] ?? ''));
+        if ($fh !== '') $meas = trim($meas . '  FH ' . $fh);
+
+        $bbCol  = $rlVal($ctx, ['opt:senses bottom bar colour', 'opt:unishade bottom bar colour']);
+        $bbEnd  = $rlVal($ctx, ['opt:senses bottom bar end cap colours', 'opt:uni shade end cap colours']);
+        $facCol = $rlVal($ctx, ['opt:senses profile colour', 'opt:ll profile colour']);
+        $facEnd = $rlVal($ctx, ['opt:senses end cap colour', 'opt:ll end cap colour']);
+        $fixing = $rlVal($ctx, ['opt:fixings', 'opt:fixings (senses)', 'opt:fixings (louvolite)']);
+        $braid  = $rlVal($ctx, ['opt:braid colour']);
+        $pole   = $rlVal($ctx, ['opt:pole']);
+        $safety = $rlVal($ctx, ['opt:child safety']);
+        $remote = $rlVal($ctx, ['opt:remote options']);
+        $extras = $rlVal($ctx, ['opt:optional extras']);
+
+        // TOP — the fixed option grid, shrunk into the upper section. The bench-
+        // critical cut sizes + notes live in the designable bottom section below.
+        $grid  = '';
+        $grid .= '<div class="rr">' . $cell('Name', $name, 6) . $cell('Order', $orderCel, 4) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fabric', trim((string) ($ctx['fabric'] ?? '')), 6) . $cell('Colour', trim((string) ($ctx['colour'] ?? '')), 4) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Size  W × Drop', $size, 4) . $cell('Measurement', $meas, 3) . $cell('Location', trim((string) ($ctx['location'] ?? '')), 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fabric Roll', $rlVal($ctx, ['opt:fabric roll']), 3) . $cell('Control', $rlVal($ctx, ['opt:control options', 'control']), 4) . $cell('Side', $rlVal($ctx, ['opt:control side']), 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Mech Colour', $rlVal($ctx, ['opt:mech colour']), 3) . $cell('Chain', $rlVal($ctx, ['opt:chain type', 'opt:chain']), 3) . $cell('Bracket Covers', $rlVal($ctx, ['opt:bracket covers?', 'opt:bracket covers']), 4) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Bottom Bar', $rlVal($ctx, ['opt:bottom bar options']), 4) . $cell('BB Colour', $bbCol, 3) . $cell('BB Endcaps', $bbEnd, 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fascia', $rlVal($ctx, ['opt:fascia options']), 4) . $cell('Fascia Colour', $facCol, 3) . $cell('Fascia Endcaps', $facEnd, 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fixings', $fixing, 3) . $cell('Fabric Strip', $rlVal($ctx, ['opt:fabric strip']), 3) . $cell('Scallop / Shape', $rlVal($ctx, ['opt:scallops and trims']), 4) . '</div>';
+        if ($braid !== '' || $pole !== '' || $safety !== '') {
+            $grid .= '<div class="rr">' . $cell('Braid', $braid, 3) . $cell('Pole', $pole, 3) . $cell('Child Safety', $safety, 4) . '</div>';
+        }
+        if ($remote !== '' || $extras !== '') {
+            $grid .= '<div class="rr">' . $cell('Remote', $remote, 5) . $cell('Optional Extras', $extras, 5) . '</div>';
+        }
+
+        // BOTTOM — cut sizes (bench-critical) + notes + QR. This is the section the
+        // Worksheets label designer will own; for now it shows the computed cut
+        // sizes big and bold, plus the line's notes and the scan code.
+        $cutRow = '<div class="rr rcutrow">'
+                . $cell('Tube', $cv('Tube_Cut'), 2, 'rcut')
+                . $cell('Fabric W', $cv('Fabric_W'), 2, 'rcut')
+                . $cell('Fascia', $cv('Fascia_Cut'), 2, 'rcut')
+                . $cell('Fabric Drop', $cv('Fabric_Drop'), 2, 'rcut')
+                . $cell('Chain', $cv('Chain_Length'), 2, 'rcut') . '</div>';
+        $qr = '';
+        $code = (string) ($ctx['qr_code'] ?? '');
+        if ($code !== '') $qr = '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
+        $notes = '<div class="rr rnotes">' . $cell('Additional Notes', trim((string) ($ctx['notes'] ?? '')), 10) . $qr . '</div>';
+
+        // Designer extras — anything added to the roller template's label fields in
+        // the Worksheets editor prints here, between the cut band and the notes.
+        // Empty by default (so the label is just cut band + notes out of the box).
+        $extra = '';
+        foreach ($bottomFields as $f) {
+            $src = (string) ($f['source'] ?? '');
+            if ($src === 'qr' || $src === '__break__') continue;
+            $t = $fieldText($f, $ctx, $computed);
+            if ($t === null || trim($t) === '') continue;
+            $extra .= '<span class="rx">' . $e($t) . '</span>';
+        }
+        $extraHtml = $extra !== '' ? '<div class="rr rextra">' . $extra . '</div>' : '';
+
+        return '<div class="rl-grid">' . $grid . '</div>'
+             . '<div class="rl-bottom">' . $cutRow . $extraHtml . $notes . '</div>';
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
@@ -522,6 +630,35 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds .qr svg { display:block; }
     .rl-label .flds .ln .r { margin-left:auto; }
     .rl-label .flds .ln .c { margin-left:auto; margin-right:auto; }
+    /* Boxed, ruled roller label (Excel-style grid) — rows share the height, each
+       cell stacks a small uppercase caption over the value. Nudge shifts the
+       whole label for a mis-registered printer. */
+    .rl-label { display:flex; flex-direction:column; border:0.4mm solid #000;
+                transform:translate(var(--nx),var(--ny)); font-family:"Arial Narrow",Arial,sans-serif; }
+    /* Top: fixed option grid (upper ~62%). Bottom: cut sizes + designer area. */
+    .rl-label .rl-grid   { flex:0 0 62%; display:flex; flex-direction:column; min-height:0; }
+    .rl-label .rl-bottom { flex:1 1 0;  display:flex; flex-direction:column; min-height:0; border-top:0.8mm solid #000; }
+    .rl-label .rr { display:flex; flex:1 1 0; min-height:0; border-top:0.3mm solid #000; }
+    .rl-label .rl-grid .rr:first-child, .rl-label .rl-bottom .rr:first-child { border-top:none; }
+    .rl-label .rr.rnotes { flex:1.6 1 0; position:relative; }
+    .rl-label .rc { display:flex; flex-direction:column; justify-content:flex-start;
+                    padding:0.4mm 1mm; border-left:0.3mm solid #000; overflow:hidden; min-width:0; }
+    .rl-label .rc:first-child { border-left:none; }
+    .rl-label .rcap { font-size:1.9mm; font-weight:700; letter-spacing:0.1px; line-height:1.05;
+                      text-transform:uppercase; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rl-label .rval { font-size:3.3mm; font-weight:700; line-height:1.06; margin-top:0.4mm; color:#000; overflow-wrap:anywhere; }
+    .rl-label .rnotes .rval { font-size:2.7mm; font-weight:600; }
+    /* Cut sizes — the key numbers the bench works to: taller row, bigger bold
+       values, heavier rules top & bottom so they stand out on the ticket. */
+    .rl-label .rr.rcutrow { flex:1 1 0; border-top:none; border-bottom:0.6mm solid #000; }
+    .rl-label .rcut .rcap { font-size:2mm; }
+    .rl-label .rcut .rval { font-size:5.5mm; font-weight:800; line-height:1.02; }
+    /* Designer extras row — free-flow captioned fields the user adds in the editor. */
+    .rl-label .rr.rextra { flex:0.9 1 0; display:flex; flex-wrap:wrap; gap:0 3mm; align-content:flex-start;
+                           padding:0.6mm 1mm; border-bottom:0.4mm solid #000; }
+    .rl-label .rextra .rx { font-size:2.7mm; font-weight:600; white-space:nowrap; line-height:1.2; }
+    .rl-label .qr { position:absolute; right:1mm; bottom:1mm; line-height:0; }
+    .rl-label .qr svg { display:block; }
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
@@ -544,8 +681,8 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 </div>
 <div class="stack">
 <?php // Roller blinds only — verticals go on the die-cut sheet, a different printer. ?>
-<?php foreach ($rollBlinds as $r): $lab0 = $r['template']['labels'][0] ?? []; $labFields = is_array($lab0) ? ($lab0['fields'] ?? []) : []; ?>
-    <div class="rl-label<?= $ol ?>"><div class="flds" style="<?= e($labelTypeStyle(is_array($lab0) ? $lab0 : [], $fs, 1.18)) ?>"><?= $renderFields($labFields, $labelCtx($r, 0), $r['computed']) ?></div></div>
+<?php foreach ($rollBlinds as $r): ?>
+    <div class="rl-label<?= $ol ?>"><?= $rollerLabelHtml($labelCtx($r, 0), $r['computed'], (is_array($r['template'] ?? null) ? ($r['template']['labels'][0]['fields'] ?? []) : [])) ?></div>
 <?php endforeach; ?>
 </div>
 <script>
