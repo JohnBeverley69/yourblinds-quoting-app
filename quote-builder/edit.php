@@ -1631,9 +1631,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 // guessing — mirrors the customer-facing "Deposit on acceptance".
                                 // Once accepted, deposit_amount is set and the Deposit panel
                                 // below takes over, so this row disappears.
-                                $predDep = (empty($quote['deposit_amount'])
+                                // Pre-acceptance only: show what's due when accepted — the
+                                // typed override if one's been set for this quote, else the
+                                // predicted default. On an order the Deposit panel takes over.
+                                $predDep = (!$quoteIsOrder
                                             && !in_array((string) $quote['status'], ['declined', 'paid'], true))
-                                    ? qb_predicted_deposit(db(), (int) $quote['client_id'], (float) $quote['total'])
+                                    ? (!empty($quote['deposit_amount'])
+                                        ? (float) $quote['deposit_amount']
+                                        : qb_predicted_deposit(db(), (int) $quote['client_id'], (float) $quote['total']))
                                     : 0.0;
                             ?>
                             <?php if ($predDep > 0): ?>
@@ -1748,6 +1753,37 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <?php endif; ?>
                 </form>
             <?php endif; ?>
+        </section>
+        <?php elseif ($editable): ?>
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Deposit</h2>
+            </div>
+            <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.625rem">
+                The deposit due when the customer accepts. Leave it as your default, or type an override for this quote.
+            </p>
+            <form method="post" action="/quote-builder/deposit.php"
+                  style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="save_amount">
+                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                <label for="dep-due-amt" style="font-size:0.8125rem;color:var(--text-faint);margin:0">Deposit due on acceptance £</label>
+                <input id="dep-due-amt" type="number" name="deposit_amount" step="0.01" min="0"
+                       <?= $depositPrefill !== null ? 'value="' . e(number_format($depositPrefill, 2, '.', '')) . '"' : '' ?>
+                       style="width:8rem;padding:0.375rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                <button type="submit" class="btn btn-primary"
+                        style="padding:0.3125rem 0.875rem;font-size:0.8125rem">Save deposit</button>
+                <?php if ($depositSuggestion !== null): ?>
+                    <span style="font-size:0.8125rem;color:var(--text-faint)">
+                        <?= e($depositSuggestLabel) ?>:
+                        <a href="#" onclick="document.getElementById('dep-due-amt').value='<?= e(number_format($depositSuggestion, 2, '.', '')) ?>';return false;"
+                           style="font-weight:600;color:var(--brand);text-decoration:none"><?= e(qb_fmt_money($depositSuggestion)) ?></a>
+                    </span>
+                <?php endif; ?>
+                <?php if (!empty($quote['deposit_amount'])): ?>
+                    <span style="font-size:0.8125rem;color:var(--brand);font-weight:600">Override set</span>
+                <?php endif; ?>
+            </form>
         </section>
         <?php endif; ?>
 
