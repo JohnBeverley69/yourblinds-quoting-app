@@ -325,6 +325,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: feature_auto_receipt not saved (run migrate_auto_receipt.php): ' . $e->getMessage());
             }
+            // Default sale type for the "New" launcher — factory only
+            // (migrate_sale_type.php). Only accept the two valid values.
+            if (is_super_admin() && isset($_POST['default_sale_type'])) {
+                $dst = $_POST['default_sale_type'] === 'retail' ? 'retail' : 'trade';
+                try {
+                    db()->prepare('UPDATE client_settings SET default_sale_type = ? WHERE client_id = ?')
+                        ->execute([$dst, $clientId]);
+                } catch (Throwable $e) {
+                    error_log('settings: default_sale_type not saved (run migrate_sale_type.php): ' . $e->getMessage());
+                }
+            }
             $_SESSION['flash_success'] = 'Quote settings saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save settings: ' . $e->getMessage();
@@ -1374,6 +1385,31 @@ $activeNav = 'settings';
                         </span>
                     </label>
                 </fieldset>
+
+                <?php if (is_super_admin()):
+                    $defaultSaleType = ($settings['default_sale_type'] ?? 'trade') === 'retail' ? 'retail' : 'trade';
+                ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Default sale type
+                    </legend>
+                    <label style="display:block;font-size:0.9375rem">
+                        When you click <strong>New</strong>, start as
+                        <select name="default_sale_type" style="margin-left:0.4rem;padding:0.3rem 0.5rem">
+                            <option value="trade"  <?= $defaultSaleType === 'trade'  ? 'selected' : '' ?>>Trade</option>
+                            <option value="retail" <?= $defaultSaleType === 'retail' ? 'selected' : '' ?>>Retail</option>
+                        </select>
+                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                            Most Beverley orders are trade, so the <em>New</em> screen opens on Trade by default —
+                            pick an account or enter a one-off. You can flip to Retail on the screen itself for a
+                            direct retail sale.
+                        </span>
+                    </label>
+                </fieldset>
+                <?php endif; ?>
 
                 <?php $autoPlaceInhouse = !isset($settings['auto_place_inhouse']) || !empty($settings['auto_place_inhouse']); ?>
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;

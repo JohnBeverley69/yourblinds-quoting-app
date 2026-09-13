@@ -313,39 +313,28 @@ window.addEventListener('pageshow', function (e) {
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
-        <?php if ($hasQuotes && $canCreateQuotes): ?>
-            <!-- Primary CTA — pinned at the top of the sidebar so
-                 raising a new quote is one click from any page.
-                 Visually distinct from nav links so it reads as
-                 "this is the main action", not "yet another link". -->
+        <?php if ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)): ?>
+            <!-- Primary CTA — one "New" button, pinned at the top so starting a
+                 quote is one click from any page. For the factory super-admin it
+                 opens the trade/retail launcher (pick an account, enter a one-off,
+                 or a retail sale); for everyone else it's the retail quick-quote. -->
             <div class="sidebar-cta">
-                <a href="/quote-builder/new.php" class="sidebar-cta-btn">
+                <a href="<?= $isSuperAdmin ? '/master-admin/new-order.php' : '/quote-builder/new.php' ?>" class="sidebar-cta-btn">
                     <span aria-hidden="true">+</span>
-                    New quote
+                    New
                 </a>
             </div>
         <?php endif; ?>
 
-        <!-- InstaPrice CTA — pinned right under New quote, in a distinct
-             coloured box so the "quick price" tool is easy to find.
-             Shown to everyone (it's just a price tool). -->
-        <div class="sidebar-cta"<?= ($hasQuotes && $canCreateQuotes) ? ' style="padding-top:0.375rem"' : '' ?>>
+        <!-- InstaPrice CTA — pinned right under New, in a distinct coloured box
+             so the "quick price" tool is easy to find. Shown to everyone. -->
+        <div class="sidebar-cta"<?= ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)) ? ' style="padding-top:0.375rem"' : '' ?>>
             <a href="/instaprice/index.php"
                class="sidebar-cta-btn is-instaprice<?= $activeNav === 'instaprice' ? ' is-active' : '' ?>">
                 <span aria-hidden="true">&#9889;</span>
                 InstaPrice
             </a>
         </div>
-        <?php if ($isSuperAdmin && $hasQuotes): ?>
-            <!-- Super-admin: raise a quote for a trade account (their pricing,
-                 sent to them) or a new customer, via the "who for?" launcher. -->
-            <div class="sidebar-cta" style="padding-top:0.375rem">
-                <a href="/master-admin/new-order.php" class="sidebar-cta-btn">
-                    <span aria-hidden="true">&#128221;</span>
-                    New order
-                </a>
-            </div>
-        <?php endif; ?>
 
         <nav class="app-sidebar-nav">
 <?php foreach ($navSections as $section):

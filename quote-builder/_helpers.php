@@ -932,12 +932,15 @@ function qb_create_measure_from_quote(PDO $pdo, int $quoteId, ?int $assignedUser
  * by the manual form submit and the "Start quote" calendar shortcut that
  * creates a quote straight from an appointment without the confirm screen.
  */
-function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $appointmentId, int $userId, int $accountClientId = 0): array
+function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $appointmentId, int $userId, int $accountClientId = 0, ?string $saleType = null): array
 {
     // $accountClientId > 0 => a factory quote raised FOR a trade account (via the
     // "New order" launcher). The account is the customer, so we don't spawn a
     // separate one-off customer record, and we tag the quote with the account.
-    $pdo->beginTransaction();
+    // Transaction-aware: a caller may already have one open (e.g. creating a new
+    // trade account + its first quote atomically), so only own it if we opened it.
+    $ownTx = !$pdo->inTransaction();
+    if ($ownTx) $pdo->beginTransaction();
     try {
         // If no existing customer picked but a name was entered, auto-create a
         // customer record so the same person is findable on the next quote.
@@ -1031,6 +1034,17 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
             } catch (Throwable $e) { /* column absent (pre-migration) — ignore */ }
         }
 
+        // Stamp an explicit trade/retail marker on the quote. A trade order with
+        // an account is obviously trade; a one-off trade sale (no account) still
+        // needs to be marked 'trade' so it's distinguishable downstream (factory
+        // queue label, reporting) from a plain retail sale. Defaults to trade
+        // when an account is linked, retail otherwise. Guarded pre-migration.
+        $saleTypeVal = $saleType ?? ($accountClientId > 0 ? 'trade' : 'retail');
+        try {
+            $pdo->prepare('UPDATE quotes SET sale_type = ? WHERE id = ?')
+                ->execute([$saleTypeVal, $newId]);
+        } catch (Throwable $e) { /* column absent (pre-migration) — ignore */ }
+
         // Link the originating measure appointment to this quote so its
         // calendar entry tracks the quote's progress. Only fills an as-yet-
         // unlinked appointment in this tenant.
@@ -1047,10 +1061,10 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
         // walk-up can book an appointment explicitly. qb_create_measure_from_quote()
         // is kept for a future opt-in "this was an on-site quote" tickbox.
 
-        $pdo->commit();
+        if ($ownTx) $pdo->commit();
         return ['id' => $newId, 'number' => $quoteNumber];
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($ownTx && $pdo->inTransaction()) $pdo->rollBack();
         throw $e;
     }
 }
