@@ -37,11 +37,21 @@ $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $action   = (string) ($_POST['_action'] ?? '');
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 
-// A deposit is an accepted-order activity, NOT a draft one — so it's allowed
-// once the quote has been accepted (through to invoiced), without forcing a
-// reopen-to-draft. (The old draft-only gate is exactly what made the deposit
-// section read-only on an accepted quote.)
-if (!in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced'], true)) {
+// Setting the deposit AMOUNT (save_amount) is allowed before acceptance too:
+// a draft/sent quote can carry an override that the accept-seed then keeps
+// (change_status only seeds a default when deposit_amount is still NULL).
+// Recording an actual PAID deposit (record_paid / mark_paid) stays an
+// accepted-order activity — you can't take money on a draft.
+$isOrderState = in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced'], true);
+if ($action === 'save_amount') {
+    if (!$isOrderState && !in_array((string) $quote['status'], ['draft', 'sent'], true)) {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId,
+            'error',
+            'This quote can no longer be edited.'
+        );
+    }
+} elseif (!$isOrderState) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
