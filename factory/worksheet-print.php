@@ -454,6 +454,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     body { background:#666; font-family:system-ui,sans-serif; }
     .toolbar { position:fixed; top:0; left:0; right:0; background:#1f2a37; color:#e5edf5; padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:10; font-size:14px; }
     .toolbar b { color:#fff; } .toolbar .note { color:#b9c6d3; flex:1; min-width:220px; }
+    .toolbar a { color:#7dd3fc; text-decoration:none; } .toolbar a:hover { text-decoration:underline; }
     .toolbar > button { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:7px 16px; background:#38bdf8; color:#06263a; }
     .nudge { display:flex; align-items:center; gap:4px; color:#b9c6d3; white-space:nowrap; }
     .nudge .lbl { color:#8ba0b3; } .nudge input { width:3.2rem; font:inherit; border:none; border-radius:6px; padding:5px 6px; text-align:right; }
