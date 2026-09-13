@@ -320,6 +320,13 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php if ($boughtinQty > 0 && !$supReceived): ?>
                             <a class="io-btn" href="/factory/order-suppliers.php?id=<?= $qid ?>" title="Order the bought-in items from their supplier"><?= $supOrdered ? '📦 Bought-in' : '📦 Order bought-in' ?></a>
                         <?php endif; ?>
+                        <?php if ($boughtinQty > 0 && $supOrdered && !$supReceived): ?>
+                            <form method="post" action="/factory/boughtin-received.php" style="margin:0">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                <button type="submit" class="io-btn" title="Mark the bought-in items as received from the supplier">✓ Received</button>
+                            </form>
+                        <?php endif; ?>
                         <?php if ($next !== null): ?>
                             <form method="post" action="/factory/set-status.php" style="margin:0">
                                 <?= csrf_field() ?>

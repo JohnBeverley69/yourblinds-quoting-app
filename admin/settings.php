@@ -351,6 +351,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         error_log('settings: factory_notify_email not saved (run migrate_factory_notify_email.php): ' . $e->getMessage());
                     }
                 }
+                // Auto-order bought-in from suppliers on placement (same form/gating).
+                try {
+                    db()->prepare('UPDATE client_settings SET auto_send_suppliers = ? WHERE client_id = ?')
+                        ->execute([isset($_POST['auto_send_suppliers']) ? 1 : 0, $clientId]);
+                } catch (Throwable $e) {
+                    error_log('settings: auto_send_suppliers not saved (run migrate_factory_supplier_ordering.php): ' . $e->getMessage());
+                }
             }
             // Default sale type for the "New" launcher — factory only
             // (migrate_sale_type.php). Only accept the two valid values.
@@ -1475,6 +1482,29 @@ $activeNav = 'settings';
                         <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
                             When one of your trade accounts places an order that you manufacture, we'll email this
                             address so the workshop knows a job has come in. Leave blank to use the address above.
+                        </span>
+                    </label>
+                </fieldset>
+
+                <?php $autoSendSup = !empty($settings['auto_send_suppliers']); ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Auto-order bought-in items
+                    </legend>
+                    <label style="display:flex;align-items:flex-start;gap:0.55rem;font-size:0.9375rem;cursor:pointer">
+                        <input type="checkbox" name="auto_send_suppliers" value="1" <?= $autoSendSup ? 'checked' : '' ?> style="margin-top:0.2rem">
+                        <span>
+                            Automatically order bought-in blinds from their supplier when an order is placed
+                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                                When an order lands in your factory queue, any bought-in line (e.g. a PF Venetian from
+                                Hunter Douglas) is emailed to its supplier automatically — no "Order bought-in" click.
+                                <strong>Off by default</strong>: it sends a real purchase order, so switch it on only
+                                once you've confirmed the supplier emails are right. A supplier with no email is left
+                                for you to order by hand (it won't fail silently).
+                            </span>
                         </span>
                     </label>
                 </fieldset>

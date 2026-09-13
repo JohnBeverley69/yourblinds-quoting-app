@@ -22,6 +22,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../_partials/bought_in.php';
 require __DIR__ . '/../_partials/supplier_send.php';
+require __DIR__ . '/../_partials/factory_boughtin.php';
 
 requireFactory();
 
@@ -192,11 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($ok) $sentTo[] = $name; else $failed[] = $name;
     }
 
-    // Rollup stamp so the incoming-orders pill + auto-send idempotency are cheap.
-    if ($sentTo) {
-        try { $pdo->prepare('UPDATE quotes SET supplier_ordered_at = COALESCE(supplier_ordered_at, NOW()) WHERE id = ?')->execute([$quoteId]); }
-        catch (Throwable $e) {}
-    }
+    // Re-derive the "ordered / received" rollups from the log (only flips to
+    // "ordered" once EVERY bought-in supplier on the order has been sent).
+    if ($sentTo) factory_boughtin_restamp($pdo, $quoteId, $factoryId);
     if ($sentTo && !$failed)      qb_flash_redirect($backToOrder, 'success', 'Ordered from ' . implode(', ', $sentTo) . '.');
     elseif ($sentTo && $failed)   qb_flash_redirect($backToOrder, 'error', 'Ordered from ' . implode(', ', $sentTo) . ' — FAILED for ' . implode(', ', $failed) . '.');
     elseif ($failed)              qb_flash_redirect($backToOrder, 'error', 'Nothing was sent (failed for ' . implode(', ', $failed) . ').');
