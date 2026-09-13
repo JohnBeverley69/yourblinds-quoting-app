@@ -66,6 +66,17 @@ if ($quoteId <= 0 || !$isBev) {
     exit;
 }
 
+// Gate dispatch on the bought-in track: an order can't ship while its bought-in
+// items are still awaited from the supplier (order/receive them first).
+if ($target === 'dispatched') {
+    require_once __DIR__ . '/../_partials/factory_boughtin.php';
+    if (factory_boughtin_awaiting($pdo, $quoteId, $MASTER)) {
+        $_SESSION['flash_error'] = "Can't dispatch yet — the bought-in items haven't been received from the supplier. Order and receive them first.";
+        header('Location: ' . $backTo);
+        exit;
+    }
+}
+
 try {
     if ($target === 'new') {
         $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ?")->execute([$quoteId]);

@@ -143,6 +143,8 @@ if ($action === 'accept') {
                     // → email the factory that a new order has landed (once).
                     require_once __DIR__ . '/../_partials/factory_notify.php';
                     factory_notify_new_order($pdo, $acQuote);
+                    require_once __DIR__ . '/../_partials/factory_boughtin.php';
+                    factory_autosend_suppliers($pdo, $acQuote);
                 }
             }
         }

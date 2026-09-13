@@ -249,6 +249,8 @@ try {
     if ($target === 'ordered') {
         require_once __DIR__ . '/../_partials/factory_notify.php';
         factory_notify_new_order($pdo, $quoteId);
+        require_once __DIR__ . '/../_partials/factory_boughtin.php';
+        factory_autosend_suppliers($pdo, $quoteId);
     }
 
     // "Save as order" flow: the accept succeeded. If it didn't already

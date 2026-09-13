@@ -403,6 +403,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Placed → email the factory a new order has landed (once).
                 require_once __DIR__ . '/../_partials/factory_notify.php';
                 factory_notify_new_order(db(), $quoteId);
+                require_once __DIR__ . '/../_partials/factory_boughtin.php';
+                factory_autosend_suppliers(db(), $quoteId);
             }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());
