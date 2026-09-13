@@ -66,7 +66,7 @@ try {
                 ac.company_name AS account_company, ac.contact_name AS account_contact,
                 q.quote_number, q.status, q.created_at,
                 q.customer_reference, q.additional_reference,
-                q.end_customer_name,
+                q.end_customer_name, q.supplier_ordered_at, q.supplier_received_at,
                 COUNT(qi.id)                  AS bev_lines,
                 COALESCE(SUM(CASE WHEN $inHouse THEN qi.quantity ELSE 0 END), 0)     AS bev_qty,
                 COALESCE(SUM(CASE WHEN NOT ($inHouse) THEN qi.quantity ELSE 0 END), 0) AS boughtin_qty
@@ -83,7 +83,7 @@ try {
        GROUP BY q.id, q.client_id, c.company_name, q.account_client_id,
                 ac.company_name, ac.contact_name, q.quote_number, q.status,
                 q.created_at, q.customer_reference, q.additional_reference,
-                q.end_customer_name $fjGroup
+                q.end_customer_name, q.supplier_ordered_at, q.supplier_received_at $fjGroup
        ORDER BY {$fjOrder}q.created_at DESC
           LIMIT 300"
     );
@@ -283,6 +283,10 @@ require __DIR__ . '/../_partials/factory_head.php';
             $next      = $STAGE_NEXT[$stage] ?? null;
             $prev      = $STAGE_PREV[$stage] ?? null;
             $prog      = $floorProg[$qid] ?? null;   // ['total'=>, 'done'=>] once on the floor
+            // Bought-in (ordered from a supplier, not made here): its own track.
+            $boughtinQty = (int) ($o['boughtin_qty'] ?? 0);
+            $supOrdered  = $o['supplier_ordered_at']  ?? null;
+            $supReceived = $o['supplier_received_at'] ?? null;
             $searchKey = strtolower(trim($ref . ' ' . $custLabel . ' ' . $accContact . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
             <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?><?= $stage === 'new' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
@@ -300,10 +304,22 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php if ($prog !== null && $prog['total'] > 0): ?>
                             <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>
                         <?php endif; ?>
+                        <?php if ($boughtinQty > 0): ?>
+                            <?php if ($supReceived): ?>
+                                <span class="io-stage" style="color:#166534;background:#dcfce7" title="Bought-in items received">Bought-in: received</span>
+                            <?php elseif ($supOrdered): ?>
+                                <span class="io-stage" style="color:#1e40af;background:#dbeafe" title="Ordered from supplier <?= e(date('j M Y', strtotime((string) $supOrdered))) ?>">Bought-in: ordered</span>
+                            <?php else: ?>
+                                <span class="io-stage" style="color:#b91c1c;background:#fee2e2" title="<?= (int) $boughtinQty ?> bought-in item(s) to order from the supplier">Bought-in: <?= (int) $boughtinQty ?> to order</span>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </span>
                     <span class="io-actions">
                         <a class="io-btn edit" href="/factory/edit-order.php?order=<?= $qid ?>">Edit</a>
                         <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
+                        <?php if ($boughtinQty > 0 && !$supReceived): ?>
+                            <a class="io-btn" href="/factory/order-suppliers.php?id=<?= $qid ?>" title="Order the bought-in items from their supplier"><?= $supOrdered ? '📦 Bought-in' : '📦 Order bought-in' ?></a>
+                        <?php endif; ?>
                         <?php if ($next !== null): ?>
                             <form method="post" action="/factory/set-status.php" style="margin:0">
                                 <?= csrf_field() ?>
