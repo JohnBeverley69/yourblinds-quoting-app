@@ -50,6 +50,24 @@ try {
         }
     }
 } catch (Throwable $e) { /* table absent on an older schema — just no badge */ }
+
+// Per-choice face_value flag (migrate_extra_face_value.php). 1 (default) = the
+// price is added at face value; 0 = supplier list add-on (run through the product
+// discount+markup on a supplier product). Batch-fetched + guarded so an older
+// schema without the column simply defaults every row to face value (ticked).
+$faceValById = [];
+try {
+    $fvIds = [];
+    foreach ($gridChoices as $gc) { if (isset($gc['id'])) $fvIds[] = (int) $gc['id']; }
+    if ($fvIds) {
+        $fvPh   = implode(',', array_fill(0, count($fvIds), '?'));
+        $fvStmt = db()->prepare("SELECT id, face_value FROM product_extra_choices WHERE id IN ($fvPh)");
+        $fvStmt->execute($fvIds);
+        foreach ($fvStmt->fetchAll(PDO::FETCH_ASSOC) as $fvRow) {
+            $faceValById[(int) $fvRow['id']] = (int) $fvRow['face_value'] === 1;
+        }
+    }
+} catch (Throwable $e) { /* column absent — default to face value */ }
 ?>
 <div class="choices-grid-wrap" data-extra-id="<?= (int) $gridExtraId ?>">
     <div class="table-wrap">
@@ -158,6 +176,7 @@ try {
                     <?php endforeach; ?>
                     <th class="col-toggle" title="Default = pre-selected for the customer">Default</th>
                     <th class="col-toggle" title="Inactive = hidden from quote builder">Active</th>
+                    <th class="col-toggle" title="Face value (default) = the price you set is what's charged. Untick for a supplier list add-on — then on a supplier-priced product it's run through the buying discount + markup with the base.">Face&nbsp;value</th>
                     <th class="col-actions"></th>
                 </tr>
             </thead>
@@ -219,6 +238,10 @@ try {
                         <td class="col-toggle">
                             <input type="checkbox" data-field="active"
                                    <?= $isActive ? 'checked' : '' ?>>
+                        </td>
+                        <td class="col-toggle">
+                            <input type="checkbox" data-field="face_value"
+                                   <?= ($faceValById[$cid] ?? true) ? 'checked' : '' ?>>
                         </td>
                         <td class="col-actions row-actions">
                             <a href="/admin/products/extra-choice-edit.php?id=<?= $cid ?>"
@@ -291,6 +314,7 @@ try {
                     <td class="col-price"></td>
                     <td class="col-price"></td>
                     <td class="col-price"></td>
+                    <td class="col-toggle"></td>
                     <td class="col-toggle"></td>
                     <td class="col-toggle"></td>
                     <td class="col-actions"></td>

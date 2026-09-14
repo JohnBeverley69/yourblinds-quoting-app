@@ -263,6 +263,7 @@
 
         tr.appendChild(cellToggle('is_default', choice.is_default));
         tr.appendChild(cellToggle('active',     choice.active));
+        tr.appendChild(cellToggle('face_value', choice.face_value == null ? 1 : choice.face_value));
 
         var tdActions = document.createElement('td');
         tdActions.className = 'col-actions row-actions';

@@ -148,6 +148,10 @@ $fetchChoice = static function (int $choiceId) use ($pdo): array {
         'price_per_metre'   => number_format((float) $r['price_per_metre'], 2, '.', ''),
         'is_default'        => (int) $r['is_default'],
         'active'            => (int) $r['active'],
+        // A newly created/duplicated choice defaults to face value (DB default 1);
+        // returned as a constant so this helper stays pre-migration-safe (no
+        // face_value column in the SELECT). Reload reflects any later toggle.
+        'face_value'        => 1,
         'image_path'        => $r['image_path'] !== null ? (string) $r['image_path'] : null,
         'width_table_size'  => (int) $r['width_table_size'],
     ];
@@ -329,6 +333,15 @@ try {
                 case 'active':
                     $on = !empty($value) && $value !== '0' ? 1 : 0;
                     $pdo->prepare('UPDATE product_extra_choices SET active = ? WHERE id = ?')
+                        ->execute([$on, $choiceId]);
+                    break;
+
+                case 'face_value':
+                    // 1 (default) = price added at face value; 0 = supplier list
+                    // add-on (run through the product discount+markup on supplier
+                    // products). Column added by migrate_extra_face_value.php.
+                    $on = !empty($value) && $value !== '0' ? 1 : 0;
+                    $pdo->prepare('UPDATE product_extra_choices SET face_value = ? WHERE id = ?')
                         ->execute([$on, $choiceId]);
                     break;
 
