@@ -269,6 +269,21 @@ if ($extraIds) {
     }
 }
 
+// code (migrate_extra_code.php) — optional stable machine key per extra. Probed
+// separately (like parent_match_all) so pre-migration tenants keep working. The
+// front-end keys its roller multi-blind flow off these, not off captions.
+$codeById = [];
+if ($extraIds) {
+    try {
+        $cdh = implode(',', array_fill(0, count($extraIds), '?'));
+        $cdSt = $pdo->prepare("SELECT id, code FROM product_extras WHERE id IN ($cdh)");
+        $cdSt->execute($extraIds);
+        foreach ($cdSt->fetchAll() as $cr) {
+            $codeById[(int) $cr['id']] = ($cr['code'] !== null && $cr['code'] !== '') ? (string) $cr['code'] : null;
+        }
+    } catch (Throwable $e) { /* column absent — every extra reports code null */ }
+}
+
 $choicesByExtra  = [];
 $bandsByChoice   = [];
 $fabricsByChoice = [];
@@ -281,10 +296,16 @@ if ($extraIds) {
         $pdo->query('SELECT length_input_label FROM product_extra_choices LIMIT 1');
         $choiceLenCol = ', length_input_label';
     } catch (Throwable $e) { /* column absent — choices report null */ }
+    // Per-choice stable machine key (migrate_extra_code.php) — optional.
+    $choiceCodeCol = '';
+    try {
+        $pdo->query('SELECT code FROM product_extra_choices LIMIT 1');
+        $choiceCodeCol = ', code';
+    } catch (Throwable $e) { /* column absent — choices report code null */ }
     $st = $pdo->prepare(
         "SELECT id, product_extra_id, system_id, label,
                 price_delta, price_percent, price_per_metre,
-                is_default, sort_order, image_path$choiceLenCol
+                is_default, sort_order, image_path$choiceLenCol$choiceCodeCol
            FROM product_extra_choices
           WHERE product_extra_id IN ($ph) AND active = 1
        ORDER BY product_extra_id, sort_order, label"
@@ -350,6 +371,9 @@ if ($extraIds) {
             // typed value rides on the choice's quote_item_extras row.
             'length_input_label' => isset($r['length_input_label']) && $r['length_input_label'] !== ''
                 ? (string) $r['length_input_label'] : null,
+            // Stable machine key — lets the front-end identify a choice (e.g.
+            // the roller fascia-sizing modes) without depending on its caption.
+            'code' => isset($r['code']) && $r['code'] !== '' ? (string) $r['code'] : null,
             // asset() adds ?v=<mtime> so a re-uploaded thumbnail (same path)
             // isn't served stale from the browser cache in the quote builder.
             'image_url'  => !empty($r['image_path']) ? asset((string) $r['image_path']) : null,
@@ -369,11 +393,14 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, $matchAllById) {
+$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, $matchAllById, $codeById) {
     $eid = (int) $r['id'];
     return [
         'id'                 => $eid,
         'name'               => (string) $r['name'],
+        // Stable machine key (null when unset) — the front-end keys the roller
+        // multi-blind fascia flow off this so captions stay editable.
+        'code'               => $codeById[$eid] ?? null,
         'is_required'        => (bool)   $r['is_required'],
         // parent_choice_ids — list of choice ids that gate this extra.
         // Empty list = always visible. With parent_match_all=false (default)
@@ -392,6 +419,12 @@ $extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, 
         'choices'            => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);
+
+// Hide internal-only option groups from the builder form (e.g. the roller
+// "Multiple Blinds in One Fascia" flag, code `multiple_internal`). These are
+// set by the server (qb_reconcile_fascia_groups reads product_extras directly),
+// never picked by the salesperson, so they must not render as a control.
+$extras = array_values(array_filter($extras, static fn ($e) => ($e['code'] ?? '') !== 'multiple_internal'));
 
 echo json_encode([
     'product' => [

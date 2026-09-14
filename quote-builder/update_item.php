@@ -47,6 +47,18 @@ if (!$existing) {
     );
 }
 
+// "Multi blind" can't be applied when editing a single line — it needs to fan
+// into several grouped lines, which only add_item.php does. Guard against a
+// stray payload (the form hides Multi in edit mode, so this is belt-and-braces)
+// rather than silently saving the line at width 0 (its Width field is disabled).
+if (!empty($_POST['multi_fascia']['active'])) {
+    qb_flash_redirect(
+        '/quote-builder/edit.php?id=' . $quoteId . '&edit_item=' . $itemId . '#add-line',
+        'error',
+        'To set up multiple blinds in one fascia, remove this blind and add it again with "Multi blind".'
+    );
+}
+
 // Parse free-text width / drop using the shared dimension parser. Same as
 // add_item.php — the form sends raw input strings.
 $unit     = effective_unit($quote['measurement_unit'] ?? null, db(), $clientId);

@@ -1458,7 +1458,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <th class="num">Qty</th>
                                 <th class="num">Unit</th>
                                 <th class="num">Total</th>
-                                <?php if ($editable): ?><th title="Tag blinds that share one fascia with the same letter — priced &amp; cut once across the group">Fascia</th><th></th><?php endif; ?>
+                                <?php if ($editable): ?><th></th><?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -1510,24 +1510,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                                 echo '—';
                                             }
                                         ?>
+                                        <?php $fgTag = strtoupper(trim((string) ($it['fascia_group'] ?? ''))); if ($fgTag !== ''): ?>
+                                            <br><span style="display:inline-block;margin-top:0.15rem;padding:0.05rem 0.4rem;
+                                                             background:#ede9fe;color:#6d28d9;border-radius:999px;
+                                                             font-size:0.7rem;font-weight:600" title="Shares one fascia with the other blinds in group <?= e($fgTag) ?>">Fascia <?= e($fgTag) ?></span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="num"><?= (int) $it['quantity'] ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
                                     <?php if ($editable): ?>
-                                        <td>
-                                            <?php $isRoller = stripos((string) $it['product_name_snapshot'], 'Roller') !== false; if ($isRoller): $fg = strtoupper(trim((string) ($it['fascia_group'] ?? ''))); ?>
-                                            <form method="post" action="/quote-builder/save_fascia_group.php" style="margin:0">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
-                                                <select name="fascia_group" onchange="this.form.submit()" class="btn btn-sm btn-secondary" title="Blinds sharing a letter share one continuous fascia (priced &amp; cut once)">
-                                                    <option value=""<?= $fg === '' ? ' selected' : '' ?>>—</option>
-                                                    <?php foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $g): ?><option value="<?= $g ?>"<?= $fg === $g ? ' selected' : '' ?>><?= $g ?></option><?php endforeach; ?>
-                                                </select>
-                                            </form>
-                                            <?php endif; ?>
-                                        </td>
                                         <td style="white-space:nowrap">
                                             <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
                                                class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
@@ -1574,7 +1566,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <?= e(qb_fmt_money($wtAmount)) ?>
                                         <?php endif; ?>
                                     </td>
-                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php
@@ -1597,19 +1589,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(to agreed price)</span>
                                     </td>
                                     <td class="num"><?= ($olDiscount >= 0 ? '&minus;' : '+') . e(qb_fmt_money(abs($olDiscount))) ?></td>
-                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php if ((float) $quote['vat_percent'] > 0): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
                                     <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
-                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
                                     <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
-                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <tr class="totals-row grand">
@@ -1635,7 +1627,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.8125rem">Set</button>
                                         </form>
                                     </td>
-                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
+                                    <?php if ($editable): ?><td></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php
@@ -2241,6 +2233,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var extrasBox     = document.getElementById('item-extras');
     var previewBox    = document.getElementById('item-preview');
     var submitBtns    = document.querySelectorAll('#add-item-form .item-submit');
+    // Editing an existing line (vs adding) — the item_id hidden field is only
+    // present on edit. "Multi blind" can't be applied when editing one line
+    // (it would need to fan into many), so it's hidden in that mode.
+    var qbEditing     = !!document.querySelector('#add-item-form input[name="item_id"]');
     function setSubmitDisabled(disabled) {
         submitBtns.forEach(function (btn) { btn.disabled = !!disabled; });
     }
@@ -2791,6 +2787,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             }
 
             var out = '<div data-extra-id="' + extra.id + '"'
+                    + ' data-extra-code="' + escapeAttr(extra.code || '') + '"'
                     + (isChild ? ' class="extra-child"' : '')
                     + '>';
             out += '<label>' + escapeHtml(extra.name)
@@ -2986,6 +2983,85 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 schedulePreview();
             });
         });
+        // Roller multi-blind: typing a "Blind N Width" re-prices the summary.
+        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input').forEach(function (inp) {
+            inp.addEventListener('input', schedulePreview);
+        });
+        // Reflect the fascia-sizing mode into the Width field + fascia-width box.
+        applyFasciaSizingUI();
+    }
+
+    // ---- Roller "Fascia Sizing" (multi-blind) helpers -----------------------
+    // All keyed off stable option `code`s, never captions, so the labels stay
+    // freely editable. fascia_sizing choice codes: standard | oversize | multi.
+
+    // The currently-selected fascia-sizing mode, or null when the group isn't
+    // present / shown (no real fascia picked).
+    function fasciaSizingMode() {
+        if (!productData || !productData.extras) return null;
+        var ext = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
+        if (!ext) return null;
+        var sel = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
+        var cid = sel ? parseInt(sel.value, 10) : 0;
+        if (!cid) {                                   // not in the DOM yet — use its default
+            var ids = effectiveChoiceIds(ext);
+            cid = ids.length ? ids[0] : 0;
+        }
+        var ch = ext.choices.find(function (c) { return c.id === cid; });
+        return ch ? (ch.code || null) : null;
+    }
+
+    // The typed "Blind N Width" values (raw strings, quote unit), in order.
+    // Only the visible boxes exist in the DOM, so this is exactly the count.
+    function multiBlindWidths() {
+        var out = [];
+        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input').forEach(function (inp) {
+            var v = parseFloat(inp.value);
+            if (!isNaN(v) && v > 0) out.push(inp.value.trim());
+        });
+        return out;
+    }
+
+    // Reflect the mode into the shared controls: the top Width field reads
+    // "multi blind" (the per-blind widths drive the cut), and the manual fascia
+    // width box (on the Fascia Options group) shows only for Over size / Multi.
+    function applyFasciaSizingUI() {
+        // When editing an existing line, drop "Multi blind" — you can't split
+        // one line into many; the salesperson deletes and re-adds instead.
+        if (qbEditing && productData && productData.extras) {
+            var sizExt = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
+            var ssel   = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
+            if (sizExt && ssel) {
+                var multiCh = sizExt.choices.find(function (c) { return c.code === 'multi'; });
+                if (multiCh) {
+                    var opt = ssel.querySelector('option[value="' + multiCh.id + '"]');
+                    if (opt) opt.remove();
+                }
+            }
+        }
+        var mode = fasciaSizingMode();
+        var isMulti = (mode === 'multi');
+        if (widthIn) {
+            if (isMulti) {
+                widthIn.dataset.multiLock = '1';
+                widthIn.value = 'multi blind';
+                widthIn.readOnly = true;
+                widthIn.style.fontStyle = 'italic';
+                widthIn.style.color = 'var(--text-faint)';
+            } else if (widthIn.dataset.multiLock === '1') {
+                widthIn.dataset.multiLock = '';
+                if (widthIn.value === 'multi blind') widthIn.value = '';
+                widthIn.readOnly = false;
+                widthIn.style.fontStyle = '';
+                widthIn.style.color = '';
+            }
+        }
+        var fw = extrasBox.querySelector('[data-extra-code="fascia_options"] .extra-user-value');
+        if (fw) {
+            var show = (mode === 'oversize' || mode === 'multi');
+            fw.style.display = show ? '' : 'none';
+            if (!show) { var i = fw.querySelector('input'); if (i) i.value = ''; }
+        }
     }
 
     // Apply the editing-mode pre-fill after loadProductData has populated
@@ -3060,6 +3136,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Final pass after the last render — renderExtras' sticky preset
         // already applies the values, but a defensive pass costs nothing.
         (initial.extras || []).forEach(applyOneExtra);
+
+        // Reconstruct the fascia-sizing mode for an existing line: a stored
+        // manual fascia width (on the Fascia Options group) means "Over size",
+        // so select that mode — otherwise the box would be hidden (and cleared)
+        // in the default "Standard" and the saved width would be lost on save.
+        // ("Multi blind" can't be reconstructed — its blinds are already
+        // separate grouped lines — so a member/carrier just edits as normal.)
+        if (productData && productData.extras) {
+            var foExt = productData.extras.find(function (e) { return e.code === 'fascia_options'; });
+            var fsExt = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
+            if (foExt && fsExt) {
+                var stored = (initial.extras || []).find(function (ex) {
+                    return ex.extra_id === foExt.id && ex.user_value != null && parseFloat(ex.user_value) > 0;
+                });
+                var over = fsExt.choices.find(function (c) { return c.code === 'oversize'; });
+                if (stored && over) {
+                    var sizSel = document.querySelector('[data-extra-code="fascia_sizing"] select');
+                    if (sizSel) { sizSel.value = String(over.id); renderExtras(); }
+                    var fwIn = document.querySelector('[data-extra-code="fascia_options"] input[data-uv-for="' + foExt.id + '"]');
+                    if (fwIn) fwIn.value = String(stored.user_value);
+                }
+            }
+        }
         schedulePreview();
     }
 
@@ -3141,6 +3240,30 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
 
     async function runPreview() {
+        // Roller "Multi blind": several blinds share one fascia. They're priced
+        // per-blind on save (the server fans them into grouped lines), so a
+        // single-line live price is meaningless — validate the essentials,
+        // summarise, and let the user save.
+        if (fasciaSizingMode() === 'multi') {
+            var missM = [];
+            if (!productSel.value)                  missM.push('product');
+            if (requiresOption && !fabricId.value)  missM.push('fabric');
+            if (!widthOnly && !dropIn.value.trim()) missM.push('drop');
+            var widths = multiBlindWidths();
+            if (widths.length < 2) missM.push('at least 2 blind widths');
+            if (missM.length > 0) {
+                previewBox.className   = 'idle';
+                previewBox.textContent = 'Still need: ' + missM.join(', ') + '.';
+                setSubmitDisabled(true);
+                return;
+            }
+            previewBox.className = 'idle';
+            previewBox.innerHTML = '<strong>' + widths.length + ' blinds</strong> under one fascia'
+                                 + ' — priced per blind on save.';
+            setSubmitDisabled(false);
+            return;
+        }
+
         // Spell out exactly what's missing so the user can act on it
         // without having to guess which field they skipped — generic
         // "pick a product, fabric and dimensions" was too easy to miss
@@ -3256,6 +3379,34 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             setSubmitDisabled(true);
             console.error(err);
         }
+    }
+
+    // Roller multi-blind fan-out. On submit: the fascia-sizing / count / width
+    // groups are UI only — strip them so they never persist as priced extras.
+    // In Multi mode also hand the per-blind widths to the server (add_item.php
+    // creates one grouped line per width) and drop the placeholder Width.
+    var addItemForm = document.getElementById('add-item-form');
+    if (addItemForm) {
+        addItemForm.addEventListener('submit', function () {
+            var mode = fasciaSizingMode();
+            var widths = (mode === 'multi') ? multiBlindWidths() : [];
+            ['fascia_sizing', 'fascia_blind_count', 'fascia_blind_width'].forEach(function (code) {
+                extrasBox.querySelectorAll('[data-extra-code="' + code + '"]').forEach(function (div) {
+                    div.querySelectorAll('[name]').forEach(function (el) { el.removeAttribute('name'); });
+                });
+            });
+            if (mode === 'multi') {
+                widths.forEach(function (w) {
+                    var h = document.createElement('input');
+                    h.type = 'hidden'; h.name = 'multi_fascia[widths][]'; h.value = w;
+                    addItemForm.appendChild(h);
+                });
+                var flag = document.createElement('input');
+                flag.type = 'hidden'; flag.name = 'multi_fascia[active]'; flag.value = '1';
+                addItemForm.appendChild(flag);
+                if (widthIn) widthIn.disabled = true;   // "multi blind" placeholder — not a real width
+            }
+        });
     }
 
     productSel.addEventListener('change', loadProductData);
