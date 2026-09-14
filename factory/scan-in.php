@@ -131,6 +131,20 @@ try {
 $result = $res['ok'] ? (!empty($res['already']) ? 'already' : 'ok') : 'not_found';
 $log($result, $res['detail'] ?? null, $code, $parsed, $source);
 
+// Phase 0: a scan can complete a blind → roll the order's fulfilment stage up.
+// Fully guarded — a scan must never fail because of this.
+if (!empty($res['ok'])) {
+    try {
+        $qs = $pdo->prepare('SELECT quote_id FROM quote_items WHERE id = ? LIMIT 1');
+        $qs->execute([$itemId]);
+        $qid = (int) $qs->fetchColumn();
+        if ($qid > 0) {
+            require_once __DIR__ . '/../_partials/order_stage.php';
+            recompute_order_stage($pdo, $qid);
+        }
+    } catch (Throwable $e) { /* never break a scan */ }
+}
+
 // Opportunistic retention: occasionally drop scans older than the configured
 // window so the log can't grow without bound. Rare (≈2% of scans) and indexed
 // (idx_scan_time), so it costs a scan almost nothing. 0/absent = keep forever.

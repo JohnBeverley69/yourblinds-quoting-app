@@ -52,6 +52,15 @@ $advance = function (int $streamId) use ($pdo, $userId): array {
     bj_stream_advance($pdo, $streamId, $userId ?: null);
     $after = bj_stream_get($pdo, $streamId);
 
+    // Phase 0: this advance may complete the blind → roll the order stage up.
+    try {
+        require_once __DIR__ . '/../_partials/order_stage.php';
+        $osq = $pdo->prepare('SELECT quote_id FROM factory_blind_jobs WHERE id = ? LIMIT 1');
+        $osq->execute([(int) $row['blind_job_id']]);
+        $osqid = (int) $osq->fetchColumn();
+        if ($osqid > 0) recompute_order_stage($pdo, $osqid);
+    } catch (Throwable $e) { /* never break a scan */ }
+
     $q = $pdo->prepare(
         'SELECT q.quote_number, qi.line_no, qi.quantity, qi.product_name_snapshot,
                 qi.width_mm, qi.drop_mm, qi.room_name, bj.unit_no

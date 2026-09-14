@@ -111,5 +111,9 @@ try {
         . ' — have the factory_jobs migrations been run?';
 }
 
+// Phase 0: roll the single fulfilment stage up from this floor status change.
+require_once __DIR__ . '/../_partials/order_stage.php';
+recompute_order_stage($pdo, $quoteId);
+
 header('Location: ' . $backTo);
 exit;

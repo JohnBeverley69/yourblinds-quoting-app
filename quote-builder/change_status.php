@@ -245,6 +245,10 @@ try {
 
     $pdo->commit();
 
+    // Phase 0: roll the single fulfilment stage up from the (now changed) status.
+    require_once __DIR__ . '/../_partials/order_stage.php';
+    recompute_order_stage($pdo, $quoteId);
+
     // The order just landed in a factory queue → email the factory (once).
     if ($target === 'ordered') {
         require_once __DIR__ . '/../_partials/factory_notify.php';
