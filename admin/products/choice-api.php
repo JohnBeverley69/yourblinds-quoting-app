@@ -139,6 +139,15 @@ $fetchChoice = static function (int $choiceId) use ($pdo): array {
     if (!$r) {
         throw new RuntimeException('Choice missing after save.');
     }
+    // Read the real face_value (guarded so this stays pre-migration-safe); a new
+    // choice is 1 (DB default), a clone carries its source's value.
+    $faceVal = 1;
+    try {
+        $fvS = $pdo->prepare('SELECT face_value FROM product_extra_choices WHERE id = ?');
+        $fvS->execute([$choiceId]);
+        $v = $fvS->fetchColumn();
+        if ($v !== false) $faceVal = (int) $v;
+    } catch (Throwable $e) { $faceVal = 1; }
     return [
         'id'                => (int)    $r['id'],
         'system_id'         => $r['system_id'] !== null ? (int) $r['system_id'] : null,
@@ -148,10 +157,7 @@ $fetchChoice = static function (int $choiceId) use ($pdo): array {
         'price_per_metre'   => number_format((float) $r['price_per_metre'], 2, '.', ''),
         'is_default'        => (int) $r['is_default'],
         'active'            => (int) $r['active'],
-        // A newly created/duplicated choice defaults to face value (DB default 1);
-        // returned as a constant so this helper stays pre-migration-safe (no
-        // face_value column in the SELECT). Reload reflects any later toggle.
-        'face_value'        => 1,
+        'face_value'        => $faceVal,
         'image_path'        => $r['image_path'] !== null ? (string) $r['image_path'] : null,
         'width_table_size'  => (int) $r['width_table_size'],
     ];
@@ -382,11 +388,17 @@ try {
                 $apiHasBasis = true;
             } catch (Throwable $e) { /* column absent */ }
             $basisSel = $apiHasBasis ? ', per_metre_basis' : '';
+            // face_value (migrate_extra_face_value.php) — carry it onto the clone so
+            // a supplier list add-on flagged face_value=0 doesn't silently reset to 1.
+            $apiHasFaceVal = false;
+            try { $pdo->query('SELECT face_value FROM product_extra_choices LIMIT 1'); $apiHasFaceVal = true; }
+            catch (Throwable $e) { /* column absent */ }
+            $fvSel = $apiHasFaceVal ? ', face_value' : '';
 
             $srcSt = $pdo->prepare(
                 "SELECT label, image_path,
                         price_delta, price_percent, price_per_metre,
-                        sort_order, active$basisSel
+                        sort_order, active$basisSel$fvSel
                    FROM product_extra_choices
                   WHERE id = ? AND product_extra_id = ? LIMIT 1"
             );
@@ -401,12 +413,14 @@ try {
 
             $basisCol = $apiHasBasis ? ', per_metre_basis' : '';
             $basisPh  = $apiHasBasis ? ', ?' : '';
+            $fvCol    = $apiHasFaceVal ? ', face_value' : '';
+            $fvPh     = $apiHasFaceVal ? ', ?' : '';
             $ins = $pdo->prepare(
                 "INSERT INTO product_extra_choices
                    (product_extra_id, system_id, label, image_path,
                     price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active$basisCol)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?$basisPh)"
+                    is_default, sort_order, active$basisCol$fvCol)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?$basisPh$fvPh)"
             );
             $insVals = [
                 $extraId,
@@ -417,7 +431,8 @@ try {
                 $newSort,
                 (int) $src['active'],
             ];
-            if ($apiHasBasis) $insVals[] = (string) ($src['per_metre_basis'] ?? 'width');
+            if ($apiHasBasis)   $insVals[] = (string) ($src['per_metre_basis'] ?? 'width');
+            if ($apiHasFaceVal) $insVals[] = (int) ($src['face_value'] ?? 1);
             $ins->execute($insVals);
             $newId = (int) $pdo->lastInsertId();
 
