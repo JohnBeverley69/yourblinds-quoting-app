@@ -39,11 +39,26 @@ $dropRaw  = (string) ($_POST['drop']  ?? '');
 $widthMm  = ptp_parse_dimension($widthRaw, $unit);
 $dropMm   = ptp_parse_dimension($dropRaw, $unit);
 
+// Roller "Multi blind": several blinds share one fascia. The form sends each
+// blind's width in multi_fascia[widths][] (and disables the top Width field,
+// which reads "multi blind"). Detect it up front so the placeholder width
+// isn't treated as an error and the fan-out below can create one line each.
+$multi = (isset($_POST['multi_fascia']) && is_array($_POST['multi_fascia'])) ? $_POST['multi_fascia'] : [];
+$multiWidths = [];
+if (!empty($multi['active']) && !empty($multi['widths']) && is_array($multi['widths'])) {
+    foreach ($multi['widths'] as $w) {
+        $wm = ptp_parse_dimension((string) $w, $unit);
+        if ($wm !== null && $wm > 0) $multiWidths[] = (int) $wm;
+    }
+}
+$multiActive = count($multiWidths) >= 2;
+
 // Blank width → 0 (per-slat products have none); blank drop → 0 (width-only
 // products have none). The engine decides which are required. A non-blank
-// unparseable value is still an error.
+// unparseable value is still an error — except in multi-blind mode, where the
+// top Width field is just the "multi blind" placeholder.
 if ($widthMm === null) {
-    if (trim($widthRaw) === '') {
+    if (trim($widthRaw) === '' || $multiActive) {
         $widthMm = 0;
     } else {
         qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not read width "' . $widthRaw . '".');
@@ -129,141 +144,148 @@ if ($canCosts) {
 }
 
 $pdo = db();
+
+$room  = trim((string) ($_POST['room_name'] ?? ''));
+$note  = trim((string) ($_POST['notes']     ?? ''));
+
 $pdo->beginTransaction();
 try {
-    $priced = pe_calculate_item($pdo, $clientId, $input, (int) ($quote['account_client_id'] ?? 0));
-    if (isset($priced['error'])) {
-        $pdo->rollBack();
-        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', $priced['error']);
-    }
+    // Price + insert one blind at a given width, tagged into an optional fascia
+    // group. Returns [itemId, priced, lineNo]. Shared by the single-blind path
+    // and the multi-blind fan-out so they stay identical. cost_price_snapshot +
+    // extras_cost_snapshot freeze the per-blind wholesale cost at save-time.
+    $insertLine = function (int $lineWidthMm, ?string $fasciaTag)
+                    use ($pdo, $clientId, $quote, $quoteId, $input, $room, $note): array {
+        $lineInput = $input;
+        $lineInput['width_mm'] = $lineWidthMm;
+        $priced = pe_calculate_item($pdo, $clientId, $lineInput, (int) ($quote['account_client_id'] ?? 0));
+        if (isset($priced['error'])) throw new RuntimeException($priced['error']);
 
-    // Next line_no in this quote.
-    $lnSt = $pdo->prepare(
-        'SELECT COALESCE(MAX(line_no), 0) + 1 FROM quote_items WHERE quote_id = ?'
-    );
-    $lnSt->execute([$quoteId]);
-    $nextLineNo = (int) $lnSt->fetchColumn();
+        $lnSt = $pdo->prepare('SELECT COALESCE(MAX(line_no), 0) + 1 FROM quote_items WHERE quote_id = ?');
+        $lnSt->execute([$quoteId]);
+        $nextLineNo = (int) $lnSt->fetchColumn();
 
-    $room  = trim((string) ($_POST['room_name'] ?? ''));
-    $note  = trim((string) ($_POST['notes']     ?? ''));
+        $ins = $pdo->prepare(
+            'INSERT INTO quote_items
+              (quote_id, line_no,
+               product_id, product_name_snapshot,
+               system_id, system_name_snapshot,
+               option_id,
+               fabric_band_snapshot, fabric_supplier_snapshot, fabric_name_snapshot,
+               fabric_colour_snapshot, fabric_code_snapshot,
+               room_name, fascia_group,
+               width_mm, drop_mm, width_matrix_mm, drop_matrix_mm,
+               quantity,
+               price_table_id, price_table_row_id,
+               base_price, cost_price_snapshot, extras_cost_snapshot,
+               extras_total, subtotal_per_blind,
+               markup_percent, discount_percent,
+               sell_price, line_total,
+               notes)
+             VALUES
+              (?, ?,
+               ?, ?,
+               ?, ?,
+               ?,
+               ?, ?, ?,
+               ?, ?,
+               ?, ?,
+               ?, ?, ?, ?,
+               ?,
+               ?, ?,
+               ?, ?, ?,
+               ?, ?,
+               ?, ?,
+               ?, ?,
+               ?)'
+        );
+        $ins->execute([
+            $quoteId, $nextLineNo,
+            $priced['product_id'], $priced['product_name'],
+            $priced['system_id'],  $priced['system_name'],
+            $priced['option_id'],
+            $priced['fabric_band'], $priced['fabric_supplier'], $priced['fabric_name'],
+            $priced['fabric_colour'], $priced['fabric_code'],
+            $room !== '' ? $room : null, $fasciaTag,
+            $priced['width_mm'], $priced['drop_mm'],
+            $priced['matrix_width_mm'], $priced['matrix_drop_mm'],
+            $priced['quantity'],
+            $priced['price_table_id'], $priced['price_table_row_id'],
+            $priced['base_price'], $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0,
+            $priced['extras_total'], $priced['subtotal_per_blind'],
+            $priced['markup_percent'], $priced['discount_percent'],
+            $priced['sell_price'], $priced['line_total'],
+            $note !== '' ? $note : null,
+        ]);
+        $newItemId = (int) $pdo->lastInsertId();
+        qb_capture_line_wholesale($pdo, $newItemId, $priced);   // Phase 2A wholesale capture
 
-    // cost_price_snapshot + extras_cost_snapshot freeze the per-blind
-    // wholesale cost at save-time, so historic gross-profit numbers
-    // stay correct if the admin edits products/fabrics later. NULL on
-    // any underlying cost_price column → 0 here; tenants see no
-    // profit erosion until they fill cost data in.
-    $ins = $pdo->prepare(
-        'INSERT INTO quote_items
-          (quote_id, line_no,
-           product_id, product_name_snapshot,
-           system_id, system_name_snapshot,
-           option_id,
-           fabric_band_snapshot, fabric_supplier_snapshot, fabric_name_snapshot,
-           fabric_colour_snapshot, fabric_code_snapshot,
-           room_name,
-           width_mm, drop_mm, width_matrix_mm, drop_matrix_mm,
-           quantity,
-           price_table_id, price_table_row_id,
-           base_price, cost_price_snapshot, extras_cost_snapshot,
-           extras_total, subtotal_per_blind,
-           markup_percent, discount_percent,
-           sell_price, line_total,
-           notes)
-         VALUES
-          (?, ?,
-           ?, ?,
-           ?, ?,
-           ?,
-           ?, ?, ?,
-           ?, ?,
-           ?,
-           ?, ?, ?, ?,
-           ?,
-           ?, ?,
-           ?, ?, ?,
-           ?, ?,
-           ?, ?,
-           ?, ?,
-           ?)'
-    );
-    $ins->execute([
-        $quoteId, $nextLineNo,
-        $priced['product_id'], $priced['product_name'],
-        $priced['system_id'],  $priced['system_name'],
-        $priced['option_id'],
-        $priced['fabric_band'], $priced['fabric_supplier'], $priced['fabric_name'],
-        $priced['fabric_colour'], $priced['fabric_code'],
-        $room !== '' ? $room : null,
-        $priced['width_mm'], $priced['drop_mm'],
-        $priced['matrix_width_mm'], $priced['matrix_drop_mm'],
-        $priced['quantity'],
-        $priced['price_table_id'], $priced['price_table_row_id'],
-        $priced['base_price'], $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0,
-        $priced['extras_total'], $priced['subtotal_per_blind'],
-        $priced['markup_percent'], $priced['discount_percent'],
-        $priced['sell_price'], $priced['line_total'],
-        $note !== '' ? $note : null,
-    ]);
-    $newItemId = (int) $pdo->lastInsertId();
-    qb_capture_line_wholesale($pdo, $newItemId, $priced);   // Phase 2A wholesale capture
-
-    // Insert one row per applied extra. cost_snapshot freezes the
-    // wholesale cost. user_value snapshots the user-typed length / spec
-    // (NULL when the extra doesn't have a length_input_label, or when
-    // nothing was typed). Try-fallback so this still works pre-
-    // migrate_extra_length_input.php.
-    if (!empty($priced['extras_applied'])) {
-        try {
-            $insE = $pdo->prepare(
-                'INSERT INTO quote_item_extras
-                   (quote_item_id,
-                    product_extra_id, extra_name_snapshot,
-                    product_extra_choice_id, choice_label_snapshot,
-                    mode, amount_applied, cost_snapshot, user_value)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            foreach ($priced['extras_applied'] as $ex) {
-                $insE->execute([
-                    $newItemId,
-                    $ex['extra_id'], $ex['extra_name'],
-                    $ex['choice_id'], $ex['choice_label'],
-                    $ex['mode'], $ex['amount_applied'],
-                    $ex['cost_snapshot'] ?? 0,
-                    $ex['user_value']    ?? null,
-                ]);
-                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
+        // One row per applied extra. Try-fallback so this still works pre-
+        // migrate_extra_length_input.php (user_value column may be absent).
+        if (!empty($priced['extras_applied'])) {
+            try {
+                $insE = $pdo->prepare(
+                    'INSERT INTO quote_item_extras
+                       (quote_item_id, product_extra_id, extra_name_snapshot,
+                        product_extra_choice_id, choice_label_snapshot,
+                        mode, amount_applied, cost_snapshot, user_value)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                foreach ($priced['extras_applied'] as $ex) {
+                    $insE->execute([
+                        $newItemId, $ex['extra_id'], $ex['extra_name'],
+                        $ex['choice_id'], $ex['choice_label'],
+                        $ex['mode'], $ex['amount_applied'],
+                        $ex['cost_snapshot'] ?? 0, $ex['user_value'] ?? null,
+                    ]);
+                    qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
+                }
+            } catch (Throwable $e) {
+                $insE = $pdo->prepare(
+                    'INSERT INTO quote_item_extras
+                       (quote_item_id, product_extra_id, extra_name_snapshot,
+                        product_extra_choice_id, choice_label_snapshot,
+                        mode, amount_applied, cost_snapshot)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                foreach ($priced['extras_applied'] as $ex) {
+                    $insE->execute([
+                        $newItemId, $ex['extra_id'], $ex['extra_name'],
+                        $ex['choice_id'], $ex['choice_label'],
+                        $ex['mode'], $ex['amount_applied'], $ex['cost_snapshot'] ?? 0,
+                    ]);
+                    qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
+                }
             }
-        } catch (Throwable $e) {
-            $insE = $pdo->prepare(
-                'INSERT INTO quote_item_extras
-                   (quote_item_id,
-                    product_extra_id, extra_name_snapshot,
-                    product_extra_choice_id, choice_label_snapshot,
-                    mode, amount_applied, cost_snapshot)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            foreach ($priced['extras_applied'] as $ex) {
-                $insE->execute([
-                    $newItemId,
-                    $ex['extra_id'], $ex['extra_name'],
-                    $ex['choice_id'], $ex['choice_label'],
-                    $ex['mode'], $ex['amount_applied'],
-                    $ex['cost_snapshot'] ?? 0,
-                ]);
-                qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
-            }
+        }
+        return [$newItemId, $priced, $nextLineNo];
+    };
+
+    if ($multiActive) {
+        // Fan out: one grouped line per blind width, sharing the next free
+        // fascia-group letter. qb_reconcile_fascia_groups then carries the
+        // fascia once across the group (each blind still cut to its own width).
+        $used = [];
+        $ug = $pdo->prepare("SELECT DISTINCT fascia_group FROM quote_items WHERE quote_id = ? AND fascia_group IS NOT NULL AND fascia_group <> ''");
+        $ug->execute([$quoteId]);
+        foreach ($ug->fetchAll(PDO::FETCH_COLUMN) as $t) $used[strtoupper((string) $t)] = true;
+        $tag = 'A';
+        foreach (range('A', 'Z') as $L) { if (empty($used[$L])) { $tag = (string) $L; break; } }
+
+        foreach ($multiWidths as $w) { $insertLine($w, $tag); }
+        $msg = count($multiWidths) . ' blinds added under one shared fascia (group ' . $tag . ').';
+    } else {
+        [$newItemId, $priced, $nextLineNo] = $insertLine($widthMm, null);
+        $msg = 'Blind ' . $nextLineNo . ' added (' . qb_fmt_money($priced['line_total']) . ').';
+        if (!empty($priced['rounded_up'])) {
+            $msg .= ' Rounded up to ' . qb_fmt_mm((int) $priced['matrix_width_mm'])
+                  . ' × ' . qb_fmt_mm((int) $priced['matrix_drop_mm']) . ' cell.';
         }
     }
 
     qb_reconcile_fascia_groups($pdo, $quoteId, $clientId, (int) ($quote['account_client_id'] ?? 0));
     qb_recompute_totals($quoteId);
     $pdo->commit();
-
-    $msg = 'Blind ' . $nextLineNo . ' added (' . qb_fmt_money($priced['line_total']) . ').';
-    if (!empty($priced['rounded_up'])) {
-        $msg .= ' Rounded up to ' . qb_fmt_mm((int) $priced['matrix_width_mm'])
-              . ' × ' . qb_fmt_mm((int) $priced['matrix_drop_mm']) . ' cell.';
-    }
     // The form has two submit buttons:
     //   "Add blind"          → next_action=more  → land back on Add-line
     //   "Add blind & finish" → next_action=stop  → land at top of editor
