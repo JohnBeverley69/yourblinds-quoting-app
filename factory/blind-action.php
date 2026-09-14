@@ -64,5 +64,9 @@ try {
     $_SESSION['flash_error'] = 'Could not update that blind: ' . $e->getMessage();
 }
 
+// Phase 0: roll the single fulfilment stage up from this floor movement.
+require_once __DIR__ . '/../_partials/order_stage.php';
+recompute_order_stage($pdo, (int) ($stream['quote_id'] ?? 0));
+
 header('Location: ' . $backTo);
 exit;

@@ -410,6 +410,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());
         }
     }
+    // Phase 0: sending POs / placing the order changes bought-in + status — roll it up.
+    require_once __DIR__ . '/../_partials/order_stage.php';
+    recompute_order_stage(db(), $quoteId);
+
     $orderedNote = $advancedToOrdered ? ' Moved on to "Ordered".' : '';
 
     // Compose the result from what actually happened (supplier emails and/or

@@ -119,6 +119,19 @@ if (bj_tables_ready($pdo) && !empty($ids)) {
     try { $floorProg = bj_order_progress($pdo, $ids); } catch (Throwable $e) { $floorProg = []; }
 }
 
+// Phase 0: the single derived fulfilment stage, shown next to the old pills so
+// it can be checked against them. Guarded (column added by migration).
+require_once __DIR__ . '/../_partials/order_stage.php';
+$stageBy = [];
+if (!empty($ids)) {
+    try {
+        $sph = implode(',', array_fill(0, count($ids), '?'));
+        $sSt = $pdo->prepare("SELECT id, fulfilment_stage FROM quotes WHERE id IN ($sph)");
+        $sSt->execute($ids);
+        foreach ($sSt->fetchAll(PDO::FETCH_ASSOC) as $r) $stageBy[(int) $r['id']] = $r['fulfilment_stage'];
+    } catch (Throwable $e) { $stageBy = []; }
+}
+
 $newCount = 0;
 foreach ($orders as $o) {
     if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
@@ -300,6 +313,9 @@ require __DIR__ . '/../_partials/factory_head.php';
                             <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>"><?= e($stagePill[0]) ?></span>
                         <?php else: ?>
                             <span class="io-status <?= $status === 'ordered' ? 'ordered' : '' ?>"><?= e($status !== '' ? $status : 'new') ?></span>
+                        <?php endif; ?>
+                        <?php if (($fs = ($stageBy[$qid] ?? null)) !== null): ?>
+                            <span class="io-stage" style="color:#0a5561;background:transparent;border:1px solid #0e6d7c" title="Unified fulfilment stage (Phase 0 roll-up — verify against the pills to its left)">&#9656; <?= e(os_stage_label($fs)) ?></span>
                         <?php endif; ?>
                         <?php if ($prog !== null && $prog['total'] > 0): ?>
                             <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>

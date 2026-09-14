@@ -42,6 +42,9 @@ try {
         $msg = 'Bought-in items marked received.';
     }
     factory_boughtin_restamp($pdo, $quoteId, $factoryId);
+    // Phase 0: bought-in received can complete the Ready gate — roll it up.
+    require_once __DIR__ . '/../_partials/order_stage.php';
+    recompute_order_stage($pdo, $quoteId);
 } catch (Throwable $e) {
     qb_flash_redirect($back, 'error', 'Could not update: ' . $e->getMessage());
 }

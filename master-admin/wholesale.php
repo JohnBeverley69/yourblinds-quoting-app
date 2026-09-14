@@ -71,6 +71,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not update delivery note: ' . $e->getMessage();
         }
+        // Phase 0: dispatching / cancelling a delivery note moves the fulfilment stage.
+        try {
+            require_once __DIR__ . '/../_partials/order_stage.php';
+            $dq = $pdo->prepare('SELECT source_quote_id FROM factory_ar_delivery_notes WHERE id = ? LIMIT 1');
+            $dq->execute([$dnId]);
+            $dnQid = (int) $dq->fetchColumn();
+            if ($dnQid > 0) recompute_order_stage($pdo, $dnQid);
+        } catch (Throwable $e) { /* non-fatal */ }
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
@@ -153,6 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
+            // Phase 0: dispatch (and invoice) moves the fulfilment stage — roll it up.
+            try {
+                require_once __DIR__ . '/../_partials/order_stage.php';
+                recompute_order_stage($pdo, $qid);
+            } catch (Throwable $e) { /* non-fatal */ }
             $_SESSION['flash_success'] = $msg;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
