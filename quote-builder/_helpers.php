@@ -155,6 +155,197 @@ function qb_recompute_totals(int $quoteId): void
 }
 
 /**
+ * Auto-grouping: reconcile the fascia across blinds that share a fascia group tag.
+ *
+ * Blinds on a quote tagged with the same quote_items.fascia_group letter share ONE
+ * continuous fascia. This pass makes one "carrier" line carry the fascia at the
+ * group's TOTAL width (so it's priced once via the fascia width-table and cut once
+ * via Fascia_Cut) and sets every other member to "No Fascia" (no double charge, no
+ * extra fascia piece). All members get "Multiple Blinds in One Fascia = Yes" so the
+ * editable tube/fabric deduction applies — each blind is still made to its own width.
+ *
+ * Purely data: it rewrites each member's Fascia Options + Multiple choices and
+ * re-prices through pe_calculate_item (the same engine the handlers use). The total
+ * width = the carrier's typed fascia width if given, else SUM(member widths) +
+ * one editable roller_fascia_join "gap" per join. Nothing hardcoded.
+ *
+ * Called from add/update/delete/duplicate handlers before qb_recompute_totals,
+ * inside their transaction. No-op unless a group has 2+ members with a real fascia.
+ */
+function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $accountClientId): void
+{
+    $ls = $pdo->prepare(
+        'SELECT id, line_no, product_id, system_id, option_id, width_mm, drop_mm,
+                quantity, markup_percent, discount_percent, fascia_group
+           FROM quote_items WHERE quote_id = ? ORDER BY line_no, id'
+    );
+    $ls->execute([$quoteId]);
+    $lines = $ls->fetchAll(PDO::FETCH_ASSOC);
+    if (!$lines) return;
+
+    $groups = [];
+    foreach ($lines as $ln) {
+        $tag = strtoupper(trim((string) ($ln['fascia_group'] ?? '')));
+        if ($tag !== '') $groups[$tag][] = $ln;
+    }
+    if (!$groups) return;
+
+    // Editable per-gap join allowance (mm); allowance_rows is a global set.
+    $gap = 0.0;
+    try {
+        $g = $pdo->prepare("SELECT value FROM allowance_rows WHERE table_name='roller_fascia_join' AND key_norm='gap' LIMIT 1");
+        $g->execute();
+        $v = $g->fetchColumn();
+        if ($v !== false && $v !== null) $gap = (float) $v;
+    } catch (Throwable $e) { /* default 0 */ }
+
+    // Per-product: resolve the Fascia Options extra + its choices, the Multiple
+    // extra + its Yes choice, and the fascia-colour child extras to drop when a
+    // member becomes No Fascia. Returns null if the product has no fascia option.
+    $resolveCache = [];
+    $resolve = function (int $productId) use ($pdo, &$resolveCache): ?array {
+        if (array_key_exists($productId, $resolveCache)) return $resolveCache[$productId];
+        $out = ['fascia_extra' => 0, 'no_fascia_choice' => 0, 'fascia_real_choices' => [],
+                'multiple_extra' => 0, 'multiple_yes' => 0, 'child_extras' => []];
+        $fe = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND name = 'Fascia Options' LIMIT 1");
+        $fe->execute([$productId]);
+        $out['fascia_extra'] = (int) $fe->fetchColumn();
+        if ($out['fascia_extra'] > 0) {
+            $ch = $pdo->prepare("SELECT id, label FROM product_extra_choices WHERE product_extra_id = ?");
+            $ch->execute([$out['fascia_extra']]);
+            foreach ($ch->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                if (strcasecmp(trim((string) $c['label']), 'No Fascia') === 0) $out['no_fascia_choice'] = (int) $c['id'];
+                else $out['fascia_real_choices'][(int) $c['id']] = (string) $c['label'];
+            }
+        }
+        $me = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND name = 'Multiple Blinds in One Fascia' LIMIT 1");
+        $me->execute([$productId]);
+        $out['multiple_extra'] = (int) $me->fetchColumn();
+        if ($out['multiple_extra'] > 0) {
+            $yc = $pdo->prepare("SELECT id FROM product_extra_choices WHERE product_extra_id = ? AND label = 'Yes' LIMIT 1");
+            $yc->execute([$out['multiple_extra']]);
+            $out['multiple_yes'] = (int) $yc->fetchColumn();
+        }
+        $ce = $pdo->prepare("SELECT id, name FROM product_extras WHERE product_id = ?");
+        $ce->execute([$productId]);
+        foreach ($ce->fetchAll(PDO::FETCH_ASSOC) as $x) {
+            if (in_array(strtolower(trim((string) $x['name'])),
+                    ['senses profile colour', 'senses end cap colour', 'll profile colour', 'll end cap colour'], true)) {
+                $out['child_extras'][] = (int) $x['id'];
+            }
+        }
+        return $resolveCache[$productId] = ($out['fascia_extra'] > 0 ? $out : null);
+    };
+
+    $loadExtras = function (int $itemId) use ($pdo): array {
+        $e = $pdo->prepare("SELECT product_extra_id, product_extra_choice_id, user_value FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id");
+        $e->execute([$itemId]);
+        $rows = [];
+        foreach ($e->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $row = ['extra_id' => (int) $r['product_extra_id'], 'choice_id' => (int) $r['product_extra_choice_id']];
+            if ($r['user_value'] !== null && is_numeric($r['user_value']) && (float) $r['user_value'] > 0) {
+                $row['user_value'] = (float) $r['user_value'];
+            }
+            $rows[] = $row;
+        }
+        return $rows;
+    };
+
+    // Re-price one stored line with a modified extras set and rewrite it in place
+    // (mirrors update_item's write). round_up=true and the stored markup/discount
+    // percentages reproduce the line's economics; only the fascia/Multiple change.
+    $reprice = function (array $ln, array $extras) use ($pdo, $clientId, $accountClientId): void {
+        $input = [
+            'product_id' => (int) $ln['product_id'], 'system_id' => (int) $ln['system_id'], 'option_id' => (int) $ln['option_id'],
+            'width_mm' => (int) $ln['width_mm'], 'drop_mm' => (int) $ln['drop_mm'], 'quantity' => max(1, (int) $ln['quantity']),
+            'extras' => array_values($extras), 'round_up' => true,
+            'markup_override' => (float) $ln['markup_percent'], 'discount_override' => (float) $ln['discount_percent'],
+        ];
+        $priced = pe_calculate_item($pdo, $clientId, $input, $accountClientId);
+        if (isset($priced['error'])) return;   // leave the line untouched on any pricing error
+        $pdo->prepare(
+            'UPDATE quote_items
+                SET option_id = ?, fabric_band_snapshot = ?, fabric_supplier_snapshot = ?, fabric_name_snapshot = ?,
+                    fabric_colour_snapshot = ?, fabric_code_snapshot = ?, width_matrix_mm = ?, drop_matrix_mm = ?,
+                    price_table_id = ?, price_table_row_id = ?, base_price = ?, cost_price_snapshot = ?, extras_cost_snapshot = ?,
+                    extras_total = ?, subtotal_per_blind = ?, markup_percent = ?, discount_percent = ?, sell_price = ?, line_total = ?
+              WHERE id = ?'
+        )->execute([
+            $priced['option_id'], $priced['fabric_band'], $priced['fabric_supplier'], $priced['fabric_name'],
+            $priced['fabric_colour'], $priced['fabric_code'], $priced['matrix_width_mm'], $priced['matrix_drop_mm'],
+            $priced['price_table_id'], $priced['price_table_row_id'], $priced['base_price'],
+            $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0,
+            $priced['extras_total'], $priced['subtotal_per_blind'], $priced['markup_percent'], $priced['discount_percent'],
+            $priced['sell_price'], $priced['line_total'], (int) $ln['id'],
+        ]);
+        if (function_exists('qb_capture_line_wholesale')) qb_capture_line_wholesale($pdo, (int) $ln['id'], $priced);
+        $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id = ?')->execute([(int) $ln['id']]);
+        if (!empty($priced['extras_applied'])) {
+            try {
+                $insE = $pdo->prepare('INSERT INTO quote_item_extras (quote_item_id, product_extra_id, extra_name_snapshot, product_extra_choice_id, choice_label_snapshot, mode, amount_applied, cost_snapshot, user_value) VALUES (?,?,?,?,?,?,?,?,?)');
+                foreach ($priced['extras_applied'] as $ex) {
+                    $insE->execute([(int) $ln['id'], $ex['extra_id'], $ex['extra_name'], $ex['choice_id'], $ex['choice_label'], $ex['mode'], $ex['amount_applied'], $ex['cost_snapshot'] ?? 0, $ex['user_value'] ?? null]);
+                    if (function_exists('qb_capture_extra_wholesale')) qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
+                }
+            } catch (Throwable $e) {
+                $insE = $pdo->prepare('INSERT INTO quote_item_extras (quote_item_id, product_extra_id, extra_name_snapshot, product_extra_choice_id, choice_label_snapshot, mode, amount_applied, cost_snapshot) VALUES (?,?,?,?,?,?,?,?)');
+                foreach ($priced['extras_applied'] as $ex) {
+                    $insE->execute([(int) $ln['id'], $ex['extra_id'], $ex['extra_name'], $ex['choice_id'], $ex['choice_label'], $ex['mode'], $ex['amount_applied'], $ex['cost_snapshot'] ?? 0]);
+                    if (function_exists('qb_capture_extra_wholesale')) qb_capture_extra_wholesale($pdo, (int) $pdo->lastInsertId(), $ex);
+                }
+            }
+        }
+    };
+
+    foreach ($groups as $members) {
+        if (count($members) < 2) continue;
+        $R = $resolve((int) $members[0]['product_id']);
+        if ($R === null || $R['no_fascia_choice'] === 0) continue;
+
+        // Load each member's extras; find the carrier (first with a real fascia).
+        $memberExtras = [];
+        $carrierIdx = -1; $carrierFasciaChoice = 0; $carrierTypedWidth = 0.0;
+        foreach ($members as $i => $m) {
+            $memberExtras[$i] = $loadExtras((int) $m['id']);
+            if ($carrierIdx === -1) {
+                foreach ($memberExtras[$i] as $row) {
+                    if ($row['extra_id'] === $R['fascia_extra'] && isset($R['fascia_real_choices'][$row['choice_id']])) {
+                        $carrierIdx = $i; $carrierFasciaChoice = $row['choice_id'];
+                        $carrierTypedWidth = (float) ($row['user_value'] ?? 0);
+                        break;
+                    }
+                }
+            }
+        }
+        if ($carrierIdx === -1) continue;   // no real fascia anywhere in the group → nothing to share
+
+        $sum = 0.0;
+        foreach ($members as $m) $sum += (float) $m['width_mm'];
+        $total = $carrierTypedWidth > 0 ? $carrierTypedWidth : ($sum + (count($members) - 1) * $gap);
+
+        foreach ($members as $i => $m) {
+            $isCarrier = ($i === $carrierIdx);
+            $kept = [];
+            foreach ($memberExtras[$i] as $row) {
+                if ($row['extra_id'] === $R['fascia_extra'])   continue;   // re-added below
+                if ($row['extra_id'] === $R['multiple_extra'])  continue;   // re-added below
+                if (!$isCarrier && in_array($row['extra_id'], $R['child_extras'], true)) continue;   // fascia colours gone on No-Fascia members
+                $kept[] = $row;
+            }
+            if ($isCarrier) {
+                $kept[] = ['extra_id' => $R['fascia_extra'], 'choice_id' => $carrierFasciaChoice, 'user_value' => $total];
+            } else {
+                $kept[] = ['extra_id' => $R['fascia_extra'], 'choice_id' => $R['no_fascia_choice']];
+            }
+            if ($R['multiple_extra'] > 0 && $R['multiple_yes'] > 0) {
+                $kept[] = ['extra_id' => $R['multiple_extra'], 'choice_id' => $R['multiple_yes']];
+            }
+            $reprice($m, $kept);
+        }
+    }
+}
+
+/**
  * Generate the next sequential quote number for a client: PRE-YYYY-####.
  * Prefix is from client_settings.quote_prefix, falling back to the first
  * 3 alpha chars of company_name. Subject to a small race window — the

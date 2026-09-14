@@ -255,6 +255,7 @@ try {
         }
     }
 
+    qb_reconcile_fascia_groups($pdo, $quoteId, $clientId, (int) ($quote['account_client_id'] ?? 0));
     qb_recompute_totals($quoteId);
     $pdo->commit();
 

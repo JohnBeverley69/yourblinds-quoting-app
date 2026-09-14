@@ -1458,7 +1458,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 <th class="num">Qty</th>
                                 <th class="num">Unit</th>
                                 <th class="num">Total</th>
-                                <?php if ($editable): ?><th></th><?php endif; ?>
+                                <?php if ($editable): ?><th title="Tag blinds that share one fascia with the same letter — priced &amp; cut once across the group">Fascia</th><th></th><?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -1515,6 +1515,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                     <td class="num"><?= e(qb_fmt_money($it['sell_price'])) ?></td>
                                     <td class="num"><?= e(qb_fmt_money($it['line_total'])) ?></td>
                                     <?php if ($editable): ?>
+                                        <td>
+                                            <?php $isRoller = stripos((string) $it['product_name_snapshot'], 'Roller') !== false; if ($isRoller): $fg = strtoupper(trim((string) ($it['fascia_group'] ?? ''))); ?>
+                                            <form method="post" action="/quote-builder/save_fascia_group.php" style="margin:0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                                                <input type="hidden" name="item_id"  value="<?= (int) $it['id'] ?>">
+                                                <select name="fascia_group" onchange="this.form.submit()" class="btn btn-sm btn-secondary" title="Blinds sharing a letter share one continuous fascia (priced &amp; cut once)">
+                                                    <option value=""<?= $fg === '' ? ' selected' : '' ?>>—</option>
+                                                    <?php foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $g): ?><option value="<?= $g ?>"<?= $fg === $g ? ' selected' : '' ?>><?= $g ?></option><?php endforeach; ?>
+                                                </select>
+                                            </form>
+                                            <?php endif; ?>
+                                        </td>
                                         <td style="white-space:nowrap">
                                             <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>&edit_item=<?= (int) $it['id'] ?>#add-line"
                                                class="btn btn-sm btn-secondary" style="margin-right:0.25rem">Edit</a>
@@ -1561,7 +1574,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <?= e(qb_fmt_money($wtAmount)) ?>
                                         <?php endif; ?>
                                     </td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php
@@ -1584,25 +1597,25 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                         <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(to agreed price)</span>
                                     </td>
                                     <td class="num"><?= ($olDiscount >= 0 ? '&minus;' : '+') . e(qb_fmt_money(abs($olDiscount))) ?></td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php if ((float) $quote['vat_percent'] > 0): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Subtotal</td>
                                     <td class="num"><?= e(qb_fmt_money($quote['subtotal'])) ?></td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                                 </tr>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">VAT (<?= number_format((float) $quote['vat_percent'], 2) ?>%)</td>
                                     <td class="num"><?= e(qb_fmt_money($quote['vat'])) ?></td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <tr class="totals-row grand">
                                 <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
-                                <?php if ($editable): ?><td></td><?php endif; ?>
+                                <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                             </tr>
                             <?php if ($editable): ?>
                                 <tr class="totals-row">
@@ -1622,7 +1635,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <button type="submit" class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.8125rem">Set</button>
                                         </form>
                                     </td>
-                                    <?php if ($editable): ?><td></td><?php endif; ?>
+                                    <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                                 </tr>
                             <?php endif; ?>
                             <?php
@@ -1645,7 +1658,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <tr class="totals-row">
                                 <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;color:var(--text-faint);font-size:0.875rem">Deposit due on acceptance</td>
                                 <td class="num" style="color:var(--text-faint);font-size:0.875rem"><?= e(qb_fmt_money($predDep)) ?></td>
-                                <?php if ($editable): ?><td></td><?php endif; ?>
+                                <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                             </tr>
                             <?php endif; ?>
                         </tbody>
