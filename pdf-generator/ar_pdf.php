@@ -162,15 +162,38 @@ function ar_render_invoice(array $ctx, array $items, array $totals): ?string
     $money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
     $title = strtoupper((string) ($ctx['doc_title'] ?? 'INVOICE'));
 
+    // Show the List / Discount breakdown columns only when at least one line
+    // actually carries an account discount — otherwise list == net on every line
+    // and the extra columns are just noise (e.g. a supplier-priced invoice with
+    // no trade discount). list_trade_unit / discount_amount are per-unit figures
+    // set by the pricing engine and stored on each invoice line.
+    $hasDisc = false;
+    foreach ($items as $it) {
+        if (round((float) ($it['discount_amount'] ?? 0), 2) > 0) { $hasDisc = true; break; }
+    }
+
     $rows = '';
     $n = 0;
     foreach ($items as $it) {
         $n++;
         $size = trim($mm($it['width_mm'] ?? null) . (($it['drop_mm'] ?? null) ? ' &times; ' . $mm($it['drop_mm']) : ''));
+        $discCols = '';
+        if ($hasDisc) {
+            $listUnit = (float) ($it['list_trade_unit'] ?? ($it['unit_net'] ?? 0));
+            $discAmt  = round((float) ($it['discount_amount'] ?? 0), 2);
+            $discPct  = (float) ($it['discount_percent'] ?? 0);
+            $discCell = $discAmt > 0
+                ? '&minus;' . $money($discAmt)
+                  . ($discPct > 0 ? '<br><span class="muted">' . rtrim(rtrim(number_format($discPct, 2), '0'), '.') . '%</span>' : '')
+                : '';
+            $discCols = '<td class="rt">' . $money($listUnit) . '</td>'
+                      . '<td class="rt">' . $discCell . '</td>';
+        }
         $rows .= '<tr>'
               . '<td class="num">' . $n . '</td>'
               . '<td>' . $e($it['description'] ?? '') . ($size !== '' ? '<br><span class="muted">' . $size . '</span>' : '') . '</td>'
               . '<td class="num">' . (int) ($it['quantity'] ?? 1) . '</td>'
+              . $discCols
               . '<td class="rt">' . $money($it['unit_net'] ?? 0) . '</td>'
               . '<td class="rt">' . $money($it['line_net'] ?? 0) . '</td>'
               . '</tr>';
@@ -191,7 +214,7 @@ function ar_render_invoice(array $ctx, array $items, array $totals): ?string
         . 'table.items th{background:#1f3b5b;color:#fff;font-size:10px;text-align:left;padding:6px 7px}'
         . 'table.items td{border-bottom:1px solid #e5e7eb;padding:6px 7px;font-size:11px;vertical-align:top}'
         . 'table.items td.num,table.items th.num{text-align:center;width:30px}'
-        . 'table.items td.rt,table.items th.rt{text-align:right;width:76px}'
+        . 'table.items td.rt,table.items th.rt{text-align:right;width:64px}'
         . '.muted{color:#6b7280;font-size:10px}'
         . 'table.tot{width:46%;margin-left:54%;margin-top:8px;border-collapse:collapse}'
         . 'table.tot td{padding:4px 7px;font-size:11px}table.tot td.rt{text-align:right}'
@@ -213,7 +236,9 @@ function ar_render_invoice(array $ctx, array $items, array $totals): ?string
         . ((string) ($ctx['bill_to'] ?? '') !== '' ? $nl2($ctx['bill_to']) : '<span class="muted">— no address —</span>')
         . '</div></td><td></td></tr></table>'
         . '<table class="items"><thead><tr>'
-        . '<th class="num">#</th><th>Description</th><th class="num">Qty</th><th class="rt">Unit (net)</th><th class="rt">Net</th>'
+        . '<th class="num">#</th><th>Description</th><th class="num">Qty</th>'
+        . ($hasDisc ? '<th class="rt">List</th><th class="rt">Discount</th>' : '')
+        . '<th class="rt">' . ($hasDisc ? 'Discounted' : 'Unit (net)') . '</th><th class="rt">Net</th>'
         . '</tr></thead><tbody>' . $rows . '</tbody></table>'
         . '<table class="tot">'
         . '<tr><td>Subtotal (net)</td><td class="rt">' . $money($totals['subtotal'] ?? 0) . '</td></tr>'
