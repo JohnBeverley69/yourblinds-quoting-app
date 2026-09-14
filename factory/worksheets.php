@@ -122,10 +122,72 @@ try {
     }
 } catch (Throwable $e) { /* product_extras not available */ }
 
+/**
+ * Count the real (non-break) fields across a layout's header + every label.
+ * The save guard uses this so a populated template can't be silently replaced
+ * with an empty one.
+ */
+function ws_layout_field_count($layout): int
+{
+    if (!is_array($layout)) return 0;
+    $count = 0;
+    $tally = static function ($fields) use (&$count) {
+        if (!is_array($fields)) return;
+        foreach ($fields as $f) {
+            $src = is_array($f) ? (string) ($f['source'] ?? '') : '';
+            if ($src !== '' && $src !== '__break__') $count++;
+        }
+    };
+    if (isset($layout['header']['fields'])) $tally($layout['header']['fields']);
+    foreach (($layout['labels'] ?? []) as $lab) {
+        if (isset($lab['fields'])) $tally($lab['fields']);
+    }
+    return $count;
+}
+
+/** Snapshot a layout_json into the version history (best-effort, trimmed to 30). */
+function ws_snapshot_layout(PDO $pdo, int $templateId, int $productId, string $layoutJson, ?int $userId): void
+{
+    try {
+        $nameSt = $pdo->prepare('SELECT name FROM worksheet_templates WHERE id = ? LIMIT 1');
+        $nameSt->execute([$templateId]);
+        $name = (string) ($nameSt->fetchColumn() ?: '');
+        $cnt  = ws_layout_field_count(json_decode($layoutJson, true));
+        $pdo->prepare(
+            'INSERT INTO worksheet_template_versions
+                (template_id, product_id, name, layout_json, field_count, saved_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$templateId, $productId, $name, $layoutJson, $cnt, $userId]);
+        // Keep only the most recent 30 snapshots per template.
+        $pdo->prepare(
+            'DELETE FROM worksheet_template_versions
+              WHERE template_id = ? AND id NOT IN (
+                    SELECT id FROM (
+                        SELECT id FROM worksheet_template_versions
+                         WHERE template_id = ? ORDER BY id DESC LIMIT 30
+                    ) keep)'
+        )->execute([$templateId, $templateId]);
+    } catch (Throwable $e) { /* history table missing / pre-migration — non-fatal */ }
+}
+
+/** Snapshot a template's CURRENT stored layout before it's changed. */
+function ws_snapshot_current(PDO $pdo, int $templateId, int $productId, ?int $userId): void
+{
+    try {
+        $sel = $pdo->prepare('SELECT layout_json FROM worksheet_templates WHERE id = ? AND product_id = ?');
+        $sel->execute([$templateId, $productId]);
+        $cur = $sel->fetchColumn();
+        if ($cur !== false && $cur !== null) {
+            ws_snapshot_layout($pdo, $templateId, $productId, (string) $cur, $userId);
+        }
+    } catch (Throwable $e) { /* non-fatal */ }
+}
+
 // ---- POST: save / delete --------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
     csrf_check();
     $action = (string) ($_POST['_action'] ?? '');
+    $uid    = (function_exists('current_user') ? (int) (current_user()['user_id'] ?? 0) : 0) ?: null;
 
     if ($action === 'delete') {
         $tid = (int) ($_POST['template_id'] ?? 0);
@@ -137,36 +199,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
         exit;
     }
 
+    // Roll a template back to one of its snapshots. Snapshots the current layout
+    // first, so a restore is itself undoable.
+    if ($action === 'restore_version' && $productId > 0) {
+        $tid = (int) ($_POST['template_id'] ?? 0);
+        $vid = (int) ($_POST['version_id'] ?? 0);
+        try {
+            $vsel = $pdo->prepare(
+                'SELECT layout_json FROM worksheet_template_versions
+                  WHERE id = ? AND template_id = ? AND product_id = ?'
+            );
+            $vsel->execute([$vid, $tid, $productId]);
+            $verJson = $vsel->fetchColumn();
+            if ($verJson === false) {
+                $_SESSION['flash_error'] = 'That version could not be found.';
+            } else {
+                ws_snapshot_current($pdo, $tid, $productId, $uid);
+                $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ? AND product_id = ?')
+                    ->execute([(string) $verJson, $tid, $productId]);
+                $_SESSION['flash_success'] = 'Restored a previous version of this worksheet.';
+            }
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not restore: ' . $e->getMessage();
+        }
+        header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
+        exit;
+    }
+
     if ($action === 'save' && $productId > 0) {
-        $tid       = (int) ($_POST['template_id'] ?? 0);
-        $name      = trim((string) ($_POST['name'] ?? '')) ?: 'Worksheet';
-        $name      = mb_substr($name, 0, 120);
-        $isDefault = !empty($_POST['is_default']) ? 1 : 0;
-        $layout    = json_decode((string) ($_POST['payload'] ?? ''), true);
+        $tid        = (int) ($_POST['template_id'] ?? 0);
+        $name       = trim((string) ($_POST['name'] ?? '')) ?: 'Worksheet';
+        $name       = mb_substr($name, 0, 120);
+        $isDefault  = !empty($_POST['is_default']) ? 1 : 0;
+        $allowEmpty = !empty($_POST['allow_empty']);
+        $layout     = json_decode((string) ($_POST['payload'] ?? ''), true);
 
         if (!is_array($layout)) {
             $_SESSION['flash_error'] = 'Could not read the layout — nothing saved.';
-        } else {
-            $layoutJson = json_encode($layout, JSON_UNESCAPED_UNICODE);
+            header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
+            exit;
+        }
+
+        // Load the existing template for the clobber-guard + version snapshot.
+        $existingJson = null; $existingCount = 0;
+        if ($tid > 0) {
             try {
-                $pdo->beginTransaction();
-                if ($tid > 0) {
-                    $upd = $pdo->prepare('UPDATE worksheet_templates SET name = ?, is_default = ?, layout_json = ? WHERE id = ? AND product_id = ?');
-                    $upd->execute([$name, $isDefault, $layoutJson, $tid, $productId]);
-                } else {
-                    $ins = $pdo->prepare('INSERT INTO worksheet_templates (product_id, name, is_default, layout_json) VALUES (?, ?, ?, ?)');
-                    $ins->execute([$productId, $name, $isDefault, $layoutJson]);
-                    $tid = (int) $pdo->lastInsertId();
+                $ex = $pdo->prepare('SELECT layout_json FROM worksheet_templates WHERE id = ? AND product_id = ?');
+                $ex->execute([$tid, $productId]);
+                $ej = $ex->fetchColumn();
+                if ($ej !== false && $ej !== null) {
+                    $existingJson  = (string) $ej;
+                    $existingCount = ws_layout_field_count(json_decode($existingJson, true));
                 }
-                if ($isDefault) {
-                    $pdo->prepare('UPDATE worksheet_templates SET is_default = 0 WHERE product_id = ? AND id <> ?')->execute([$productId, $tid]);
+            } catch (Throwable $e) { /* treat as no existing */ }
+        }
+
+        $incomingCount = ws_layout_field_count($layout);
+
+        // GUARD: never silently replace a populated template with an empty one.
+        if ($tid > 0 && $existingCount > 0 && $incomingCount === 0 && !$allowEmpty) {
+            $_SESSION['flash_error'] =
+                'Not saved — the layout sent had no fields, but the saved template has '
+                . $existingCount . '. That looks like an accidental wipe, so it was blocked and '
+                . 'your saved layout is untouched. To deliberately clear every field, use the '
+                . '"clear all fields" confirmation.';
+            header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
+            exit;
+        }
+
+        $layoutJson = json_encode($layout, JSON_UNESCAPED_UNICODE);
+        try {
+            $pdo->beginTransaction();
+            if ($tid > 0) {
+                // Snapshot the old layout before overwriting (skip a no-op save).
+                if ($existingJson !== null && $existingJson !== $layoutJson) {
+                    ws_snapshot_layout($pdo, $tid, $productId, $existingJson, $uid);
                 }
-                $pdo->commit();
-                $_SESSION['flash_success'] = "Saved “{$name}”.";
-            } catch (Throwable $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+                $upd = $pdo->prepare('UPDATE worksheet_templates SET name = ?, is_default = ?, layout_json = ? WHERE id = ? AND product_id = ?');
+                $upd->execute([$name, $isDefault, $layoutJson, $tid, $productId]);
+            } else {
+                $ins = $pdo->prepare('INSERT INTO worksheet_templates (product_id, name, is_default, layout_json) VALUES (?, ?, ?, ?)');
+                $ins->execute([$productId, $name, $isDefault, $layoutJson]);
+                $tid = (int) $pdo->lastInsertId();
             }
+            if ($isDefault) {
+                $pdo->prepare('UPDATE worksheet_templates SET is_default = 0 WHERE product_id = ? AND id <> ?')->execute([$productId, $tid]);
+            }
+            $pdo->commit();
+            $_SESSION['flash_success'] = "Saved “{$name}”.";
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
         }
         header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
         exit;
@@ -191,6 +314,20 @@ if (!$current && $templates) { $current = $templates[0]; $templateId = (int) $cu
 $currentLayout = $current ? (json_decode((string) $current['layout_json'], true) ?: null) : null;
 $currentName   = $current ? (string) $current['name'] : ($productName ? $productName . ' worksheet' : 'Worksheet');
 $currentIsDef  = $current ? (int) $current['is_default'] : 1;
+
+// Saved snapshots for this template (version history — most recent first).
+$versions = [];
+if ($templateId > 0) {
+    try {
+        $vs = $pdo->prepare(
+            'SELECT id, field_count, created_at
+               FROM worksheet_template_versions
+              WHERE template_id = ? ORDER BY id DESC LIMIT 15'
+        );
+        $vs->execute([$templateId]);
+        $versions = $vs->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { /* history table absent (pre-migration) — no panel */ }
+}
 
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error'] ?? '');
@@ -420,6 +557,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <input type="hidden" name="name" id="f-name">
         <input type="hidden" name="is_default" id="f-default">
         <input type="hidden" name="payload" id="payload">
+        <input type="hidden" name="allow_empty" id="f-allow-empty" value="">
         <button type="submit" class="btn primary">Save worksheet</button>
         <?php if ($templateId > 0): ?>
         <span style="flex:1"></span>
@@ -433,6 +571,39 @@ require __DIR__ . '/../_partials/factory_head.php';
         <input type="hidden" name="product_id" value="<?= $productId ?>">
         <input type="hidden" name="template_id" value="<?= $templateId ?>">
     </form>
+    <?php endif; ?>
+
+    <?php if ($templateId > 0 && $versions): ?>
+    <details class="ws-versions" style="margin-top:1rem; border:1px solid var(--border); border-radius:8px; padding:0.5rem 0.8rem;">
+        <summary style="cursor:pointer; font-weight:600;">Previous versions (<?= count($versions) ?>) — restore an earlier layout</summary>
+        <p class="ws-hint" style="margin:0.5rem 0;">Each save snapshots the layout it replaced. Restoring one also snapshots the current layout first, so nothing is ever lost.</p>
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead><tr style="text-align:left; color:var(--text-faint);">
+                <th style="padding:0.3rem 0.4rem;">Saved</th>
+                <th style="padding:0.3rem 0.4rem;">Fields</th>
+                <th style="padding:0.3rem 0.4rem;"></th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($versions as $v): ?>
+                <tr style="border-top:1px solid var(--border-faint);">
+                    <td style="padding:0.3rem 0.4rem;"><?= e(date('j M Y, H:i', strtotime((string) $v['created_at']))) ?></td>
+                    <td style="padding:0.3rem 0.4rem;"><?= (int) $v['field_count'] ?></td>
+                    <td style="padding:0.3rem 0.4rem; text-align:right;">
+                        <form method="post" action="/factory/worksheets.php?product_id=<?= $productId ?>" style="display:inline; margin:0;"
+                              onsubmit="return confirm('Restore this version? Your current layout is snapshotted first, so this is undoable.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="_action" value="restore_version">
+                            <input type="hidden" name="product_id" value="<?= $productId ?>">
+                            <input type="hidden" name="template_id" value="<?= $templateId ?>">
+                            <input type="hidden" name="version_id" value="<?= (int) $v['id'] ?>">
+                            <button type="submit" class="btn ghost" style="padding:0.15rem 0.6rem; font-size:0.8rem;">Restore</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </details>
     <?php endif; ?>
 </div>
 
@@ -1133,8 +1304,34 @@ require __DIR__ . '/../_partials/factory_head.php';
     document.getElementById('zoom-reset').addEventListener('click', function () { setZoom(BASE_SCALE); });
     document.getElementById('zoom-val').textContent = Math.round(SCALE / BASE_SCALE * 100) + '%';
 
+    // How many real fields the layout had when the page loaded — used to catch a
+    // save that would wipe every field (the exact failure that lost a layout).
+    function countFields(st) {
+        if (!st || typeof st !== 'object') return 0;
+        var n = 0;
+        function tally(fs) { (fs || []).forEach(function (f) {
+            var s = f && f.source; if (s && s !== '__break__') n++; }); }
+        if (st.header) tally(st.header.fields);
+        (st.labels || []).forEach(function (l) { tally(l.fields); });
+        return n;
+    }
+    var LOADED_FIELD_COUNT = countFields(LAYOUT);
+
     document.getElementById('save-form').addEventListener('submit', function (e) {
         sync();
+        // Client-side clobber guard: if the layout loaded with fields but is now
+        // empty, confirm before sending. Cancel aborts the save entirely; OK sets
+        // the allow_empty flag so the matching server-side guard lets it through.
+        var now = countFields(STATE);
+        var allow = document.getElementById('f-allow-empty');
+        if (allow) allow.value = '';
+        if (LOADED_FIELD_COUNT > 0 && now === 0) {
+            if (!confirm('This will clear ALL ' + LOADED_FIELD_COUNT + ' field(s) from the worksheet — the saved layout keeps them until you confirm.\n\nClear every field and save an empty layout?')) {
+                e.preventDefault();
+                return;
+            }
+            if (allow) allow.value = '1';
+        }
         document.getElementById('f-name').value = document.getElementById('tpl-name').value;
         document.getElementById('f-default').value = document.getElementById('tpl-default').checked ? '1' : '';
         STATE.one_per_line = !!(document.getElementById('tpl-oneline') || {}).checked;
