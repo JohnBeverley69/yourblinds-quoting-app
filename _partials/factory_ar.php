@@ -131,7 +131,7 @@ function ar_account_expr(PDO $pdo, string $prefix = 'q.'): string
 /**
  * Placed trade-account orders that contain ≥1 factory-owned line, newest first.
  * Each row: quote id/number/status/date, account id + name, bev_lines, bev_qty,
- * wholesale_total (base×qty + Σ option trade_amount), and dn_count (delivery notes
+ * wholesale_total (Σ line_total — the account's sell price), and dn_count (delivery notes
  * already raised for this order). $accountId / $from / $to are optional filters.
  *
  * "Account" is resolved via ar_account_expr(), so Beverley-raised orders FOR an
@@ -142,11 +142,11 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
 {
     $in     = "'" . implode("','", ar_placed_statuses()) . "'";
     $acct   = ar_account_expr($pdo, 'q.');                                   // effective trade account
-    $ownSub = 'COALESCE(NULLIF(p2.source_client_id,0), p2.client_id) = ?';   // options subquery (p2)
-    // Placeholders bind in SQL text order: [1] subquery ownership, [2] account<>,
-    // [optional account/from/to], [last] main ownership. ($acct carries no
-    // placeholders, so interpolating it doesn't shift this order.)
-    $args = [$factoryId];   // [1] options-subquery ownership
+    // wholesale_total is now SUM(line_total) (the account's actual sell price,
+    // incl. options + account discount), so the old options-trade_amount subquery
+    // and its placeholder are gone. Placeholders bind in SQL text order:
+    // [1] account<>, [optional account/from/to], [last] main ownership.
+    $args = [];
 
     $dnReady = ar_table_ready($pdo, 'factory_ar_delivery_notes');
     $dnSel   = $dnReady
@@ -164,12 +164,7 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
                 {$acct} AS account_id, c.company_name AS account_name,
                 COUNT(qi.id)                  AS bev_lines,
                 COALESCE(SUM(qi.quantity), 0) AS bev_qty,
-                COALESCE(SUM(qi.base_price * qi.quantity), 0)
-                  + COALESCE((SELECT SUM(qie.trade_amount)
-                                FROM quote_item_extras qie
-                                JOIN quote_items qi2 ON qi2.id = qie.quote_item_id
-                                JOIN products p2     ON p2.id = qi2.product_id
-                               WHERE qi2.quote_id = q.id AND $ownSub), 0) AS wholesale_total,
+                COALESCE(SUM(qi.line_total), 0) AS wholesale_total,
                 $dnSel AS dn_count
            FROM quotes q
            JOIN clients c      ON c.id = {$acct}
@@ -204,7 +199,8 @@ function ar_order_lines_for_doc(PDO $pdo, int $factoryId, int $quoteId): array
         "SELECT qi.id, qi.line_no, qi.product_name_snapshot, qi.system_name_snapshot,
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.fabric_code_snapshot,
                 qi.fabric_band_snapshot, qi.width_mm, qi.drop_mm, qi.quantity, qi.room_name,
-                qi.notes, qi.base_price, qi.trade_price_per_blind,
+                qi.notes, qi.base_price, qi.sell_price, qi.line_total,
+                qi.trade_price_per_blind,
                 qi.trade_discount_percent, qi.trade_discount_amount
            FROM quote_items qi
            JOIN products p ON p.id = qi.product_id
@@ -291,9 +287,14 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
             if ($ta === null) { if ($applied > 0) $uncaptured = true; continue; }
             $optNet += (float) $ta;
         }
-        $unitNet  = round((float) $ln['base_price'] + $optNet, 2);
+        // Bill the account our SELL price — the same figure the quote shows.
+        // sell_price is per blind, incl. options and any per-account discount;
+        // trade_price_per_blind is the sell BEFORE their account discount and
+        // trade_discount_amount the £ off (both sell-basis, set by the engine).
+        // ($optNet is still summed above only to flag uncaptured options.)
+        $unitNet  = round((float) $ln['sell_price'], 2);
         $lineNet  = round($unitNet * $qty, 2);
-        $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['base_price']) + $optNet, 2);
+        $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['sell_price']), 2);
 
         $desc = trim((string) $ln['product_name_snapshot']);
         if (($ln['system_name_snapshot'] ?? '') !== '') $desc .= ' — ' . $ln['system_name_snapshot'];

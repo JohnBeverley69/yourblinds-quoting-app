@@ -1257,7 +1257,13 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     }
     $tradePriceUnit = round($basePrice, 2);   // trade price per blind, before our discount
     $tradeDiscAmt   = 0.0;
-    if ($tradeDiscPct > 0) {
+    if ($tradeDiscPct > 0 && $forAccountId === 0) {
+        // RETAIL only (legacy): the tenant's own trade/promo discount comes off the
+        // base before markup, so it flows through to their retail customer. Unchanged
+        // → retail stays byte-identical. For a trade-account quote ($forAccountId > 0)
+        // the account's discount is applied to the FINAL sell price at step 8 instead
+        // (their discount is off our sell price, per the pricing model), and the
+        // trade breakdown fields are recomputed there on a sell basis.
         $discountedBaseUnit = $basePrice * (1 - $tradeDiscPct / 100);
         $tradeDiscAmt = round($tradePriceUnit - round($discountedBaseUnit, 2), 2);
         $basePrice    = $discountedBaseUnit;
@@ -1357,20 +1363,20 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     // product configured as 'own' behaves the same as one configured as 'supplier'.
     // A product the account sources elsewhere never has a trade discount ($tradeDiscPct
     // stays 0), so its own discount is completely untouched.
-    if ($tradeDiscPct > 0) {
+    if ($tradeDiscPct > 0 && $forAccountId === 0) {
+        // RETAIL only: legacy "supplier trade discount wins" — don't stack the
+        // tenant's own buying discount on top of a trade/promo discount that has
+        // already come off the base. For a trade-ACCOUNT quote the buying discount
+        // and markup ARE the grid sell price (list − buying discount + markup) and
+        // must be kept; the account's own discount is a separate layer off the
+        // final sell (applied at step 8).
         $discount = 0.0;
     }
-
-    // Quoting a factory product FOR a trade account (a wholesale quote sent TO
-    // them): they pay the TRADE price — the base minus their buying discount,
-    // plus extras — with NO retail markup and no reseller discount. The markup is
-    // the account's own margin on resale, which has nothing to do with what they
-    // buy from us. So zero both for the account line; the base already carries
-    // their trade discount from step 5b.
-    if ($forAccountId > 0) {
-        $markup   = 0.0;
-        $discount = 0.0;
-    }
+    // NOTE: a trade-account quote ($forAccountId > 0) is priced from the SAME grid
+    // as a retail quote (base − buying discount + markup). Their own per-account
+    // discount, if any, comes off the FINAL sell at step 8. (Previously the engine
+    // zeroed markup + discount here for accounts, which collapsed a supplier-list
+    // product to its raw list price — the bug this fix removes.)
 
     // 8. Sell price + line total.
     //
@@ -1399,10 +1405,27 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     //    surcharge skipped the ×0.67 ×1.35 the base went through.
     $discountedBase = $basePrice * (1 - $discount / 100);
     if (ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
-        $sellPrice = round(($basePrice + $extrasTotal)
-                           * (1 - $discount / 100) * (1 + $markup / 100), 2);
+        $sellBefore = ($basePrice + $extrasTotal) * (1 - $discount / 100) * (1 + $markup / 100);
     } else {
-        $sellPrice = round($discountedBase * (1 + $markup / 100) + $extrasTotal, 2);
+        $sellBefore = $discountedBase * (1 + $markup / 100) + $extrasTotal;
+    }
+    // $sellBefore is the grid sell price (our trade price to any client). For a
+    // trade-ACCOUNT quote, the account's own per-account discount comes off this
+    // FINAL sell. The wholesale invoice bills this sell price (see factory_ar.php),
+    // so recompute the trade breakdown fields on a sell basis for account lines:
+    //   trade_price_per_blind = sell before their discount, trade_discount_amount = £ off.
+    if ($forAccountId > 0) {
+        if ($tradeDiscPct > 0) {
+            $sellPrice      = round($sellBefore * (1 - $tradeDiscPct / 100), 2);
+            $tradePriceUnit = round($sellBefore, 2);
+            $tradeDiscAmt   = round(round($sellBefore, 2) - $sellPrice, 2);
+        } else {
+            $sellPrice      = round($sellBefore, 2);
+            $tradePriceUnit = $sellPrice;   // no account discount → trade price == sell
+            $tradeDiscAmt   = 0.0;
+        }
+    } else {
+        $sellPrice = round($sellBefore, 2);
     }
     // Per-line flat charge (products.line_charge) — a fixed £ added ONCE per
     // line, AFTER the × quantity step, so it is not multiplied by the slat
