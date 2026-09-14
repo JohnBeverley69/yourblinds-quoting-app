@@ -86,6 +86,32 @@ try {
     if (!$realFasciaChoiceIds) { throw new RuntimeException("No real fascia choices found on 'Fascia Options'."); }
     echo "Real fascia choices: " . implode(',', $realFasciaChoiceIds) . "\n";
 
+    // Fixings should only appear with a real fascia — drop the "No Fascia" gate
+    // link from any Fixings group so it hides when No Fascia is chosen.
+    $nf = $pdo->prepare("SELECT id FROM product_extra_choices WHERE product_extra_id = ? AND label = 'No Fascia' LIMIT 1");
+    $nf->execute([$fasciaExtraId]);
+    $noFasciaId = (int) $nf->fetchColumn();
+    if ($noFasciaId > 0) {
+        $fx = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND client_id = ? AND name = 'Fixings'");
+        $fx->execute([$productId, $MASTER]);
+        $fxIds = array_map('intval', $fx->fetchAll(PDO::FETCH_COLUMN));
+        foreach ($fxIds as $fid) {
+            $pdo->prepare("DELETE FROM product_extra_parent_choices WHERE product_extra_id = ? AND product_extra_choice_id = ?")
+                ->execute([$fid, $noFasciaId]);
+            // If the primary parent pointed at No Fascia, repoint to a remaining one.
+            $pc = $pdo->prepare("SELECT parent_choice_id FROM product_extras WHERE id = ?");
+            $pc->execute([$fid]);
+            if ((int) $pc->fetchColumn() === $noFasciaId) {
+                $rem = $pdo->prepare("SELECT product_extra_choice_id FROM product_extra_parent_choices WHERE product_extra_id = ? LIMIT 1");
+                $rem->execute([$fid]);
+                $newPrimary = $rem->fetchColumn();
+                $pdo->prepare("UPDATE product_extras SET parent_choice_id = ? WHERE id = ?")
+                    ->execute([$newPrimary !== false ? (int) $newPrimary : null, $fid]);
+            }
+        }
+        echo "Removed 'No Fascia' gate from Fixings (" . count($fxIds) . " group(s)) — hidden without a fascia.\n";
+    }
+
     // --- Helpers: find-or-create extra / choice; reset parent gates ----------
     $findExtra = function (string $name) use ($pdo, $productId, $MASTER): int {
         $q = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND client_id = ? AND name = ? LIMIT 1");

@@ -3058,11 +3058,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 widthIn.style.color = '';
             }
         }
-        var fw = extrasBox.querySelector('[data-extra-code="fascia_options"] .extra-user-value');
-        if (fw) {
+        // The manual fascia-width box lives on the Fascia Options group (worksheet
+        // + reconcile read it there). Show it only for Over size / Multi, and move
+        // it to sit directly under the Fascia Sizing dropdown so it reads as part
+        // of that choice rather than floating up by the fascia-type picker.
+        var foExt = productData.extras.find(function (e) { return e.code === 'fascia_options'; });
+        var fwInput = foExt ? extrasBox.querySelector('input[data-uv-for="' + foExt.id + '"]') : null;
+        var fwBox = fwInput ? fwInput.closest('.extra-user-value') : null;
+        if (fwBox) {
             var show = (mode === 'oversize' || mode === 'multi');
-            fw.style.display = show ? '' : 'none';
-            if (!show) { var i = fw.querySelector('input'); if (i) i.value = ''; }
+            fwBox.style.display = show ? '' : 'none';
+            if (!show) {
+                fwInput.value = '';
+            } else {
+                var sizingWrap = extrasBox.querySelector('[data-extra-code="fascia_sizing"]');
+                if (sizingWrap && sizingWrap.parentNode && sizingWrap.nextSibling !== fwBox) {
+                    sizingWrap.parentNode.insertBefore(fwBox, sizingWrap.nextSibling);
+                }
+            }
         }
     }
 
