@@ -1430,32 +1430,35 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     //    or the quote stops matching the supplier's own taped price: a £69
     //    blind + 20% tape came out at £76.21 instead of £74.89, because the
     //    surcharge skipped the ×0.67 ×1.35 the base went through.
-    $discountedBase = $basePrice * (1 - $discount / 100);
+    // Split the sell into the BASE BLIND part and the OPTIONS part.
+    //   base part    = the blind: base × (1 − buying discount) × (1 + markup)
+    //   options part = supplier: marked-up options ride through the discount+markup;
+    //                  face-value options (the default) are added at the price set.
+    //                  own: options are face value (no markup).
+    // A flat £2 face-value charge therefore stays £2.
+    $factor = (1 - $discount / 100) * (1 + $markup / 100);
+    $basePart = $basePrice * $factor;
     if (ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
-        // Face-value options (the default) are added at the price set, AFTER the
-        // discount+markup — so a flat £2 charge stays £2. Only options flagged as
-        // supplier list add-ons (face_value=0) go through the discount+markup with
-        // the base.
-        $sellBefore = ($basePrice + $extrasMarkedUp) * (1 - $discount / 100) * (1 + $markup / 100)
-                    + $extrasFaceValue;
+        $optionsPart = $extrasMarkedUp * $factor + $extrasFaceValue;
     } else {
-        $sellBefore = $discountedBase * (1 + $markup / 100) + $extrasTotal;
+        $optionsPart = $extrasTotal;
     }
-    // $sellBefore is the grid sell price (our trade price to any client). For a
-    // trade-ACCOUNT quote, the account's own per-account discount comes off this
-    // FINAL sell. The wholesale invoice bills this sell price (see factory_ar.php),
-    // so recompute the trade breakdown fields on a sell basis for account lines:
-    //   trade_price_per_blind = sell before their discount, trade_discount_amount = £ off.
-    if ($forAccountId > 0) {
-        if ($tradeDiscPct > 0) {
-            $sellPrice      = round($sellBefore * (1 - $tradeDiscPct / 100), 2);
-            $tradePriceUnit = round($sellBefore, 2);
-            $tradeDiscAmt   = round(round($sellBefore, 2) - $sellPrice, 2);
-        } else {
-            $sellPrice      = round($sellBefore, 2);
-            $tradePriceUnit = $sellPrice;   // no account discount → trade price == sell
-            $tradeDiscAmt   = 0.0;
-        }
+    $sellBefore = $basePart + $optionsPart;   // grid sell to ANY client, before account discount
+
+    // Trade-ACCOUNT quote: the account's per-account discount comes off the BASE
+    // BLIND ONLY — options are charged at their set price and are NOT reduced by
+    // the account discount (a discount on an option must be set on the option
+    // itself). The wholesale invoice bills sell_price (factory_ar.php), so the
+    // trade breakdown fields are on a sell basis: trade_price_per_blind = the sell
+    // before the account discount, trade_discount_amount = the £ actually taken off.
+    if ($forAccountId > 0 && $tradeDiscPct > 0) {
+        $sellPrice      = round($basePart * (1 - $tradeDiscPct / 100) + $optionsPart, 2);
+        $tradePriceUnit = round($sellBefore, 2);
+        $tradeDiscAmt   = round(round($sellBefore, 2) - $sellPrice, 2);
+    } elseif ($forAccountId > 0) {
+        $sellPrice      = round($sellBefore, 2);
+        $tradePriceUnit = $sellPrice;   // no account discount → trade price == sell
+        $tradeDiscAmt   = 0.0;
     } else {
         $sellPrice = round($sellBefore, 2);
     }
