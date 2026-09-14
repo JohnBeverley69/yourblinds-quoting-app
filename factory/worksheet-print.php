@@ -210,6 +210,12 @@ foreach ($lines as $ln) {
     // Wand length is a typed input riding on the "Wand Options" row (user_value).
     $numTidy  = static fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
     $wandLen  = isset($userVal['wand options']) ? $numTidy($userVal['wand options']) : '';
+    // Fascia width: the number typed in the "Fascia Options" input box (blank/0 =
+    // fit blind). Exposed so a build rule (Fascia_Cut) can cut the fascia to a
+    // manual width — e.g. full width past a skirting board — instead of the blind
+    // width. Defaults to the ordered width so a blank box behaves as before.
+    $fasciaWidth = (($userVal['fascia options'] ?? 0) > 0)
+        ? (float) $userVal['fascia options'] : (float) $ln['width_mm'];
     // Decision tables match on the System axis + option group NAME (tenant group
     // ids differ from the master's), so key selections by name.
     $optSel = array_merge(['system' => (string) ($ln['system_name_snapshot'] ?? '')], $byName);
@@ -222,7 +228,7 @@ foreach ($lines as $ln) {
     // Quantity is exposed so build rules can reference the ordered qty — e.g. a
     // fabric-only Vanes = Quantity + 1 (the spare vane) and a total-metres calc.
     $numVars = ['Width' => (float) $ln['width_mm'], 'Drop' => (float) $ln['drop_mm'], 'Fit_height' => $fitHeight,
-                'Quantity' => (float) $ln['quantity']];
+                'Quantity' => (float) $ln['quantity'], 'Fascia_Width' => $fasciaWidth];
     $eval    = build_evaluate($pdo, $masterPid, $numVars, $optSel);
 
     $lineVals = [

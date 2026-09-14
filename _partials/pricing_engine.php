@@ -490,7 +490,13 @@ function pe_apply_extra(
     }
 
     // 5. Width-based price table (the 4th mode).
-    //    Find smallest entry where width_mm >= request.
+    //    Find smallest entry where width_mm >= request. When this choice also
+    //    captured a positive number in its input box (length_input_label — e.g. a
+    //    manual fascia width; blank = fit blind), that typed width OVERRIDES the
+    //    blind's ordered width for this lookup, so a fascia (or any width-table
+    //    option) can be priced wider than the blind. Generic + additive: with no
+    //    number typed it behaves exactly as before.
+    $lookupWidth = ($userValue !== null && (float) $userValue > 0) ? (int) $userValue : $widthMm;
     $st = $pdo->prepare(
         'SELECT width_mm, price
            FROM extra_choice_price_rows
@@ -499,7 +505,7 @@ function pe_apply_extra(
           ORDER BY width_mm ASC
           LIMIT 1'
     );
-    $st->execute([$choiceId, $widthMm]);
+    $st->execute([$choiceId, $lookupWidth]);
     $widthRow = $st->fetch();
     if ($widthRow) {
         $amount         += (float) $widthRow['price'];
@@ -513,7 +519,7 @@ function pe_apply_extra(
         );
         $check->execute([$choiceId]);
         if ($check->fetchColumn()) {
-            return ['error' => "Width $widthMm mm exceeds the largest entry in the "
+            return ['error' => "Width $lookupWidth mm exceeds the largest entry in the "
                               . "width table for '" . $choice['label'] . "'."];
         }
     }
