@@ -671,29 +671,6 @@ $activeNav = 'instaprice';
         extrasBox.querySelectorAll('input[data-uv-for], input[data-cuv-for]').forEach(function (el) {
             el.addEventListener('input', schedulePreview);
         });
-        // The manual fascia-width box (on the Fascia Options group) should only
-        // show for Over size / Multi — never on No Fascia or Standard. Mirrors
-        // the quote builder's applyFasciaSizingUI; keyed off the stable option
-        // codes so captions stay editable.
-        (function () {
-            var szExt = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
-            var foExt = productData.extras.find(function (e) { return e.code === 'fascia_options'; });
-            if (!foExt) return;
-            var foInput = extrasBox.querySelector('input[data-uv-for="' + foExt.id + '"]');
-            if (!foInput) return;
-            var mode = null;
-            if (szExt) {
-                var szSel = extrasBox.querySelector('[data-extra-id="' + szExt.id + '"] select');
-                if (szSel) {
-                    var cid = parseInt(szSel.value, 10);
-                    var ch  = szExt.choices.find(function (c) { return c.id === cid; });
-                    mode = ch ? (ch.code || null) : null;
-                }
-            }
-            var show = (mode === 'oversize' || mode === 'multi');
-            foInput.style.display = show ? '' : 'none';
-            if (!show) foInput.value = '';
-        })();
     }
     function collectExtras() {
         var out = [];

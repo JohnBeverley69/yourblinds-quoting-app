@@ -61,6 +61,8 @@ catch (Throwable $e) { exit("The `code` columns are missing — run /migrate_ext
 // this schema, but stay defensive.)
 $hasLen = false; try { $pdo->query('SELECT length_input_label FROM product_extras LIMIT 1'); $hasLen = true; } catch (Throwable $e) {}
 $hasMatchAll = false; try { $pdo->query('SELECT parent_match_all FROM product_extras LIMIT 1'); $hasMatchAll = true; } catch (Throwable $e) {}
+$hasWidthSrc = false; try { $pdo->query('SELECT is_width_source FROM product_extras LIMIT 1'); $hasWidthSrc = true; } catch (Throwable $e) {}
+if (!$hasWidthSrc) { exit("The is_width_source column is missing — run /migrate_extra_width_source.php first.\n"); }
 
 $pdo->beginTransaction();
 try {
@@ -70,8 +72,14 @@ try {
     $fasciaExtraId = (int) $fe->fetchColumn();
     if ($fasciaExtraId === 0) { throw new RuntimeException("Missing 'Fascia Options' on product {$productId}."); }
 
-    // Tag Fascia Options + the internal Multiple extra with stable codes.
-    $pdo->prepare("UPDATE product_extras SET code = 'fascia_options' WHERE id = ?")->execute([$fasciaExtraId]);
+    // Tag Fascia Options with its code, and REMOVE its old manual-width box —
+    // the fascia width now lives in its own "Fascia width" option (a child of
+    // Fascia Sizing), so it must not double up on the Fascia Options group.
+    if ($hasLen) {
+        $pdo->prepare("UPDATE product_extras SET code = 'fascia_options', length_input_label = NULL WHERE id = ?")->execute([$fasciaExtraId]);
+    } else {
+        $pdo->prepare("UPDATE product_extras SET code = 'fascia_options' WHERE id = ?")->execute([$fasciaExtraId]);
+    }
     $pdo->prepare("UPDATE product_extras SET code = 'multiple_internal' WHERE product_id = ? AND client_id = ? AND name = 'Multiple Blinds in One Fascia'")
         ->execute([$productId, $MASTER]);
     echo "Tagged Fascia Options (fascia_options) + Multiple (multiple_internal).\n";
@@ -118,8 +126,8 @@ try {
         $q->execute([$productId, $MASTER, $name]);
         return (int) $q->fetchColumn();
     };
-    $upsertExtra = function (string $name, string $code, bool $required, int $sort, ?string $lenLabel)
-                    use ($pdo, $productId, $MASTER, $findExtra, $hasLen): int {
+    $upsertExtra = function (string $name, string $code, bool $required, int $sort, ?string $lenLabel, bool $isWidthSource = false)
+                    use ($pdo, $productId, $MASTER, $findExtra, $hasLen, $hasWidthSrc): int {
         $id = $findExtra($name);
         if ($id > 0) {
             $sql = "UPDATE product_extras SET code = ?, is_required = ?, sort_order = ?, active = 1"
@@ -127,16 +135,20 @@ try {
             $args = $hasLen ? [$code, $required ? 1 : 0, $sort, $lenLabel, $id]
                             : [$code, $required ? 1 : 0, $sort, $id];
             $pdo->prepare($sql)->execute($args);
-            return $id;
-        }
-        if ($hasLen) {
-            $pdo->prepare("INSERT INTO product_extras (client_id, product_id, parent_choice_id, name, code, is_required, sort_order, active, length_input_label) VALUES (?,?,NULL,?,?,?,?,1,?)")
-                ->execute([$MASTER, $productId, $name, $code, $required ? 1 : 0, $sort, $lenLabel]);
         } else {
-            $pdo->prepare("INSERT INTO product_extras (client_id, product_id, parent_choice_id, name, code, is_required, sort_order, active) VALUES (?,?,NULL,?,?,?,?,1)")
-                ->execute([$MASTER, $productId, $name, $code, $required ? 1 : 0, $sort]);
+            if ($hasLen) {
+                $pdo->prepare("INSERT INTO product_extras (client_id, product_id, parent_choice_id, name, code, is_required, sort_order, active, length_input_label) VALUES (?,?,NULL,?,?,?,?,1,?)")
+                    ->execute([$MASTER, $productId, $name, $code, $required ? 1 : 0, $sort, $lenLabel]);
+            } else {
+                $pdo->prepare("INSERT INTO product_extras (client_id, product_id, parent_choice_id, name, code, is_required, sort_order, active) VALUES (?,?,NULL,?,?,?,?,1)")
+                    ->execute([$MASTER, $productId, $name, $code, $required ? 1 : 0, $sort]);
+            }
+            $id = (int) $pdo->lastInsertId();
         }
-        return (int) $pdo->lastInsertId();
+        if ($hasWidthSrc) {
+            $pdo->prepare("UPDATE product_extras SET is_width_source = ? WHERE id = ?")->execute([$isWidthSource ? 1 : 0, $id]);
+        }
+        return $id;
     };
     $upsertChoice = function (int $extraId, string $label, string $code, bool $isDefault, int $sort) use ($pdo): int {
         $q = $pdo->prepare("SELECT id FROM product_extra_choices WHERE product_extra_id = ? AND label = ? LIMIT 1");
@@ -173,8 +185,17 @@ try {
     $setGates($sizingId, $realFasciaChoiceIds, false);
     echo "Fascia Sizing (#{$sizingId}): standard/oversize/multi, gated on real fascias.\n";
 
+    // --- 1b. Fascia width (own option, child of Fascia Sizing) ---------------
+    // A real, reorderable option — number-only, flagged is_width_source so its
+    // typed value drives the fascia PRICE (width-table lookup) and CUT
+    // (worksheet Fascia_Width). Shown for Over size OR Multi.
+    $fwId = $upsertExtra('Fascia width', 'fascia_width', false, 41,
+                         'Fascia width (mm) — blank = fit blind', true);
+    $setGates($fwId, [$cOversize, $cMulti], false);
+    echo "Fascia width (#{$fwId}): number box, is_width_source, gated on Over size / Multi.\n";
+
     // --- 2. Number of Blinds? (gated on Multi) -------------------------------
-    $countId = $upsertExtra('Number of Blinds?', 'fascia_blind_count', false, 41, null);
+    $countId = $upsertExtra('Number of Blinds?', 'fascia_blind_count', false, 42, null);
     $countChoiceIds = [];   // n => choice id
     foreach ([2 => true, 3 => false, 4 => false, 5 => false] as $n => $def) {
         $countChoiceIds[$n] = $upsertChoice($countId, (string) $n, 'n' . $n, $def, $n);
@@ -187,7 +208,7 @@ try {
     // via parent_match_all — [multi] owned by Fascia Sizing, [nN..n5] owned by
     // Number of Blinds; AND across the two owner groups.
     for ($n = 1; $n <= 5; $n++) {
-        $wId = $upsertExtra("Blind {$n} Width", 'fascia_blind_width', false, 41 + $n, "Blind {$n} width (mm)");
+        $wId = $upsertExtra("Blind {$n} Width", 'fascia_blind_width', false, 42 + $n, "Blind {$n} width (mm)");
         if ($n <= 2) {
             $setGates($wId, [$cMulti], false);
         } else {
