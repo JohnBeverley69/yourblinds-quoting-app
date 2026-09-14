@@ -398,11 +398,22 @@ function pe_apply_extra(
     }
     $perUnitCol = $hasPerUnitCol ? ', price_per_unit' : '';
 
+    // face_value (migrate_extra_face_value.php) — optional. 1 (default) = this
+    // option's price is added at face value; 0 = it's a supplier list add-on and
+    // is run through the product discount+markup on a supplier product. Absent
+    // column ⇒ treated as face value (1).
+    static $hasFaceValCol = null;
+    if ($hasFaceValCol === null) {
+        try { $pdo->query('SELECT face_value FROM product_extra_choices LIMIT 1'); $hasFaceValCol = true; }
+        catch (Throwable $e) { $hasFaceValCol = false; }
+    }
+    $faceValCol = $hasFaceValCol ? ', face_value' : '';
+
     try {
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price, markup_pct_override$basisCol$choiceLenCol$perUnitCol
+                    cost_price, markup_pct_override$basisCol$choiceLenCol$perUnitCol$faceValCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -413,7 +424,7 @@ function pe_apply_extra(
         $st = $pdo->prepare(
             "SELECT id, product_extra_id, system_id, label,
                     price_delta, price_percent, price_per_metre,
-                    cost_price$basisCol$choiceLenCol$perUnitCol
+                    cost_price$basisCol$choiceLenCol$perUnitCol$faceValCol
                FROM product_extra_choices
               WHERE id = ? AND product_extra_id = ? AND active = 1
               LIMIT 1"
@@ -610,6 +621,9 @@ function pe_apply_extra(
         'choice_label'        => (string) $choice['label'],
         'mode'                => $primary,
         'amount_applied'      => round($amount, 2),
+        // face_value: true (default) = add at the price set; false = supplier list
+        // add-on, run through the product discount+markup on a supplier product.
+        'face_value'          => (!isset($choice['face_value']) || (int) $choice['face_value'] === 1),
         // Components-promotion breakdown for the wholesale invoice (trade →
         // discount → discounted on the add-on). With no promo: trade_amount
         // equals the pre-markup amount, discount 0.
@@ -1337,6 +1351,19 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     $extrasTotal      = round($extrasTotal, 2);
     $subtotalPerBlind = round($basePrice + $extrasTotal, 2);
 
+    // Split extras: face-value (default — added at the price set) vs supplier
+    // list add-ons (face_value=0 — run through the product discount+markup with
+    // the base). Only affects supplier products; own products add all at face
+    // value regardless. Number-only rows contribute 0, so their bucket is moot.
+    $extrasFaceValue = 0.0; $extrasMarkedUp = 0.0;
+    foreach ($extrasApplied as $ea) {
+        $amt = (float) ($ea['amount_applied'] ?? 0);
+        if (($ea['face_value'] ?? true) === false) $extrasMarkedUp  += $amt;
+        else                                       $extrasFaceValue += $amt;
+    }
+    $extrasMarkedUp  = round($extrasMarkedUp, 2);
+    $extrasFaceValue = round($extrasFaceValue, 2);
+
     // 7. Markup / discount — resolved per (product, system) so premium /
     //    motorised / standard can each have their own margin.
     $markup   = pe_markup_for_system  ($pdo, $clientId, $productId, $systemId);
@@ -1405,7 +1432,12 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     //    surcharge skipped the ×0.67 ×1.35 the base went through.
     $discountedBase = $basePrice * (1 - $discount / 100);
     if (ps_for_product($pdo, $productId) === PRICE_SOURCE_SUPPLIER) {
-        $sellBefore = ($basePrice + $extrasTotal) * (1 - $discount / 100) * (1 + $markup / 100);
+        // Face-value options (the default) are added at the price set, AFTER the
+        // discount+markup — so a flat £2 charge stays £2. Only options flagged as
+        // supplier list add-ons (face_value=0) go through the discount+markup with
+        // the base.
+        $sellBefore = ($basePrice + $extrasMarkedUp) * (1 - $discount / 100) * (1 + $markup / 100)
+                    + $extrasFaceValue;
     } else {
         $sellBefore = $discountedBase * (1 + $markup / 100) + $extrasTotal;
     }
