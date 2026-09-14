@@ -3001,12 +3001,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (!productData || !productData.extras) return null;
         var ext = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
         if (!ext) return null;
+        // The select is present in the DOM whenever the mode is relevant (a real
+        // fascia is picked). Not shown → no sizing mode applies.
         var sel = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
-        var cid = sel ? parseInt(sel.value, 10) : 0;
-        if (!cid) {                                   // not in the DOM yet — use its default
-            var ids = effectiveChoiceIds(ext);
-            cid = ids.length ? ids[0] : 0;
-        }
+        if (!sel) return null;
+        var cid = parseInt(sel.value, 10);
+        if (!cid) return null;
         var ch = ext.choices.find(function (c) { return c.id === cid; });
         return ch ? (ch.code || null) : null;
     }
