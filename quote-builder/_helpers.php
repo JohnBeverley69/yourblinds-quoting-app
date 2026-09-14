@@ -206,10 +206,16 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
     $resolve = function (int $productId) use ($pdo, &$resolveCache): ?array {
         if (array_key_exists($productId, $resolveCache)) return $resolveCache[$productId];
         $out = ['fascia_extra' => 0, 'no_fascia_choice' => 0, 'fascia_real_choices' => [],
-                'multiple_extra' => 0, 'multiple_yes' => 0, 'child_extras' => []];
+                'multiple_extra' => 0, 'multiple_yes' => 0, 'child_extras' => [], 'fascia_width_extra' => 0];
         $fe = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND name = 'Fascia Options' LIMIT 1");
         $fe->execute([$productId]);
         $out['fascia_extra'] = (int) $fe->fetchColumn();
+        // The manual fascia width now lives in its own "Fascia width" option
+        // (a child of Fascia Sizing, flagged is_width_source) rather than on the
+        // Fascia Options group. The carrier carries the group's total width here.
+        $fw = $pdo->prepare("SELECT id FROM product_extras WHERE product_id = ? AND name = 'Fascia width' LIMIT 1");
+        $fw->execute([$productId]);
+        $out['fascia_width_extra'] = (int) $fw->fetchColumn();
         if ($out['fascia_extra'] > 0) {
             $ch = $pdo->prepare("SELECT id, label FROM product_extra_choices WHERE product_extra_id = ?");
             $ch->execute([$out['fascia_extra']]);
@@ -311,13 +317,22 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
                 foreach ($memberExtras[$i] as $row) {
                     if ($row['extra_id'] === $R['fascia_extra'] && isset($R['fascia_real_choices'][$row['choice_id']])) {
                         $carrierIdx = $i; $carrierFasciaChoice = $row['choice_id'];
-                        $carrierTypedWidth = (float) ($row['user_value'] ?? 0);
                         break;
                     }
                 }
             }
         }
         if ($carrierIdx === -1) continue;   // no real fascia anywhere in the group → nothing to share
+
+        // Manual fascia width (if any) is on the carrier's "Fascia width" option.
+        if ($R['fascia_width_extra'] > 0) {
+            foreach ($memberExtras[$carrierIdx] as $row) {
+                if ($row['extra_id'] === $R['fascia_width_extra'] && (float) ($row['user_value'] ?? 0) > 0) {
+                    $carrierTypedWidth = (float) $row['user_value'];
+                    break;
+                }
+            }
+        }
 
         $sum = 0.0;
         foreach ($members as $m) $sum += (float) $m['width_mm'];
@@ -329,11 +344,18 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
             foreach ($memberExtras[$i] as $row) {
                 if ($row['extra_id'] === $R['fascia_extra'])   continue;   // re-added below
                 if ($row['extra_id'] === $R['multiple_extra'])  continue;   // re-added below
+                if ($R['fascia_width_extra'] > 0 && $row['extra_id'] === $R['fascia_width_extra']) continue;  // carrier-only, re-added below
                 if (!$isCarrier && in_array($row['extra_id'], $R['child_extras'], true)) continue;   // fascia colours gone on No-Fascia members
                 $kept[] = $row;
             }
             if ($isCarrier) {
-                $kept[] = ['extra_id' => $R['fascia_extra'], 'choice_id' => $carrierFasciaChoice, 'user_value' => $total];
+                // Real fascia on the carrier; the group's total width rides on the
+                // separate "Fascia width" option (is_width_source → prices + cuts
+                // the fascia at that width). No manual width → fit the total.
+                $kept[] = ['extra_id' => $R['fascia_extra'], 'choice_id' => $carrierFasciaChoice];
+                if ($R['fascia_width_extra'] > 0 && $total > 0) {
+                    $kept[] = ['extra_id' => $R['fascia_width_extra'], 'choice_id' => 0, 'user_value' => $total];
+                }
             } else {
                 $kept[] = ['extra_id' => $R['fascia_extra'], 'choice_id' => $R['no_fascia_choice']];
             }

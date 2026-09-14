@@ -305,7 +305,8 @@ function pe_apply_extra(
     float $basePrice,
     ?float $userValue = null,
     ?int  $dropMm = null,
-    int   $forAccountId = 0
+    int   $forAccountId = 0,
+    ?float $widthOverride = null
 ): array {
     // 1. Verify the extra belongs to this product + tenant. Option-level
     //    system scope no longer exists in this model — an option appears
@@ -496,7 +497,13 @@ function pe_apply_extra(
     //    blind's ordered width for this lookup, so a fascia (or any width-table
     //    option) can be priced wider than the blind. Generic + additive: with no
     //    number typed it behaves exactly as before.
-    $lookupWidth = ($userValue !== null && (float) $userValue > 0) ? (int) $userValue : $widthMm;
+    //    The lookup width is, in priority order: this choice's OWN typed value,
+    //    then a line-level width-source override (an option flagged
+    //    is_width_source — e.g. a manual "Fascia width" in its own option),
+    //    then the blind's ordered width. All additive — no override ⇒ unchanged.
+    $lookupWidth = ($userValue !== null && (float) $userValue > 0)
+        ? (int) $userValue
+        : (($widthOverride !== null && $widthOverride > 0) ? (int) $widthOverride : $widthMm);
     $st = $pdo->prepare(
         'SELECT width_mm, price
            FROM extra_choice_price_rows
@@ -1261,6 +1268,33 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     //    can snapshot the value alongside the choice.
     $extrasApplied = [];
     $extrasTotal   = 0.0;
+
+    // Width-source override: an option flagged product_extras.is_width_source
+    // (e.g. a manual "Fascia width") whose typed value replaces the blind's
+    // ordered width for any width-table (extra_choice_price_rows) lookup on this
+    // line — so a fascia can be priced wider than the blind. Computed once here
+    // and passed to every pe_apply_extra call. Generic + additive: no flagged
+    // option (or a blank value) leaves $widthOverride null and every lookup on
+    // the ordered width, exactly as before. Try-fallback for pre-migration.
+    $widthOverride = null;
+    $selValById = [];
+    foreach ($extras as $sel) {
+        $eid = (int) ($sel['extra_id'] ?? 0);
+        if ($eid <= 0) continue;
+        $rv = $sel['user_value'] ?? $sel['value'] ?? null;
+        if (is_numeric($rv) && (float) $rv > 0) $selValById[$eid] = (float) $rv;
+    }
+    if ($selValById) {
+        try {
+            $wph  = implode(',', array_fill(0, count($selValById), '?'));
+            $wsSt = $pdo->prepare("SELECT id FROM product_extras WHERE id IN ($wph) AND is_width_source = 1");
+            $wsSt->execute(array_keys($selValById));
+            foreach ($wsSt->fetchAll(PDO::FETCH_COLUMN) as $wid) {
+                if (($selValById[(int) $wid] ?? 0) > 0) { $widthOverride = $selValById[(int) $wid]; break; }
+            }
+        } catch (Throwable $e) { /* column absent (pre-migration) → no override */ }
+    }
+
     foreach ($extras as $sel) {
         $eid = (int) ($sel['extra_id']  ?? 0);
         $cid = (int) ($sel['choice_id'] ?? 0);
@@ -1286,7 +1320,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
 
         $applied = pe_apply_extra(
             $pdo, $clientId, $productId, $systemId, $eid, $cid,
-            $widthMm, $basePrice, $userValue, $dropMm, $forAccountId
+            $widthMm, $basePrice, $userValue, $dropMm, $forAccountId, $widthOverride
         );
         if (isset($applied['error'])) {
             return ['error' => $applied['error']];

@@ -3058,25 +3058,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 widthIn.style.color = '';
             }
         }
-        // The manual fascia-width box lives on the Fascia Options group (worksheet
-        // + reconcile read it there). Show it only for Over size / Multi, and move
-        // it to sit directly under the Fascia Sizing dropdown so it reads as part
-        // of that choice rather than floating up by the fascia-type picker.
-        var foExt = productData.extras.find(function (e) { return e.code === 'fascia_options'; });
-        var fwInput = foExt ? extrasBox.querySelector('input[data-uv-for="' + foExt.id + '"]') : null;
-        var fwBox = fwInput ? fwInput.closest('.extra-user-value') : null;
-        if (fwBox) {
-            var show = (mode === 'oversize' || mode === 'multi');
-            fwBox.style.display = show ? '' : 'none';
-            if (!show) {
-                fwInput.value = '';
-            } else {
-                var sizingWrap = extrasBox.querySelector('[data-extra-code="fascia_sizing"]');
-                if (sizingWrap && sizingWrap.parentNode && sizingWrap.nextSibling !== fwBox) {
-                    sizingWrap.parentNode.insertBefore(fwBox, sizingWrap.nextSibling);
-                }
-            }
-        }
+        // The manual fascia-width box is now its own "Fascia width" option, a
+        // real child of Fascia Sizing gated on Over size / Multi — so both forms
+        // render it (and its position) purely from the option data. Nothing to
+        // show/hide/move here any more.
     }
 
     // Apply the editing-mode pre-fill after loadProductData has populated
@@ -3159,17 +3144,17 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // ("Multi blind" can't be reconstructed — its blinds are already
         // separate grouped lines — so a member/carrier just edits as normal.)
         if (productData && productData.extras) {
-            var foExt = productData.extras.find(function (e) { return e.code === 'fascia_options'; });
+            var fwExt = productData.extras.find(function (e) { return e.code === 'fascia_width'; });
             var fsExt = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
-            if (foExt && fsExt) {
+            if (fwExt && fsExt) {
                 var stored = (initial.extras || []).find(function (ex) {
-                    return ex.extra_id === foExt.id && ex.user_value != null && parseFloat(ex.user_value) > 0;
+                    return ex.extra_id === fwExt.id && ex.user_value != null && parseFloat(ex.user_value) > 0;
                 });
                 var over = fsExt.choices.find(function (c) { return c.code === 'oversize'; });
                 if (stored && over) {
                     var sizSel = document.querySelector('[data-extra-code="fascia_sizing"] select');
                     if (sizSel) { sizSel.value = String(over.id); renderExtras(); }
-                    var fwIn = document.querySelector('[data-extra-code="fascia_options"] input[data-uv-for="' + foExt.id + '"]');
+                    var fwIn = document.querySelector('[data-extra-code="fascia_width"] input[data-uv-for="' + fwExt.id + '"]');
                     if (fwIn) fwIn.value = String(stored.user_value);
                 }
             }
