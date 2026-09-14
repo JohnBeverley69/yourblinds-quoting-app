@@ -2984,7 +2984,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             });
         });
         // Roller multi-blind: typing a "Blind N Width" re-prices the summary.
-        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input').forEach(function (inp) {
+        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
             inp.addEventListener('input', schedulePreview);
         });
         // Reflect the fascia-sizing mode into the Width field + fascia-width box.
@@ -3015,7 +3015,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // Only the visible boxes exist in the DOM, so this is exactly the count.
     function multiBlindWidths() {
         var out = [];
-        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input').forEach(function (inp) {
+        // Only the number box (data-uv-for) — NOT the hidden extras[][extra_id]
+        // input that also lives inside the group (its value is the extra id).
+        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
             var v = parseFloat(inp.value);
             if (!isNaN(v) && v > 0) out.push(inp.value.trim());
         });
