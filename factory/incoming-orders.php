@@ -302,20 +302,30 @@ require __DIR__ . '/../_partials/factory_head.php';
             $supReceived = $o['supplier_received_at'] ?? null;
             $searchKey = strtolower(trim($ref . ' ' . $custLabel . ' ' . $accContact . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
-            <div class="io-item<?= $stage === 'dispatched' ? ' done' : '' ?><?= $stage === 'new' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
+            <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?><?= ($stageBy[$qid] ?? '') === 'confirmed' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
                     <span class="cnt"><?= (int) $o['bev_qty'] ?> blind<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?></span>
                     <span class="stat">
-                        <?php if ($stagePill !== null): ?>
-                            <span class="io-stage" style="color:<?= e($stagePill[1]) ?>;background:<?= e($stagePill[2]) ?>"><?= e($stagePill[0]) ?></span>
+                        <?php
+                            // Phase 3: the single fulfilment stage IS the status now (Confirmed /
+                            // In Production / Ready / Dispatched), coloured by stage. The old raw
+                            // factory-jobs pill has been retired now the roll-up is proven.
+                            $fs = $stageBy[$qid] ?? null;
+                            $stCols = [
+                                'confirmed'     => ['#5b6b7f', '#e6ebf1'],
+                                'in_production' => ['#b5730f', '#f7ecd6'],
+                                'ready'         => ['#245ea3', '#dde8f6'],
+                                'dispatched'    => ['#0d7a67', '#d6ece6'],
+                            ];
+                            $sc = $stCols[$fs] ?? ['#5b6b7f', '#eef1f4'];
+                        ?>
+                        <?php if ($fs !== null): ?>
+                            <span class="io-stage" style="color:<?= $sc[0] ?>;background:<?= $sc[1] ?>;font-weight:700"><?= e(os_stage_label($fs)) ?></span>
                         <?php else: ?>
                             <span class="io-status <?= $status === 'ordered' ? 'ordered' : '' ?>"><?= e($status !== '' ? $status : 'new') ?></span>
-                        <?php endif; ?>
-                        <?php if (($fs = ($stageBy[$qid] ?? null)) !== null): ?>
-                            <span class="io-stage" style="color:#0a5561;background:transparent;border:1px solid #0e6d7c" title="Unified fulfilment stage (Phase 0 roll-up — verify against the pills to its left)">&#9656; <?= e(os_stage_label($fs)) ?></span>
                         <?php endif; ?>
                         <?php if ($prog !== null && $prog['total'] > 0): ?>
                             <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>
