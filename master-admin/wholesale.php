@@ -651,7 +651,7 @@ $activeNav = 'wholesale';
                                     <button type="button" class="wh-caret" aria-expanded="false" aria-label="Show documents" onclick="whToggle(this)">&#9656;</button>
                                 </td>
                                 <td class="wh-num"><?= e($ordNo) ?></td>
-                                <td><?= e((string) $o['account_name']) ?></td>
+                                <td><a href="/master-admin/account.php?id=<?= (int) $o['account_id'] ?>" title="Account overview"><?= e((string) $o['account_name']) ?></a></td>
                                 <td style="white-space:nowrap"><?= $fmtD($o['created_at']) ?></td>
                                 <td class="wh-money"><?= (int) $o['bev_qty'] ?></td>
                                 <td class="wh-money"><?= $money($o['wholesale_total']) ?></td>
