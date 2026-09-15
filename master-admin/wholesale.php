@@ -58,10 +58,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'dn_dispatch' || $action === 'dn_cancel') {
         $dnId = (int) ($_POST['dn_id'] ?? 0);
+        require_once __DIR__ . '/../_partials/order_stage.php';
+
+        // Resolve the order behind this delivery note.
+        $dnQid = 0;
+        try {
+            $dq = $pdo->prepare('SELECT source_quote_id FROM factory_ar_delivery_notes WHERE id = ? AND factory_client_id = ? LIMIT 1');
+            $dq->execute([$dnId, $factory]);
+            $dnQid = (int) $dq->fetchColumn();
+        } catch (Throwable $e) { /* ignore */ }
+
+        // Phase 1: can't dispatch a delivery note before the order is Ready.
+        if ($action === 'dn_dispatch' && $dnQid > 0 && !os_is_ready($pdo, $dnQid, $factory)) {
+            $_SESSION['flash_error'] = "Can't dispatch — the order isn't ready yet (every blind made and every bought-in item received).";
+            header('Location: /master-admin/wholesale.php'); exit;
+        }
+
         try {
             if ($action === 'dn_dispatch') {
                 $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW() WHERE id = ? AND factory_client_id = ? AND status = 'draft'")
                     ->execute([$dnId, $factory]);
+                // Phase 1: reflect the dispatch on the floor side too (one dispatch).
+                os_set_factory_dispatched($pdo, $dnQid, (int) ($user['user_id'] ?? 0) ?: null);
                 $_SESSION['flash_success'] = 'Delivery note marked dispatched.';
             } else {
                 $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'cancelled' WHERE id = ? AND factory_client_id = ? AND status <> 'cancelled'")
@@ -71,14 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not update delivery note: ' . $e->getMessage();
         }
-        // Phase 0: dispatching / cancelling a delivery note moves the fulfilment stage.
-        try {
-            require_once __DIR__ . '/../_partials/order_stage.php';
-            $dq = $pdo->prepare('SELECT source_quote_id FROM factory_ar_delivery_notes WHERE id = ? LIMIT 1');
-            $dq->execute([$dnId]);
-            $dnQid = (int) $dq->fetchColumn();
-            if ($dnQid > 0) recompute_order_stage($pdo, $dnQid);
-        } catch (Throwable $e) { /* non-fatal */ }
+        if ($dnQid > 0) recompute_order_stage($pdo, $dnQid);
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
@@ -115,6 +126,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // "Print DN & invoice" button when auto-invoice mode is on.
     if ($action === 'deliver_invoice') {
         $qid = (int) ($_POST['quote_id'] ?? 0);
+        // Phase 1: can't dispatch (and invoice) before the order is Ready.
+        require_once __DIR__ . '/../_partials/order_stage.php';
+        if ($qid > 0 && !os_is_ready($pdo, $qid, $factory)) {
+            $_SESSION['flash_error'] = "Can't dispatch & invoice — the order isn't ready yet (every blind made and every bought-in item received).";
+            header('Location: /master-admin/wholesale.php'); exit;
+        }
         try {
             if (!$dnReady)  throw new RuntimeException('Run /migrate_ar_delivery_notes.php first.');
             if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
@@ -161,9 +178,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
-            // Phase 0: dispatch (and invoice) moves the fulfilment stage — roll it up.
+            // Phase 1: reflect dispatch on the floor side, then roll the stage up.
             try {
                 require_once __DIR__ . '/../_partials/order_stage.php';
+                os_set_factory_dispatched($pdo, $qid, (int) ($user['user_id'] ?? 0) ?: null);
                 recompute_order_stage($pdo, $qid);
             } catch (Throwable $e) { /* non-fatal */ }
             $_SESSION['flash_success'] = $msg;

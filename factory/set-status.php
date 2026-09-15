@@ -66,12 +66,13 @@ if ($quoteId <= 0 || !$isBev) {
     exit;
 }
 
-// Gate dispatch on the bought-in track: an order can't ship while its bought-in
-// items are still awaited from the supplier (order/receive them first).
+// Gate dispatch on Ready: every in-house blind made AND every bought-in line
+// received (Phase 1 — previously only the bought-in half was enforced, so an
+// order could ship with blinds still unfinished on the floor).
 if ($target === 'dispatched') {
-    require_once __DIR__ . '/../_partials/factory_boughtin.php';
-    if (factory_boughtin_awaiting($pdo, $quoteId, $MASTER)) {
-        $_SESSION['flash_error'] = "Can't dispatch yet — the bought-in items haven't been received from the supplier. Order and receive them first.";
+    require_once __DIR__ . '/../_partials/order_stage.php';
+    if (!os_is_ready($pdo, $quoteId, $MASTER)) {
+        $_SESSION['flash_error'] = "Can't dispatch yet — the order isn't ready. Every blind must be made and every bought-in item received first.";
         header('Location: ' . $backTo);
         exit;
     }
@@ -111,8 +112,13 @@ try {
         . ' — have the factory_jobs migrations been run?';
 }
 
-// Phase 0: roll the single fulfilment stage up from this floor status change.
+// Phase 1: dispatching on the floor issues the delivery note too — one dispatch,
+// one delivery note, whichever path is used.
 require_once __DIR__ . '/../_partials/order_stage.php';
+if ($target === 'dispatched') {
+    os_mark_dispatched_dn($pdo, $quoteId, $MASTER, $userId ?: null);
+}
+// Phase 0: roll the single fulfilment stage up from this floor status change.
 recompute_order_stage($pdo, $quoteId);
 
 header('Location: ' . $backTo);
