@@ -45,10 +45,15 @@ $dropMm   = ptp_parse_dimension($dropRaw, $unit);
 // isn't treated as an error and the fan-out below can create one line each.
 $multi = (isset($_POST['multi_fascia']) && is_array($_POST['multi_fascia'])) ? $_POST['multi_fascia'] : [];
 $multiWidths = [];
+$multiDrops  = [];   // parallel to $multiWidths; 0 = use the shared (top) drop
 if (!empty($multi['active']) && !empty($multi['widths']) && is_array($multi['widths'])) {
-    foreach ($multi['widths'] as $w) {
+    $dropsRaw = (isset($multi['drops']) && is_array($multi['drops'])) ? array_values($multi['drops']) : [];
+    foreach (array_values($multi['widths']) as $idx => $w) {
         $wm = ptp_parse_dimension((string) $w, $unit);
-        if ($wm !== null && $wm > 0) $multiWidths[] = (int) $wm;
+        if ($wm === null || $wm <= 0) continue;
+        $dm = ptp_parse_dimension((string) ($dropsRaw[$idx] ?? ''), $unit);
+        $multiWidths[] = (int) $wm;
+        $multiDrops[]  = ($dm !== null && $dm > 0) ? (int) $dm : 0;   // per-blind drop override
     }
 }
 $multiActive = count($multiWidths) >= 2;
@@ -148,16 +153,39 @@ $pdo = db();
 $room  = trim((string) ($_POST['room_name'] ?? ''));
 $note  = trim((string) ($_POST['notes']     ?? ''));
 
+// Multi-blind fit check: the blinds must fit within the fascia. When an overall
+// Fascia width has been typed, the sum of the blind widths must not exceed it.
+if ($multiActive) {
+    $meta = qb_resolve_fascia_meta($pdo, (int) $input['product_id']);
+    $fasciaWidthMm = 0.0;
+    if ($meta && $meta['fascia_width_extra'] > 0) {
+        foreach ($extras as $row) {
+            if ((int) ($row['extra_id'] ?? 0) === $meta['fascia_width_extra'] && (float) ($row['user_value'] ?? 0) > 0) {
+                $fasciaWidthMm = (float) $row['user_value']; break;
+            }
+        }
+    }
+    $sumW = array_sum($multiWidths);
+    if ($fasciaWidthMm > 0 && $sumW > $fasciaWidthMm + 0.5) {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error',
+            'These blinds won\'t fit: they total ' . qb_fmt_mm((int) $sumW) . ' but the fascia is only '
+            . qb_fmt_mm((int) $fasciaWidthMm) . '. Reduce a blind width or widen the fascia.'
+        );
+    }
+}
+
 $pdo->beginTransaction();
 try {
     // Price + insert one blind at a given width, tagged into an optional fascia
     // group. Returns [itemId, priced, lineNo]. Shared by the single-blind path
     // and the multi-blind fan-out so they stay identical. cost_price_snapshot +
     // extras_cost_snapshot freeze the per-blind wholesale cost at save-time.
-    $insertLine = function (int $lineWidthMm, ?string $fasciaTag)
+    $insertLine = function (int $lineWidthMm, ?string $fasciaTag, int $dropOverrideMm = 0)
                     use ($pdo, $clientId, $quote, $quoteId, $input, $room, $note): array {
         $lineInput = $input;
         $lineInput['width_mm'] = $lineWidthMm;
+        if ($dropOverrideMm > 0) $lineInput['drop_mm'] = $dropOverrideMm;   // per-blind drop override
         $priced = pe_calculate_item($pdo, $clientId, $lineInput, (int) ($quote['account_client_id'] ?? 0));
         if (isset($priced['error'])) throw new RuntimeException($priced['error']);
 
@@ -272,7 +300,7 @@ try {
         $tag = 'A';
         foreach (range('A', 'Z') as $L) { if (empty($used[$L])) { $tag = (string) $L; break; } }
 
-        foreach ($multiWidths as $w) { $insertLine($w, $tag); }
+        foreach ($multiWidths as $k => $w) { $insertLine($w, $tag, $multiDrops[$k] ?? 0); }
         $msg = count($multiWidths) . ' blinds added under one shared fascia (group ' . $tag . ').';
     } else {
         [$newItemId, $priced, $nextLineNo] = $insertLine($widthMm, null);

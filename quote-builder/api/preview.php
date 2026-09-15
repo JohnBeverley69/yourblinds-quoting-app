@@ -30,6 +30,7 @@ require __DIR__ . '/../../auth/middleware.php';
 require __DIR__ . '/../../_partials/pricing_engine.php';
 require __DIR__ . '/../../_partials/price_table_parser.php';
 require __DIR__ . '/../../_partials/units.php';
+require __DIR__ . '/../_helpers.php';   // qb_price_multi_fascia (shared multi-blind pricer)
 
 requireLogin();
 
@@ -133,6 +134,42 @@ $input = [
 if ($canCosts) {
     if (isset($_GET['markup_override'])   && is_numeric($_GET['markup_override']))   $input['markup_override']   = (float) $_GET['markup_override'];
     if (isset($_GET['discount_override']) && is_numeric($_GET['discount_override'])) $input['discount_override'] = (float) $_GET['discount_override'];
+}
+
+// Multi-blind fascia: several blinds share one fascia. Price the whole group
+// live via the shared pricer (fascia once, other extras per blind) and return a
+// per-blind breakdown + fit check, so the builder shows a real total before save.
+// The caller sends the picked Fascia Options choice + Fascia width in extras[],
+// and each blind's width/drop in multi_fascia[widths][]/[drops][].
+$mf = (isset($_GET['multi_fascia']) && is_array($_GET['multi_fascia'])) ? $_GET['multi_fascia'] : [];
+if (!empty($mf['active']) && !empty($mf['widths']) && is_array($mf['widths'])) {
+    $mfDrops = (isset($mf['drops']) && is_array($mf['drops'])) ? array_values($mf['drops']) : [];
+    $blinds = [];
+    foreach (array_values($mf['widths']) as $idx => $wRaw) {
+        $wm = ptp_parse_dimension((string) $wRaw, $unit);
+        if ($wm === null || $wm <= 0) continue;
+        $dm = ptp_parse_dimension((string) ($mfDrops[$idx] ?? ''), $unit);
+        if ($dm === null || $dm <= 0) $dm = $dropMm;   // per-blind drop defaults to the shared drop
+        $blinds[] = ['width_mm' => (int) $wm, 'drop_mm' => (int) $dm];
+    }
+    if (count($blinds) >= 2) {
+        $g = qb_price_multi_fascia(db(), $clientId, $input, $blinds, $forAccountId);
+        echo json_encode([
+            'multi'           => true,
+            'count'           => count($blinds),
+            'total'           => $g['total'],
+            'fascia_width_mm' => $g['fascia_width_mm'],
+            'sum_widths_mm'   => $g['sum_widths_mm'],
+            'checked'         => $g['checked'],
+            'fits'            => $g['fits'],
+            'has_fascia'      => $g['has_fascia'],
+            'blinds'          => array_map(static fn ($b) => [
+                'width_mm'   => $b['width_mm'], 'drop_mm' => $b['drop_mm'], 'is_carrier' => $b['is_carrier'],
+                'sell_price' => $b['sell_price'], 'line_total' => $b['line_total'], 'error' => $b['error'],
+            ], $g['blinds']),
+        ]);
+        exit;
+    }
 }
 
 $result = pe_calculate_item(db(), $clientId, $input, $forAccountId);
