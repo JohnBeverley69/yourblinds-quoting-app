@@ -108,6 +108,8 @@ try {
             unset($lab);
 
             $after = json_encode($layout, JSON_UNESCAPED_UNICODE);
+            $GLOBALS['__dbg_diff'] = ($after !== $before) ? 'yes' : 'no';
+            $GLOBALS['__dbg_tpl'] = (int) $tpl['id'];
             if ($after !== $before) {
                 // Snapshot the pre-migration layout (undoable) if history exists.
                 try {
@@ -121,7 +123,9 @@ try {
                          VALUES (?, ?, ?, ?, ?, ?)'
                     )->execute([(int) $tpl['id'], $productId, (string) $tpl['name'], (string) $tpl['layout_json'], $cnt, null]);
                 } catch (Throwable $e) { /* history table absent — proceed */ }
-                $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ?')->execute([$after, (int) $tpl['id']]);
+                $upd = $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ?');
+                $upd->execute([$after, (int) $tpl['id']]);
+                $GLOBALS['__dbg_rows'] = $upd->rowCount();
             }
         }
     }
@@ -132,7 +136,8 @@ try {
     exit("\nFAILED: " . $e->getMessage() . " (no changes saved)\n");
 }
 
-echo "Roller label code hardening complete.\n\n";
+echo "Roller label code hardening complete.\n";
+echo 'DEBUG diff=' . ($GLOBALS['__dbg_diff'] ?? '?') . ' tpl=' . ($GLOBALS['__dbg_tpl'] ?? '?') . ' updRows=' . ($GLOBALS['__dbg_rows'] ?? '?') . "\n\n";
 echo 'Codes assigned to ' . count($assigned) . " previously-uncoded option(s):\n";
 foreach ($assigned as $a) echo "  {$a}\n";
 if (!$assigned) echo "  (none — all options already had codes)\n";
