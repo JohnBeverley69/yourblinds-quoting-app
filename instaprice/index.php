@@ -592,7 +592,7 @@ $activeNav = 'instaprice';
                      + ' style="max-width:12rem">'
                      + '</div>';
             }
-            var out = '<div data-extra-id="' + extra.id + '"' + (isChild ? ' class="extra-child"' : '') + '>';
+            var out = '<div data-extra-id="' + extra.id + '" data-extra-code="' + escapeAttr(extra.code || '') + '"' + (isChild ? ' class="extra-child"' : '') + '>';
             out += '<label>' + escapeHtml(extra.name) + (extra.is_required ? ' <span style="color:#b91c1c">*</span>' : '') + '</label>';
             out += '<input type="hidden" name="extras[' + idx + '][extra_id]" value="' + extra.id + '">';
             if (numberOnly) {
@@ -733,7 +733,125 @@ $activeNav = 'instaprice';
         if (toQuoteBtn) toQuoteBtn.disabled = true;
     }
 
+    // ----- Roller multi-blind (shared fascia) — mirrors the quote builder ---
+    function fasciaSizingMode() {
+        if (!productData || !productData.extras) return null;
+        var ext = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
+        if (!ext) return null;
+        var sel = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
+        if (!sel) return null;
+        var cid = parseInt(sel.value, 10); if (!cid) return null;
+        var ch = ext.choices.find(function (c) { return c.id === cid; });
+        return ch ? (ch.code || null) : null;
+    }
+    function multiBlindWidths() {
+        var out = [];
+        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
+            var v = parseFloat(inp.value); if (!isNaN(v) && v > 0) out.push(inp.value.trim());
+        });
+        return out;
+    }
+    function fasciaCascadeExtraIds() {
+        var ids = {};
+        if (productData && productData.extras) productData.extras.forEach(function (e) {
+            if (e.code === 'fascia_sizing' || e.code === 'fascia_blind_count' || e.code === 'fascia_blind_width') ids[e.id] = true;
+        });
+        return ids;
+    }
+    var ipMultiPanel = null, ipMultiCount = -1, ipMultiDrops = {};
+    function ensureIpMultiPanel() {
+        if (ipMultiPanel) return ipMultiPanel;
+        if (!document.getElementById('ip-multi-css')) {
+            var st = document.createElement('style'); st.id = 'ip-multi-css';
+            st.textContent =
+                '.ip-multi{margin-top:.5rem;border:1px solid var(--border-strong);border-radius:8px;padding:.5rem .625rem;font-size:.875rem}'
+              + '.ip-multi .mb-head{font-weight:600;margin-bottom:.35rem}'
+              + '.ip-multi table{width:100%;border-collapse:collapse}'
+              + '.ip-multi th,.ip-multi td{padding:.2rem .4rem;text-align:left;border-bottom:1px solid var(--border)}'
+              + '.ip-multi .mb-r{text-align:right}.ip-multi input.mb-drop{width:5rem;padding:.2rem .3rem}'
+              + '.ip-multi .mb-fit{font-weight:600}.ip-multi .mb-ok{color:#065f46}.ip-multi .mb-bad{color:#b91c1c}'
+              + '.ip-multi tfoot td{border-bottom:none;font-weight:600}';
+            document.head.appendChild(st);
+        }
+        ipMultiPanel = document.createElement('div');
+        ipMultiPanel.className = 'ip-multi'; ipMultiPanel.id = 'ip-multi-panel'; ipMultiPanel.hidden = true;
+        priceBox.parentNode.insertBefore(ipMultiPanel, priceBox.nextSibling);
+        return ipMultiPanel;
+    }
+    function hideIpMultiPanel() { if (ipMultiPanel) ipMultiPanel.hidden = true; }
+    function renderIpMultiRows(count) {
+        var p = ensureIpMultiPanel();
+        var html = '<div class="mb-head">Blinds in this fascia</div><table><thead><tr><th>Blind</th><th>Width</th><th>Drop</th><th class="mb-r">Price</th></tr></thead><tbody>';
+        for (var i = 0; i < count; i++) {
+            var dv = (ipMultiDrops[i] !== undefined) ? String(ipMultiDrops[i]) : '';
+            html += '<tr data-i="' + i + '"><td>Blind ' + (i + 1) + '</td><td class="mb-w">—</td>'
+                  + '<td><input type="text" class="mb-drop" data-i="' + i + '" value="' + escapeAttr(dv) + '" placeholder="same"></td>'
+                  + '<td class="mb-r mb-price">—</td></tr>';
+        }
+        html += '</tbody><tfoot><tr><td colspan="2" class="mb-fit"></td><td class="mb-r">Total</td><td class="mb-r mb-total">—</td></tr></tfoot></table>';
+        p.innerHTML = html;
+        p.querySelectorAll('input.mb-drop').forEach(function (inp) {
+            inp.addEventListener('input', function () { ipMultiDrops[parseInt(inp.dataset.i, 10)] = inp.value; schedulePreview(); });
+        });
+        ipMultiCount = count;
+    }
+    async function runIpMultiPreview() {
+        var p = ensureIpMultiPanel();
+        var widths = multiBlindWidths();
+        var miss = [];
+        if (!productSel.value)                  miss.push('product');
+        if (requiresOption && !fabricId.value)  miss.push('fabric');
+        if (!widthOnly && !dropIn.value.trim()) miss.push('a shared drop');
+        if (widths.length < 2)                  miss.push('at least 2 blind widths');
+        if (miss.length) { setPriceIdle('Still need: ' + miss.join(', ') + '.', false); hideIpMultiPanel(); return; }
+        if (widths.length !== ipMultiCount) renderIpMultiRows(widths.length);
+        p.hidden = false;
+
+        var skip = fasciaCascadeExtraIds();
+        var baseExtras = collectExtras().filter(function (ex) { return !skip[ex.extra_id]; });
+        var params = new URLSearchParams({ product_id: productSel.value, system_id: systemSel.value || '0',
+            option_id: fabricId.value, drop: dropIn.value, quantity: '1', round_up: '1', unit: activeUnit });
+        params.append('multi_fascia[active]', '1');
+        widths.forEach(function (w) { params.append('multi_fascia[widths][]', w); });
+        widths.forEach(function (w, i) {
+            var d = (ipMultiDrops[i] !== undefined && String(ipMultiDrops[i]).trim() !== '') ? ipMultiDrops[i] : '';
+            params.append('multi_fascia[drops][]', d);
+        });
+        baseExtras.forEach(function (ex, i) {
+            params.append('extras[' + i + '][extra_id]', ex.extra_id);
+            if (ex.choice_id !== undefined)  params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            if (ex.user_value !== undefined) params.append('extras[' + i + '][user_value]', ex.user_value);
+        });
+        var myseq = ++previewSeq;
+        try {
+            params.append('_', Date.now());
+            var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
+            var data = await r.json();
+            if (myseq !== previewSeq) return;
+            if (!data || !data.multi) { setPriceIdle((data && data.error) || 'Could not price the group.', true); return; }
+            var rows = p.querySelectorAll('tbody tr');
+            (data.blinds || []).forEach(function (b, i) {
+                if (!rows[i]) return;
+                var pc = rows[i].querySelector('.mb-price'); if (pc) pc.textContent = b.error ? '—' : money(Number(b.line_total));
+                var wc = rows[i].querySelector('.mb-w'); if (wc) wc.textContent = b.width_mm + ' mm' + (b.is_carrier ? ' · fascia' : '');
+            });
+            var totalEl = p.querySelector('.mb-total'); if (totalEl) totalEl.textContent = money(Number(data.total));
+            var fits = data.fits !== false;
+            var fitEl = p.querySelector('.mb-fit');
+            if (fitEl) {
+                if (data.checked && !fits) { fitEl.textContent = '⚠ Won\'t fit: ' + data.sum_widths_mm + ' mm vs fascia ' + data.fascia_width_mm + ' mm'; fitEl.className = 'mb-fit mb-bad'; }
+                else if (data.checked)     { fitEl.textContent = '✓ Fits: ' + data.sum_widths_mm + ' mm in ' + data.fascia_width_mm + ' mm'; fitEl.className = 'mb-fit mb-ok'; }
+                else                       { fitEl.textContent = 'Tip: enter a Fascia width to fit-check.'; fitEl.className = 'mb-fit'; }
+            }
+            priceBox.className = 'ip-price';
+            priceBox.innerHTML = '<div class="ip-total">' + data.count + ' blinds &middot; ' + money(Number(data.total)) + ' total</div>';
+            if (toQuoteBtn) toQuoteBtn.disabled = (data.checked && !fits);
+        } catch (e) { if (myseq !== previewSeq) return; setPriceIdle('Could not price the group — try again.', true); }
+    }
+
     async function runPreview() {
+        if (fasciaSizingMode() === 'multi') { await runIpMultiPreview(); return; }
+        hideIpMultiPanel();
         var missing = [];
         if (!productSel.value)                  missing.push('product');
         if (requiresOption && !fabricId.value)  missing.push('fabric');
@@ -963,15 +1081,37 @@ $activeNav = 'instaprice';
 
     if (toQuoteBtn) toQuoteBtn.addEventListener('click', function () {
         if (toQuoteBtn.disabled) return;
+        var form = document.getElementById('ip-quote-form');
         document.getElementById('q-product').value = productSel.value;
         document.getElementById('q-system').value  = systemSel.value || '0';
         document.getElementById('q-option').value  = fabricId.value;
-        document.getElementById('q-width').value   = widthIn.value;
         document.getElementById('q-drop').value    = dropIn.value;
         document.getElementById('q-qty').value     = qtyIn.value || '1';
         document.getElementById('q-unit').value    = activeUnit;
+
+        // Roller multi-blind: hand the per-blind widths/drops to the server (it
+        // fans out one grouped line per blind, fascia once). The fascia sizing/
+        // count/width inputs are UI only — strip them from the priced extras.
+        document.querySelectorAll('.ip-multi-injected').forEach(function (n) { n.remove(); });
+        if (fasciaSizingMode() === 'multi') {
+            var widths = multiBlindWidths();
+            var skip = fasciaCascadeExtraIds();
+            document.getElementById('q-width').value  = '';   // no single width in multi
+            document.getElementById('q-extras').value = JSON.stringify(collectExtras().filter(function (ex) { return !skip[ex.extra_id]; }));
+            var inj = function (name, val) { var h = document.createElement('input'); h.type = 'hidden'; h.name = name; h.value = val; h.className = 'ip-multi-injected'; form.appendChild(h); };
+            inj('multi_fascia[active]', '1');
+            widths.forEach(function (w, i) {
+                inj('multi_fascia[widths][]', w);
+                var d = (ipMultiDrops[i] !== undefined && String(ipMultiDrops[i]).trim() !== '') ? ipMultiDrops[i] : '';
+                inj('multi_fascia[drops][]', d);
+            });
+            form.submit();
+            return;
+        }
+
+        document.getElementById('q-width').value   = widthIn.value;
         document.getElementById('q-extras').value  = JSON.stringify(collectExtras());
-        document.getElementById('ip-quote-form').submit();
+        form.submit();
     });
 })();
 </script>
