@@ -21,16 +21,18 @@ $prod = $pdo->prepare("SELECT id FROM products WHERE client_id = ? AND name = 'B
 $prod->execute([$MASTER]);
 $productId = (int) $prod->fetchColumn();
 
-// Most recent roller line (match by product id OR master_product_id, any status).
-$q = $pdo->prepare("SELECT qi.id, qi.quote_id
+// Most recent roller line by product id OR by product-name snapshot (a portal
+// order carries the tenant's mirrored product id, not the factory's).
+$q = $pdo->prepare("SELECT qi.id, qi.quote_id, qi.product_id, qi.product_name_snapshot, q.client_id
                       FROM quote_items qi
-                     WHERE qi.product_id = ?
+                      JOIN quotes q ON q.id = qi.quote_id
+                     WHERE qi.product_id = ? OR qi.product_name_snapshot LIKE '%Roller%'
                      ORDER BY qi.id DESC LIMIT 1");
 $q->execute([$productId]);
 $row = $q->fetch(PDO::FETCH_ASSOC);
-if (!$row) { exit("No Bev Roller Blinds order line found anywhere — create one roller order to test rendering.\n"); }
+if (!$row) { exit("No roller order line found anywhere — create one roller order to test rendering.\n"); }
 $itemId = (int) $row['id']; $quoteId = (int) $row['quote_id'];
-echo "Roller line: quote_item #{$itemId} (quote #{$quoteId})\n\n";
+echo "Roller line: quote_item #{$itemId} (quote #{$quoteId}, client {$row['client_id']}, product {$row['product_id']} \"{$row['product_name_snapshot']}\")\n\n";
 
 // Replicate worksheet-print's extras resolution.
 $ex = $pdo->prepare("SELECT qie.extra_name_snapshot, qie.choice_label_snapshot, qie.user_value,
