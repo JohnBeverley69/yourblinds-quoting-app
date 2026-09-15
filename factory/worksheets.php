@@ -98,7 +98,8 @@ try {
 // a label rather than a hardcoded list. Sample = the group's first choice.
 $productOptions = [];
 try {
-    $pe = $pdo->prepare('SELECT id, name FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name');
+    $peHasCode = false; try { $pdo->query('SELECT code FROM product_extras LIMIT 1'); $peHasCode = true; } catch (Throwable $e) {}
+    $pe = $pdo->prepare('SELECT id, name, ' . ($peHasCode ? 'code' : 'NULL AS code') . ' FROM product_extras WHERE product_id = ? AND client_id = ? AND active = 1 ORDER BY sort_order, name');
     $pe->execute([$productId, $MASTER]);
     $cs = $pdo->prepare('SELECT label FROM product_extra_choices WHERE product_extra_id = ? AND active = 1 ORDER BY sort_order, label LIMIT 1');
     // Merge groups that share a name (e.g. parent-gated variants such as two
@@ -106,9 +107,13 @@ try {
     // choices). On any order only the fascia-matched variant is ever selected,
     // so the worksheet resolves opt:<name> by name to whatever value the order
     // carries — one merged field is the correct model, not two.
+    // Prefer the option's stable machine code as the field-source key (opt:<code>),
+    // so a label built here survives the option being renamed; fall back to the
+    // name for any option that has no code yet.
     $seenOpt = [];
     foreach ($pe->fetchAll(PDO::FETCH_ASSOC) as $er) {
-        $key = mb_strtolower(trim((string) $er['name']));
+        $code = trim((string) ($er['code'] ?? ''));
+        $key  = $code !== '' ? $code : mb_strtolower(trim((string) $er['name']));
         $cs->execute([(int) $er['id']]);
         $sample = (string) ($cs->fetchColumn() ?: '');
         if (isset($seenOpt[$key])) {

@@ -133,16 +133,23 @@ $extrasBy = [];
 if ($lines) {
     $ids = array_map(static fn ($l) => (int) $l['id'], $lines);
     $ph  = implode(',', array_fill(0, count($ids), '?'));
-    $sql = "SELECT quote_item_id, product_extra_id, extra_name_snapshot, choice_label_snapshot, user_value
-              FROM quote_item_extras WHERE quote_item_id IN ($ph) ORDER BY id";
+    // Join the live option row for its stable machine code + current name, so the
+    // label can resolve opt:<code> (rename-proof) as well as opt:<snapshot-name>.
+    $sql = "SELECT qie.quote_item_id, qie.product_extra_id, qie.extra_name_snapshot, qie.choice_label_snapshot, qie.user_value,
+                   pe.code AS extra_code, pe.name AS extra_live_name
+              FROM quote_item_extras qie
+              LEFT JOIN product_extras pe ON pe.id = qie.product_extra_id
+             WHERE qie.quote_item_id IN ($ph) ORDER BY qie.id";
     try {
         $ex = $pdo->prepare($sql);
         $ex->execute($ids);
         foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $r) { $extrasBy[(int) $r['quote_item_id']][] = $r; }
     } catch (Throwable $e) {
-        // user_value column may be absent on un-migrated installs — retry without it.
+        // user_value and/or product_extras.code may be absent on un-migrated
+        // installs — retry without them (name-only resolution still works).
         try {
-            $ex = $pdo->prepare("SELECT quote_item_id, product_extra_id, extra_name_snapshot, choice_label_snapshot, NULL AS user_value
+            $ex = $pdo->prepare("SELECT quote_item_id, product_extra_id, extra_name_snapshot, choice_label_snapshot, NULL AS user_value,
+                                        NULL AS extra_code, NULL AS extra_live_name
                                    FROM quote_item_extras WHERE quote_item_id IN ($ph) ORDER BY id");
             $ex->execute($ids);
             foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $r) { $extrasBy[(int) $r['quote_item_id']][] = $r; }
@@ -199,12 +206,22 @@ $rendered = [];   // [ ['ctx'=>lineDetailVals merged with order, 'computed'=>var
 foreach ($lines as $ln) {
     $extras = $extrasBy[(int) $ln['id']] ?? [];
 
-    $byName     = [];   // lower group name => chosen label
+    $byName     = [];   // lower group name (order-time snapshot) => chosen label
     $userVal    = [];   // lower group name => typed numeric input (user_value)
+    $byCode     = [];   // stable machine code => chosen label (rename-proof)
+    $uvCode     = [];   // stable machine code => typed numeric input
+    $byLive     = [];   // current option name (lower) => chosen label
+    $uvLive     = [];   // current option name (lower) => typed numeric input
     foreach ($extras as $r) {
-        $nm = strtolower(trim((string) $r['extra_name_snapshot']));
-        $byName[$nm] = (string) $r['choice_label_snapshot'];
-        if (is_numeric($r['user_value'] ?? null)) $userVal[$nm] = (float) $r['user_value'];
+        $nm  = strtolower(trim((string) $r['extra_name_snapshot']));
+        $lbl = (string) $r['choice_label_snapshot'];
+        $num = is_numeric($r['user_value'] ?? null) ? (float) $r['user_value'] : null;
+        $byName[$nm] = $lbl;
+        if ($num !== null) $userVal[$nm] = $num;
+        $code = strtolower(trim((string) ($r['extra_code'] ?? '')));
+        if ($code !== '') { $byCode[$code] = $lbl; if ($num !== null) $uvCode[$code] = $num; }
+        $live = strtolower(trim((string) ($r['extra_live_name'] ?? '')));
+        if ($live !== '' && $live !== $nm) { $byLive[$live] = $lbl; if ($num !== null) $uvLive[$live] = $num; }
     }
     $fitHeight = $userVal['fit height'] ?? 0.0;
     // Wand length is a typed input riding on the "Wand Options" row (user_value).
@@ -261,9 +278,14 @@ foreach ($lines as $ln) {
     // on this order, keyed by name, so any product's own options resolve. The
     // chosen label, or the typed number (fit height / wand length) when the
     // group carries a value rather than a choice.
-    foreach ($byName as $gname => $label) $lineVals['opt:' . $gname] = $label;
-    foreach ($userVal as $gname => $uv) {
-        $ok = 'opt:' . $gname;
+    // Key each opt: value by the option's stable code AND its name (order-time
+    // snapshot and current), so a label field source of opt:<code> resolves even
+    // after the option is renamed, while legacy opt:<name> sources keep working.
+    $optLabel = $byName + $byLive + $byCode;   // union; earlier arrays win on key clash
+    $optUv    = $userVal + $uvLive + $uvCode;
+    foreach ($optLabel as $gk => $label) $lineVals['opt:' . $gk] = $label;
+    foreach ($optUv as $gk => $uv) {
+        $ok = 'opt:' . $gk;
         if (($lineVals[$ok] ?? '') === '') $lineVals[$ok] = $numTidy($uv);
     }
 
@@ -543,20 +565,20 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
         $orderCel = $ref !== '' ? ($orderNo . ' · ' . $ref) : $orderNo;
         $w = trim((string) ($ctx['width'] ?? '')); $d = trim((string) ($ctx['drop'] ?? ''));
         $size = ($w !== '' || $d !== '') ? ($w . ' × ' . $d) : '';
-        $meas = $rlVal($ctx, ['opt:exact or recess', 'recess_exact']);
+        $meas = $rlVal($ctx, ['opt:exact_or_recess', 'opt:exact or recess', 'recess_exact']);
         $fh   = trim((string) ($ctx['fit_height'] ?? ''));
         if ($fh !== '') $meas = trim($meas . '  FH ' . $fh);
 
-        $bbCol  = $rlVal($ctx, ['opt:senses bottom bar colour', 'opt:unishade bottom bar colour']);
-        $bbEnd  = $rlVal($ctx, ['opt:senses bottom bar end cap colours', 'opt:uni shade end cap colours']);
-        $facCol = $rlVal($ctx, ['opt:senses profile colour', 'opt:ll profile colour']);
-        $facEnd = $rlVal($ctx, ['opt:senses end cap colour', 'opt:ll end cap colour']);
-        $fixing = $rlVal($ctx, ['opt:fixings', 'opt:fixings (senses)', 'opt:fixings (louvolite)']);
-        $braid  = $rlVal($ctx, ['opt:braid colour']);
+        $bbCol  = $rlVal($ctx, ['opt:senses_bottom_bar_colour', 'opt:unishade_bottom_bar_colour', 'opt:senses bottom bar colour', 'opt:unishade bottom bar colour']);
+        $bbEnd  = $rlVal($ctx, ['opt:senses_bottom_bar_end_cap_colours', 'opt:unishade_end_cap_colours', 'opt:senses bottom bar end cap colours', 'opt:uni shade end cap colours']);
+        $facCol = $rlVal($ctx, ['opt:senses_profile_colour', 'opt:ll_profile_colour', 'opt:senses profile colour', 'opt:ll profile colour']);
+        $facEnd = $rlVal($ctx, ['opt:senses_end_cap_colour', 'opt:ll_end_cap_colour', 'opt:senses end cap colour', 'opt:ll end cap colour']);
+        $fixing = $rlVal($ctx, ['opt:fixings', 'opt:fixings_2', 'opt:fixings (senses)', 'opt:fixings (louvolite)']);
+        $braid  = $rlVal($ctx, ['opt:braid_colour', 'opt:braid colour']);
         $pole   = $rlVal($ctx, ['opt:pole']);
-        $safety = $rlVal($ctx, ['opt:child safety']);
-        $remote = $rlVal($ctx, ['opt:remote options']);
-        $extras = $rlVal($ctx, ['opt:optional extras']);
+        $safety = $rlVal($ctx, ['opt:child_safety', 'opt:child safety']);
+        $remote = $rlVal($ctx, ['opt:remote_options', 'opt:remote options']);
+        $extras = $rlVal($ctx, ['opt:optional_extras', 'opt:optional extras']);
 
         // TOP — the fixed option grid, shrunk into the upper section. The bench-
         // critical cut sizes + notes live in the designable bottom section below.
@@ -564,11 +586,11 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
         $grid .= '<div class="rr">' . $cell('Name', $name, 6) . $cell('Order', $orderCel, 4) . '</div>';
         $grid .= '<div class="rr">' . $cell('Fabric', trim((string) ($ctx['fabric'] ?? '')), 6) . $cell('Colour', trim((string) ($ctx['colour'] ?? '')), 4) . '</div>';
         $grid .= '<div class="rr">' . $cell('Size  W × Drop', $size, 4) . $cell('Measurement', $meas, 3) . $cell('Location', trim((string) ($ctx['location'] ?? '')), 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fabric Roll', $rlVal($ctx, ['opt:fabric roll']), 3) . $cell('Control', $rlVal($ctx, ['opt:control options', 'control']), 4) . $cell('Side', $rlVal($ctx, ['opt:control side']), 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Mech Colour', $rlVal($ctx, ['opt:mech colour']), 3) . $cell('Chain', $rlVal($ctx, ['opt:chain type', 'opt:chain']), 3) . $cell('Bracket Covers', $rlVal($ctx, ['opt:bracket covers?', 'opt:bracket covers']), 4) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Bottom Bar', $rlVal($ctx, ['opt:bottom bar options']), 4) . $cell('BB Colour', $bbCol, 3) . $cell('BB Endcaps', $bbEnd, 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fascia', $rlVal($ctx, ['opt:fascia options']), 4) . $cell('Fascia Colour', $facCol, 3) . $cell('Fascia Endcaps', $facEnd, 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fixings', $fixing, 3) . $cell('Fabric Strip', $rlVal($ctx, ['opt:fabric strip']), 3) . $cell('Scallop / Shape', $rlVal($ctx, ['opt:scallops and trims']), 4) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fabric Roll', $rlVal($ctx, ['opt:fabric_roll', 'opt:fabric roll']), 3) . $cell('Control', $rlVal($ctx, ['opt:control_options', 'opt:control options', 'control']), 4) . $cell('Side', $rlVal($ctx, ['opt:control_side', 'opt:control side']), 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Mech Colour', $rlVal($ctx, ['opt:mech_colour', 'opt:mech colour']), 3) . $cell('Chain', $rlVal($ctx, ['opt:chain_type', 'opt:chain type', 'opt:chain']), 3) . $cell('Bracket Covers', $rlVal($ctx, ['opt:bracket_covers', 'opt:bracket covers?', 'opt:bracket covers']), 4) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Bottom Bar', $rlVal($ctx, ['opt:bottom_bar_options', 'opt:bottom bar options']), 4) . $cell('BB Colour', $bbCol, 3) . $cell('BB Endcaps', $bbEnd, 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fascia', $rlVal($ctx, ['opt:fascia_options', 'opt:fascia options']), 4) . $cell('Fascia Colour', $facCol, 3) . $cell('Fascia Endcaps', $facEnd, 3) . '</div>';
+        $grid .= '<div class="rr">' . $cell('Fixings', $fixing, 3) . $cell('Fabric Strip', $rlVal($ctx, ['opt:fabric_strip', 'opt:fabric strip']), 3) . $cell('Scallop / Shape', $rlVal($ctx, ['opt:scallops_and_trims', 'opt:scallops and trims']), 4) . '</div>';
         if ($braid !== '' || $pole !== '' || $safety !== '') {
             $grid .= '<div class="rr">' . $cell('Braid', $braid, 3) . $cell('Pole', $pole, 3) . $cell('Child Safety', $safety, 4) . '</div>';
         }
