@@ -3240,29 +3240,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
 
     async function runPreview() {
-        // Roller "Multi blind": several blinds share one fascia. They're priced
-        // per-blind on save (the server fans them into grouped lines), so a
-        // single-line live price is meaningless — validate the essentials,
-        // summarise, and let the user save.
-        if (fasciaSizingMode() === 'multi') {
-            var missM = [];
-            if (!productSel.value)                  missM.push('product');
-            if (requiresOption && !fabricId.value)  missM.push('fabric');
-            if (!widthOnly && !dropIn.value.trim()) missM.push('drop');
-            var widths = multiBlindWidths();
-            if (widths.length < 2) missM.push('at least 2 blind widths');
-            if (missM.length > 0) {
-                previewBox.className   = 'idle';
-                previewBox.textContent = 'Still need: ' + missM.join(', ') + '.';
-                setSubmitDisabled(true);
-                return;
-            }
-            previewBox.className = 'idle';
-            previewBox.innerHTML = '<strong>' + widths.length + ' blinds</strong> under one fascia'
-                                 + ' — priced per blind on save.';
-            setSubmitDisabled(false);
-            return;
-        }
+        // Roller "Multi blind": several blinds share one fascia. Price the whole
+        // group live (fascia once, other extras per blind) with a per-blind
+        // breakdown + fit check via runMultiPreview().
+        if (fasciaSizingMode() === 'multi') { await runMultiPreview(); return; }
+        hideMultiPanel();
 
         // Spell out exactly what's missing so the user can act on it
         // without having to guess which field they skipped — generic
@@ -3381,6 +3363,156 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
     }
 
+    // ---- Roller multi-blind live pricing panel -----------------------------
+    // Shows each blind (width × drop, per-blind price), a running total, and a
+    // fit check (sum of blind widths vs the typed Fascia width). Drop defaults to
+    // the shared drop; each blind's drop can be overridden here.
+    var multiPanel = null, multiPanelCount = -1, multiDropVals = {};
+
+    function ensureMultiPanel() {
+        if (multiPanel) return multiPanel;
+        if (!document.getElementById('multi-panel-css')) {
+            var st = document.createElement('style');
+            st.id = 'multi-panel-css';
+            st.textContent =
+                '.multi-panel{margin-top:8px;border:1px solid var(--border,#d9d9e3);border-radius:8px;padding:8px 10px;background:var(--surface,#fff);font-size:13px}'
+              + '.multi-panel .mb-head{font-weight:600;margin-bottom:6px}'
+              + '.multi-panel table{width:100%;border-collapse:collapse}'
+              + '.multi-panel th,.multi-panel td{padding:3px 6px;text-align:left;border-bottom:1px solid var(--border,#eee)}'
+              + '.multi-panel .mb-r{text-align:right}'
+              + '.multi-panel input.mb-drop{width:74px;padding:2px 4px}'
+              + '.multi-panel .mb-fit{font-weight:600}'
+              + '.multi-panel .mb-ok{color:#127a29}.multi-panel .mb-bad{color:#b00020}'
+              + '.multi-panel tfoot td{border-bottom:none;font-weight:600}';
+            document.head.appendChild(st);
+        }
+        multiPanel = document.createElement('div');
+        multiPanel.id = 'multi-panel';
+        multiPanel.className = 'multi-panel';
+        multiPanel.hidden = true;
+        previewBox.parentNode.insertBefore(multiPanel, previewBox.nextSibling);
+        return multiPanel;
+    }
+    function hideMultiPanel() { if (multiPanel) multiPanel.hidden = true; }
+
+    // Extra ids that belong to the fascia sizing/count/width cascade — excluded
+    // from the priced base extras (the widths ARE the blinds; sizing/count are UI).
+    function fasciaCascadeExtraIds() {
+        var ids = {};
+        if (productData && productData.extras) {
+            productData.extras.forEach(function (e) {
+                if (e.code === 'fascia_sizing' || e.code === 'fascia_blind_count' || e.code === 'fascia_blind_width') ids[e.id] = true;
+            });
+        }
+        return ids;
+    }
+
+    function renderMultiRows(count) {
+        var p = ensureMultiPanel();
+        var html = '<div class="mb-head">Blinds in this fascia</div>'
+                 + '<table class="mb-tbl"><thead><tr><th>Blind</th><th>Width</th><th>Drop</th><th class="mb-r">Price</th></tr></thead><tbody>';
+        for (var i = 0; i < count; i++) {
+            var dv = (multiDropVals[i] !== undefined) ? String(multiDropVals[i]) : '';
+            html += '<tr data-i="' + i + '"><td>Blind ' + (i + 1) + '</td>'
+                  + '<td class="mb-w">—</td>'
+                  + '<td><input type="text" class="mb-drop" data-i="' + i + '" value="' + escapeHtml(dv) + '" placeholder="same"></td>'
+                  + '<td class="mb-r mb-price">—</td></tr>';
+        }
+        html += '</tbody><tfoot><tr><td colspan="2" class="mb-fit"></td><td class="mb-r">Total</td><td class="mb-r mb-total">—</td></tr></tfoot></table>';
+        p.innerHTML = html;
+        p.querySelectorAll('input.mb-drop').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                multiDropVals[parseInt(inp.dataset.i, 10)] = inp.value;
+                schedulePreview();
+            });
+        });
+        multiPanelCount = count;
+    }
+
+    async function runMultiPreview() {
+        var p = ensureMultiPanel();
+        var widths = multiBlindWidths();
+        var missM = [];
+        if (!productSel.value)                  missM.push('product');
+        if (requiresOption && !fabricId.value)  missM.push('fabric');
+        if (!widthOnly && !dropIn.value.trim()) missM.push('a shared drop');
+        if (widths.length < 2)                  missM.push('at least 2 blind widths');
+        if (missM.length > 0) {
+            previewBox.className = 'idle';
+            previewBox.textContent = 'Still need: ' + missM.join(', ') + '.';
+            hideMultiPanel();
+            setSubmitDisabled(true);
+            return;
+        }
+        if (widths.length !== multiPanelCount) renderMultiRows(widths.length);
+        p.hidden = false;
+
+        var skip = fasciaCascadeExtraIds();
+        var baseExtras = collectExtras().filter(function (ex) { return !skip[ex.extra_id]; });
+
+        var params = new URLSearchParams({
+            product_id: productSel.value, system_id: systemSel.value || '0', option_id: fabricId.value,
+            drop: dropIn.value, quantity: '1', round_up: '1', unit: measureUnit,
+            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>'
+        });
+        params.append('multi_fascia[active]', '1');
+        widths.forEach(function (w) { params.append('multi_fascia[widths][]', w); });
+        widths.forEach(function (w, i) {
+            var d = (multiDropVals[i] !== undefined && String(multiDropVals[i]).trim() !== '') ? multiDropVals[i] : '';
+            params.append('multi_fascia[drops][]', d);
+        });
+        baseExtras.forEach(function (ex, i) {
+            params.append('extras[' + i + '][extra_id]', ex.extra_id);
+            if (ex.choice_id !== undefined)  params.append('extras[' + i + '][choice_id]', ex.choice_id);
+            if (ex.user_value !== undefined) params.append('extras[' + i + '][user_value]', ex.user_value);
+        });
+
+        try {
+            params.append('_', Date.now());
+            var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
+            var data = await r.json();
+            if (!data || !data.multi) {
+                previewBox.className = 'error';
+                previewBox.textContent = (data && data.error) || 'Could not price the group.';
+                setSubmitDisabled(true);
+                return;
+            }
+            var rows = p.querySelectorAll('tbody tr');
+            (data.blinds || []).forEach(function (b, i) {
+                if (!rows[i]) return;
+                var pc = rows[i].querySelector('.mb-price');
+                if (pc) pc.textContent = b.error ? '—' : ('£' + Number(b.line_total).toFixed(2));
+                var wc = rows[i].querySelector('.mb-w');
+                if (wc) wc.textContent = b.width_mm + ' mm' + (b.is_carrier ? ' · fascia' : '');
+            });
+            var totalEl = p.querySelector('.mb-total');
+            if (totalEl) totalEl.textContent = '£' + Number(data.total).toFixed(2);
+            var fits  = data.fits !== false;
+            var fitEl = p.querySelector('.mb-fit');
+            if (fitEl) {
+                if (data.checked && !fits) {
+                    fitEl.textContent = '⚠ Won\'t fit: blinds total ' + data.sum_widths_mm + ' mm vs fascia ' + data.fascia_width_mm + ' mm';
+                    fitEl.className = 'mb-fit mb-bad';
+                } else if (data.checked) {
+                    fitEl.textContent = '✓ Fits: ' + data.sum_widths_mm + ' mm in ' + data.fascia_width_mm + ' mm fascia';
+                    fitEl.className = 'mb-fit mb-ok';
+                } else {
+                    fitEl.textContent = 'Tip: enter a Fascia width to fit-check.';
+                    fitEl.className = 'mb-fit';
+                }
+            }
+            previewBox.className = 'success';
+            previewBox.innerHTML = '<strong>' + data.count + ' blinds</strong> under one fascia — <strong>£'
+                                 + Number(data.total).toFixed(2) + '</strong> total';
+            setSubmitDisabled(data.checked && !fits);
+        } catch (err) {
+            previewBox.className = 'error';
+            previewBox.textContent = 'Could not fetch group price.';
+            setSubmitDisabled(true);
+            console.error(err);
+        }
+    }
+
     // Roller multi-blind fan-out. On submit: the fascia-sizing / count / width
     // groups are UI only — strip them so they never persist as priced extras.
     // In Multi mode also hand the per-blind widths to the server (add_item.php
@@ -3396,10 +3528,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 });
             });
             if (mode === 'multi') {
-                widths.forEach(function (w) {
+                widths.forEach(function (w, i) {
                     var h = document.createElement('input');
                     h.type = 'hidden'; h.name = 'multi_fascia[widths][]'; h.value = w;
                     addItemForm.appendChild(h);
+                    // Per-blind drop override (blank = use the shared drop), aligned by index.
+                    var d = (multiDropVals[i] !== undefined && String(multiDropVals[i]).trim() !== '') ? multiDropVals[i] : '';
+                    var hd = document.createElement('input');
+                    hd.type = 'hidden'; hd.name = 'multi_fascia[drops][]'; hd.value = d;
+                    addItemForm.appendChild(hd);
                 });
                 var flag = document.createElement('input');
                 flag.type = 'hidden'; flag.name = 'multi_fascia[active]'; flag.value = '1';
