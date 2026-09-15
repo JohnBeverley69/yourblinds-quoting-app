@@ -80,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([$dnId, $factory]);
                 // Phase 1: reflect the dispatch on the floor side too (one dispatch).
                 os_set_factory_dispatched($pdo, $dnQid, (int) ($user['user_id'] ?? 0) ?: null);
+                // Phase 2: auto-invoice on dispatch if the setting is on (default off).
+                os_auto_invoice_on_dispatch($pdo, $dnQid, $factory, (int) ($user['user_id'] ?? 0) ?: null);
                 $_SESSION['flash_success'] = 'Delivery note marked dispatched.';
             } else {
                 $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'cancelled' WHERE id = ? AND factory_client_id = ? AND status <> 'cancelled'")
@@ -200,6 +202,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ($mode === 'two_step'
                 ? 'Switched to two-step: raise a delivery note, then invoice separately.'
                 : 'Switched to one-step: printing a delivery note creates & sends the invoice automatically.')
+            : "Couldn't save the setting — run /migrate_app_settings.php (super-admin) and try again.";
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
+    // Auto-invoice-on-dispatch rule: when ON, dispatching an order (floor OR
+    // delivery note) also raises & sends its invoice. Default OFF — dispatch just
+    // marks the order ready to invoice.
+    if ($action === 'auto_dispatch_mode') {
+        $on = (string) ($_POST['on'] ?? '') === '1';
+        $ok = app_setting_set('auto_invoice_on_dispatch', $on ? '1' : '0');
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
+            ? ($on
+                ? 'Auto-invoice ON: dispatching an order now raises & sends its invoice automatically.'
+                : 'Auto-invoice OFF: dispatching an order marks it ready to invoice — you raise it when ready.')
             : "Couldn't save the setting — run /migrate_app_settings.php (super-admin) and try again.";
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -415,6 +431,8 @@ foreach ($creditNotes as $cn) {
 
 // One-step (auto-invoice on DN print) is the default; two-step is the manual fallback.
 $autoInvoice = app_setting_get('wholesale_dn_auto_invoice', '1') === '1';
+// Phase 2: auto-invoice when an order is dispatched (any path). Default OFF.
+$autoInvoiceDispatch = app_setting_get('auto_invoice_on_dispatch', '0') === '1';
 
 /**
  * The live (non-void) invoice covering an order, or null. Void invoices remain
@@ -533,6 +551,22 @@ $activeNav = 'wholesale';
                 <?= $autoInvoice
                     ? 'Printing a delivery note dispatches it and creates &amp; sends the invoice automatically (once per order).'
                     : 'Raise a delivery note, then raise and send the invoice yourself.' ?>
+            </span>
+        </form>
+
+        <!-- Auto-invoice on dispatch (any path) -->
+        <form method="post" action="/master-admin/wholesale.php" class="wh-mode" style="margin-top:0.6rem">
+            <?= csrf_field() ?>
+            <input type="hidden" name="_action" value="auto_dispatch_mode">
+            <strong style="font-weight:700">Auto-invoice on dispatch:</strong>
+            <span class="wh-seg">
+                <button type="submit" name="on" value="1" class="<?= $autoInvoiceDispatch ? 'on' : '' ?>">On</button>
+                <button type="submit" name="on" value="0" class="<?= $autoInvoiceDispatch ? '' : 'on' ?>">Off</button>
+            </span>
+            <span class="wh-muted" style="font-size:0.8rem">
+                <?= $autoInvoiceDispatch
+                    ? 'Dispatching an order (on the floor or via a delivery note) raises &amp; sends its invoice automatically, once per order.'
+                    : 'Dispatching an order marks it ready to invoice — you raise the invoice yourself. Turn on once you\'re happy it prices correctly.' ?>
             </span>
         </form>
 

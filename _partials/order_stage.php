@@ -205,6 +205,37 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
     } catch (Throwable $e) { /* non-fatal — never block a dispatch */ }
 }
 
+/**
+ * Phase 2 billing rule: when an order is dispatched, raise + send its invoice —
+ * but ONLY when the installation setting `auto_invoice_on_dispatch` is ON (it
+ * ships OFF, so dispatch just marks the order ready to invoice). Idempotent: an
+ * order that already has a non-void invoice is skipped. Best-effort — never
+ * blocks a dispatch. Call it AFTER the order has been marked dispatched.
+ */
+function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = null, ?int $userId = null): void
+{
+    try {
+        require_once __DIR__ . '/app_settings.php';
+        if (!function_exists('app_setting_on') || !app_setting_on('auto_invoice_on_dispatch')) return;
+
+        $factory = $factory ?? os_factory_id();
+        require_once __DIR__ . '/factory_ar.php';
+        if (!function_exists('ar_create_invoice')) return;
+
+        // Already invoiced (non-void)? Don't double-invoice.
+        if (function_exists('ar_order_invoice_number') && ar_order_invoice_number($pdo, $quoteId) !== '') return;
+
+        $q = $pdo->prepare('SELECT account_client_id, client_id FROM quotes WHERE id = ? LIMIT 1');
+        $q->execute([$quoteId]);
+        $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+        $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
+
+        ar_create_invoice($pdo, $factory, $quoteId, $acc, (int) $userId, true);   // true = send
+    } catch (Throwable $e) {
+        error_log('os_auto_invoice_on_dispatch failed for quote ' . $quoteId . ': ' . $e->getMessage());
+    }
+}
+
 /** Count of the order's in-house (made-here) factory-owned lines. */
 function os_inhouse_line_count(PDO $pdo, int $quoteId, int $factory): int
 {

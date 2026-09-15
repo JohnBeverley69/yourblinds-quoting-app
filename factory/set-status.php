@@ -117,6 +117,8 @@ try {
 require_once __DIR__ . '/../_partials/order_stage.php';
 if ($target === 'dispatched') {
     os_mark_dispatched_dn($pdo, $quoteId, $MASTER, $userId ?: null);
+    // Phase 2: auto-invoice on dispatch, only if the setting is on (default off).
+    os_auto_invoice_on_dispatch($pdo, $quoteId, $MASTER, $userId ?: null);
 }
 // Phase 0: roll the single fulfilment stage up from this floor status change.
 recompute_order_stage($pdo, $quoteId);
