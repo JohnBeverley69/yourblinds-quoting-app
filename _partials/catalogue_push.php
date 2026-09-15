@@ -690,10 +690,12 @@ function pp_sync_extras_and_choices(
     // shape if the columns aren't there. We probe once upfront.
     $hasLengthLabel = pp_column_exists($pdo, 'product_extras', 'length_input_label');
     $hasAllowMulti  = pp_column_exists($pdo, 'product_extras', 'allow_multi');
+    $hasCodeCol     = pp_column_exists($pdo, 'product_extras', 'code');
 
     $extraCols = 'id, name, is_required, sort_order, active';
     if ($hasLengthLabel) $extraCols .= ', length_input_label';
     if ($hasAllowMulti)  $extraCols .= ', allow_multi';
+    if ($hasCodeCol)     $extraCols .= ', code';
 
     $src = $pdo->prepare(
         "SELECT $extraCols FROM product_extras
@@ -716,6 +718,7 @@ function pp_sync_extras_and_choices(
 
     $seenExtraIds = [];
     $hasExtraSrc  = pp_has_src_col($pdo, 'product_extras', 'source_extra_id');
+    $hasExtraCode = $hasCodeCol;
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $srcExtraId       = (int) $r['id'];
         $seenExtraIds[]   = $srcExtraId;
@@ -750,6 +753,7 @@ function pp_sync_extras_and_choices(
                 $params[] = (int) ($r['allow_multi'] ?? 0);
             }
             if ($hasExtraSrc) { $cols[] = 'source_extra_id'; $params[] = $srcExtraId; }
+            if ($hasExtraCode) { $cols[] = 'code'; $params[] = ($r['code'] ?? null) !== null && (string) $r['code'] !== '' ? (string) $r['code'] : null; }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -777,6 +781,11 @@ function pp_sync_extras_and_choices(
                 $params[] = (int) ($r['allow_multi'] ?? 0);
             }
             if ($hasExtraSrc) { $sets[] = 'source_extra_id = ?'; $params[] = $srcExtraId; }
+            // Carry the master's machine code so mirrors resolve opt:<code> on the
+            // shared factory worksheet label (only fill it, never blank it).
+            if ($hasExtraCode && ($r['code'] ?? null) !== null && (string) $r['code'] !== '') {
+                $sets[] = 'code = ?'; $params[] = (string) $r['code'];
+            }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'

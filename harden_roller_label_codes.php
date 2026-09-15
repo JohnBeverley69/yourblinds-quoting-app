@@ -64,6 +64,25 @@ try {
         $assigned[] = "#{$r['id']}  {$r['name']}  ->  {$code}";
     }
 
+    // ---- 1b. Mirror the codes onto tenant copies -----------------------------
+    // Portal orders carry the tenant's MIRROR of the roller product, whose
+    // options point back to the master via source_extra_id. worksheet-print
+    // JOINs the order's product_extra_id (the mirror) for its code, so the
+    // mirrors need the master's codes too or opt:<code> resolves to nothing.
+    $mirrored = 0;
+    $hasSrc = false; try { $pdo->query('SELECT source_extra_id FROM product_extras LIMIT 1'); $hasSrc = true; } catch (Throwable $e) {}
+    if ($hasSrc) {
+        $mir = $pdo->prepare(
+            "UPDATE product_extras m
+               JOIN product_extras src ON src.id = m.source_extra_id AND src.product_id = ?
+                SET m.code = src.code
+              WHERE (m.code IS NULL OR m.code = '')
+                AND src.code IS NOT NULL AND src.code <> ''"
+        );
+        $mir->execute([$productId]);
+        $mirrored = $mir->rowCount();
+    }
+
     // ---- 2. Rewrite the stored layout field sources to codes ------------------
     // Build a name->code lookup from the (now fully coded) option list.
     $rows->execute([$productId, $MASTER]);
@@ -139,9 +158,10 @@ try {
 }
 
 echo "Roller label code hardening complete.\n\n";
-echo 'Codes assigned to ' . count($assigned) . " previously-uncoded option(s):\n";
+echo 'Codes assigned to ' . count($assigned) . " previously-uncoded master option(s):\n";
 foreach ($assigned as $a) echo "  {$a}\n";
-if (!$assigned) echo "  (none — all options already had codes)\n";
+if (!$assigned) echo "  (none — all master options already had codes)\n";
+echo "\nTenant mirror options coded from master (by source_extra_id): {$mirrored}\n";
 echo "\nLayout field sources migrated to codes: " . count($migratedSources) . "\n";
 foreach ($migratedSources as $m) echo "  {$m}\n";
 if (!$migratedSources) echo "  (none — layout already on codes or no template)\n";
