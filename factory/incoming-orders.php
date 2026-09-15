@@ -343,12 +343,20 @@ require __DIR__ . '/../_partials/factory_head.php';
                                 <button type="submit" class="io-btn" title="Mark the bought-in items as received from the supplier">✓ Received</button>
                             </form>
                         <?php endif; ?>
-                        <?php if ($next !== null): ?>
+                        <?php
+                            // Phase 1: dispatch is gated on Ready (all made AND all bought-in
+                            // received). Only offer the Dispatch button once the order is ready;
+                            // otherwise show a disabled hint so it's clear why.
+                            $dispatchReady = ($stageBy[$qid] ?? '') === 'ready';
+                        ?>
+                        <?php if ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)): ?>
                             <form method="post" action="/factory/set-status.php" style="margin:0">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="quote_id" value="<?= $qid ?>">
                                 <button type="submit" name="status" value="<?= e($next[0]) ?>" class="io-btn advance"><?= e($next[1]) ?></button>
                             </form>
+                        <?php elseif ($next !== null && $next[0] === 'dispatched'): ?>
+                            <span class="io-btn advance" style="opacity:.45;cursor:not-allowed" title="Not ready to dispatch yet — every blind must be made and every bought-in item received first">Dispatch</span>
                         <?php endif; ?>
                         <span class="io-chev" aria-hidden="true">&#9654;</span>
                     </span>
