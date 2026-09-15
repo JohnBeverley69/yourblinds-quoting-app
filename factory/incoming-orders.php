@@ -190,6 +190,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-news { position: sticky; top: 56px; z-index: 15; display: flex; align-items: center; gap: 0.9rem;
         background: #166534; color: #fff; padding: 0.7rem 1.1rem; border-radius: 10px; margin: 0 0 1rem;
         font-size: 0.95rem; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+    /* The banner is shown only by JS (news.hidden = false). Without this, the
+       display:flex above overrides the [hidden] attribute and it's always on. */
+    .io-news[hidden] { display: none; }
     .io-news button { font: inherit; font-weight: 700; cursor: pointer; border: none; border-radius: 8px;
         padding: 0.35rem 0.9rem; background: #fff; color: #166534; }
     .io-flash { padding: 0.7rem 1rem; border-radius: 10px; margin: 0 0 1.2rem; font-size: 0.9375rem; }
