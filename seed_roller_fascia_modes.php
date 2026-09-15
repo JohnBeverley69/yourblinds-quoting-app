@@ -190,7 +190,7 @@ try {
     // typed value drives the fascia PRICE (width-table lookup) and CUT
     // (worksheet Fascia_Width). Shown for Over size OR Multi.
     $fwId = $upsertExtra('Fascia width', 'fascia_width', false, 41,
-                         'Fascia width (mm) — blank = fit blind', true);
+                         'Fascia width (mm)', true);
     $setGates($fwId, [$cOversize, $cMulti], false);
     echo "Fascia width (#{$fwId}): number box, is_width_source, gated on Over size / Multi.\n";
 
