@@ -24,9 +24,9 @@ $productId = (int) $prod->fetchColumn();
 // Most recent roller line (match by product id OR master_product_id, any status).
 $q = $pdo->prepare("SELECT qi.id, qi.quote_id
                       FROM quote_items qi
-                     WHERE qi.product_id = ? OR qi.master_product_id = ?
+                     WHERE qi.product_id = ?
                      ORDER BY qi.id DESC LIMIT 1");
-$q->execute([$productId, $productId]);
+$q->execute([$productId]);
 $row = $q->fetch(PDO::FETCH_ASSOC);
 if (!$row) { exit("No Bev Roller Blinds order line found anywhere — create one roller order to test rendering.\n"); }
 $itemId = (int) $row['id']; $quoteId = (int) $row['quote_id'];
