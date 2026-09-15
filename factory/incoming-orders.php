@@ -344,12 +344,29 @@ require __DIR__ . '/../_partials/factory_head.php';
                             </form>
                         <?php endif; ?>
                         <?php
-                            // Phase 1: dispatch is gated on Ready (all made AND all bought-in
-                            // received). Only offer the Dispatch button once the order is ready;
-                            // otherwise show a disabled hint so it's clear why.
+                            // Phase 1: dispatch is gated on Ready (all made AND all bought-in received).
+                            // Phase 3: an all-bought-in order (no in-house blinds) has nothing to make,
+                            // so skip the production steps — it goes received -> dispatch once the
+                            // bought-in items arrive.
                             $dispatchReady = ($stageBy[$qid] ?? '') === 'ready';
+                            $noProduction  = ((int) ($o['bev_qty'] ?? 0) === 0);
                         ?>
-                        <?php if ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)): ?>
+                        <?php if ($noProduction): ?>
+                            <?php if ($next !== null && $next[0] === 'received'): ?>
+                                <form method="post" action="/factory/set-status.php" style="margin:0">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                    <button type="submit" name="status" value="received" class="io-btn advance">Mark as received</button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if ($dispatchReady): ?>
+                                <form method="post" action="/factory/set-status.php" style="margin:0">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                    <button type="submit" name="status" value="dispatched" class="io-btn advance">Dispatch</button>
+                                </form>
+                            <?php endif; ?>
+                        <?php elseif ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)): ?>
                             <form method="post" action="/factory/set-status.php" style="margin:0">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="quote_id" value="<?= $qid ?>">
