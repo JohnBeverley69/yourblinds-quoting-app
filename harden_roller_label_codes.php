@@ -102,14 +102,18 @@ try {
             if (isset($layout['header']['fields']) === false && isset($layout['headerFields']) && is_array($layout['headerFields'])) {
                 $rewriteFields($layout['headerFields']);
             }
-            foreach (($layout['labels'] ?? []) as &$lab) {
-                if (is_array($lab) && isset($lab['fields'])) $rewriteFields($lab['fields']);
+            // Iterate by index (NOT `foreach (($layout['labels'] ?? []) as &$lab)`
+            // — the `?? []` makes a temporary copy, so a by-ref alias would mutate
+            // the copy, not $layout).
+            if (!empty($layout['labels']) && is_array($layout['labels'])) {
+                foreach (array_keys($layout['labels']) as $li) {
+                    if (is_array($layout['labels'][$li]) && isset($layout['labels'][$li]['fields'])) {
+                        $rewriteFields($layout['labels'][$li]['fields']);
+                    }
+                }
             }
-            unset($lab);
 
             $after = json_encode($layout, JSON_UNESCAPED_UNICODE);
-            $GLOBALS['__dbg_diff'] = ($after !== $before) ? 'yes' : 'no';
-            $GLOBALS['__dbg_tpl'] = (int) $tpl['id'];
             if ($after !== $before) {
                 // Snapshot the pre-migration layout (undoable) if history exists.
                 try {
@@ -123,9 +127,7 @@ try {
                          VALUES (?, ?, ?, ?, ?, ?)'
                     )->execute([(int) $tpl['id'], $productId, (string) $tpl['name'], (string) $tpl['layout_json'], $cnt, null]);
                 } catch (Throwable $e) { /* history table absent — proceed */ }
-                $upd = $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ?');
-                $upd->execute([$after, (int) $tpl['id']]);
-                $GLOBALS['__dbg_rows'] = $upd->rowCount();
+                $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ?')->execute([$after, (int) $tpl['id']]);
             }
         }
     }
@@ -136,8 +138,7 @@ try {
     exit("\nFAILED: " . $e->getMessage() . " (no changes saved)\n");
 }
 
-echo "Roller label code hardening complete.\n";
-echo 'DEBUG diff=' . ($GLOBALS['__dbg_diff'] ?? '?') . ' tpl=' . ($GLOBALS['__dbg_tpl'] ?? '?') . ' updRows=' . ($GLOBALS['__dbg_rows'] ?? '?') . "\n\n";
+echo "Roller label code hardening complete.\n\n";
 echo 'Codes assigned to ' . count($assigned) . " previously-uncoded option(s):\n";
 foreach ($assigned as $a) echo "  {$a}\n";
 if (!$assigned) echo "  (none — all options already had codes)\n";
