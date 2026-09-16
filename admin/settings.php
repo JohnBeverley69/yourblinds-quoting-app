@@ -304,6 +304,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: show_line_prices not saved (run migrate_show_line_prices.php): ' . $e->getMessage());
             }
+            // Per-blind SIZE visibility on customer-facing quote/PDF (sibling of
+            // show_line_prices). Guarded the same way so a pre-migration DB still
+            // saves the rest. Unchecked = hide.
+            try {
+                db()->prepare('UPDATE client_settings SET show_line_sizes = ? WHERE client_id = ?')
+                    ->execute([isset($_POST['show_line_sizes']) ? 1 : 0, $clientId]);
+            } catch (Throwable $e) {
+                error_log('settings: show_line_sizes not saved (run migrate_show_line_sizes.php): ' . $e->getMessage());
+            }
             // WT charge on/off (migrate_wt_charge.php). Guarded the same way.
             try {
                 db()->prepare('UPDATE client_settings SET feature_wt = ? WHERE client_id = ?')
@@ -671,6 +680,7 @@ $settings = $settingsStmt->fetch() ?: [
     'quote_footer'             => '',
     'default_measurement_unit' => 'mm',
     'show_line_prices'         => 1,
+    'show_line_sizes'          => 1,
     'bank_account_name'        => '',
     'bank_sort_code'           => '',
     'bank_account_number'      => '',
@@ -1387,6 +1397,35 @@ $activeNav = 'settings';
                                 unit price and line total for every blind. Unticked: those
                                 per-blind prices are hidden and the customer only sees the
                                 quote total.
+                            </span>
+                        </span>
+                    </label>
+                </fieldset>
+
+                <?php
+                // Column absent (pre-migration) ⇒ treat as ON (trade default —
+                // show sizes). Toggle for per-blind SIZE visibility.
+                $showLineSizes = !isset($settings['show_line_sizes'])
+                    || (int) $settings['show_line_sizes'] === 1;
+                ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        Sizes on the customer quote
+                    </legend>
+                    <label style="display:flex;align-items:flex-start;gap:0.55rem;
+                                  font-size:0.9375rem;cursor:pointer">
+                        <input type="checkbox" name="show_line_sizes" value="1"
+                               <?= $showLineSizes ? 'checked' : '' ?>
+                               style="margin-top:0.2rem">
+                        <span>
+                            Show the size of each blind
+                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
+                                Ticked: the quote PDF and the customer's online quote show each
+                                blind's size (width × drop) — right for trade orders. Unticked:
+                                sizes are hidden (retail style), leaving just the description.
                             </span>
                         </span>
                     </label>

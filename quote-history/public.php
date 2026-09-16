@@ -86,6 +86,16 @@ try {
     if ($spVal !== false && $spVal !== null) $showLinePrices = ((int) $spVal) === 1;
 } catch (Throwable $e) { /* column not migrated yet — show */ }
 
+// Per-blind SIZE visibility (Settings → Quoting), sibling of the above. Guarded
+// so a pre-migration DB defaults to SHOWING sizes — the new trade default.
+$showLineSizes = true;
+try {
+    $ss = db()->prepare('SELECT show_line_sizes FROM client_settings WHERE client_id = ? LIMIT 1');
+    $ss->execute([(int) $quote['client_id']]);
+    $ssVal = $ss->fetchColumn();
+    if ($ssVal !== false && $ssVal !== null) $showLineSizes = ((int) $ssVal) === 1;
+} catch (Throwable $e) { /* column not migrated yet — show */ }
+
 // Bank details for "How to pay" (Settings → Quoting). Guarded so a pre-migration
 // DB (columns absent) simply omits the block.
 $bank = ['name' => '', 'sort' => '', 'acc' => '', 'instr' => ''];
@@ -279,6 +289,7 @@ if ($depositStored !== null) {
         table.items td.num, table.items th.num { text-align: right; }
         .room { font-weight: 600; color: #111827; }
         .desc { color: #4b5563; font-size: 0.875rem; margin-top: 0.25rem; line-height: 1.45; }
+        .size { color: #111827; font-size: 0.9rem; font-weight: 600; margin-top: 0.25rem; }
         .extras { color: #6b7280; font-size: 0.8125rem; margin-top: 0.25rem; }
         table.items tfoot td { padding: 0.5rem 0.75rem; }
         table.items tfoot td.lbl { text-align: right; color: #6b7280; font-weight: 600; }
@@ -454,6 +465,13 @@ if ($depositStored !== null) {
                         <?php if ($descBits): ?>
                             <div class="desc"><?= e(implode("\n", $descBits)) ?></div>
                         <?php endif; ?>
+                        <?php if ($showLineSizes):
+                            $__w = (int) ($item['width_mm'] ?? 0); $__d = (int) ($item['drop_mm'] ?? 0);
+                            $__sz = ($__w > 0 && $__d > 0) ? ($__w . ' × ' . $__d . ' mm')
+                                  : ($__w > 0 ? ($__w . ' mm wide') : ($__d > 0 ? ('Drop ' . $__d . ' mm') : ''));
+                            if ($__sz !== ''): ?>
+                            <div class="size"><?= e($__sz) ?></div>
+                        <?php endif; endif; ?>
                         <?php $exs = $extrasByItem[(int) $item['id']] ?? []; ?>
                         <?php if ($exs): ?>
                             <div class="extras">

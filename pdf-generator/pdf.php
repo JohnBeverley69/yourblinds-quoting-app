@@ -111,6 +111,16 @@ function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote
         if ($spVal !== false && $spVal !== null) $quote['show_line_prices'] = (int) $spVal;
     } catch (Throwable $e) { /* column not migrated yet — show */ }
 
+    // Per-blind SIZE visibility (sibling of show_line_prices). Guarded so a
+    // pre-migration DB defaults to SHOWING sizes — the new trade default.
+    $quote['show_line_sizes'] = 1;
+    try {
+        $ssstmt = $pdo->prepare('SELECT show_line_sizes FROM client_settings WHERE client_id = ? LIMIT 1');
+        $ssstmt->execute([$clientId]);
+        $ssVal = $ssstmt->fetchColumn();
+        if ($ssVal !== false && $ssVal !== null) $quote['show_line_sizes'] = (int) $ssVal;
+    } catch (Throwable $e) { /* column not migrated yet — show */ }
+
     // Bank details for the "How to pay" block. Carried on $quote; guarded so a
     // pre-migration DB (columns absent) simply omits the block.
     $quote['bank_account_name'] = $quote['bank_sort_code'] = '';
@@ -413,6 +423,7 @@ table { border-collapse: collapse; }
 .items td.num, .items th.num { text-align: right; }
 .items .room { font-weight: 600; color: #111827; font-size: 11.5px; }
 .items .desc { color: #4b5563; font-size: 10px; margin-top: 3px; line-height: 1.45; }
+.items .size { color: #111827; font-size: 10.5px; font-weight: 600; margin-top: 3px; }
 .items .extras { color: #6b7280; font-size: 10px; margin-top: 3px; }
 .items tfoot td { padding: 6px 8px; font-size: 11px; }
 .items tfoot td.label { text-align: right; color: #6b7280; }
@@ -482,7 +493,18 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 
 <?php
 $showLinePrices = ((int) ($quote['show_line_prices'] ?? 1)) === 1;
+$showLineSizes  = ((int) ($quote['show_line_sizes'] ?? 1)) === 1;
 $colCount = $showLinePrices ? 5 : 3;
+
+// Human size string for a line (W × D mm), honouring width-only / per-slat lines.
+$lineSizeStr = static function (array $item): string {
+    $w = (int) ($item['width_mm'] ?? 0);
+    $d = (int) ($item['drop_mm'] ?? 0);
+    if ($w > 0 && $d > 0) return $w . ' × ' . $d . ' mm';
+    if ($w > 0) return $w . ' mm wide';
+    if ($d > 0) return 'Drop ' . $d . ' mm';
+    return '';
+};
 
 // WT (internal surcharge) is folded into the stored subtotal. When per-blind
 // prices are shown, spread it proportionally across the line totals so the
@@ -519,9 +541,9 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 <?php if (empty($items)): ?>
 <tr><td colspan="<?= $colCount ?>" style="text-align:center; padding:24px; color:#9ca3af;">No line items.</td></tr>
 <?php else: foreach ($items as $i => $item):
-    // Build the description block from snapshot fields. We deliberately
-    // do NOT render width_mm / drop_mm / matrix_* anywhere — that's the
-    // size-rule the trade business asked for.
+    // Build the description block from snapshot fields. The blind SIZE
+    // (width × drop) is shown only when show_line_sizes is on (a Settings →
+    // Quoting toggle) — trade quotes show sizes, retail quotes hide them.
     $descBits = [];
     if (!empty($item['product_name_snapshot'])) {
         $descBits[] = (string) $item['product_name_snapshot']
@@ -544,6 +566,9 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 <?php endif; ?>
 <?php if ($descBits): ?>
 <div class="desc"><?= e(implode("\n", $descBits)) ?></div>
+<?php endif; ?>
+<?php if ($showLineSizes && ($__sz = $lineSizeStr($item)) !== ''): ?>
+<div class="size"><?= e($__sz) ?></div>
 <?php endif; ?>
 <?php $exs = $extrasByItem[(int) $item['id']] ?? []; ?>
 <?php if ($exs): ?>
