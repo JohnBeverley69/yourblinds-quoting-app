@@ -73,6 +73,32 @@ try {
     }
 } catch (Throwable $e) { /* no allowance_rows */ }
 
+// Does this product's cut rules use the "multiple blinds in one fascia" allowance?
+// If so, surface a dedicated editable section for it (tube/fabric take-offs + the
+// join gap). Detected from the build vars so it only shows on roller (and any
+// product wired the same way), never on products that don't share fascias.
+$usesMultiFascia = false;
+if ($productId > 0) {
+    foreach ($vars as $v) {
+        if (stripos((string) ($v['rows_json'] ?? ''), 'roller_multiple') !== false) { $usesMultiFascia = true; break; }
+    }
+}
+// Current values for the section (client-scoped; fall back to the unscoped read).
+$mfHasClient = false;
+try { $pdo->query('SELECT client_id FROM allowance_rows LIMIT 0'); $mfHasClient = true; } catch (Throwable $e) {}
+$mfVal = function (string $table, string $key) use ($pdo, $mfHasClient, $MASTER, $alw) {
+    try {
+        $q = $pdo->prepare('SELECT value FROM allowance_rows WHERE table_name = ? AND key_norm = ?' . ($mfHasClient ? ' AND client_id = ?' : '') . ' LIMIT 1');
+        $q->execute($mfHasClient ? [$table, $key, (int) $MASTER] : [$table, $key]);
+        $v = $q->fetchColumn();
+        if ($v !== false && $v !== null) return (float) $v;
+    } catch (Throwable $e) { /* fall through */ }
+    return $alw[strtolower($table)][$key] ?? null;
+};
+$mfTube   = $mfVal('roller_multiple', 'tube');
+$mfFabric = $mfVal('roller_multiple', 'fabric');
+$mfGap    = $mfVal('roller_fascia_join', 'gap');
+
 // Option sources for this product (what a new cut can be driven by): the System
 // axis plus each option group and its distinct choice labels. Same shape the old
 // editor uses. Feeds the "depends on" picker in the add-cut form.
@@ -281,6 +307,51 @@ $parseCut = static function (string $result): ?array {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['action'] ?? '');
+
+    // ---- Save the "multiple blinds in one fascia" allowances -------------------
+    // A dedicated, clearly-labelled section for the shared-fascia cut allowances:
+    // each grouped blind's tube/fabric take-off (off its own width) + the join gap.
+    // Writes the same allowance_rows the cut rules LOOKUP + the reconcile reads.
+    if ($action === 'save_multi_fascia') {
+        $redirect = '/factory/build-rules-v2.php?product_id=' . $productId;
+        $hasClientCol = false;
+        try { $pdo->query('SELECT client_id FROM allowance_rows LIMIT 0'); $hasClientCol = true; } catch (Throwable $e) {}
+        $upsertAlw = function (string $table, string $key, string $display, $valRaw) use ($pdo, $hasClientCol, $MASTER): void {
+            if (trim((string) $valRaw) === '' || !is_numeric($valRaw)) return;   // blank = leave as-is
+            $val = (float) $valRaw;
+            $where = 'table_name = ? AND key_norm = ?' . ($hasClientCol ? ' AND client_id = ?' : '');
+            $args  = $hasClientCol ? [$table, $key, (int) $MASTER] : [$table, $key];
+            $exists = $pdo->prepare("SELECT COUNT(*) FROM allowance_rows WHERE $where");
+            $exists->execute($args);
+            if ((int) $exists->fetchColumn() > 0) {
+                $pdo->prepare("UPDATE allowance_rows SET value = ? WHERE $where")->execute(array_merge([$val], $args));
+            } else {
+                $seqStmt = $pdo->prepare('SELECT COALESCE(MAX(seq), -1) + 1 FROM allowance_rows WHERE table_name = ?' . ($hasClientCol ? ' AND client_id = ?' : ''));
+                $seqStmt->execute($hasClientCol ? [$table, (int) $MASTER] : [$table]);
+                $seq = (int) $seqStmt->fetchColumn();
+                if ($hasClientCol) {
+                    $pdo->prepare('INSERT INTO allowance_rows (client_id, table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?, ?)')
+                        ->execute([(int) $MASTER, $table, $key, $display, $val, $seq]);
+                } else {
+                    $pdo->prepare('INSERT INTO allowance_rows (table_name, key_norm, keys_display, value, seq) VALUES (?, ?, ?, ?, ?)')
+                        ->execute([$table, $key, $display, $val, $seq]);
+                }
+            }
+        };
+        try {
+            $pdo->beginTransaction();
+            $upsertAlw('roller_multiple', 'tube',   'Multiple in one fascia · Tube (off Width)',   $_POST['mf_tube']   ?? '');
+            $upsertAlw('roller_multiple', 'fabric', 'Multiple in one fascia · Fabric (off Width)', $_POST['mf_fabric'] ?? '');
+            $upsertAlw('roller_fascia_join', 'gap', 'Shared fascia · join per gap (mm)',           $_POST['mf_gap']    ?? '');
+            $pdo->commit();
+            $_SESSION['flash_success'] = 'Saved the multiple-blinds-in-one-fascia allowances — the worksheet now uses them.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
+        exit;
+    }
 
     // ---- Delete a rule --------------------------------------------------------
     if (($delName = trim((string) ($_POST['deletevar'] ?? ''))) !== '') {
@@ -892,6 +963,35 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
           <span>These are the real formulas. Change a number or the sum; keep the variable names (Width, Drop, Vanes…) as they are.</span>
         </div>
       </form>
+      <?php endif; ?>
+
+      <!-- MULTIPLE BLINDS IN ONE FASCIA -->
+      <?php if ($usesMultiFascia):
+        $fmtMf = static fn ($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'); ?>
+      <div class="grouplabel"><span>Multiple blinds in one fascia</span><span class="badge prints">feeds the ticket</span><span class="ln"></span></div>
+      <div class="chartcard">
+        <span class="ic">🪟</span>
+        <div style="flex:1 1 auto">
+          <div class="cn">Shared-fascia cut allowances</div>
+          <p>When 2 or more blinds share one fascia, each blind's <b>tube</b> and <b>fabric</b> are cut off <em>its own</em> width using these take-offs, and the fascia extrusion is cut once across the whole opening. A deduction is negative (e.g. <code>-25</code>); leave a box blank to keep its current value.</p>
+          <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>"
+                style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;margin-top:.6rem">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="save_multi_fascia">
+            <input type="hidden" name="product_id" value="<?= (int) $productId ?>">
+            <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)">Tube — off width (mm)
+              <input type="number" step="any" name="mf_tube" value="<?= $e2($fmtMf($mfTube)) ?>"
+                     style="width:8rem;font:inherit;text-align:right;border:1px solid var(--line);border-radius:7px;padding:.4rem .5rem;background:var(--surface);color:var(--ink)"></label>
+            <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)">Fabric — off width (mm)
+              <input type="number" step="any" name="mf_fabric" value="<?= $e2($fmtMf($mfFabric)) ?>"
+                     style="width:8rem;font:inherit;text-align:right;border:1px solid var(--line);border-radius:7px;padding:.4rem .5rem;background:var(--surface);color:var(--ink)"></label>
+            <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)">Gap between blinds (mm)
+              <input type="number" step="any" name="mf_gap" value="<?= $e2($fmtMf($mfGap)) ?>"
+                     style="width:8rem;font:inherit;text-align:right;border:1px solid var(--line);border-radius:7px;padding:.4rem .5rem;background:var(--surface);color:var(--ink)"></label>
+            <button type="submit" class="savebtn">Save allowances</button>
+          </form>
+        </div>
+      </div>
       <?php endif; ?>
 
       <!-- CHART -->
