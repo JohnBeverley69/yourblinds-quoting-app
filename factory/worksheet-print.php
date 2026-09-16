@@ -116,7 +116,7 @@ if ($order) {
         $li = $pdo->prepare(
             "SELECT qi.id, qi.line_no, qi.quantity, qi.product_id, qi.system_id, qi.width_mm, qi.drop_mm,
                     qi.product_name_snapshot, qi.system_name_snapshot,
-                    qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes,
+                    qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes, qi.fascia_group,
                     COALESCE(p.source_product_id, p.id) AS master_product_id
                FROM quote_items qi JOIN products p ON p.id = qi.product_id
               WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
@@ -124,9 +124,35 @@ if ($order) {
         );
         $li->execute([$qid, $MASTER]);
         $lines = $li->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) { /* leave empty */ }
+    } catch (Throwable $e) {
+        // fascia_group column may be absent on an un-migrated install — retry without it.
+        try {
+            $li = $pdo->prepare(
+                "SELECT qi.id, qi.line_no, qi.quantity, qi.product_id, qi.system_id, qi.width_mm, qi.drop_mm,
+                        qi.product_name_snapshot, qi.system_name_snapshot,
+                        qi.fabric_name_snapshot, qi.fabric_colour_snapshot, qi.room_name, qi.notes, NULL AS fascia_group,
+                        COALESCE(p.source_product_id, p.id) AS master_product_id
+                   FROM quote_items qi JOIN products p ON p.id = qi.product_id
+                  WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
+               ORDER BY qi.line_no, qi.id"
+            );
+            $li->execute([$qid, $MASTER]);
+            $lines = $li->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) { /* leave empty */ }
+    }
 }
 $totalLines = count($lines);
+
+// Blinds sharing one fascia (same non-empty fascia_group, 2+ members) are cut
+// with the editable "multiple blinds in one fascia" allowances. Expose that to
+// the build engine as a synthetic "Multiple Blinds in One Fascia = Yes" option
+// selection so the Tube_Cut / Fabric_W decision tables' Multiple branch fires —
+// no stored option needed. Single blinds and 1-member groups are untouched.
+$fasciaGroupCounts = [];
+foreach ($lines as $ln) {
+    $g = strtoupper(trim((string) ($ln['fascia_group'] ?? '')));
+    if ($g !== '') $fasciaGroupCounts[$g] = ($fasciaGroupCounts[$g] ?? 0) + 1;
+}
 
 // ---- Per-line option selections (for the build engine + detail fields) -----
 $extrasBy = [];
@@ -238,6 +264,12 @@ foreach ($lines as $ln) {
     // Decision tables match on the System axis + option group NAME (tenant group
     // ids differ from the master's), so key selections by name.
     $optSel = array_merge(['system' => (string) ($ln['system_name_snapshot'] ?? '')], $byName);
+    // Shared-fascia member? Flag it for the cut rules' "multiple blinds in one
+    // fascia" branch (keyed on the option-group name, lower-cased).
+    $lnGroup = strtoupper(trim((string) ($ln['fascia_group'] ?? '')));
+    if ($lnGroup !== '' && ($fasciaGroupCounts[$lnGroup] ?? 0) >= 2) {
+        $optSel['multiple blinds in one fascia'] = 'Yes';
+    }
     $masterPid = (int) ($ln['master_product_id'] ?? $ln['product_id']);
     $pick = static function (array $byName, array $names): string {
         foreach ($names as $n) { if (isset($byName[$n])) return $byName[$n]; }
