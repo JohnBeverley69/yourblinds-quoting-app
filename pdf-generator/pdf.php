@@ -9,10 +9,10 @@ require_once __DIR__ . '/../_partials/legal_text.php';
 /**
  * YourBlinds — customer-facing quote PDF rendering.
  *
- * The output is intentionally **size-free** — the customer sees product,
- * fabric, colour, room, extras, quantity, price. Width and drop are NOT
- * rendered (business rule: trade companies don't want customers shopping
- * the same blinds elsewhere with dimensions in hand).
+ * Each line shows product, fabric, colour, room, extras, quantity, price. The
+ * blind SIZE (width × drop) is shown only when the tenant's show_line_sizes
+ * setting is on (Settings → Quoting) — trade quotes show sizes, retail hide them.
+ * Per-blind prices are likewise gated by show_line_prices.
  *
  * Loads a quote (scoped by client_id), builds an HTML document, and uses
  * Dompdf to produce A4 PDF bytes. Returns null if the quote does not
