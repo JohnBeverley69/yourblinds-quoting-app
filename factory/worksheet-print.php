@@ -22,6 +22,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/build_eval.php';
 require __DIR__ . '/../_partials/qr.php';
 require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a label's part-specific QR
+require __DIR__ . '/../_partials/roller_box.php';   // roller_box_default() — the editable boxed-label grid
 
 requireFactory();
 
@@ -575,78 +576,79 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     // option names as captions. Optional rows (braid/pole/safety, motor extras)
     // collapse out when empty so a plain chain roller stays compact, and expand
     // for a motorised blind. Bracket Covers prints Yes/No only.
-    $rollerLabelHtml = static function (array $ctx, array $computed, array $bottomFields = []) use ($rlVal, $qrMm, $fieldText): string {
-        $e    = static fn ($s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-        $cell = static function (string $cap, string $val, float $w, string $cls = '') use ($e): string {
-            return '<div class="rc' . ($cls !== '' ? ' ' . $cls : '') . '" style="flex:' . $w . '">'
-                 . '<span class="rcap">' . $e($cap) . '</span>'
-                 . '<span class="rval">' . $e($val) . '</span></div>';
-        };
-        // A computed build variable (cut size), tidied: mm numbers show as integers;
-        // "" (Fascia_Cut on open fascia, Chain_Length on non-chain) stays blank.
+    // The bespoke boxed roller label. The TOP grid + the CUT row are now DATA —
+    // rows of cells {cap, src, w, big} stored on the template as labels[0].box —
+    // so the Worksheets editor can change them. When the template stores no box,
+    // roller_box_default() (below, shared with the editor + seed) supplies today's
+    // exact layout, so nothing changes until someone edits it.
+    $rollerLabelHtml = static function (array $ctx, array $computed, array $bottomFields = [], ?array $boxDef = null) use ($rlVal, $qrMm, $fieldText): string {
+        $e = static fn ($s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+        // A computed build variable (cut size), tidied: mm -> integer; "" stays blank.
         $cv = static function (string $name) use ($computed): string {
             $v = $computed[$name] ?? null;
             if ($v === null) return '';
             if (is_numeric($v)) return rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
             return trim((string) $v);
         };
-        $name = trim((string) ($ctx['customer'] ?? ''));
-        if ($name === '') $name = trim((string) ($ctx['company'] ?? ''));
-        $ref      = trim((string) ($ctx['cust_ref'] ?? ''));
-        $orderNo  = trim((string) ($ctx['order_no'] ?? ''));
-        $orderCel = $ref !== '' ? ($orderNo . ' · ' . $ref) : $orderNo;
-        $w = trim((string) ($ctx['width'] ?? '')); $d = trim((string) ($ctx['drop'] ?? ''));
-        $size = ($w !== '' || $d !== '') ? ($w . ' × ' . $d) : '';
+        // Composite + brand-merged values, exposed as ctx keys so every grid cell
+        // references a SINGLE source (a fascia's colour lives under senses_* OR
+        // ll_*/unishade_* depending on the order; only one is populated).
+        $name = trim((string) ($ctx['customer'] ?? '')); if ($name === '') $name = trim((string) ($ctx['company'] ?? ''));
+        $ref  = trim((string) ($ctx['cust_ref'] ?? '')); $orderNo = trim((string) ($ctx['order_no'] ?? ''));
+        $wv = trim((string) ($ctx['width'] ?? '')); $dv = trim((string) ($ctx['drop'] ?? ''));
         $meas = $rlVal($ctx, ['opt:exact_or_recess', 'opt:exact or recess', 'recess_exact']);
-        $fh   = trim((string) ($ctx['fit_height'] ?? ''));
-        if ($fh !== '') $meas = trim($meas . '  FH ' . $fh);
+        $fh = trim((string) ($ctx['fit_height'] ?? '')); if ($fh !== '') $meas = trim($meas . '  FH ' . $fh);
+        $ctx['name_cell']     = $name;
+        $ctx['order_cell']    = $ref !== '' ? ($orderNo . ' · ' . $ref) : $orderNo;
+        $ctx['size']          = ($wv !== '' || $dv !== '') ? ($wv . ' × ' . $dv) : (string) ($ctx['size'] ?? '');
+        $ctx['measurement']   = $meas;
+        $ctx['bb_colour']     = $rlVal($ctx, ['opt:senses_bottom_bar_colour', 'opt:unishade_bottom_bar_colour', 'opt:senses bottom bar colour', 'opt:unishade bottom bar colour']);
+        $ctx['bb_endcaps']    = $rlVal($ctx, ['opt:senses_bottom_bar_end_cap_colours', 'opt:unishade_end_cap_colours', 'opt:senses bottom bar end cap colours', 'opt:uni shade end cap colours']);
+        $ctx['fascia_colour'] = $rlVal($ctx, ['opt:senses_profile_colour', 'opt:ll_profile_colour', 'opt:senses profile colour', 'opt:ll profile colour']);
+        $ctx['fascia_endcaps']= $rlVal($ctx, ['opt:senses_end_cap_colour', 'opt:ll_end_cap_colour', 'opt:senses end cap colour', 'opt:ll end cap colour']);
+        $ctx['fixings_val']   = $rlVal($ctx, ['opt:fixings', 'opt:fixings_2', 'opt:fixings (senses)', 'opt:fixings (louvolite)']);
 
-        $bbCol  = $rlVal($ctx, ['opt:senses_bottom_bar_colour', 'opt:unishade_bottom_bar_colour', 'opt:senses bottom bar colour', 'opt:unishade bottom bar colour']);
-        $bbEnd  = $rlVal($ctx, ['opt:senses_bottom_bar_end_cap_colours', 'opt:unishade_end_cap_colours', 'opt:senses bottom bar end cap colours', 'opt:uni shade end cap colours']);
-        $facCol = $rlVal($ctx, ['opt:senses_profile_colour', 'opt:ll_profile_colour', 'opt:senses profile colour', 'opt:ll profile colour']);
-        $facEnd = $rlVal($ctx, ['opt:senses_end_cap_colour', 'opt:ll_end_cap_colour', 'opt:senses end cap colour', 'opt:ll end cap colour']);
-        $fixing = $rlVal($ctx, ['opt:fixings', 'opt:fixings_2', 'opt:fixings (senses)', 'opt:fixings (louvolite)']);
-        $braid  = $rlVal($ctx, ['opt:braid_colour', 'opt:braid colour']);
-        $pole   = $rlVal($ctx, ['opt:pole']);
-        $safety = $rlVal($ctx, ['opt:child_safety', 'opt:child safety']);
-        $remote = $rlVal($ctx, ['opt:remote_options', 'opt:remote options']);
-        $extras = $rlVal($ctx, ['opt:optional_extras', 'opt:optional extras']);
+        // Resolve one cell's single source to its value (no caption).
+        $val = static function (string $src) use ($ctx, $cv): string {
+            if ($src === '') return '';
+            if (strncmp($src, 'var:', 4) === 0)  return $cv(substr($src, 4));
+            if (strncmp($src, 'order:', 6) === 0) return (string) ($ctx[substr($src, 6)] ?? '');
+            if (strncmp($src, 'opt:', 4) === 0)   return (string) ($ctx[$src] ?? '');
+            return '';
+        };
+        $cellHtml = static function (array $c) use ($e, $val): string {
+            $wt = (float) ($c['w'] ?? 1); if ($wt <= 0) $wt = 1;
+            $cls = 'rc' . (!empty($c['big']) ? ' rcut' : '');
+            return '<div class="' . $cls . '" style="flex:' . $wt . '"><span class="rcap">'
+                 . $e((string) ($c['cap'] ?? '')) . '</span><span class="rval">' . $e($val((string) ($c['src'] ?? ''))) . '</span></div>';
+        };
 
-        // TOP — the fixed option grid, shrunk into the upper section. The bench-
-        // critical cut sizes + notes live in the designable bottom section below.
-        $grid  = '';
-        $grid .= '<div class="rr">' . $cell('Name', $name, 6) . $cell('Order', $orderCel, 4) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fabric', trim((string) ($ctx['fabric'] ?? '')), 6) . $cell('Colour', trim((string) ($ctx['colour'] ?? '')), 4) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Size  W × Drop', $size, 4) . $cell('Measurement', $meas, 3) . $cell('Location', trim((string) ($ctx['location'] ?? '')), 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fabric Roll', $rlVal($ctx, ['opt:fabric_roll', 'opt:fabric roll']), 3) . $cell('Control', $rlVal($ctx, ['opt:control_options', 'opt:control options', 'control']), 4) . $cell('Side', $rlVal($ctx, ['opt:control_side', 'opt:control side']), 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Mech Colour', $rlVal($ctx, ['opt:mech_colour', 'opt:mech colour']), 3) . $cell('Chain', $rlVal($ctx, ['opt:chain_type', 'opt:chain type', 'opt:chain']), 3) . $cell('Bracket Covers', $rlVal($ctx, ['opt:bracket_covers', 'opt:bracket covers?', 'opt:bracket covers']), 4) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Bottom Bar', $rlVal($ctx, ['opt:bottom_bar_options', 'opt:bottom bar options']), 4) . $cell('BB Colour', $bbCol, 3) . $cell('BB Endcaps', $bbEnd, 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fascia', $rlVal($ctx, ['opt:fascia_options', 'opt:fascia options']), 4) . $cell('Fascia Colour', $facCol, 3) . $cell('Fascia Endcaps', $facEnd, 3) . '</div>';
-        $grid .= '<div class="rr">' . $cell('Fixings', $fixing, 3) . $cell('Fabric Strip', $rlVal($ctx, ['opt:fabric_strip', 'opt:fabric strip']), 3) . $cell('Scallop / Shape', $rlVal($ctx, ['opt:scallops_and_trims', 'opt:scallops and trims']), 4) . '</div>';
-        if ($braid !== '' || $pole !== '' || $safety !== '') {
-            $grid .= '<div class="rr">' . $cell('Braid', $braid, 3) . $cell('Pole', $pole, 3) . $cell('Child Safety', $safety, 4) . '</div>';
+        $box = (is_array($boxDef) && (!empty($boxDef['grid']) || !empty($boxDef['cut']))) ? $boxDef : roller_box_default();
+
+        // TOP grid — each row; a row flagged hide_if_empty is skipped when all its
+        // cells are blank (the old Braid/Pole/Safety + Remote/Extras behaviour).
+        $grid = '';
+        foreach (($box['grid'] ?? []) as $row) {
+            $cells = is_array($row['cells'] ?? null) ? $row['cells'] : [];
+            if (!$cells) continue;
+            if (!empty($row['hide_if_empty'])) {
+                $any = false; foreach ($cells as $c) { if (trim($val((string) ($c['src'] ?? ''))) !== '') { $any = true; break; } }
+                if (!$any) continue;
+            }
+            $inner = ''; foreach ($cells as $c) $inner .= $cellHtml($c);
+            $grid .= '<div class="rr">' . $inner . '</div>';
         }
-        if ($remote !== '' || $extras !== '') {
-            $grid .= '<div class="rr">' . $cell('Remote', $remote, 5) . $cell('Optional Extras', $extras, 5) . '</div>';
-        }
 
-        // BOTTOM — cut sizes (bench-critical) + notes + QR. This is the section the
-        // Worksheets label designer will own; for now it shows the computed cut
-        // sizes big and bold, plus the line's notes and the scan code.
-        $cutRow = '<div class="rr rcutrow">'
-                . $cell('Tube', $cv('Tube_Cut'), 2, 'rcut')
-                . $cell('Fabric W', $cv('Fabric_W'), 2, 'rcut')
-                . $cell('Fascia', $cv('Fascia_Cut'), 2, 'rcut')
-                . $cell('Fabric Drop', $cv('Fabric_Drop'), 2, 'rcut')
-                . $cell('Chain', $cv('Chain_Length'), 2, 'rcut') . '</div>';
-        $qr = '';
-        $code = (string) ($ctx['qr_code'] ?? '');
+        // CUT row (big bold numbers).
+        $cutInner = ''; foreach (($box['cut'] ?? []) as $c) { $c['big'] = true; $cutInner .= $cellHtml($c); }
+        $cutRow = $cutInner !== '' ? '<div class="rr rcutrow">' . $cutInner . '</div>' : '';
+
+        // Designer extras (the flat field list) + notes + QR — unchanged.
+        $qr = ''; $code = (string) ($ctx['qr_code'] ?? '');
         if ($code !== '') $qr = '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
-        $notes = '<div class="rr rnotes">' . $cell('Additional Notes', trim((string) ($ctx['notes'] ?? '')), 10) . $qr . '</div>';
+        $notes = '<div class="rr rnotes"><div class="rc" style="flex:10"><span class="rcap">Additional Notes</span><span class="rval">'
+               . $e(trim((string) ($ctx['notes'] ?? ''))) . '</span></div>' . $qr . '</div>';
 
-        // Designer extras — anything added to the roller template's label fields in
-        // the Worksheets editor prints here, between the cut band and the notes.
-        // Empty by default (so the label is just cut band + notes out of the box).
         $extra = '';
         foreach ($bottomFields as $f) {
             $src = (string) ($f['source'] ?? '');
@@ -744,7 +746,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 <div class="stack">
 <?php // Roller blinds only — verticals go on the die-cut sheet, a different printer. ?>
 <?php foreach ($rollBlinds as $r): ?>
-    <div class="rl-label<?= $ol ?>"><?= $rollerLabelHtml($labelCtx($r, 0), $r['computed'], (is_array($r['template'] ?? null) ? ($r['template']['labels'][0]['fields'] ?? []) : [])) ?></div>
+    <div class="rl-label<?= $ol ?>"><?= $rollerLabelHtml($labelCtx($r, 0), $r['computed'], (is_array($r['template'] ?? null) ? ($r['template']['labels'][0]['fields'] ?? []) : []), (is_array($r['template'] ?? null) ? ($r['template']['labels'][0]['box'] ?? null) : null)) ?></div>
 <?php endforeach; ?>
 </div>
 <script>
