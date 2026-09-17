@@ -581,7 +581,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     // so the Worksheets editor can change them. When the template stores no box,
     // roller_box_default() (below, shared with the editor + seed) supplies today's
     // exact layout, so nothing changes until someone edits it.
-    $rollerLabelHtml = static function (array $ctx, array $computed, array $bottomFields = [], ?array $boxDef = null) use ($rlVal, $qrMm, $fieldText): string {
+    $rollerLabelHtml = static function (array $ctx, array $computed, array $bottomFields = [], ?array $boxDef = null) use ($rlVal, $qrMm): string {
         $e = static fn ($s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         // A computed build variable (cut size), tidied: mm -> integer; "" stays blank.
         $cv = static function (string $name) use ($computed): string {
@@ -643,24 +643,16 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
         $cutInner = ''; foreach (($box['cut'] ?? []) as $c) { $c['big'] = true; $cutInner .= $cellHtml($c); }
         $cutRow = $cutInner !== '' ? '<div class="rr rcutrow">' . $cutInner . '</div>' : '';
 
-        // Designer extras (the flat field list) + notes + QR — unchanged.
+        // Notes + QR. (The old flat "field list" that printed here as a row of
+        // text spans is retired — it duplicated the box grid above, which is now
+        // the single editable source. $bottomFields is intentionally ignored.)
         $qr = ''; $code = (string) ($ctx['qr_code'] ?? '');
         if ($code !== '') $qr = '<span class="qr">' . qr_svg($code, $qrMm) . '</span>';
         $notes = '<div class="rr rnotes"><div class="rc" style="flex:10"><span class="rcap">Additional Notes</span><span class="rval">'
                . $e(trim((string) ($ctx['notes'] ?? ''))) . '</span></div>' . $qr . '</div>';
 
-        $extra = '';
-        foreach ($bottomFields as $f) {
-            $src = (string) ($f['source'] ?? '');
-            if ($src === 'qr' || $src === '__break__') continue;
-            $t = $fieldText($f, $ctx, $computed);
-            if ($t === null || trim($t) === '') continue;
-            $extra .= '<span class="rx">' . $e($t) . '</span>';
-        }
-        $extraHtml = $extra !== '' ? '<div class="rr rextra">' . $extra . '</div>' : '';
-
         return '<div class="rl-grid">' . $grid . '</div>'
-             . '<div class="rl-bottom">' . $cutRow . $extraHtml . $notes . '</div>';
+             . '<div class="rl-bottom">' . $cutRow . $notes . '</div>';
     };
     header('Content-Type: text/html; charset=utf-8');
     $ono = e((string) ($order['quote_number'] ?? ('#' . $qid)));
