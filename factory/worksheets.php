@@ -542,6 +542,9 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <option value="roll-102x76">Roll of labels</option>
             </select></label>
         <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
+        <?php if (stripos($productName, 'roller') !== false): ?>
+            <a href="/factory/roller-label-editor.php?product_id=<?= (int) $productId ?>" style="font-weight:600; color:#1f3b5b; margin-left:auto;" title="The roller label's printed grid (the boxes + cut row) is bespoke — edit its layout here. Size / font / QR stay on this page.">Edit box layout &rarr;</a>
+        <?php endif; ?>
     </div>
 
     <div class="palette" id="palette"></div>

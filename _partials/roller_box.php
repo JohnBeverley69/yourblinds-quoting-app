@@ -39,6 +39,74 @@ if (!function_exists('roller_box_default')) {
     }
 }
 
+if (!function_exists('roller_box_sources')) {
+    /** Sources a box cell can show, grouped for the editor dropdown: value => label. */
+    function roller_box_sources(): array
+    {
+        return [
+            'Order / line' => [
+                'order:name_cell'   => 'Customer name',
+                'order:order_cell'  => 'Order no + ref',
+                'order:order_no'    => 'Order number',
+                'order:cust_ref'    => 'Customer ref',
+                'order:fabric'      => 'Fabric',
+                'order:colour'      => 'Colour',
+                'order:size'        => 'Size (W × Drop)',
+                'order:width'       => 'Width',
+                'order:drop'        => 'Drop',
+                'order:measurement' => 'Measurement (fit + FH)',
+                'order:location'    => 'Location / room',
+                'order:notes'       => 'Notes',
+                'order:blind_seq'   => 'Blind N of M',
+                'order:line_no'     => 'Line number',
+            ],
+            'Fascia / bottom bar (auto-picks Senses or LL)' => [
+                'order:bb_colour'      => 'Bottom bar colour',
+                'order:bb_endcaps'     => 'Bottom bar endcaps',
+                'order:fascia_colour'  => 'Fascia colour',
+                'order:fascia_endcaps' => 'Fascia endcaps',
+                'order:fixings_val'    => 'Fixings',
+            ],
+            'Cut sizes (computed)' => [
+                'var:Tube_Cut'     => 'Tube cut',
+                'var:Fabric_W'     => 'Fabric width',
+                'var:Fascia_Cut'   => 'Fascia cut',
+                'var:Fabric_Drop'  => 'Fabric drop',
+                'var:Chain_Length' => 'Chain length',
+            ],
+            'Options' => [
+                'opt:exact_or_recess'    => 'Exact or Recess',
+                'opt:fabric_roll'        => 'Fabric Roll',
+                'opt:control_options'    => 'Control Options',
+                'opt:control_side'       => 'Control Side',
+                'opt:mech_colour'        => 'Mech Colour',
+                'opt:chain_type'         => 'Chain Type',
+                'opt:bracket_covers'     => 'Bracket Covers',
+                'opt:bottom_bar_options' => 'Bottom Bar Options',
+                'opt:fascia_options'     => 'Fascia Options',
+                'opt:fabric_strip'       => 'Fabric Strip',
+                'opt:scallops_and_trims' => 'Scallops and Trims',
+                'opt:braid_colour'       => 'Braid Colour',
+                'opt:pole'               => 'Pole',
+                'opt:child_safety'       => 'Child Safety',
+                'opt:remote_options'     => 'Remote Options',
+                'opt:optional_extras'    => 'Optional Extras',
+            ],
+        ];
+    }
+}
+
+if (!function_exists('roller_box_source_label')) {
+    /** Friendly label for a source value (falls back to the raw value). */
+    function roller_box_source_label(string $src): string
+    {
+        foreach (roller_box_sources() as $opts) {
+            if (isset($opts[$src])) return $opts[$src];
+        }
+        return $src;
+    }
+}
+
 if (!function_exists('roller_box_normalise')) {
     /** Coerce a posted/stored box into the strict {grid:[{cells:[{cap,src,w,big}],hide_if_empty}], cut:[…]} shape. */
     function roller_box_normalise($raw): array
