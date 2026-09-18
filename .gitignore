@@ -49,3 +49,12 @@ desktop.ini
 
 # --- Composer ---
 composer.phar
+
+# --- Personal / non-app files kept in the working dir (not part of the app) ---
+/Beverley-Blinds-Flow.pdf
+/CNC-Copy-Tool/
+/Man-Cave-Cinema-Speaker-Layout.pdf
+/Renault-Trafic-Dealer-Handout.pdf
+/Renault-Trafic-Dealer-Handout.py
+/Timber-Workshops-Foundation-Plan*.pdf
+/Workshops-Pad-*.pdf
