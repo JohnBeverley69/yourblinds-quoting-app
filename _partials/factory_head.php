@@ -66,6 +66,7 @@ if (function_exists('is_super_admin') && is_super_admin()) {
     $factoryNavItems['profit'] = ['/factory/profit.php', 'Profit'];
 }
 $factoryNavItems += [
+    'areas'      => ['/factory/production-areas.php', 'Production areas'],
     'routes'     => ['/factory/routes.php',          'Routes'],
     'build'      => ['/factory/build-rules-v2.php',  'Build rules'],
     // Allowances is no longer a top-level tab — the best-fit charts now live under a
