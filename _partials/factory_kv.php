@@ -29,6 +29,12 @@ function fx_scan_key(PDO $pdo): string
     return (string) fx_kv_get($pdo, 'scan_key', '');
 }
 
+/** The marshalling/collection bench's own scan key (?key=…). '' if not set. */
+function fx_marshal_key(PDO $pdo): string
+{
+    return (string) fx_kv_get($pdo, 'marshal_scan_key', '');
+}
+
 /**
  * A per-area scan key identifies which production area a scanner belongs to.
  * Returns [id, client_id, name] for the area whose scan_key matches, or null.

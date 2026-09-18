@@ -111,6 +111,7 @@ if ($ready) {
 // Each result's pill: [label, text colour, background].
 $RES = [
     'ok'        => ['done',       '#166534', '#dcfce7'],
+    'marshalled'=> ['collected',  '#155e75', '#cffafe'],
     'already'   => ['already',    '#3730a3', '#e0e7ff'],
     'dup'       => ['double tap', '#6b7280', '#e5e7eb'],
     'not_found' => ['not on floor','#991b1b', '#fee2e2'],
