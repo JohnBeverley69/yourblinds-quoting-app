@@ -9,7 +9,9 @@ declare(strict_types=1);
  * Wands) — plain wand stacks have neither (no rule → blank on the worksheet).
  * The chain depends on whether a fit height was entered:
  *
- *   CH_L = corded: IF(Fit_height > 0, (Fit_height - 1500) * 2, Drop * 1.5)
+ *   CH_L = corded: IF(Fit_height > 1500, (Fit_height - 1500) * 2, Drop * 1.5)
+ *          (a fit height at/below 1500 uses the drop rule — the high-mount loop
+ *           formula only applies above 1500, else it would go negative.)
  *   C_L  = corded: CH_L + 2 * Width   |   wand split/centre: 2 * Width
  *
  * Fit_height is the floor-to-top-of-blind height the customer enters in the
@@ -65,7 +67,7 @@ $colWand = ['ref' => 'extra:' . $wandId, 'label' => 'Wand Options'];
 // stacks → no rule → blank. Same across all systems.
 $variables = [
     ['name' => 'CH_L', 'seq' => 11, 'columns' => [$colCtrl], 'rows' => [
-        ['cells' => ['Corded'], 'result' => 'IF(Fit_height > 0, (Fit_height - 1500) * 2, Drop * 1.5)'],
+        ['cells' => ['Corded'], 'result' => 'IF(Fit_height > 1500, (Fit_height - 1500) * 2, Drop * 1.5)'],
     ]],
     ['name' => 'C_L', 'seq' => 12, 'columns' => [$colCtrl, $colWand], 'rows' => [
         ['cells' => ['Corded', ''],                   'result' => 'CH_L + 2 * Width'],
