@@ -13,7 +13,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/auth/middleware.php';
 requireSuperAdmin();
-header('Content-Type: text/plain; charset=utf-8');
+$autochain = (($_GET['auto'] ?? '') === '1');
+header('Content-Type: ' . ($autochain ? 'text/html' : 'text/plain') . '; charset=utf-8');
 @set_time_limit(600);
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
@@ -69,4 +70,12 @@ foreach ($tids as $tid) {
 
 $left = (int) $pdo->query("SELECT COUNT(*) FROM clients WHERE company_name LIKE 'LoadTest Tenant %' AND id <> " . (int) $factory . " AND COALESCE(is_factory,0)=0")->fetchColumn();
 echo "\nRemoved {$done} this pass. {$left} load-test tenant(s) remain.\n";
-echo $left > 0 ? "\nNOT DONE — reload to remove the next {$batch}.\n" : "\nALL GONE.\n";
+if ($left > 0) {
+    echo "\nNOT DONE — reload to remove the next {$batch}.\n";
+    if ($autochain) {
+        // Pause a few seconds between passes so a fragile box gets breathing room.
+        echo '<meta http-equiv="refresh" content="4;url=/cleanup_loadtest_tenants.php?batch=' . $batch . '&auto=1&_=' . time() . '">';
+    }
+} else {
+    echo "\nALL GONE.\n";
+}
