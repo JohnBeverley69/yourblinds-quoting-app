@@ -625,8 +625,10 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 
         $box = (is_array($boxDef) && (!empty($boxDef['grid']) || !empty($boxDef['cut']))) ? $boxDef : roller_box_default();
 
-        // TOP grid — each row; a row flagged hide_if_empty is skipped when all its
-        // cells are blank (the old Braid/Pole/Safety + Remote/Extras behaviour).
+        // TOP grid — each row. A cell flagged 'ifvalue' is dropped when its value
+        // is blank (so "Braid / Pole / …" don't print empty captions); a row-level
+        // hide_if_empty skips the whole row when all cells are blank; and a row that
+        // ends up with no cells (all hidden) is skipped too.
         $grid = '';
         foreach (($box['grid'] ?? []) as $row) {
             $cells = is_array($row['cells'] ?? null) ? $row['cells'] : [];
@@ -635,7 +637,12 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
                 $any = false; foreach ($cells as $c) { if (trim($val((string) ($c['src'] ?? ''))) !== '') { $any = true; break; } }
                 if (!$any) continue;
             }
-            $inner = ''; foreach ($cells as $c) $inner .= $cellHtml($c);
+            $inner = '';
+            foreach ($cells as $c) {
+                if (!empty($c['ifvalue']) && trim($val((string) ($c['src'] ?? ''))) === '') continue;
+                $inner .= $cellHtml($c);
+            }
+            if ($inner === '') continue;
             $grid .= '<div class="rr">' . $inner . '</div>';
         }
 

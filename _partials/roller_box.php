@@ -119,6 +119,7 @@ if (!function_exists('roller_box_normalise')) {
             $w = (float) ($c['w'] ?? 1); if ($w <= 0) $w = 1;
             $out = ['cap' => $cap, 'src' => $src, 'w' => $w];
             if (!empty($c['big'])) $out['big'] = true;
+            if (!empty($c['ifvalue'])) $out['ifvalue'] = true;   // hide this box when its value is blank
             return $out;
         };
         $grid = [];

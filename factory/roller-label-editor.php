@@ -188,9 +188,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         d.innerHTML = '<span class="lbl">Caption</span><input class="cap" type="text" value="">'
                     + '<span class="lbl">Value</span>' + sel
                     + '<span class="lbl">Width</span><input class="w" type="number" min="0.5" step="0.5" value="' + ((c && c.w) || 3) + '">'
+                    + '<label class="lbl" style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer" title="Only print this box when its value isn\'t blank"><input type="checkbox" class="ifv"> hide if blank</label>'
                     + '<button type="button" class="btn rm" title="Remove box">✕</button>';
         d.querySelector('.cap').value = (c && c.cap) || '';
         var s = d.querySelector('.src'); if (c && c.src) s.value = c.src;
+        d.querySelector('.ifv').checked = !!(c && c.ifvalue);
         d.querySelector('.rm').addEventListener('click', function () {
             var wrap = d.parentNode; d.remove();
             // if a grid row lost its last cell, drop the row
@@ -224,7 +226,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     });
 
     function readCell(d) {
-        return { cap: d.querySelector('.cap').value.trim(), src: d.querySelector('.src').value, w: parseFloat(d.querySelector('.w').value) || 1 };
+        var o = { cap: d.querySelector('.cap').value.trim(), src: d.querySelector('.src').value, w: parseFloat(d.querySelector('.w').value) || 1 };
+        if (d.querySelector('.ifv').checked) o.ifvalue = true;
+        return o;
     }
     document.getElementById('rb-form').addEventListener('submit', function () {
         var out = { grid: [], cut: [] };
