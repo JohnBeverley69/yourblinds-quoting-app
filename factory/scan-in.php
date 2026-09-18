@@ -85,28 +85,20 @@ if ($code !== '' && !preg_match('/^\d{8,9}$/', $code) && preg_match('/\b\d{8,9}\
     $code = $m[0];
 }
 
-// The secret. A scanner can carry the MARSHALLING bench key (collects finished
-// blinds), an AREA key (advances that area's work, scoped to it), or the global
-// fallback key (advances any blind). Marshalling first, then area, then global.
-$marshal = false;
-$mkey    = fx_marshal_key($pdo);
-if ($mkey !== '' && hash_equals($mkey, $key)) {
-    $marshal = true;
-}
-$area = $marshal ? null : fx_area_by_scan_key($pdo, $key);
-if (!$marshal && $area === null) {
+// The secret. A scanner can carry EITHER its area's own key (which also scopes
+// what it may finish) OR the global fallback key (any blind). Try the per-area
+// key first; if it's not one, fall back to the global key, timing-safe.
+$area = fx_area_by_scan_key($pdo, $key);
+if ($area === null) {
     $expected = fx_scan_key($pdo);
     if ($expected === '' || !hash_equals($expected, $key)) {
         $log('bad_key', null, $code, null, $source);
         $reply(403, 'NO');
     }
 }
-// A bench scanner that didn't name itself is tagged in the log with where it is,
+// An area scanner that didn't name itself is tagged with its area in the log,
 // so the scan log still shows where a scan came from.
-if ($source === '') {
-    if ($marshal)          $source = 'Marshalling';
-    elseif ($area !== null) $source = $area['name'];
-}
+if ($area !== null && $source === '') $source = $area['name'];
 
 $parsed = qr_parse_code($code);
 if ($parsed === null) {
@@ -143,7 +135,7 @@ try {
     $dup = $pdo->prepare(
         "SELECT 1 FROM factory_scan_log
           WHERE quote_item_id = ? AND unit_no = ? AND stream_digit = ?
-            AND result IN ('ok','already','marshalled') AND created_at > (NOW() - INTERVAL 10 SECOND)
+            AND result IN ('ok','already') AND created_at > (NOW() - INTERVAL 10 SECOND)
           LIMIT 1"
     );
     $dup->execute([$itemId, $unitNo, $streamDigit]);
@@ -154,18 +146,13 @@ try {
 } catch (Throwable $e) { /* table missing? fall through */ }
 
 try {
-    // Marshalling bench collects finished blinds; every other key advances work.
-    $res = $marshal
-        ? bj_mark_marshalled($pdo, $itemId, $unitNo, null)
-        : bj_complete_by_code($pdo, $itemId, $unitNo, $streamDigit, null);
+    $res = bj_complete_by_code($pdo, $itemId, $unitNo, $streamDigit, null);
 } catch (Throwable $e) {
     $log('error', $e->getMessage(), $code, $parsed, $source);
     $reply(500, 'ERROR');
 }
 
-$result = $res['ok']
-    ? (!empty($res['already']) ? 'already' : ($marshal ? 'marshalled' : 'ok'))
-    : 'not_found';
+$result = $res['ok'] ? (!empty($res['already']) ? 'already' : 'ok') : 'not_found';
 $log($result, $res['detail'] ?? null, $code, $parsed, $source);
 
 // Phase 0: a scan can complete a blind → roll the order's fulfilment stage up.

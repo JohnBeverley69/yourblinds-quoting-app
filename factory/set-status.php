@@ -76,13 +76,6 @@ if ($target === 'dispatched') {
         header('Location: ' . $backTo);
         exit;
     }
-    // Phase D: every blind must also be marshalled — scanned into collection — so
-    // all the areas' parts have physically come together before it ships.
-    if (!bj_all_marshalled($pdo, $quoteId)) {
-        $_SESSION['flash_error'] = "Can't dispatch yet — not every blind has been marshalled (scanned into collection). Open the Marshalling board to bring the order together.";
-        header('Location: ' . $backTo);
-        exit;
-    }
 }
 
 try {

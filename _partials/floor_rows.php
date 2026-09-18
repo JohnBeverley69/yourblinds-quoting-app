@@ -44,11 +44,23 @@ foreach ($rows as $r):
             <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
             <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
             <?php
+            $oa     = $orderAreas[(int) $r['quote_id']] ?? [];
+            $myArea = (int) ($r['area_id'] ?? 0);
+            // Order-level convergence: is the WHOLE order (every area) made yet? This
+            // is the dispatch gate made visible — "ready to dispatch" only when all
+            // its blinds, across all areas, are done. Summed from the per-area tally.
+            $ordTotal = 0; $ordDone = 0;
+            foreach ($oa as $ag) { $ordTotal += (int) $ag['total']; $ordDone += (int) $ag['done']; }
+            if ($ordTotal > 0):
+                if ($ordDone >= $ordTotal): ?>
+                    <a class="fl-ord ready" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="Every blind on this order is made — it can be dispatched">✓ order ready to dispatch</a>
+                <?php else: ?>
+                    <a class="fl-ord wait" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> of <?= $ordTotal ?> still to make</a>
+                <?php endif;
+            endif;
             // Cross-area awareness: if this order also has blinds in OTHER areas,
             // show them as read-only chips so this bench knows the rest is coming
             // together. Links to the whole-order view.
-            $oa     = $orderAreas[(int) $r['quote_id']] ?? [];
-            $myArea = (int) ($r['area_id'] ?? 0);
             if (count($oa) > 1):
             ?>
             <a class="fl-others" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="See the whole order across every area">

@@ -185,6 +185,10 @@ require __DIR__ . '/../_partials/blind_styles.php';
     .fl-oa.part { background:#fef3c7; color:#92600a; }
     .fl-oa.done { background:#dcfce7; color:#166534; }
     .fl-others:hover .fl-oa { filter:brightness(.97); }
+    /* Order-level convergence badge — the dispatch gate made visible on the floor. */
+    .fl-ord { display:inline-block; margin-top:.25rem; font-size:.72rem; font-weight:700; padding:.1rem .5rem; border-radius:999px; text-decoration:none; white-space:nowrap; }
+    .fl-ord.ready { background:#dcfce7; color:#166534; }
+    .fl-ord.wait  { background:#fef3c7; color:#92600a; }
 </style>
 <div class="fl-head">
     <h1 class="fl-h1">Production Floor</h1>
