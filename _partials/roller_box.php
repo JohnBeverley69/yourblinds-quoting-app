@@ -55,6 +55,7 @@ if (!function_exists('roller_box_sources')) {
                 'order:width'       => 'Width',
                 'order:drop'        => 'Drop',
                 'order:measurement' => 'Measurement (fit + FH)',
+                'order:fit_height'  => 'Fit height (number only)',
                 'order:location'    => 'Location / room',
                 'order:notes'       => 'Notes',
                 'order:blind_seq'   => 'Blind N of M',
