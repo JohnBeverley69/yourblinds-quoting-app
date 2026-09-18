@@ -646,8 +646,12 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
             $grid .= '<div class="rr">' . $inner . '</div>';
         }
 
-        // CUT row (big bold numbers).
-        $cutInner = ''; foreach (($box['cut'] ?? []) as $c) { $c['big'] = true; $cutInner .= $cellHtml($c); }
+        // CUT row (big bold numbers) — a cut cell can also hide when blank.
+        $cutInner = '';
+        foreach (($box['cut'] ?? []) as $c) {
+            if (!empty($c['ifvalue']) && trim($val((string) ($c['src'] ?? ''))) === '') continue;
+            $c['big'] = true; $cutInner .= $cellHtml($c);
+        }
         $cutRow = $cutInner !== '' ? '<div class="rr rcutrow">' . $cutInner . '</div>' : '';
 
         // Notes + QR. (The old flat "field list" that printed here as a row of
