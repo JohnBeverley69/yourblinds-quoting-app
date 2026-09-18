@@ -7,7 +7,10 @@ declare(strict_types=1);
  * fresh rows without a reload or scroll jump.
  *
  * Expects in scope: $rows, $streamsBy, $pdo, $dueTag, $fmtDate, $RT.
+ * Optional (Phase C): $orderAreas, $areaNames — cross-area order summary.
  */
+$orderAreas = $orderAreas ?? [];
+$areaNames  = $areaNames  ?? [];
 foreach ($rows as $r):
     $jobId   = (int) $r['id'];
     $qty     = max(1, (int) $r['quantity']);
@@ -40,6 +43,24 @@ foreach ($rows as $r):
         <td>
             <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
             <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
+            <?php
+            // Cross-area awareness: if this order also has blinds in OTHER areas,
+            // show them as read-only chips so this bench knows the rest is coming
+            // together. Links to the whole-order view.
+            $oa     = $orderAreas[(int) $r['quote_id']] ?? [];
+            $myArea = (int) ($r['area_id'] ?? 0);
+            if (count($oa) > 1):
+            ?>
+            <a class="fl-others" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="See the whole order across every area">
+                <span class="fl-oa-lead">also on order:</span>
+                <?php foreach ($oa as $aid => $ag): if ((int) $aid === $myArea) continue;
+                    $nm  = $aid === 0 ? 'Unassigned' : ($areaNames[$aid] ?? ('Area ' . $aid));
+                    $cls = $ag['done'] >= $ag['total'] ? 'done' : ($ag['done'] > 0 ? 'part' : '');
+                ?>
+                    <span class="fl-oa <?= $cls ?>"><?= e($nm) ?> <?= (int) $ag['done'] ?>/<?= (int) $ag['total'] ?></span>
+                <?php endforeach; ?>
+            </a>
+            <?php endif; ?>
         </td>
         <td>
             <div class="fl-prog" title="<?= $doneCount ?> of <?= $total ?> stages done">

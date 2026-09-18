@@ -106,6 +106,27 @@ if ($ready) {
     }
     // Each blind's position in every one of its streams, in one query.
     $streamsBy = bj_streams_for($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
+
+    // Cross-area awareness: for every order on the board, how its blinds sit across
+    // ALL areas — so a bench filtered to its own area still sees the rest of the
+    // order converging. Only orders spanning more than one area get sibling chips.
+    $orderAreas = [];   // quote_id => [area_id => ['total'=>, 'done'=>]]
+    $areaNames  = [];   // area_id => name, for the chip labels
+    if ($rows && $hasAreaCol) {
+        $qids = array_values(array_unique(array_map(static fn ($r) => (int) $r['quote_id'], $rows)));
+        $ph = implode(',', array_fill(0, count($qids), '?'));
+        try {
+            $ca = $pdo->prepare(
+                "SELECT quote_id, area_id, COUNT(*) AS total, SUM(status = 'complete') AS done
+                   FROM factory_blind_jobs WHERE quote_id IN ($ph) GROUP BY quote_id, area_id"
+            );
+            $ca->execute($qids);
+            foreach ($ca->fetchAll(PDO::FETCH_ASSOC) as $g) {
+                $orderAreas[(int) $g['quote_id']][(int) $g['area_id']] = ['total' => (int) $g['total'], 'done' => (int) $g['done']];
+            }
+            foreach ($areas as $a) $areaNames[(int) $a['id']] = (string) $a['name'];
+        } catch (Throwable $e) { $orderAreas = []; }
+    }
 }
 
 $fmtDate = static function (?string $ts): string {
@@ -155,6 +176,15 @@ require __DIR__ . '/../_partials/blind_styles.php';
     .fl-live { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; color:#64748b; }
     .fl-live-dot { width:.55rem; height:.55rem; border-radius:50%; background:#94a3b8; transition:background .2s, box-shadow .2s; }
     .fl-live-dot.on { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.2); }
+    /* Cross-area order awareness — read-only chips of the same order's blinds in
+       OTHER areas, so a bench sees the whole order converging. */
+    .fl-others { display:flex; flex-wrap:wrap; align-items:center; gap:.25rem; margin-top:.25rem; text-decoration:none; }
+    .fl-oa-lead { font-size:.66rem; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; }
+    .fl-oa { font-size:.7rem; font-weight:700; padding:.05rem .4rem; border-radius:999px; white-space:nowrap;
+             background:#e5e7eb; color:#475569; }
+    .fl-oa.part { background:#fef3c7; color:#92600a; }
+    .fl-oa.done { background:#dcfce7; color:#166534; }
+    .fl-others:hover .fl-oa { filter:brightness(.97); }
 </style>
 <div class="fl-head">
     <h1 class="fl-h1">Production Floor</h1>
