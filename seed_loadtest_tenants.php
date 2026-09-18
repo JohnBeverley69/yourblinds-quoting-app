@@ -21,7 +21,8 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/auth/middleware.php';
 require_once __DIR__ . '/_partials/catalogue_push.php';
 requireSuperAdmin();
-header('Content-Type: text/plain; charset=utf-8');
+$autochain = (($_GET['auto'] ?? '') === '1');
+header('Content-Type: ' . ($autochain ? 'text/html' : 'text/plain') . '; charset=utf-8');
 @set_time_limit(600);
 @ini_set('memory_limit', '512M');
 ini_set('display_errors', '1');
@@ -81,6 +82,11 @@ echo "\nThis pass: created {$created}, pushed {$pushed} (skipped {$existing} alr
 echo "Total load-test tenants now: {$have} of {$target}.\n";
 if ($have < $target) {
     echo "\nNOT DONE — reload this page to push the next {$batch}.\n";
+    if ($autochain) {
+        // Auto-continue: reload to process the next batch without manual driving.
+        $qs = 'target=' . $target . '&batch=' . $batch . '&auto=1&_=' . time();
+        echo '<meta http-equiv="refresh" content="2;url=/seed_loadtest_tenants.php?' . $qs . '">';
+    }
 } else {
     echo "\nALL DONE. Logins: lttenant1..lttenant{$target}  password: " . LT_PASSWORD . "\n";
     echo "Each tenant can now place orders that route to Beverley Incoming Orders.\n";
