@@ -37,11 +37,39 @@ function bj_workstation_streams(PDO $pdo, int $userId): array
 {
     static $cache = [];
     if (isset($cache[$userId])) return $cache[$userId];
+
+    // Production areas are the SINGLE source of truth for what a factory login
+    // covers: the products in the login's assigned area(s), each with its route
+    // streams (a product with no route still has one 'main' stream). Deriving it
+    // here — rather than storing a separate per-process list — is what keeps the
+    // users page and the Production areas page the same list: change an area's
+    // products and every login on that area follows automatically, live.
     try {
-        $st = $pdo->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
-        $st->execute([$userId]);
-        return $cache[$userId] = $st->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) { return $cache[$userId] = []; }   // not migrated yet
+        $pq = $pdo->prepare(
+            'SELECT DISTINCT pam.product_id
+               FROM user_production_areas ua
+               JOIN product_area_map pam ON pam.area_id = ua.area_id
+              WHERE ua.user_id = ?'
+        );
+        $pq->execute([$userId]);
+        $pids = array_map('intval', $pq->fetchAll(PDO::FETCH_COLUMN));
+
+        $out = [];
+        foreach ($pids as $pid) {
+            $streams = bj_streams_ordered($pdo, $pid);   // route streams, in order
+            if (!$streams) $streams = ['main'];          // unrouted product → one stream
+            foreach ($streams as $s) $out[] = ['product_id' => $pid, 'stream' => $s];
+        }
+        return $cache[$userId] = $out;
+    } catch (Throwable $e) {
+        // Production-area tables not migrated yet — fall back to the legacy
+        // per-process table so nothing breaks mid-migration.
+        try {
+            $st = $pdo->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
+            $st->execute([$userId]);
+            return $cache[$userId] = $st->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) { return $cache[$userId] = []; }
+    }
 }
 
 /** Does this login cover this product's stream? */

@@ -346,11 +346,20 @@ function current_user_is_workstation(): bool
 
     $user = current_user();
     if (!$user || !is_factory_client((int) ($user['client_id'] ?? 0))) return $cache = false;
+    // A factory login is a workstation when it's assigned to a production area
+    // (its own computer + scanner). Production areas are the single source of
+    // truth now; fall back to the legacy per-process table pre-migration.
     try {
-        $st = db()->prepare('SELECT 1 FROM workstation_streams WHERE user_id = ? LIMIT 1');
+        $st = db()->prepare('SELECT 1 FROM user_production_areas WHERE user_id = ? LIMIT 1');
         $st->execute([(int) $user['user_id']]);
         return $cache = (bool) $st->fetchColumn();
-    } catch (Throwable $e) { return $cache = false; }   // not migrated yet
+    } catch (Throwable $e) {
+        try {
+            $st = db()->prepare('SELECT 1 FROM workstation_streams WHERE user_id = ? LIMIT 1');
+            $st->execute([(int) $user['user_id']]);
+            return $cache = (bool) $st->fetchColumn();
+        } catch (Throwable $e2) { return $cache = false; }   // not migrated yet
+    }
 }
 
 /**

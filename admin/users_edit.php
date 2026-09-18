@@ -33,34 +33,10 @@ if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }
 
-// Processes, for a workstation login. A workshop account is a PROCESS, not a
-// person: "Vertical Head Rail" owns the vertical's Headrail stream wherever the
-// saw happens to be. Every (product, stream) on the master's routes is offered;
-// tick as many as the login covers. Null = don't offer it (not the factory
-// account, or not migrated).
-$factoryProcesses = null;
-$myProcesses      = [];
-if ($isFactoryAccount) {
-    try {
-        db()->query('SELECT 1 FROM workstation_streams LIMIT 0');
-        $s = db()->prepare(
-            "SELECT DISTINCT rs.product_id, COALESCE(NULLIF(rs.stream,''),'main') AS stream, p.name
-               FROM product_route_steps rs JOIN products p ON p.id = rs.product_id
-              WHERE p.client_id = ? AND rs.active = 1
-              ORDER BY p.name, stream"
-        );
-        $s->execute([$clientId]);
-        $factoryProcesses = $s->fetchAll(PDO::FETCH_ASSOC);
-
-        $m = db()->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
-        $m->execute([$id]);
-        foreach ($m->fetchAll(PDO::FETCH_ASSOC) as $r) $myProcesses[$r['product_id'] . '|' . $r['stream']] = true;
-    } catch (Throwable $e) { $factoryProcesses = null; }
-}
-
-// A factory login's HOME production area(s). The floor/scan screens default to it
-// (with a per-computer switcher), so the roller bench's computer opens on roller
-// blinds. Null = don't offer (not a factory account, or areas not migrated yet).
+// A factory login's production area(s) — the SINGLE place a workshop login's work
+// is set. It drives the scan screen (what that login can finish) and the Floor's
+// default area, and it's the same list as Factory → Production areas, so the two
+// can't drift. Null = don't offer (not a factory account, or areas not migrated).
 $productionAreas = null;
 $myAreas         = [];
 if ($isFactoryAccount) {
@@ -270,23 +246,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 $insRole->execute([$id, $r]);
             }
 
-            // Workstation processes — same replace-wholesale approach as roles.
-            // Only touched on the factory account, where the field was actually
-            // rendered, so a form that never showed it can't wipe them.
-            if ($factoryProcesses !== null) {
-                $pdo->prepare('DELETE FROM workstation_streams WHERE user_id = ?')->execute([$id]);
-                $insWs = $pdo->prepare('INSERT IGNORE INTO workstation_streams (user_id, product_id, stream) VALUES (?, ?, ?)');
-                $valid = [];
-                foreach ($factoryProcesses as $p) $valid[$p['product_id'] . '|' . $p['stream']] = true;
-                foreach ((array) ($_POST['processes'] ?? []) as $key) {
-                    if (!isset($valid[(string) $key])) continue;   // only real routes
-                    [$pid, $stream] = explode('|', (string) $key, 2);
-                    $insWs->execute([$id, (int) $pid, $stream]);
-                }
-            }
-
-            // Home production area(s) — same replace-wholesale approach, only when
-            // the field was actually rendered (factory account + areas migrated).
+            // Production area(s) — replace-wholesale, only when the field was
+            // actually rendered (factory account + areas migrated). This is the
+            // one place a workshop login's work is assigned; the scan screen's
+            // coverage is derived from it (see bj_workstation_streams()).
             if ($productionAreas !== null) {
                 $pdo->prepare('DELETE FROM user_production_areas WHERE user_id = ?')->execute([$id]);
                 $insUa   = $pdo->prepare('INSERT IGNORE INTO user_production_areas (user_id, area_id) VALUES (?, ?)');
@@ -447,60 +410,32 @@ $activeNav = 'users';
                     </div>
                 </div>
 
-                <?php if ($factoryProcesses !== null): ?>
+                <?php if ($productionAreas !== null): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label>Workstation processes</label>
-                        <?php if (!$factoryProcesses): ?>
-                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No routes set up yet — build them on Factory &rarr; Routes first.</p>
+                        <label>Production area</label>
+                        <?php if (!$productionAreas): ?>
+                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No areas set up yet — add them on <a href="/factory/production-areas.php">Factory &rarr; Production areas</a> first.</p>
                         <?php else: ?>
                             <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
                                         padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
                                         border-radius:8px; background:var(--bg-input); color:var(--text-body);
                                         font-size:0.9375rem;">
-                                <?php foreach ($factoryProcesses as $p):
-                                    $key = $p['product_id'] . '|' . $p['stream'];
-                                    $lab = $p['stream'] === 'main' ? (string) $p['name'] : $p['name'] . ' — ' . $p['stream'];
-                                ?>
+                                <?php foreach ($productionAreas as $pa): ?>
                                     <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
-                                        <input type="checkbox" name="processes[]" value="<?= e($key) ?>"
-                                               <?= isset($myProcesses[$key]) ? 'checked' : '' ?>>
-                                        <?= e($lab) ?>
+                                        <input type="checkbox" name="home_areas[]" value="<?= (int) $pa['id'] ?>"
+                                               <?= isset($myAreas[(int) $pa['id']]) ? 'checked' : '' ?>>
+                                        <?= e((string) $pa['name']) ?>
                                     </label>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                         <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
-                            For a workshop login that <em>is</em> a process rather than a person &mdash;
-                            “Vertical Head Rail”, “Roller”. Whoever's on that job today uses the account.
-                            Tick as many as it covers; staff move where they're needed, and more than one
-                            login can cover the same process. It logs straight into its scan screen.
-                            Needs the <strong>Factory</strong> role ticked above.
-                        </p>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <?php if ($productionAreas !== null && $productionAreas): ?>
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label>Home production area</label>
-                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
-                                    padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
-                                    border-radius:8px; background:var(--bg-input); color:var(--text-body);
-                                    font-size:0.9375rem;">
-                            <?php foreach ($productionAreas as $pa): ?>
-                                <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
-                                    <input type="checkbox" name="home_areas[]" value="<?= (int) $pa['id'] ?>"
-                                           <?= isset($myAreas[(int) $pa['id']]) ? 'checked' : '' ?>>
-                                    <?= e((string) $pa['name']) ?>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
-                            The area this login's computer opens on &mdash; the Floor defaults to it, and staff
-                            can still switch to another area (the switch is remembered per computer). Set up
-                            the areas on <a href="/factory/production-areas.php">Factory &rarr; Production areas</a>.
+                            The area(s) this workshop login works in &mdash; the one place its work is set.
+                            It drives the login's <strong>scan screen</strong> (the blinds it can finish) and the
+                            <strong>Floor</strong>'s default area, and it's the same list as
+                            <a href="/factory/production-areas.php">Factory &rarr; Production areas</a>, so the two
+                            always match. Tick as many as the login covers. Needs the <strong>Factory</strong> role ticked above.
                         </p>
                     </div>
                 </div>

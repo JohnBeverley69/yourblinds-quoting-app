@@ -23,24 +23,19 @@ if ($isFactoryAccount) {
     $validRoles[] = 'factory';
 }
 
-// Processes, for a workshop login that IS a process rather than a person —
-// "Vertical Head Rail", "Roller". Offered right here on the create form, because
-// that's when these accounts get made; create-then-go-and-edit is exactly the
-// two-step that gets forgotten, leaving a workstation stranded on the office
-// order list. Null = don't offer it (not the factory account, or not migrated).
-$factoryProcesses = null;
+// Production area(s), for a workshop login. Offered right here on the create form,
+// because that's when these accounts get made; create-then-go-and-edit is exactly
+// the two-step that gets forgotten, leaving a workstation stranded on the office
+// order list. This is the SAME list as Factory → Production areas (the single
+// source of truth), and the login's scan-screen coverage is derived from it.
+// Null = don't offer it (not the factory account, or areas not migrated).
+$productionAreas = null;
 if ($isFactoryAccount) {
     try {
-        db()->query('SELECT 1 FROM workstation_streams LIMIT 0');
-        $s = db()->prepare(
-            "SELECT DISTINCT rs.product_id, COALESCE(NULLIF(rs.stream,''),'main') AS stream, p.name
-               FROM product_route_steps rs JOIN products p ON p.id = rs.product_id
-              WHERE p.client_id = ? AND rs.active = 1
-              ORDER BY p.name, stream"
-        );
+        $s = db()->prepare('SELECT id, name FROM production_areas WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
         $s->execute([$clientId]);
-        $factoryProcesses = $s->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) { $factoryProcesses = null; }
+        $productionAreas = $s->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $productionAreas = null; }
 }
 $rolePriority = array_flip($validRoles);
 $pickPrimary = static function (array $roles) use ($rolePriority): string {
@@ -55,7 +50,7 @@ $form = [
     'last_name'  => '',
     'username'   => '',
     'email'      => '',
-    'processes'  => [],
+    'home_areas' => [],
     'roles'      => ['sales'],
     'can_create_quotes'          => 1,
     'can_create_orders'          => 0,
@@ -74,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
-    $form['processes'] = array_values(array_filter(array_map('strval', (array) ($_POST['processes'] ?? []))));
+    $form['home_areas'] = array_values(array_filter(array_map('intval', (array) ($_POST['home_areas'] ?? []))));
     $password = (string) ($_POST['password'] ?? '');
 
     // Multi-role checkbox group. Filter to known roles, dedupe.
@@ -129,17 +124,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             $stmt->execute($params);
             $newUserId = (int) $pdo->lastInsertId();
 
-            // Workstation processes — assigned here at creation, so a workshop
-            // login can't be made and then left stranded on the office order
-            // list because someone forgot the second step.
-            if ($factoryProcesses !== null && $form['processes']) {
+            // Production area(s) — assigned here at creation, so a workshop login
+            // can't be made and then left stranded on the office order list
+            // because someone forgot the second step. This is the login's whole
+            // work assignment; its scan coverage is derived from it.
+            if ($productionAreas !== null && $form['home_areas']) {
                 $valid = [];
-                foreach ($factoryProcesses as $p) $valid[$p['product_id'] . '|' . $p['stream']] = true;
-                $insWs = $pdo->prepare('INSERT IGNORE INTO workstation_streams (user_id, product_id, stream) VALUES (?, ?, ?)');
-                foreach ($form['processes'] as $key) {
-                    if (!isset($valid[$key])) continue;   // only real routes
-                    [$wpid, $wstream] = explode('|', $key, 2);
-                    $insWs->execute([$newUserId, (int) $wpid, $wstream]);
+                foreach ($productionAreas as $pa) $valid[(int) $pa['id']] = true;
+                $insUa = $pdo->prepare('INSERT IGNORE INTO user_production_areas (user_id, area_id) VALUES (?, ?)');
+                foreach ($form['home_areas'] as $aid) {
+                    if (isset($valid[(int) $aid])) $insUa->execute([$newUserId, (int) $aid]);
                 }
             }
 
@@ -308,34 +302,33 @@ $activeNav = 'users';
                     </div>
                 </div>
 
-                <?php if ($factoryProcesses !== null): ?>
+                <?php if ($productionAreas !== null): ?>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label>Workstation processes</label>
-                        <?php if (!$factoryProcesses): ?>
-                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No routes set up yet — build them on Factory &rarr; Routes first.</p>
+                        <label>Production area</label>
+                        <?php if (!$productionAreas): ?>
+                            <p style="font-size:0.875rem; color:#6b7280; margin:0;">No areas set up yet — add them on <a href="/factory/production-areas.php">Factory &rarr; Production areas</a> first.</p>
                         <?php else: ?>
                             <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
                                         padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
                                         border-radius:8px; background:var(--bg-input); color:var(--text-body);
                                         font-size:0.9375rem;">
-                                <?php foreach ($factoryProcesses as $p):
-                                    $key = $p['product_id'] . '|' . $p['stream'];
-                                    $lab = $p['stream'] === 'main' ? (string) $p['name'] : $p['name'] . ' — ' . $p['stream'];
-                                ?>
+                                <?php foreach ($productionAreas as $pa): ?>
                                     <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
-                                        <input type="checkbox" name="processes[]" value="<?= e($key) ?>"
-                                               <?= in_array($key, (array) $form['processes'], true) ? 'checked' : '' ?>>
-                                        <?= e($lab) ?>
+                                        <input type="checkbox" name="home_areas[]" value="<?= (int) $pa['id'] ?>"
+                                               <?= in_array((int) $pa['id'], (array) $form['home_areas'], true) ? 'checked' : '' ?>>
+                                        <?= e((string) $pa['name']) ?>
                                     </label>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                         <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
-                            For a workshop login that <em>is</em> a process rather than a person &mdash;
-                            username it “Vertical Head Rail”, and whoever's on that job today uses it.
-                            Tick as many as it covers. It logs straight into its scan screen instead of
-                            the office order list. Needs the <strong>Factory</strong> role ticked above.
+                            For a workshop login that <em>is</em> a bench rather than a person &mdash; username it
+                            after the area (“Roller Blinds”), and whoever's on that job today uses it. Pick the
+                            area(s) it works in; that drives its <strong>scan screen</strong> and the <strong>Floor</strong>
+                            default, and it logs straight into its scan screen. Same list as
+                            <a href="/factory/production-areas.php">Factory &rarr; Production areas</a>.
+                            Needs the <strong>Factory</strong> role ticked above.
                         </p>
                     </div>
                 </div>
