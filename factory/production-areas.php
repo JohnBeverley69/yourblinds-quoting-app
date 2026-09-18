@@ -78,6 +78,19 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('DELETE FROM production_areas WHERE id = ? AND client_id = ?')->execute([$id, $MASTER]);
                 $_SESSION['flash_success'] = 'Area removed.';
             }
+        } elseif ($action === 'gen_scan_key') {
+            $id = (int) ($_POST['area_id'] ?? 0);
+            if ($ownArea($pdo, $id, $MASTER)) {
+                $newKey = bin2hex(random_bytes(12));   // 24 hex chars
+                $pdo->prepare('UPDATE production_areas SET scan_key = ? WHERE id = ? AND client_id = ?')->execute([$newKey, $id, $MASTER]);
+                $_SESSION['flash_success'] = 'Scan key generated — point that area\'s scanner at the URL shown.';
+            }
+        } elseif ($action === 'clear_scan_key') {
+            $id = (int) ($_POST['area_id'] ?? 0);
+            if ($ownArea($pdo, $id, $MASTER)) {
+                $pdo->prepare('UPDATE production_areas SET scan_key = NULL WHERE id = ? AND client_id = ?')->execute([$id, $MASTER]);
+                $_SESSION['flash_success'] = 'Scan key removed — that area\'s scanner will stop working until you generate a new one.';
+            }
         } elseif ($action === 'set_product_area') {
             // Assign one product to an area (or clear it). Product must be factory-owned.
             $pid = (int) ($_POST['product_id'] ?? 0);
@@ -100,10 +113,17 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---- Load for display ------------------------------------------------------
+// The scan_key column arrives with Phase B — degrade gracefully if not migrated.
+$hasScanKey = false;
+if ($ready) {
+    try { $pdo->query('SELECT scan_key FROM production_areas LIMIT 0'); $hasScanKey = true; }
+    catch (Throwable $e) { $hasScanKey = false; }
+}
+
 $areas = [];
 $productArea = [];   // product_id => area_id
 if ($ready) {
-    $a = $pdo->prepare('SELECT id, name FROM production_areas WHERE client_id = ? ORDER BY sort_order, id');
+    $a = $pdo->prepare('SELECT id, name' . ($hasScanKey ? ', scan_key' : '') . ' FROM production_areas WHERE client_id = ? ORDER BY sort_order, id');
     $a->execute([$MASTER]);
     $areas = $a->fetchAll(PDO::FETCH_ASSOC);
     foreach ($pdo->query('SELECT product_id, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -147,6 +167,11 @@ require __DIR__ . '/../_partials/factory_head.php';
   table.prods { width:100%; border-collapse:collapse; }
   table.prods td { padding:.4rem .3rem; border-bottom:1px solid var(--border,#eef); }
   table.prods td.pname { font-weight:600; }
+  .scan-row { display:flex; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap; }
+  .scan-row:last-child { border-bottom:none; }
+  .scan-name { font-weight:600; min-width:9rem; }
+  .scan-url { flex:1; min-width:16rem; font-family:ui-monospace,Consolas,monospace; font-size:.8rem; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-subtle,#f8fafc); color:inherit; }
+  .scan-none { color:var(--text-muted,#667); font-size:.85rem; }
 </style>
 
 <h1 style="font-size:1.5rem;margin:0 0 .3rem;">Production areas</h1>
@@ -206,6 +231,30 @@ require __DIR__ . '/../_partials/factory_head.php';
           </tr>
         <?php endforeach; ?>
       </table>
+    <?php endif; ?>
+  </div>
+
+  <div class="pa-card">
+    <h2>Area scanners</h2>
+    <p class="pa-sub" style="margin:.2rem 0 .8rem">Each area's WiFi scanner uses its own key. Point the scanner at the URL below (put <code>{CODE}</code> where it sends the barcode). A key only finishes blinds in <em>its</em> area — a roller scanner can't advance a vertical.</p>
+    <?php if (!$hasScanKey): ?>
+      <div class="pa-flash err">Scan keys need the Phase B migration — run <code>/migrate_production_areas_phase_b.php</code>.</div>
+    <?php elseif (!$areas): ?>
+      <p class="pa-sub">Add an area first, then generate its scanner key here.</p>
+    <?php else: $scanBase = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/factory/scan-in.php'; ?>
+      <?php foreach ($areas as $ar): $aid = (int) $ar['id']; $key = (string) ($ar['scan_key'] ?? ''); ?>
+        <div class="scan-row">
+          <div class="scan-name"><?= e((string) $ar['name']) ?></div>
+          <?php if ($key === ''): ?>
+            <span class="scan-none">No key yet</span>
+            <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn mini">Generate key</button></form>
+          <?php else: ?>
+            <input type="text" class="scan-url" readonly onclick="this.select()" value="<?= e($scanBase . '?key=' . $key . '&c={CODE}') ?>">
+            <form method="post" class="inline" onsubmit="return confirm('Generate a new key? The old one stops working immediately — you\'ll need to re-point that area\'s scanner.')"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">Regenerate</button></form>
+            <form method="post" class="inline" onsubmit="return confirm('Remove this key? That area\'s scanner will stop working.')"><?= csrf_field() ?><input type="hidden" name="_action" value="clear_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">✕</button></form>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
     <?php endif; ?>
   </div>
 </div>

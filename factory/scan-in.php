@@ -85,12 +85,20 @@ if ($code !== '' && !preg_match('/^\d{8,9}$/', $code) && preg_match('/\b\d{8,9}\
     $code = $m[0];
 }
 
-// The secret. Timing-safe, and a missing/blank configured key can never match.
-$expected = fx_scan_key($pdo);
-if ($expected === '' || !hash_equals($expected, $key)) {
-    $log('bad_key', null, $code, null, $source);
-    $reply(403, 'NO');
+// The secret. A scanner can carry EITHER its area's own key (which also scopes
+// what it may finish) OR the global fallback key (any blind). Try the per-area
+// key first; if it's not one, fall back to the global key, timing-safe.
+$area = fx_area_by_scan_key($pdo, $key);
+if ($area === null) {
+    $expected = fx_scan_key($pdo);
+    if ($expected === '' || !hash_equals($expected, $key)) {
+        $log('bad_key', null, $code, null, $source);
+        $reply(403, 'NO');
+    }
 }
+// An area scanner that didn't name itself is tagged with its area in the log,
+// so the scan log still shows where a scan came from.
+if ($area !== null && $source === '') $source = $area['name'];
 
 $parsed = qr_parse_code($code);
 if ($parsed === null) {
@@ -103,6 +111,22 @@ if ($parsed === null) {
     $reply(400, 'BAD CODE');
 }
 [$itemId, $unitNo, $streamDigit] = $parsed;
+
+// Per-area scanner: only finish blinds that belong to THIS area. A roller bench's
+// scanner can't advance a vertical, even if the wrong label is waved at it. A
+// blind with no area (unassigned product) is allowed through; a code that isn't
+// on the floor falls through to bj_complete_by_code's own "not on floor" reply.
+if ($area !== null) {
+    try {
+        $as = $pdo->prepare('SELECT area_id FROM factory_blind_jobs WHERE quote_item_id = ? AND unit_no = ? LIMIT 1');
+        $as->execute([$itemId, $unitNo]);
+        $jobArea = $as->fetch(PDO::FETCH_ASSOC);
+        if ($jobArea !== false && $jobArea['area_id'] !== null && (int) $jobArea['area_id'] !== (int) $area['id']) {
+            $log('wrong_area', 'belongs to another area', $code, $parsed, $source);
+            $reply(409, 'WRONG AREA (' . $area['name'] . ')');
+        }
+    } catch (Throwable $e) { /* area_id not migrated — don't block a scan */ }
+}
 
 // De-dupe: the same code landing again within 10s is a double pull, not a second
 // blind. Completing an already-done part is harmless, but this keeps the log

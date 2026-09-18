@@ -30,6 +30,31 @@ $hasDue = dd_ready($pdo);   // due dates are a later migration — degrade quiet
 
 $showMade = isset($_GET['made']);   // completed blinds are hidden by default
 
+// Production areas, for the per-area floor filter — a computer on the roller bench
+// sees roller blinds by default (its user's home area), with a switcher remembered
+// per computer. All guarded: if areas aren't migrated the filter simply won't show.
+$areas    = [];
+$homeArea = 0;
+try {
+    $a = $pdo->prepare('SELECT id, name FROM production_areas WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+    $a->execute([$MASTER]);
+    $areas = $a->fetchAll(PDO::FETCH_ASSOC);
+    if ($areas) {
+        $uid = (int) (current_user()['user_id'] ?? 0);
+        if ($uid > 0) {
+            $u = $pdo->prepare('SELECT area_id FROM user_production_areas WHERE user_id = ? ORDER BY area_id LIMIT 1');
+            $u->execute([$uid]);
+            $homeArea = (int) $u->fetchColumn();
+        }
+    }
+} catch (Throwable $e) { $areas = []; }
+
+// The area_id column arrives with Phase B — degrade to NULL if it isn't there yet
+// so the floor never breaks between deploy and migration.
+$hasAreaCol = false;
+try { $pdo->query('SELECT area_id FROM factory_blind_jobs LIMIT 0'); $hasAreaCol = true; }
+catch (Throwable $e) { $hasAreaCol = false; }
+
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error'] ?? '');
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -60,7 +85,7 @@ if ($ready) {
     $dueSel   = $hasDue ? 'q.due_date' : 'NULL AS due_date';
     $dueOrder = $hasDue ? 'q.due_date IS NULL, q.due_date,' : '';
     $st = $pdo->query(
-        "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id, bj.status,
+        "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id, " . ($hasAreaCol ? 'bj.area_id' : 'NULL AS area_id') . ", bj.status,
                 q.quote_number, q.created_at, $dueSel, c.company_name AS tenant,
                 qi.line_no, qi.product_name_snapshot, qi.system_name_snapshot,
                 qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
@@ -153,6 +178,14 @@ require __DIR__ . '/../_partials/blind_styles.php';
 
 <div class="fl-bar">
     <input type="search" id="fl-search" placeholder="Search job ref, blind, fabric, room, customer&hellip;" autocomplete="off">
+    <?php if ($areas): ?>
+    <select id="fl-area" data-home="<?= (int) $homeArea ?>" title="Show one production area — remembered on this computer">
+        <option value="">All areas</option>
+        <?php foreach ($areas as $a): ?>
+            <option value="<?= (int) $a['id'] ?>"><?= e((string) $a['name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <?php endif; ?>
     <select id="fl-station">
         <option value="">All processes</option>
         <?php foreach ($stations as $s): ?>
@@ -188,23 +221,41 @@ require __DIR__ . '/../_partials/blind_styles.php';
 (function () {
     var search  = document.getElementById('fl-search');
     var station = document.getElementById('fl-station');
+    var area    = document.getElementById('fl-area');
     var made    = document.getElementById('fl-made');
     var shown   = document.getElementById('fl-shown');
     var tbody   = document.querySelector('.fl-tbl tbody');
 
-    // Search / process filter. Re-reads the rows each pass so it keeps working
-    // after the live update swaps fresh ones in.
+    // Per-area filter, remembered on THIS computer. On first load use whatever
+    // this computer chose last; failing that, the logged-in user's home area.
+    if (area) {
+        var saved = null;
+        try { saved = localStorage.getItem('fl-area'); } catch (e) {}
+        var want = saved !== null ? saved : (area.dataset.home || '');
+        // Only honour a value that's still a real option (an area may be gone).
+        if (want && !area.querySelector('option[value="' + want.replace(/"/g, '') + '"]')) want = '';
+        area.value = want;
+        area.addEventListener('change', function () {
+            try { localStorage.setItem('fl-area', area.value); } catch (e) {}
+            apply();
+        });
+    }
+
+    // Search / process / area filter. Re-reads the rows each pass so it keeps
+    // working after the live update swaps fresh ones in.
     function apply() {
         if (!tbody || !search) return;
         var q = (search.value || '').trim().toLowerCase();
         var s = station.value;
+        var ar = area ? area.value : '';
         var n = 0;
         [].slice.call(tbody.querySelectorAll('tr')).forEach(function (tr) {
             // A blind needs two processes at once (headrail + fabric), so
             // data-station is a list of "<product>|<stream>".
             var at = (tr.dataset.station || '').split(',');
             var ok = (!q || (tr.dataset.search || '').indexOf(q) !== -1)
-                  && (!s || at.indexOf(s) !== -1);
+                  && (!s || at.indexOf(s) !== -1)
+                  && (!ar || (tr.dataset.area || '0') === ar);
             tr.style.display = ok ? '' : 'none';
             if (ok) n++;
         });

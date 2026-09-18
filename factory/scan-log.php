@@ -114,6 +114,7 @@ $RES = [
     'already'   => ['already',    '#3730a3', '#e0e7ff'],
     'dup'       => ['double tap', '#6b7280', '#e5e7eb'],
     'not_found' => ['not on floor','#991b1b', '#fee2e2'],
+    'wrong_area'=> ['wrong area', '#9a3412', '#ffedd5'],
     'bad_code'  => ['unreadable', '#92600a', '#fef3c7'],
     'bad_key'   => ['bad key',    '#991b1b', '#fee2e2'],
     'error'     => ['error',      '#991b1b', '#fee2e2'],

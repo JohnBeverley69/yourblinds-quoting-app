@@ -250,6 +250,23 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
          VALUES (?, ?, ?, ?, 'queued')"
     );
     $findJob = $pdo->prepare('SELECT id FROM factory_blind_jobs WHERE quote_item_id = ? AND unit_no = ? LIMIT 1');
+
+    // Which area makes each master product — for stamping area_id on the blind so
+    // the floor can filter to one area and the scan-in can enforce it. Guarded:
+    // if the production-areas tables aren't there yet, area stamping is a no-op.
+    $areaOf   = [];
+    $areaStamp = null;
+    try {
+        foreach ($pdo->query('SELECT product_id, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $areaOf[(int) $m['product_id']] = (int) $m['area_id'];
+        }
+        // Re-stamp on every release so a changed product→area mapping catches up
+        // (only writes when it actually differs).
+        $areaStamp = $pdo->prepare(
+            'UPDATE factory_blind_jobs SET area_id = ? WHERE id = ? AND (area_id IS NULL OR area_id <> ?)'
+        );
+    } catch (Throwable $e) { $areaStamp = null; }   // area_id column / map not migrated
+
     $insStream = $pdo->prepare(
         "INSERT IGNORE INTO factory_blind_streams
              (blind_job_id, stream, route_step_id, station_id, seq, status, step_started_at)
@@ -290,6 +307,12 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
             $findJob->execute([(int) $it['id'], $unit]);
             $jobId = (int) $findJob->fetchColumn();
             if ($jobId === 0) continue;
+
+            // Stamp the blind's production area from the product→area map.
+            if ($areaStamp !== null && isset($areaOf[$pid])) {
+                try { $areaStamp->execute([$areaOf[$pid], $jobId, $areaOf[$pid]]); }
+                catch (Throwable $e) { /* never block a release on area stamping */ }
+            }
 
             if (!$byStr) {   // product has no route yet — unrouted, one open stream
                 $insStream->execute([$jobId, 'main', null, null, 0]);

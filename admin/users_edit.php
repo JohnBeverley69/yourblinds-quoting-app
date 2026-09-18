@@ -58,6 +58,22 @@ if ($isFactoryAccount) {
     } catch (Throwable $e) { $factoryProcesses = null; }
 }
 
+// A factory login's HOME production area(s). The floor/scan screens default to it
+// (with a per-computer switcher), so the roller bench's computer opens on roller
+// blinds. Null = don't offer (not a factory account, or areas not migrated yet).
+$productionAreas = null;
+$myAreas         = [];
+if ($isFactoryAccount) {
+    try {
+        $pa = db()->prepare('SELECT id, name FROM production_areas WHERE client_id = ? AND active = 1 ORDER BY sort_order, id');
+        $pa->execute([$clientId]);
+        $productionAreas = $pa->fetchAll(PDO::FETCH_ASSOC);
+        $ma = db()->prepare('SELECT area_id FROM user_production_areas WHERE user_id = ?');
+        $ma->execute([$id]);
+        foreach ($ma->fetchAll(PDO::FETCH_COLUMN) as $aid) $myAreas[(int) $aid] = true;
+    } catch (Throwable $e) { $productionAreas = null; }   // areas not migrated
+}
+
 // Priority for picking the "primary" role to write into client_users.role
 // when the user has more than one selected. Highest-privilege wins, so
 // existing requireAdmin() / role === 'admin' checks behave intuitively
@@ -268,6 +284,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $insWs->execute([$id, (int) $pid, $stream]);
                 }
             }
+
+            // Home production area(s) — same replace-wholesale approach, only when
+            // the field was actually rendered (factory account + areas migrated).
+            if ($productionAreas !== null) {
+                $pdo->prepare('DELETE FROM user_production_areas WHERE user_id = ?')->execute([$id]);
+                $insUa   = $pdo->prepare('INSERT IGNORE INTO user_production_areas (user_id, area_id) VALUES (?, ?)');
+                $validA  = [];
+                foreach ($productionAreas as $pa) $validA[(int) $pa['id']] = true;
+                foreach ((array) ($_POST['home_areas'] ?? []) as $aid) {
+                    if (isset($validA[(int) $aid])) $insUa->execute([$id, (int) $aid]);
+                }
+            }
             $pdo->commit();
 
             // If we just edited our own roles, refresh the live session
@@ -448,6 +476,31 @@ $activeNav = 'users';
                             Tick as many as it covers; staff move where they're needed, and more than one
                             login can cover the same process. It logs straight into its scan screen.
                             Needs the <strong>Factory</strong> role ticked above.
+                        </p>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($productionAreas !== null && $productionAreas): ?>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Home production area</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem 1.25rem;
+                                    padding:0.5rem 0.625rem; border:1px solid var(--border-strong);
+                                    border-radius:8px; background:var(--bg-input); color:var(--text-body);
+                                    font-size:0.9375rem;">
+                            <?php foreach ($productionAreas as $pa): ?>
+                                <label style="display:inline-flex; align-items:center; gap:0.4rem; font-weight:400;">
+                                    <input type="checkbox" name="home_areas[]" value="<?= (int) $pa['id'] ?>"
+                                           <?= isset($myAreas[(int) $pa['id']]) ? 'checked' : '' ?>>
+                                    <?= e((string) $pa['name']) ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            The area this login's computer opens on &mdash; the Floor defaults to it, and staff
+                            can still switch to another area (the switch is remembered per computer). Set up
+                            the areas on <a href="/factory/production-areas.php">Factory &rarr; Production areas</a>.
                         </p>
                     </div>
                 </div>

@@ -36,7 +36,7 @@ foreach ($rows as $r):
     $sys = trim((string) $r['system_name_snapshot']);
     $searchKey = strtolower(trim($ref . ' ' . $r['product_name_snapshot'] . ' ' . $sys . ' ' . $fab . ' ' . $col . ' ' . $r['room_name'] . ' ' . $r['tenant']));
 ?>
-    <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-made="<?= $done ? 1 : 0 ?>">
+    <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-area="<?= (int) ($r['area_id'] ?? 0) ?>" data-made="<?= $done ? 1 : 0 ?>">
         <td>
             <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
             <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>

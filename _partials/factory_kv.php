@@ -28,3 +28,20 @@ function fx_scan_key(PDO $pdo): string
 {
     return (string) fx_kv_get($pdo, 'scan_key', '');
 }
+
+/**
+ * A per-area scan key identifies which production area a scanner belongs to.
+ * Returns [id, client_id, name] for the area whose scan_key matches, or null.
+ * Timing-safe compare is unnecessary here — a blank/short key can't match a
+ * generated 24-char one, and the row lookup is by exact value.
+ */
+function fx_area_by_scan_key(PDO $pdo, string $key): ?array
+{
+    if (strlen($key) < 12) return null;   // real keys are long; skip cheap guesses
+    try {
+        $s = $pdo->prepare('SELECT id, client_id, name FROM production_areas WHERE scan_key = ? AND active = 1 LIMIT 1');
+        $s->execute([$key]);
+        $r = $s->fetch(PDO::FETCH_ASSOC);
+        return $r ?: null;
+    } catch (Throwable $e) { return null; }   // production_areas / scan_key not migrated
+}
