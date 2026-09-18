@@ -206,12 +206,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 );
                 $upd->execute([$newName, $targetId, $productId, $clientId]);
 
+                // Build rules store the system as a NAME string (no FK), so cascade
+                // the rename into them or the rules stop matching at ticket time.
+                require_once __DIR__ . '/../../_partials/build_var_rename_system.php';
+                $ruleCells = build_var_rename_system($pdo, $productId, (string) $oldName, $newName);
+
                 require_once __DIR__ . '/../../_partials/catalogue_audit.php';
                 catalogue_audit_log(
                     'system', $targetId, 'update', $newName,
                     ['name' => (string) $oldName], ['name' => $newName], $productId
                 );
-                $_SESSION['flash_success'] = 'System renamed to "' . $newName . '".';
+                $_SESSION['flash_success'] = 'System renamed to "' . $newName . '".'
+                    . ($ruleCells > 0 ? ' Updated ' . $ruleCells . ' build-rule row(s).' : '');
             }
         } catch (Throwable $e) {
             if (str_contains($e->getMessage(), 'uniq_system_per_product')) {

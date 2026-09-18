@@ -580,10 +580,12 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 // ---- Fold each cut into a readable grid ------------------------------------
 // Pivot the Recess/Exact "basis" column into value columns; group the remaining
-// rows, aliasing Centre Left/Right -> "Centre" and No Thrills -> its parent
-// system, so ~24 raw rows read as ~8. Each grid cell keeps the comma-joined list
-// of underlying row indices it represents, so one edit fans back to them all.
-$SYSTEM_PARENT = ['no thrills' => 'SlimLine', 'no frills' => 'SlimLine'];
+// rows, aliasing Centre Left/Right -> "Centre", so ~24 raw rows read as ~8. Each
+// grid cell keeps the comma-joined list of underlying row indices it represents,
+// so one edit fans back to them all.
+// (No Frills is now a first-class system with its own rules, so it is no longer
+// folded onto Slimline for display — the old No-Thrills/No-Frills fold is retired.)
+$SYSTEM_PARENT = [];
 $BASIS_SET     = ['recess', 'exact', 'cloth size', 'cloth'];
 $BASIS_ORDER   = ['recess' => 0, 'exact' => 1, 'cloth size' => 2, 'cloth' => 3];
 
