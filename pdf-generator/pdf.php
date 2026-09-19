@@ -425,6 +425,7 @@ table { border-collapse: collapse; }
 .items .desc { color: #4b5563; font-size: 10px; margin-top: 3px; line-height: 1.45; }
 .items .size { color: #111827; font-size: 10.5px; font-weight: 600; margin-top: 3px; }
 .items .extras { color: #6b7280; font-size: 10px; margin-top: 3px; }
+.items .trade-disc { color: #374151; font-size: 10px; margin-top: 4px; }
 .items tfoot td { padding: 6px 8px; font-size: 11px; }
 .items tfoot td.label { text-align: right; color: #6b7280; }
 .items tfoot td.val   { text-align: right; font-weight: 600; }
@@ -557,6 +558,26 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
     if ($fabricBits) {
         $descBits[] = implode(' / ', $fabricBits);
     }
+
+    // Trade quote: surface the account's discount on the line, reading
+    // list price · discount % · discounted price. The account discount comes
+    // off the BASE only (pricing_engine.php), so it's derived from the stored
+    // figures — no re-save of existing quotes needed. Only shown on a trade
+    // quote (account linked), when line prices are visible AND a real discount
+    // is present. (Markup-inflated lines yield no positive base discount here,
+    // so nothing misleading is shown.)
+    $tradeDiscNote = '';
+    if ($showLinePrices && (int) ($quote['account_client_id'] ?? 0) > 0) {
+        $__base   = (float) ($item['base_price']   ?? 0);
+        $__extras = (float) ($item['extras_total'] ?? 0);
+        $__net    = (float) ($item['sell_price']   ?? 0);
+        $__list   = round($__base + $__extras, 2);
+        $__off    = round($__list - $__net, 2);
+        if ($__base > 0 && $__off >= 0.01) {
+            $__pct = rtrim(rtrim(number_format($__off / $__base * 100, 2, '.', ''), '0'), '.');
+            $tradeDiscNote = $money($__list) . ' &middot; discount ' . $__pct . '% &middot; ' . $money($__net);
+        }
+    }
 ?>
 <tr>
 <td><?= (int) ($item['line_no'] ?? ($i + 1)) ?></td>
@@ -581,6 +602,9 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 ?><br>
 <?php endforeach; ?>
 </div>
+<?php endif; ?>
+<?php if ($tradeDiscNote !== ''): ?>
+<div class="trade-disc"><?= $tradeDiscNote ?></div>
 <?php endif; ?>
 </td>
 <td class="num"><?= (int) $item['quantity'] ?></td>
