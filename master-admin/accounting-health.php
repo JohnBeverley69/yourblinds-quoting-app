@@ -28,6 +28,21 @@ echo "=== Accounting integration health ===\n\n";
 echo "APP_ROOT                : " . APP_ROOT . "\n";
 echo ".env expected at        : " . $envFile . "\n";
 echo ".env file exists?       : " . (is_readable($envFile) ? 'YES' : 'NO — app is not reading a .env at this path') . "\n";
+if (is_readable($envFile)) {
+    echo ".env last modified      : " . date('Y-m-d H:i:s', (int) @filemtime($envFile)) . "\n";
+    echo ".env size (bytes)       : " . (int) @filesize($envFile) . "\n";
+    // KEY NAMES ONLY (never values) actually present in the file the app reads.
+    $names = [];
+    foreach ((array) @file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $ln) {
+        $ln = trim((string) $ln);
+        if ($ln === '' || $ln[0] === '#') continue;
+        $eq = strpos($ln, '=');
+        if ($eq === false) continue;
+        $k = trim(substr($ln, 0, $eq));
+        if ($k !== '' && preg_match('/^[A-Z_][A-Z0-9_]*$/i', $k)) $names[] = $k;
+    }
+    echo ".env keys present       : " . ($names ? implode(', ', $names) : '(none parsed)') . "\n";
+}
 echo "APP_URL                 : " . (string) (env('APP_URL', '(unset)')) . "\n";
 echo "APP_ENCRYPTION_KEY      : " . present(env('APP_ENCRYPTION_KEY', '')) . "\n\n";
 
