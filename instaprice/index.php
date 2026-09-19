@@ -664,7 +664,7 @@ $activeNav = 'instaprice';
         });
         extrasBox.innerHTML = html;
         extrasBox.querySelectorAll('select, input[data-multi-choice]').forEach(function (el) {
-            el.addEventListener('change', function () { renderExtras(); schedulePreview(); });
+            el.addEventListener('change', function () { renderExtras(); applyIpFasciaSizingUI(); schedulePreview(); });
         });
         // Number-only inputs don't affect price, but capturing keystrokes keeps
         // the value sticky across re-renders and ready for "Convert to quote".
@@ -758,6 +758,27 @@ $activeNav = 'instaprice';
         });
         return ids;
     }
+    // Mirror the quote builder: on Multi Blind the single Width box is
+    // meaningless (each blind carries its own width up in the fascia group),
+    // so lock it to a read-only "multi blind" placeholder. Restore it for any
+    // other sizing. Keep in lockstep with edit.php applyFasciaSizingUI().
+    function applyIpFasciaSizingUI() {
+        if (!widthIn) return;
+        var isMulti = (fasciaSizingMode() === 'multi');
+        if (isMulti) {
+            widthIn.dataset.multiLock = '1';
+            widthIn.value = 'multi blind';
+            widthIn.readOnly = true;
+            widthIn.style.fontStyle = 'italic';
+            widthIn.style.color = 'var(--text-faint)';
+        } else if (widthIn.dataset.multiLock === '1') {
+            widthIn.dataset.multiLock = '';
+            if (widthIn.value === 'multi blind') widthIn.value = '';
+            widthIn.readOnly = false;
+            widthIn.style.fontStyle = '';
+            widthIn.style.color = '';
+        }
+    }
     var ipMultiPanel = null, ipMultiCount = -1, ipMultiDrops = {};
     function ensureIpMultiPanel() {
         if (ipMultiPanel) return ipMultiPanel;
@@ -850,6 +871,7 @@ $activeNav = 'instaprice';
     }
 
     async function runPreview() {
+        applyIpFasciaSizingUI();
         if (fasciaSizingMode() === 'multi') { await runIpMultiPreview(); return; }
         hideIpMultiPanel();
         var missing = [];
@@ -1074,6 +1096,9 @@ $activeNav = 'instaprice';
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
         productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';
+        // Clear any Multi-Blind lock so Width is a real, editable field again.
+        widthIn.dataset.multiLock = ''; widthIn.readOnly = false;
+        widthIn.style.fontStyle = ''; widthIn.style.color = '';
         updateDimEcho();
         loadProductData();
         setPriceIdle('Choose a product and enter a size to see the price.', false);
