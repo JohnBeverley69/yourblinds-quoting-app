@@ -420,9 +420,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Saved separately from the quote-defaults block so it can never
         // disturb it. An empty box is a valid "configured but blank" value
         // (disables that document); a NULL column means never configured.
-        $terms    = trim((string) ($_POST['terms_conditions']  ?? ''));
-        $privacy  = trim((string) ($_POST['privacy_policy']    ?? ''));
-        $acceptEm = trim((string) ($_POST['accept_email_body'] ?? ''));
+        $terms      = trim((string) ($_POST['terms_conditions']       ?? ''));
+        $tradeTerms = trim((string) ($_POST['trade_terms_conditions'] ?? ''));
+        $privacy    = trim((string) ($_POST['privacy_policy']         ?? ''));
+        $acceptEm   = trim((string) ($_POST['accept_email_body']      ?? ''));
         try {
             $stmt = db()->prepare(
                 'INSERT INTO client_settings (client_id, terms_conditions, privacy_policy, accept_email_body)
@@ -438,6 +439,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
                 . ' — have you run migrate_terms_conditions.php?';
         }
+        // Trade T&Cs live in a later column (migrate_trade_terms.php) — saved
+        // separately and guarded so a pre-migration DB still saves the rest.
+        try {
+            db()->prepare('UPDATE client_settings SET trade_terms_conditions = ? WHERE client_id = ?')
+                ->execute([$tradeTerms, $clientId]);
+        } catch (Throwable $e) { /* trade column not migrated yet — ignore */ }
         header('Location: /admin/settings.php');
         exit;
     }
@@ -711,10 +718,12 @@ $supplierDelivery = (string) ($settings['supplier_delivery_address'] ?? '');
 // Terms & Privacy textareas: show the stored value if configured, else
 // pre-fill with the suggested template as a starting point. A NULL column
 // (key absent — never saved, or migration not yet run) ⇒ show the template.
-$tcStored  = $settings['terms_conditions']  ?? null;
-$ppStored  = $settings['privacy_policy']    ?? null;
-$aeStored  = $settings['accept_email_body'] ?? null;
-$tcDisplay = $tcStored === null ? legal_default_terms()        : (string) $tcStored;
+$tcStored  = $settings['terms_conditions']       ?? null;
+$ttcStored = $settings['trade_terms_conditions'] ?? null;   // may be absent pre-migration
+$ppStored  = $settings['privacy_policy']         ?? null;
+$aeStored  = $settings['accept_email_body']      ?? null;
+$tcDisplay  = $tcStored  === null ? legal_default_terms()        : (string) $tcStored;
+$ttcDisplay = $ttcStored === null ? legal_default_trade_terms()  : (string) $ttcStored;
 $ppDisplay = $ppStored === null ? legal_default_privacy()      : (string) $ppStored;
 $aeDisplay = $aeStored === null ? legal_default_accept_email() : (string) $aeStored;
 
@@ -1702,12 +1711,24 @@ $activeNav = 'settings';
 
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="terms_conditions">Terms &amp; Conditions</label>
+                        <label for="terms_conditions">Terms &amp; Conditions <span style="font-weight:normal;color:var(--text-faint)">(retail — used on retail quotes)</span></label>
                         <textarea id="terms_conditions" name="terms_conditions" rows="16"
                                   style="font-family:inherit;line-height:1.5"><?= e($tcDisplay) ?></textarea>
                         <div style="margin-top:0.5rem">
                             <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);margin-bottom:0.25rem">Preview <span style="text-transform:none;letter-spacing:normal">— with example customer &amp; quote</span></div>
                             <div class="legal-preview" data-src="terms_conditions"
+                                 style="white-space:pre-wrap;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary);background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:0.625rem 0.75rem;max-height:16rem;overflow:auto"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="trade_terms_conditions">Terms &amp; Conditions <span style="font-weight:normal;color:var(--text-faint)">(trade — used on quotes raised for a trade account)</span></label>
+                        <textarea id="trade_terms_conditions" name="trade_terms_conditions" rows="16"
+                                  style="font-family:inherit;line-height:1.5"><?= e($ttcDisplay) ?></textarea>
+                        <div style="margin-top:0.5rem">
+                            <div style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-faint);margin-bottom:0.25rem">Preview <span style="text-transform:none;letter-spacing:normal">— with example customer &amp; quote</span></div>
+                            <div class="legal-preview" data-src="trade_terms_conditions"
                                  style="white-space:pre-wrap;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary);background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:0.625rem 0.75rem;max-height:16rem;overflow:auto"></div>
                         </div>
                     </div>

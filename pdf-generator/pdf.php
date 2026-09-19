@@ -80,24 +80,35 @@ function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote
     // Terms & Conditions + Privacy Policy (optional columns). Loaded with a
     // separate guarded query — kept out of the main SELECT so the PDF still
     // renders if migrate_terms_conditions.php hasn't been run yet.
-    $quote['terms_conditions'] = null;
-    $quote['privacy_policy']   = null;
+    $quote['terms_conditions']       = null;
+    $quote['trade_terms_conditions'] = null;
+    $quote['privacy_policy']         = null;
     $legalAvailable = false;
     try {
-        $lstmt = $pdo->prepare(
-            'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
-        );
-        $lstmt->execute([$clientId]);
+        // trade_terms_conditions is a later migration; try it first, fall back.
+        try {
+            $lstmt = $pdo->prepare(
+                'SELECT terms_conditions, trade_terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
+            );
+            $lstmt->execute([$clientId]);
+        } catch (Throwable $eCol) {
+            $lstmt = $pdo->prepare(
+                'SELECT terms_conditions, privacy_policy FROM client_settings WHERE client_id = ? LIMIT 1'
+            );
+            $lstmt->execute([$clientId]);
+        }
         $legalAvailable = true;
         if ($lrow = $lstmt->fetch()) {
-            $quote['terms_conditions'] = $lrow['terms_conditions'];
-            $quote['privacy_policy']   = $lrow['privacy_policy'];
+            $quote['terms_conditions']       = $lrow['terms_conditions'] ?? null;
+            $quote['trade_terms_conditions'] = $lrow['trade_terms_conditions'] ?? null;
+            $quote['privacy_policy']         = $lrow['privacy_policy'] ?? null;
         }
     } catch (Throwable $e) { /* columns not present yet — skip */ }
     // NULL / no settings row → standard template (live by default).
     if ($legalAvailable) {
-        $quote['terms_conditions'] = legal_effective_terms($quote['terms_conditions'] ?? null);
-        $quote['privacy_policy']   = legal_effective_privacy($quote['privacy_policy'] ?? null);
+        $quote['terms_conditions']       = legal_effective_terms($quote['terms_conditions'] ?? null);
+        $quote['trade_terms_conditions'] = legal_effective_trade_terms($quote['trade_terms_conditions'] ?? null);
+        $quote['privacy_policy']         = legal_effective_privacy($quote['privacy_policy'] ?? null);
     }
 
     // Per-blind price visibility (Settings → Quoting). Carried on $quote so the
@@ -443,6 +454,9 @@ table { border-collapse: collapse; }
 .legal h3 { margin: 0 0 6px; font-size: 11px; color: #111827; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.04em; }
 .legal p  { margin: 0; white-space: pre-line; font-size: 8px; line-height: 1.5; color: #374151; }
+.legal-links { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e5e7eb;
+               font-size: 9px; line-height: 1.6; color: #6b7280; }
+.legal-links a { color: #1f3b5b; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -681,19 +695,30 @@ $bInstr = trim((string) ($quote['payment_instructions'] ?? ''));
 </div>
 <?php endif; ?>
 
-<?php $tcText = trim((string) ($quote['terms_conditions'] ?? '')); ?>
-<?php if ($tcText !== ''): ?>
-<div class="legal">
-<h3>Terms &amp; Conditions</h3>
-<p><?= e(legal_render_tokens($tcText, $quote)) ?></p>
-</div>
+<?php
+// Terms & Conditions and Privacy Policy are LINKED, not printed in full — the
+// customer clicks through to the always-current online copy (saves printing many
+// pages on every quote). A trade quote (raised for an account) links to the
+// TRADE terms; a retail quote to the retail terms. We only show a link when that
+// document actually has content (a tenant can blank it to switch it off).
+$legalDoc  = ((int) ($quote['account_client_id'] ?? 0) > 0) ? 'trade' : 'retail';
+$legalText = trim((string) ($legalDoc === 'trade'
+    ? ($quote['trade_terms_conditions'] ?? '')
+    : ($quote['terms_conditions'] ?? '')));
+$ppText    = trim((string) ($quote['privacy_policy'] ?? ''));
+$legalHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$legalBase = 'https://' . ($legalHost !== '' ? $legalHost : 'yourblinds.uk');
+$termsUrl  = $legalBase . '/legal/view.php?c=' . (int) $clientId . '&doc=' . $legalDoc;
+$privUrl   = $legalBase . '/legal/view.php?c=' . (int) $clientId . '&doc=privacy';
+?>
+<?php if ($legalText !== '' || $ppText !== ''): ?>
+<div class="legal-links">
+<?php if ($legalText !== ''): ?>
+This <?= e($docLabel === 'Quote' ? 'quotation' : strtolower($docLabel)) ?> is subject to our Terms &amp; Conditions of sale: <a href="<?= e($termsUrl) ?>"><?= e($termsUrl) ?></a>.<br>
 <?php endif; ?>
-
-<?php $ppText = trim((string) ($quote['privacy_policy'] ?? '')); ?>
 <?php if ($ppText !== ''): ?>
-<div class="legal">
-<h3>Privacy Policy</h3>
-<p><?= e(legal_render_tokens($ppText, $quote)) ?></p>
+Privacy Policy: <a href="<?= e($privUrl) ?>"><?= e($privUrl) ?></a>.
+<?php endif; ?>
 </div>
 <?php endif; ?>
 
