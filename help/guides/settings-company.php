@@ -173,7 +173,7 @@ return [
 
                 <!-- Scene B: the payoff — the letterhead those ten boxes build -->
                 <div class="csc scB">
-                  <div class="card-t">Top-left of your quote, order and invoice PDF</div>
+                  <div class="card-t">Top-left of your quote, invoice and receipt PDF</div>
                   <div class="lhead">
                     <div class="lhlogo">LOGO</div>
                     <div class="lhname">Demo Blinds Ltd</div>
@@ -240,7 +240,7 @@ return [
                 &ldquo;<em>Leave blank if your business isn&rsquo;t VAT-registered. When set, it appears below your
                 contact details on every quote PDF.</em>&rdquo; It&rsquo;s the only box on this form with a faint
                 example in it (<code>e.g. GB123456789</code>). Fill it in and it prints as <b>VAT No.</b> under your
-                phone and email &mdash; on the quote, order and invoice PDFs, and on trade delivery notes, invoices,
+                phone and email &mdash; on the quote, invoice and receipt PDFs, and on trade delivery notes, invoices,
                 credit notes and statements as well. It is the one letterhead line that does <b>not</b> appear on the
                 public quote page your customer opens in a browser &mdash; that page stops at your email address.
                 Leave the box empty and the line simply isn&rsquo;t there anywhere. <em>(If you&rsquo;ve switched
@@ -270,7 +270,7 @@ return [
 
           <p><b>Where these details show up.</b> Ten boxes, a lot of paperwork:</p>
           <ul class="steps">
-            <li><b>Your quote, order and invoice PDFs</b> &mdash; the top-left letterhead: your logo, then the
+            <li><b>Your quote, invoice and receipt PDFs</b> &mdash; the top-left letterhead: your logo, then the
                 company name, then the address, then phone, email and <b>VAT No.</b></li>
             <li><b>The public quote page</b> your customer opens from their email, on their phone &mdash; the
                 same block, in the same order, <em>except</em> that it ends at your email address. The
@@ -306,6 +306,6 @@ return [
             ['1:06', 'Address line 1, then line 2 underneath.',    'Now your address. Line one, and then line two on its own row underneath — unit or building first, estate or street second. If you don\'t need line two, leave it empty. Blanks are dropped, so you won\'t get a gap on the printed page.', 5],
             ['1:20', 'Town, county and postcode fill together.',   'And the last three, side by side — town, county, postcode. Quick tip: on the printed letterhead the town and the postcode end up together on one line, with the county underneath. That\'s the app doing it, not you — just put each one in its own box.', 6],
             ['1:34', 'Save; green bar; sidebar name updates.',     'Hit Save company details. The page reloads and a green bar across the top says "Company details saved." Now look top-left, just under the big YourBlinds name — there\'s your own name, and on the line under it your company name and your role. That company name has changed. That\'s how you know it took.', 7],
-            ['1:46', 'The finished letterhead.',                   'And that\'s where every one of those boxes ends up — the top-left corner of your quote, order and invoice PDF. The page your customer opens on their phone shows the very same block in the very same order, with one difference: it stops at your email address, so the V-A-T number line isn\'t on it. One last thing worth knowing: you can\'t empty the company name out. Clear it, save, and the old name quietly comes back. The app would rather keep the name it\'s got than send out a quote with no name on it. So to change it, just type the new one over the top.', 8],
+            ['1:46', 'The finished letterhead.',                   'And that\'s where every one of those boxes ends up — the top-left corner of your quote, invoice and receipt PDF. The page your customer opens on their phone shows the very same block in the very same order, with one difference: it stops at your email address, so the V-A-T number line isn\'t on it. One last thing worth knowing: you can\'t empty the company name out. Clear it, save, and the old name quietly comes back. The app would rather keep the name it\'s got than send out a quote with no name on it. So to change it, just type the new one over the top.', 8],
         ],
 ];

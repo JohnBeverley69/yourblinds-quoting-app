@@ -388,7 +388,7 @@ return [
                 <b>paid</b> &mdash; there is no &ldquo;mark as paid&rdquo; button to hunt for. The banner turns green,
                 <em>&ldquo;&check; Fully paid (&pound;66.00)&rdquo;</em>, and the record-a-payment card <b>disappears</b>, because there is
                 nothing left to take. The customer is emailed a receipt at the same moment: subject <em>&ldquo;Receipt PRE-2026-0042 &mdash;
-                paid in full &middot; Beverley Blinds&rdquo;</em>, with the order PDF headed <b>Receipt</b> attached as
+                paid in full &middot; Beverley Blinds&rdquo;</em>, with the PDF headed <b>Receipt</b> attached as
                 <b>Receipt_PRE-2026-0042.pdf</b>. It goes <b>once and once only</b> &mdash; the app stamps the order the moment it sends, so
                 it can never repeat. Three things have to be true: the setting <b>Settings &rarr; Paid-in-full receipt &rarr;
                 &ldquo;Email a receipt when an order is paid in full&rdquo;</b> is ticked (it is, by default), the customer has a valid email

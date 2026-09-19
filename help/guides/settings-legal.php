@@ -271,8 +271,9 @@ return [
              they print one line with a link: <em>&ldquo;This quotation is subject to our Terms &amp; Conditions of sale:
              https://yourblinds.uk/legal/view.php?c=3&amp;doc=retail.&rdquo;</em> and <em>&ldquo;Privacy Policy:
              https://yourblinds.uk/legal/view.php?c=3&amp;doc=privacy.&rdquo;</em> The <code>doc=</code> bit switches
-             between <code>retail</code>, <code>trade</code> and <code>privacy</code>; on an order or invoice the
-             sentence reads &ldquo;This invoice is subject to&hellip;&rdquo; instead. A link only prints when that
+             between <code>retail</code>, <code>trade</code> and <code>privacy</code>; on an invoice it
+             reads &ldquo;This invoice is subject to&hellip;&rdquo;, and on a receipt &ldquo;This receipt is
+             subject to&hellip;&rdquo;. A link only prints when that
              document has something in it. Because the link is read live, <b>change a word today and every quote already
              sitting in someone&rsquo;s inbox shows the new wording next time they open it</b>. That page needs
              <b>no login</b> and is printable &mdash; anyone with the link can read it, so keep internal notes out of
