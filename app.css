@@ -608,7 +608,7 @@ a { color: var(--link); }
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
-    margin-bottom: 0.75rem;   /* was 1rem — trimmed the field-to-field air */
+    margin-bottom: 0.625rem;   /* 10px — trimmed the field-to-field air (was 1rem) */
 }
 .form-row.full { grid-template-columns: 1fr; }
 .form-row.cols-3 { grid-template-columns: 2fr 2fr 1fr; }
