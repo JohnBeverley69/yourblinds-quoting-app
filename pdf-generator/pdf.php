@@ -407,9 +407,13 @@ table { border-collapse: collapse; }
 .trade-block .name { color: #111827; font-size: 13px; font-weight: bold; }
 .quote-block { text-align: right; }
 .quote-block h2 { font-size: 18px; color: #111827; margin: 0 0 10px; font-weight: bold; }
-.quote-block .meta { font-size: 10.5px; }
-.quote-block .meta .lbl { color: #6b7280; display: inline-block; min-width: 78px; }
-.quote-block .meta .val { color: #111827; font-weight: 600; }
+/* Laid out as a small right-aligned table so the label and value share a
+   baseline and the two rows line up in columns — Dompdf mis-aligns
+   inline-block against adjacent text, which left the labels sitting high. */
+.quote-block .meta { font-size: 10.5px; border-collapse: collapse; }
+.quote-block .meta td { padding: 0 0 3px; vertical-align: baseline; white-space: nowrap; }
+.quote-block .meta td.lbl { color: #6b7280; text-align: right; padding-right: 8px; }
+.quote-block .meta td.val { color: #111827; font-weight: 600; text-align: right; }
 .customer { margin: 28px 0 22px; padding: 12px 14px; background: #f9fafb; border-left: 3px solid #1f3b5b; }
 .customer .label { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; }
 .customer .name { font-weight: bold; font-size: 13px; color: #111827; margin-top: 2px; }
@@ -465,10 +469,10 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 </td>
 <td class="quote-block">
 <h2><?= e($docLabel) ?> <?= e((string) $quote['quote_number']) ?></h2>
-<div class="meta">
-<span class="lbl">Date</span> <span class="val"><?= $fmtDate($quote['created_at'] ?? null) ?></span><br>
-<span class="lbl">Status</span> <span class="val" style="text-transform:capitalize;"><?= e((string) $quote['status']) ?></span>
-</div>
+<table class="meta" align="right">
+<tr><td class="lbl">Date</td><td class="val"><?= $fmtDate($quote['created_at'] ?? null) ?></td></tr>
+<tr><td class="lbl">Status</td><td class="val" style="text-transform:capitalize;"><?= e((string) $quote['status']) ?></td></tr>
+</table>
 </td>
 </tr>
 </table>
