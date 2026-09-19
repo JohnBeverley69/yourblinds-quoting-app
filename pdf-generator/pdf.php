@@ -574,7 +574,9 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
         $__list   = round($__base + $__extras, 2);
         $__off    = round($__list - $__net, 2);
         if ($__base > 0 && $__off >= 0.01) {
-            $__pct = rtrim(rtrim(number_format($__off / $__base * 100, 2, '.', ''), '0'), '.');
+            // 1dp, trailing zeros trimmed — deriving the % from penny-rounded
+            // prices gives 15.01/14.99; 1dp reads back as a clean 15%.
+            $__pct = rtrim(rtrim(number_format($__off / $__base * 100, 1, '.', ''), '0'), '.');
             $tradeDiscNote = $money($__list) . ' &middot; discount ' . $__pct . '% &middot; ' . $money($__net);
         }
     }
