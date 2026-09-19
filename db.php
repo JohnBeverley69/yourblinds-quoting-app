@@ -43,5 +43,23 @@ function db(): PDO
     ];
 
     $pdo = new PDO($dsn, $user, (string) $pass, $options);
+
+    // Align the DB session's time zone with the app's. bootstrap.php sets PHP to
+    // Europe/London, but MySQL was left on the server zone (UTC on Cloudways), so
+    // NOW()/CURRENT_TIMESTAMP were written in UTC while PHP formatted those naive
+    // strings as London — every stored timestamp then displayed an hour behind
+    // during BST. We set a NUMERIC offset computed from PHP's current zone rather
+    // than a named zone ('Europe/London'), because managed hosts often don't load
+    // MySQL's named-timezone tables (which makes SET time_zone='Europe/London'
+    // throw). The offset already reflects DST as of now; connections are per
+    // request (not persistent), so a request after a DST switch gets the new
+    // offset. Guarded — a failure here must never break the connection.
+    try {
+        $off  = (new DateTimeZone(date_default_timezone_get()))->getOffset(new DateTimeImmutable('now'));
+        $abs  = abs($off);
+        $tz   = sprintf('%s%02d:%02d', $off < 0 ? '-' : '+', intdiv($abs, 3600), intdiv($abs % 3600, 60));
+        $pdo->exec("SET time_zone = '$tz'");
+    } catch (Throwable $e) { /* leave the server default if this can't be set */ }
+
     return $pdo;
 }
