@@ -21,6 +21,87 @@ requireFactory();
 $pdo    = db();
 $MASTER = current_factory_id();
 
+require_once __DIR__ . '/../_partials/factory_kv.php';   // fx_kv_get / fx_kv_set
+
+$scanHost = (string) ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk');
+
+/**
+ * The path+query a bench scanner calls. ONE definition — the URL box, the AT
+ * provisioning string and the QR of it are all built from this, so what you
+ * scan can never drift from what you copy.
+ */
+$scanPathFor = static function (array $ar): string {
+    $key   = (string) ($ar['scan_key'] ?? '');
+    $sname = trim((string) ($ar['scanner_name'] ?? ''));
+    return '/factory/scan-in.php?key=' . $key
+         . ($sname !== '' ? '&s=' . rawurlencode($sname) : '')
+         . '&c={CODE}';
+};
+$scanUrlFor = static function (array $ar) use ($scanPathFor, $scanHost): string {
+    return 'https://' . $scanHost . $scanPathFor($ar);
+};
+
+/**
+ * The scanner's provisioning string — what its WiFi-configuration QR carries.
+ * Two AT commands, semicolon-separated, exactly as the vendor's Windows tool
+ * emits them:
+ *
+ *   AT+URL=1.<host>.<path+query>;AT+RAP=<ssid>,<password>
+ *
+ * The leading "1." is the protocol selector (1 = https), and the "." after the
+ * host separates it from the path — so
+ * "https://yourblinds.uk/factory/scan-in.php?..." is written
+ * "1.yourblinds.uk./factory/scan-in.php?...". AT+RAP carries the network the
+ * scanner joins, SSID first.
+ *
+ * The literal {CODE} stays in: the scanner substitutes the barcode it reads.
+ */
+$scanAtFor = static function (array $ar, string $ssid, string $pass) use ($scanPathFor, $scanHost): string {
+    return 'AT+URL=1.' . $scanHost . '.' . $scanPathFor($ar)
+         . ';AT+RAP=' . $ssid . ',' . $pass;
+};
+
+// ---- ?qr=<area id> — that area's scanner URL as a QR code -------------------
+// Rendered here rather than by a third-party generator: the URL carries the
+// area's scan KEY, and pasting a secret into someone else's website to get a
+// picture back is the one thing you never want in a setup flow. We already
+// have the encoder (_partials/qr.php over the vendored _lib/qrcode), so this
+// costs nothing and keeps the app self-contained.
+//
+// Served on demand instead of inlined because a ~106-character scanner URL is a
+// 53x53 symbol — about 40kB of SVG — which would be added to the page once per
+// bench. As its own response the browser caches it and the page stays light.
+// Behind the same requireFactory() guard as the rest of the page.
+if (isset($_GET['qr'])) {
+    require_once __DIR__ . '/../_partials/qr.php';
+    $row = null;
+    try {
+        $st = $pdo->prepare('SELECT * FROM production_areas WHERE id = ? AND client_id = ? LIMIT 1');
+        $st->execute([(int) $_GET['qr'], $MASTER]);
+        $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) { $row = null; }
+
+    $qrSsid = (string) fx_kv_get($pdo, 'wifi_ssid', '');
+    $qrPass = (string) fx_kv_get($pdo, 'wifi_password', '');
+
+    if (!$row || trim((string) ($row['scan_key'] ?? '')) === '' || trim($qrSsid) === '') {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit("Need both a scan key for that area and the workshop WiFi set.\n");
+    }
+
+    header('Content-Type: image/svg+xml; charset=utf-8');
+    // It encodes the scan key AND the WiFi password — keep it out of shared
+    // caches, proxies and browser history.
+    header('Cache-Control: no-store, private');
+    header('Referrer-Policy: no-referrer');
+    // ECC M, not the label default of Q: this is read off a screen rather than
+    // a greasy workshop label, and the lower level keeps the symbol smaller, so
+    // each module stays fatter at the same physical size.
+    echo qr_svg($scanAtFor($row, $qrSsid, $qrPass), 44.0, 'M');
+    exit;
+}
+
 $ready = true;
 try { $pdo->query('SELECT 1 FROM production_areas LIMIT 0'); }
 catch (Throwable $e) { $ready = false; }
@@ -78,6 +159,23 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 try { $pdo->prepare('DELETE FROM user_production_areas WHERE area_id = ?')->execute([$id]); } catch (Throwable $e) {}
                 $pdo->prepare('DELETE FROM production_areas WHERE id = ? AND client_id = ?')->execute([$id, $MASTER]);
                 $_SESSION['flash_success'] = 'Area removed.';
+            }
+        } elseif ($action === 'set_wifi') {
+            // The network every bench scanner joins. Factory-wide, so it lives in
+            // factory_kv alongside the scan secret rather than per area.
+            $ssid = trim((string) ($_POST['wifi_ssid'] ?? ''));
+            $pass = (string) ($_POST['wifi_password'] ?? '');
+            // AT+RAP=<ssid>,<password> is comma-separated and the command list is
+            // semicolon-separated, so either character would split the string and
+            // silently mis-provision the scanner. Refuse rather than mangle.
+            if (strpbrk($ssid, ',;') !== false || strpbrk($pass, ',;') !== false) {
+                $_SESSION['flash_error'] = 'WiFi name and password cannot contain a comma or semicolon — the scanner\'s setup command uses both as separators.';
+            } else {
+                fx_kv_set($pdo, 'wifi_ssid', $ssid);
+                // Blank password box = leave the stored one alone, so saving a
+                // corrected SSID doesn't wipe the password you can't see.
+                if ($pass !== '') fx_kv_set($pdo, 'wifi_password', $pass);
+                $_SESSION['flash_success'] = 'Workshop WiFi saved — the setup QR codes now carry it.';
             }
         } elseif ($action === 'gen_scan_key') {
             $id = (int) ($_POST['area_id'] ?? 0);
@@ -217,6 +315,27 @@ require __DIR__ . '/../_partials/factory_head.php';
   .scan-name { font-weight:600; min-width:9rem; }
   .scan-url { flex:1; min-width:16rem; font-family:ui-monospace,Consolas,monospace; font-size:.8rem; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-subtle,#f8fafc); color:inherit; }
   .scan-none { color:var(--text-muted,#667); font-size:.85rem; }
+  .wifi-bar { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:0 0 .7rem;
+              padding:.55rem .65rem; border:1px solid var(--border,#eef); border-radius:10px;
+              background:var(--bg-subtle,#f8fafc); }
+  .wifi-lab { font-weight:600; font-size:.85rem; margin-right:.2rem; }
+  .wifi-bar input { font:inherit; font-size:.82rem; padding:.3rem .45rem; border-radius:7px;
+                    border:1px solid var(--border-strong,#cbd5e1); background:var(--bg-card,#fff); color:inherit; }
+  /* QR of the scanner URL. <details> so it costs nothing until asked for, and
+     needs no JavaScript. The marker is suppressed so <summary> can wear .btn. */
+  .scan-qr { position:relative; }
+  .scan-qr > summary { list-style:none; cursor:pointer; }
+  .scan-qr > summary::-webkit-details-marker { display:none; }
+  .scan-qr[open] > summary { outline:2px solid var(--link,#175cd3); outline-offset:1px; }
+  .scan-qr-pop { position:absolute; z-index:20; right:0; margin-top:.4rem; width:13rem;
+                 display:flex; flex-direction:column; gap:.5rem; align-items:center;
+                 padding:.6rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:10px;
+                 background:var(--bg-card,#fff); box-shadow:0 8px 24px rgba(0,0,0,.14); }
+  .scan-qr-pop img { width:180px; height:180px; background:#fff; border-radius:4px; }
+  .scan-qr-note { font-size:.72rem; line-height:1.35; color:var(--text-muted,#667); text-align:left; }
+  @media (max-width:640px) { .scan-qr-pop { position:static; width:auto; }
+                             .scan-qr-pop img { width:150px; height:150px; } }
+  @media print { .scan-qr-pop { position:static; box-shadow:none; } }
 </style>
 
 <h1 style="font-size:1.5rem;margin:0 0 .3rem;">Production areas</h1>
@@ -302,12 +421,34 @@ require __DIR__ . '/../_partials/factory_head.php';
       <div class="pa-flash err">Scan keys need the Phase B migration — run <code>/migrate_production_areas_phase_b.php</code>.</div>
     <?php elseif (!$areas): ?>
       <p class="pa-sub">Add an area first, then generate its scanner key here.</p>
-    <?php else: $scanBase = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/factory/scan-in.php'; ?>
+    <?php else: ?>
+      <?php
+        $wifiSsid = (string) fx_kv_get($pdo, 'wifi_ssid', '');
+        $wifiPass = (string) fx_kv_get($pdo, 'wifi_password', '');
+      ?>
+      <form method="post" class="wifi-bar">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="set_wifi">
+        <span class="wifi-lab">Workshop WiFi</span>
+        <input type="text" name="wifi_ssid" value="<?= e($wifiSsid) ?>"
+               placeholder="network name (SSID)" maxlength="60" style="width:11rem" autocomplete="off">
+        <input type="password" name="wifi_password" value=""
+               placeholder="<?= $wifiPass !== '' ? 'password saved — leave blank to keep' : 'password' ?>"
+               maxlength="120" style="width:13rem" autocomplete="new-password">
+        <button class="btn mini">Save WiFi</button>
+        <span class="pa-sub" style="flex-basis:100%;margin:.15rem 0 0;font-size:.75rem">
+          The scanners join this network, so it goes in every setup QR below.
+          <?php if (trim($wifiSsid) === ''): ?>
+            <strong>Set it before generating a QR</strong> — without it the scanner can't get online.
+          <?php endif; ?>
+          No commas or semicolons: the scanner's setup command uses both as separators.
+        </span>
+      </form>
       <?php foreach ($areas as $ar):
               $aid   = (int) $ar['id'];
               $key   = (string) ($ar['scan_key'] ?? '');
               $sname = trim((string) ($ar['scanner_name'] ?? ''));
-              $url   = $scanBase . '?key=' . $key . ($sname !== '' ? '&s=' . rawurlencode($sname) : '') . '&c={CODE}';
+              $url   = $scanUrlFor($ar);
       ?>
         <div class="scan-row">
           <div class="scan-name"><?= e((string) $ar['name']) ?></div>
@@ -322,6 +463,27 @@ require __DIR__ . '/../_partials/factory_head.php';
             <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn mini">Generate key</button></form>
           <?php else: ?>
             <input type="text" class="scan-url" readonly onclick="this.select()" value="<?= e($url) ?>">
+            <details class="scan-qr">
+              <summary class="btn ghost mini" title="Show this bench's scanner setup code">Setup QR</summary>
+              <div class="scan-qr-pop">
+                <?php if (trim($wifiSsid) === ''): ?>
+                  <div class="scan-qr-note">Set the workshop WiFi above first — the setup code carries the network as well as this URL.</div>
+                <?php else: ?>
+                  <img src="?qr=<?= $aid ?>" alt="Scanner setup code for <?= e((string) $ar['name']) ?>" width="180" height="180">
+                  <div class="scan-qr-note">
+                    Put the scanner in WiFi-config mode and read this. It carries
+                    the network <strong><?= e($wifiSsid) ?></strong> and this
+                    bench's URL in one code, so there's nothing to type.
+                    <br><br>
+                    <strong>Press the trigger twice</strong> to commit it — one
+                    press looks like it worked but doesn't save.
+                    <br><br>
+                    It contains this area's key and the WiFi password, so don't
+                    leave it on screen or print it where it'll be left lying about.
+                  </div>
+                <?php endif; ?>
+              </div>
+            </details>
             <form method="post" class="inline" onsubmit="return confirm('Generate a new key? The old one stops working immediately — you\'ll need to re-point that area\'s scanner.')"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">Regenerate</button></form>
             <form method="post" class="inline" onsubmit="return confirm('Remove this key? That area\'s scanner will stop working.')"><?= csrf_field() ?><input type="hidden" name="_action" value="clear_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">✕</button></form>
           <?php endif; ?>
