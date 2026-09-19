@@ -252,7 +252,7 @@ $activeNav = 'order-history';
         <?php endif; ?>
 
         <section class="section">
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+            <p class="ui-hint" style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
                 Pick an existing customer (their details auto-fill below), or type a new
                 customer's name. You can flesh out the rest later from the editor.
             </p>
@@ -286,7 +286,7 @@ $activeNav = 'order-history';
                                         data-postcode="<?= e($d['postcode']) ?>"></option>
                             <?php endforeach; ?>
                         </datalist>
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small class="ui-hint" style="color:#6b7280;font-size:0.8125rem">
                             Type to filter — leave blank for a new customer.
                         </small>
                     </div>

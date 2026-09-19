@@ -942,7 +942,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <div style="grid-column:1/-1"><div class="ta-lbl" style="font-size:0.75rem;color:var(--text-faint)">Address</div><div><?= e(implode(', ', $accAddr)) ?></div></div>
                         <?php endif; ?>
                     </div>
-                    <p style="font-size:0.8125rem;color:var(--text-faint);margin:0.75rem 0 0">
+                    <p class="ui-hint" style="font-size:0.8125rem;color:var(--text-faint);margin:0.75rem 0 0">
                         These details come from the trade account<?= ($isSuperAdmin ?? false) ? ' — edit them there, not here.' : '.' ?>
                     </p>
                 </div>
@@ -1003,7 +1003,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <?php endforeach; ?>
                         </datalist>
                         <?php if ($editable): ?>
-                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                            <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                                 Type to filter — leave blank to unlink.
                             </small>
                         <?php endif; ?>
@@ -1316,7 +1316,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.25rem">
+                        <small class="ui-hint" style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.25rem">
                             Re-displays this quote's sizes in the chosen unit. Sizes are stored
                             the same way regardless.
                         </small>
@@ -1388,7 +1388,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <span id="item-rate-hint" style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
                         </div>
                     </div>
-                    <small style="color:var(--text-faint);font-size:0.72rem;line-height:1.4;display:block">
+                    <small class="ui-hint" style="color:var(--text-faint);font-size:0.72rem;line-height:1.4;display:block">
                         Leave blank to use the product's set <?= e($basisWord) ?> / discount.
                         This only changes <strong>this blind</strong> on this quote.
                     </small>

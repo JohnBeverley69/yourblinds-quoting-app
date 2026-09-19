@@ -2,7 +2,7 @@
 <style>
   .fl-head { display:flex; align-items:baseline; gap:.9rem; flex-wrap:wrap; margin:0 0 .3rem; }
   .fl-h1 { font-size:1.5rem; font-weight:700; margin:0; letter-spacing:-.01em; }
-  .fl-sub { color:var(--text-muted,#667); margin:.15rem 0 1.1rem; font-size:.92rem; }
+  .fl-sub { color:var(--text-muted,#667); margin:.1rem 0 .55rem; font-size:.92rem; }
   .fl-stat { font-size:.8rem; font-weight:600; color:var(--text-muted,#667); }
   .fl-stat b { color:inherit; }
   .fl-flash { padding:.6rem 1rem; border-radius:10px; margin:0 0 1rem; font-size:.9rem; }
@@ -13,7 +13,7 @@
   .pill.out{ background:#fef3c7; color:#92400e; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:999px; }
 
   /* Controls above the table. */
-  .fl-bar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:0 0 .9rem; }
+  .fl-bar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:0 0 .55rem; }
   .fl-bar input[type=search], .fl-bar select { font:inherit; font-size:.9rem; padding:.4rem .6rem; border:1px solid var(--border,#e5e7eb); border-radius:8px; background:var(--bg-card,#fff); color:inherit; }
   .fl-bar input[type=search] { min-width:15rem; }
   .fl-bar label { display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; color:var(--text-muted,#667); }
@@ -24,8 +24,8 @@
   /* Hand any spare width to the stage strip. Otherwise the table shares it out
      and leaves Job ref / Size / Due adrift in the middle of oversized columns. */
   .fl-tbl th:last-child, .fl-tbl td:last-child { width:100%; }
-  .fl-tbl th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint,#94a3b8); font-weight:700; padding:.5rem .7rem; background:var(--bg-subtle,#f8fafc); border-bottom:1px solid var(--border,#e5e7eb); white-space:nowrap; position:sticky; top:0; z-index:2; }
-  .fl-tbl td { padding:.45rem .7rem; border-bottom:1px solid var(--border,#eef1f5); font-size:.875rem; vertical-align:middle; }
+  .fl-tbl th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint,#94a3b8); font-weight:700; padding:.35rem .7rem; background:var(--bg-subtle,#f8fafc); border-bottom:1px solid var(--border,#e5e7eb); white-space:nowrap; position:sticky; top:0; z-index:2; }
+  .fl-tbl td { padding:.3rem .7rem; border-bottom:1px solid var(--border,#eef1f5); font-size:.875rem; vertical-align:middle; }
   .fl-tbl tr:last-child td { border-bottom:none; }
   .fl-tbl tbody tr:hover { background:var(--bg-subtle,#f8fafc); }
   .fl-tbl tr.is-made td { opacity:.6; }

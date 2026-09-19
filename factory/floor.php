@@ -224,7 +224,7 @@ require __DIR__ . '/../_partials/blind_styles.php';
         <span class="fl-live" title="This board updates itself as blinds are scanned — no need to refresh."><span class="fl-live-dot" id="fl-live-dot"></span> Live</span>
     <?php endif; ?>
 </div>
-<p class="fl-sub">Every blind in production, one row each &mdash; the board updates itself as scans come in. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
+<p class="fl-sub ui-hint">Every blind in production, one row each &mdash; the board updates itself as scans come in. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
 
 <?php if ($flashOk !== ''): ?><div class="fl-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="fl-flash err"><?= e($flashErr) ?></div><?php endif; ?>

@@ -183,7 +183,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-h1 { font-size: 1.6rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
     .io-badge { background: #dcfce7; color: #166534; font-size: 0.8125rem; font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 999px; }
     .io-search { margin-left: auto; font: inherit; padding: 0.45rem 0.75rem; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; min-width: 16rem; background: var(--bg-card, #fff); color: inherit; }
-    .io-sub { color: var(--text-muted, #667); margin: 0 0 1.1rem; }
+    .io-sub { color: var(--text-muted, #667); margin: 0 0 0.55rem; }
     /* Deliberately an OFFER, not an auto-reload: this page has "Start production"
        on it, and a page that reloads under someone's hand lands the click on the
        wrong order. */
@@ -195,7 +195,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-news[hidden] { display: none; }
     .io-news button { font: inherit; font-weight: 700; cursor: pointer; border: none; border-radius: 8px;
         padding: 0.35rem 0.9rem; background: #fff; color: #166534; }
-    .io-flash { padding: 0.7rem 1rem; border-radius: 10px; margin: 0 0 1.2rem; font-size: 0.9375rem; }
+    .io-flash { padding: 0.7rem 1rem; border-radius: 10px; margin: 0 0 0.7rem; font-size: 0.9375rem; }
     .io-flash.ok  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .io-flash.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .io-empty { background: var(--bg-subtle, #f8fafc); border: 1px dashed var(--border, #e5e7eb); border-radius: 12px; padding: 1.75rem; color: var(--text-faint, #94a3b8); text-align: center; }
@@ -211,7 +211,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-item.is-new { border-left: 4px solid #dc2626; background: #fef4f4; }
     [data-theme="dark"] .io-item.is-new { background: rgba(220,38,38,0.10); }
     .io-item:last-child { border-bottom: none; }
-    .io-summary { padding: 0.55rem 1rem; cursor: pointer; }
+    .io-summary { padding: 0.4rem 1rem; cursor: pointer; }
     .io-summary:hover { background: var(--bg-subtle, #f8fafc); }
     .io-summary:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
     .io-summary .ref { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -241,7 +241,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-detail .io-refs { color: var(--text-muted, #667); font-size: 0.85rem; margin: 0 0 0.5rem; }
     .io-lines { width: 100%; border-collapse: collapse; }
     .io-lines th { text-align: left; font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint, #94a3b8); font-weight: 600; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border, #e5e7eb); }
-    .io-lines td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border, #e5e7eb); font-size: 0.9rem; vertical-align: top; }
+    .io-lines td { padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--border, #e5e7eb); font-size: 0.9rem; vertical-align: top; }
     .io-lines tr:last-child td { border-bottom: none; }
     .io-lines .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .io-lines .prod { font-weight: 600; }
@@ -261,7 +261,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if ($newCount > 0): ?><span class="io-badge"><?= (int) $newCount ?> new</span><?php endif; ?>
     <input type="search" id="io-search" class="io-search" placeholder="Search order no, customer, ref&hellip;" autocomplete="off">
 </div>
-<p class="io-sub">Placed orders that contain <?= e($factoryName) ?> lines. Click an order to open its blinds.</p>
+<p class="io-sub ui-hint">Placed orders that contain <?= e($factoryName) ?> lines. Click an order to open its blinds.</p>
 
 <?php if ($flashOk !== ''): ?><div class="io-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="io-flash err"><?= e($flashErr) ?></div><?php endif; ?>

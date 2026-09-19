@@ -81,6 +81,19 @@ $factoryNavItems += [
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($factoryTitle) ?> &middot; <?= e($factoryName) ?></title>
+    <script>
+    // Density (compact) pre-paint — the factory back-office has its own shell, so
+    // it must stamp the yb_density cookie onto <html> itself (the main app does
+    // this in sidebar.php). Without this, compact mode is inert on factory pages.
+    (function () {
+        try {
+            var m = document.cookie.match(/(?:^|; )yb_density=([^;]+)/);
+            if (m && decodeURIComponent(m[1]) === 'compact') {
+                document.documentElement.setAttribute('data-density', 'compact');
+            }
+        } catch (e) {}
+    })();
+    </script>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         :root { --fac-bar: #1f2a37; --fac-bar-2: #111a24; --fac-accent: #38bdf8; }
@@ -120,7 +133,7 @@ $factoryNavItems += [
         /* 1200px is a comfortable reading width for forms. Dense tables want the
            whole monitor instead — capping them just hides columns behind a
            scrollbar on a screen that had the room all along. */
-        .factory-main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+        .factory-main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 1.5rem; }
         .factory-main.is-wide { max-width: none; }
     </style>
 </head>
