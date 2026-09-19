@@ -168,7 +168,10 @@ $navSections = [
         ],
     ],
     [
-        'name'  => 'Setup',
+        // Config, not everyday work — collapsible (like Master admin) so it sits
+        // shrunk down by default and only opens when you're on a Setup page.
+        'name'        => 'Setup',
+        'collapsible' => true,
         'items' => [
             'products' => ['/admin/products/index.php', 'Products', $isAdmin],
             'users'    => ['/admin/users.php',          'Users',    $isAdmin],
