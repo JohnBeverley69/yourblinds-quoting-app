@@ -33,10 +33,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             record_login_attempt($ip, 'reset:' . $email, false);
 
             $stmt = db()->prepare(
-                'SELECT id FROM client_users WHERE email = ? AND active = 1 LIMIT 1'
+                'SELECT id, client_id FROM client_users WHERE email = ? AND active = 1 LIMIT 1'
             );
             $stmt->execute([$email]);
             $user = $stmt->fetch();
+
+            // Same gap as login: `active = 1` above is the USER's flag. A user
+            // under a deactivated trade account could still send themselves a
+            // reset link. Guarded probe so a schema without clients.active
+            // behaves exactly as before.
+            if ($user) {
+                try {
+                    $cs = db()->prepare('SELECT active FROM clients WHERE id = ? LIMIT 1');
+                    $cs->execute([(int) $user['client_id']]);
+                    $cAct = $cs->fetchColumn();
+                    if ($cAct !== false && (int) $cAct !== 1) $user = false;
+                } catch (Throwable $e) { /* column absent — leave as-is */ }
+            }
 
             if ($user) {
                 $token     = bin2hex(random_bytes(32));               // 64 hex chars
