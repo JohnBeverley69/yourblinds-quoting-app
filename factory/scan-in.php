@@ -101,9 +101,12 @@ if ($area === null) {
         $reply(403, 'NO');
     }
 }
-// An area scanner that didn't name itself is tagged with its area in the log,
-// so the scan log still shows where a scan came from.
-if ($area !== null && $source === '') $source = $area['name'];
+// An area scanner that didn't name itself is tagged with the scanner name set on
+// the area (or, failing that, the area's own name), so the scan log still shows
+// which bench a scan came from.
+if ($area !== null && $source === '') {
+    $source = trim((string) ($area['scanner_name'] ?? '')) ?: (string) $area['name'];
+}
 
 $parsed = qr_parse_code($code);
 if ($parsed === null) {
@@ -117,20 +120,18 @@ if ($parsed === null) {
 }
 [$itemId, $unitNo, $streamDigit] = $parsed;
 
-// Per-area scanner: only finish blinds that belong to THIS area. A roller bench's
-// scanner can't advance a vertical, even if the wrong label is waved at it. A
-// blind with no area (unassigned product) is allowed through; a code that isn't
-// on the floor falls through to bj_complete_by_code's own "not on floor" reply.
+// Per-area scanner: only finish the ROUTE that belongs to THIS area. This is
+// stream-level (Phase E) — a vertical's headrail label and fabric label carry
+// different stream digits, so the fabric bench's scanner rejects a headrail
+// label (and vice versa): misscan-proof. A stream with no area (unassigned) is
+// allowed through; a code not on the floor falls through to bj_complete_by_code's
+// own "not on floor" reply.
 if ($area !== null) {
-    try {
-        $as = $pdo->prepare('SELECT area_id FROM factory_blind_jobs WHERE quote_item_id = ? AND unit_no = ? LIMIT 1');
-        $as->execute([$itemId, $unitNo]);
-        $jobArea = $as->fetch(PDO::FETCH_ASSOC);
-        if ($jobArea !== false && $jobArea['area_id'] !== null && (int) $jobArea['area_id'] !== (int) $area['id']) {
-            $log('wrong_area', 'belongs to another area', $code, $parsed, $source);
-            $reply(409, 'WRONG AREA (' . $area['name'] . ')');
-        }
-    } catch (Throwable $e) { /* area_id not migrated — don't block a scan */ }
+    $sa = bj_scanned_stream_area($pdo, $itemId, $unitNo, $streamDigit);
+    if ($sa['area_id'] !== null && $sa['area_id'] !== (int) $area['id']) {
+        $log('wrong_area', 'route belongs to another area', $code, $parsed, $source);
+        $reply(409, 'WRONG AREA (' . $area['name'] . ')');
+    }
 }
 
 // De-dupe: the same code landing again within 10s is a double pull, not a second

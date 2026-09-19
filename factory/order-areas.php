@@ -27,6 +27,9 @@ $hasDue = dd_ready($pdo);
 $hasArea = false;
 try { $pdo->query('SELECT area_id FROM factory_blind_jobs LIMIT 0'); $hasArea = true; }
 catch (Throwable $e) { $hasArea = false; }
+$hasStreamArea = false;
+try { $pdo->query('SELECT area_id FROM factory_blind_streams LIMIT 0'); $hasStreamArea = true; }
+catch (Throwable $e) { $hasStreamArea = false; }
 
 // This login's home area, to highlight "yours" among the rest.
 $homeArea = 0;
@@ -70,25 +73,53 @@ if ($order > 0) {
     if ($rows) $meta = $rows[0];
 }
 
-// Group by area, computing each blind's progress (same maths as the floor).
-$byArea      = [];   // area_id => [rows]
-$areaRoll    = [];   // area_id => ['total'=>, 'made'=>]
-$grandTotal  = 0;
-$grandMade   = 0;
+// Group by area, one entry per (blind, stream) so a split vertical shows its
+// headrail part under one area and its fabric part under another — each with that
+// part's own progress. A single-route product is one part = the whole blind, so it
+// reads exactly as before. The grand total stays blind-level (the dispatch gate).
+$byArea      = [];   // area_id => [entries]
+$areaRoll    = [];   // area_id => ['total'=>parts, 'made'=>parts done]
+$grandTotal  = 0;    // blinds
+$grandMade   = 0;    // blinds complete
 if ($rows) {
     $streamsBy = bj_streams_for($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
-    foreach ($rows as &$r) {
-        $aid = (int) ($r['area_id'] ?? 0);
-        $byStream = bj_route_by_stream($pdo, (int) $r['product_id']);
-        [$dc, $tot] = bj_progress($byStream, $streamsBy[(int) $r['id']] ?? []);
-        $r['_pct']  = $tot > 0 ? (int) round($dc / $tot * 100) : 0;
-        $r['_made'] = $r['status'] === 'complete';
-        $byArea[$aid][] = $r;
-        $areaRoll[$aid]['total'] = ($areaRoll[$aid]['total'] ?? 0) + 1;
-        $areaRoll[$aid]['made']  = ($areaRoll[$aid]['made'] ?? 0) + ($r['_made'] ? 1 : 0);
-        $grandTotal++; if ($r['_made']) $grandMade++;
+    foreach ($rows as $r) {
+        $jobId     = (int) $r['id'];
+        $byStream  = bj_route_by_stream($pdo, (int) $r['product_id']);
+        $myStreams = $streamsBy[$jobId] ?? [];
+        $multi     = count($byStream) > 1;
+
+        // No route yet → treat the whole blind as one 'main' part.
+        $streamsToShow = $byStream ?: ['main' => []];
+        foreach ($streamsToShow as $stream => $list) {
+            $sr = $myStreams[$stream] ?? null;
+            // Which area this PART belongs to: its stream's area, else the blind's, else 0.
+            $aid = ($sr && isset($sr['area_id']) && $sr['area_id'] !== null)
+                 ? (int) $sr['area_id']
+                 : (int) ($r['area_id'] ?? 0);
+
+            // This part's progress along its own stream.
+            $tot = count($list);
+            if ($sr && ($sr['status'] === 'done' || $sr['route_step_id'] === null)) {
+                $dc = $tot; $partMade = true; $partStatus = 'done';
+            } else {
+                $idx = 0;
+                foreach ($list as $i => $s) { if ($sr && (int) $s['id'] === (int) $sr['route_step_id']) { $idx = $i; break; } }
+                $dc = $idx; $partMade = false; $partStatus = $sr['status'] ?? 'queued';
+            }
+
+            $entry = $r;
+            $entry['_pct']    = $tot > 0 ? (int) round($dc / $tot * 100) : ($partMade ? 100 : 0);
+            $entry['_made']   = $partMade;
+            $entry['_status'] = $partStatus;
+            $entry['_part']   = $multi ? (string) $stream : '';   // label only when split
+            $byArea[$aid][] = $entry;
+            $areaRoll[$aid]['total'] = ($areaRoll[$aid]['total'] ?? 0) + 1;
+            $areaRoll[$aid]['made']  = ($areaRoll[$aid]['made'] ?? 0) + ($partMade ? 1 : 0);
+        }
+
+        $grandTotal++; if ($r['status'] === 'complete') $grandMade++;
     }
-    unset($r);
 }
 
 $fmtDate = static function (?string $ts): string {
@@ -174,12 +205,14 @@ require __DIR__ . '/../_partials/factory_head.php';
                     $fab = trim((string) $r['fabric_name_snapshot']);
                     $col = trim((string) $r['fabric_colour_snapshot']);
                     $sys = trim((string) $r['system_name_snapshot']);
-                    $stCls = $r['_made'] ? 'made' : ($r['status'] === 'in_progress' ? 'work' : 'queue');
-                    $stTxt = $r['_made'] ? 'Made' : ($r['status'] === 'in_progress' ? 'In progress' : 'Queued');
+                    $part = (string) ($r['_part'] ?? '');
+                    $stCls = $r['_made'] ? 'made' : (($r['_status'] ?? '') === 'in_progress' ? 'work' : 'queue');
+                    $stTxt = $r['_made'] ? ($part !== '' ? $part . ' done' : 'Made') : (($r['_status'] ?? '') === 'in_progress' ? 'In progress' : 'Queued');
                 ?>
                     <tr>
                         <td class="oa-ref"><a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $order ?>" target="_blank" rel="noopener"><?= e($ref) ?></a></td>
                         <td><?= e((string) $r['product_name_snapshot']) ?><?php if ($sys !== ''): ?> <span style="color:var(--text-muted,#667)"><?= e($sys) ?></span><?php endif; ?>
+                            <?php if ($part !== ''): ?> <span style="font-size:.7rem;font-weight:700;background:#eef2f6;color:#334155;padding:.05rem .4rem;border-radius:999px"><?= e($part) ?></span><?php endif; ?>
                             <?php if ($fab !== '' || $col !== ''): ?><br><span style="color:var(--text-muted,#667);font-size:.82rem"><?= e(trim($fab . ($col !== '' ? ' / ' . $col : ''))) ?></span><?php endif; ?></td>
                         <td style="white-space:nowrap"><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
                         <td><?= e((string) $r['room_name']) ?></td>

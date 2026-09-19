@@ -54,6 +54,10 @@ try {
 $hasAreaCol = false;
 try { $pdo->query('SELECT area_id FROM factory_blind_jobs LIMIT 0'); $hasAreaCol = true; }
 catch (Throwable $e) { $hasAreaCol = false; }
+// Per-STREAM area_id (Phase E) — lets a split vertical show under both its areas.
+$hasStreamAreaCol = false;
+try { $pdo->query('SELECT area_id FROM factory_blind_streams LIMIT 0'); $hasStreamAreaCol = true; }
+catch (Throwable $e) { $hasStreamAreaCol = false; }
 
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error'] ?? '');
@@ -108,24 +112,47 @@ if ($ready) {
     $streamsBy = bj_streams_for($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
 
     // Cross-area awareness: for every order on the board, how its blinds sit across
-    // ALL areas — so a bench filtered to its own area still sees the rest of the
-    // order converging. Only orders spanning more than one area get sibling chips.
-    $orderAreas = [];   // quote_id => [area_id => ['total'=>, 'done'=>]]
-    $areaNames  = [];   // area_id => name, for the chip labels
-    if ($rows && $hasAreaCol) {
+    // areas — so a bench filtered to its own area still sees the rest of the order
+    // converging. Two tallies:
+    //   $orderTotals — blind-level (all blinds / made), the dispatch gate; summed
+    //                  across everything so it stays right even for split verticals.
+    //   $orderAreas  — per-area breakdown from STREAMS, so a vertical shows under
+    //                  BOTH its headrail and fabric areas, not "unassigned".
+    $orderAreas  = [];   // quote_id => [area_id => ['total'=>blinds, 'done'=>blinds made]]
+    $orderTotals = [];   // quote_id => ['total'=>blinds, 'done'=>blinds made]
+    $areaNames   = [];   // area_id => name, for the chip labels
+    if ($rows) {
         $qids = array_values(array_unique(array_map(static fn ($r) => (int) $r['quote_id'], $rows)));
         $ph = implode(',', array_fill(0, count($qids), '?'));
         try {
-            $ca = $pdo->prepare(
-                "SELECT quote_id, area_id, COUNT(*) AS total, SUM(status = 'complete') AS done
-                   FROM factory_blind_jobs WHERE quote_id IN ($ph) GROUP BY quote_id, area_id"
+            $ct = $pdo->prepare(
+                "SELECT quote_id, COUNT(*) AS total, SUM(status = 'complete') AS done
+                   FROM factory_blind_jobs WHERE quote_id IN ($ph) GROUP BY quote_id"
             );
-            $ca->execute($qids);
-            foreach ($ca->fetchAll(PDO::FETCH_ASSOC) as $g) {
-                $orderAreas[(int) $g['quote_id']][(int) $g['area_id']] = ['total' => (int) $g['total'], 'done' => (int) $g['done']];
+            $ct->execute($qids);
+            foreach ($ct->fetchAll(PDO::FETCH_ASSOC) as $g) {
+                $orderTotals[(int) $g['quote_id']] = ['total' => (int) $g['total'], 'done' => (int) $g['done']];
             }
-            foreach ($areas as $a) $areaNames[(int) $a['id']] = (string) $a['name'];
-        } catch (Throwable $e) { $orderAreas = []; }
+        } catch (Throwable $e) { $orderTotals = []; }
+
+        if ($hasStreamAreaCol) {
+            try {
+                $ca = $pdo->prepare(
+                    "SELECT j.quote_id, s.area_id,
+                            COUNT(DISTINCT j.id) AS total,
+                            COUNT(DISTINCT CASE WHEN j.status = 'complete' THEN j.id END) AS done
+                       FROM factory_blind_streams s
+                       JOIN factory_blind_jobs j ON j.id = s.blind_job_id
+                      WHERE j.quote_id IN ($ph) AND s.area_id IS NOT NULL
+                      GROUP BY j.quote_id, s.area_id"
+                );
+                $ca->execute($qids);
+                foreach ($ca->fetchAll(PDO::FETCH_ASSOC) as $g) {
+                    $orderAreas[(int) $g['quote_id']][(int) $g['area_id']] = ['total' => (int) $g['total'], 'done' => (int) $g['done']];
+                }
+                foreach ($areas as $a) $areaNames[(int) $a['id']] = (string) $a['name'];
+            } catch (Throwable $e) { $orderAreas = []; }
+        }
     }
 }
 
@@ -285,11 +312,13 @@ require __DIR__ . '/../_partials/blind_styles.php';
         var n = 0;
         [].slice.call(tbody.querySelectorAll('tr')).forEach(function (tr) {
             // A blind needs two processes at once (headrail + fabric), so
-            // data-station is a list of "<product>|<stream>".
-            var at = (tr.dataset.station || '').split(',');
+            // data-station is a list of "<product>|<stream>". data-area is likewise
+            // a list — a split vertical belongs to both its headrail and fabric area.
+            var at   = (tr.dataset.station || '').split(',');
+            var ars  = (tr.dataset.area || '0').split(',');
             var ok = (!q || (tr.dataset.search || '').indexOf(q) !== -1)
                   && (!s || at.indexOf(s) !== -1)
-                  && (!ar || (tr.dataset.area || '0') === ar);
+                  && (!ar || ars.indexOf(ar) !== -1);
             tr.style.display = ok ? '' : 'none';
             if (ok) n++;
         });
