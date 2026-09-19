@@ -30,6 +30,13 @@ $qboCfgEnv       = pc_get('QUICKBOOKS_ENV', 'sandbox') ?? 'sandbox';
 $qboCfgClientId  = pc_get('QUICKBOOKS_CLIENT_ID', '') ?? '';
 $qboCfgRedirect  = $qboProvider ? $qboProvider->redirectUri() : '';
 $qboHasSecret    = (pc_get('QUICKBOOKS_CLIENT_SECRET', '') ?? '') !== '';
+// Field-mapping summary (Phase 2), shown once connected.
+$qboMapping = [];
+if ($qboConn && !empty($qboConn['mapping_json'])) {
+    $qm = json_decode((string) $qboConn['mapping_json'], true);
+    if (is_array($qm)) $qboMapping = $qm;
+}
+$qboMapped = !empty($qboMapping['sales_item_id']);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -2006,15 +2013,27 @@ $activeNav = 'settings';
                             <span style="color:var(--text-faint)"> · since <?= e(date('j M Y', strtotime((string) $qboConn['connected_at']))) ?></span>
                         <?php endif; ?>
                     </p>
-                    <p class="ui-hint" style="margin:.5rem 0 1rem;color:var(--text-faint);font-size:.8125rem">
-                        Next: map your VAT code, sales item and income account, then paid invoices push automatically.
-                    </p>
-                    <form method="post" action="/admin/accounting/disconnect.php"
-                          onsubmit="return confirm('Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="provider" value="quickbooks">
-                        <button type="submit" class="btn btn-secondary">Disconnect</button>
-                    </form>
+                    <?php if ($qboMapped): ?>
+                        <p style="margin:.5rem 0 .25rem;font-size:.875rem;color:var(--text-secondary)">
+                            Mapping set:
+                            <strong><?= e((string) ($qboMapping['sales_item_name'] ?: 'item')) ?></strong>
+                            <?php if (!empty($qboMapping['tax_code_name'])): ?> · VAT <strong><?= e((string) $qboMapping['tax_code_name']) ?></strong><?php endif; ?>
+                            <?php if (!empty($qboMapping['deposit_account_name'])): ?> · into <strong><?= e((string) $qboMapping['deposit_account_name']) ?></strong><?php endif; ?>
+                        </p>
+                    <?php else: ?>
+                        <p class="ui-hint" style="margin:.5rem 0 .25rem;color:var(--text-faint);font-size:.8125rem">
+                            Next: map your sales item, VAT code and bank account so paid sales post to the right place.
+                        </p>
+                    <?php endif; ?>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem">
+                        <a class="btn btn-primary" href="/admin/accounting/quickbooks-mapping.php"><?= $qboMapped ? 'Edit mapping' : 'Set up mapping' ?></a>
+                        <form method="post" action="/admin/accounting/disconnect.php" style="display:inline"
+                              onsubmit="return confirm('Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="provider" value="quickbooks">
+                            <button type="submit" class="btn btn-secondary">Disconnect</button>
+                        </form>
+                    </div>
                 <?php elseif ($qboReady): ?>
                     <p style="margin:.75rem 0 1rem;color:var(--text-secondary);font-size:.9375rem">
                         Connect your QuickBooks company to get started. You'll sign in at QuickBooks and approve access.

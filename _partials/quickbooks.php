@@ -236,3 +236,69 @@ function qbo_api_get(int $clientId, string $path, array $params = []): array
     }
     return $r;
 }
+
+/**
+ * Run a QuickBooks SQL-ish query and return the QueryResponse array
+ * (e.g. ['Item' => [...]], ['TaxCode' => [...]], ['Account' => [...]]).
+ */
+function qbo_query(int $clientId, string $sql): array
+{
+    $token = ac_valid_access_token($clientId, 'quickbooks');
+    if ($token === null) throw new RuntimeException('QuickBooks is not connected for this account.');
+    $conn = ac_get_connection($clientId, 'quickbooks');
+    $realmId = (string) ($conn['realm_id'] ?? '');
+    if ($realmId === '') throw new RuntimeException('QuickBooks connection has no company id.');
+
+    /** @var QuickBooksProvider $prov */
+    $prov = ac_provider('quickbooks');
+    $url = $prov->apiBase() . '/v3/company/' . rawurlencode($realmId) . '/query'
+         . '?query=' . rawurlencode($sql) . '&minorversion=73';
+    $r = ac_http('GET', $url, [
+        'headers' => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
+    ]);
+    if ($r['status'] >= 400) {
+        throw new RuntimeException('QuickBooks query failed (' . $r['status'] . '): ' . $r['raw']);
+    }
+    return $r['data']['QueryResponse'] ?? [];
+}
+
+/** Active service/other items usable on invoice + sales-receipt lines. */
+function qbo_list_items(int $clientId): array
+{
+    $resp = qbo_query($clientId, "SELECT Id, Name, Type FROM Item WHERE Active = true ORDERBY Name MAXRESULTS 500");
+    return array_map(static fn ($i) => [
+        'id'   => (string) ($i['Id'] ?? ''),
+        'name' => (string) ($i['Name'] ?? ''),
+        'type' => (string) ($i['Type'] ?? ''),
+    ], (array) ($resp['Item'] ?? []));
+}
+
+/** VAT / sales-tax codes. */
+function qbo_list_tax_codes(int $clientId): array
+{
+    $resp = qbo_query($clientId, "SELECT Id, Name, Active FROM TaxCode MAXRESULTS 500");
+    $out = [];
+    foreach ((array) ($resp['TaxCode'] ?? []) as $t) {
+        if (isset($t['Active']) && $t['Active'] === false) continue;
+        $out[] = ['id' => (string) ($t['Id'] ?? ''), 'name' => (string) ($t['Name'] ?? '')];
+    }
+    return $out;
+}
+
+/**
+ * Accounts, split by role: 'income' (where sales post) and 'deposit'
+ * (Bank + Undeposited Funds — where a paid sale's money lands).
+ */
+function qbo_list_accounts(int $clientId): array
+{
+    $resp = qbo_query($clientId, "SELECT Id, Name, AccountType, AccountSubType FROM Account WHERE Active = true ORDERBY Name MAXRESULTS 1000");
+    $income = []; $deposit = [];
+    foreach ((array) ($resp['Account'] ?? []) as $a) {
+        $row = ['id' => (string) ($a['Id'] ?? ''), 'name' => (string) ($a['Name'] ?? '')];
+        $type = (string) ($a['AccountType'] ?? '');
+        $sub  = (string) ($a['AccountSubType'] ?? '');
+        if ($type === 'Income') $income[] = $row;
+        if ($type === 'Bank' || $sub === 'UndepositedFunds') $deposit[] = $row;
+    }
+    return ['income' => $income, 'deposit' => $deposit];
+}
