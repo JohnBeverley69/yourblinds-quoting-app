@@ -44,31 +44,39 @@ function bj_workstation_streams(PDO $pdo, int $userId): array
     // here — rather than storing a separate per-process list — is what keeps the
     // users page and the Production areas page the same list: change an area's
     // products and every login on that area follows automatically, live.
+    // Per-STREAM (Phase E): the area map now says which route/stream each area owns,
+    // so a Head Rails login covers only the Headrail route, not the Fabric route.
     try {
         $pq = $pdo->prepare(
-            'SELECT DISTINCT pam.product_id
+            'SELECT DISTINCT pam.product_id, pam.stream
                FROM user_production_areas ua
                JOIN product_area_map pam ON pam.area_id = ua.area_id
               WHERE ua.user_id = ?'
         );
         $pq->execute([$userId]);
-        $pids = array_map('intval', $pq->fetchAll(PDO::FETCH_COLUMN));
-
         $out = [];
-        foreach ($pids as $pid) {
-            $streams = bj_streams_ordered($pdo, $pid);   // route streams, in order
-            if (!$streams) $streams = ['main'];          // unrouted product → one stream
-            foreach ($streams as $s) $out[] = ['product_id' => $pid, 'stream' => $s];
+        foreach ($pq->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[] = ['product_id' => (int) $r['product_id'], 'stream' => (string) $r['stream']];
         }
         return $cache[$userId] = $out;
     } catch (Throwable $e) {
-        // Production-area tables not migrated yet — fall back to the legacy
-        // per-process table so nothing breaks mid-migration.
+        // Pre-Phase-E: product-level map (no stream column) → cover all the product's streams.
         try {
-            $st = $pdo->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
-            $st->execute([$userId]);
-            return $cache[$userId] = $st->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e2) { return $cache[$userId] = []; }
+            $pq = $pdo->prepare('SELECT DISTINCT pam.product_id FROM user_production_areas ua JOIN product_area_map pam ON pam.area_id = ua.area_id WHERE ua.user_id = ?');
+            $pq->execute([$userId]);
+            $out = [];
+            foreach (array_map('intval', $pq->fetchAll(PDO::FETCH_COLUMN)) as $pid) {
+                foreach ((bj_streams_ordered($pdo, $pid) ?: ['main']) as $s) $out[] = ['product_id' => $pid, 'stream' => $s];
+            }
+            return $cache[$userId] = $out;
+        } catch (Throwable $e2) {
+            // Legacy per-process table.
+            try {
+                $st = $pdo->prepare('SELECT product_id, stream FROM workstation_streams WHERE user_id = ?');
+                $st->execute([$userId]);
+                return $cache[$userId] = $st->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e3) { return $cache[$userId] = []; }
+        }
     }
 }
 
@@ -231,6 +239,51 @@ function bj_complete_by_code(PDO $pdo, int $itemId, int $unitNo, int $streamDigi
     return ['ok' => true, 'title' => $ref, 'detail' => $detail];
 }
 
+/**
+ * The production area of the exact stream a scanned code points at (Phase E).
+ *
+ * This is what makes a vertical misscan-proof: the headrail and fabric labels
+ * carry different stream digits, so a headrail label waved at the fabric bench's
+ * scanner resolves to the Head Rails area — which the fabric scanner then
+ * rejects. Returns area_id = null when the stream (or the area_id column) can't
+ * be resolved, so a genuine lookup miss never blocks a scan.
+ *
+ * @return array{found:bool, area_id:?int}
+ */
+function bj_scanned_stream_area(PDO $pdo, int $itemId, int $unitNo, int $streamDigit): array
+{
+    try {
+        $q = $pdo->prepare('SELECT id, product_id FROM factory_blind_jobs WHERE quote_item_id = ? AND unit_no = ? LIMIT 1');
+        $q->execute([$itemId, $unitNo]);
+        $job = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$job) return ['found' => false, 'area_id' => null];
+        $jobId = (int) $job['id'];
+
+        if ($streamDigit === 0) {
+            // Whole-blind scan (single-stream products): use the blind's area only
+            // when all its streams sit in exactly one area.
+            $s = $pdo->prepare('SELECT DISTINCT area_id FROM factory_blind_streams WHERE blind_job_id = ?');
+            $s->execute([$jobId]);
+            $areas = array_values(array_filter(
+                array_map(static fn ($v) => $v === null ? null : (int) $v, $s->fetchAll(PDO::FETCH_COLUMN)),
+                static fn ($v) => $v !== null
+            ));
+            return ['found' => true, 'area_id' => count($areas) === 1 ? $areas[0] : null];
+        }
+
+        $ordered = bj_streams_ordered($pdo, (int) $job['product_id']);
+        $name = $ordered[$streamDigit - 1] ?? null;
+        if ($name === null) return ['found' => false, 'area_id' => null];
+        $s = $pdo->prepare('SELECT area_id FROM factory_blind_streams WHERE blind_job_id = ? AND stream = ? LIMIT 1');
+        $s->execute([$jobId, $name]);
+        $row = $s->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) return ['found' => false, 'area_id' => null];
+        return ['found' => true, 'area_id' => $row['area_id'] === null ? null : (int) $row['area_id']];
+    } catch (Throwable $e) {
+        return ['found' => false, 'area_id' => null];   // area_id not migrated → don't block
+    }
+}
+
 /** A route step's display label (its own label), or ''. */
 function bj_step_label(array $list, ?int $stepId): string
 {
@@ -279,27 +332,54 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
     );
     $findJob = $pdo->prepare('SELECT id FROM factory_blind_jobs WHERE quote_item_id = ? AND unit_no = ? LIMIT 1');
 
-    // Which area makes each master product — for stamping area_id on the blind so
-    // the floor can filter to one area and the scan-in can enforce it. Guarded:
-    // if the production-areas tables aren't there yet, area stamping is a no-op.
-    $areaOf   = [];
+    // Which area makes each product ROUTE — for stamping area_id so the floor can
+    // filter to one area and the scan-in can enforce it. Phase E keys the map by
+    // (product, stream): a vertical's Headrail and Fabric routes can sit in
+    // different areas. Guarded: if the tables aren't there yet, stamping is a no-op.
+    //   $areaOf["<pid>:<stream>"] => area_id   (per-stream, Phase E)
+    //   $areaOf["<pid>:*"]        => area_id   (pre-Phase-E product-level fallback)
+    $areaOf = [];
+    try {
+        foreach ($pdo->query('SELECT product_id, stream, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $areaOf[(int) $m['product_id'] . ':' . (string) $m['stream']] = (int) $m['area_id'];
+        }
+    } catch (Throwable $e) {
+        try {   // no stream column yet — product-level map
+            foreach ($pdo->query('SELECT product_id, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $m) {
+                $areaOf[(int) $m['product_id'] . ':*'] = (int) $m['area_id'];
+            }
+        } catch (Throwable $e2) { $areaOf = []; }
+    }
+    /** Resolve the area for a product's stream: exact, then 'main', then product-level. */
+    $areaFor = static function (int $pid, string $stream) use ($areaOf): ?int {
+        return $areaOf["$pid:$stream"] ?? $areaOf["$pid:main"] ?? $areaOf["$pid:*"] ?? null;
+    };
+
+    // Re-stamp on every release so a changed area mapping catches up (only writes
+    // when it differs). Blind-level area_id is set only when all the blind's
+    // streams share one area (single-route products, and verticals not yet split);
+    // a split blind carries area on each STREAM instead and its blind-level area is
+    // cleared so the floor filters per-stream.
     $areaStamp = null;
     try {
-        foreach ($pdo->query('SELECT product_id, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $m) {
-            $areaOf[(int) $m['product_id']] = (int) $m['area_id'];
-        }
-        // Re-stamp on every release so a changed product→area mapping catches up
-        // (only writes when it actually differs).
-        $areaStamp = $pdo->prepare(
-            'UPDATE factory_blind_jobs SET area_id = ? WHERE id = ? AND (area_id IS NULL OR area_id <> ?)'
+        $pdo->query('SELECT area_id FROM factory_blind_jobs LIMIT 0');
+        $areaStamp = $pdo->prepare('UPDATE factory_blind_jobs SET area_id = ? WHERE id = ?');
+    } catch (Throwable $e) { $areaStamp = null; }   // area_id column not migrated
+
+    $streamAreaStamp = null;
+    try {
+        $pdo->query('SELECT area_id FROM factory_blind_streams LIMIT 0');
+        $streamAreaStamp = $pdo->prepare(
+            'UPDATE factory_blind_streams SET area_id = ? WHERE id = ? AND (area_id IS NULL OR area_id <> ?)'
         );
-    } catch (Throwable $e) { $areaStamp = null; }   // area_id column / map not migrated
+    } catch (Throwable $e) { $streamAreaStamp = null; }   // area_id column not migrated
 
     $insStream = $pdo->prepare(
         "INSERT IGNORE INTO factory_blind_streams
              (blind_job_id, stream, route_step_id, station_id, seq, status, step_started_at)
          VALUES (?, ?, ?, ?, ?, 'queued', NOW())"
     );
+    $findStream = $pdo->prepare('SELECT id FROM factory_blind_streams WHERE blind_job_id = ? AND stream = ? LIMIT 1');
 
     // A product whose worksheet template is "one per line" (e.g. Vertical Fabric
     // Only — one job of N slats, not N blinds) gets a SINGLE floor job for the
@@ -336,20 +416,40 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
             $jobId = (int) $findJob->fetchColumn();
             if ($jobId === 0) continue;
 
-            // Stamp the blind's production area from the product→area map.
-            if ($areaStamp !== null && isset($areaOf[$pid])) {
-                try { $areaStamp->execute([$areaOf[$pid], $jobId, $areaOf[$pid]]); }
-                catch (Throwable $e) { /* never block a release on area stamping */ }
-            }
+            // The streams this blind is made in: its route's streams, or a single
+            // 'main' stream when the product has no route yet.
+            $seenAreas = [];   // distinct area_ids across this blind's streams
+            $stampStreamArea = function (string $stream) use ($pid, $jobId, $areaFor, $streamAreaStamp, $findStream, &$seenAreas): void {
+                $aid = $areaFor($pid, $stream);
+                if ($aid !== null) $seenAreas[$aid] = true;
+                if ($streamAreaStamp !== null && $aid !== null) {
+                    try {
+                        $findStream->execute([$jobId, $stream]);
+                        $sid = (int) $findStream->fetchColumn();
+                        if ($sid > 0) $streamAreaStamp->execute([$aid, $sid, $aid]);
+                    } catch (Throwable $e) { /* never block a release on area stamping */ }
+                }
+            };
 
             if (!$byStr) {   // product has no route yet — unrouted, one open stream
                 $insStream->execute([$jobId, 'main', null, null, 0]);
-                continue;
+                $stampStreamArea('main');
+            } else {
+                foreach ($byStr as $stream => $list) {
+                    $f = $list[0];
+                    $stationId = $f['station_id'] !== null ? (int) $f['station_id'] : null;   // station-less steps are allowed
+                    $insStream->execute([$jobId, (string) $stream, (int) $f['id'], $stationId, (int) $f['seq']]);
+                    $stampStreamArea((string) $stream);
+                }
             }
-            foreach ($byStr as $stream => $list) {
-                $f = $list[0];
-                $stationId = $f['station_id'] !== null ? (int) $f['station_id'] : null;   // station-less steps are allowed
-                $insStream->execute([$jobId, (string) $stream, (int) $f['id'], $stationId, (int) $f['seq']]);
+
+            // Blind-level area: set it only when every stream is in ONE area (so the
+            // floor/order views keep a clean single area for roller/pleated and
+            // un-split verticals). A blind split across areas gets a NULL blind area
+            // and is filtered per-stream instead.
+            if ($areaStamp !== null) {
+                try { $areaStamp->execute([count($seenAreas) === 1 ? array_key_first($seenAreas) : null, $jobId]); }
+                catch (Throwable $e) { /* never block a release on area stamping */ }
             }
         }
     }

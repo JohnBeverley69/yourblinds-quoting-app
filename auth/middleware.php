@@ -502,11 +502,13 @@ function redirect_after_login(): void
     if ($user && current_user_has_role('factory')
         && is_factory_client((int) ($user['client_id'] ?? 0))
         && ($user['role'] ?? '') !== 'admin') {
-        // A workstation login IS a process rather than a person — whoever's on
-        // that job today uses it. Drop it straight on its scan screen; the
-        // incoming orders list is an office view and no use at a machine.
+        // An area login IS the bench rather than a person — whoever's on that
+        // bench today uses it. Drop it on the Floor, which opens filtered to the
+        // bench's own area (its home area) so the operator sees just their work;
+        // scanning itself is done by the bench's WiFi scanner, not this screen.
+        // The incoming-orders list is an office view and no use at a machine.
         header('Location: ' . (current_user_is_workstation()
-            ? '/factory/scan.php'
+            ? '/factory/floor.php'
             : '/factory/incoming-orders.php'));
         exit;
     }

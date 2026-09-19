@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a product's routes
 requireFactory();
 
 $pdo    = db();
@@ -91,18 +92,43 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE production_areas SET scan_key = NULL WHERE id = ? AND client_id = ?')->execute([$id, $MASTER]);
                 $_SESSION['flash_success'] = 'Scan key removed — that area\'s scanner will stop working until you generate a new one.';
             }
+        } elseif ($action === 'set_scanner_name') {
+            // Name the scanner/bench for an area — baked into its scan-in URL as &s=
+            // so the scan log shows which bench a scan came from.
+            $id = (int) ($_POST['area_id'] ?? 0);
+            $nm = trim((string) ($_POST['scanner_name'] ?? ''));
+            if ($ownArea($pdo, $id, $MASTER)) {
+                $pdo->prepare('UPDATE production_areas SET scanner_name = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$nm !== '' ? mb_substr($nm, 0, 60) : null, $id, $MASTER]);
+                $_SESSION['flash_success'] = 'Scanner name saved.';
+            }
         } elseif ($action === 'set_product_area') {
-            // Assign one product to an area (or clear it). Product must be factory-owned.
-            $pid = (int) ($_POST['product_id'] ?? 0);
-            $aid = (int) ($_POST['area_id'] ?? 0);
+            // Assign one product ROUTE (stream) to an area, or clear it. A single-route
+            // product uses stream 'main'; a vertical has 'Headrail' and 'Fabric', each
+            // assignable to a different area. Product must be factory-owned.
+            $pid    = (int) ($_POST['product_id'] ?? 0);
+            $aid    = (int) ($_POST['area_id'] ?? 0);
+            $stream = trim((string) ($_POST['stream'] ?? 'main'));
+            if ($stream === '') $stream = 'main';
             if ($pid > 0 && factory_owns_product($pdo, $pid, $MASTER)) {
                 if ($aid === 0) {
-                    $pdo->prepare('DELETE FROM product_area_map WHERE product_id = ?')->execute([$pid]);
+                    $pdo->prepare('DELETE FROM product_area_map WHERE product_id = ? AND stream = ?')->execute([$pid, $stream]);
                 } elseif ($ownArea($pdo, $aid, $MASTER)) {
-                    // One area per product: replace any existing mapping.
-                    $pdo->prepare('INSERT INTO product_area_map (area_id, product_id) VALUES (?, ?)
-                                   ON DUPLICATE KEY UPDATE area_id = VALUES(area_id)')->execute([$aid, $pid]);
+                    // One area per (product, stream): replace any existing mapping.
+                    $pdo->prepare('INSERT INTO product_area_map (area_id, product_id, stream) VALUES (?, ?, ?)
+                                   ON DUPLICATE KEY UPDATE area_id = VALUES(area_id)')->execute([$aid, $pid, $stream]);
                 }
+                // Re-stamp this route's blinds already on the floor so the change
+                // takes effect at once (release also stamps, but existing orders
+                // won't re-release on their own). Guarded on the Phase E column.
+                try {
+                    $pdo->prepare(
+                        "UPDATE factory_blind_streams s
+                           JOIN factory_blind_jobs j ON j.id = s.blind_job_id
+                            SET s.area_id = ?
+                          WHERE j.product_id = ? AND COALESCE(NULLIF(s.stream,''),'main') = ?"
+                    )->execute([$aid > 0 ? $aid : null, $pid, $stream]);
+                } catch (Throwable $e) { /* factory_blind_streams.area_id not migrated yet */ }
             }
         }
     } catch (Throwable $e) {
@@ -113,21 +139,25 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---- Load for display ------------------------------------------------------
-// The scan_key column arrives with Phase B — degrade gracefully if not migrated.
-$hasScanKey = false;
+// The scan_key column arrives with Phase B, scanner_name + per-stream map with
+// Phase E — degrade gracefully if not migrated.
+$hasScanKey = $hasScannerName = $hasStream = false;
 if ($ready) {
-    try { $pdo->query('SELECT scan_key FROM production_areas LIMIT 0'); $hasScanKey = true; }
-    catch (Throwable $e) { $hasScanKey = false; }
+    try { $pdo->query('SELECT scan_key FROM production_areas LIMIT 0'); $hasScanKey = true; } catch (Throwable $e) {}
+    try { $pdo->query('SELECT scanner_name FROM production_areas LIMIT 0'); $hasScannerName = true; } catch (Throwable $e) {}
+    try { $pdo->query('SELECT stream FROM product_area_map LIMIT 0'); $hasStream = true; } catch (Throwable $e) {}
 }
 
 $areas = [];
-$productArea = [];   // product_id => area_id
+$productArea = [];   // "product_id:stream" => area_id
 if ($ready) {
-    $a = $pdo->prepare('SELECT id, name' . ($hasScanKey ? ', scan_key' : '') . ' FROM production_areas WHERE client_id = ? ORDER BY sort_order, id');
+    $cols = 'id, name' . ($hasScanKey ? ', scan_key' : '') . ($hasScannerName ? ', scanner_name' : '');
+    $a = $pdo->prepare("SELECT $cols FROM production_areas WHERE client_id = ? ORDER BY sort_order, id");
     $a->execute([$MASTER]);
     $areas = $a->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($pdo->query('SELECT product_id, area_id FROM product_area_map')->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $productArea[(int) $r['product_id']] = (int) $r['area_id'];
+    $mapCols = $hasStream ? 'product_id, stream, area_id' : "product_id, 'main' AS stream, area_id";
+    foreach ($pdo->query("SELECT $mapCols FROM product_area_map")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $productArea[(int) $r['product_id'] . ':' . (string) $r['stream']] = (int) $r['area_id'];
     }
 }
 // Factory's own (master) products — the things it makes.
@@ -135,9 +165,24 @@ $products = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORD
 $products->execute([$MASTER]);
 $products = $products->fetchAll(PDO::FETCH_ASSOC);
 
-// Per-area product counts for the summary.
+// Each product's routes (streams). A single-route product → ['main'] (shown as one
+// row); a vertical → ['Headrail','Fabric'] (a row each, assignable separately).
+$productStreams = [];
+foreach ($products as $p) {
+    $pid = (int) $p['id'];
+    $productStreams[$pid] = bj_streams_ordered($pdo, $pid) ?: ['main'];
+}
+
+// Per-area count of distinct PRODUCTS (not per-stream rows) for the summary.
 $areaCounts = [];
-foreach ($productArea as $pid => $aid) $areaCounts[$aid] = ($areaCounts[$aid] ?? 0) + 1;
+$seenPA = [];
+foreach ($productArea as $key => $aid) {
+    $pidStr = explode(':', $key, 2)[0];
+    $tag = $aid . ':' . $pidStr;
+    if (isset($seenPA[$tag])) continue;
+    $seenPA[$tag] = true;
+    $areaCounts[$aid] = ($areaCounts[$aid] ?? 0) + 1;
+}
 
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
 $flashErr = (string) ($_SESSION['flash_error'] ?? '');
@@ -175,7 +220,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 </style>
 
 <h1 style="font-size:1.5rem;margin:0 0 .3rem;">Production areas</h1>
-<p class="pa-sub">Your workshop's areas, and which product is made in which. When an order comes in, its blinds split to their area automatically. Each product belongs to one area.</p>
+<p class="pa-sub">Your workshop's areas — each a bench with its own scanner — and which product route is made in which. When an order comes in, its blinds split to their area automatically. A vertical's headrail and fabric routes can live in separate areas.</p>
 
 <?php if ($flashOk !== ''): ?><div class="pa-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="pa-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -209,26 +254,42 @@ require __DIR__ . '/../_partials/factory_head.php';
 
   <div class="pa-card">
     <h2>What's made where</h2>
-    <p class="pa-sub" style="margin:.2rem 0 .8rem">Set the area for each product. This is what routes a blind to its area on the floor.</p>
+    <p class="pa-sub" style="margin:.2rem 0 .8rem">Set the area for each product's route. Most products have one route, so one area. A vertical blind has two — its <em>Headrail</em> and <em>Fabric</em> labels — and each can go to a different area, so each area's scanner only accepts its own label.</p>
+    <?php
+      // One area <select> for a (product, stream) → its own tiny form.
+      $areaSelect = function (int $pid, string $stream, int $cur) use ($areas): string {
+          $h  = '<form method="post" class="inline">' . csrf_field()
+              . '<input type="hidden" name="_action" value="set_product_area">'
+              . '<input type="hidden" name="product_id" value="' . $pid . '">'
+              . '<input type="hidden" name="stream" value="' . e($stream) . '">'
+              . '<select name="area_id" onchange="this.form.submit()">'
+              . '<option value="0"' . ($cur === 0 ? ' selected' : '') . '>— unassigned —</option>';
+          foreach ($areas as $ar) {
+              $id = (int) $ar['id'];
+              $h .= '<option value="' . $id . '"' . ($cur === $id ? ' selected' : '') . '>' . e((string) $ar['name']) . '</option>';
+          }
+          return $h . '</select></form>';
+      };
+    ?>
     <?php if (!$areas): ?>
       <p class="pa-sub">Add an area first, then assign products to it.</p>
     <?php else: ?>
       <table class="prods">
-        <?php foreach ($products as $p): $pid = (int) $p['id']; $cur = (int) ($productArea[$pid] ?? 0); ?>
-          <tr>
-            <td class="pname"><?= e((string) $p['name']) ?></td>
-            <td style="text-align:right">
-              <form method="post" class="inline">
-                <?= csrf_field() ?><input type="hidden" name="_action" value="set_product_area"><input type="hidden" name="product_id" value="<?= $pid ?>">
-                <select name="area_id" onchange="this.form.submit()">
-                  <option value="0"<?= $cur === 0 ? ' selected' : '' ?>>— unassigned —</option>
-                  <?php foreach ($areas as $ar): ?>
-                    <option value="<?= (int) $ar['id'] ?>"<?= $cur === (int) $ar['id'] ? ' selected' : '' ?>><?= e((string) $ar['name']) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </form>
-            </td>
-          </tr>
+        <?php foreach ($products as $p): $pid = (int) $p['id']; $streams = $productStreams[$pid]; ?>
+          <?php if (count($streams) === 1): $st = (string) $streams[0]; $cur = (int) ($productArea["$pid:$st"] ?? 0); ?>
+            <tr>
+              <td class="pname"><?= e((string) $p['name']) ?></td>
+              <td style="text-align:right"><?= $areaSelect($pid, $st, $cur) ?></td>
+            </tr>
+          <?php else: ?>
+            <tr><td class="pname" colspan="2" style="padding-top:.7rem;border-bottom:none"><?= e((string) $p['name']) ?> <span class="count">· <?= count($streams) ?> routes</span></td></tr>
+            <?php foreach ($streams as $st): $st = (string) $st; $cur = (int) ($productArea["$pid:$st"] ?? 0); ?>
+              <tr>
+                <td style="padding-left:1.4rem;color:var(--text-muted,#667)">↳ <?= e(ucfirst($st)) ?></td>
+                <td style="text-align:right"><?= $areaSelect($pid, $st, $cur) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          <?php endif; ?>
         <?php endforeach; ?>
       </table>
     <?php endif; ?>
@@ -236,20 +297,31 @@ require __DIR__ . '/../_partials/factory_head.php';
 
   <div class="pa-card">
     <h2>Area scanners</h2>
-    <p class="pa-sub" style="margin:.2rem 0 .8rem">Each area's WiFi scanner uses its own key. Point the scanner at the URL below (put <code>{CODE}</code> where it sends the barcode). A key only finishes blinds in <em>its</em> area — a roller scanner can't advance a vertical.</p>
+    <p class="pa-sub" style="margin:.2rem 0 .8rem">Each area is a bench with its own WiFi scanner. Name the scanner and generate its key, then point the scanner at the URL below (put <code>{CODE}</code> where it sends the barcode). A key only finishes the routes in <em>its</em> area — so the fabric bench's scanner rejects a headrail label, and vice versa. The scanner name shows against every scan in the log.</p>
     <?php if (!$hasScanKey): ?>
       <div class="pa-flash err">Scan keys need the Phase B migration — run <code>/migrate_production_areas_phase_b.php</code>.</div>
     <?php elseif (!$areas): ?>
       <p class="pa-sub">Add an area first, then generate its scanner key here.</p>
     <?php else: $scanBase = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/factory/scan-in.php'; ?>
-      <?php foreach ($areas as $ar): $aid = (int) $ar['id']; $key = (string) ($ar['scan_key'] ?? ''); ?>
+      <?php foreach ($areas as $ar):
+              $aid   = (int) $ar['id'];
+              $key   = (string) ($ar['scan_key'] ?? '');
+              $sname = trim((string) ($ar['scanner_name'] ?? ''));
+              $url   = $scanBase . '?key=' . $key . ($sname !== '' ? '&s=' . rawurlencode($sname) : '') . '&c={CODE}';
+      ?>
         <div class="scan-row">
           <div class="scan-name"><?= e((string) $ar['name']) ?></div>
+          <?php if ($hasScannerName): ?>
+            <form method="post" class="inline" style="display:flex;gap:.3rem;align-items:center">
+              <?= csrf_field() ?><input type="hidden" name="_action" value="set_scanner_name"><input type="hidden" name="area_id" value="<?= $aid ?>">
+              <input type="text" name="scanner_name" value="<?= e($sname) ?>" placeholder="scanner name, e.g. Headrail bench" onchange="this.form.submit()" style="width:12rem" maxlength="60">
+            </form>
+          <?php endif; ?>
           <?php if ($key === ''): ?>
             <span class="scan-none">No key yet</span>
             <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn mini">Generate key</button></form>
           <?php else: ?>
-            <input type="text" class="scan-url" readonly onclick="this.select()" value="<?= e($scanBase . '?key=' . $key . '&c={CODE}') ?>">
+            <input type="text" class="scan-url" readonly onclick="this.select()" value="<?= e($url) ?>">
             <form method="post" class="inline" onsubmit="return confirm('Generate a new key? The old one stops working immediately — you\'ll need to re-point that area\'s scanner.')"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">Regenerate</button></form>
             <form method="post" class="inline" onsubmit="return confirm('Remove this key? That area\'s scanner will stop working.')"><?= csrf_field() ?><input type="hidden" name="_action" value="clear_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn ghost mini">✕</button></form>
           <?php endif; ?>

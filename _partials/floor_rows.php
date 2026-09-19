@@ -7,10 +7,11 @@ declare(strict_types=1);
  * fresh rows without a reload or scroll jump.
  *
  * Expects in scope: $rows, $streamsBy, $pdo, $dueTag, $fmtDate, $RT.
- * Optional (Phase C): $orderAreas, $areaNames — cross-area order summary.
+ * Optional (Phase C/E): $orderAreas, $orderTotals, $areaNames — order summary.
  */
-$orderAreas = $orderAreas ?? [];
-$areaNames  = $areaNames  ?? [];
+$orderAreas  = $orderAreas  ?? [];
+$orderTotals = $orderTotals ?? [];
+$areaNames   = $areaNames   ?? [];
 foreach ($rows as $r):
     $jobId   = (int) $r['id'];
     $qty     = max(1, (int) $r['quantity']);
@@ -34,23 +35,33 @@ foreach ($rows as $r):
         if ($sr['status'] !== 'done') $atStations[] = (int) $r['product_id'] . '|' . $sname;
     }
 
+    // The areas this blind belongs to — one per stream (Phase E), so a split
+    // vertical filters onto BOTH its headrail and its fabric bench. Falls back to
+    // the blind-level area, then 0 (unassigned), if streams carry no area yet.
+    $rowAreas = [];
+    foreach ($myStreams as $sr) {
+        if (isset($sr['area_id']) && $sr['area_id'] !== null) $rowAreas[(int) $sr['area_id']] = true;
+    }
+    if (!$rowAreas && (int) ($r['area_id'] ?? 0) > 0) $rowAreas[(int) $r['area_id']] = true;
+    $dataArea = $rowAreas ? implode(',', array_keys($rowAreas)) : '0';
+
     $fab = trim((string) $r['fabric_name_snapshot']);
     $col = trim((string) $r['fabric_colour_snapshot']);
     $sys = trim((string) $r['system_name_snapshot']);
     $searchKey = strtolower(trim($ref . ' ' . $r['product_name_snapshot'] . ' ' . $sys . ' ' . $fab . ' ' . $col . ' ' . $r['room_name'] . ' ' . $r['tenant']));
 ?>
-    <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-area="<?= (int) ($r['area_id'] ?? 0) ?>" data-made="<?= $done ? 1 : 0 ?>">
+    <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-area="<?= e($dataArea) ?>" data-made="<?= $done ? 1 : 0 ?>">
         <td>
             <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
             <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
             <?php
-            $oa     = $orderAreas[(int) $r['quote_id']] ?? [];
-            $myArea = (int) ($r['area_id'] ?? 0);
-            // Order-level convergence: is the WHOLE order (every area) made yet? This
-            // is the dispatch gate made visible — "ready to dispatch" only when all
-            // its blinds, across all areas, are done. Summed from the per-area tally.
-            $ordTotal = 0; $ordDone = 0;
-            foreach ($oa as $ag) { $ordTotal += (int) $ag['total']; $ordDone += (int) $ag['done']; }
+            $oa  = $orderAreas[(int) $r['quote_id']] ?? [];
+            // Order-level convergence: is the WHOLE order made yet? The dispatch gate
+            // made visible — "ready to dispatch" only when every blind on the order is
+            // done. Blind-level (not per-area), so it stays right for split verticals.
+            $ot       = $orderTotals[(int) $r['quote_id']] ?? null;
+            $ordTotal = $ot ? (int) $ot['total'] : 0;
+            $ordDone  = $ot ? (int) $ot['done']  : 0;
             if ($ordTotal > 0):
                 if ($ordDone >= $ordTotal): ?>
                     <a class="fl-ord ready" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="Every blind on this order is made — it can be dispatched">✓ order ready to dispatch</a>
@@ -58,14 +69,14 @@ foreach ($rows as $r):
                     <a class="fl-ord wait" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> of <?= $ordTotal ?> still to make</a>
                 <?php endif;
             endif;
-            // Cross-area awareness: if this order also has blinds in OTHER areas,
-            // show them as read-only chips so this bench knows the rest is coming
-            // together. Links to the whole-order view.
+            // Cross-area awareness: if this order spans more than one area, show each
+            // area as a read-only chip so a bench sees the whole order converging.
+            // Links to the whole-order view.
             if (count($oa) > 1):
             ?>
             <a class="fl-others" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="See the whole order across every area">
-                <span class="fl-oa-lead">also on order:</span>
-                <?php foreach ($oa as $aid => $ag): if ((int) $aid === $myArea) continue;
+                <span class="fl-oa-lead">across areas:</span>
+                <?php foreach ($oa as $aid => $ag):
                     $nm  = $aid === 0 ? 'Unassigned' : ($areaNames[$aid] ?? ('Area ' . $aid));
                     $cls = $ag['done'] >= $ag['total'] ? 'done' : ($ag['done'] > 0 ? 'part' : '');
                 ?>
