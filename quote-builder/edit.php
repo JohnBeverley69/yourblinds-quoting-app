@@ -2543,12 +2543,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     function escapeAttr(s) { return escapeHtml(s); }
 
     function renderExtras() {
-        if (beforeBox) { beforeBox.innerHTML = ''; beforeBox.style.display = 'none'; }
         if (!productData || !productData.extras || productData.extras.length === 0) {
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
+            if (beforeBox) { beforeBox.innerHTML = ''; beforeBox.style.display = 'none'; }
             return;
         }
+        // NB: do NOT clear beforeBox before the preset capture below — that would
+        // wipe the before-slot's current selections before they're preserved.
 
         // Capture currently-selected values so re-renders preserve user
         // selections instead of reverting to defaults. Distinguishes
