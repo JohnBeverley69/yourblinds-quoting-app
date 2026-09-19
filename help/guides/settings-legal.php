@@ -31,8 +31,8 @@ return [
           .gd .tb{ font-size:.66rem; color:var(--faint); padding:.18rem .42rem; border-radius:6px; white-space:nowrap; }
           .gd .tb.legal{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; }
           .gd .stage[data-step="1"] .tabs{ box-shadow:0 0 0 3px var(--accent-wash); border-radius:8px; }
-          .gd .stage[data-step="7"] .tb.legal{ background:transparent; color:var(--faint); font-weight:400; }
-          .gd .stage[data-step="7"] .tb.company{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; }
+          /* the Legal tab stays lit after Save — settings.php remembers the open tab */
+          .gd .stage[data-step="7"] .tb.legal{ box-shadow:0 0 0 2px var(--accent-wash); }
 
           /* ---- the form (hidden on the last step, which shows the output) ---- */
           .gd .stage[data-step="8"] .lform{ display:none; }
@@ -89,10 +89,9 @@ return [
           .gd .acctnote b{ color:var(--ink); }
           .gd .stage[data-step="4"] .acctnote{ display:block; }
 
-          /* ---- save + flash ---- */
+          /* ---- save + flash (the real banner prints ABOVE the tab strip) ---- */
           .gd .stage[data-step="7"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          .gd .stage[data-step="7"] .toast{ opacity:1; transform:none; }
-          .gd .lsaved{ display:none; margin-top:.55rem; }
+          .gd .lsaved{ display:none; margin:0 0 .55rem; }
           .gd .stage[data-step="7"] .lsaved{ display:flex; }
 
           /* ---- step 8: where the wording actually appears ---- */
@@ -107,6 +106,8 @@ return [
             font-size:.6rem; color:var(--faint); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
           .gd .pubbody{ padding:.5rem .65rem; font-size:.66rem; line-height:1.55; color:var(--soft); }
           .gd .pubco{ display:block; font-size:.85rem; font-weight:800; color:var(--ink); margin-bottom:.15rem; }
+          .gd .pubt{ display:block; font-size:.62rem; text-transform:uppercase; letter-spacing:.05em;
+            font-weight:600; color:var(--faint); margin:0 0 .35rem; }
           .gd .pubfoot{ margin-top:.45rem; padding-top:.3rem; border-top:1px solid var(--line); font-size:.58rem; color:var(--faint); }',
         'demo'    => '
           <div class="demo-shell">
@@ -117,7 +118,7 @@ return [
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="toast">&check; Terms, Privacy Policy and acceptance email saved.</div>
+                <div class="okbanner lsaved"><span>&check;</span> Terms, Privacy Policy and acceptance email saved.</div>
 
                 <div class="tabs">
                   <span class="tb company">Company</span><span class="tb">Quoting</span>
@@ -129,7 +130,8 @@ return [
                   <div class="card-t">Terms &amp; Conditions &amp; Privacy Policy</div>
                   <p class="lintro">These print, personalised, at the bottom of your quote PDF and the customer-facing
                      quote. A suggested template is pre-filled below &mdash; edit it to suit your business, then Save.
-                     <b>Leave a box empty to show nothing.</b></p>
+                     <b>Leave a box empty to show nothing.</b> This is a starting point, not legal advice &mdash;
+                     have it reviewed before relying on it.</p>
                   <div class="chips">
                     <code>{{company_name}}</code><code>{{company_address}}</code><code>{{company_email}}</code><code>{{company_phone}}</code><code>{{customer_name}}</code><code>{{quote_number}}</code><code>{{date}}</code>
                   </div>
@@ -153,7 +155,7 @@ return [
                     <span class="llab">Privacy Policy</span>
                     <div class="ta tb3"><span class="ph">Privacy Policy&hellip;</span><span class="val">PRIVACY POLICY &mdash; {{company_name}}<br>11. HOW TO COMPLAIN &mdash; you may complain to the Information Commissioner&rsquo;s Office (ICO), Wycliffe House, Wilmslow SK9 5AF&hellip;</span></div>
                     <div class="lpvh">Preview <span>&mdash; with example customer &amp; quote</span></div>
-                    <div class="lpv pv3"><span class="pvt">PRIVACY POLICY &mdash; <b>Demo Blinds Ltd</b><br>13. CONTACT US &mdash; <b>Demo Blinds Ltd</b>, Unit 4, Sample Way, Leeds, LS1 1AA &mdash; hello@demoblinds.example &mdash; 01234 567890.</span></div>
+                    <div class="lpv pv3"><span class="pvt">PRIVACY POLICY &mdash; <b>Demo Blinds Ltd</b><br>13. CONTACT US<br><b>Demo Blinds Ltd</b>, Unit 4, Sample Way, Leeds, LS1 1AA &mdash; hello@demoblinds.example &mdash; 01234 567890.</span></div>
                   </div>
 
                   <div class="lgrp">
@@ -164,7 +166,6 @@ return [
                   </div>
 
                   <div class="save">Save terms, privacy &amp; email</div>
-                  <div class="okbanner lsaved"><span>&check;</span> Terms, Privacy Policy and acceptance email saved.</div>
                 </div>
 
                 <div class="outp">
@@ -178,6 +179,7 @@ return [
                     <div class="pubbar">yourblinds.uk/legal/view.php?c=3&amp;doc=retail</div>
                     <div class="pubbody">
                       <span class="pubco">Demo Blinds Ltd</span>
+                      <span class="pubt">Terms &amp; Conditions</span>
                       TERMS &amp; CONDITIONS OF SALE &mdash; Demo Blinds Ltd<br>
                       1. OUR QUOTATION &mdash; Quotations are valid for 30 days&hellip;
                       <div class="pubfoot">Provided via YourBlinds</div>
@@ -192,7 +194,7 @@ return [
                   <b class="c4"><span class="n">4</span> Box two: <em>trade</em> &mdash; used when the quote has an account.</b>
                   <b class="c5"><span class="n">5</span> Box three: your privacy policy.</b>
                   <b class="c6"><span class="n">6</span> Box four: the thank-you email, with the quote link.</b>
-                  <b class="c7 good"><span class="n">7</span> Saved &mdash; and it drops you back on Company.</b>
+                  <b class="c7 good"><span class="n">7</span> Saved &mdash; green banner at the top, still on Legal.</b>
                   <b class="c8"><span class="n">8</span> Quotes print a link; the page is public.</b>
                 </div>
               </div>
@@ -210,8 +212,10 @@ return [
                 <code>{{company_address}}</code>, <code>{{company_email}}</code>, <code>{{company_phone}}</code>,
                 <code>{{customer_name}}</code>, <code>{{quote_number}}</code> and <code>{{date}}</code>. The first four
                 come straight from the <b>Company</b> tab, so <b>fill that in first</b> &mdash; all three documents end
-                with a contact line (&ldquo;Contact: {{company_name}}, {{company_address}} &mdash; {{company_email}}
-                &mdash; {{company_phone}}.&rdquo;) which would otherwise publish half empty. Under every box sits a grey
+                with your contact details, and they would otherwise publish half empty. The two terms documents close
+                with a prefixed line, &ldquo;Contact: {{company_name}}, {{company_address}} &mdash; {{company_email}}
+                &mdash; {{company_phone}}.&rdquo;; the privacy policy carries the same details without the
+                &ldquo;Contact:&rdquo; prefix, under its own heading <b>13. CONTACT US</b>. Under every box sits a grey
                 <b>Preview</b> that redraws as you type, using your real company details and a fixed example: customer
                 <b>Jane Smith</b>, quote <b>BEV-2026-0042</b>. (In <b>Compact mode</b> the placeholder chips are hidden
                 along with the other hints &mdash; the list above is the same one.)</li>
@@ -244,10 +248,11 @@ return [
                 (&ldquo;Thank you for accepting quote BEV-2026-0042&rdquo;), it only goes out when the quote carries a
                 valid customer email address, and sending never holds up the acceptance itself.
                 <b>Leave empty to send no thank-you email.</b></li>
-            <li><b>Save terms, privacy &amp; email.</b> One button, at the foot, saves all four together. You get a
-                green <b>&ldquo;Terms, Privacy Policy and acceptance email saved.&rdquo;</b> and the page then reopens on
-                the <b>Company</b> tab &mdash; nothing is lost, that banner is your receipt. Click <b>Legal</b> again to
-                carry on.</li>
+            <li><b>Save terms, privacy &amp; email.</b> One button, at the foot, saves all four together. The page
+                reloads and a green <b>&ldquo;Terms, Privacy Policy and acceptance email saved.&rdquo;</b> appears
+                <b>above the row of tabs</b>, under the &ldquo;Settings&rdquo; heading &mdash; that banner is your
+                receipt. You stay on <b>Legal</b>: the screen remembers the tab you had open and reopens on it, so the
+                boxes and their previews are right there to read back.</li>
           </ul>
           <div class="oops"><b>Careful with an empty box.</b> Clearing the <b>retail</b> box does more than drop the
              small print: the <b>&ldquo;I agree to the Terms &amp; Conditions&rdquo;</b> tick-box disappears from the
@@ -256,8 +261,8 @@ return [
              <em>never</em> been saved. If you might want it back, copy it out somewhere before you clear the box.</div>
           <p><b>Two things that catch people out.</b> The trade box is written to the database by a separate step from
              the other three, and on an older database that step can fail silently &mdash; the green banner still
-             appears. So after your <b>first</b> trade edit, click <b>Legal</b> again and check the trade box really
-             kept it. And if you see <b>&ldquo;Could not save: &hellip; &mdash; have you run
+             appears. So after your <b>first</b> trade edit, reload <b>Settings</b> &mdash; you come back on
+             <b>Legal</b> &mdash; and check the trade box really kept it. And if you see <b>&ldquo;Could not save: &hellip; &mdash; have you run
              migrate_terms_conditions.php?&rdquo;</b>, nothing saved at all: that one is for whoever set the system up.</p>
           <p><b>Not the same as &ldquo;Trade terms&rdquo; in the menu.</b> The <b>Trade terms</b> page in the left-hand
              nav is about the buying <em>discounts</em> an account gets. The trade <em>document</em> lives here, on
@@ -271,7 +276,9 @@ return [
              document has something in it. Because the link is read live, <b>change a word today and every quote already
              sitting in someone&rsquo;s inbox shows the new wording next time they open it</b>. That page needs
              <b>no login</b> and is printable &mdash; anyone with the link can read it, so keep internal notes out of
-             these boxes. It shows your company name as its heading and is footed &ldquo;Provided via YourBlinds&rdquo;.</p>
+             these boxes. It is headed with your company name, then the document&rsquo;s own title in small capitals
+             &mdash; <b>Terms &amp; Conditions</b>, <b>Terms &amp; Conditions (Trade)</b> or <b>Privacy Policy</b>
+             &mdash; then your wording, and is footed &ldquo;Provided via YourBlinds&rdquo;.</p>
           <p><b>One honest limitation.</b> The <em>online</em> quote page &mdash; the tick-box beside
              &ldquo;I agree to the Terms &amp; Conditions of &lt;your company&gt;.&rdquo; and the link at the foot
              &mdash; always shows the <b>retail</b> wording, even for a trade account. The trade wording is what a trade
@@ -298,8 +305,8 @@ return [
                      'Third box, your privacy policy — what you do with a customer\'s details. It is written to UK data protection law, and it already names the Information Commissioner\'s Office and how to complain.', 5],
             ['1:09', 'Email box fills; preview shows the quote link.',
                      'The last box is the email that goes out the moment a customer accepts online. Four placeholders here, not seven — and the important one is quote link, which drops in the web address of their own quote so they can look at it again any time.', 6],
-            ['1:21', 'Save pressed; green banner; tab snaps to Company.',
-                     'One button at the bottom saves all four together — Save terms, privacy and email. You get a green banner, and then the page drops you back on the Company tab. Nothing is lost; just click Legal again to carry on.', 7],
+            ['1:21', 'Save pressed; green banner above the tabs; still on Legal.',
+                     'One button at the bottom saves all four together — Save terms, privacy and email. The page reloads, a green banner appears above the row of tabs saying Terms, Privacy Policy and acceptance email saved, and you are still on the Legal tab: the screen remembers which tab you had open, so you can read the previews back straight away.', 7],
             ['1:33', 'Quote footer link, then the public page.',
                      'And this is the point of it. Your quotes and invoices no longer print pages of terms — they print one line with a link. The customer clicks it and reads the current version on a plain web page with your company name at the top. Change a word here, and every quote already sitting in someone\'s inbox shows the new wording next time they look.', 8],
         ],

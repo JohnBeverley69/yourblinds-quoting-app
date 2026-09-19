@@ -92,6 +92,10 @@ return [
           .gd .cfmbtns{ display:flex; gap:.5rem; justify-content:center; }
           .gd .cfm-cancel{ border:1px solid var(--line); background:var(--panel); color:var(--soft); border-radius:7px; padding:.28rem .7rem; font-size:.78rem; font-weight:600; }
           .gd .cfm-ok{ background:var(--err); color:#fff; border-radius:7px; padding:.28rem .7rem; font-size:.78rem; font-weight:700; }
+          /* the scrim fills the whole stage, and the caption strip is a child of
+             the stage — so lift the captions clear or step 7 reads its line
+             through a 45% dark wash. */
+          .gd .caps{ z-index:10; }
 
           /* ---- where it lands (step 8) ---- */
           .gd .stage[data-step="8"] .settingswrap{ display:none; }
@@ -179,19 +183,20 @@ return [
                         <div class="dname">Demo Blinds Ltd</div>
                         <div class="dline">Unit 4, Sample Way</div>
                         <div class="dline">Sample Business Park</div>
-                        <div class="dline">Leeds, West Yorkshire, LS1 1AA</div>
+                        <div class="dline">Leeds LS1 1AA</div>
+                        <div class="dline">West Yorkshire</div>
                         <div class="dline">01234 567890</div>
                         <div class="dline">hello@demoblinds.example</div>
                         <div class="dline">VAT No. GB 123 4567 89</div>
                       </div>
-                      <div class="docmeta">Quote 1042</div>
+                      <div class="docmeta">Quote PRE-2026-0042</div>
                     </div>
                     <div class="doclines"><span></span><span></span><span></span></div>
                   </div>
                 </div>
 
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> Settings opens on the <b>Company</b> tab.</b>
+                  <b class="c1"><span class="n">1</span> Settings opens on the <strong>Company</strong> tab.</b>
                   <b class="c2"><span class="n">2</span> Choose File &mdash; pictures only.</b>
                   <b class="c3"><span class="n">3</span> Picked &mdash; but not saved yet.</b>
                   <b class="c4"><span class="n">4</span> Upload logo.</b>
@@ -215,7 +220,7 @@ return [
              sneak it through, it&rsquo;ll be turned away. A <b>see-through (transparent) PNG</b> sits best, because
              everything it prints on is white paper.</p>
 
-          <p><b>Shape matters more than size.</b> Your logo is squeezed to fit <b>64 points tall by 240 wide</b> on
+          <p><b>Shape matters more than size.</b> Your logo is squeezed to fit <b>64 pixels tall by 240 wide</b> on
              the PDFs, and <b>64 by 200</b> on the accept page. A long, wide logo fills that nicely. A tall square
              crest has to shrink to fit the height, so it comes out small and hard to read. Crop the empty white
              space off the edges before you upload and it&rsquo;ll look twice the size.</p>

@@ -99,16 +99,21 @@ return [
                 </div>
 
                 <div class="card-t">Suppliers</div>
-                <p class="pghint">Who you <b>order stock from</b> &mdash; these fill a product&rsquo;s <em>Order supplier</em> field and go on purchase orders.</p>
+                <p class="pghint">Who you <b>order stock from</b> &mdash; these fill a product&rsquo;s <em>Order supplier</em> field and go on purchase orders. Tick a row&rsquo;s delete box to remove a stray (they get added automatically when you save a product).</p>
 
                 <label class="slbl">Delivery address <span class="muted">(where suppliers ship to)</span></label>
                 <div class="ta taddr f2 keep"><span class="ph">Your business / warehouse address &mdash; this goes on every supplier order</span><span class="val">Demo Blinds Ltd<br>Unit 4, Sample Way<br>Leeds<br>LS1 1AA</span></div>
 
-                <p class="pghint" style="margin-top:.8rem">Add the order email for each supplier. You can rename a supplier, tick <b>Remove</b> to delete it, or add one in the bottom row &mdash; then Save.</p>
+                <p class="pghint" style="margin-top:.8rem">Add the order email for each supplier. You can rename a supplier, tick <b>Remove</b> to delete it, or add one in the bottom row &mdash; then Save. Suppliers you set on products appear here automatically.</p>
 
                 <div class="suptable2">
                   <div class="sup-head"><span>Supplier</span><span>Order email</span><span>Account no.</span><span class="rm">Remove</span></div>
 
+                  <!-- Deliberate: the "In House" name and the "Louvolight" stray are the only two
+                       values on screen at step 0. Neither is typed by the user — both arrive on
+                       their own (a product saved with that supplier adds the row), and the stray has
+                       to pre-exist for the Remove demonstration at step 7. Every value the narration
+                       actually fills (f2..f5 and the Decora email fix) is blank at step 0. -->
                   <div class="sup-row">
                     <span class="box"><span class="val" style="opacity:1">In House</span></span>
                     <span class="box"><span class="ph">orders@supplier.com</span></span>
@@ -151,7 +156,7 @@ return [
                 <div class="flash flash-ok"><div class="okbanner"><span>&check;</span><div>Suppliers saved.</div></div></div>
 
                 <div class="popanel">
-                  <div class="pohd"><span class="pot">PURCHASE ORDER</span><span class="por">Ref: Q-1042</span></div>
+                  <div class="pohd"><span class="pot">PURCHASE ORDER</span><span class="por">Ref: PRE-2026-0042</span></div>
                   <div class="pogrid">
                     <div class="pobox"><span class="pol">Supplier</span>Louvolite<br>Account no: LV-4471</div>
                     <div class="pobox"><span class="pol">Deliver to</span>Demo Blinds Ltd<br>Unit 4, Sample Way<br>Leeds LS1 1AA</div>
@@ -180,9 +185,11 @@ return [
           <ul class="steps">
             <li><b>Delivery address</b> &mdash; the one address <em>all</em> your suppliers ship to. It prints on every
                 purchase order in the <b>Deliver to</b> box, so put the full thing in, exactly as a courier would need it.
-                Leave it empty and the send screen stops you with
+                Leave it empty and the send screen puts a red warning across the top &mdash;
                 &ldquo;<b>No delivery address set &mdash; suppliers won&rsquo;t know where to ship.</b> Add one under
-                Settings &rsaquo; Suppliers first.&rdquo;</li>
+                Settings &rsaquo; Suppliers first.&rdquo; It is only a warning: nothing is blocked, the send button still
+                works, and the purchase order goes out with &ldquo;<b>&mdash; no delivery address set &mdash;</b>&rdquo;
+                printed in the <b>Deliver to</b> box. So treat that red bar as a stop sign even though the app doesn&rsquo;t.</li>
             <li><b>One row per supplier</b>, four columns, and <em>every</em> cell is a live box you can type in:
                 <b>Supplier</b> (the name, up to 150 characters &mdash; typing over it <em>is</em> how you rename one),
                 <b>Order email</b> (where the purchase order is sent, shown as <code>orders@supplier.com</code> until you fill it),
@@ -196,11 +203,24 @@ return [
              that name is added here automatically &mdash; so usually your only job on this tab is adding the email. It works the
              other way round too: the drop-down list on a product&rsquo;s <b>Order supplier</b> box is fed from <b>this table and
              nowhere else</b>, plus <em>In House</em>, which is always offered.</p>
-          <p><b>&ldquo;In House&rdquo;</b> is pinned to the top of the list on purpose. It means <em>you make it yourself</em>: no
-             email is ever sent for it, no shipping address is asked for, and it never produces a purchase order. Putting a real
-             email on In House achieves nothing. Products you buy from a master catalogue don&rsquo;t need a supplier either &mdash;
-             on the product they read &ldquo;<b>Made by &lt;factory&gt; &mdash; orders go straight to their manufacturing</b>&rdquo;
-             and they route themselves into their own group when you place the order.</p>
+          <p><b>&ldquo;In House&rdquo;</b> is pinned to the top of the list on purpose. It means <em>you make it yourself</em>, so
+             normally there is nothing to send and you should <b>leave its Order email blank</b>. What happens when you place the
+             order then depends on <em>whose</em> product it is. A product from a <b>master catalogue</b> (one the factory makes for
+             you) is lifted out into its own green group headed
+             &ldquo;<b>&#127981; &lt;factory&gt; &mdash; manufacturing</b>&rdquo; and marked <em>auto-routed</em>, with the note
+             &ldquo;These are your products from the &lt;factory&gt; catalogue &mdash; they go <b>straight to manufacturing</b>
+             when you place the order. No supplier email needed.&rdquo; It needs no email and no address. On the product
+             itself there is no <b>Order supplier</b> box at all; it reads
+             &ldquo;<b>Made by &lt;factory&gt; &mdash; orders go straight to their manufacturing</b>&rdquo; instead.</p>
+          <p>One of <em>your own</em> products marked In House is different: it simply becomes a group called <b>In House</b>,
+             first in the list, exactly like any other supplier. With the email blank it shows
+             &ldquo;<b>No order email for In House</b> &mdash; fix it under Settings &rsaquo; Suppliers to send this&rdquo; and there
+             is nothing to tick, which is the harmless, normal state. But <b>put a real email on In House and the app will take you
+             at your word</b> &mdash; it becomes sendable and will email itself a purchase order like any other firm. So leave that
+             box empty unless you genuinely want an order landing in your own inbox. The one thing to watch: if <em>every</em> line
+             on a job is In House with no email and nothing is going to manufacturing, the send screen has nothing it can do and the
+             button is greyed out with &ldquo;<b>Nothing&rsquo;s ready to send yet &mdash; set suppliers on your products and their
+             emails in Settings.</b>&rdquo;</p>
           <div class="heads"><span class="hi">&#9888;</span><div><b>The supplier name here is just text &mdash; your products don&rsquo;t follow it.</b>
              There is no link between the two: your products hold the supplier&rsquo;s name as plain words. Rename <b>Louvolite</b> to
              <b>Louvolite Ltd</b> on this tab and every product still says <em>Louvolite</em>, so the send screen can no longer find an
@@ -224,8 +244,11 @@ return [
              row is left <em>unticked</em> on purpose &mdash; &ldquo;left unticked so you don&rsquo;t double-order.&rdquo; Sending also
              moves the job on from <b>Accepted</b> to <b>Ordered</b>. Factory accounts use this very same list and the very same
              delivery address from <b>&#128230; Order bought-in</b> on their incoming orders.</p>
-          <p><b>Before you switch on auto-ordering.</b> Over on <b>Settings &rsaquo; Quoting</b> there&rsquo;s
-             &ldquo;Automatically order bought-in blinds from their supplier when an order is placed&rdquo;. It is <b>off by default</b>
+          <p><b>Before you switch on auto-ordering.</b> Over on <b>Settings &rsaquo; Quoting</b>, <em>if your login has it</em>, there&rsquo;s
+             a box headed <b>Auto-order bought-in items</b>:
+             &ldquo;Automatically order bought-in blinds from their supplier when an order is placed&rdquo;. Don&rsquo;t go hunting for
+             it &mdash; that whole panel is <b>only shown to a super-admin login</b>, so on an ordinary account it simply isn&rsquo;t on
+             the page, and nothing is wrong if you can&rsquo;t find it. Where it does appear, it is <b>off by default</b>
              and it sends <em>real</em> purchase orders with nobody checking first, so only turn it on once every email on this tab has
              been confirmed. A supplier with no email is simply left for you to order by hand &mdash; it won&rsquo;t fail silently.</p>
           <p><b>Three different things called &ldquo;supplier&rdquo;</b>, so you don&rsquo;t get them muddled:
@@ -239,9 +262,9 @@ return [
         // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
             ['0:00', 'Settings opens; Suppliers tab highlighted.',      'Settings, then the Suppliers tab — the fifth one along. This is the list of firms you buy your stock from, and it is what your purchase orders are sent to.', 1],
-            ['0:10', 'Delivery address types in.',                      'Start with the delivery address — where your suppliers send the goods. It prints on every single purchase order, so put the full thing in, exactly as a courier would need it. Leave it blank and the send screen stops you with, no delivery address set — suppliers won\'t know where to ship.', 2],
+            ['0:10', 'Delivery address types in.',                      'Start with the delivery address — where your suppliers send the goods. It prints on every single purchase order, so put the full thing in, exactly as a courier would need it. Leave it blank and the send screen warns you in red — no delivery address set, suppliers won\'t know where to ship — but it won\'t actually stop you, and the order goes out with no address on it at all.', 2],
             ['0:25', 'Louvolite: name, order email, account fill.',     'Now each supplier. The name, then the order email — this is the important one, because the order is emailed to exactly this address and nowhere else. Then your account number with them, so they can see whose order it is.', 3],
-            ['0:38', 'Decora row fills; In House sits on top.',         'The same again for the next one. And notice In House sitting at the top — that\'s the app\'s own marker for anything you make yourself. It never needs an email, and it never gets a purchase order.', 4],
+            ['0:38', 'Decora row fills; In House sits on top.',         'The same again for the next one. And notice In House sitting at the top — that\'s the app\'s own marker for anything you make yourself. Leave its email blank: with nothing in that box there is nothing to send. Put a real address in and the app takes you at your word — In House becomes just another supplier and will email itself a purchase order.', 4],
             ['0:50', 'The bottom row fills — a new supplier.',          'The empty row at the bottom is how you add one. Most of the time you won\'t need it: whenever you save a product and type a supplier on it, that name appears here on its own. All that\'s missing is the email, and that\'s what you\'re here for.', 5],
             ['1:03', 'Decora\'s email is wrong; the save is rejected.', 'Get an address wrong and the page won\'t quietly take it. It comes back with, that doesn\'t look like a valid email for Decora — and nothing at all is saved, not even the delivery address you just typed. Fix the address and save again.', 6],
             ['1:17', 'Stray row ticked for Remove; saved.',             'To get rid of a stray, tick Remove on its row and save. Clearing the name out of the box does nothing at all — the row just gets skipped. And be careful renaming one: your products still hold the old name, so the order can\'t find an email for it any more. Safer to leave the name alone and change it on the products first.', 7],

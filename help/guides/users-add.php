@@ -23,7 +23,8 @@ return [
         'lede'    => 'This page does <b>two jobs</b>. At the top, the <b>Add user</b> form makes a new login. Underneath,
                       <b>Existing users</b> lists everyone you have, with an <b>Edit</b> link on every row &mdash; and the Edit
                       page is where you fine-tune what that person actually sees: their <b>Dashboard panels</b>, their
-                      <b>Active</b> switch, and their <b>home address</b> for the calendar&rsquo;s run map.',
+                      <b>Active</b> switch, their <b>home address</b> for the calendar&rsquo;s run map &mdash; and the <b>Danger zone</b>
+                      that deletes them.',
         'open'    => '/admin/users.php',
         'css'     => '
           .gd .muted{ color:var(--faint); font-weight:400; }
@@ -53,20 +54,28 @@ return [
           .gd .stage[data-step="5"] .perm-row{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
           .gd .stage[data-step="7"] .dash-fs{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
 
+          /* the Home address boxes fill in as the voice reaches them at step 8 */
+          .gd .stage[data-step="8"] .f8 .ph{ opacity:0; }
+          .gd .stage[data-step="8"] .f8 .val{ opacity:1; animation:gdRoll .8s ease-out both; }
+          .gd .stage[data-step="8"] .f8{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
+
           .gd .addbtn{ margin-top:.85rem; display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.42rem .9rem; font-size:.82rem; font-weight:700; transition:transform .1s, filter .1s; }
           .gd .stage[data-step="6"] .addbtn{ transform:scale(.97); filter:brightness(1.12); }
           .gd .stage[data-step="8"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          .gd .stage[data-step="8"] .toast{ opacity:1; transform:none; }
 
-          /* the result of pressing Add user: the green flash + the real table */
+          /* the green flash the real page prints at the TOP, under the heading */
+          .gd .flash{ display:none; margin:0 0 .7rem; }
+          .gd .stage[data-step="6"] .scA .flash, .gd .stage[data-step="8"] .scB .flash{ display:block; }
+          /* the result of pressing Add user: the new row in the real table */
           .gd .aftr{ display:none; margin-top:.9rem; }
           .gd .stage[data-step="6"] .aftr{ display:block; }
-          .gd .stage[data-step="8"] .aftr8{ display:block; }
           .gd .utitle{ font-size:.72rem; font-weight:700; color:var(--ink); margin:.7rem 0 .35rem; }
           .gd .utab{ display:grid; grid-template-columns:5.6rem 5.2rem 5rem 3.6rem 3.2rem 2.2rem; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
           .gd .uc{ background:var(--surface); padding:.28rem .32rem; font-size:.66rem; color:var(--ink); }
           .gd .uc.hd{ background:var(--panel); color:var(--faint); font-weight:700; font-size:.58rem; text-transform:uppercase; letter-spacing:.03em; }
           .gd .uc .nvr{ color:var(--faint); }
+          .gd .uc .you{ color:var(--faint); }
+          .gd .uc.rl{ text-transform:capitalize; }
           .gd .uc .lnk{ color:var(--accent); }
           .gd .ubadge{ display:inline-block; border-radius:999px; padding:.02rem .38rem; font-size:.58rem; font-weight:700; background:var(--good-wash); color:var(--good); }
 
@@ -77,7 +86,14 @@ return [
           .gd .fsnote{ font-size:.62rem; color:var(--faint); margin-left:.35rem; }
           .gd .back{ font-size:.66rem; color:var(--faint); margin:-.6rem 0 .7rem; }
           .gd .addr3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.4rem; margin-top:.4rem; }
-          .gd .cancel{ margin-left:.6rem; font-size:.78rem; color:var(--faint); }
+          /* Save changes / Cancel: Cancel is a real secondary BUTTON, not a text link */
+          .gd .acts{ display:flex; align-items:center; gap:.5rem; }
+          .gd .acts .save{ margin-top:1rem; }
+          .gd .cancelbtn{ margin-top:1rem; display:inline-flex; align-items:center; border:1px solid var(--border-strong,#c7ccd4); background:var(--surface); color:var(--soft); border-radius:8px; padding:.42rem .8rem; font-size:.82rem; font-weight:600; }
+          /* Danger zone */
+          .gd .dz{ margin-top:1rem; padding-top:.7rem; border-top:1px solid var(--line); }
+          .gd .dzh{ font-size:.8rem; font-weight:700; color:#b91c1c; margin:0 0 .25rem; }
+          .gd .delbtn{ margin-top:.5rem; display:inline-flex; background:var(--err); color:#fff; border-radius:8px; padding:.38rem .8rem; font-size:.8rem; font-weight:700; }
           @media(max-width:620px){ .gd .utab{ grid-template-columns:1fr 1fr; } .gd .addr3{ grid-template-columns:1fr; } }',
         'demo'    => '
           <div class="demo-shell">
@@ -88,10 +104,10 @@ return [
                 <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Users</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="toast">&check; Saved</div>
 
                 <!-- Scene A: /admin/users.php -->
                 <div class="osc scA">
+                  <div class="flash"><div class="okbanner"><b>&check;</b> User added.</div></div>
                   <div class="card-t">Add user</div>
                   <div class="frow">
                     <div class="fld"><label>First name</label><div class="box f1"><span class="ph">First name</span><span class="val">Dave</span></div></div>
@@ -129,11 +145,13 @@ return [
                   <div class="addbtn">Add user</div>
 
                   <div class="aftr">
-                    <div class="okbanner"><b>&check;</b> User added.</div>
                     <div class="utitle">Existing users (4)</div>
                     <div class="utab">
                       <span class="uc hd">Name</span><span class="uc hd">Email</span><span class="uc hd">Roles</span><span class="uc hd">Status</span><span class="uc hd">Last login</span><span class="uc hd"></span>
-                      <span class="uc">Dave Miller</span><span class="uc">dave@&hellip;</span><span class="uc">sales, fitter</span><span class="uc"><span class="ubadge">active</span></span><span class="uc"><span class="nvr">never</span></span><span class="uc"><span class="lnk">Edit</span></span>
+                      <span class="uc">Anna Shaw <span class="you">(you)</span></span><span class="uc">anna@&hellip;</span><span class="uc rl">admin, sales</span><span class="uc"><span class="ubadge">active</span></span><span class="uc">18 Sep 2026 08:14</span><span class="uc"><span class="lnk">Edit</span></span>
+                      <span class="uc">Dave Miller</span><span class="uc">dave@&hellip;</span><span class="uc rl">sales, fitter</span><span class="uc"><span class="ubadge">active</span></span><span class="uc"><span class="nvr">never</span></span><span class="uc"><span class="lnk">Edit</span></span>
+                      <span class="uc">Jo Patel</span><span class="uc">jo@&hellip;</span><span class="uc rl">office</span><span class="uc"><span class="ubadge">active</span></span><span class="uc">17 Sep 2026 16:02</span><span class="uc"><span class="lnk">Edit</span></span>
+                      <span class="uc">Sam Reed</span><span class="uc">sam@&hellip;</span><span class="uc rl">fitter</span><span class="uc"><span class="ubadge">active</span></span><span class="uc">12 Sep 2026 07:48</span><span class="uc"><span class="lnk">Edit</span></span>
                     </div>
                   </div>
                 </div>
@@ -142,6 +160,44 @@ return [
                 <div class="osc scB">
                   <div class="card-t">Dave Miller</div>
                   <p class="back">&larr; Back to users</p>
+                  <div class="flash"><div class="okbanner"><b>&check;</b> User updated.</div></div>
+
+                  <div class="frow">
+                    <div class="fld"><label>First name</label><div class="boxv">Dave</div></div>
+                    <div class="fld"><label>Last name</label><div class="boxv">Miller</div></div>
+                  </div>
+                  <div class="frow" style="margin-top:.55rem">
+                    <div class="fld"><label>Email <span class="muted">(optional)</span></label><div class="boxv">dave@demoblinds.example</div></div>
+                    <div class="fld"><label>Username</label><div class="boxv">&nbsp;</div></div>
+                  </div>
+                  <div class="frow" style="margin-top:.55rem">
+                    <div class="fld"><label>New password</label>
+                      <div class="box"><span class="ph">Leave blank to keep current</span></div></div>
+                    <div class="fld"><label>Roles</label>
+                      <div class="permbox">
+                        <span class="chkopt"><span class="tick">&check;</span> Admin</span>
+                        <span class="chkopt"><span class="tick">&check;</span> Owner</span>
+                        <span class="chkopt"><span class="tick">&check;</span> Office</span>
+                        <span class="chkopt"><span class="tick on">&check;</span> Sales</span>
+                        <span class="chkopt"><span class="tick">&check;</span> Agent</span>
+                        <span class="chkopt"><span class="tick on">&check;</span> Fitter</span>
+                        <span class="chkopt"><span class="tick">&check;</span> Readonly</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="ghint">Tick every role this person fills &mdash; e.g. someone who fits and also closes sales should have both
+                     ticked. The most privileged role drives admin-only access.</p>
+
+                  <div class="plbl">Permissions</div>
+                  <div class="permrow">
+                    <span class="chkopt"><span class="tick on">&check;</span> Create quotes</span>
+                    <span class="chkopt"><span class="tick">&check;</span> Create orders</span>
+                    <span class="chkopt"><span class="tick">&check;</span> View all customer jobs</span>
+                    <span class="chkopt"><span class="tick">&check;</span> View costs</span>
+                    <span class="chkopt"><span class="tick on">&check;</span> Fittings only</span>
+                  </div>
+                  <p class="ghint"><b>Fittings only</b> limits a user&rsquo;s calendar to fitting jobs (hides measures / sales visits)
+                     &mdash; handy for fitters.</p>
 
                   <fieldset class="gdfs dash-fs">
                     <div class="gdlg">Dashboard</div>
@@ -160,17 +216,27 @@ return [
                   <fieldset class="gdfs">
                     <div class="gdlg">Home address</div>
                     <p class="ghint" style="margin-top:0">Used as the start and end point for the calendar&rsquo;s &ldquo;Today&rsquo;s run&rdquo; map. Leave blank if the user works out of the office only.</p>
-                    <div class="fld"><label>Address line 1</label><div class="boxv">12 Sample Terrace</div></div>
-                    <div class="fld" style="margin-top:.4rem"><label>Address line 2</label><div class="boxv">&nbsp;</div></div>
+                    <div class="fld"><label>Address line 1</label>
+                      <div class="box f8"><span class="ph"></span><span class="val">12 Sample Terrace</span></div></div>
+                    <div class="fld" style="margin-top:.4rem"><label>Address line 2</label>
+                      <div class="box"><span class="ph"></span></div></div>
                     <div class="addr3">
-                      <div class="fld"><label>Town</label><div class="boxv">Leeds</div></div>
-                      <div class="fld"><label>County</label><div class="boxv">West Yorkshire</div></div>
-                      <div class="fld"><label>Postcode</label><div class="boxv">LS9 8AB</div></div>
+                      <div class="fld"><label>Town</label>
+                        <div class="box f8"><span class="ph"></span><span class="val">Leeds</span></div></div>
+                      <div class="fld"><label>County</label>
+                        <div class="box f8"><span class="ph"></span><span class="val">West Yorkshire</span></div></div>
+                      <div class="fld"><label>Postcode</label>
+                        <div class="box f8"><span class="ph"></span><span class="val">LS9 8AB</span></div></div>
                     </div>
                   </fieldset>
 
-                  <div><span class="save">Save changes</span><span class="cancel">Cancel</span></div>
-                  <div class="aftr aftr8" style="margin-top:.7rem"><div class="okbanner"><b>&check;</b> User updated.</div></div>
+                  <div class="acts"><span class="save">Save changes</span><span class="cancelbtn">Cancel</span></div>
+
+                  <div class="dz">
+                    <p class="dzh">Danger zone</p>
+                    <p class="ghint" style="margin-top:0">Deleting this user is permanent. Their existing quotes will be kept (link cleared).</p>
+                    <div class="delbtn">Delete user</div>
+                  </div>
                 </div>
 
                 <div class="caps">
@@ -180,8 +246,8 @@ return [
                   <b class="c4"><span class="n">4</span> Roles &mdash; Sales is already on; tick Fitter too.</b>
                   <b class="c5"><span class="n">5</span> Permissions &mdash; Fittings only on, View costs off.</b>
                   <b class="c6 good"><span class="n">6</span> Add user &mdash; he&rsquo;s in the list, last login &ldquo;never&rdquo;.</b>
-                  <b class="c7"><span class="n">7</span> Edit &rarr; Dashboard: which panels he may see.</b>
-                  <b class="c8 good"><span class="n">8</span> Active, home address, Save changes.</b>
+                  <b class="c7"><span class="n">7</span> Edit &rarr; the same fields, plus Dashboard: which panels he may see.</b>
+                  <b class="c8 good"><span class="n">8</span> Active, home address typed in, Save changes.</b>
                 </div>
               </div>
             </div>
@@ -190,7 +256,8 @@ return [
           <p>The <b>Users</b> page lives under <b>Setup</b> in the sidebar, and only an <b>Admin</b> can open it. It does two jobs on one
              screen: the <b>Add user</b> form at the top creates a login, and <b>Existing users</b> underneath lists everyone you have &mdash;
              with an <b>Edit</b> link on every row. The Edit page has everything the add form has, <b>plus</b> the <b>Dashboard</b> panel box,
-             the <b>Active</b> switch and a <b>Home address</b>. So: add them here, then open <b>Edit</b> to finish the job.</p>
+             the <b>Active</b> switch, a <b>Home address</b> and a <b>Danger zone</b> for deleting them. So: add them here, then open
+             <b>Edit</b> to finish the job.</p>
 
           <p class="prose"><b>1) Who they are, and how they get in</b></p>
           <ul class="steps">
@@ -214,7 +281,7 @@ return [
             <li><b>Admin</b> is the one that matters. It is the <b>only</b> role that opens <b>Products, Users, Settings, Trade terms</b> and
                 <b>Billing</b>. Everything else in the app is governed by the permissions below, not by the role.</li>
             <li><b>Sales</b> and <b>Fitter</b> have exactly one job each: they decide who is offered in an appointment&rsquo;s
-                <b>&ldquo;Assign to&rdquo;</b> list. A <b>measure</b> offers your <b>Sales</b> people; a <b>fitting</b> offers your
+                <b>&ldquo;Assigned to&rdquo;</b> list. A <b>measure</b> offers your <b>Sales</b> people; a <b>fitting</b> offers your
                 <b>Fitter</b>s. (If nobody holds the role at all, everyone is offered, so nothing ever gets stuck.)</li>
             <li><b>Owner, Office, Agent and Readonly</b> are <b>labels</b> today &mdash; handy for knowing who&rsquo;s who, but they don&rsquo;t
                 lock anything down on their own. In particular, <b>Readonly does not make someone read-only</b>. Use the
@@ -235,7 +302,23 @@ return [
                 right for a fitter &mdash; they reach their job through <b>My Schedule</b> instead.</li>
           </ul>
 
-          <p class="prose"><b>4) The Dashboard box (on the Edit page)</b></p>
+          <p class="prose"><b>4) The Edit page &mdash; the same form again, with four extras</b></p>
+          <ul class="steps">
+            <li>Click <b>Edit</b> on anybody&rsquo;s row and you get the whole form back, already filled in: <b>First name</b>,
+                <b>Last name</b>, <b>Email (optional)</b>, <b>Username</b>, <b>Roles</b> and <b>Permissions</b>. Change what you like and
+                press <b>Save changes</b>. (One small difference: on the Edit page <b>Username</b> is plain &mdash; it loses the
+                &ldquo;use this for staff with no email&rdquo; note the add form carries.)</li>
+            <li><b>New password</b> replaces the add form&rsquo;s <b>Password *</b>, and it is <em>not</em> required. The box says
+                &ldquo;<em>Leave blank to keep current</em>&rdquo; &mdash; so leave it alone and their existing password carries on
+                working. Type in it only when you are actually resetting it for them, and it still has to be <b>8 characters</b> or
+                more. Under the <b>Roles</b> box sits the same note the add form doesn&rsquo;t show: &ldquo;<em>Tick every role this
+                person fills &mdash; e.g. someone who fits and also closes sales should have both ticked. The most privileged role
+                drives admin-only access.</em>&rdquo;</li>
+            <li>Then the four things the add form hasn&rsquo;t got at all: the <b>Dashboard</b> panel box, the <b>Active</b> switch,
+                the <b>Home address</b> fieldset and, right at the bottom, the <b>Danger zone</b>. They are covered next.</li>
+          </ul>
+
+          <p class="prose"><b>5) The Dashboard box (Edit page only)</b></p>
           <p>The screen says it plainly: &ldquo;<em>Which Dashboard panels this user can see. Admins always see everything; these checkboxes only
              apply to non-admin users. Tick none to hide the Dashboard menu entry entirely for this user. Gross profit also requires the
              View costs permission above.</em>&rdquo;</p>
@@ -251,7 +334,7 @@ return [
                 the dashboard address just bounces them there too.</li>
           </ul>
 
-          <p class="prose"><b>5) Active, home address, and getting rid of someone</b></p>
+          <p class="prose"><b>6) Active, home address, and getting rid of someone</b></p>
           <ul class="steps">
             <li><b>Active (can sign in)</b> is the on/off switch. Untick it and they can&rsquo;t log in &mdash; but be warned, they just get the
                 ordinary <code>Invalid username/email or password.</code> message, <b>not</b> &ldquo;your account is off&rdquo;. So tell them,
@@ -260,13 +343,15 @@ return [
                 &ldquo;used as the start and end point for the calendar&rsquo;s <b>Today&rsquo;s run</b> map&rdquo;. Leave it blank for anyone who
                 works out of the office only. If postcode lookup is switched on for you, a <b>Find by postcode</b> box and a <b>Find address</b>
                 button appear above the fields &mdash; type the postcode, press the button, then <b>Pick an address</b>.</li>
-            <li><b>Save changes</b> (or <b>Cancel</b> to back out). The <b>Danger zone</b> at the bottom has <b>Delete user</b>, which is
-                <b>permanent</b> &mdash; their existing quotes are kept but unlinked.</li>
+            <li><b>Save changes</b> &mdash; the blue button at the foot of the form, with a grey <b>Cancel</b> button beside it that takes
+                you back to the users list without saving. Below the form, under a red <b>Danger zone</b> heading, sits
+                &ldquo;<em>Deleting this user is permanent. Their existing quotes will be kept (link cleared).</em>&rdquo; and the red
+                <b>Delete user</b> button. It really is permanent.</li>
             <li><b>You are protected from yourself.</b> On your own row the <b>Admin</b> tick and the <b>Active</b> tick are greyed out, and
                 there is no Danger zone &mdash; you can&rsquo;t untick your own admin, switch yourself off, or delete yourself.</li>
           </ul>
 
-          <p class="prose"><b>6) If you&rsquo;re on the factory account</b></p>
+          <p class="prose"><b>7) If you&rsquo;re on the factory account</b></p>
           <ul class="steps">
             <li>As well as the extra <b>Factory</b> role, a <b>Production area</b> box of tick-boxes appears on <b>both</b> screens. This is the
                 <b>one place</b> a workshop login&rsquo;s work is set: it drives that login&rsquo;s <b>scan screen</b> (the blinds it can finish)
@@ -293,8 +378,11 @@ return [
                <li>Deleting &rarr; it asks <code>Delete &lt;Name&gt;? This cannot be undone.</code>, then confirms <code>User deleted. Their existing quotes are kept but unlinked.</code></li>
              </ul></div>
 
-          <p>Press <b>Add user</b> and you get a green <b>User added.</b>, with the new row in <b>Existing users</b> below: their name, email,
-             roles comma-joined (<em>sales, fitter</em>), an <b>active</b> badge, and a grey <b>never</b> under <b>Last login</b>. When they first
+          <p>Press <b>Add user</b> and the page comes back with a green <b>User added.</b> across the <b>top</b>, and the new row in
+             <b>Existing users</b> below. That heading counts everybody &mdash; <b>Existing users (4)</b> &mdash; and the rows are listed
+             <b>by name</b>, so your new person slots in alphabetically rather than at the bottom. Each row shows their name (your own is
+             marked <b>(you)</b>), their email, their roles comma-joined (<em>Sales, Fitter</em>), an <b>active</b> badge, and a grey
+             <b>never</b> under <b>Last login</b>. When they first
              sign in they land on the <b>Dashboard</b> if they have any panel ticked, otherwise the <b>Calendar</b> &mdash; and a factory bench
              login with an area goes straight to the <b>Floor</b>. That grey <b>never</b> is the quickest way to spot a login nobody has picked
              up yet.</p>',
@@ -310,11 +398,11 @@ return [
                      'Now the roles. Sales is already ticked when the page opens, so untick it if it\'s wrong. Tick every role this person fills — Dave fits and he sells, so he gets both. Only Admin opens the setup screens; Sales and Fitter decide who\'s offered when you book a measure or a fitting.', 4],
             ['0:44', 'Fittings only ticked; View costs left off.',
                      'Permissions are what really bite. Create quotes is ticked by default. View costs is the one that shows your cost and profit figures, so leave it off for a fitter. Fittings only keeps his calendar to fitting jobs, and hides your measure and sales visits.', 5],
-            ['0:58', 'Add user pressed; green "User added."; the row appears.',
-                     'Press Add user. He appears in the list below, active, with his roles beside him, and his last login showing "never" until he first signs in.', 6],
-            ['1:09', 'Edit page; Dashboard fieldset; Revenue & KPIs ticked.',
-                     'Open Edit and there\'s more. The Dashboard box picks which panels of the dashboard he\'s allowed to see. Tick none at all and the Dashboard disappears from his menu completely. Gross profit only works if you\'ve also given him View costs.', 7],
-            ['1:23', 'Home address shown; Save changes; "User updated."',
-                     'Underneath, "Active" is the on-off switch for signing in, and his home address is where Today\'s run starts and ends on the map. Press Save changes and you\'re done.', 8],
+            ['0:58', 'Add user pressed; green "User added." at the top; the row appears in the list.',
+                     'Press Add user. A green "User added." comes up at the top of the page, and he joins the list below — in name order, active, with his roles beside him, and his last login showing "never" until he first signs in.', 6],
+            ['1:09', 'Edit page: the same fields filled in, New password blank, Dashboard fieldset lights up.',
+                     'Open Edit and you get the whole form back, already filled in — names, email, username, roles and permissions. The only one that changes is the password box: it now says "New password", and leaving it blank keeps the one he\'s already got. Underneath is the part the add form hasn\'t got. The Dashboard box picks which panels of the dashboard he\'s allowed to see. Tick none at all and the Dashboard disappears from his menu completely. Gross profit only works if you\'ve also given him View costs.', 7],
+            ['1:30', 'Home address typed in; Save changes; green "User updated."; Danger zone below.',
+                     'Underneath, "Active" is the on-off switch for signing in, and his home address is where Today\'s run starts and ends on the map — address line one, town, county and postcode. Press Save changes and you get a green "User updated." at the top. Cancel, beside it, backs out without saving. And right at the bottom, in the Danger zone, "Delete user" — permanent, so take care.', 8],
         ],
 ];

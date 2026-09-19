@@ -118,6 +118,12 @@ return [
           .gd .calc-card.danger .cc-sell{ color:var(--err); }
           .gd .cc-cap{ display:none; font-size:.68rem; line-height:1.4; color:var(--err); font-weight:600; margin-top:.3rem; }
           .gd .calc-card.danger .cc-cap{ display:block; }
+          /* "steep but perfectly legal" band (75%–90.9% margin): amber, not error red.
+             Red is reserved for the genuine 999% cap, so a saveable rate never looks broken. */
+          .gd .calc-card.steep{ border-color:#f59e0b; background:color-mix(in srgb,#f59e0b 12%,transparent); }
+          .gd .calc-card.steep .cc-sell{ color:#b45309; }
+          :root[data-theme="dark"] .gd .calc-card.steep .cc-sell{ color:#fbbf24; }
+          @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .gd .calc-card.steep .cc-sell{ color:#fbbf24; } }
           .gd .calc-bars{ margin:.9rem 0 .3rem; display:flex; flex-direction:column; gap:.4rem; }
           .gd .bar{ height:12px; background:var(--line-2); border-radius:6px; overflow:hidden; }
           .gd .bar span{ display:block; height:100%; border-radius:6px; transition:width .15s; width:0; }
@@ -141,6 +147,7 @@ return [
                 <div class="tabrow">
                   <span class="tb">Company</span><span class="tb on">Quoting</span><span class="tb">Legal</span>
                   <span class="tb">Status colours</span><span class="tb">Suppliers</span>
+                  <span class="tb">Accounting</span><span class="tb">Back up data</span>
                 </div>
                 <div class="mform">
                   <div class="card-t">Default margins</div>
@@ -233,7 +240,10 @@ return [
             <li><b>Default price-table markup&nbsp;%</b> (the word changes to &ldquo;margin&rdquo; if you tick Margin) &mdash;
                 your everyday rate on the blind itself. It is &ldquo;Applied to every (product, system) that
                 doesn&rsquo;t have an explicit value set on the product edit page.&rdquo; It takes pennies as well as
-                whole numbers (steps of 0.01) and won&rsquo;t go below 0.</li>
+                whole numbers (steps of 0.01), won&rsquo;t go below 0, and &mdash; like the options box next to it
+                &mdash; carries a ceiling of <b>999</b>. That is the same 999 the clamp further down turns on. The form
+                is marked <code>novalidate</code>, so your browser won&rsquo;t stop you typing 1500 into it; it&rsquo;s
+                the save itself that quietly trims anything above 999 back down to 999.</li>
             <li><b>Default options &amp; extras markup&nbsp;%</b> &mdash; the same job for everything you bolt on:
                 &ldquo;Uniform uplift on every option choice&rsquo;s price &mdash; fixed-&pound;, per-metre, and
                 width-table modes all included.&rdquo; Read the rest of that line carefully, because it surprises
@@ -245,8 +255,12 @@ return [
                 works in <b>markup</b>. Whatever you type is converted on the way in and converted back on the way out
                 &mdash; which is exactly why flipping between the two is safe, and why a rate of 0 shows no blue line
                 at all.</li>
-            <li><b>Save margins</b> &mdash; the one and only button here. The page reloads onto Quoting and tells you
-                <b>&ldquo;Default margins saved.&rdquo;</b></li>
+            <li><b>Save margins</b> &mdash; the one and only button here. The page reloads and tells you
+                <b>&ldquo;Default margins saved.&rdquo;</b> Don&rsquo;t be thrown if it drops you back onto
+                <b>Company</b> with that green message sitting at the top: saving sends you to the plain
+                <code>/admin/settings.php</code> address with no tab named in it, so you land on whichever tab the app
+                remembers &mdash; the very same quirk as above. Click <b>Quoting</b> and your new figures are sitting
+                there, saved.</li>
             <li><b>If you see a red banner instead of the form</b>, this database hasn&rsquo;t had its one-off
                 upgrade: &ldquo;The default-margins columns aren&rsquo;t on this database yet &mdash; run
                 <code>/migrate_default_margins.php</code> &hellip; (super-admin) to enable this section.&rdquo; The same
@@ -334,7 +348,11 @@ return [
     barMg.style.width = ((isFinite(mg)?mg/ref:1)*100) + '%';
     // The save handler does max(0, min(999, markup)) — so a margin over ~90.90 is clamped.
     var asMarkup = m2k(p), capped = asMarkup > 999;
-    mgCard.classList.toggle('danger', capped || p >= 80);
+    // Red = the genuine 999% cap ONLY. 80% margin is a legal rate that saves
+    // fine (400% markup), so the steep-but-legal band gets the amber treatment
+    // that matches the ⚠ line in .calc-eq instead of looking like an error.
+    mgCard.classList.toggle('danger', capped);
+    mgCard.classList.toggle('steep', !capped && p >= 75);
     q('mmCap').style.display = capped ? 'block' : 'none';
     // What the engine actually stores — worded exactly as the blue line on the screen.
     if (p <= 0){
@@ -387,7 +405,7 @@ JS,
             ['1:14', 'First box flashes 95, settles at 90.90 with an amber note.',
                      'One thing to know before you push margin up. Margin runs away near the top — eighty percent margin is five times your cost, ninety is ten. And there\'s a hard ceiling: type ninety-five and it saves as the highest markup allowed, then comes back as ninety point nine. It won\'t warn you, it\'ll just be a different number to the one you typed.', 6],
             ['1:31', 'Save margins is pressed; green "Default margins saved." appears.',
-                     'Happy? Save margins. The page reloads, you land back on Quoting, and it says Default margins saved.', 7],
+                     'Happy? Save margins. The page reloads and says Default margins saved. If it puts you back on the Company tab, nothing has gone wrong — that\'s the same tab-memory quirk as before. Click Quoting and your new figures are there.', 7],
             ['1:39', 'The form settles back; the "where it lands" strip appears.',
                      'That\'s it — and it\'s now working everywhere. Every product with no rate of its own uses it. Every new option choice uses it. Every quote uses it, retail and trade alike.', 8],
         ],

@@ -89,9 +89,13 @@ return [
           .gd .pdfsheet{ border:1px solid var(--line); border-radius:8px; background:var(--surface); padding:.5rem .6rem; max-width:33rem; box-shadow:var(--gd-shadow); }
           .gd .pdfsheet .t{ font-size:.75rem; font-weight:700; color:var(--ink); }
           .gd .pdfsheet .sub{ font-size:.6rem; color:var(--faint); margin:.1rem 0 .4rem; }
-          .gd .pdfhead{ display:flex; gap:.14rem; flex-wrap:wrap; }
-          .gd .pdfhead span{ background:#1f3b5b; color:#fff; font-size:.57rem; border-radius:3px; padding:.12rem .34rem; white-space:nowrap; }
-          .gd .pdfempty{ font-size:.6rem; color:var(--faint); text-align:center; padding:.32rem 0; border-bottom:1px solid var(--line-2); }
+          .gd .pdfhead,
+          .gd .pdfrow{ display:grid; grid-template-columns:3.9rem minmax(0,1fr) 3.3rem 3.4rem 3.9rem 3rem 2.9rem 3.2rem; gap:.14rem; }
+          .gd .pdfhead span{ background:#1f3b5b; color:#fff; font-size:.57rem; border-radius:3px; padding:.12rem .34rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .gd .pdfrow{ padding:.16rem 0; border-bottom:1px solid var(--line-2); }
+          .gd .pdfrow span{ font-size:.57rem; color:var(--ink); padding:0 .34rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .gd .pdfhead .num, .gd .pdfrow .num{ text-align:right; }
+          .gd .pdfmore{ font-size:.58rem; font-style:italic; color:var(--faint); padding:.26rem .34rem 0; }
 
           /* ---- the bordered box: before a backup, and after one ---- */
           .gd .bkbox{ margin-top:.9rem; border:1px solid var(--line); border-radius:8px; padding:.55rem .7rem; max-width:33rem; }
@@ -175,9 +179,17 @@ return [
                     <div class="sub">42 records &middot; All data &middot; generated 19 Sep 2026</div>
                     <div class="pdfhead">
                       <span>Quote #</span><span>Customer</span><span>Postcode</span><span>Status</span>
-                      <span>Date</span><span>Total</span><span>Received</span><span>Outstanding</span>
+                      <span>Date</span><span class="num">Total</span><span class="num">Received</span><span class="num">Outstanding</span>
                     </div>
-                    <div class="pdfempty">No quotes or orders yet.</div>
+                    <div class="pdfrow">
+                      <span>BEV-2026-0042</span><span>Jane Smith</span><span>LS1 4AB</span><span>Accepted</span>
+                      <span>12 Sep 2026</span><span class="num">&pound;1,240.00</span><span class="num">&pound;620.00</span><span class="num">&pound;620.00</span>
+                    </div>
+                    <div class="pdfrow">
+                      <span>BEV-2026-0041</span><span>M Okafor</span><span>HG1 2QT</span><span>Ordered</span>
+                      <span>9 Sep 2026</span><span class="num">&pound;486.00</span><span class="num">&pound;486.00</span><span class="num">&pound;0.00</span>
+                    </div>
+                    <div class="pdfmore">&hellip; and 40 more rows, one per job.</div>
                   </div>
                 </div>
 
@@ -265,7 +277,9 @@ return [
                 the job was quoted</em>, so an old order still reads correctly after you rename something.</li>
           </ul>
           <p>On a <b>trade order with no customer record</b>, the Customer and Postcode columns fall back to the
-             <b>end customer&rsquo;s</b> name and postcode, so the rows are never blank.</p>
+             <b>end customer&rsquo;s</b> name and postcode as typed on the order. If those were left blank as well,
+             the cell simply comes out <b>empty</b> &mdash; nothing is invented to fill it, so a blank Customer or
+             Postcode in the file means nobody filled the end-customer details in on the job itself.</p>
           <div class="heads"><span class="hi">&#9888;</span><div><b>Only a full Excel counts as a backup.</b>
              Excel with <b>both dates empty</b> &rarr; <b>counts</b>, and moves the &ldquo;last full backup&rdquo; date
              on. Excel with a From or a To in (including anything <b>Last 30 days</b> or <b>This year</b> typed in for

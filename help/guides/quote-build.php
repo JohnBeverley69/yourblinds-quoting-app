@@ -62,6 +62,16 @@ return [
           .gd .numbox .spin{ position:absolute; right:.35rem; top:50%; transform:translateY(-50%); z-index:2;
                              display:flex; flex-direction:column; line-height:.72; font-size:.46rem; color:var(--faint); }
           .gd .chkline{ display:inline-flex; align-items:center; gap:.4rem; font-size:.72rem; color:var(--ink); margin-top:.3rem; }
+          /* A .selectbox that fills in. The Product control on the real form is a
+             <select> (edit.php:1162), so it must be drawn as one — but it also has
+             to roll its value in at step 4, which the engine only scaffolds for
+             .box. This gives a .selectbox the same .ph / .val pair, clear of the
+             chevron the ::after draws on the right. */
+          .gd .selectbox.fillv{ position:relative; }
+          .gd .selectbox.fillv .ph{ color:var(--faint); transition:opacity .15s; }
+          .gd .selectbox.fillv .val{ position:absolute; left:.6rem; right:1.7rem; top:0; bottom:0;
+                                     display:flex; align-items:center; color:var(--ink); opacity:0;
+                                     white-space:nowrap; overflow:hidden; }
           .gd .qbtn{ display:inline-flex; align-items:center; gap:.3rem; border-radius:8px; padding:.4rem .8rem;
                      font-size:.76rem; font-weight:600; }
           .gd .qbtn.pri{ background:var(--accent); color:#fff; }
@@ -110,8 +120,11 @@ return [
                             padding:.4rem .55rem; margin-top:.6rem; }
           .gd .beforestrip .bs-t{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em;
                                   color:var(--faint); font-weight:700; margin-bottom:.3rem; }
-          .gd .bs-row{ display:flex; gap:.4rem; flex-wrap:wrap; }
+          .gd .bs-row{ display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; }
           .gd .bs-row .selectbox{ min-width:0; font-size:.68rem; padding:.22rem .45rem; }
+          /* Fabric is a text input, not a dropdown — so the asleep strip draws it
+             as a box with no chevron (edit.php:1195). */
+          .gd .bs-row .boxv{ height:auto; min-width:0; font-size:.68rem; padding:.22rem .45rem; }
           .gd .fabres{ display:none; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
                        background:var(--surface); margin-top:.25rem; padding:.2rem; max-width:19rem;
                        box-shadow:0 8px 20px rgba(0,0,0,.08); }
@@ -153,7 +166,6 @@ return [
           .gd .optrow{ display:flex; align-items:center; gap:.5rem; font-size:.73rem; margin:.24rem 0; flex-wrap:wrap; }
           .gd .optrow > label{ min-width:6.4rem; color:var(--faint); font-size:.62rem; text-transform:uppercase; letter-spacing:.03em; }
           .gd .optrow .selectbox{ min-width:8.5rem; font-size:.74rem; padding:.26rem .5rem; }
-          .gd .plus{ color:#065f46; font-weight:600; font-size:.7rem; }
           .gd .multi{ display:flex; gap:.9rem; flex-wrap:wrap; }
           .gd .child{ margin-left:.7rem; padding-left:.6rem; border-left:2px solid var(--line); }
           .gd .capn{ font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint);
@@ -176,7 +188,7 @@ return [
                   <span class="qn">Quote PRE-2026-0042</span>
                   <span class="qpill">Draft</span>
                   <span class="mini acc">&check; Customer accepted</span>
-                  <span class="mini">&times; Customer declined</span>
+                  <span class="mini">&#10005; Customer declined</span>
                   <span class="qtot">Total &pound;0.00</span>
                 </div>
 
@@ -254,7 +266,7 @@ return [
                 <div class="osc scCasc">
                   <div class="card-t">Add blind</div>
                   <div class="frow">
-                    <div class="fld"><label>Product <span class="req">*</span></label><div class="box f4"><span class="ph">Choose product&hellip;</span><span class="val">Roller Blind</span></div></div>
+                    <div class="fld"><label>Product <span class="req">*</span></label><div class="selectbox fillv f4"><span class="ph">Choose product&hellip;</span><span class="val">Roller Blind</span></div></div>
                     <div class="fld"><label>System</label><div class="selectbox">Standard</div></div>
                   </div>
                   <div class="frow" style="margin-top:.5rem">
@@ -287,11 +299,11 @@ return [
                   <div class="beforestrip">
                     <div class="bs-t">Before you pick a product, these three are asleep</div>
                     <div class="bs-row">
-                      <span class="selectbox asleep">Choose product&hellip;</span>
                       <span class="selectbox asleep">Choose product first</span>
                       <span class="selectbox asleep">All bands</span>
-                      <span class="selectbox asleep">Choose product first</span>
+                      <span class="boxv asleep">Choose product first</span>
                     </div>
+                    <p class="ldesc2">System and Band are <b>dropdowns</b> sitting on those words; Fabric is a <b>text box</b> you cannot type in yet.</p>
                   </div>
                 </div>
 
@@ -327,7 +339,7 @@ return [
                 <div class="osc scErr">
                   <div class="card-t">Add blind &mdash; the price says no</div>
                   <div class="frow">
-                    <div class="fld"><label>Product <span class="req">*</span></label><div class="boxv">Roller Blind</div></div>
+                    <div class="fld"><label>Product <span class="req">*</span></label><div class="selectbox">Roller Blind</div></div>
                     <div class="fld"><label>System</label><div class="selectbox" style="border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.25)">Cassette</div></div>
                   </div>
                   <div class="frow" style="margin-top:.5rem">
@@ -350,26 +362,33 @@ return [
                   <div class="card-t">Add blind &mdash; the options</div>
 
                   <div class="optgroup before">
-                    <div class="opthd">Fascia Options &mdash; sits ABOVE Width / Drop</div>
-                    <div class="optrow"><label>Fascia Sizing</label><span class="selectbox">Standard</span></div>
+                    <div class="optrow"><label>Fascia Options</label><span class="selectbox">Senses</span></div>
+                    <div class="child">
+                      <div class="optrow"><label>Fascia Sizing</label><span class="selectbox">Standard fascia</span></div>
+                    </div>
                   </div>
+                  <p class="ldesc2">The dashed box is <b>us</b>, not the screen. Options flagged <em>Show above the size fields</em> are simply drawn here, between <b>Measurement unit</b> and <b>Width / Drop</b> &mdash; with <b>no heading of any kind</b> over them.</p>
 
                   <div class="optgroup">
                     <div class="opthd">Options</div>
-                    <div class="optrow"><label>Bottom weight</label><span class="selectbox">Chained</span><span class="plus">+ &pound;5.00</span></div>
-                    <div class="optrow"><label>Control type</label><span class="selectbox">Motorised</span></div>
+                    <div class="optrow"><label>Bottom Weight</label><span class="selectbox">Chained</span></div>
                     <div class="child">
-                      <div class="optrow"><label>Motor extras</label>
-                        <span class="multi">
-                          <span class="chkline"><span class="tick on">&check;</span> Remote handset</span>
-                          <span class="chkline"><span class="tick">&check;</span> Wall switch</span>
-                          <span class="chkline"><span class="tick">&check;</span> Charging cable</span>
-                        </span>
-                      </div>
-                      <p class="capn">Chain drop (mm)</p>
-                      <div class="numbox g8"><span class="ph">&nbsp;</span><span class="val">900</span><span class="spin">&#9650;<br>&#9660;</span></div>
+                      <div class="optrow"><label>Colour</label><span class="selectbox">White</span></div>
                     </div>
+                    <div class="optrow"><label>Optional Extras</label>
+                      <span class="multi">
+                        <span class="chkline"><span class="tick on">&check;</span> <em>first choice on your list</em></span>
+                        <span class="chkline"><span class="tick">&check;</span> <em>second choice</em></span>
+                        <span class="chkline"><span class="tick">&check;</span> <em>third choice</em></span>
+                      </span>
+                    </div>
+                    <p class="ldesc2">Ticks, not a dropdown, because that option has <b>Allow multiple choices</b> set. The captions are whatever <em>your</em> product&rsquo;s list holds &mdash; we are not going to put words in your screen&rsquo;s mouth.</p>
+                    <div class="optrow"><label>Fit height</label></div>
+                    <p class="capn">Fit height</p>
+                    <div class="numbox g8"><span class="ph">&nbsp;</span><span class="val">2100</span><span class="spin">&#9650;<br>&#9660;</span></div>
+                    <p class="ldesc2">One choice plus a measurement &rarr; the pointless dropdown is hidden and the number box <b>is</b> the control. You get the option&rsquo;s name, then the measurement&rsquo;s own small caption over the box &mdash; on this one they happen to be the same words twice.</p>
                   </div>
+                  <p class="ldesc2"><b>No prices anywhere in this grid.</b> Picking an option never puts a little &ldquo;+ &pound;5.00&rdquo; beside it. The money shows up in the green price line below (<em>+ extras &pound;5.00</em>) and, once saved, on the blind&rsquo;s own line in the table.</p>
 
                   <div class="ovr">
                     <div class="sum"><span class="tri">&#9662;</span>Adjust price for this blind</div>
@@ -377,7 +396,7 @@ return [
                       <div class="fld"><label>Discount % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
                       <div class="fld"><label>Markup % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
                     </div>
-                    <p class="ldesc2">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote.</p>
+                    <p class="ldesc2">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote. On a company set to <b>margin</b> rather than markup, that second label reads <b>Margin % (this blind)</b> and the sentence says <em>margin</em> instead.</p>
                   </div>
 
                   <div class="prev ok"><b>&pound;50.00</b> per blind &middot; base &pound;45.00 &middot; + extras &pound;5.00</div>
@@ -427,7 +446,7 @@ return [
           </ul>
 
           <p><b>In the builder.</b> A dark bar sits at the top with the quote number, a status pill, the one-tap
-             <b>&check; Customer accepted</b> / <b>&times; Customer declined</b> buttons and the running <b>Total</b>. Below that is a
+             <b>&check; Customer accepted</b> / <b>&#10005; Customer declined</b> buttons and the running <b>Total</b>. Below that is a
              <b>Quote actions</b> row &mdash; View PDF, Download PDF, <b>&#128230; Save as order</b> and the status buttons. The
              customer block is <b>folded shut</b>: a single line reading <em>&ldquo;Customer: Emma Fletcher &mdash; Leamington Spa
              &mdash; CV32 5PJ (click to edit)&rdquo;</em>. Click it to open the whole address form, which has its own <b>Save details</b>
@@ -457,7 +476,8 @@ return [
                 (in). It is set <b>per quote, not per blind</b>: change it and every size already on the quote is re-displayed in the
                 new unit &mdash; the stored measurements never change. You can also just type <code>150cm</code>, <code>1.5m</code> or
                 <code>60in</code> straight into Width and it is read for you; something it cannot read comes back as
-                <em>&ldquo;Could not read width &lsquo;abc&rsquo;.&rdquo;</em>. <b>Quantity</b> is how many identical blinds &mdash; on
+                <em>&ldquo;Could not read width &quot;abc&quot;.&rdquo;</em> &mdash; straight double quotes round whatever you
+                typed, which is how the app prints it back at you. <b>Quantity</b> is how many identical blinds &mdash; on
                 a per-slat product that label changes itself to <b>Number of slats</b>. <b>Notes</b> is <b>internal</b>: it prints on
                 your paperwork, not on the customer&rsquo;s quote.</li>
           </ul>
@@ -484,21 +504,40 @@ return [
              buttons start disabled and stay disabled until that box is green</b> &mdash; they are greyed and will not click. That is
              deliberate: a blind with no price cannot go onto a quote.</p>
 
-          <p><b>Options.</b> Once the product loads, its own <b>Options</b> grid appears, and it will not look the same on two
-             products, because options are set up per product. Some are a plain <b>dropdown</b> (with a &ldquo;&mdash; Select
+          <p><b>Options.</b> Once the product loads, a section headed simply <b>Options</b> appears, and it will not look the same on
+             two products, because options are set up per product. Some are a plain <b>dropdown</b> (with a &ldquo;&mdash; Select
              &mdash;&rdquo; first line only when nothing is set as the default). Some are a <b>list of tick-boxes</b> where you can
-             have more than one. Some are just a <b>number to type</b>, under a small capitalised caption. A chosen option can open a
-             number box of its own, choices can show a little picture, and some options only appear <b>after</b> you have picked the
-             fabric or the system &mdash; that is by design, not a glitch. A few options are flagged to sit <b>above</b> Width and Drop
-             (the roller fascia group), because you need to answer them before the size makes sense. <b>Adjust price for this blind</b>
-             is a folded-away panel for cost-viewers holding <b>Discount %</b> and <b>Markup %</b> for this line only, both showing
-             <em>product default</em> until you type in them. Then <b>Save</b>, or <b>Save and add another blind</b> to keep the form
-             open and carry on to the next window.</p>
+             have more than one &mdash; that is an option with <b>Allow multiple choices</b> ticked in its setup. Some are just a
+             <b>number to type</b>: when an option has a measurement box and only one thing to pick, the pointless dropdown is hidden
+             and the number box is the whole control, under a small capitalised caption &mdash; <em>Fascia width (mm)</em>,
+             <em>Fit height</em>. A chosen option can open a number box of its very own (<em>Top offset (mm)</em> hanging off one
+             choice), choices can show a little picture, and some options only appear <b>after</b> you have picked the fabric or the
+             system &mdash; that is by design, not a glitch. Before a fabric is picked you may see the stand-in line <em>&ldquo;Pick a
+             fabric above to see its options.&rdquo;</em> instead of the grid.</p>
+
+          <p><b>What the Options grid never shows you is a price.</b> There is no little green &ldquo;+ &pound;5.00&rdquo; beside the
+             choice you just made &mdash; each option is a label and a control, full stop. The money appears in two places only: the
+             live price line below the form (<em>+ extras &pound;5.00</em>) and, once the blind is saved, its own line in the blinds
+             table (<em>+ Bottom Weight: Chained (&pound;5.00)</em>). If you are hunting the grid for a price, stop hunting.</p>
+
+          <p><b>Options that sit above the size.</b> An option can be flagged <em>Show above the size fields</em> in its setup, and it
+             is then drawn between <b>Measurement unit (this quote)</b> and <b>Width / Drop</b> &mdash; because you need to answer it
+             before the size means anything. On the roller that is <b>Fascia Options</b> (Senses, the LL cassettes, or <b>No Fascia</b>),
+             and nested under it once a real fascia is chosen, <b>Fascia Sizing</b> &mdash; <em>Standard fascia</em>, <em>Over size for
+             single blind</em>, <em>Multi blind</em>. The last two open a <b>Fascia width</b> box. There is <b>no heading</b> over that
+             area on the real screen: the options just appear there, above Width, with nothing announcing them.</p>
+
+          <p><b>Adjust price for this blind</b> is a folded-away panel &mdash; only there if you are allowed to see costs &mdash;
+             holding <b>Discount % (this blind)</b> and <b>Markup % (this blind)</b> for this line only, both showing
+             <em>product default</em> until you type in them. If your company is set to work in <b>margin</b> rather than markup, that
+             second label reads <b>Margin % (this blind)</b> instead, and the little note underneath says <em>&ldquo;Leave blank to use
+             the product&rsquo;s set margin / discount.&rdquo;</em> Same box, your word for it. Then <b>Save</b>, or <b>Save and add
+             another blind</b> to keep the form open and carry on to the next window.</p>
 
           <p><b>The blinds list.</b> Each saved blind lands in the table on the right &mdash; columns <b>#</b>, <b>Description</b>,
              <b>Size</b>, <b>Qty</b>, <b>Unit</b>, <b>Total</b>. The description stacks up in the order you built it: the <b>Room</b> in
              bold, then <em>Roller Blind &mdash; Standard</em>, then <em>Band A &mdash; Louvolite &mdash; Sunset White / Ivory</em>,
-             then a line per option (<em>+ Bottom weight: Chained (&pound;5.00)</em>), then your internal note in italics. Three
+             then a line per option (<em>+ Bottom Weight: Chained (&pound;5.00)</em>), then your internal note in italics. Three
              buttons follow: <b>Edit</b>, <b>Dup</b> (<em>&ldquo;Duplicate this blind &mdash; copies fabric, system, options. New row
              opens in edit mode for you to tweak the size.&rdquo;</em> &mdash; the fastest way to do four windows in one room) and
              <b>&times;</b>, which asks <em>&ldquo;Remove this blind?&rdquo;</em> first. Before you add anything it simply says
@@ -512,7 +551,8 @@ return [
              clear)&rdquo;</em> and has a little <b>&pound;</b> box and a <b>Set</b> button. You shook hands on &pound;950 on the
              doorstep &mdash; type <code>950</code>, click <b>Set</b>, and the quote totals &pound;950 plus VAT. The gap between the
              blinds and the agreed figure appears above as a <b>Discount (to agreed price)</b> line, so the arithmetic still adds up
-             and nobody has to guess later why it does not. Empty the box and Set again to clear it.</p>
+             and nobody has to guess later why it does not. Agree a figure <em>higher</em> than the blinds add up to and the same row
+             calls itself <b>Price adjustment (to agreed price)</b> and shows a plus instead. Empty the box and Set again to clear it.</p>
 
           <p><b>The Wally tax (WT charge).</b> The purple row labelled <em>&ldquo;WT (internal &mdash; never shown to the
              customer)&rdquo;</em> is your hassle money &mdash; the awkward job, the scaffold tower, the two-hour round trip. Type the
@@ -524,11 +564,15 @@ return [
              customer accepts&hellip;&rdquo;</em> with <b>Deposit due on acceptance &pound;</b> and <b>Save deposit</b> &mdash; plus a
              handy <em>Suggested 50%: &pound;33.00</em> link you can click to fill the box. <b>After</b> they accept it flips to
              <em>&ldquo;Enter the deposit the customer has paid.&rdquo;</em> with <b>Deposit paid &pound;</b> and <b>Record deposit
-             paid</b>; once recorded you get <em>&ldquo;&check; Deposit paid &pound;33.00 on 19 Sep 2026&rdquo;</em> with <b>Amend</b>
-             and <b>Mark unpaid</b> if you fat-fingered it.</p>
+             paid</b>; once recorded you get <em>&ldquo;&check; Deposit paid &pound;33.00 on 19 Sep 2026&rdquo;</em> and, underneath
+             it, the two ways to undo a fat finger: an <b>Amend &pound;</b> label with a number box and a <b>Save</b> button beside
+             it (retype the figure, click Save), and a separate <b>Mark unpaid</b> button that reverses the whole thing. There is no
+             button actually labelled &ldquo;Amend&rdquo; &mdash; Amend is the caption on the box, and the button says Save.</p>
 
-          <p><b>Rollers only &mdash; several blinds under one fascia.</b> Set the fascia sizing option to <b>multi</b> and the Width box
-             locks itself to the words <em>multi blind</em>, because the individual widths now drive the cut. A panel appears under the
+          <p><b>Rollers only &mdash; several blinds under one fascia.</b> Set <b>Fascia Sizing</b> to <b>Multi blind</b> and the Width
+             box locks itself to the words <em>multi blind</em>, greyed and italic, because the individual widths now drive the cut. A
+             <b>Number of Blinds?</b> dropdown appears (2 to 5), and a <b>Blind 1 Width</b> &hellip; <b>Blind 5 Width</b> box for each
+             one you asked for. A panel appears under the
              price headed <b>Blinds in this fascia</b>: a row per blind with its own width, an optional drop override (leave it
              <em>same</em> to share the drop) and its price, with a running total. It fit-checks as you type &mdash;
              <em>&ldquo;&check; Fits: 2850 mm in 2900 mm fascia&rdquo;</em>, <em>&ldquo;&#9888; Won&rsquo;t fit: blinds total 3000 mm
@@ -544,14 +588,19 @@ return [
           <div class="heads"><span class="hi">&#9888;</span><div><b>Five things worth knowing before you go.</b>
              <b>(1)</b> Only a <b>draft</b> is editable &mdash; everything else is read-only until you reopen it.
              <b>(2)</b> <b>Paid is never a button.</b> The quote flips itself to paid once the deposit and payments cover the total.
-             <b>(3)</b> Marking it accepted also drops a <b>placeholder fitting</b> into the calendar (a fortnight out, 9am, an hour
-             long) for you to move to the real date.
+             <b>(3)</b> Marking it accepted also creates the install appointment for you &mdash; titled <em>Install: PRE-2026-0042
+             &mdash; Emma Fletcher</em>, 9am, an hour long, carrying the address over. It is deliberately given <b>no date</b>, so it
+             lands in the calendar&rsquo;s <b>Pending Fitting</b> tray for you to drag onto the real day. Where there is exactly one
+             fitter on the books it is assigned to them; with several it is left unassigned for you to pick. Decline the quote later
+             and that pending fitting is removed again.
              <b>(4)</b> <b>&#128230; Save as order</b> accepts the quote and takes you straight to Place order in one go.
              <b>(5)</b> On a job raised for a <b>trade account</b>, the customer block is replaced by a <b>Trade account</b> card
              showing the company&rsquo;s contact, phone, mobile, email and address, with the note <em>&ldquo;These details come from
-             the trade account &mdash; edit them there, not here.&rdquo;</em> You get two extra boxes instead &mdash; <b>Customer
-             reference (their order / PO)</b> and <b>Additional reference</b> &mdash; and the live price shows their
-             <em>trade discount</em> as well.</div></div>
+             the trade account.&rdquo;</em> (A super-admin &mdash; and only a super-admin &mdash; sees that sentence run on into
+             <em>&ldquo;&mdash; edit them there, not here&rdquo;</em>, plus a <b>Manage account &rarr;</b> link in the corner. If you
+             are not one, do not go hunting for either.) You get two extra boxes instead &mdash; <b>Customer reference (their order /
+             PO)</b> and <b>Additional reference (optional)</b> &mdash; and the live price shows their <em>trade discount</em> as
+             well.</div></div>
 
           <p>One last thing: if a screen looks like it is missing its little grey helper lines, you are probably in <b>compact mode</b>,
              which hides them to fit more on screen. Turn it off and the hints come back.</p>

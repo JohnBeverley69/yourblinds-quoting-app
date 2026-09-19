@@ -62,7 +62,8 @@ return [
           .gd .ctbl td{ padding:.32rem .4rem; border-bottom:1px solid var(--line); color:var(--ink); }
           .gd .ctbl th.num, .gd .ctbl td.num{ text-align:right; }
           .gd .ctbl a{ color:var(--accent); font-weight:600; }
-          .gd .cap100{ font-size:.62rem; color:var(--faint); margin:.4rem 0 0; }
+          .gd .foundline{ font-size:.66rem; color:var(--faint); margin:0 0 .5rem; }
+          .gd .foundline b{ color:var(--ink); }
 
           /* ---------- the form (Add / record) ---------- */
           .gd .colsepm{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.55rem .7rem; margin-top:.5rem; align-items:start; }
@@ -136,7 +137,7 @@ return [
                 <div class="navh navtrade">Trade</div>
                 <a>Trade accounts</a>
                 <div class="navh">Setup</div>
-                <a>Products</a><a>Settings</a>
+                <a>Products</a><a>Users</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
@@ -164,7 +165,6 @@ return [
                       <tr><td><b>Emma Fletcher</b></td><td>emma.f@icloud.com</td><td>&mdash;</td><td>Kenilworth</td><td>CV8 1AA</td><td class="num">0</td><td><a>Edit</a></td></tr>
                     </tbody>
                   </table>
-                  <p class="cap100">Showing the first 100 by name &mdash; use Search to reach the rest.</p>
                 </div>
 
                 <!-- ============ Scenes 2&ndash;5: Add customer ============ -->
@@ -235,26 +235,25 @@ return [
                     <div class="fld"><label>Mobile</label><div class="boxv">07700 900318</div>
                       <span class="waline"><span class="tick t-wa">&check;</span> Mobile is on WhatsApp</span></div>
                   </div>
+                  <div class="fld full"><label>Address line 1</label><div class="boxv">14 Willow Drive</div></div>
+                  <div class="fld full"><label>Address line 2</label><div class="boxv">Cubbington</div></div>
                   <div class="cols3">
-                    <div class="fld"><label>Address line 1</label><div class="boxv">14 Willow Drive</div></div>
-                    <div class="fld"><label>Address line 2</label><div class="boxv">Cubbington</div></div>
                     <div class="fld"><label>Town</label><div class="boxv">Leamington Spa</div></div>
-                  </div>
-                  <div class="cols3">
                     <div class="fld"><label>County</label><div class="boxv">Warwickshire</div></div>
                     <div class="fld"><label>Postcode</label><div class="boxv">CV32 5PJ</div></div>
-                    <div class="fld"><label>Notes</label><div class="tav">Prefers afternoon fittings&hellip;</div></div>
                   </div>
+                  <div class="fld full"><label>Notes</label>
+                    <div class="tav" style="min-height:52px">Prefers afternoon fittings. Dog in the back garden &mdash; ring first.</div></div>
                   <div class="facts"><span class="btnp">Save changes</span><span class="btns">Cancel</span></div>
 
                   <div class="rqh">Recent quotes</div>
                   <table class="ctbl">
                     <thead><tr><th>Quote #</th><th>Status</th><th class="num">Total</th><th>Created</th><th></th></tr></thead>
                     <tbody>
-                      <tr><td><b>Q-1042</b></td><td><span class="bdg accepted">accepted</span></td><td class="num">&pound;1,486.00</td><td>2 Aug 2026</td><td><a>Open</a></td></tr>
-                      <tr><td><b>Q-1039</b></td><td><span class="bdg sent">sent</span></td><td class="num">&pound;302.50</td><td>28 Jul 2026</td><td><a>Open</a></td></tr>
-                      <tr><td><b>Q-1031</b></td><td><span class="bdg ordered">ordered</span></td><td class="num">&pound;915.00</td><td>19 Jul 2026</td><td><a>Open</a></td></tr>
-                      <tr><td><b>Q-1028</b></td><td><span class="bdg draft">draft</span></td><td class="num">&pound;0.00</td><td>11 Jul 2026</td><td><a>Open</a></td></tr>
+                      <tr><td><b>BEV-2026-0042</b></td><td><span class="bdg accepted">accepted</span></td><td class="num">&pound;1,486.00</td><td>2 Aug 2026</td><td><a>Open</a></td></tr>
+                      <tr><td><b>BEV-2026-0039</b></td><td><span class="bdg sent">sent</span></td><td class="num">&pound;302.50</td><td>28 Jul 2026</td><td><a>Open</a></td></tr>
+                      <tr><td><b>BEV-2026-0031</b></td><td><span class="bdg ordered">ordered</span></td><td class="num">&pound;915.00</td><td>19 Jul 2026</td><td><a>Open</a></td></tr>
+                      <tr><td><b>BEV-2026-0028</b></td><td><span class="bdg draft">draft</span></td><td class="num">&pound;0.00</td><td>11 Jul 2026</td><td><a>Open</a></td></tr>
                     </tbody>
                   </table>
 
@@ -280,6 +279,7 @@ return [
                   <div class="bluep"><b>How merging works:</b> the customer with the lowest id (the oldest record) is kept. All quotes,
                     appointments and payments linked to the duplicate rows are re-pointed to the keeper, then the duplicate rows are deleted.
                     <b>Cannot be undone</b> &mdash; if you&rsquo;re not sure, eyeball each group first.</div>
+                  <p class="foundline">Found <b>1</b> duplicate name group with <b>1</b> redundant row in total.</p>
                   <div class="gcard">
                     <div class="gcardh">Emma Fletcher <span>(2 rows)</span></div>
                     <table class="ctbl">
@@ -289,7 +289,7 @@ return [
                         <tr><td>#487</td><td>emma.fletcher@gmail.com</td><td>01926 555104</td><td>Leamington Spa</td><td>CV32 5PJ</td><td class="num">4</td><td class="num">2</td><td>2 Aug 2026</td></tr>
                       </tbody>
                     </table>
-                    <div class="gacts"><span class="btnp">Merge this group</span></div>
+                    <div class="gacts"><span class="btns">Merge this group</span></div>
                   </div>
                 </div>
 
@@ -297,12 +297,11 @@ return [
                 <div class="osc scNew">
                   <div class="twocol">
                     <div>
-                      <p class="halfh">New &mdash; sale type</p>
+                      <p class="halfh">New</p>
                       <div class="seg"><span>Trade</span><span class="on">Retail</span></div>
                       <p class="segnote"><b>Retail sale</b><br>A direct retail customer at your standard pricing. You&rsquo;ll add their
                          details in the quote.</p>
-                      <p class="segnote">Pick <b>Trade</b> instead and the sale runs off a <b>trade account</b> &mdash; it never writes a
-                         customer here.</p>
+                      <div style="margin-top:.5rem"><span class="btnp">Start retail quote &rarr;</span></div>
                     </div>
                     <div>
                       <p class="halfh">New quote</p>
@@ -311,16 +310,26 @@ return [
                         <div class="sugg">Emma Fletcher &mdash; Leamington Spa &mdash; CV32 5PJ</div>
                         <div class="sugghint">Type to filter &mdash; leave blank for a new customer.</div></div>
                       <div class="fld" style="margin-top:.45rem"><label>Customer name <span class="req">*</span></label><div class="boxv">Emma Fletcher</div></div>
-                      <div class="fld" style="margin-top:.45rem"><label>Mobile</label><div class="boxv">07700 900318</div>
-                        <span class="waline"><span class="tick on">&check;</span> Mobile is on WhatsApp</span></div>
-                      <div class="fld" style="margin-top:.45rem"><label>Address</label>
-                        <div class="tav">14 Willow Drive, Cubbington, Leamington Spa, Warwickshire, CV32 5PJ</div></div>
+                      <div class="cols3">
+                        <div class="fld"><label>Email</label><div class="boxv">emma.fletcher@gmail.com</div></div>
+                        <div class="fld"><label>Phone <span class="lsoft">(landline)</span></label><div class="boxv">01926 555104</div></div>
+                        <div class="fld"><label>Mobile</label><div class="boxv">07700 900318</div>
+                          <span class="waline"><span class="tick on">&check;</span> Mobile is on WhatsApp</span></div>
+                      </div>
+                      <div class="fld full"><label>Address line 1</label><div class="boxv">14 Willow Drive</div></div>
+                      <div class="fld full"><label>Address line 2</label><div class="boxv">Cubbington</div></div>
+                      <div class="cols3">
+                        <div class="fld"><label>Town</label><div class="boxv">Leamington Spa</div></div>
+                        <div class="fld"><label>County</label><div class="boxv">Warwickshire</div></div>
+                        <div class="fld"><label>Postcode</label><div class="boxv">CV32 5PJ</div></div>
+                      </div>
+                      <div class="fld full"><label>Quote notes</label><div class="tav">&nbsp;</div></div>
                     </div>
                   </div>
                 </div>
 
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> The list &mdash; search, first 100, + Add customer.</b>
+                  <b class="c1"><span class="n">1</span> The list &mdash; Search, the Quotes count, + Add customer.</b>
                   <b class="c2"><span class="n">2</span> Name is the only must; email, landline, mobile, WhatsApp.</b>
                   <b class="c3"><span class="n">3</span> Two address lines, then town, county, postcode.</b>
                   <b class="c4"><span class="n">4</span> Notes for the fitter &mdash; then Save customer.</b>
@@ -335,8 +344,10 @@ return [
         'body'    => '
           <p><b>Customers</b> lives under <b>Retail</b> in the left-hand menu, and the subtitle on the page spells out what it holds:
              &ldquo;<b>End-customers belonging to &lt;your company&gt;</b>.&rdquo; These are the households you quote, measure and fit for.
-             It is visible to staff who can raise quotes or orders. One thing to know before anyone rings you about it: a staff member
-             <b>without</b> the &ldquo;view all customer jobs&rdquo; permission (set per person in <b>Settings &rarr; Users</b>) only sees
+             It appears on the menu for anybody carrying <em>any one</em> of three permissions &mdash; <b>Create quotes</b>,
+             <b>Create orders</b> or <b>View all customer jobs</b>. One thing to know before anyone rings you about it: a staff member
+             <b>without</b> the <b>&ldquo;View all customer jobs&rdquo;</b> tick (set per person in <b>Setup &rarr; Users</b> &mdash; note
+             <b>Setup</b>, not Settings; Users and Settings are two separate entries sitting side by side in that group) only sees
              customers who have a job <b>assigned to them</b>. Two people can open the same page and see lists of different lengths, and
              neither of them is broken. Admins see the lot.</p>
           <ul class="steps">
@@ -375,18 +386,24 @@ return [
                 name. It is the <b>same form again</b>, filled in &mdash; so correcting a postcode is a matter of typing over it and pressing
                 <b>Save changes</b> (you get <b>&ldquo;Customer updated.&rdquo;</b>). Below the form is <b>Recent quotes</b>: their last five,
                 newest first, with Quote #, a colour-coded <b>Status</b> badge, the <b>Total</b>, when it was <b>Created</b>, and <b>Open</b> to
-                jump into the quote. The badge colours are the app&rsquo;s own fixed set &mdash; <b>grey</b> draft, <b>blue</b> sent,
+                jump into the quote. The quote numbers are the app&rsquo;s own &mdash; your prefix, the year, then a four-digit count, like
+                <b>BEV-2026-0042</b>. If they have never been quoted, the <b>whole Recent quotes section is simply not there</b>; it appears the
+                moment they have one, so do not go hunting for an empty table on a brand-new record. The badge colours are the app&rsquo;s own
+                fixed set &mdash; <b>grey</b> draft, <b>blue</b> sent,
                 <b>green</b> accepted, <b>yellow</b> ordered, <b>red</b> rejected &mdash; so you can read where every job stands at a glance.
                 (These are not the palette on <em>Settings &rarr; Status colours</em>; that one paints your calendar cards and the orders list.)
                 At the very bottom is the <b>Danger zone</b>.</li>
             <li><b>Find duplicates</b> (admins only &mdash; the secondary button beside <b>+ Add customer</b>, titled <em>&ldquo;Find and merge
-                customers with the same name&rdquo;</em>). It groups every customer sharing a name and shows each group as a card &mdash;
-                <b>&ldquo;Emma Fletcher (2 rows)&rdquo;</b> &mdash; listing ID, Email, Phone, Town, Postcode, <b>Quotes</b>, <b>Appts</b> and
-                Created. The <b>oldest row is tinted green and badged &ldquo;Keeper&rdquo;</b>. Press <b>Merge this group</b> (or
-                <b>Merge all duplicates</b> in the header) and, as the blue panel says, every quote, appointment and payment on the other rows
+                customers with the same name&rdquo;</em>). Under the blue &ldquo;How merging works&rdquo; panel it counts up what it found &mdash;
+                <em>&ldquo;Found <b>1</b> duplicate name group with <b>1</b> redundant row in total.&rdquo;</em> &mdash; then shows each group as
+                a card headed <b>&ldquo;Emma Fletcher (2 rows)&rdquo;</b>, listing ID, Email, Phone, Town, Postcode, <b>Quotes</b>, <b>Appts</b>
+                and Created. The <b>oldest row is tinted green and badged &ldquo;Keeper&rdquo;</b>. Press <b>Merge this group</b> (the quiet grey
+                button under the card &mdash; only <b>Merge all duplicates</b> up in the header is the blue one) and you are asked to confirm:
+                <em>&ldquo;Merge this group? 1 duplicate row will be removed. Quote / appointment links are re-pointed to the keeper. This
+                can&rsquo;t be undone.&rdquo;</em> Say yes and, as the blue panel says, every quote, appointment and payment on the other rows
                 is re-pointed onto the keeper and the spares are deleted. You get a count back, e.g.
                 <em>&ldquo;Merged 1 group; removed 2 duplicates.&rdquo;</em> Nothing to do? It says
-                <em>&ldquo;No duplicates found&rdquo;</em> &mdash; &ldquo;Every customer in this tenant has a unique name. Nothing to
+                <em>&ldquo;No duplicates found &#127881;&rdquo;</em> &mdash; &ldquo;Every customer in this tenant has a unique name. Nothing to
                 merge.&rdquo; Check the Quotes and Appts counts before you merge: this one <b>cannot be undone</b>.</li>
             <li><b>Where customers come from.</b> This page is only one of three doors. Booking a <b>measure appointment</b> on the calendar
                 creates a customer (the installation address becomes their address), and starting a <b>New quote</b> for a name that is not on
@@ -394,7 +411,11 @@ return [
                 the book twice, and why Find duplicates exists. On a <b>New quote</b>, the <b>Existing customer</b> box is a plain text box with
                 a type-ahead: <em>&ldquo;Type to search by name, town, or postcode&hellip;&rdquo;</em>, hint <em>&ldquo;Type to filter &mdash;
                 leave blank for a new customer.&rdquo;</em> Type two or three letters, pick them, and their name, email, landline, mobile,
-                WhatsApp tick and full address all come across. That is the payoff for filling this form in properly.</li>
+                WhatsApp tick and full address all come across. Everything below that box is <b>the same set of boxes you have just filled in
+                here</b> &mdash; <b>Customer name</b> <span class="req">*</span>, <b>Email</b>, <b>Phone <em>(landline)</em></b>, <b>Mobile</b>
+                with its <b>Mobile is on WhatsApp</b> tick, <b>Address line 1</b>, <b>Address line 2</b>, <b>Town</b>, <b>County</b>,
+                <b>Postcode</b> &mdash; and one extra at the bottom, <b>Quote notes</b>, which belongs to that quote rather than to the person
+                and never lands on their customer record. That is the payoff for filling this form in properly.</li>
           </ul>
           <div class="oops"><b>The messages you will meet:</b>
              <ul style="margin:.4rem 0 0;padding-left:1.15rem">
@@ -410,11 +431,13 @@ return [
              or merge them instead.</div></div>
           <p><b>Retail and trade are two different books.</b> Customers is the <b>retail</b> one &mdash; your own end-customers. Businesses you
              <em>supply</em> are <b>trade accounts</b>, and they live under <b>Trade &rarr; Trade accounts</b>, each with its own discount,
-             portal login and invoices. When you start a sale from <b>New</b> you pick a side on a two-part <b>Trade | Retail</b> switch:
-             <b>Retail sale</b> is &ldquo;a direct retail customer at your standard pricing &mdash; you&rsquo;ll add their details in the
-             quote&rdquo;, and that is the side that uses this address book. A <b>trade</b> sale takes its customer details straight off the
-             account and <b>never writes a record here</b>, which is why your trade customers are not in this list and never will be. Money
-             taken from the people in this book shows up under <b>Retail &rarr; Payments</b>.</p>
+             portal login and invoices. The <b>+ New</b> button pinned at the top of the menu knows which of the two you are: on an ordinary
+             account it goes <b>straight to the retail New quote form</b>, and on the factory&rsquo;s own super-admin account it opens a
+             launcher first, headed <b>New</b>, with a two-part <b>Trade | Retail</b> switch. (If you have never seen that switch, this is why
+             &mdash; you are not missing a setting.) On it, <b>Retail sale</b> is &ldquo;a direct retail customer at your standard pricing.
+             You&rsquo;ll add their details in the quote&rdquo;, and that is the side that uses this address book. A <b>Trade sale</b> takes
+             its customer details straight off the account and <b>never writes a record here</b>, which is why your trade customers are not in
+             this list and never will be. Money taken from the people in this book shows up under <b>Retail &rarr; Payments</b>.</p>
           <p><b>One last thing:</b> there is <b>no bulk customer import</b>. Every name in here arrived one of three ways &mdash; typed on this
              form, created by a calendar booking, or created by a New quote. If you are moving over from another system, work through them as
              the jobs come in rather than trying to load them all at once.</p>',
@@ -431,10 +454,10 @@ return [
             ['1:08', 'Amber same-name banner with the match listed.',
              'If that name is already in the book, the app stops and shows you who it found, with their town, postcode and number so you can tell. Nine times in ten it is the same person and you click their name to open the one you already have. If it truly is a second Emma Fletcher, the button now reads Save anyway, and it saves. It only checks the name — two people really can share a phone or an email.', 5],
             ['1:28', 'Customer added; record, quotes, danger zone.',
-             'Saved — and this is their record. It is the same form, so correcting a postcode is just typing over it and Save changes. Underneath, their last five quotes with the status colour — grey drafted, blue sent, green accepted, yellow ordered — and Open to jump straight into one. At the bottom, the danger zone. Deleting is permanent and it asks you twice; their quotes stay but stop being joined to anybody, so only delete something you created by mistake, never someone with history.', 6],
+             'Saved — and this is their record. It is the same form, so correcting a postcode is just typing over it and Save changes. Underneath, their last five quotes, numbered your prefix, the year, then a count — Bev, two thousand and twenty six, forty two — with the status colour: grey draft, blue sent, green accepted, yellow ordered, and Open to jump straight into one. If they have never been quoted, that whole section simply is not there. At the bottom, the danger zone. Deleting is permanent and it asks you twice; their quotes stay but stop being joined to anybody, so only delete something you created by mistake, never someone with history.', 6],
             ['1:52', 'Find duplicates; green keeper row; merge.',
-             'Here is why the same name turns up twice. Booking a measure on the calendar creates a customer, and starting a New quote for a name that is not on the list creates one too — neither of those asks. Find duplicates rounds them up. The oldest record is the keeper, marked in green; every quote, appointment and payment on the others is moved onto it and the spares are deleted. Look at the quote and appointment counts first, because this one cannot be undone.', 7],
+             'Here is why the same name turns up twice. Booking a measure on the calendar creates a customer, and starting a New quote for a name that is not on the list creates one too — neither of those asks. Find duplicates rounds them up and tells you what it found — one duplicate name group, one redundant row. The oldest record is the keeper, marked in green; every quote, appointment and payment on the others is moved onto it and the spares are deleted. Look at the quote and appointment counts first, because this one cannot be undone.', 7],
             ['2:14', 'Trade or Retail; the new-quote type-ahead.',
-             'And that is the payoff. On New, Retail is the side that uses this address book — trade sales run off a trade account instead and never land in here. Start a retail quote, type two or three letters of her name in the customer box, pick her, and her phone, her address, her WhatsApp tick all come across. Leave that box empty and just type a new name, and the app quietly adds them to the book for you — handy, but that is how the duplicates you just merged got there.', 8],
+             'And that is the payoff. If your account is the factory\'s own, New opens a launcher with a Trade or Retail switch; on an ordinary account it takes you straight to the retail form, which is the same thing without the choice. Either way, Retail is the side that uses this address book — trade sales run off a trade account instead and never land in here. Start a retail quote, type two or three letters of her name in the customer box, pick her, and the rest of the form fills itself: email, landline, mobile, the WhatsApp tick, both address lines, town, county and postcode. The only box left is Quote notes, and that belongs to the job, not to her. Leave the customer box empty and just type a new name, and the app quietly adds them to the book for you — handy, but that is how the duplicates you just merged got there.', 8],
         ],
 ];

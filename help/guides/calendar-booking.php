@@ -35,6 +35,8 @@ return [
         'css'     => '
           /* ---- scene switching ------------------------------------------------ */
           .gd .osc{ display:none; }
+          /* step 0 = the poster: the empty board, nothing filled in anywhere */
+          .gd .stage[data-step="0"] .scBoard,
           .gd .stage[data-step="1"] .scBoard, .gd .stage[data-step="2"] .scBoard{ display:block; }
           .gd .stage[data-step="3"] .scTray{ display:block; }
           .gd .stage[data-step="4"] .scDrop{ display:block; }
@@ -84,7 +86,7 @@ return [
           .gd .cnb{ border:1px solid var(--line); border-radius:6px; padding:.1rem .38rem; font-size:.72rem; color:var(--soft); }
           .gd .cml{ font-size:.72rem; font-weight:700; color:var(--ink); text-align:center; line-height:1.15; }
           .gd .cml small{ display:block; font-size:.56rem; font-weight:500; color:var(--faint); }
-          .gd .cleg{ display:flex; flex-wrap:wrap; gap:.15rem .5rem; font-size:.55rem; color:var(--soft); margin-left:auto; max-width:23rem; }
+          .gd .cleg{ display:flex; flex-wrap:wrap; gap:.15rem .5rem; font-size:.55rem; color:var(--soft); margin-left:auto; max-width:26rem; }
           .gd .cleg span{ display:inline-flex; align-items:center; gap:.2rem; }
           .gd .cleg i{ width:8px; height:8px; border-radius:2px; display:inline-block; }
 
@@ -134,7 +136,14 @@ return [
           .gd .ckrow{ display:inline-flex; align-items:center; gap:.4rem; font-size:.68rem; color:var(--ink); margin:.4rem 0 .1rem; }
           .gd .bblk{ border-left:2px solid var(--line); padding-left:.5rem; margin-top:.35rem; }
           .gd .fhint{ font-size:.6rem; color:var(--faint); line-height:1.45; margin:.3rem 0 0; }
-          .gd .boxv{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel); display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
+          /* a number input with its spinner, so Duration (mins) reads as typable */
+          .gd .numbox{ position:relative; padding-right:1.1rem; }
+          .gd .numbox .spin{ position:absolute; right:.32rem; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; line-height:.62; font-size:.5rem; color:var(--faint); }
+          .gd .numbox .spin i{ font-style:normal; display:block; }
+          /* a dropped-open list: the closed control plus the real options beneath it */
+          .gd .optlist{ border:1px solid var(--border-strong,#c7ccd4); border-top:0; border-radius:0 0 7px 7px; background:var(--surface); padding:.12rem; box-shadow:0 8px 18px -12px rgba(20,30,45,.45); }
+          .gd .optlist b{ display:block; font-size:.66rem; font-weight:400; color:var(--soft); padding:.12rem .32rem; border-radius:4px; }
+          .gd .optlist b.pick{ background:var(--accent); color:#fff; font-weight:600; }
           .gd .facts{ display:flex; gap:.4rem; margin-top:.5rem; }
 
           /* ---- AM/PM radio cards (drawn as the real radios) -------------------- */
@@ -209,14 +218,18 @@ return [
                       <span class="cnb">Today</span>
                     </div>
                     <div class="cleg">
-                      <span><i style="background:#94a3b8"></i> Quote drafted</span>
-                      <span><i style="background:#2563eb"></i> Quote sent</span>
+                      <span><i style="background:#7c3aed"></i> Quote drafted</span>
+                      <span><i style="background:#f59e0b"></i> Quote sent</span>
                       <span><i style="background:#16a34a"></i> Accepted</span>
-                      <span><i style="background:#7c3aed"></i> Ordered</span>
-                      <span><i style="background:#0d9488"></i> Fitting booked</span>
-                      <span><i style="background:#0891b2"></i> Fitted</span>
-                      <span><i style="background:#ca8a04"></i> Invoiced</span>
-                      <span><i style="background:#15803d"></i> Paid</span>
+                      <span><i style="background:#dc2626"></i> Declined</span>
+                      <span><i style="background:#0891b2"></i> Ordered</span>
+                      <span><i style="background:#2563eb"></i> Appointment booked</span>
+                      <span><i style="background:#6366f1"></i> Fitting booked</span>
+                      <span><i style="background:#0d9488"></i> Fitted</span>
+                      <span><i style="background:#ea580c"></i> Invoiced</span>
+                      <span><i style="background:#475569"></i> Paid</span>
+                      <span><i style="background:#b91c1c"></i> Cancelled</span>
+                      <span><i style="background:#9ca3af"></i> No-show</span>
                       <span><i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting</span>
                       <span class="issp"><i style="background:transparent;outline:2px solid #e11d48;outline-offset:-2px"></i> &#9888;&#65039; Issues (2)</span>
                     </div>
@@ -229,7 +242,7 @@ return [
                     <span class="mc tod"><span class="dn">12/08</span><span class="appt" style="background:#2563eb"><span class="aw">Morning</span>ABC-2026-0031 &mdash; Angela Reed <span class="gl">&#9888;&#65039;</span><span class="gl">&#128221;</span></span></span>
                     <span class="mc"><span class="dn">13/08</span></span>
                     <span class="mc"><span class="dn">14/08</span></span>
-                    <span class="mc"><span class="dn">15/08</span><span class="appt fit" style="background:#0d9488"><span class="aw">9:00am</span>ABC-2026-0042 &mdash; Install: Emma Fletcher <span class="gl">&rarr;</span></span></span>
+                    <span class="mc"><span class="dn">15/08</span><span class="appt fit" style="background:#6366f1"><span class="aw">9:00am</span>ABC-2026-0042 &mdash; Install: Emma Fletcher <span class="gl">&rarr;</span></span></span>
                     <span class="mc"><span class="dn">16/08</span></span>
                     <span class="mc"><span class="dn">17/08</span></span>
                     <span class="mc"><span class="dn">18/08</span></span>
@@ -359,7 +372,8 @@ return [
                         <div class="fld"><label>Date <span class="req">*</span></label>
                           <div class="box fB"><span class="ph">dd/mm/yyyy</span><span class="val">22/08/2026</span></div></div>
                         <div class="fld"><label>Assigned to</label>
-                          <div class="selectbox" style="min-width:0;width:100%">Sam Yates</div></div>
+                          <div class="selectbox" style="min-width:0;width:100%">Sam Yates</div>
+                          <div class="optlist"><b>&mdash; Unassigned &mdash;</b><b class="pick">Sam Yates</b><b>Priya Nair</b></div></div>
                       </div>
                       <div class="fld" style="margin-top:.45rem"><label>Time slot <span class="req">*</span></label>
                         <div class="ampm">
@@ -383,11 +397,19 @@ return [
                     <div class="altbox">
                       <div class="at">With Morning / afternoon slots switched OFF, the same box looks like this</div>
                       <div class="frow4">
-                        <div class="fld"><label>Date <span class="req">*</span></label><div class="boxv">22/08/2026</div></div>
-                        <div class="fld"><label>Time <span class="req">*</span></label><div class="selectbox" style="min-width:0;width:100%">09:00</div></div>
-                        <div class="fld"><label>Duration (mins)</label><div class="boxv">60</div></div>
+                        <div class="fld"><label>Date <span class="req">*</span></label><div class="box">22/08/2026</div></div>
+                        <div class="fld"><label>Time <span class="req">*</span></label>
+                          <div class="box">09:00</div>
+                          <div class="optlist"><b>08:30</b><b class="pick">09:00</b><b>09:30</b><b>10:00</b></div></div>
+                        <div class="fld"><label>Duration (mins)</label>
+                          <div class="box numbox">60<span class="spin"><i>&#9652;</i><i>&#9662;</i></span></div></div>
                         <div class="fld"><label>Assigned to</label><div class="selectbox" style="min-width:0;width:100%">Sam Yates</div></div>
                       </div>
+                      <p class="fhint"><b>Time</b> is a box you type into &mdash; it shows
+                        <code>HH:MM (e.g. 09:30)</code> until you do &mdash; with the half-hour list from
+                        <b>08:00</b> to <b>18:00</b> dropping down under it, filtering as you type. Type anything else and it
+                        tells you &ldquo;<em>No common slot &mdash; type any HH:MM you like.</em>&rdquo;
+                        <b>Duration (mins)</b> is a number box with up/down arrows, stepping in fives.</p>
                     </div>
 
                     <div class="fld" style="margin-top:.45rem"><label>Notes</label>
@@ -398,8 +420,18 @@ return [
 
                 <!-- ===== Scene: finishing the job (step 8) ===== -->
                 <div class="osc scDone">
-                  <div class="pgh">Install: ABC-2026-0042 &mdash; Emma Fletcher</div>
-                  <div class="pgs">&#128506; Google Maps &rarr; &middot; Waze &rarr; &middot; Open order &rarr; &middot; Edit</div>
+                  <div class="hdrow">
+                    <div>
+                      <div class="pgh">Install: ABC-2026-0042 &mdash; Emma Fletcher</div>
+                      <div class="pgs"><a>&larr; Back to calendar</a></div>
+                    </div>
+                    <div class="acts">
+                      <span class="cbtn ok">Google Maps &rarr;</span>
+                      <span class="cbtn ok">Waze &rarr;</span>
+                      <span class="cbtn pri">Open order &rarr;</span>
+                      <span class="cbtn sec">Edit</span>
+                    </div>
+                  </div>
                   <div class="okbanner" style="margin:.35rem 0 .55rem"><b>&check;</b>
                     Status updated to completed. Linked quote ABC-2026-0042 advanced to &ldquo;fitted&rdquo;.</div>
                   <div class="card-t" style="margin-bottom:.45rem">When &amp; status <span class="spill">Completed</span></div>
@@ -440,7 +472,11 @@ return [
              <b>&rsaquo;</b> arrows move you <b>one week</b> at a time, the middle of the toolbar names the month most of the
              screen belongs to (<em>August 2026</em>) with the real span underneath (<em>Mon 3 Aug &mdash; Sun 13 Sep</em>), and
              a <b>Today</b> button only appears once you have wandered off this week. Days that fall outside the named month are
-             shaded but perfectly usable, and every cell is labelled <b>DD/MM</b> &mdash; so look for <b>21/08</b>, not a bare 21.</p>
+             shaded but perfectly usable, and every cell is labelled <b>DD/MM</b> &mdash; so look for <b>21/08</b>, not a bare 21.
+             Top right sit the page&rsquo;s buttons: <b>+ Book Appointment</b> always, <b>+ New quote</b> if your login is allowed
+             to create quotes, and a green <b>Today&rsquo;s run &rarr;</b> <em>only</em> if the maps add-on is switched on for
+             your account &mdash; it opens a <b>Today&rsquo;s run</b> page that plots the day&rsquo;s visits as a driving route
+             on a map. No maps add-on, no button, and nothing is broken.</p>
 
           <ul class="steps">
             <li><b>Read the board.</b> Each job is a card showing either a time (<em>9:00am</em>) or, if it was booked into a
@@ -531,19 +567,25 @@ return [
           <div class="heads"><span class="hi">&#9888;</span><div><b>Booking a measure visit creates a brand-new customer.</b>
              Saving that form writes a <b>new customer record</b>, with the installation address saved as their address. So if
              the person is already on the system, start from their customer record instead &mdash; otherwise you end up with two
-             of them. <b>And the money line:</b> ticking <b>&ldquo;&#128181; Show order value + balance on the calendar&rdquo;</b>
+             of them. <b>And the money line:</b> ticking <b>&ldquo;&#128183; Show order value + balance on the calendar&rdquo;</b>
              in <em>Settings &rarr; Calendar</em> prints the value, what has been received and the balance on every card &mdash;
              and the app warns you there that it <b>ignores each person&rsquo;s &ldquo;Can view costs&rdquo; setting</b>. Anyone
              who can open the calendar will see the figures.</div></div>
 
           <p><b>If you have not switched the windows on</b>, the Appointment section looks different: a four-across row of
-             <b>Date</b>, an exact <b>Time</b> (type it, or pick from the half-hour list between 08:00 and 18:00), a
-             <b>Duration (mins)</b> starting at <b>60</b> (anything from 5 to 1440), and <b>Assigned to</b>. In that mode the app
+             <b>Date</b>, an exact <b>Time</b> &mdash; a box you type into, showing <code>HH:MM (e.g. 09:30)</code> until you do,
+             with the half-hour list from <b>08:00</b> to <b>18:00</b> dropping down under it and filtering as you type
+             (&ldquo;<em>No common slot &mdash; type any HH:MM you like.</em>&rdquo; if what you typed is not on it) &mdash; a
+             <b>Duration (mins)</b> number box starting at <b>60</b> and stepping in fives (anything from 5 to 1440), and
+             <b>Assigned to</b>. In that mode the app
              also watches for clashes: <em>&ldquo;Dave Cole is already booked 09:00&ndash;10:00 (Angela Reed) that day &mdash;
              they can&rsquo;t be in two places at once. Pick another time, assignee, or day.&rdquo;</em> &mdash; with a
              <b>Book anyway</b> button if you really do mean it. The <b>Assigned to</b> list is picked for the job in hand: a
              measure offers your <b>sales</b> people, a fitting offers your <b>fitters</b> (and everyone, if nobody holds the
-             role). A new booking preselects <em>you</em> if you do measures, or your only salesperson if you have just the one.
+             role). Whichever mode you are in, the very first line of that list is <b>&ldquo;&mdash; Unassigned &mdash;&rdquo;</b>.
+             A new booking preselects <em>you</em> if you do measures, or your only salesperson if you have just the one &mdash;
+             and if neither applies (several sales people, and you are not one of them) it opens on
+             <b>&mdash; Unassigned &mdash;</b>, so remember to set it before you save.
              You change the times, the length of each window and the <b>Bookings / day</b> limit &mdash; Morning and Afternoon
              have <b>separate</b> limits &mdash; in <a href="/help/guide.php?g=settings-calendar"><b>Settings &rarr;
              Calendar</b></a>.</p>

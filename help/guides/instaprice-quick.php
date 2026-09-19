@@ -15,7 +15,7 @@ declare(strict_types=1);
 return [
         'aud'     => 'all',
         'section' => 'Quotes',
-        'title'   => 'InstaPrice &mdash; a price in thirty seconds',
+        'title'   => 'InstaPrice — a price in thirty seconds',
         'eyebrow' => 'InstaPrice',
         'blurb'   => 'The whole quick-price flow: product, fabric, options, size — then the breakdown, the two rates you can override, and turning it into a real quote.',
         'lede'    => 'InstaPrice is the tool for <b>&ldquo;how much is that, roughly?&rdquo;</b> &mdash; on the phone, or standing in
@@ -28,6 +28,7 @@ return [
           .gd .side a.ipcta{ background:#f2a33c; color:#3a2400; font-weight:700; margin-bottom:.4rem; }
           .gd .mt{ margin-top:.7rem; }
           .gd .ipnote{ font-size:.62rem; color:var(--faint); margin:.2rem 0 0; }
+          .gd .ipsub{ font-size:.72rem; color:var(--faint); margin:-.72rem 0 .9rem; }
           .gd .sysnote{ display:none; }
           .gd .stage[data-step="1"] .sysnote{ display:block; }
           .gd .stage[data-step="8"] .ipform{ display:none; }
@@ -141,6 +142,18 @@ return [
           .gd .qline{ margin-top:.6rem; border:1px solid var(--line); border-radius:8px; background:var(--panel);
                       padding:.4rem .55rem; font-size:.74rem; color:var(--soft); }
           .gd .qbcust{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); background:var(--surface); }
+          /* the real page opens on a slim sticky bar: quote number, status pill, total */
+          .gd .stickybar{ display:flex; align-items:center; gap:.5rem; margin-top:.7rem; font-size:.78rem;
+                          font-weight:700; color:var(--ink); }
+          .gd .stickybar .spill{ font-weight:600; font-size:.6rem; text-transform:uppercase; letter-spacing:.05em;
+                                 border:1px solid var(--line); border-radius:999px; padding:.06rem .45rem; color:var(--soft); }
+          .gd .stickybar .stot{ margin-left:auto; font-weight:600; color:var(--soft); }
+          /* Customer details is a <details> block — it ARRIVES CLOSED, summary only */
+          .gd .cdet{ margin-top:.7rem; border:1px solid var(--line); border-radius:9px; padding:.55rem .7rem; }
+          .gd .csum{ font-size:.8rem; color:var(--ink); font-weight:600; }
+          .gd .csum .tri{ color:var(--faint); margin-right:.3rem; }
+          .gd .csum .cshint{ font-weight:400; color:var(--faint); font-size:.72rem; }
+          .gd .cbody{ margin-top:.6rem; padding-top:.55rem; border-top:1px solid var(--line-2); }
 
           /* ---------- value reveals (explicit: f1..f5 stop at step 5) ---------- */
           .gd .stage[data-step="1"] .rP .val, .gd .stage[data-step="2"] .rP .val, .gd .stage[data-step="3"] .rP .val,
@@ -211,7 +224,8 @@ return [
               <div class="stage" id="gdStage" data-step="0">
 
                 <div class="ipform">
-                  <div class="card-t">InstaPrice &mdash; Quick price, no customer details needed.</div>
+                  <div class="card-t">InstaPrice</div>
+                  <p class="ipsub">Quick price &mdash; no customer details needed.</p>
 
                   <!-- Product + System -->
                   <div class="frow">
@@ -341,16 +355,33 @@ return [
 
                 <!-- Step 8: it is a real quote now -->
                 <div class="qbscene">
-                  <div class="okbanner"><span>&check;</span> Quote Q-1042 started from InstaPrice &mdash; add the customer details (and any more blinds) below.</div>
-                  <div class="card-t mt">Quote Q-1042 &mdash; draft</div>
-                  <div class="frow">
-                    <div class="fld"><label>Search customers</label><div class="box"><span class="ph">Type a name&hellip;</span></div></div>
-                    <div class="fld"><label>Customer name <span class="req">*</span></label>
-                      <div class="box qbcust"><span class="valv">Quick price (add customer)</span></div>
-                      <p class="ipnote">rename this now &mdash; it is how the quote shows in your list</p>
+                  <div class="okbanner"><span>&check;</span> Quote BEV-2026-0042 started from InstaPrice &mdash; add the customer details (and any more blinds) below.</div>
+                  <div class="stickybar">Quote BEV-2026-0042 <span class="spill">draft</span><span class="stot">Total &pound;194.40</span></div>
+
+                  <!-- Customer details is a collapsible block and it ARRIVES CLOSED:
+                       all you get is this one summary line. -->
+                  <div class="cdet">
+                    <div class="csum"><span class="tri">&#9662;</span>Customer: Quick price (add customer)
+                      <span class="cshint">(click to edit)</span></div>
+                    <p class="ipnote">this line is all you land on &mdash; click it to open the form underneath</p>
+                    <div class="cbody">
+                      <div class="frow">
+                        <div class="fld"><label>Linked customer</label>
+                          <div class="box"><span class="ph">Type to search by name, town, or postcode...</span></div>
+                          <p class="ipnote">Type to filter &mdash; leave blank to unlink.</p>
+                        </div>
+                        <div class="fld"><label>Customer name <span class="req">*</span></label>
+                          <div class="box qbcust"><span class="valv">Quick price (add customer)</span></div>
+                          <p class="ipnote">rename this now &mdash; it is how the quote shows in your list</p>
+                        </div>
+                      </div>
+                      <p class="ipnote">Email, Phone, Mobile (with &ldquo;Mobile is on WhatsApp&rdquo;) and the address
+                        follow underneath.</p>
                     </div>
                   </div>
-                  <div class="qline">Line 1 &mdash; 25mm Venetian &middot; Bev 25mm &middot; Aspen / Auburn &middot; 1200 &times; 1400 mm &middot; Qty 2 &middot; &pound;201.96</div>
+
+                  <div class="qline">Line 1 &mdash; 25mm Venetian &middot; Bev 25mm &middot; Aspen / Auburn &middot; 1200 &times; 1400 mm &middot; Qty 2 &middot; &pound;194.40
+                    <span style="display:block;color:var(--err)">re-priced at the product&rsquo;s own 10.00% / 100.00% &mdash; the 15 / 120 you typed did not come with it</span></div>
                 </div>
 
                 <div class="caps">
@@ -361,7 +392,7 @@ return [
                   <b class="c5"><span class="n">5</span> The price, worked out line by line.</b>
                   <b class="c6"><span class="n">6</span> Change either rate and watch the price move.</b>
                   <b class="c7 err"><span class="n">7</span> Off the end of the price table &mdash; fix the size.</b>
-                  <b class="c8 good"><span class="n">8</span> One click &mdash; it is a real quote, waiting for a name.</b>
+                  <b class="c8 good"><span class="n">8</span> A real quote &mdash; click the Customer line open and rename it.</b>
                 </div>
               </div>
             </div>
@@ -378,13 +409,19 @@ return [
             <li><b>Product, then System.</b> The <b>Product</b> dropdown groups your live products under their <b>category</b> headings, so scroll
                 to the right heading (anything without a category sits under <b>Other</b>, at the bottom). The <b>System</b> box next to it starts
                 greyed out reading <b>&ldquo;Choose product first&rdquo;</b>; pick a product and it wakes up on that product&rsquo;s <b>default
-                system</b>. Change it only if this job is the other one &mdash; the price, the bands and the options can all differ per system.</li>
+                system</b>, with a blank <b>&ldquo;&mdash; Choose system &mdash;&rdquo;</b> entry above the list if you ever want none of them.
+                Change it only if this job is the other one &mdash; the price, the bands and the options can all differ per system.
+                (A product with no systems set up simply reads <b>&ldquo;&mdash; No systems &mdash;&rdquo;</b>.)</li>
             <li><b>Band, then Fabric.</b> <b>Band</b> is a price tier: leave it on <b>&ldquo;All bands&rdquo;</b> and search the lot, or pick a band
                 to narrow the search down. <b>Fabric</b> is a <b>search box, not a dropdown</b> &mdash; type two or three letters and the matches
                 drop down underneath with the supplier and code, then click one. Nothing matching? It says <b>&ldquo;No matching fabrics.&rdquo;</b>
-                Once you have picked, the box holds that fabric&rsquo;s <b>name</b>, so clicking back into it shows you the <b>whole list</b> again
-                to switch colour. Changing the <b>System</b> clears the fabric, so pick the system first. These two labels follow the product &mdash;
-                on a vertical the second one may say <b>Slat</b>, on a shutter <b>Colour</b>.</li>
+                &mdash; and if the search itself falls over, <b>&ldquo;Could not search.&rdquo;</b> Once you have picked, the box holds that
+                fabric&rsquo;s <b>name and colour</b>, so clicking back into it shows you the <b>whole list</b> again to switch colour (the text
+                is pre-selected, so your first keystroke replaces it rather than tacking on the end). Changing the <b>System</b>
+                <b>or the Band</b> clears the fabric and reopens the list, so work down the screen in order. These two labels follow the product
+                &mdash; the fabric one is whatever that product calls its material (<b>Fabric</b> on rollers and romans, <b>Colour</b> on a metal
+                venetian, <b>Slat</b> or <b>Finish</b> on a wood one), and the band one can be renamed too (a wood venetian might call it
+                <b>Tape / String</b>).</li>
             <li><b>Options.</b> Whatever this product offers appears next, and only what <em>this</em> product, <em>this</em> system and
                 <em>this</em> fabric can actually have. Sensible ones are <b>already chosen</b> for you; where there is no sensible default the
                 dropdown starts on <b>&ldquo;&mdash; Select &mdash;&rdquo;</b>. A red <b>*</b> means you must answer it. Some options are
@@ -425,13 +462,24 @@ return [
              amber <b>Discount %</b> box below it.</div></div>
 
           <p><b>The two amber boxes are yours to play with.</b> <b>Discount %</b> and <b>Mark up %</b> arrive already filled in from that
-             <b>product and system&rsquo;s own saved rates</b> (which themselves fall back to <b>Settings &rarr; Default margins</b>). Type straight
-             over either one and the figures below <b>move as you type</b> &mdash; no waiting, no saving &mdash; which is exactly what you want when
-             somebody is haggling and you need to know what another five percent really costs you. Three things to know: it is a <b>one-off</b> for
-             this figure, it is <b>never written back to the product</b>, and it <b>springs back to the usual rates</b> the moment you change the
-             product or the system. But whatever those boxes read when you press <b>Turn into full quote</b> <b>is</b> what the quote line gets
-             created with. If your company works in <b>margin</b> rather than markup, the second box is labelled <b>Margin %</b> instead &mdash; same
-             money, different way of typing it.</p>
+             <b>product and system&rsquo;s own saved rates</b>. The two behave differently when a product has no rate of its own: <b>Mark up %</b>
+             falls back to <b>Settings &rarr; Default margins</b> (the <b>Default price-table markup&nbsp;%</b> box), while <b>Discount %</b> has no
+             tenant-wide default at all &mdash; no saved row means it simply starts at <b>0.00</b>. Type straight over either one and the figures
+             below <b>move as you type</b> &mdash; no waiting, no saving &mdash; which is exactly what you want when somebody is haggling and you
+             need to know what another five percent really costs you. Three things to know: it is a <b>one-off</b> for this figure, it is
+             <b>never written back to the product</b>, and it <b>springs back to the usual rates</b> the moment you change the product or the
+             system. And &mdash; this one catches people out &mdash; <b>it does not survive the conversion either</b>: see the warning below. If
+             your company works in <b>margin</b> rather than markup, the second box is labelled <b>Margin %</b> instead &mdash; same money,
+             different way of typing it.</p>
+
+          <div class="heads"><span class="hi">&#9888;</span><div><b>A rate you typed over does NOT carry onto the quote.</b>
+             <b>Turn into full quote</b> sends the product, system, fabric, options, size, quantity and unit &mdash; and nothing else. The server
+             prices the new line from scratch, which means it resolves <b>that product and system&rsquo;s own saved Discount % and Mark up %</b>
+             all over again. So if you knocked the price about on this screen while you were haggling, the quote line comes out at the
+             <em>standard</em> rates, not the ones on your screen. Say the deal out loud before you press it, then put the agreed figures back on
+             the quote line itself: open the blind in the quote builder and use <b>Adjust price for this blind</b>, which has its own
+             <b>Discount % (this blind)</b> and <b>Mark up % (this blind)</b> boxes. (That panel, like the green Trade discount line, is only shown
+             to admins and to users allowed to see cost figures.)</div></div>
 
           <p><b>Roller blinds sharing one fascia.</b> Pick the multi-blind choice on a roller and the screen changes: the <b>Width</b> box locks
              itself to a grey italic <b>&ldquo;multi blind&rdquo;</b> (each blind carries its own width instead), and a small table headed
@@ -454,21 +502,35 @@ return [
                <li><code>No price table for 25mm Venetian band A on system &lsquo;Bev 25mm&rsquo;.</code> &mdash; that band has <b>no grid at all</b>
                    on that system yet. Same for <code>No price table set up for Headrail for system &lsquo;Vogue&rsquo;.</code> and
                    <code>No &pound;/m&sup2; rate set for Shutters in this price list.</code></li>
-               <li><code>Could not get a price &mdash; try again.</code> &mdash; the connection blinked. Change something and it will re-price.</li>
+               <li><code>Could not get a price &mdash; try again.</code> &mdash; the connection blinked. Change something and it will re-price.
+                   (On a multi-blind fascia the same stumble reads <code>Could not price the group &mdash; try again.</code>, or
+                   <code>Could not price the group.</code> if the server answered but not with a group price.)</li>
                <li><code>Fabric is required.</code> / <code>Width must be greater than zero.</code> / <code>Drop must be greater than zero.</code>
                    &mdash; something the engine needs is missing or zero.</li>
+               <li><code>Fabric not found or inactive.</code> / <code>Fabric belongs to a different product.</code> &mdash; the fabric you picked
+                   has since been switched off, or you changed product with a stale choice still in the box. Re-pick it.</li>
              </ul>
              While the panel is red, <b>Turn into full quote</b> goes grey. Fix the figure and the price comes straight back.</div>
 
           <p><b>What &ldquo;Turn into full quote&rdquo; really does &mdash; read this bit.</b> It does not open a scratch pad. It <b>creates a
-             genuine draft quote</b>: it takes the next <b>quote number</b>, snapshots your current <b>VAT rate</b>, copies the line and all its
-             options across with the rates you set, stamps the <b>measurement unit</b> you were working in so the builder opens the same way, and
-             drops you on the quote builder with a green message naming the quote. The customer is a placeholder reading
-             <b>&ldquo;Quick price (add customer)&rdquo;</b> &mdash; and that is exactly how it will sit in your quotes list until you change it, so
-             <b>rename it straight away</b>. Press that button to <b>keep</b> a price, not to see what happens; if you clicked it by mistake, delete
-             the draft from your quotes list rather than leaving litter behind. If the server cannot manage it you will come back to InstaPrice with a
-             red bar reading <code>Could not price that: &hellip;</code>, <code>Could not read the size &mdash; go back and try again.</code> or
-             <code>Could not start the quote &mdash; please try again.</code> &mdash; nothing will have been created.</p>
+             genuine draft quote</b>: it takes the next <b>quote number</b> (your prefix, the year and a four-digit run &mdash; <code>BEV-2026-0042</code>),
+             snapshots your current <b>VAT rate</b>, re-prices the line and copies all its options across, stamps the <b>measurement unit</b> you
+             were working in so the builder opens the same way, and drops you on the quote builder with a green message naming the quote. The
+             customer is a placeholder reading <b>&ldquo;Quick price (add customer)&rdquo;</b> &mdash; and that is exactly how it will sit in your
+             quotes list until you change it, so <b>rename it straight away</b>. Press that button to <b>keep</b> a price, not to see what happens;
+             if you clicked it by mistake, delete the draft from your quotes list rather than leaving litter behind. If the server cannot manage it
+             you will come back to InstaPrice with a red bar reading <code>Could not price that: &hellip;</code>,
+             <code>Could not read the size &mdash; go back and try again.</code> or <code>Could not start the quote &mdash; please try again.</code>
+             &mdash; nothing will have been created. (A multi-blind fascia that trips over on one of its blinds says
+             <code>Could not price a blind in the group: &hellip;</code> instead.)</p>
+
+          <p><b>Where you land, and why it looks empty.</b> The quote builder opens on a slim bar reading <b>Quote BEV-2026-0042</b> with a
+             <b>draft</b> pill and the total, the green message underneath &mdash; and then a <b>closed</b> Customer details block. All you see of
+             it is one summary line: <b>&ldquo;Customer: Quick price (add customer) <em>(click to edit)</em>&rdquo;</b>. <b>Click that line</b> and
+             the form unfolds: <b>Linked customer</b> first (a type-to-search box reading <b>&ldquo;Type to search by name, town, or
+             postcode...&rdquo;</b>, which ties the quote to a customer you already have &mdash; <em>leave blank to unlink</em>), then
+             <b>Customer name *</b>, which is the box holding the placeholder. Overtype that, then <b>Email</b>, <b>Phone</b>, <b>Mobile</b> and the
+             address underneath, and press <b>Save details</b> at the bottom of the block.</p>
 
           <p><b>No &ldquo;Turn into full quote&rdquo; button at all?</b> That is not a fault either. The button is only drawn for admins and for
              users with the <b>Create quotes</b> permission &mdash; everybody else can price all day but cannot keep it. An admin can switch that on
@@ -478,7 +540,7 @@ return [
             ['0:00', 'Product picked; System fills itself.',
                 'Everything starts with the Product box. Your products are grouped under their categories, so scroll to the right heading and pick one. The moment you do, the System box next to it wakes up and lands on that product\'s usual system — change it only if this job is the other one, and remember the price can be different for each.', 1],
             ['0:16', 'Band narrowed; fabric searched and picked.',
-                'Next the fabric. Band is a price tier — leave it on All bands and search everything, or pick a band to narrow it down. Then just type two or three letters into the Fabric box; matches drop down underneath with the supplier and the code, and you click the one you want. If nothing matches it says so, in plain words: no matching fabrics. And these two labels change with the product — on a vertical it might say Slat, on a shutter it might say Colour. On a headrail or a track there is no fabric at all, so the whole row disappears.', 2],
+                'Next the fabric. Band is a price tier — leave it on All bands and search everything, or pick a band to narrow it down. Then just type two or three letters into the Fabric box; matches drop down underneath with the supplier and the code, and you click the one you want. If nothing matches it says so, in plain words: no matching fabrics. And these two labels change with the product — they are whatever that product calls its material, so a metal venetian might say Colour and a wood one Slat or Finish. Careful with the order, by the way: changing the system or the band afterwards clears the fabric and makes you pick again. On a headrail or a track there is no fabric at all, so the whole row disappears.', 2],
             ['0:40', 'Options appear, most already answered.',
                 'Now the options. These are not a fixed list — the screen only offers what this product, this system and this fabric can actually have, and sensible ones are already chosen for you. A red star means you must answer it. Some options open a second one underneath, indented, once you have picked the parent. And if an option you expected is not there, nine times out of ten it is the fabric — that choice is set up for other colours.', 3],
             ['1:00', 'Unit, width, drop, quantity, echo line.',
@@ -486,10 +548,10 @@ return [
             ['1:24', 'The breakdown, line by line.',
                 'And there is your price, shown as a sum you can follow. Price is what this blind costs at that size with its options. Discount percent and Mark up percent arrive already filled in from that product\'s own settings. Discounted price is the middle step, and Sell price at the bottom, in big letters, is what you would charge. If you see a green Trade discount line at the top, that is your own buying discount from your supplier — it is already inside the Price above, it is shown for your information only, and only people allowed to see cost figures ever see it. And if your company works in margin rather than markup, that second box is labelled Margin percent instead — same money either way.', 5],
             ['1:56', 'Rates typed over; quantity raised to two.',
-                'Those two amber boxes are yours to play with. Type over them and the price changes as you type — handy when someone is haggling and you want to know what a bit more discount really costs you. It is a one-off, just for this figure: nothing is saved back to the product, and it springs back to the usual rates the moment you change product or system. Put the quantity up and the big number becomes the total for all of them, with the each-price underneath. Nothing on this screen is stored anywhere — Reset wipes it and you start again.', 6],
+                'Those two amber boxes are yours to play with. Type over them and the price changes as you type — handy when someone is haggling and you want to know what a bit more discount really costs you. It is a one-off, just for this figure: nothing is saved back to the product, it springs back to the usual rates the moment you change product or system, and — worth knowing before you press the button — it does not travel onto the quote either. Put the quantity up and the big number becomes the total for all of them, with the each-price underneath. Nothing on this screen is stored anywhere — Reset wipes it and you start again.', 6],
             ['2:20', 'Size off the end of the table; panel goes red.',
                 'If a size falls outside the grid you have loaded, InstaPrice will not guess. The panel goes red and tells you exactly why — size three thousand two hundred by fourteen hundred millimetres exceeds the largest cell in this price table — and the quote button goes grey until it is fixed. That is not a fault on this screen: it means the price table for that band stops short of that size, and somebody needs to add it under Products. Bring the size back inside the table and the price comes straight back.', 7],
-            ['2:44', 'Converted: a real draft quote, no customer yet.',
-                'They have said yes. Click Turn into full quote and the whole thing lifts straight into the quote builder — same product, same fabric, same options, same size, and the rates you set. It opens in the unit you were working in. The green message names the new quote number, and the customer box is sitting there saying quick price, add customer — that is your job, right now, before you forget. Then carry on as normal: add the rest of the blinds, and send it. One word of warning — that button makes a real quote the moment you press it, number and all. Press it to keep a price, not to see what happens; if you did not mean to, delete the draft from your quotes list.', 8],
+            ['2:44', 'Converted: a real draft quote, customer block closed.',
+                'They have said yes. Click Turn into full quote and the whole thing lifts straight into the quote builder — same product, same fabric, same options, same size, same quantity, and it opens in the unit you were working in. One thing does not come with it: the rates. The new line is priced from the product and system\'s own saved discount and mark-up, so anything you typed over while you were haggling is gone — put it back on the line itself, under Adjust price for this blind. The green message names the new quote number. And the customer? All you can see is one closed line reading customer, quick price, add customer, click to edit. Click it, and the form opens: linked customer first, then the customer name box holding that placeholder. Overtype it and save details — right now, before you forget. Then carry on as normal: add the rest of the blinds, and send it. One word of warning — that button makes a real quote the moment you press it, number and all. Press it to keep a price, not to see what happens; if you did not mean to, delete the draft from your quotes list.', 8],
         ],
 ];

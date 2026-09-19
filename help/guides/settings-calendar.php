@@ -108,14 +108,25 @@ return [
           .gd .bookmock{ display:none; }
           .gd .stage[data-step="8"] .bookmock{ display:block; position:absolute; inset:0 0 3rem 0; z-index:3;
                                                background:var(--surface); padding:1.1rem 1.2rem; overflow:hidden; }
+          /* the real booking screen is an h1 "Book appointment" with the fields inside a
+             bordered fieldset whose legend reads "Appointment" (uppercase, letter-spaced)
+             — calendar/new.php page-title + .form-fieldset legend. */
+          .gd .fset{ position:relative; border:1px solid var(--line); border-radius:10px;
+                     padding:.6rem .7rem .25rem; margin-top:.35rem; }
+          .gd .fset .lgnd{ position:absolute; top:-.5rem; left:.7rem; padding:0 .4rem; background:var(--surface);
+                           font-size:.64rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+                           color:var(--ink); }
           .gd .ampmopt{ display:flex; align-items:center; justify-content:space-between; gap:.7rem;
                         border:1px solid var(--border-strong,#c7ccd4); border-radius:9px; padding:.45rem .6rem;
                         margin-bottom:.4rem; background:var(--surface); }
           .gd .ampmopt.is-sel{ border-color:var(--accent); background:var(--accent-wash); }
           .gd .ampmopt.is-full{ opacity:.55; background:var(--panel); }
           .gd .ampmopt .rng{ color:var(--soft); font-weight:400; }
-          .gd .ampmopt .cnt{ font-size:.72rem; font-weight:700; color:var(--good); white-space:nowrap; }
-          .gd .ampmopt.is-full .cnt{ color:var(--err); }
+          /* the real count is plain muted grey; only a full window goes amber (#b45309)
+             — calendar/new.php .ampm-count / .ampm-opt.is-full .ampm-count. */
+          .gd .ampmopt .cnt{ font-size:.72rem; font-weight:400; color:var(--soft); white-space:nowrap;
+                             font-variant-numeric:tabular-nums; }
+          .gd .ampmopt.is-full .cnt{ color:#b45309; font-weight:600; }
           @media(max-width:620px){ .gd .wrow{ gap:.4rem .5rem; } .gd .timebox, .gd .numbox{ width:5.3rem; } }',
         'demo'    => '
           <div class="demo-shell">
@@ -150,7 +161,7 @@ return [
 
                 <div class="cform cf-nav">
                   <div class="blab">&#129517; Navigation app</div>
-                  <div class="radios"><span class="radio rg"><span class="dot"></span> Google Maps</span><span class="radio rw"><span class="dot"></span> Waze</span></div>
+                  <div class="radios"><span class="radio rg on"><span class="dot"></span> Google Maps</span><span class="radio rw"><span class="dot"></span> Waze</span></div>
                   <div class="uihint">When you tap an address on My Schedule or the day calendar, it opens in the app you
                     choose here. Google Maps is the default; pick Waze if your fitters prefer it for live traffic and routing.</div>
                   <div class="save sv2">Save</div>
@@ -187,18 +198,21 @@ return [
 
                 <div class="bookmock">
                   <div class="okbanner"><b>&check;</b> Morning/afternoon booking slots saved.</div>
-                  <div class="card-t" style="margin-top:.8rem">Book appointment &mdash; Appointment</div>
-                  <div class="frow" style="margin-bottom:.7rem">
-                    <div class="fld"><label>Date <span class="req">*</span></label><div class="box">24/09/2026</div></div>
-                    <div class="fld"><label>Assigned to</label><span class="selectbox" style="min-width:0;width:100%">Dave (fitter)</span></div>
+                  <div class="card-t" style="margin-top:.75rem;margin-bottom:.5rem">Book appointment</div>
+                  <div class="fset">
+                    <span class="lgnd">Appointment</span>
+                    <div class="frow" style="margin-bottom:.7rem">
+                      <div class="fld"><label>Date <span class="req">*</span></label><div class="box">24/09/2026</div></div>
+                      <div class="fld"><label>Assigned to</label><span class="selectbox" style="min-width:0;width:100%">Dave (fitter)</span></div>
+                    </div>
+                    <div class="blab">Time slot <span class="req">*</span></div>
+                    <div class="ampmopt is-sel"><span class="radio on"><span class="dot"></span> Morning <span class="rng">(8am&ndash;12:30pm)</span></span><span class="cnt">6 of 6 left</span></div>
+                    <div class="ampmopt is-full"><span class="radio"><span class="dot"></span> Afternoon <span class="rng">(12:30pm&ndash;5pm)</span></span><span class="cnt">Full</span></div>
+                    <div class="uihint">The customer is given this window, never an exact time. Each window holds a set number
+                      of quote visits per day (change the times and limits in Settings &rarr; Calendar).</div>
+                    <div class="chk" style="margin-top:.55rem"><span class="tick on">&check;</span> Email the customer their
+                      appointment window (needs an email above)</div>
                   </div>
-                  <div class="blab">Time slot <span class="req">*</span></div>
-                  <div class="ampmopt is-sel"><span class="radio on"><span class="dot"></span> Morning <span class="rng">(8am&ndash;12:30pm)</span></span><span class="cnt">6 of 6 left</span></div>
-                  <div class="ampmopt is-full"><span class="radio"><span class="dot"></span> Afternoon <span class="rng">(12:30pm&ndash;5pm)</span></span><span class="cnt">Full</span></div>
-                  <div class="uihint">The customer is given this window, never an exact time. Each window holds a set number
-                    of quote visits per day (change the times and limits in Settings &rarr; Calendar).</div>
-                  <div class="chk" style="margin-top:.55rem"><span class="tick on">&check;</span> Email the customer their
-                    appointment window (needs an email above)</div>
                 </div>
 
                 <div class="caps">
@@ -240,7 +254,7 @@ return [
              <b>My Schedule</b> or on the <b>day calendar</b> &mdash; so pick Waze if your fitters want live traffic and
              routing. Save says <b>&ldquo;Address links will now open in Waze.&rdquo;</b> or
              <b>&ldquo;Address links will now open in Google Maps.&rdquo;</b> One honest exception: the little <b>route map drawn
-             inside the run planner</b> always stays Google, because Waze cannot be embedded in a page. The tappable address
+             inside Today&rsquo;s run</b> always stays Google, because Waze cannot be embedded in a page. The tappable address
              links still go where you chose.</p>
 
           <p><b>&#128344; Morning / afternoon booking slots.</b> This one changes how you <b>book a measure (quote) visit</b>.
@@ -294,7 +308,7 @@ return [
             ['0:36', 'Amber warning glows; Save pressed.',
                 'Before you tick it, read the amber note underneath. This shows the money to everyone who can open the calendar, fitters included. It ignores each person\'s "Can view costs" setting on the Users page, just for the calendar. If anyone who sees your diary should not see your figures, leave it unticked. Press Save and you get "Calendar will show order value plus balance." Untick and save, and it says the money figures are now hidden.', 3],
             ['0:57', 'Waze radio takes the dot; Save pressed.',
-                'Second one. Navigation app — two plain radio buttons, Google Maps or Waze. Google Maps is what you start with. Whichever you pick is what opens when somebody taps an address on My Schedule or on the day calendar, so pick Waze if your fitters want live traffic. Save says "Address links will now open in Waze." One honest exception: the little route map drawn inside the run planner always stays Google, because Waze cannot be put inside a page.', 4],
+                'Second one. Navigation app — two plain radio buttons, Google Maps or Waze. Google Maps is what you start with. Whichever you pick is what opens when somebody taps an address on My Schedule or on the day calendar, so pick Waze if your fitters want live traffic. Save says "Address links will now open in Waze." One honest exception: the little route map drawn inside Today&rsquo;s run always stays Google, because Waze cannot be put inside a page.', 4],
             ['1:16', 'Slots tick on; the two rows light up.',
                 'Third one, and this is the big one. It changes how you book a measure visit. Instead of promising ten past eleven, you promise a morning or an afternoon. Fittings are not touched — they still get a proper time. Underneath you get two rows, Morning and Afternoon, and each row has three boxes: From, To, and Bookings per day.', 5],
             ['1:32', 'Morning row types in: 08:00, 12:30, 6.',

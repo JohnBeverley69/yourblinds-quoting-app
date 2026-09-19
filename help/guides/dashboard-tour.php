@@ -43,6 +43,10 @@ return [
           .gd .stage[data-step="5"] .z5, .gd .stage[data-step="6"] .z6,
           .gd .stage[data-step="7"] .z7, .gd .stage[data-step="8"] .z8{ opacity:1; filter:none; }
 
+          /* ---------- sidebar group heading (the real nav is grouped Work / Retail / …) ---------- */
+          .gd .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c;
+                     font-weight:700; margin:.7rem 0 .15rem; padding:0 .5rem; }
+
           /* ---------- page header ---------- */
           .gd .dhead{ display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
           .gd .pgh{ font-size:1rem; font-weight:800; color:var(--ink); }
@@ -138,6 +142,17 @@ return [
           .gd .phead{ font-size:.5rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint);
                       font-weight:700; margin-bottom:.2rem; }
           .gd .stage[data-step="4"] .sharewrap{ display:none; }
+          /* Filtered to one person, the panel re-titles itself AND re-words its sub-line
+             ("Their numbers" / "…for this salesperson.") — so the mock must swap both. */
+          .gd .tmjane, .gd .tsjane{ display:none; }
+          .gd .stage[data-step="4"] .tmall, .gd .stage[data-step="4"] .tsall{ display:none; }
+          .gd .stage[data-step="4"] .tmjane, .gd .stage[data-step="4"] .tsjane{ display:inline; }
+
+          /* ---------- the red bar you get when neither date parses ---------- */
+          /* Sits where the real one does: under the page header, above the period bar.
+             Deliberately outside any .zone so the spotlight never dims it. */
+          .gd .errdemo{ display:none; font-size:.66rem; padding:.35rem .5rem; margin-bottom:.5rem; }
+          .gd .stage[data-step="3"] .errdemo{ display:flex; }
 
           /* ---------- donut + legend (the real charts are SVG donuts with a legend) ---------- */
           .gd .pwrap{ display:flex; gap:.5rem; align-items:center; }
@@ -217,6 +232,11 @@ return [
                   </div>
                 </div>
 
+                <!-- the flash_error bar, exactly where the real one renders -->
+                <div class="errbanner errdemo">
+                  <span>&#9888;</span><div><b>Bad date format &mdash; use the date pickers.</b></div>
+                </div>
+
                 <!-- 2. period buttons + 3. custom range -->
                 <div class="pbar">
                   <span class="zone z2 pgrp">
@@ -224,7 +244,7 @@ return [
                   </span>
                   <span class="zone z3 crange">
                     <span class="dlbl">From</span>
-                    <span class="box dbox f3"><span class="ph">dd/mm/yyyy</span><span class="val">01/09/2026</span></span>
+                    <span class="box dbox f3"><span class="ph">dd/mm/yyyy</span><span class="val">31/08/2026</span></span>
                     <span class="dlbl">To</span>
                     <span class="box dbox f3"><span class="ph">dd/mm/yyyy</span><span class="val">30/09/2026</span></span>
                     <span class="applybtn">Apply</span>
@@ -245,7 +265,7 @@ return [
                     <div><div class="update today">Today</div><div class="uptime">2:30pm</div></div>
                     <div><div class="upname">Mrs Halliwell</div><div class="upplace">TA1 3QS</div></div>
                     <div class="upfit">Dave Perry</div>
-                    <div class="upq"><span class="spill">accepted</span><span class="upqn">Q-1042</span></div>
+                    <div class="upq"><span class="spill">accepted</span><span class="upqn">PRE-2026-0042</span></div>
                   </div>
                   <div class="uprow">
                     <div><div class="update">Tomorrow</div><div class="uptime">9:00am</div></div>
@@ -254,10 +274,10 @@ return [
                     <div class="upq"></div>
                   </div>
                   <div class="uprow">
-                    <div><div class="update">Fri 3 Oct</div><div class="uptime">11:30am</div></div>
+                    <div><div class="update">Fri 2 Oct</div><div class="uptime">11:30am</div></div>
                     <div><div class="upname">Miller</div><div class="upplace">BS40 5RL</div></div>
                     <div class="upfit">Dave Perry</div>
-                    <div class="upq"><span class="spill ord">ordered</span><span class="upqn">Q-1038</span></div>
+                    <div class="upq"><span class="spill ord">ordered</span><span class="upqn">PRE-2026-0038</span></div>
                   </div>
                   <div class="pfoot">Open calendar &rarr;</div>
                 </div>
@@ -272,8 +292,8 @@ return [
 
                 <!-- 7. sales team + revenue share donut -->
                 <div class="zone z7 pnl">
-                  <h4>Sales team</h4>
-                  <div class="psub">Pipeline, close rate, and revenue per salesperson.</div>
+                  <h4><span class="tmall">Sales team</span><span class="tmjane">Their numbers</span></h4>
+                  <div class="psub"><span class="tsall">Pipeline, close rate, and revenue per salesperson.</span><span class="tsjane">Pipeline, close rate, and revenue for this salesperson.</span></div>
                   <div class="lbflex">
                     <div class="lbwrap">
                       <table class="lbt">
@@ -352,16 +372,16 @@ return [
                   <div class="pnl">
                     <h4>Recent wins</h4>
                     <div class="psub">Latest 10 jobs accepted in this period.</div>
-                    <div class="rrow"><div><a>Q-1042</a> &mdash; Mrs Halliwell</div><div>Jane Weller</div><div class="rdate">3 Oct 2026</div><div class="rrev">&pound;1,284.00</div></div>
-                    <div class="rrow"><div><a>Q-1038</a> &mdash; Miller</div><div>Dave Perry</div><div class="rdate">1 Oct 2026</div><div class="rrev">&pound;2,140.00</div></div>
-                    <div class="rrow"><div><a>Q-1031</a> &mdash; Bishops Lydeard Surgery</div><div>Jane Weller</div><div class="rdate">28 Sep 2026</div><div class="rrev">&pound;3,960.00</div></div>
+                    <div class="rrow"><div><a>PRE-2026-0042</a> &mdash; Mrs Halliwell</div><div>Jane Weller</div><div class="rdate">29 Sep 2026</div><div class="rrev">&pound;1,284.00</div></div>
+                    <div class="rrow"><div><a>PRE-2026-0038</a> &mdash; Miller</div><div>Dave Perry</div><div class="rdate">26 Sep 2026</div><div class="rrev">&pound;2,140.00</div></div>
+                    <div class="rrow"><div><a>PRE-2026-0031</a> &mdash; Bishops Lydeard Surgery</div><div>Jane Weller</div><div class="rdate">18 Sep 2026</div><div class="rrev">&pound;3,960.00</div></div>
                   </div>
                 </div>
 
                 <div class="caps">
                   <b class="c1"><span class="n">1</span> A scoreboard &mdash; and the line that says what you are looking at.</b>
                   <b class="c2"><span class="n">2</span> The time window. It counts from when the quote was <em>started</em>.</b>
-                  <b class="c3"><span class="n">3</span> Your own dates &mdash; From, To, Apply.</b>
+                  <b class="c3"><span class="n">3</span> Your own dates &mdash; From, To, Apply. Neither box goes past today.</b>
                   <b class="c4"><span class="n">4</span> View: one salesperson&rsquo;s numbers.</b>
                   <b class="c5"><span class="n">5</span> Upcoming jobs &mdash; the panel that ignores all that.</b>
                   <b class="c6"><span class="n">6</span> The four big numbers.</b>
@@ -376,11 +396,15 @@ return [
              the only screen in the app that does not ask you to <em>do</em> anything. It is a scoreboard.
              The title says <b>Dashboard</b>, and the grey line underneath always tells you exactly what is
              being counted &mdash; <em>&ldquo;Sales at a glance &mdash; this month.&rdquo;</em> Read that line
-             first, every time. Top right is a solid <b>+ New quote</b> button, so you are never more than one
-             click from starting a job. Above the numbers you may get an amber <b>Joke of the day</b> strip:
+             first, every time. Top right, <em>if you are an admin or you have been given</em>
+             <b>Create quotes</b>, there is a solid <b>+ New quote</b> button, so you are never more than one
+             click from starting a job &mdash; somebody who is not allowed to raise quotes simply does not get
+             that button. Above the numbers you may get an amber <b>Joke of the day</b> strip:
              <b>&#128257; Another</b> fetches a different one, and the <b>&#10005;</b> only hides it
-             <em>until tomorrow</em> &mdash; it is not an off switch. The real off switch is a tick-box on
-             <a href="/help/guide.php?g=settings-dashboard"><b>Settings &rarr; Company</b></a>.</p>
+             <em>until tomorrow</em> &mdash; it is not an off switch. The real off switch is the tick-box
+             <em>&ldquo;&#128516; Show a &lsquo;Joke of the day&rsquo; on the dashboard&rdquo;</em>, in the
+             <b>Dashboard</b> section of
+             <a href="/help/guide.php?g=settings-dashboard"><b>Setup &rarr; Settings</b></a>.</p>
 
           <p><b>The three controls at the top.</b> That is the whole of the input on this page:</p>
           <ul class="steps">
@@ -390,20 +414,32 @@ return [
                 <b>Upcoming jobs</b> is re-counted the moment you click one.</li>
             <li><b>From / To and Apply</b> &mdash; two date pickers sitting in their own little bordered strip,
                 for anything the five buttons do not cover: a show week, one supplier&rsquo;s month, last
-                year&rsquo;s same fortnight. Both come <b>pre-filled with the last thirty days</b> so you are
-                never staring at an empty box. The <b>To</b> date is <b>included</b> &mdash; pick the 30th and
-                you get all of the 30th. Leave one side empty and that end stays open; the line under the title
-                then reads something like <em>&ldquo;beginning &rarr; 3 Oct 2026&rdquo;</em>. Press <b>Apply</b>
-                to set it. Neither date makes sense to the app and you get a red bar:
-                <b>&ldquo;Bad date format &mdash; use the date pickers.&rdquo;</b></li>
+                year&rsquo;s same fortnight. Both come <b>pre-filled with the last thirty days</b> &mdash;
+                From is thirty days ago, To is today &mdash; so you are never staring at an empty box.
+                <b>Neither box will let you pick a day later than today.</b> The Dashboard only ever looks
+                backwards, so both pickers are capped at today&rsquo;s date and the calendar simply greys out
+                anything beyond it; if you are hunting for a future date, you are on the wrong screen (that is
+                the <b>Calendar</b>). The <b>To</b> date is <b>included</b> &mdash; pick the 30th and
+                you get all of the 30th. Leave one side empty and that end stays open, and the line under the
+                title says so in words rather than dates: clear the From box and it reads
+                <em>&ldquo;beginning &rarr; 30 Sep 2026&rdquo;</em>; clear the To box and it reads
+                <em>&ldquo;1 Sep 2026 &rarr; today&rdquo;</em>; clear both and it reads
+                <em>&ldquo;beginning &rarr; today&rdquo;</em>, which is the same as <b>All time</b>.
+                Press <b>Apply</b> to set it. If <em>neither</em> date makes sense to the app you get a red bar
+                across the top: <b>&ldquo;Bad date format &mdash; use the date pickers.&rdquo;</b> &mdash; which
+                in practice only happens if something has mangled the web address, because the pickers
+                themselves cannot produce a bad date.</li>
             <li><b>View:</b> &mdash; a dropdown on its own row underneath, starting at <b>All sales team</b>. Pick a
                 name and the whole page narrows to that one person; it applies straight away, no button to press.
                 The list only holds people who have <em>actually raised a quote</em> in your account, so it stays
                 short. The title line gains <em>&ldquo;for Jane Weller&rdquo;</em> so nobody mistakes one
-                person&rsquo;s figures for the firm&rsquo;s, the team panel re-titles itself <b>Their numbers</b>,
-                and the <b>Revenue share</b> ring disappears (one person&rsquo;s share of themselves is always a
-                hundred per cent). Pick <b>All sales team</b> to come back out. Changing the period keeps your
-                person, and changing the person keeps your period.</li>
+                person&rsquo;s figures for the firm&rsquo;s; the team panel re-titles itself from
+                <b>Sales team</b> to <b>Their numbers</b> and its sub-line changes from
+                <em>&ldquo;&hellip;per salesperson.&rdquo;</em> to <em>&ldquo;&hellip;for this
+                salesperson.&rdquo;</em>; and the <b>Revenue share</b> ring disappears (one person&rsquo;s share
+                of themselves is always a hundred per cent). Pick <b>All sales team</b> to come back out.
+                Changing the period keeps your person, and changing the person keeps your period. If nobody in
+                your account has raised a quote yet, the whole <b>View:</b> row is not drawn at all.</li>
           </ul>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>The window counts from when the quote was
@@ -416,18 +452,26 @@ return [
           <p><b>Now the panels, top to bottom.</b></p>
           <ul class="steps">
             <li><b>Upcoming jobs</b> &mdash; the odd one out, and the only panel that is looking <em>forwards</em>.
-                It ignores the period buttons and it ignores the View dropdown. It always shows the next
-                <b>eight</b> appointments <b>booked</b> on the calendar, soonest first, with the sub-line
-                <em>&ldquo;Next 3 appointments on the calendar &mdash; soonest first.&rdquo;</em> Each row is a
-                link straight to that appointment and carries four things: the day (<b>Today</b> is in red, then
-                <b>Tomorrow</b>, then a date like <em>Fri 3 Oct</em>) over the time; the customer&rsquo;s name
-                over the <b>postcode you are driving to</b>; the fitter, or an italic <b>Unassigned</b> &mdash;
-                which is your cue to go and put somebody on it; and, if the appointment is tied to a quote, that
-                quote&rsquo;s status pill and its number. <b>Open calendar &rarr;</b> at the foot takes you to the
-                full diary. With nothing in the book the sub-line reads
-                <em>&ldquo;Nothing booked yet &mdash; head to the calendar to add one.&rdquo;</em> and the panel
-                says <em>&ldquo;No upcoming jobs booked.&rdquo;</em> A member of staff who can only see their own
-                diary only sees their own rows here.</li>
+                It ignores the period buttons and it ignores the View dropdown. It shows the next appointments
+                <b>booked</b> on the calendar, soonest first, <b>up to eight of them</b> &mdash; and the sub-line
+                counts what it actually found, so it reads <em>&ldquo;Next <b>3</b> appointments on the calendar
+                &mdash; soonest first.&rdquo;</em> when there are three in the book and <em>&ldquo;Next
+                <b>8</b>&hellip;&rdquo;</em> once you are busy. (With exactly one it says
+                <em>&ldquo;appointment&rdquo;</em>, singular.) Only <em>booked</em> jobs count &mdash; completed,
+                cancelled and no-shows are not &ldquo;upcoming&rdquo; by any useful definition, so they never
+                appear. Each row is a link straight to that appointment and carries four things: the day
+                (<b>Today</b> is in red, then <b>Tomorrow</b>, then a date like <em>Fri 2 Oct</em>) over the
+                time; the customer&rsquo;s name over the <b>postcode you are driving to</b>; the fitter; and, if
+                the appointment is tied to a quote, that quote&rsquo;s status pill and its number.
+                <b>Open calendar &rarr;</b> at the foot takes you to the full diary. With nothing in the book the
+                sub-line reads <em>&ldquo;Nothing booked yet &mdash; head to the calendar to add one.&rdquo;</em>
+                and the panel says <em>&ldquo;No upcoming jobs booked.&rdquo;</em>
+                <br><b>The fitter column depends on who you are.</b> If you have <b>View all customer jobs</b>
+                (and every admin does) you see every booking, with the fitter&rsquo;s name, or an italic
+                <b>Unassigned</b> where nobody is on it &mdash; which is your cue to go and put somebody on it.
+                If you do <em>not</em> have that permission, you only ever see your own bookings, and the fitter
+                column is left <b>blank</b> rather than saying &ldquo;Unassigned&rdquo; &mdash; every row is
+                yours, so there is nothing to tell you.</li>
             <li><b>The four KPI tiles</b> &mdash; <b>Revenue (won)</b> in green is the money from every job that
                 got past accepted (accepted, ordered, invoiced or paid), and it is the <b>customer&rsquo;s full
                 figure &mdash; VAT included</b>, carrying any Wally tax (WT charge) you added. Underneath it,
@@ -499,15 +543,15 @@ return [
         // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
             ['0:00', 'Header and the joke strip light up.',
-             'This is the first screen most people open, and it helps to know what it is: a scoreboard, not a job list. It tells you how the selling is going. The grey line under the title always tells you exactly what you are looking at — "Sales at a glance, this month." Read that line first, every single time. Top right there is a "new quote" button, so you never have to go looking for it. And the amber strip is just the joke of the day — the cross hides it until tomorrow, it is not an off switch. The off switch is in Settings, on the Company tab.', 1],
+             'This is the first screen most people open, and it helps to know what it is: a scoreboard, not a job list. It tells you how the selling is going. The grey line under the title always tells you exactly what you are looking at — "Sales at a glance, this month." Read that line first, every single time. Top right — as long as you are an admin, or you have been given the "create quotes" tick — there is a "new quote" button, so you never have to go looking for it. Somebody who is not allowed to raise quotes just will not have it. And the amber strip is the joke of the day — the cross hides it until tomorrow, it is not an off switch. The real off switch is a tick-box in Settings, in the section headed Dashboard.', 1],
             ['0:24', 'The five period buttons; This month is filled.',
              'Now the important row. Every number below, apart from the upcoming jobs list, is measured over the window you pick here — this month, last thirty days, this quarter, this year, or all time. It opens on this month. And here is the one thing that catches everybody out, so listen carefully. The window counts a job by the day the quote was STARTED — not the day the customer said yes. So a quote you began in September and won in October still lands in September. If a job you know you have won seems to be missing, widen the window, or click all time, and it will be there.', 2],
-            ['0:52', 'From and To dates are picked; Apply.',
-             'For anything else — a show week, one supplier\'s month — use the two date pickers and press Apply. They come ready filled with the last thirty days, so you are never staring at an empty box. The "to" date is included, so picking the thirtieth means all of the thirtieth. Leave one side empty and that end stays open; the line under the title then reads "beginning, arrow, today". And if the dates will not take, you get a red bar saying "Bad date format — use the date pickers."', 3],
+            ['0:52', 'From and To dates are picked; Apply. The red bar shows what a bad date looks like.',
+             'For anything else — a show week, one supplier\'s month — use the two date pickers and press Apply. They come ready filled with the last thirty days: "from" is thirty days back, "to" is today, so you are never staring at an empty box. Notice that neither box will go past today — this screen only ever looks backwards, so the calendar greys out tomorrow onwards. If you want a future date you want the Calendar, not the Dashboard. The "to" date is included, so picking the thirtieth means all of the thirtieth. Leave one side empty and that end stays open; the line under the title then reads "beginning, arrow, today". And if neither date makes sense to the app, you get the red bar you can see now — "Bad date format — use the date pickers." In practice that only ever turns up if the web address itself has been mangled, because the pickers cannot produce a bad date.', 3],
             ['1:12', 'View: switches to Jane Weller; the page re-labels.',
-             'The View box narrows the whole page down to one salesperson. It only lists people who have actually raised a quote here, so it stays nice and short, and it applies the moment you pick a name. Watch what changes: the title line gains "for Jane Weller", so nobody mistakes one person\'s figures for the firm\'s. The team panel re-titles itself "Their numbers". And the revenue share ring disappears, because one person\'s share of themselves is always a hundred per cent. Pick "all sales team" to come back out. Changing the period keeps your person, and changing the person keeps your period.', 4],
+             'The View box narrows the whole page down to one salesperson. It only lists people who have actually raised a quote here, so it stays nice and short, and it applies the moment you pick a name. Watch what changes: the title line gains "for Jane Weller", so nobody mistakes one person\'s figures for the firm\'s. The team panel stops saying "Sales team" and re-titles itself "Their numbers", with its sub-line changing from "per salesperson" to "for this salesperson". And the revenue share ring disappears, because one person\'s share of themselves is always a hundred per cent. Pick "all sales team" to come back out. Changing the period keeps your person, and changing the person keeps your period.', 4],
             ['1:38', 'Upcoming jobs panel lights up.',
-             'Upcoming jobs is the exception to everything I have just said. It ignores the period, and it ignores the person. It always shows the next eight jobs booked on the calendar, soonest first. Today is in red so your eye lands on it. Under the customer\'s name is the postcode you are driving to, then the fitter — or the word "unassigned", which is your cue to go and put somebody on it. If the appointment is tied to a quote you also get its status and its number. Click any row to open the appointment, or "open calendar" at the bottom for the full diary. With nothing in the book it reads "Nothing booked yet — head to the calendar to add one." And a fitter who only sees their own diary only sees their own rows here.', 5],
+             'Upcoming jobs is the exception to everything I have just said. It ignores the period, and it ignores the person. It shows the next jobs booked on the calendar, soonest first, up to eight of them — and the little grey line counts whatever it found, so with three in the book it says "next three appointments", not "next eight". Only jobs still marked as booked appear; anything completed, cancelled or marked a no-show drops off. Today is in red so your eye lands on it. Under the customer\'s name is the postcode you are driving to, then the fitter — or the word "unassigned", which is your cue to go and put somebody on it. If the appointment is tied to a quote you also get its status and its number. Click any row to open the appointment, or "open calendar" at the bottom for the full diary. With nothing in the book it reads "Nothing booked yet — head to the calendar to add one." And a fitter who has not been given "view all customer jobs" only sees their own bookings here, with that fitter column left blank rather than saying unassigned — every row is theirs anyway.', 5],
             ['2:10', 'The four KPI tiles light up.',
              'The four big numbers. "Revenue, won" is the money from jobs that got past accepted — accepted, ordered, invoiced or paid — and it is the customer\'s full figure, VAT included, carrying any Wally tax you added. "Average order value" is that money shared across those jobs. "Close rate" is how many you won out of the ones the customer has actually decided on; quotes still sitting at "sent" are left out on purpose, because they might still land, so nobody is punished for a job that is still in the air. With nothing decided it simply reads a dash, and "no decided quotes yet". "Jobs in period" is the same count you can already see under Revenue, written large. And an honest warning before we go on: because the Revenue tile includes VAT and the Wally tax, do not try to take the gross profit figure away from it. They are counting different things.', 6],
             ['2:46', 'Sales team table and the Revenue share ring.',

@@ -22,21 +22,28 @@ return [
         'blurb'   => 'All ten boxes on the Company tab, in order — and the letterhead they build on every quote, invoice and legal page.',
         'lede'    => 'These ten boxes are your <b>letterhead</b>. Your name, your contact details,
                       your VAT number and your address get printed at the top-left of every quote,
-                      order and invoice you send &mdash; and on the web page your customer opens on
-                      their phone. Fill them in once, properly, and everything that leaves the app
-                      looks like it came from <b>you</b>. Here&rsquo;s every box, in the order you
-                      meet them, and where each one ends up.',
+                      order and invoice PDF you send &mdash; and all of it bar the VAT line on the
+                      web page your customer opens on their phone. Fill them in once, properly, and
+                      everything that leaves the app looks like it came from <b>you</b>. Here&rsquo;s
+                      every box, in the order you meet them, and where each one ends up.',
         'open'    => '/admin/settings.php',
         'css'     => '
           /* --- sidebar drawn in the real "two worlds" shape (Work / Retail / Setup) --- */
           .gd .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.7rem 0 .15rem; padding:0 .5rem; }
           .gd .navh .chev{ font-size:.6rem; margin-left:.15rem; }
-          .gd .navfoot{ margin-top:1rem; padding:.35rem .5rem 0; border-top:1px solid rgba(255,255,255,.08); font-size:.6rem; color:#8fa3b3; }
-          .gd .navfoot .nfnew{ display:none; }
-          .gd .app:has(.stage[data-step="7"]) .navfoot .nfold,
-          .gd .app:has(.stage[data-step="8"]) .navfoot .nfold{ display:none; }
-          .gd .app:has(.stage[data-step="7"]) .navfoot .nfnew,
-          .gd .app:has(.stage[data-step="8"]) .navfoot .nfnew{ display:inline; color:#fff; font-weight:700; }
+          /* Who-you-are block. In the real sidebar this sits at the TOP, directly
+             under the YourBlinds brand (_partials/sidebar.php:325 .app-sidebar-user,
+             app.css:244 gives it a border-BOTTOM): your full name on its own line,
+             then "company name · role" under it. Not a footer. */
+          .gd .navuser{ margin:.45rem 0 .25rem; padding:0 .5rem .5rem; border-bottom:1px solid rgba(255,255,255,.08); }
+          .gd .navuser .nuname{ font-size:.66rem; font-weight:700; color:#fff; line-height:1.3; }
+          .gd .navuser .numeta{ font-size:.6rem; color:#8fa3b3; margin-top:.1rem; line-height:1.3; }
+          .gd .navuser .nfnew{ display:none; }
+          .gd .app:has(.stage[data-step="7"]) .navuser .nfold,
+          .gd .app:has(.stage[data-step="8"]) .navuser .nfold{ display:none; }
+          .gd .app:has(.stage[data-step="7"]) .navuser .nfnew,
+          .gd .app:has(.stage[data-step="8"]) .navuser .nfnew{ display:inline; color:#fff; font-weight:700; }
+          .gd .app:has(.stage[data-step="7"]) .navuser{ box-shadow:0 0 0 2px #5b9bff; border-radius:7px; }
           /* step 1 rings the route in: Setup, then Settings */
           .gd .app:has(.stage[data-step="1"]) .navsetup,
           .gd .app:has(.stage[data-step="1"]) .side a.on{ box-shadow:0 0 0 2px #5b9bff; border-radius:7px; }
@@ -88,6 +95,12 @@ return [
           .gd .lhname{ font-weight:800; font-size:.95rem; color:var(--ink); margin-bottom:.25rem; }
           .gd .lhline{ font-size:.74rem; color:var(--soft); line-height:1.55; }
           .gd .lhline .mk{ background:var(--accent-wash); border-radius:4px; padding:0 .2rem; }
+          /* VAT No. is on the PDF letterhead (pdf-generator/pdf.php) but NOT on the
+             public quote page (quote-history/public.php stops at the email), so the
+             mock tags that one line rather than pretending both carry it. */
+          .gd .lhline .pdfonly{ font-size:.56rem; letter-spacing:.06em; text-transform:uppercase;
+                                color:var(--faint); border:1px solid var(--line); border-radius:4px;
+                                padding:0 .22rem; margin-left:.3rem; white-space:nowrap; }
           .gd .lhnote{ font-size:.68rem; color:var(--faint); margin-top:.6rem; max-width:24rem; line-height:1.5; }
           .gd .lhnote b{ color:var(--ink); }
           @media(max-width:620px){ .gd .frow3{ grid-template-columns:1fr; } }',
@@ -97,13 +110,16 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
+                <div class="navuser">
+                  <div class="nuname">Jo Taylor</div>
+                  <div class="numeta"><span class="nfold">Sample Blinds</span><span class="nfnew">Demo Blinds Ltd</span> &middot; admin</div>
+                </div>
                 <div class="navh">Work</div>
                 <a>Dashboard</a><a>Calendar</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a>
                 <div class="navh navsetup">Setup <span class="chev">&#9662;</span></div>
                 <a>Products</a><a>Users</a><a class="on">Settings</a>
-                <div class="navfoot"><span class="nfold">Sample Blinds</span><span class="nfnew">Demo Blinds Ltd</span> &middot; admin</div>
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="toast">&check; Company details saved.</div>
@@ -157,7 +173,7 @@ return [
 
                 <!-- Scene B: the payoff — the letterhead those ten boxes build -->
                 <div class="csc scB">
-                  <div class="card-t">Top-left of your quote &mdash; and of the page your customer opens</div>
+                  <div class="card-t">Top-left of your quote, order and invoice PDF</div>
                   <div class="lhead">
                     <div class="lhlogo">LOGO</div>
                     <div class="lhname">Demo Blinds Ltd</div>
@@ -168,11 +184,14 @@ return [
                       West Yorkshire<br>
                       01234 567890<br>
                       hello@demoblinds.example<br>
-                      VAT No. GB123456789
+                      VAT No. GB123456789 <span class="pdfonly">PDF only</span>
                     </div>
                   </div>
                   <div class="lhnote"><b>Town and postcode share a line</b>, with the county underneath &mdash;
-                    the app arranges that for you. Any box you left empty is simply dropped, so there are no gaps.</div>
+                    the app arranges that for you. Any box you left empty is simply dropped, so there are no gaps.
+                    The web page your customer opens on their phone carries this very same block, in this very same
+                    order, with <b>one difference: no VAT line</b>. That page stops at your email address &mdash;
+                    <b>VAT No. prints on the PDF only</b>.</div>
                 </div>
 
                 <div class="caps">
@@ -182,7 +201,7 @@ return [
                   <b class="c4"><span class="n">4</span> VAT number &mdash; or leave it blank.</b>
                   <b class="c5"><span class="n">5</span> Address line one, then line two underneath.</b>
                   <b class="c6"><span class="n">6</span> Town, county, postcode.</b>
-                  <b class="c7 good"><span class="n">7</span> Saved &mdash; and your name updates bottom-left.</b>
+                  <b class="c7 good"><span class="n">7</span> Saved &mdash; and your name updates top-left.</b>
                   <b class="c8 good"><span class="n">8</span> And that&rsquo;s where every box ends up.</b>
                 </div>
               </div>
@@ -202,13 +221,18 @@ return [
           <p><b>Work down the form.</b> They&rsquo;re in this order on screen:</p>
           <ul class="steps">
             <li><b>Company name</b> &mdash; the one with the little red <span class="req">*</span>. This is the
-                name that heads every quote, order and invoice, and it&rsquo;s the title of your public terms
-                page too. Type it exactly as you want customers to read it. Up to 150 characters.</li>
+                name that heads every quote, order and invoice; it sits at the very top of your public terms
+                and privacy pages, above the document&rsquo;s own heading; and it&rsquo;s the second half of
+                those pages&rsquo; browser-tab title. Type it exactly as you want customers to read it.
+                Up to 150 characters.</li>
             <li><b>Contact name</b> &mdash; the real person a customer asks for when they ring. Also up to 150.</li>
             <li><b>Email</b> &mdash; your <em>printed</em> email address: it goes on the paperwork and into the
                 sign-off of the purchase orders you send suppliers. It is <b>not</b> the address your quotes are
                 sent <em>from</em>. That lives on the <b>Quoting</b> tab, under <b>Email &ldquo;from&rdquo; name</b>
-                and <b>Reply-to email</b>. Filling this box in won&rsquo;t change who your emails appear to come from.</li>
+                and <b>Reply-to email</b>. Filling this box in won&rsquo;t change who your <em>quote</em> emails
+                appear to come from. One exception worth knowing: your <b>purchase orders to suppliers</b> fall
+                back to this address for their reply-to if you&rsquo;ve left <b>Reply-to email</b> on the Quoting
+                tab empty &mdash; so a supplier hitting Reply lands here.</li>
             <li><b>Phone</b> &mdash; the number printed alongside the email. Up to 50 characters, and because the
                 app marks it as a telephone box, a phone or tablet pops up the number keypad for it rather than
                 the full keyboard.</li>
@@ -216,8 +240,10 @@ return [
                 &ldquo;<em>Leave blank if your business isn&rsquo;t VAT-registered. When set, it appears below your
                 contact details on every quote PDF.</em>&rdquo; It&rsquo;s the only box on this form with a faint
                 example in it (<code>e.g. GB123456789</code>). Fill it in and it prints as <b>VAT No.</b> under your
-                phone and email &mdash; on quotes, and on trade delivery notes, invoices, credit notes and statements
-                as well. Leave it empty and the line simply isn&rsquo;t there. <em>(If you&rsquo;ve switched
+                phone and email &mdash; on the quote, order and invoice PDFs, and on trade delivery notes, invoices,
+                credit notes and statements as well. It is the one letterhead line that does <b>not</b> appear on the
+                public quote page your customer opens in a browser &mdash; that page stops at your email address.
+                Leave the box empty and the line simply isn&rsquo;t there anywhere. <em>(If you&rsquo;ve switched
                 <b>Compact mode</b> on in the sidebar, that little grey advice line is hidden to save room &mdash;
                 the box itself works exactly the same.)</em></li>
             <li><b>Address line 1</b> &mdash; full width, on its own row. Unit or building first. Up to 150.</li>
@@ -231,8 +257,10 @@ return [
 
           <p><b>Then save.</b> Click <b>Save company details</b>. The page reloads and a green bar appears across
              the top, above the tabs, reading <b>&ldquo;Company details saved.&rdquo;</b> Glance at the
-             <b>bottom-left corner</b> of the menu as well &mdash; your company name is printed down there, and it
-             changes the moment you save. That&rsquo;s your proof it went in.</p>
+             <b>top-left corner</b> of the menu as well &mdash; just under the big <b>YourBlinds</b> name there&rsquo;s
+             a small block with <em>your own name</em> on the first line and, on the line beneath it, your company
+             name and your role, like &ldquo;Demo Blinds Ltd &middot; admin&rdquo;. That company name changes the
+             moment you save. That&rsquo;s your proof it went in.</p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>You can&rsquo;t empty the company name out.</b>
              Clear that box, hit Save, and the old name quietly comes back &mdash; with the same green
@@ -245,9 +273,13 @@ return [
             <li><b>Your quote, order and invoice PDFs</b> &mdash; the top-left letterhead: your logo, then the
                 company name, then the address, then phone, email and <b>VAT No.</b></li>
             <li><b>The public quote page</b> your customer opens from their email, on their phone &mdash; the
-                same block, in the same order.</li>
-            <li><b>Your public terms and privacy pages</b> &mdash; your company name is the heading, and the page
-                title in the browser tab.</li>
+                same block, in the same order, <em>except</em> that it ends at your email address. The
+                <b>VAT No.</b> line is not on it. If you want a customer to see your VAT number, send them
+                the PDF.</li>
+            <li><b>Your public terms and privacy pages</b> &mdash; your company name sits at the top of the page
+                in bold, with the document&rsquo;s own heading underneath it (<b>Terms &amp; Conditions</b>,
+                <b>Terms &amp; Conditions (Trade)</b> or <b>Privacy Policy</b>), and it makes up the second half
+                of the browser-tab title, as in &ldquo;Privacy Policy &middot; Demo Blinds Ltd&rdquo;.</li>
             <li><b>Trade paperwork</b> &mdash; delivery notes, invoices, credit notes and statements all carry the
                 identical letterhead.</li>
             <li><b>Purchase-order emails to your suppliers</b> &mdash; your company name heads the order and the
@@ -273,7 +305,7 @@ return [
             ['0:47', 'VAT number types over the example.',         'VAT number — and the app tells you itself: leave blank if your business isn\'t VAT-registered; when set, it appears below your contact details on every quote PDF. If you are registered, put it in. It prints as V-A-T number under your phone and email, and it carries onto your trade delivery notes, invoices and statements too. If you\'re not registered, leave it empty and that line simply doesn\'t appear.', 4],
             ['1:06', 'Address line 1, then line 2 underneath.',    'Now your address. Line one, and then line two on its own row underneath — unit or building first, estate or street second. If you don\'t need line two, leave it empty. Blanks are dropped, so you won\'t get a gap on the printed page.', 5],
             ['1:20', 'Town, county and postcode fill together.',   'And the last three, side by side — town, county, postcode. Quick tip: on the printed letterhead the town and the postcode end up together on one line, with the county underneath. That\'s the app doing it, not you — just put each one in its own box.', 6],
-            ['1:34', 'Save; green bar; sidebar name updates.',     'Hit Save company details. The page reloads and a green bar across the top says "Company details saved." Look bottom-left — your company name has changed down there too. That\'s how you know it took.', 7],
-            ['1:46', 'The finished letterhead.',                   'And that\'s where every one of those boxes ends up — the top-left corner of your quote, and of the page your customer opens on their phone. One last thing worth knowing: you can\'t empty the company name out. Clear it, save, and the old name quietly comes back. The app would rather keep the name it\'s got than send out a quote with no name on it. So to change it, just type the new one over the top.', 8],
+            ['1:34', 'Save; green bar; sidebar name updates.',     'Hit Save company details. The page reloads and a green bar across the top says "Company details saved." Now look top-left, just under the big YourBlinds name — there\'s your own name, and on the line under it your company name and your role. That company name has changed. That\'s how you know it took.', 7],
+            ['1:46', 'The finished letterhead.',                   'And that\'s where every one of those boxes ends up — the top-left corner of your quote, order and invoice PDF. The page your customer opens on their phone shows the very same block in the very same order, with one difference: it stops at your email address, so the V-A-T number line isn\'t on it. One last thing worth knowing: you can\'t empty the company name out. Clear it, save, and the old name quietly comes back. The app would rather keep the name it\'s got than send out a quote with no name on it. So to change it, just type the new one over the top.', 8],
         ],
 ];

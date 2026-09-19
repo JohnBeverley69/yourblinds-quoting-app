@@ -224,7 +224,7 @@ return [
                 <div class="osc scC">
                   <p class="exlabel" style="margin-bottom:.3rem">Control type &mdash; Choices (2)
                     <span class="sind ok">All changes saved</span>
-                    <span class="sind bad lr lr4">Save failed</span></p>
+                    <span class="sind bad lr lr4">Must be a number.</span></p>
                   <div class="cgrid">
                     <span class="cc hd"></span><span class="cc hd">Label</span>
                     <span class="cc hd">Available on<span class="sa">Set all</span></span>
@@ -266,8 +266,16 @@ return [
                   <div class="gtip"><span><b>Tip:</b> type a label and press <b>Enter</b> to add one row at a time. For multiple
                     (e.g. <em>Left</em> + <em>Right</em>), use <b>Bulk add</b> &rarr;</span><span class="ghostbtn">+ Bulk add</span></div>
                   <div class="errbanner lr lr4" style="margin-top:.4rem"><span>&#9888;</span>
-                    <div><b>Must be a number.</b> A word typed into a price cell is refused and the cell rolls back &mdash;
-                    the badge goes red for four seconds, then settles again.</div></div>
+                    <div><b>Must be a number.</b> The three price cells are number boxes, so letters never get in &mdash; but
+                    <em>empty</em> them and the save is refused. The badge itself turns red and carries the reason
+                    (&ldquo;Save failed&rdquo; only when the server gives none), the cell rolls back to what it last saved, and after
+                    four seconds the badge settles to <b>All changes saved</b> again.</div></div>
+                  <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.55rem">
+                    <span class="hbtn pri">Done &mdash; back to options</span>
+                    <span style="font-size:.58rem;color:var(--faint);flex:1;min-width:9rem">Every change is saved automatically as you
+                      make it &mdash; you don&rsquo;t have to click anything to save. The badge at the top of the page tells you when
+                      something&rsquo;s still in flight.</span>
+                  </div>
                 </div>
 
                 <!-- ===== Scene D: the full choice edit page ===== -->
@@ -281,28 +289,35 @@ return [
                     <div class="fsl">Ask for a number on this choice</div>
                     <span class="chkline"><span class="tick on">&check;</span> Show a number input when this choice is picked</span>
                     <div class="fld" style="margin:.3rem 0 0 1.1rem"><label>What to call this field</label>
-                      <div class="box f5"><span class="ph">e.g. Top offset (mm)</span><span class="val">Size (mm)</span></div></div>
+                      <div class="box f5"><span class="ph">e.g. Top offset (mm)</span><span class="val">Number of brackets</span></div></div>
                   </div>
                   <div class="frow3">
                     <div class="fld"><label>Flat (&pound;)</label><div class="boxv">120.00</div></div>
                     <div class="fld"><label>Percent (%)</label><div class="boxv">0.00</div></div>
                     <div class="fld"><label>Per metre (&pound;/m)</label><div class="boxv">0.00</div></div>
                   </div>
-                  <div class="two" style="margin-top:.4rem">
-                    <div class="fld"><label>Price per unit (&pound;) &mdash; &times; quantity</label>
-                      <div class="box f5"><span class="ph">e.g. 2.50</span><span class="val">2.50</span></div></div>
-                    <div class="fld"><label>Per-metre length is measured along</label>
-                      <div class="selectbox" style="min-width:0;width:100%;font-size:.62rem;padding:.2rem .4rem">Perimeter (2 &times; W + 2 &times; D)</div></div>
-                  </div>
-                  <div class="two" style="margin-top:.4rem">
-                    <div class="fld"><label>Available on</label>
-                      <div class="selectbox" style="min-width:0;width:100%;font-size:.62rem;padding:.2rem .4rem">All systems</div></div>
-                    <div class="fld"><label>Available for bands</label>
-                      <div style="display:flex;gap:.5rem;padding-top:.15rem">
-                        <span class="fchk"><span class="tick">&check;</span> A</span>
-                        <span class="fchk"><span class="tick">&check;</span> B</span>
-                        <span class="fchk"><span class="tick">&check;</span> C</span></div></div>
-                  </div>
+                  <div class="fld" style="margin-top:.4rem"><label>Price per unit (&pound;) &mdash; &times; quantity</label>
+                    <div class="box f5"><span class="ph">e.g. 2.50</span><span class="val">2.50</span></div>
+                    <p class="exhelp">For things sold <b>per unit</b> &mdash; brackets, fixings and the like. The salesperson types
+                       <b>how many</b> and the line adds this price &times; that quantity. Setting it adds a <em>Quantity</em> box on the
+                       quote automatically (rename it under &ldquo;Ask for a number on this choice&rdquo; above if you&rsquo;d prefer,
+                       e.g. &ldquo;Number of brackets&rdquo;).</p></div>
+                  <div class="fld" style="margin-top:.4rem"><label>Per-metre length is measured along</label>
+                    <div class="selectbox" style="min-width:0;width:100%;font-size:.62rem;padding:.2rem .4rem">Perimeter (2 &times; W + 2 &times; D)</div>
+                    <p class="exhelp">Only matters when <b>Per metre (&pound;/m)</b> is set. Width is the usual choice; pick
+                       <b>Perimeter</b> for trims that run all the way around the blind (e.g. a magnetic strip) &mdash; charged on
+                       2&nbsp;&times;&nbsp;width&nbsp;+&nbsp;2&nbsp;&times;&nbsp;drop.</p></div>
+                  <div class="fld" style="margin-top:.4rem"><label>Available on</label>
+                    <div class="selectbox" style="min-width:0;width:100%;font-size:.62rem;padding:.2rem .4rem">All systems</div>
+                    <p class="exhelp">&ldquo;All systems&rdquo; = appears on every system on this product. Pick a single system to limit
+                       it. To price the same choice differently per system, use the <em>Duplicate</em> link on the choices list.</p></div>
+                  <div class="fld" style="margin-top:.4rem"><label>Available for bands</label>
+                    <div style="display:flex;gap:.5rem;padding-top:.15rem">
+                      <span class="fchk"><span class="tick">&check;</span> A</span>
+                      <span class="fchk"><span class="tick">&check;</span> B</span>
+                      <span class="fchk"><span class="tick">&check;</span> C</span></div>
+                    <p class="exhelp">Tick the bands this choice should appear for. Leave them all unticked =
+                       &ldquo;appears for every band&rdquo; (the default).</p></div>
                   <div class="fld" style="margin-top:.4rem"><label>Available for specific fabrics</label>
                     <div class="scrollbox">
                       <div class="bandhd">Band A</div>
@@ -407,9 +422,11 @@ return [
                         <span class="chkline"><span class="tick on">&check;</span>
                           <span>Required <small>customer must pick a choice</small></span></span>
                         <span class="chkline"><span class="tick">&check;</span>
-                          <span>Allow multiple choices <small>renders as tick-boxes instead of a dropdown &mdash; each ticked choice contributes to the price</small></span></span>
+                          <span>Allow multiple choices <small>renders as tick-boxes instead of a dropdown &mdash; salesperson can pick
+                          any combination, each ticked choice contributes to the price</small></span></span>
                         <span class="chkline"><span class="tick">&check;</span>
-                          <span>Show above the size fields <small>renders this option before Width / Drop in the quote builder</small></span></span>
+                          <span>Show above the size fields <small>renders this option (and anything nested under it) before Width / Drop
+                          in the quote builder &mdash; e.g. the roller fascia group, so multi-fascia per-blind widths make sense</small></span></span>
                         <span class="chkline"><span class="tick on">&check;</span>
                           <span>Active <small>uncheck to hide from quote builder</small></span></span>
                       </div>
@@ -422,7 +439,7 @@ return [
                             <div class="selectbox f8"><span class="ph">&mdash; Select &mdash;</span><span class="val">Motorised</span></div></div>
                           <div class="pvqchild">
                             <div class="pvqrow"><label>Motor type <span class="req">*</span></label><div class="selectbox">Tubular</div></div>
-                            <div class="pvqrow"><label>Quantity</label><div class="boxv" style="height:22px">5</div></div>
+                            <div class="pvqrow"><label>Number of brackets</label><div class="boxv" style="height:22px">5</div></div>
                             <div class="pvqrow"><label>Motorised</label><span class="pvthumb">&#128247;</span></div>
                           </div>
                           <div class="pvqsum">Options: +&pound;132.50</div>
@@ -485,7 +502,9 @@ return [
                 filled in with <b>Length (mm)</b> and selected so you can type straight over it (max <b>60 characters</b>). Include the unit.</li>
             <li><b>Where you land.</b> Click <b>Add option</b> and a normal option drops you <em>straight into its choices grid</em>. An option
                 that is <b>only</b> a number does not &mdash; it needs no choices, so you stay on the list and it tells you why:
-                <code>Option &ldquo;Fascia width&rdquo; added &mdash; it captures a typed number, so it needs no choices and is ready to use.</code></li>
+                <code>Option &ldquo;Fascia width&rdquo; added &mdash; it captures a typed number, so it needs no choices and is ready to
+                use. Open it only if you also want pickable choices alongside the number.</code> That last sentence is the licence to have
+                <em>both</em>: a dropdown of choices <b>and</b> a typed number on the same option.</li>
           </ul>
 
           <p class="prose"><b>3) Its choices.</b> The choices page is a <b>live grid</b> &mdash; there is <b>no Save button</b>.</p>
@@ -493,19 +512,33 @@ return [
             <li><b>Add one.</b> Type a label in the bottom row (<em>&ldquo;Type new label and press Enter&hellip;&rdquo;</em>) and press
                 <b>Enter</b>. The row appears above it, ready to price.</li>
             <li><b>Add a list.</b> <b>+ Bulk add</b> takes <b>one label per line</b> &mdash; paste <em>Left</em> then <em>Right</em>, or a
-                column of slat sizes. New rows start with no price differences. Labels already on the option are <b>skipped silently</b>.</li>
+                column of slat sizes. New rows start with no price differences.</li>
             <li><b>Edit anything.</b> Click a cell, type, then <b>Tab</b> or <b>Enter</b> to save it &mdash; <b>Escape</b> cancels. The pill
-                beside the heading is your receipt: <b>All changes saved</b>, <b>Saving&hellip;</b> while it is in flight, or a red
-                <b>Save failed</b> that clears itself after four seconds.</li>
-            <li><b>Repeats.</b> Type a label that is already on this option at that system and it asks first:
-                <code>A choice called &ldquo;Cord&rdquo; already exists in this option for that system. Add it again anyway?</code></li>
+                beside the heading is your receipt: <b>All changes saved</b>, <b>Saving&hellip;</b> while it is in flight, or a red one that
+                <em>tells you what went wrong</em> (it falls back to <b>Save failed</b> only when the server offers no reason) and clears
+                itself after four seconds. A refused cell rolls back to the value it last saved, so nothing is left looking saved when it
+                is not.</li>
+            <li><b>Repeats behave differently on the two add routes.</b> Type a label in the bottom row that is already on this option at
+                that system and it <b>asks first</b>:
+                <code>A choice called &ldquo;Cord&rdquo; already exists in this option for that system. Add it again anyway?</code> &mdash;
+                say yes and you get a second one on purpose. <b>Bulk add never asks</b>: it <b>skips</b> every label that already exists and
+                reloads with the rest. If <em>nothing</em> landed it tells you, and only then:
+                <code>Nothing added &mdash; 3 labels already existed.</code></li>
             <li><b>Duplicate</b> on a row clones that choice &mdash; the intended way to have <em>the same label on a different system at a
                 different price</em>. Drag <b>&#8942;&#8942;</b> to reorder, and <b>&times;</b> deletes.</li>
+            <li><b>The blue button at the bottom is not a Save button.</b> <b>Done &mdash; back to options</b> only walks you back to the
+                options list; the page says so itself underneath &mdash; <em>&ldquo;Every change is saved automatically as you make it &mdash;
+                you don&rsquo;t have to click anything to save. The badge at the top of the page tells you when something&rsquo;s still in
+                flight.&rdquo;</em> It is there for the reflex to look for a Save; clicking it saves nothing extra, and leaving without it
+                loses nothing.</li>
           </ul>
 
           <p class="prose"><b>4) The five ways to price a choice.</b> They all <b>add together</b>, and blank everywhere means the choice is
              <b>free</b>. Three live in the grid; two live on the choice&rsquo;s <b>Edit</b> page &mdash; which is exactly the bit people
-             cannot find.</p>
+             cannot find. <em>A word on the count:</em> the width-table panel on the Edit page introduces itself as
+             <b>&ldquo;A fourth pricing mode&rdquo;</b>, and that is not a contradiction &mdash; it is counting the three grid columns plus
+             itself, and leaving <b>Price per unit</b> out because that one is a multiplier on a typed quantity rather than a rate on the
+             blind. Counted as things you can fill in, there are five.</p>
           <ul class="steps">
             <li><b>Flat &pound;</b> (grid) &mdash; a straight surcharge, the same at every size.</li>
             <li><b>%</b> (grid) &mdash; worked out on the <b>base blind price</b>, not on the running total and not on the other options.</li>
@@ -514,7 +547,10 @@ return [
                 <b>Perimeter (2 &times; W + 2 &times; D)</b>. Width is the usual one; perimeter is for a trim that runs all the way round.</li>
             <li><b>Price per unit (&pound;) &mdash; &times; quantity</b> (Edit page) &mdash; for brackets, fixings and the like. The salesperson
                 types how many and the line adds price &times; quantity. Setting it <b>adds a Quantity box to the quote automatically</b>
-                (rename it under &ldquo;Ask for a number on this choice&rdquo; &mdash; e.g. &ldquo;Number of brackets&rdquo;).</li>
+                &mdash; but <em>Quantity</em> is only the name it falls back to when you have left the label blank. Fill in
+                <b>What to call this field</b> under &ldquo;Ask for a number on this choice&rdquo; and the quote builder shows <em>your</em>
+                wording instead, word for word &mdash; e.g. &ldquo;Number of brackets&rdquo;. Name it, or your salesperson gets a box
+                labelled <em>Quantity</em> with nothing to say what of.</li>
             <li><b>Width-based price table</b> (Edit page) &mdash; when the surcharge changes with width. <b>Option A</b>: paste rows, one per
                 line, <b>width then price</b>, separated by a space, a comma or a tab, in mm (<code>800</code>) or metres (<code>0.800</code>).
                 <b>Option B</b>: upload the supplier&rsquo;s Excel &mdash; vertical or horizontal, auto-detected; a file beats the textarea.
@@ -572,14 +608,20 @@ return [
              on this product (same name).</code></p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Two things worth knowing.</b>
-             <b>Renaming carries through.</b> Rename an option or a choice <em>here</em> and the factory&rsquo;s build rules are updated to match
-             automatically &mdash; those rules find their values by <em>name</em>, so a rename done anywhere else silently stops them firing and the
-             blind sizes wrongly on the real ticket. <b>A follow-on option not showing?</b> Check its <b>Appears when</b> parents are
-             <b>Active</b> choices that actually get picked, and check the option&rsquo;s own <b>Active</b> box on <em>Edit option</em>.</div></div>
+             <b>Renaming: use the full Edit pages, not the grid cell.</b> The factory&rsquo;s build rules find their values by <em>name</em>,
+             with no proper link behind them, so a rename that is not carried into those rules silently stops them firing and the blind sizes
+             wrongly &mdash; or blank &mdash; on the real ticket. Rename on <b>Edit option</b> or on a choice&rsquo;s <b>Edit</b> page and the
+             rules are updated for you as part of <b>Save changes</b>. Rename by clicking the <b>Label</b> cell in the grid and it
+             <b>does not cascade</b> &mdash; the new label saves, the build rules keep looking for the old one. Quick edits in the grid are
+             perfect for prices and ticks; for a <em>name</em> on a product the factory builds, take the extra click and use Edit.
+             <b>A follow-on option not showing?</b> Check its <b>Appears when</b> parents are <b>Active</b> choices that actually get picked,
+             and check the option&rsquo;s own <b>Active</b> box on <em>Edit option</em>.</div></div>
 
           <div class="oops"><b>What it says when something is wrong:</b>
              <ul style="margin:.4rem 0 0;padding-left:1.15rem">
-               <li>A word typed into a price cell &rarr; <code>Must be a number.</code> (on the Edit page,
+               <li>A price cell left <b>empty</b> in the grid &rarr; <code>Must be a number.</code> right in the red badge. (You cannot
+                   easily type a <em>word</em> there &mdash; the three grid price cells are number boxes &mdash; but the Edit page&rsquo;s
+                   own fields give the longer versions:
                    <code>Flat surcharge must be a number.</code>, <code>Percent surcharge must be a number.</code>,
                    <code>Per-metre surcharge must be a number.</code> or <code>Price per unit must be a number.</code>).</li>
                <li>Name or label left empty &rarr; <code>Name is required.</code> / <code>Label is required.</code> /
@@ -606,16 +648,16 @@ return [
             ['0:24', 'Add option — every box on the form.',
              'To add one, name it after what the customer is choosing. Control type. Up to a hundred and fifty characters, and it will not save without a name. Required is already ticked, so leave it. Allow multiple choices turns the dropdown into tick-boxes — only tick that if they could genuinely have two at once. Appears when is empty on a new product, and that is fine. And if you want a typed measurement alongside, tick the number box: the field name fills itself in as Length in millimetres, ready for you to type over. Click Add option and a normal option takes you straight into its choices.', 2],
             ['0:52', 'Type a label, press Enter.',
-             'Here are the choices — the values the customer picks from. Type in the bottom row and press Enter. Cord. Then Motorised. There is no save button anywhere on this page: Tab or Enter saves the cell, Escape cancels, and the green badge at the top says, all changes saved. For a whole list at once use Bulk add — one label per line. If the label is already on this option, it asks you first rather than quietly making a second one.', 3],
+             'Here are the choices — the values the customer picks from. Type in the bottom row and press Enter. Cord. Then Motorised. There is no save button anywhere on this page: Tab or Enter saves the cell, Escape cancels, and the green badge at the top says, all changes saved. There is a blue Done button at the very bottom, but read the line beside it — it only walks you back to the options list, it saves nothing, because everything is already saved. For a whole list at once use Bulk add — one label per line. Bulk add never asks about repeats: it quietly skips any label already on the option and only speaks up if nothing at all got added. Type a repeat in the bottom row instead and that one does ask you first.', 3],
             ['1:14', 'Price it and scope it in the grid.',
-             'Now price it. Blank means free. Flat pounds is a straight surcharge — a hundred and twenty pounds on Motorised. The percent column is worked out on the base blind price, not on the other options, and pounds per metre charges by length. Available on limits the choice to one system, and Bands to certain fabric tiers — leave both alone and it shows everywhere. Leave Face value ticked: that means the price you type is the price charged. Default is the one that comes pre-picked, and it is one default per system. And every one of those columns has a Set all in its heading, so you can apply a value down the whole list in one go. Type a word into a price cell and it simply says, must be a number.', 4],
+             'Now price it. Blank means free. Flat pounds is a straight surcharge — a hundred and twenty pounds on Motorised. The percent column is worked out on the base blind price, not on the other options, and pounds per metre charges by length. Available on limits the choice to one system, and Bands to certain fabric tiers — leave both alone and it shows everywhere. Leave Face value ticked: that means the price you type is the price charged. Default is the one that comes pre-picked, and it is one default per system. And every one of those columns has a Set all in its heading, so you can apply a value down the whole list in one go. Those three price cells are number boxes, so letters never get into them — but clear one out completely and the save is refused: the badge turns red and tells you why, must be a number, the cell rolls back to what it last held, and four seconds later it settles to all changes saved again.', 4],
             ['1:50', 'Open a choice in full — the Edit link.',
-             'Some things do not fit in a grid. To reach them, click Edit on the row. Edit — the first of the little links beside the choice. Everything from the grid is here too, plus three things that are only here. A price per unit — two pounds fifty a bracket — which automatically puts a Quantity box on the quote. The length your per-metre charge runs along: width, drop, width plus drop, or perimeter for a trim that goes all the way round. And a picture, for choices where the words alone will not do — Left, Right, Centre Left. Choose the file: a JPEG, PNG or GIF, up to two megabytes. Bands and fabrics are here too — only reach for fabrics when a band cannot say it.', 5],
+             'Some things do not fit in a grid. To reach them, click Edit on the row. Edit — the first of the little links beside the choice. Everything from the grid is here too, plus three things that are only here. A price per unit — two pounds fifty a bracket — which automatically puts a number box on the quote. That box is called Quantity if you leave it at that, but name it yourself, just above, under, ask for a number on this choice. Number of brackets. Whatever you type there is exactly what your salesperson reads. The length your per-metre charge runs along: width, drop, width plus drop, or perimeter for a trim that goes all the way round. And a picture, for choices where the words alone will not do — Left, Right, Centre Left. Choose the file: a JPEG, PNG or GIF, up to two megabytes. Bands and fabrics are here too — only reach for fabrics when a band cannot say it.', 5],
             ['2:24', 'Price it by width.',
              'The last pricing mode is further down the same page: a price table by width. Type one row per line — width, then price — separated by a space, a comma or a tab, in millimetres or in metres, it works it out. Or upload the supplier\'s spreadsheet instead. It rounds up to the first row at least as wide as the blind, so your last row is your ceiling: a wider blind stops the quote and says so. It adds to the flat, percent and per-metre figures, it does not replace them — and emptying the box and saving clears the table. You stay on this page afterwards, so you can check the rows landed.', 6],
             ['2:52', 'A sub-option that waits its turn.',
              'A sub-option is an option that waits its turn. Motor type only appears once Motorised is picked. There are two routes to the same thing: tick the parents under Appears when on the option itself, or use the plus Sub-option link on the choice row, which fills those ticks in for you. Tick several parents and it shows when any one of them is picked; tick none and it is always visible. Then choose: save and open its choices, or save and stay here to add another. A sub-option is a full option, so it can have its own choices, its own prices, and its own sub-options. But do read the warning when you delete one — it takes its choices with it, and it cannot be undone.', 7],
             ['3:24', 'The settings, and what they see.',
-             'Four settings live on the option itself. Required puts the red star on. Allow multiple choices turns the dropdown into tick-boxes, and every ticked choice adds its price. Show above the size fields pushes the option above width and drop, which is how the roller fascia group works. And Active is how you retire an option without deleting it. And here is the result: pick Motorised, and Motor type, the quantity box and the picture all slide in — a hundred and thirty-two pounds fifty, the flat charge plus five brackets. Pick Cord, and none of it shows. Use Live preview on the product page to walk the whole thing through before a salesperson ever meets it.', 8],
+             'Four settings live on the option itself. Required puts the red star on. Allow multiple choices turns the dropdown into tick-boxes, and every ticked choice adds its price. Show above the size fields pushes the option, and anything nested under it, above width and drop, which is how the roller fascia group works. And Active is how you retire an option without deleting it. And here is the result: pick Motorised, and Motor type, the number of brackets box and the picture all slide in — a hundred and thirty-two pounds fifty, the flat charge plus five brackets. Pick Cord, and none of it shows. Use Live preview on the product page to walk the whole thing through before a salesperson ever meets it.', 8],
         ],
 ];

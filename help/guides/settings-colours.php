@@ -26,6 +26,11 @@ return [
                       <b>thirteen stages in three groups</b>, and you never have to recolour a job by hand.',
         'open'    => '/admin/settings.php',
         'css'     => '
+          /* ---- the real grouped sidebar (Work / Retail / Trade / Setup / Platform) ---- */
+          .gd .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.7rem 0 .15rem; padding:0 .5rem; }
+          .gd .navh .chev{ font-size:.6rem; margin-left:.15rem; }
+          .gd .navfoot{ margin-top:1rem; padding:.35rem .5rem 0; border-top:1px solid rgba(255,255,255,.08); font-size:.6rem; color:#8fa3b3; }
+
           /* ---- the tab strip across the top of Settings ---- */
           .gd .tabs{ display:flex; flex-wrap:wrap; gap:.22rem; border-bottom:1px solid var(--line); margin-bottom:.75rem; padding-bottom:.3rem; }
           .gd .tb{ font-size:.67rem; color:var(--faint); padding:.2rem .42rem; border-radius:6px 6px 0 0; white-space:nowrap; }
@@ -133,7 +138,13 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+                <div class="navh">Work</div>
+                <a>Dashboard</a><a>Calendar</a><a>Pipeline</a>
+                <div class="navh">Retail</div>
+                <a>Customers</a><a>Quotes</a><a>Orders</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
+                <a>Products</a><a>Users</a><a class="on">Settings</a>
+                <div class="navfoot">Demo Blinds Ltd &middot; admin</div>
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="toast">&check; Status colours saved.</div>
@@ -210,7 +221,7 @@ return [
                 </div>
 
                 <div class="calscene">
-                  <div class="card-t">Calendar &mdash; September</div>
+                  <div class="card-t">Calendar &mdash; September 2026</div>
                   <div class="callegend">
                     <span><i style="background:#7c3aed"></i> Quote drafted</span>
                     <span><i style="background:#f59e0b"></i> Quote sent</span>
@@ -237,9 +248,9 @@ return [
 
                 <div class="pipescene">
                   <div class="card-t">Orders &amp; Pipeline</div>
-                  <div class="ordrow"><b>#1042 Patel</b><span class="pillc" style="background:#9333ea">Accepted</span></div>
-                  <div class="ordrow"><b>#1043 Nunn</b><span class="pillc dark" style="background:#f59e0b">Quote</span><span class="notsent">Not sent</span></div>
-                  <div class="ordrow"><b>#1044 Hale</b><span class="pillc" style="background:#0891b2">Ordered</span></div>
+                  <div class="ordrow"><b>PRE-2026-0042 Patel</b><span class="pillc" style="background:#9333ea">Accepted</span></div>
+                  <div class="ordrow"><b>PRE-2026-0043 Nunn</b><span class="pillc dark" style="background:#f59e0b">Quote</span><span class="notsent">Not sent</span></div>
+                  <div class="ordrow"><b>PRE-2026-0044 Hale</b><span class="pillc" style="background:#0891b2">Ordered</span></div>
                   <div class="pipecols">
                     <div class="pipecol"><div class="ph2" style="background:#f59e0b;color:#1f2937">Quote</div><div class="pb"></div></div>
                     <div class="pipecol"><div class="ph2" style="background:#dc2626">Declined</div><div class="pb"></div></div>
@@ -266,7 +277,9 @@ return [
             </div>
           </div>',
         'body'    => '
-          <p>Open <b>Settings</b> from the sidebar and click the <b>Status colours</b> tab &mdash; it is the <b>fourth</b> one along,
+          <p>Open <b>Settings</b> from the sidebar. The sidebar is grouped, and Settings lives inside the collapsible
+             <b>Setup</b> group, below <b>Work</b> and <b>Retail</b> &mdash; click the little arrow on <b>Setup</b> if it is
+             folded away. Then click the <b>Status colours</b> tab &mdash; it is the <b>fourth</b> one along,
              after Company, Quoting and Legal. You will know you are in the right place by the grey line at the top:
              &ldquo;<em>Your &lsquo;traffic-light&rsquo; colours. A job shows the same colour everywhere it appears&hellip;</em>&rdquo;
              You choose these colours <b>once, for the whole company</b> &mdash; everyone who logs in sees your colours. Your
@@ -294,7 +307,8 @@ return [
           <p class="prose"><b>Issue is not a stage &mdash; it is a warning.</b> Flagging a job does not repaint its card. It draws a
              <b>ring</b> round the card in your Issue colour with a <span class="req">&#9888;</span> mark, <b>on top of</b> whatever
              stage colour the job already has, and it colours the <b>&ldquo;&#9888;&#65039; Issues&rdquo;</b> button in the calendar&rsquo;s
-             key &mdash; the button that filters the month down to flagged jobs only. Pick something loud that nothing else uses.</p>
+             key &mdash; the button that filters the calendar down to flagged jobs only, and counts them for you. Pick something
+             loud that nothing else uses.</p>
 
           <p class="prose"><b>Changing a colour</b></p>
           <ul class="steps">
@@ -316,7 +330,9 @@ return [
              <b>&ldquo;Status colours saved.&rdquo;</b> banner at the top of the page &mdash; but the page reopens on the <b>Company</b>
              tab, not this one. Nothing has been lost. Click <b>Status colours</b> again if you want another look.</div></div>
 
-          <p class="prose"><b>Where to check your work.</b> Open the <b>calendar</b> month view. The little key along the top is built
+          <p class="prose"><b>Where to check your work.</b> Open the <b>calendar</b> &mdash; it is a rolling six-week grid, not a
+             month picker. It opens on the Monday of this week and shows the six weeks that follow, and the <b>&lsaquo;</b> and
+             <b>&rsaquo;</b> arrows step it a week at a time. The little key along the top is built
              from this very list, so it is the quickest place to see all your colours together. Fittings carry a dark outline there so
              you can tell a fitting from a measure at a glance. The same colours turn up as the status pills in your <b>orders list</b>,
              on the <b>Pipeline</b> board, and on the <b>Today&rsquo;s run</b> sheet.</p>
@@ -348,7 +364,7 @@ return [
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Two bits of friendly advice.</b> First, don&rsquo;t give two stages
              the <b>same colour</b> &mdash; nothing stops you doing it, and it quietly ruins the whole point of the traffic lights.
-             Second, <b>go easy on very pale shades</b>: on a busy month view the cards are small, and a near-white card just reads as
+             Second, <b>go easy on very pale shades</b>: on a busy calendar the day cells are small, and a near-white card just reads as
              an empty square.</div></div>
 
           <p class="prose"><b>Where these colours don&rsquo;t reach.</b> Nothing your customer sees uses them &mdash; not a quote, not an

@@ -39,6 +39,22 @@ return [
         'open'    => '/orders/index.php?scope=quotes&type=retail',
         'css'     => '
           /* --- shared bits --- */
+          /* The browser chrome changes scene by scene: three of the eight scenes
+             are NOT the admin app (an inbox, the customer\'s public page, your
+             orders list), so the address must not keep reading quote-builder. */
+          .gd .demo-bar .ubMail,
+          .gd .demo-bar .ubPub,
+          .gd .demo-bar .ubOrd{ display:none; }
+          .gd .demo-shell:has(.stage[data-step="4"]) .demo-bar .ubApp,
+          .gd .demo-shell:has(.stage[data-step="5"]) .demo-bar .ubApp,
+          .gd .demo-shell:has(.stage[data-step="6"]) .demo-bar .ubApp,
+          .gd .demo-shell:has(.stage[data-step="7"]) .demo-bar .ubApp,
+          .gd .demo-shell:has(.stage[data-step="8"]) .demo-bar .ubApp{ display:none; }
+          .gd .demo-shell:has(.stage[data-step="4"]) .demo-bar .ubMail{ display:inline; }
+          .gd .demo-shell:has(.stage[data-step="5"]) .demo-bar .ubPub,
+          .gd .demo-shell:has(.stage[data-step="6"]) .demo-bar .ubPub,
+          .gd .demo-shell:has(.stage[data-step="7"]) .demo-bar .ubPub{ display:inline; }
+          .gd .demo-shell:has(.stage[data-step="8"]) .demo-bar .ubOrd{ display:inline; }
           .gd .side a{ font-size:.72rem; padding:.22rem .5rem; }
           .gd .navh{ font-size:.54rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.55rem 0 .12rem; padding:0 .5rem; }
           .gd .navh .chev{ font-size:.58rem; margin-left:.15rem; }
@@ -190,7 +206,7 @@ return [
           @media(max-width:620px){ .gd .ycards{ flex-direction:column; } }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / quote-builder / edit</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span class="ubApp">yourblinds.uk / quote-builder / edit</span><span class="ubMail">their inbox &mdash; not your app</span><span class="ubPub">yourblinds.uk / quote-history / public.php?token=&hellip;</span><span class="ubOrd">yourblinds.uk / orders</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
@@ -326,7 +342,7 @@ return [
                         </div>
                         <div class="confbox"><div class="ct">If they press Decline</div>
                           <div class="cq">Decline this quote? Your supplier will be notified.</div>
-                          <span class="cb no">Cancel</span><span class="cb yes">OK</span></div>
+                          <span class="cb no">Cancel</span><span class="cb yes">Yes, continue</span></div>
                       </div>
 
                       <!-- step 7: accepted -->
@@ -351,13 +367,13 @@ return [
                   <div class="pgs">Accepted onward &mdash; orders, invoices and paid jobs.</div>
                   <div class="chips">
                     <span class="chip on">All (12)</span><span class="chip">Accepted (3)</span><span class="chip">Ordered (5)</span>
-                    <span class="chip arch">&#128451; Archived (2)</span>
+                    <span class="chip arch">&#128452; Archived (2)</span>
                   </div>
                   <div class="srch">Search by quote #, customer name, or postcode&hellip;</div>
                   <table class="otbl">
-                    <thead><tr><th>Quote #</th><th>Customer</th><th>Postcode</th><th>Status</th><th>Created</th><th>Total</th><th>Deposit</th></tr></thead>
+                    <thead><tr><th style="width:1.2rem;text-align:center"><span class="tick"></span></th><th>Quote #</th><th>Customer</th><th>Postcode</th><th>Status</th><th>Created</th><th>Total</th><th>Deposit</th></tr></thead>
                     <tbody>
-                      <tr><td><b>PRE-2026-0042</b></td><td>Emma Fletcher</td><td>CV32 5PQ</td>
+                      <tr><td style="text-align:center"><span class="tick"></span></td><td><b>PRE-2026-0042</b></td><td>Emma Fletcher</td><td>CV32 5PQ</td>
                           <td><span class="spill">Ordered</span></td><td>31 Aug 2026</td><td><b>&pound;66.00</b></td>
                           <td><span class="dep-due">&pound;33.00 due</span></td></tr>
                     </tbody>
@@ -397,7 +413,9 @@ return [
             <li><b>Recipient email</b> &mdash; already filled in from the customer&rsquo;s record. Glance at it and make sure
                 it&rsquo;s the address they actually use. You can type over it &mdash; changing it here doesn&rsquo;t change
                 their customer record.</li>
-            <li><b>Message (optional)</b> &mdash; one line to start with, and it grows as you type. The faint grey wording in
+            <li><b>Message (optional)</b> &mdash; one line deep to start with. It does <em>not</em> grow by itself as you
+                type &mdash; a long message just scrolls inside the box &mdash; but you can drag the bottom-right corner
+                downwards to make it as tall as you like. The faint grey wording in
                 it says &ldquo;<em>Optional &mdash; anything to add above the standard text.</em>&rdquo; Whatever you put here
                 is dropped into the email <b>underneath</b> the &ldquo;attached as a PDF&rdquo; line, in your own words.
                 Leave it empty and the email simply doesn&rsquo;t have that paragraph.</li>
@@ -477,15 +495,21 @@ return [
                 box</b> &mdash; they can change it. If you have Terms &amp; Conditions (everyone does by default) there&rsquo;s
                 an <b>unticked</b> box: &ldquo;I agree to the <b>Terms &amp; Conditions</b> of &lt;your company&gt;.&rdquo;
                 Forgetting that tick is the commonest reason an accept bounces &mdash; the page stops them with
-                <em>&ldquo;Please tick the box to agree to the Terms &amp; Conditions.&rdquo;</em> The blue
+                <em>&ldquo;Please tick the box to agree to the Terms &amp; Conditions.&rdquo;</em> The same little red line
+                also covers the name: clear the name box and it says <em>&ldquo;Please type your full name.&rdquo;</em>, and
+                if they manage both at once the two sentences are shown together on the one line. It clears itself the
+                moment they fix either. The blue
                 <b>Terms &amp; Conditions</b> words open your terms and privacy policy on <b>their own tab</b>, headed with your
                 company name and with <b>&ldquo;&larr; Back to your quote&rdquo;</b> at the top, so nobody loses the quote
                 reading them. A centred link at the very bottom of the quote does the same &mdash; labelled
                 <b>Terms &amp; Conditions &amp; Privacy Policy</b>, or just one of the two, depending on what you&rsquo;ve
                 published.</li>
-            <li><b>Or they decline.</b> The white <b>Decline</b> button asks first &mdash;
-                <em>&ldquo;Decline this quote? Your supplier will be notified.&rdquo;</em> If they say OK the quote goes to
-                <b>Declined</b> and the pending fitting is quietly taken back off your calendar.</li>
+            <li><b>Or they decline.</b> The white <b>Decline</b> button asks first &mdash; a little box pops up saying
+                <em>&ldquo;Decline this quote? Your supplier will be notified.&rdquo;</em> with two buttons under it,
+                <b>Cancel</b> and <b>Yes, continue</b>. (It is the same confirm box the app uses everywhere, so
+                <b>&ldquo;Yes, continue&rdquo;</b> is what they press &mdash; there is no button marked &ldquo;OK&rdquo;.)
+                Press <b>Yes, continue</b> and the quote goes to <b>Declined</b> and the pending fitting is quietly taken
+                back off your calendar.</li>
             <li><b>The sign-off.</b> On a yes the app stores the <b>name they typed</b>, the <b>date</b> and their
                 <b>IP address</b>, and shows them <b>&ldquo;Quote accepted &check;&rdquo;</b> with their name on it.</li>
           </ul>
@@ -517,7 +541,10 @@ return [
              customer yet</em>&rdquo;). <b>That badge disappearing is how you see the quote has gone out.</b> Once accepted it
              moves over to <b>Orders</b> &mdash; &ldquo;<em>Accepted onward &mdash; orders, invoices and paid jobs.</em>&rdquo;
              &mdash; where the pill reads Accepted or Ordered and a <b>Deposit</b> column shows
-             &ldquo;&pound;33.00 due&rdquo; in amber or &ldquo;&check; &pound;33.00 paid&rdquo; in green.</p>
+             &ldquo;&pound;33.00 due&rdquo; in amber or &ldquo;&check; &pound;33.00 paid&rdquo; in green. Both lists carry a
+             narrow <b>tick-box column down the left-hand edge</b> (with a tick-all box in the heading row) for the
+             <b>&#128452; Archive selected</b> and <b>Delete selected</b> buttons above the table &mdash; both are greyed out
+             until you tick something, and you can ignore the column entirely if you never want it.</p>
 
           <p><b>Saying yes on their behalf.</b> Plenty of customers say yes on the phone or at the door. You don&rsquo;t have
              to make them use the link. In the bar at the very top of the quote there are two one-click buttons:

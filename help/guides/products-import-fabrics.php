@@ -27,9 +27,6 @@ return [
                       you choose, because that is what the price table is keyed on.',
         'open'    => '/admin/products/options.php',
         'css'     => '
-          /* a statically-filled field (looks like .fld .box, but always shows its value) */
-          .gd .boxv{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel); display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
-
           /* three stacked panels, shown by step range */
           .gd .pn{ display:none; }
           .gd .stage[data-step="0"] .pA, .gd .stage[data-step="1"] .pA,
@@ -84,7 +81,15 @@ return [
           .gd .ftbl td{ padding:.22rem .25rem; border-bottom:1px solid var(--line-2); color:var(--soft); }
           .gd .ftbl td b{ color:var(--ink); font-weight:600; }
           .gd .bandpill{ display:inline-block; padding:.05rem .45rem; font-weight:700; font-size:.6rem; color:#fff; background:#1f3b5b; border-radius:6px; white-space:nowrap; }
-          .gd .allsys{ color:var(--faint); }
+          .gd .allsys, .gd .dash{ color:var(--faint); }
+          /* the real trailing actions column: an Edit link + a red Delete button */
+          .gd .ract{ font-size:.62rem; color:var(--accent); }
+          .gd .ract.del{ color:#b91c1c; margin-left:.35rem; }
+
+          /* the second, collapsed <details> under the paste box */
+          .gd .collapsed{ margin-top:.65rem; padding-top:.5rem; border-top:1px solid var(--line); font-size:.74rem; font-weight:600; color:var(--ink); }
+          .gd .collapsed em{ font-style:normal; color:var(--faint); font-size:.9em; }
+          .gd .collapsed i{ font-style:normal; color:var(--faint); margin-right:.2rem; }
           .gd .okflash{ display:none; margin:0 0 .5rem; }
           .gd .stage[data-step="4"] .okflash{ display:flex; }
 
@@ -182,6 +187,9 @@ return [
                     </div>
 
                     <div class="btnrow"><span class="prim addall">Add all</span></div>
+
+                    <div class="collapsed"><i>&#9656;</i>Add one at a time
+                      <em>&mdash; for setting supplier / colour / code on a single fabric</em></div>
                   </div>
 
                   <div class="listblk">
@@ -199,10 +207,10 @@ return [
                       <span>&middot; Tip: tick one, then <b>Shift</b>-click another to select everything between.</span>
                     </div>
                     <table class="ftbl">
-                      <tr><th style="width:1rem"><span class="tick">&check;</span></th><th>Band</th><th>System</th><th>Fabric</th><th>Colour</th><th>Supplier</th><th>Code</th></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Cream</b></td><td></td><td></td><td></td></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Stone</b></td><td></td><td></td><td></td></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Polaris White</b></td><td></td><td></td><td></td></tr>
+                      <tr><th style="width:1rem"><span class="tick">&check;</span></th><th>Band</th><th>System</th><th>Fabric</th><th>Colour</th><th>Supplier</th><th>Code</th><th>Group</th><th></th></tr>
+                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Cream</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
+                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Stone</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
+                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Polaris White</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
                     </table>
                   </div>
                 </div>
@@ -294,10 +302,12 @@ return [
              They all live on one page: <b>Products &rarr; the product &rarr; Fabrics</b>.</p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>It may not say &ldquo;Fabric&rdquo; on your screen.</b>
-             That word is the product&rsquo;s own <b>option label</b>, set on <b>Edit product</b>. On a wood venetian it may read
-             <em>Slat type</em>, on a plain product <em>Colour</em> &mdash; and then the whole page follows suit:
-             <em>Import slat types</em>, <em>Slat type name*</em> in the template, <em>No slat types yet</em>. Same page, same
-             buttons, different word. Everything below works exactly the same.</div></div>
+             That word is the product&rsquo;s own <b>Option label</b>, a free-text box on <b>Edit product</b> (up to 40
+             characters). The screen&rsquo;s own advice there is: <em>Fabric</em> for rollers and romans, <em>Colour</em> for
+             metal venetians, <em>Finish</em> for wood venetians &mdash; but it will take any word you like, so plenty of
+             products read <em>Slat type</em>. Whatever you put, the whole page follows suit: type <em>Slat type</em> and you
+             get <em>Import slat types</em>, <em>Slat type name*</em> in the template, <em>No slat types yet</em> on an empty
+             product. Same page, same buttons, different word. Everything below works exactly the same.</div></div>
 
           <p class="prose"><b>Four ways in.</b> They all write to the same list, so mix and match freely.</p>
           <ul class="steps">
@@ -315,6 +325,21 @@ return [
                 only&rdquo; line inherits the vertical&rsquo;s whole range in one click.</li>
           </ul>
 
+          <p class="prose"><b>And a fifth, for one row at a time.</b> Directly under the paste box sits a second, <b>folded-up</b>
+             section headed <b>Add one at a time &mdash; for setting supplier / colour / code on a single fabric</b>. Click the
+             heading to open it. It tells you plainly why it is folded away: <em>&ldquo;Bulk add above is quicker for most cases.
+             Use this only when you need to set a supplier, colour, or code on an individual fabric.&rdquo;</em> It has the same
+             band chips and the same autocomplete, and six controls in all: <b>Band&nbsp;*</b>, <b>Fabric name&nbsp;*</b>
+             (placeholder <em>e.g. Cream Slats</em>), <b>Colour</b>, <b>Supplier</b>, <b>Code</b>, an <b>Active</b> tick that is
+             on to start with, and an <b>Add fabric</b> button. Leave Active ticked unless you are parking a fabric you don&rsquo;t
+             sell at the moment &mdash; an unticked one still sits in the list, with a grey <b>Inactive</b> pill beside its name.
+             The refusals are short and say what is wrong: <code>Band code is required (e.g. A, B, C).</code>,
+             <code>Band code is too long (max 60 chars).</code>, <code>Fabric name is required.</code> and
+             <code>Fabric name is too long (max 150 chars).</code> If the Colour box is missing here &mdash; and from the Colour
+             column in the list below &mdash; that is the tick on <b>Edit product</b> called
+             <b>&ldquo;Show separate &lsquo;Colour&rsquo; column on fabric forms.&rdquo;</b>, which you untick on products where
+             the fabric name <em>is</em> the colour.</p>
+
           <p class="prose"><b>The band is yours to name.</b> A <b>band</b> groups fabrics that all cost the same per blind size,
              so they share <em>one</em> price table instead of needing one each. The box is <b>free text up to 60 characters</b>
              &mdash; <em>A</em>, <em>B</em> and <em>AAA</em> are fine, but so are <em>Plain</em>, <em>Blackout</em> and
@@ -326,7 +351,12 @@ return [
             <li><b>It remembers the last band you used</b>, so adding five bands in a row is five short edits, not five retypes.
                 There is a matching autocomplete list on the Band boxes too.</li>
             <li><b>Type <code>Band AA</code> and it quietly stores <code>AA</code></b> &mdash; a leading &ldquo;Band&nbsp;&rdquo;
-                is stripped on every route, so you never end up with &ldquo;Band Band AA&rdquo;.</li>
+                is thrown away, so you never end up with &ldquo;Band Band AA&rdquo; in the pill. That tidy-up happens on the
+                four places you <em>type</em> a band: the <b>paste a list</b> box, the <b>Add one at a time</b> form, the
+                <b>Excel import</b>, and <b>Set band on selected</b>. The one place it does <em>not</em> happen is the little
+                per-row <b>Band</b> box on the <b>fabric library</b> screen &mdash; type &ldquo;Band B&rdquo; there and you get
+                a band literally called <em>BAND B</em>, which will not match a price table called <em>B</em>. Put just the
+                code in that box.</li>
             <li><b>Case:</b> bands you <b>type</b> keep the case you typed; bands that arrive by <b>Excel import or library
                 pull</b> come in as capitals. Either way they match, because band matching ignores case &mdash; but don&rsquo;t
                 be surprised to see <em>Urban</em> and <em>URBAN</em> side by side.</li>
@@ -391,12 +421,23 @@ return [
              or <code>No manufacturers in the library yet.</code>, there is nothing to pull from &mdash; use one of the other
              three routes.</p>
 
-          <p class="prose"><b>Mending an import without re-doing it.</b> Under the list there is a <b>filter box</b> &mdash;
-             <em>Filter (e.g. polaris cream)&hellip;</em> &mdash; and every word you type has to appear in the row, so
-             &ldquo;polaris cream&rdquo; narrows straight to it. It matches name, colour, band, code, system and group; it
-             deliberately does <b>not</b> match supplier. Tick the rows you want (tick one, then <b>Shift</b>-click another to
-             take everything between) and use <b>Set band on selected</b>, <b>Set supplier on selected</b> or <b>Delete
-             selected</b>. A whole range imported under the wrong band is a thirty-second fix, not a re-import.</p>
+          <p class="prose"><b>Mending an import without re-doing it.</b> Just above the list, under the
+             <b>Fabrics&nbsp;(14)</b> heading, there is a <b>filter box</b> &mdash; <em>Filter (e.g. polaris cream)&hellip;</em>
+             &mdash; with a live count beside it and a <b>Clear</b> button that only appears once you have typed something. Every
+             word you type has to appear in the row, so &ldquo;polaris cream&rdquo; narrows straight to it. It matches name,
+             colour, band, code, system and group; it deliberately does <b>not</b> match supplier. Tick the rows you want (tick
+             one, then <b>Shift</b>-click another to take everything between) and use <b>Set band on selected</b>, <b>Set
+             supplier on selected</b> or <b>Delete selected</b>. A whole range imported under the wrong band is a
+             thirty-second fix, not a re-import.</p>
+
+          <p class="prose"><b>The list&rsquo;s own columns.</b> Left to right: a <b>tick box</b>, <b>Band</b> (the navy pill),
+             <b>System</b>, the fabric name under whatever your option label is, <b>Colour</b>, <b>Supplier</b>, <b>Code</b>,
+             <b>Group</b>, and a last, unheaded column holding <b>Edit</b> and a red <b>Delete</b> for that single row. Two of
+             those columns come and go: <b>System</b> only appears once the product has systems, and <b>Group</b> only on
+             databases that have the fabric-group column. <b>Group</b> is filled for you by the <b>fabric library</b> pull
+             &mdash; it is the library&rsquo;s own grouping of the range &mdash; and shows a grey <b>&mdash;</b> on fabrics you
+             pasted or imported yourself. Use <b>Edit</b> for a one-row correction (a misspelt name, a missing code) and the
+             bulk bar above for anything that touches more than one.</p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>The band must match a price table.</b> A fabric whose band
              has no matching price table simply <b>shows no price</b> in the quote builder. The chips strip is drawn from both
@@ -414,7 +455,7 @@ return [
              you back to the list.</p>
 
           <p class="prose"><b>One last thing, so you don&rsquo;t go hunting.</b> A single supplier workbook with <em>one sheet
-             per product</em> &mdash; many products in one go &mdash; is handled centrally, under <b>Master Admin &rarr; Fabric
+             per product</em> &mdash; many products in one go &mdash; is handled centrally, under <b>Platform &rarr; Catalogue &rarr; Fabric
              Library</b> as <b>Bulk import fabrics across products &rarr;</b>. It used to sit on the Products page and it no
              longer does. If you can&rsquo;t find it, it isn&rsquo;t missing &mdash; it just isn&rsquo;t yours; ask whoever
              looks after the library. Everything on this page does the same job one product at a time.</p>',
@@ -426,7 +467,7 @@ return [
              'The band comes first. Every fabric belongs to a band, and the band is just a name you choose — up to sixty characters, so Plain, Blackout or Special effects is every bit as valid as A. A band is a group of fabrics that all cost the same, so they can share one price table instead of needing one each. Click a chip to reuse a band you have already got, and the box remembers the last band you used. And if you type Band A A, it quietly stores just A A.', 2],
 
             ['0:45', 'System select; paste names; Add all.',
-             'Now paste the names in. One per line, or separated by commas, or both — it copes with either. Leave System on All systems and the fabrics go on every system for this product. Pick one, and they only show on that one. That is how a roller-only colour stays off your verticals. Then press Add all.', 3],
+             'Now paste the names in. One per line, or separated by commas, or both — it copes with either. Leave System on All systems and the fabrics go on every system for this product. Pick one, and they only show on that one. That is how a roller-only colour stays off your verticals. Then press Add all. And if you only ever want one fabric, with a supplier and a code on it, there is a folded-up section just underneath — Add one at a time. Click its heading to open it.', 3],
 
             ['1:02', 'Green flash; list with Band URBAN pills.',
              'And here is what comes back. Added fourteen to Band URBAN, skipped two likely duplicates — duplicates are skipped quietly, never shown as a failure. Underneath is your list, with each fabric in its navy Band URBAN pill. If something went in wrong, don\'t re-do it. Use the filter box to find the rows, tick one and shift-click another to take everything between, then Set band on selected, Set supplier on selected, or Delete selected. A wrong band is a thirty-second fix.', 4],
@@ -441,6 +482,6 @@ return [
              'When rows bounce, you get both messages. The good rows always go in — nothing is rolled back — and you are told exactly which ones did not, by row number. Row three, missing band. Row seven, missing name. Row nine, band code was just the word Band with nothing after it. Read the green line as well as the red one: it tells you whether your headings were understood, or whether it guessed by column. Fix those rows, upload again, and the ones already in skip themselves. Then Continue product setup takes you on to price tables.', 7],
 
             ['2:36', 'Library table; band edited A to B; added.',
-             'And the fourth way needs no file at all. If the range is already in the library, pick the maker, untick anything you do not sell, and the supplier name fills itself in for you. Every row carries a suggested band — change any of them right there in the little box before you add, because the band is what decides the price. Press Add ticked fabrics, and if some came in with no band the message tells you how many, and they will not price until you give them one.', 8],
+             'And the fourth way needs no file at all. If the range is already in the library, pick the maker, untick anything you do not sell, and the supplier name fills itself in for you. Every row carries a suggested band — change any of them right there in the little box before you add, because the band is what decides the price. Put just the code in that box, not the word Band in front of it: unlike the paste box, this one takes exactly what you type, in capitals. Press Add ticked fabrics, and if some came in with no band the message tells you how many, and they will not price until you give them one.', 8],
         ],
 ];

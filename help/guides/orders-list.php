@@ -72,8 +72,10 @@ return [
           .gd .stage[data-step="0"] .cbarO, .gd .stage[data-step="1"] .cbarO,
           .gd .stage[data-step="4"] .cbarO, .gd .stage[data-step="5"] .cbarO,
           .gd .stage[data-step="6"] .cbarO, .gd .stage[data-step="7"] .cbarO{ display:flex; }
-          /* which chip is lit: none on the poster, All from step 1, Ordered at step 4 */
-          .gd .stage[data-step="0"] .chip{ background:var(--bg-subtle-2,#f1f3f6) !important; color:var(--soft) !important; }
+          /* Which chip is lit. The real page always gives "All" class="active" while
+             no status filter is set (orders/index.php, the All chip link), so All is
+             lit at rest too — the poster must not black the whole bar out.
+             Ordered takes over only once step 4 clicks it. */
           .gd .stage[data-step="4"] .cAll{ background:var(--bg-subtle-2,#f1f3f6); color:var(--soft); }
           .gd .stage[data-step="4"] .cOrd{ background:var(--accent); color:#fff; box-shadow:0 0 0 3px var(--accent-wash); }
 
@@ -419,7 +421,15 @@ return [
             <li><b>Retail or Trade.</b> <b>Retail</b> is your own end customers. <b>Trade</b> is the accounts you
                 supply as a business. The heading picks up the word &mdash; <b>Retail Orders</b>,
                 <b>Trade Quotes</b> &mdash; and that prefix is the only thing on screen telling you a filter is on,
-                so get in the habit of reading it. (Only a super-admin sees the Trade section at all.)</li>
+                so get in the habit of reading it. (Only a super-admin sees the Trade section at all.)
+                Which side a job lands on is decided <em>once</em>, when the job is created, and nothing
+                afterwards moves it: <b>there is no control on this list, and none inside the job, that flips a
+                job from retail to trade or back</b>. So do not go hunting for one &mdash; if a job is on the
+                wrong side, it was raised on the wrong side, and the only cure is to raise it again on the side
+                you wanted and archive or delete the one you did not. For a super-admin, which side the
+                sidebar&rsquo;s big <b>+ New</b> button opens on is set in
+                <b>Settings &rarr; Quoting</b> under <b>Default sale type</b> &mdash; and that fieldset is itself
+                super-admin only, so an ordinary admin will not find it on their Settings page.</li>
             <li><b>The status chip.</b> The row of little rounded chips under the heading. One chip per stage,
                 with its count in brackets.</li>
             <li><b>The search box.</b> Narrows whatever the first three have already left on screen.</li>
@@ -458,7 +468,12 @@ return [
                 the same colour here, on the calendar and on the dashboard. On the quotes side a draft carries a
                 second small amber badge, <b>Not sent</b>, meaning
                 &ldquo;<em>This quote hasn&rsquo;t been sent to the customer yet</em>&rdquo;.</li>
-            <li><b>Created</b> &mdash; the date the job was started, as <code>14 Sep 2026</code>.</li>
+            <li><b>Created</b> &mdash; the date the job was started, as <code>14 Sep 2026</code>. Do not expect
+                this column to count neatly down the page, because <b>the list is not sorted by it</b>. Rows come
+                newest-first on <b>the date the job was accepted</b>, falling back to Created for anything not
+                accepted yet. So on the quotes side the two are the same thing and Created does run in order; on
+                the orders side a job written in July but accepted this morning sits at the very top, above one
+                written last week. That is the sort working, not a fault.</li>
             <li><b>Total</b> &mdash; the job&rsquo;s value.</li>
             <li><b>Deposit</b> &mdash; orders side only. Either a green <b>&check; &pound;150.00 paid</b>, an amber
                 <b>&pound;150.00 due</b>, or a plain <b>&mdash;</b> when no deposit was ever set on that job.</li>
@@ -483,8 +498,12 @@ return [
                 They reappear behind the <b>&#128451; Archived (6)</b> chip on the far right of the chip bar,
                 which turns into <b>&larr; Back to active</b> while you are in there. Tick them there and the
                 button now reads <b>Restore selected</b>: <b>&ldquo;1 job restored to active.&rdquo;</b>
-                <em>(If you cannot see an Archive button or an Archived chip, archiving is not switched on for
-                your database yet &mdash; ask for it to be turned on.)</em></li>
+                <em>(Two different reasons the chip may not be there, and only one of them is a problem.
+                <b>No Archived chip but the Archive button is present</b> &mdash; perfectly normal: the chip is
+                only drawn once there is at least one archived job, so on an account that has never archived
+                anything there is nothing to show. Archive something and it appears. <b>No Archive button
+                either</b> &mdash; that is the other one: archiving has not been switched on for your database
+                yet, and it needs turning on before any of this works.)</em></li>
             <li><b>Delete selected</b> &mdash; the red one. Read the next box before you touch it.</li>
           </ul>
 
@@ -513,10 +532,12 @@ return [
           <p><b>What this list will not do.</b> It shows you jobs; it does not move them along. You change a
              job&rsquo;s stage inside the job itself, and the workshop&rsquo;s own progress lives in
              <b>Factory</b>, not here &mdash; so do not expect a row to change colour because the bench has
-             finished it. One piece of housekeeping worth knowing: the list shows the <b>newest two hundred jobs</b>
-             in whichever view you are in, and it does not tell you when it has stopped there &mdash; there are no
-             page buttons. So if an older job will not appear no matter how you filter, don&rsquo;t scroll for it:
-             <b>search for it by name, postcode or quote number</b>.</p>
+             finished it. One piece of housekeeping worth knowing: the list stops at <b>two hundred rows</b> in
+             whichever view you are in, and it does not tell you when it has stopped there &mdash; there are no
+             page buttons. Those two hundred are the <b>two hundred most recently accepted</b> jobs (and for
+             anything not yet accepted, the most recently created), which is also the order they sit in on the
+             page &mdash; not the Created order. So if an older job will not appear no matter how you filter,
+             don&rsquo;t scroll for it: <b>search for it by name, postcode or quote number</b>.</p>
 
           <p><b>Who sees what.</b> The <b>+ New quote</b> button at the top right is only there if you are allowed
              to create quotes. Someone who only fits &mdash; a fitter without the see-everything permission &mdash;
@@ -541,16 +562,16 @@ return [
             ['0:26', 'Sidebar highlight moves to Quotes; title and chips swap; order columns vanish.',
                      'Now watch what happens when I click Quotes instead. It is the same page. A job is a quote until the customer accepts it, and an order from then on — so the Quotes door lets through the drafts, the sent quotes and the declined ones, and the Orders door lets through everything from accepted onwards. Notice the chips have changed to just Quote and Declined, and the Deposit and Outstanding columns have gone, because neither of those means anything until a job is an order. You will also see a little amber "Not sent" badge on a draft — that is a quote you have written but not yet sent out.', 2],
             ['0:54', 'Sidebar highlight jumps to Trade → Orders; title becomes Trade Orders.',
-                     'The other pair of doors is Retail and Trade. Retail is your own end customers. Trade is the accounts you supply as a business. Same page again — only the heading changes, to Trade Orders. A job is stamped retail or trade the moment it is created, and the New screen opens on whichever you have chosen as your default sale type over in Settings, under Quoting. So if a job is sitting on the wrong list, it was created on the wrong side. You fix that on the job itself, not here.', 3],
+                     'The other pair of doors is Retail and Trade. Retail is your own end customers. Trade is the accounts you supply as a business. Same page again — only the heading changes, to Trade Orders. And the Trade section is only in the menu at all if you are a super-admin. Now, the thing worth knowing about these two. A job is stamped retail or trade at the moment it is created, and nothing after that moves it: there is no switch on this list, and there is none inside the job either. So if a job is sitting on the wrong list, it was raised on the wrong side — and the only cure is to raise it again on the side you wanted, then archive or delete the one you did not. If you are the super-admin, which side the big plus-New button in the sidebar starts on is set in Settings, under Quoting, as Default sale type — and that setting is itself super-admin only, so most people will never see it.', 3],
             ['1:18', 'All (53) lit, then Ordered (7) lit; the table narrows.',
                      'Now the chips. Each one is a stage, with the number of jobs sitting at that stage in brackets, and that count already knows which side you are on. Click Ordered and you keep only the ordered jobs. Click All and you get the lot back. Two things to know. First: a chip with nothing in it is not shown at all. If you cannot see a Declined chip, it is because nothing has been declined — nothing is broken. Second, and this one catches people: clicking a chip clears anything you have typed in the search box.', 4],
             ['1:46', 'PRE-2026-0042 types into the search box; one row left; Clear appears.',
                      'The search box. Type a quote number, a customer\'s name, or a postcode — and any part of any of the three will do. Press Search. A Clear button appears beside it, and that puts the whole list back. Here is the honest warning, and it is the one thing that will have you saying a job has vanished. Search only looks inside the view you are already in. So if you cannot find something, widen it: click All first, and check the heading — you may be on the Trade side hunting for a retail job.', 5],
             ['2:12', 'The row is ringed; each cell is named underneath.',
-                     'Let us read a row properly. The quote number in bold is a link — click it and the job opens. That tiny link underneath, "Send to suppliers", sends that order off to its suppliers without you having to open it at all. Then the customer, the postcode, and the status pill. Those pill colours are your own, from Settings, Status colours, so a job is the same colour here as it is on your calendar. Deposit tells you whether the money up front has landed. And Outstanding is what is still owed — see the dashed underline? That means it is a link. Click the amount and it takes you straight to Payments with that order already picked out for you. One aside: Outstanding only appears at all if the Accounts add-on is switched on for your account.', 6],
+                     'Let us read a row properly. The quote number in bold is a link — click it and the job opens. That tiny link underneath, "Send to suppliers", sends that order off to its suppliers without you having to open it at all. Then the customer, the postcode, and the status pill. Those pill colours are your own, from Settings, Status colours, so a job is the same colour here as it is on your calendar. Deposit tells you whether the money up front has landed. And Outstanding is what is still owed — see the dashed underline? That means it is a link. Click the amount and it takes you straight to Payments with that order already picked out for you. One aside: Outstanding only appears at all if the Accounts add-on is switched on for your account. And one about the Created column before we move on — it is a date, but it is not what the list is sorted by. Rows come down the page newest-accepted first, so on the orders side you will see Created dates that look out of order. Nothing is wrong; a job accepted this morning goes to the top however long ago it was written.', 6],
             ['2:48', 'Two ticks go on; counter updates; both buttons colour up.',
                      'Down the left of every row is a tick box, and there is one in the header that takes the whole page at once. Tick a couple and watch the two buttons above the table: until something is ticked they are grey and they will not do anything, which is normal. Now they wake up, and the counter tells you how many you have got. Archive is the safe one — it just moves old jobs out of the way, you get a green bar saying "3 jobs archived", and you can always bring them back with Restore selected. Then there is the red one. And I want to be blunt about this: Delete is not archive.', 7],
             ['3:16', 'The confirm box, the red kept-rows message, then the Archived chip.',
-                     'Delete asks you once — "Delete the selected quotes? This is permanent — all blinds, items and appointments go too." That is your last chance; everything on the job goes with it. Now here is the part that surprises people. A job that has a payment recorded against it will not delete. The others go, that one stays, and the message names it: "one quote was kept because it has payment or payments recorded against it." It comes up in a red bar even though part of it worked. That guard is there on purpose — a payment with no order behind it would leave a hole in your books. And to finish on a happier note: archived jobs are never gone. They are sitting behind the Archived chip on the right-hand end of the chip bar, with the count right there on it, and one click brings you back to active. Last housekeeping fact: the list shows the newest two hundred jobs and does not tell you when it has stopped there — so if an old one will not appear, search for it by name or number rather than scrolling.', 8],
+                     'Delete asks you once — "Delete the selected quotes? This is permanent — all blinds, items and appointments go too." That is your last chance; everything on the job goes with it. Now here is the part that surprises people. A job that has a payment recorded against it will not delete. The others go, that one stays, and the message names it: "one quote was kept because it has payment or payments recorded against it." It comes up in a red bar even though part of it worked. That guard is there on purpose — a payment with no order behind it would leave a hole in your books. And to finish on a happier note: archived jobs are never gone. They are sitting behind the Archived chip on the right-hand end of the chip bar, with the count right there on it, and one click brings you back to active. And if you cannot see that chip yet, it is not broken — it only turns up once there is something archived to look at. Last housekeeping fact: the list stops at two hundred rows, the two hundred most recently accepted, and it does not tell you when it has stopped there — so if an old one will not appear, search for it by name or number rather than scrolling.', 8],
         ],
 ];

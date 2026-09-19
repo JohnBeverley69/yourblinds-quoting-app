@@ -74,6 +74,13 @@ return [
       .gd .minitab th{ text-align:left; font-size:.64rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); border-bottom:1px solid var(--line); padding:.22rem .3rem; font-weight:700; }
       .gd .minitab td{ border-bottom:1px solid var(--line); padding:.26rem .3rem; color:var(--ink); }
       .gd .minitab td .ph{ color:var(--faint); }
+      /* Master-only columns: shown, but greyed so they read as "not yours". */
+      .gd .minitab th.mo, .gd .minitab td.mo{ color:var(--faint); opacity:.55; }
+      .gd .minitab .mobadge{ font-size:.82em; font-weight:600; text-transform:none; letter-spacing:0; }
+      .gd .minitab td.rmx{ color:var(--faint); text-align:center; width:1.4rem; }
+      .gd .btnrow{ display:flex; gap:.4rem; align-items:center; margin-top:.6rem; }
+      .gd .btnsec{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:8px;
+                   background:var(--panel); color:var(--ink); padding:.34rem .7rem; font-size:.78rem; font-weight:600; }
       .gd .note{ font-size:.72rem; color:var(--soft); margin-top:.5rem; }',
     'demo'    => '
       <div class="demo-shell">
@@ -169,25 +176,34 @@ return [
                 <div class="card-s"><h4>Customer quote PDF</h4><p class="mmm">1500 &times; 1000 mm</p></div>
                 <div class="card-s"><h4>Online quote page</h4><p class="mmm">1500 &times; 1000 mm</p></div>
                 <div class="card-s"><h4>Factory worksheet</h4><p class="mmm">mm</p></div>
-                <div class="card-s"><h4>Export CSV</h4><p class="mmm">Width (mm)</p></div>
+                <div class="card-s"><h4>Excel backup &mdash; Line items</h4><p class="mmm">Width (mm)</p></div>
               </div>
               <p class="note">Customers and the workshop always see millimetres. The unit you choose is for
-                 <b>your team&rsquo;s typing and reading</b>, nothing else.</p>
+                 <b>your team&rsquo;s typing and reading</b>, nothing else. (Whether per-blind sizes appear on the
+                 customer&rsquo;s quote at all is a separate tick on the same Quoting tab &mdash;
+                 <b>Sizes on the customer quote</b> &rarr; <b>Show the size of each blind</b>. When it&rsquo;s on,
+                 they&rsquo;re in millimetres.)</p>
             </div>
 
             <!-- Scene F: the other screens that follow the company unit -->
             <div class="sc scF">
               <div class="card-t">Products &rarr; price table (width-only list)</div>
               <table class="minitab">
-                <tr><th>Width (&quot;)</th><th>Price (&pound;)</th></tr>
-                <tr><td>31.5</td><td>42.00</td></tr>
-                <tr><td>39.37</td><td>48.50</td></tr>
-                <tr><td><span class="ph">e.g. 31.5</span></td><td><span class="ph">&nbsp;</span></td></tr>
+                <tr><th>Width (&quot;)</th><th>Price (&pound;)</th>
+                    <th class="mo">Cost (&pound;) <span class="mobadge">master only</span></th><th class="mo">Margin</th><th></th></tr>
+                <tr><td>31.5</td><td>42.00</td><td class="mo">33.90</td><td class="mo">+24%</td><td class="rmx">&times;</td></tr>
+                <tr><td>39.37</td><td>48.50</td><td class="mo">39.10</td><td class="mo">+24%</td><td class="rmx">&times;</td></tr>
+                <tr><td><span class="ph">e.g. 31.5</span></td><td><span class="ph">&nbsp;</span></td>
+                    <td class="mo"><span class="ph">paste here</span></td><td class="mo">&nbsp;</td><td class="rmx">&times;</td></tr>
               </table>
+              <div class="btnrow"><span class="btnsec">+ Add row</span></div>
+              <div class="btnrow"><span class="save" style="margin-top:0">Save width prices</span><span class="btnsec">Back</span></div>
               <p class="note">The header and the boxes follow your <b>company</b> unit &mdash; the prices and the stored
-                 widths don&rsquo;t change. The big width &times; drop grid keeps its own
-                 <b>Drop \\ Width (mm)</b> corner, and the product&rsquo;s <b>&#128065; Live preview</b> drawer says
-                 <b>Dimensions (&quot;)</b> too.</p>
+                 widths don&rsquo;t change. The two greyed columns, <b>Cost (&pound;)</b> with its <b>master only</b>
+                 badge and <b>Margin</b>, only appear if you&rsquo;re signed in as a super admin; the last column is the
+                 row&rsquo;s <b>&times;</b> remove button, and it&rsquo;s always there. The big width &times; drop grid
+                 keeps its own <b>Drop \\ Width (mm)</b> corner, and the product&rsquo;s <b>&#128065; Live preview</b>
+                 drawer says <b>Dimensions (&quot;)</b> too.</p>
             </div>
 
             <div class="caps">
@@ -255,7 +271,8 @@ return [
       <div class="oops"><b>&ldquo;Could not read width &quot;two metres&quot;.&rdquo;</b> Size boxes take
          <em>numbers</em> (with an optional unit), not words. <code>two metres</code>, <code>approx</code> or a dash gets
          you that red message &mdash; and the matching <b>&ldquo;Could not read drop &hellip;&rdquo;</b> &mdash; and the line
-         is not added. Retype it as <code>2m</code> or <code>2000</code>. A genuinely <em>empty</em> box is fine, mind:
+         is not added. Retype it as <code>2m</code> (or <code>2000mm</code> &mdash; put the unit on it, because on this
+         inches quote a bare <code>2000</code> would be read as 2000&nbsp;<em>inches</em>). A genuinely <em>empty</em> box is fine, mind:
          some products price on width alone, and some on drop alone.</div>
 
       <p><b>Where your unit shows up beyond quoting.</b> Two more screens follow the <em>company</em> default (not the
@@ -264,15 +281,29 @@ return [
          <b>Price per slat (&pound;)</b>. Either way the empty boxes prompt <b>&ldquo;e.g. 31.5&rdquo;</b> for inches,
          <b>&ldquo;e.g. 0.8&rdquo;</b> for metres, <b>&ldquo;e.g. 80&rdquo;</b> for centimetres,
          <b>&ldquo;e.g. 800&rdquo;</b> for millimetres &mdash; type 31.5 in an inches shop and 800&nbsp;mm is what gets
-         stored. And a product&rsquo;s <b>&#128065; Live preview</b> drawer labels its boxes
+         stored. Two further columns, <b>Cost (&pound;)</b> (badged <b>master only</b>) and <b>Margin</b>, sit between
+         the price and the row&rsquo;s <b>&times;</b> remove button, but only when you are signed in as a super admin
+         &mdash; an ordinary login sees just the axis column, the price and the <b>&times;</b>. Neither of those extra
+         columns is a size, so the unit setting doesn&rsquo;t touch them. And a product&rsquo;s
+         <b>&#128065; Live preview</b> drawer labels its boxes
          <b>Dimensions (&quot;)</b> as well. Change the company unit and those columns simply <em>re-label and
          re-display</em>; not one saved price or width moves.</p>
 
       <p><b>Where it never shows up.</b> The <b>customer&rsquo;s quote PDF</b> and the <b>online quote page</b> print sizes
          as <b>1500 &times; 1000 mm</b> whatever you choose; so do the <b>factory worksheet</b>, the factory order screens
-         and the <b>Export CSV</b>, whose column is headed <b>Width (mm)</b>. The big width &times; drop price grid keeps
+         and the <b>Excel backup</b> (<b>Settings</b> &rarr; <b>Back up data</b> &rarr;
+         <b>&ldquo;&#11015; Download Excel (.xlsx)&rdquo;</b>), whose <b>Line items</b> sheet carries columns headed
+         <b>Width (mm)</b> and <b>Drop (mm)</b>. The big width &times; drop price grid keeps
          its <b>Drop \\ Width (mm)</b> corner too. That is deliberate: the workshop cuts in millimetres, so the paperwork
          it works from stays in millimetres.</p>
+
+      <p>On the quote itself, whether each blind&rsquo;s size is printed for the customer at all is a different setting
+         on the same <b>Quoting</b> tab: <b>Sizes on the customer quote</b> &rarr; <b>Show the size of each blind</b>.
+         It arrives ticked, and its hint spells out the trade-off &mdash; <em>&ldquo;Ticked: the quote PDF and the
+         customer&rsquo;s online quote show each blind&rsquo;s size (width &times; drop) &mdash; right for trade orders.
+         Unticked: sizes are hidden (retail style), leaving just the description.&rdquo;</em> Untick it and the sizes
+         vanish from the customer&rsquo;s paperwork entirely; tick it and they come back in millimetres. Either way the
+         measurement unit you picked above has no say in it.</p>
 
       <p><b>If saving fails</b> you&rsquo;ll see a red
          <b>&ldquo;Could not save measurement unit &mdash; has migrate_measurement_unit.php been run?&rdquo;</b>. That is a
@@ -290,8 +321,8 @@ return [
         ['0:58', 'InstaPrice: Width typed as 1.5m, Drop as 60in; the grey line underneath reads Using 1500 × 1524 mm.',
                  'For a single odd blind you do not even need the dropdown. Type the unit straight into the box. One point five m, or sixty in. A typed unit always wins, just for that box. InstaPrice even reads the answer back to you in millimetres, so you can spot a stray digit.', 5],
         ['1:16', 'Red banner: Could not read width "two metres". Amber warning about bare numbers.',
-                 'The boxes take numbers, not words. Type two metres in letters and you get, could not read width, and the line is not added. Type two m, or two thousand, instead. And do watch this one, a number with no unit is read in the quote\'s unit. On an inches quote, fifteen hundred means fifteen hundred inches.', 6],
-        ['1:36', 'Customer PDF, online quote, factory worksheet and CSV export all showing mm.',
+                 'The boxes take numbers, not words. Type two metres in letters and you get, could not read width, and the line is not added. Type two m, or two thousand m m, instead, with the unit on it. Because here is the one to watch, a number with no unit is read in the quote\'s unit. On an inches quote, fifteen hundred on its own means fifteen hundred inches.', 6],
+        ['1:36', 'Customer PDF, online quote, factory worksheet and the Excel backup\'s Line items sheet all showing mm.',
                  'Your customers never see this setting. The quote they receive, the online quote page, the factory worksheet and the exported spreadsheet all print millimetres, whatever you choose. The workshop cuts in millimetres, so its paperwork stays in millimetres.', 7],
         ['1:52', 'Price table width-only list headed Width (") with the e.g. 31.5 prompt.',
                  'One last place. Your width only and per slat price tables follow the company unit as well. The column re-labels itself and the little prompt changes to match. Nothing you have already saved moves, it is only shown a different way.', 8],

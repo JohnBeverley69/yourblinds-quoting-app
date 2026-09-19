@@ -41,6 +41,9 @@ return [
           .gd .mbtn{ display:inline-flex; align-items:center; border-radius:8px; padding:.3rem .6rem; font-size:.7rem; font-weight:600; white-space:nowrap; }
           .gd .mbtn.pri{ background:var(--accent); color:#fff; }
           .gd .mbtn.gh{ background:var(--surface); border:1px solid var(--line); color:var(--soft); }
+          /* the shared confirm dialog styles its confirm button RED, not blue */
+          .gd .mbtn.dng{ background:var(--err); color:#fff; }
+          .gd .mbtn.grey{ background:var(--line); color:var(--soft); }
           .gd .csvnote{ font-size:.66rem; color:var(--faint); margin:.45rem 0 0; line-height:1.45; }
           .gd .csvnote b{ color:var(--soft); }
 
@@ -289,7 +292,8 @@ return [
                     </div>
                   </div>
                   <p class="note">Outstanding drops from &pound;1,284.00 to &pound;1,251.00, the card turns <b>green</b>, and the order itself
-                     <b>flips to Paid on its own</b> &mdash; then the customer is emailed their paid-in-full receipt, once.</p>
+                     <b>flips to Paid on its own</b>. The paid-in-full receipt then emails itself &mdash; once only, and only if the order carries a
+                     valid customer email and the <b>Paid-in-full receipt</b> setting is still ticked.</p>
                 </div>
 
                 <!-- Scene: the slip, the edit and the delete -->
@@ -312,7 +316,7 @@ return [
                   </table>
                   <div class="cmod">
                     <div class="cq">Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank reconciliation if needed.)</div>
-                    <div class="cbtns"><span class="mbtn gh">Cancel</span><span class="mbtn pri">Yes, continue</span></div>
+                    <div class="cbtns"><span class="mbtn grey">Cancel</span><span class="mbtn dng">Yes, continue</span></div>
                   </div>
                 </div>
 
@@ -389,22 +393,36 @@ return [
                 oddity to remember: the <b>Method</b> filter can never find a deposit, because &ldquo;Deposit&rdquo; is not one of the eight methods
                 in that list.</li>
             <li><b>Record a payment.</b> The blue <b>+ Record payment</b> button, top right, opens the box (it sits closed until you ask for it).
-                Six things, in this order. <b>Order (optional)</b> &mdash; a dropdown starting
+                Six things, in this order (five on an older database &mdash; see the note on <b>Received from</b> below). <b>Order (optional)</b>
+                &mdash; a dropdown starting
                 <em>&ldquo;&mdash; Standalone payment (no order linked) &mdash;&rdquo;</em>, then your orders that still have something owing,
                 newest accepted first, each written like <em>&ldquo;PRE-2026-0042 &mdash; Emma Fletcher (&pound;33.00 outstanding)&rdquo;</em>
-                (up to 200 of them). Pick one and the <b>Amount</b> fills itself with the balance; type over it if this is only a part-payment. If
+                (up to 200 of them). Pick one and the <b>Amount</b> fills itself with the balance &mdash; but <b>only if Amount is still empty
+                (or nought)</b>. It will never overwrite a figure you have already typed, so if this is a part-payment the safe order is
+                <em>order first, then amount</em>; pick the order after typing and the box simply keeps your number. If
                 a deposit has already been taken you get an amber line: <em>&ldquo;&check; Deposit of &pound;33.00 is already recorded on this
                 order &mdash; the amount above is the remaining balance, so don&rsquo;t re-enter the deposit.&rdquo;</em> Then
                 <b>Amount &pound;</b>, <b>Received on</b> (starts on today &mdash; change it to the day the money actually landed, because every
                 figure and every filter on this page counts by that date), <b>Method</b> (Cash, Card, <b>Bank transfer</b>, Cheque, PayPal, Stripe,
-                GoCardless, Other &mdash; Bank transfer is the one already chosen), <b>Received from (optional)</b> for who sent it, and
-                <b>Reference (optional)</b> for a cheque number or a Stripe id. <b>Save payment</b> finishes it. There is a shortcut in, too: on
+                GoCardless, Other &mdash; Bank transfer is the one already chosen), <b>Received from (optional)</b> for who sent it
+                (placeholder <em>&ldquo;Who paid &mdash; e.g. customer name&rdquo;</em>), and
+                <b>Reference (optional)</b> for a cheque number or a Stripe id. <b>Save payment</b> finishes it.
+                <b>If &ldquo;Received from&rdquo; is not on your form, you have not lost it</b> &mdash; that one field only appears once the
+                database has the column for it, so on an installation that has not had that update yet the box goes straight from <b>Method</b>
+                to <b>Reference</b>. Everything else here works exactly the same; put the sender in <b>Reference</b> until it turns up.
+                There is a shortcut in, too: on
                 the <b>Orders</b> page the amber <b>Outstanding</b> figure is a link &mdash; <em>&ldquo;Click to take a payment against this
                 order&rdquo;</em> &mdash; and it lands you here with the box already open, the order already chosen and the amount already typed.</li>
             <li><b>Watch it settle itself.</b> You get a green <em>&ldquo;Payment recorded: &pound;33.00.&rdquo;</em> and the card redraws. The
                 moment the money covers the order total, the order <b>flips to Paid on its own</b> &mdash; there is no button to press &mdash; and
-                the customer is emailed their <b>paid-in-full receipt</b>, once and once only. It works in reverse as well: delete a payment and the
-                order steps <b>back</b> out of Paid to whatever it was before.</li>
+                the customer is emailed their <b>paid-in-full receipt</b> &mdash; a copy of the order headed <b>Receipt</b>, attached to an email
+                subject-lined <em>&ldquo;Receipt PRE-2026-0042 &mdash; paid in full&rdquo;</em>. That email is <b>not</b> unconditional, so do not
+                promise it to a customer without checking two things. First, <b>the customer must have a proper email address on the order</b>; no
+                valid address, no receipt, and nothing tells you it was skipped. Second, it obeys the <b>Paid-in-full receipt</b> tick in
+                <b>Setup &rarr; Settings</b> &mdash; <em>&ldquo;Email a receipt when an order is paid in full&rdquo;</em> &mdash; which is
+                <b>on unless somebody has turned it off</b>. When it does go, it goes <b>once and once only</b>: the send is stamped on the order,
+                so no amount of further fiddling can send a second one. The <em>status</em> change works in reverse as well: delete a payment and
+                the order steps <b>back</b> out of Paid to whatever it was before (the receipt, of course, cannot be un-sent).</li>
             <li><b>Filter, then export.</b> The dashed <b>Filter the list</b> box searches the <b>customer name, quote number and reference</b>;
                 <b>From</b> and <b>To</b> bracket the day the money came in; <b>This month</b> and <b>Last month</b> are one-click date windows that
                 keep your search and turn solid blue while they are in effect; the <b>All methods</b> dropdown narrows by how it was paid.
@@ -418,8 +436,10 @@ return [
           </ul>
           <div class="oops"><b>When it will not save.</b> Two things stop it, and it says so in plain words at the top of the page:
              <em>&ldquo;Amount must be a non-zero number.&rdquo;</em> (blank, nought, or something that is not a number) and
-             <em>&ldquo;Received date is required (YYYY-MM-DD).&rdquo;</em> Nothing you typed is lost &mdash; the box simply reopens with it still
-             in. Got the figure wrong? <b>Edit</b> on the row refills the very same box (the heading changes to <b>&#9998; Edit payment</b> and the
+             <em>&ldquo;Received date is required (YYYY-MM-DD).&rdquo;</em> Be warned: <b>the box does not keep what you typed</b>. It stays
+             <em>open</em> for you, but blank &mdash; <b>Amount</b> empty, <b>Received on</b> back on today, <b>Method</b> back on
+             <b>Bank transfer</b> and the order back on <b>Standalone</b> &mdash; so read the red line, then put the lot in again.
+             Got the figure wrong? <b>Edit</b> on the row refills the very same box (the heading changes to <b>&#9998; Edit payment</b> and the
              button to <b>Update payment</b>), and an edit can even move a payment onto a <b>different order</b>, or off orders altogether to
              Standalone &mdash; both orders are then re-checked for you. Wrong payment entirely? The red <b>&times;</b> asks first:
              <em>&ldquo;Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank reconciliation if needed.)&rdquo;</em>
@@ -427,13 +447,16 @@ return [
              change it from the order&rsquo;s deposit panel.&rdquo;</em> And if an order is <b>missing from the dropdown</b>, do not hunt for it:
              the list only holds orders with money still owing, so it has almost certainly been paid off already.</div>
           <div class="heads"><span class="hi">&#9888;</span><div><b>Four things this page touches.</b>
-             <b>(a) Not everyone sees the same figures.</b> A member of staff without the <b>See all customer jobs</b> permission sees only
+             <b>(a) Not everyone sees the same figures.</b> A member of staff without the <b>View all customer jobs</b> tick (set per person in
+             <b>Setup &rarr; Users</b>) sees only
              payments on orders they are booked onto, and their three cards are added up from just those &mdash; so their totals will be smaller
              than yours, and that is correct, not a fault. Standalone payments are back-office only: they cannot see or record one at all.
              <b>(b) The figures can never disagree.</b> This page, the order&rsquo;s own Payments panel, the invoice and the money line on the
              calendar all run the same sum &mdash; received is deposit plus payments, balance is total minus received.
-             <b>(c) This is retail money.</b> Trade account paperwork does not live here: trade invoices and statements are under
-             <b>Trade &rarr; Invoices</b> and <b>Trade &rarr; Statements</b>.
+             <b>(c) This is retail money.</b> It is the <b>Retail</b> section of the menu, and it counts your own end customers&rsquo; payments.
+             Trade account paperwork does not live here &mdash; it sits under <b>Trade &rarr; Invoices</b> and <b>Trade &rarr; Statements</b>
+             &mdash; but do not go hunting for those two: the whole <b>Trade</b> block is <b>super-admin only</b>, so unless you are the account
+             that runs the platform it will not be in your menu at all. If trade paperwork is what you are after, ask whoever runs the platform.
              <b>(d) CSV or the live link, not both.</b> If you have connected <b>QuickBooks Online</b> in <b>Settings &rarr; Accounting</b>, sales
              are sent across automatically once they are paid &mdash; these CSV files are the <em>manual</em> alternative for everyone else. Use
              one or the other, or your bookkeeper will enter everything twice.</div></div>',
@@ -445,13 +468,13 @@ return [
             ['0:24', 'Open a card for the detail.',
              'Click a card and it opens out into the payments themselves: the date, how it was paid, the reference and the amount. The deposit is in this list too, shaded green, with its method showing as DEPOSIT and its reference simply saying Deposit. It is in here so the totals agree with the order, but you cannot change it from this page. Where the buttons would be it says, managed on the order, and that is exactly where you change it, on the deposit panel of the order itself. One quirk: the method filter will never find a deposit, because Deposit is not one of the eight methods in that list.', 3],
             ['0:35', 'Record a payment, and pick the order.',
-             'Money arrives in the bank or the post, so let us record it. The blue plus Record payment button at the top right opens the box. First, the order. The dropdown only lists orders that still have something owing, newest first, each one showing the customer and what is outstanding, so if an order is missing it has almost certainly been paid off already. Choose one and the amount fills itself in with the balance, ready for you. If it is a part-payment, just type over it. And read the amber line when it appears. It tells you the deposit is already recorded and the amount shown is the remaining balance, so please do not enter the deposit a second time.', 4],
+             'Money arrives in the bank or the post, so let us record it. The blue plus Record payment button at the top right opens the box. First, the order. The dropdown only lists orders that still have something owing, newest first, each one showing the customer and what is outstanding, so if an order is missing it has almost certainly been paid off already. Choose one and the amount fills itself in with the balance, ready for you. It only does that while the amount box is still empty, mind, so it will never wipe out a figure you have already put in. If it is a part-payment, the easy order is to pick the order first and then type over the amount. And read the amber line when it appears. It tells you the deposit is already recorded and the amount shown is the remaining balance, so please do not enter the deposit a second time.', 4],
             ['0:47', 'Date, method, who from, reference.',
              'Now the rest. Received on already shows today, so change it to the day the money actually landed, because every figure and every filter on this page counts by that date. Method offers cash, card, bank transfer, cheque, PayPal, Stripe, GoCardless or other, and it starts on bank transfer. Received from is for money with no order attached, where there is no customer name to show. And reference is your cheque number or your Stripe reference, and it is one of the things the search box looks in, so it is worth filling. Then Save payment.', 5],
             ['0:59', 'It settles itself.',
-             'Payment recorded, thirty-three pounds. Outstanding drops, the card turns green, and the order flips itself to Paid, with no button pressed by anybody. The customer is then emailed their paid-in-full receipt, once and only once. The same thing works from the Orders page: that amber outstanding figure beside an order is a link, and it brings you here with the order already chosen and the amount already typed in for you.', 6],
+             'Payment recorded, thirty-three pounds. Outstanding drops, the card turns green, and the order flips itself to Paid, with no button pressed by anybody. The customer is then emailed their paid-in-full receipt, once and only once. Two things have to be true for that email, though, so do not promise it without checking. The order needs a proper email address on it, because there is nowhere else to send it, and the paid-in-full receipt setting over in Settings has to still be ticked, which it is unless somebody has turned it off. The same thing works from the Orders page: that amber outstanding figure beside an order is a link, and it brings you here with the order already chosen and the amount already typed in for you.', 6],
             ['1:09', 'Fixing a slip.',
-             'Two things will stop a payment saving, and it tells you in plain words. Amount must be a non-zero number. And, received date is required. Nothing you typed is lost, the box simply opens again with it all still there. Got the figure wrong? Edit on the row refills that very same box, the heading changes to Edit payment and the button to Update payment, and you can even move the payment onto a different order. Wrong payment altogether? The little red cross asks first, and warns you it will not undo the bank entry, so adjust that on your bank reconciliation. Take money back out and a Paid order steps back out of Paid on its own. The deposit refuses both, and tells you it is managed on the order.', 7],
+             'Two things will stop a payment saving, and it tells you in plain words. Amount must be a non-zero number. And, received date is required. Do be warned that the box does not hang on to what you typed. It stays open for you, but empty: the amount gone, the date back on today, the method back on bank transfer and the order back on standalone. So read the red line, then put it all in again. Got the figure wrong? Edit on the row refills that very same box, the heading changes to Edit payment and the button to Update payment, and you can even move the payment onto a different order. Wrong payment altogether? The little red cross asks first, and warns you it will not undo the bank entry, so adjust that on your bank reconciliation. Take money back out and a Paid order steps back out of Paid on its own. The deposit refuses both, and tells you it is managed on the order.', 7],
             ['1:20', 'Filter it, and the bookkeeper CSV.',
              'Last, finding things and handing them over. The search box looks at the customer name, the quote number and the reference. The two date boxes bracket the day the money came in, and This month and Last month are one-click shortcuts that keep whatever you have searched for. Then the two files. Payments gives your bookkeeper the money received. Invoices gives them the sales themselves, with every line shown before VAT so Xero, QuickBooks or Sage can work the tax out for itself. Both follow the dates you set, but not the search box and not the method. They come out as account code two hundred, sales, at twenty percent VAT, which your bookkeeper may want to remap. And if the live QuickBooks link in Settings, Accounting, is already switched on, these files are the manual alternative. Use one or the other, never both.', 8],
         ],

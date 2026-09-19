@@ -47,10 +47,12 @@ return [
           .gd .side .grp{ display:block; font-size:.54rem; letter-spacing:.14em; text-transform:uppercase; color:#6a7d8c; margin:.55rem 0 .15rem; padding-left:.5rem; font-weight:700; }
           .gd .app:has(.stage[data-step="4"]) .nvOrd,
           .gd .app:has(.stage[data-step="5"]) .nvOrd,
+          .gd .app:has(.stage[data-step="6"]) .nvOrd,
           .gd .app:has(.stage[data-step="7"]) .nvOrd,
           .gd .app:has(.stage[data-step="8"]) .nvOrd{ background:transparent; color:var(--nav-ink); }
           .gd .app:has(.stage[data-step="4"]) .nvPay,
           .gd .app:has(.stage[data-step="5"]) .nvPay,
+          .gd .app:has(.stage[data-step="6"]) .nvPay,
           .gd .app:has(.stage[data-step="7"]) .nvPay,
           .gd .app:has(.stage[data-step="8"]) .nvPay{ background:rgba(91,155,255,.16); color:#fff; }
 
@@ -66,14 +68,16 @@ return [
           .gd .bnr.over{ background:#dbeafe; color:#1e40af; }
           .gd .bnr.ok{ background:#d1fae5; color:#065f46; }
           .gd .bnr .faint{ font-weight:400; opacity:.75; }
-          .gd .paidpill{ display:inline-block; font-size:.58rem; font-weight:700; border-radius:20px; padding:.06rem .5rem; background:#a7f3d0; color:#065f46; vertical-align:middle; }
 
           /* orders list */
           .gd .otbl{ width:100%; border-collapse:collapse; font-size:.66rem; }
           .gd .otbl th{ text-align:left; font-size:.54rem; text-transform:uppercase; letter-spacing:.03em; color:var(--faint); font-weight:700; border-bottom:1px solid var(--line); padding:.26rem .3rem; white-space:nowrap; }
           .gd .otbl td{ padding:.34rem .3rem; border-bottom:1px solid var(--line); color:var(--ink); white-space:nowrap; }
           .gd .otbl .r{ text-align:right; }
+          .gd .otbl .c{ text-align:center; width:1.1rem; }
+          .gd .otbl .tick{ width:12px; height:12px; border-radius:3px; font-size:.5rem; }
           .gd .otbl .qn{ color:var(--accent); font-weight:600; }
+          .gd .otbl .subl{ display:block; margin-top:.12rem; font-size:.56rem; color:var(--accent); white-space:nowrap; }
           .gd .spill{ display:inline-block; font-size:.56rem; font-weight:700; border-radius:20px; padding:.06rem .45rem; background:#dbeafe; color:#1e40af; }
           .gd .depg{ color:#065f46; font-weight:600; }
           .gd .depa{ color:#92400e; font-weight:600; }
@@ -105,6 +109,7 @@ return [
           .gd .pgsum .qlink{ color:var(--accent); font-weight:600; }
           .gd .pgsum .bit{ color:var(--soft); }
           .gd .pgsum .ovr{ color:#1e40af; font-weight:700; }
+          .gd .pgsum .pd{ color:#065f46; font-weight:700; }
           .gd .modal{ margin-top:.5rem; border:1px solid var(--line); border-radius:9px; background:var(--surface); box-shadow:var(--gd-shadow); padding:.5rem .6rem; font-size:.7rem; color:var(--ink); max-width:26rem; }
           .gd .modal .mb{ display:flex; gap:.4rem; margin-top:.4rem; }
 
@@ -176,18 +181,25 @@ return [
                 <div class="osc scList">
                   <div class="card-t">Orders <span class="ldesc2" style="display:inline">&mdash; accepted onward</span></div>
                   <table class="otbl">
-                    <thead><tr><th>Quote #</th><th>Customer</th><th>Postcode</th><th>Status</th><th>Created</th>
+                    <thead><tr><th class="c"><span class="tick"></span></th>
+                      <th>Quote #</th><th>Customer</th><th>Postcode</th><th>Status</th><th>Created</th>
                       <th class="r">Total</th><th>Deposit</th><th class="r">Outstanding</th></tr></thead>
                     <tbody>
                       <tr>
-                        <td><span class="qn">PRE-2026-0042</span></td><td>Emma Fletcher</td><td>LS27 8QP</td>
+                        <td class="c"><span class="tick"></span></td>
+                        <td><span class="qn">PRE-2026-0042</span>
+                          <span class="subl">&#128230; Send to suppliers</span></td>
+                        <td>Emma Fletcher</td><td>LS27 8QP</td>
                         <td><span class="spill">ordered</span></td><td>2 Aug 2026</td>
                         <td class="r">&pound;66.00</td>
                         <td><span class="depg">&check; &pound;33.00 paid</span></td>
                         <td class="r"><span class="outlink">&pound;33.00</span></td>
                       </tr>
                       <tr>
-                        <td><span class="qn">PRE-2026-0039</span></td><td>Raj Patel</td><td>LS11 6EE</td>
+                        <td class="c"><span class="tick"></span></td>
+                        <td><span class="qn">PRE-2026-0039</span>
+                          <span class="subl">&#128230; Send to suppliers</span></td>
+                        <td>Raj Patel</td><td>LS11 6EE</td>
                         <td><span class="spill">ordered</span></td><td>28 Jul 2026</td>
                         <td class="r">&pound;412.00</td>
                         <td><span class="depa">&pound;206.00 due</span></td>
@@ -224,11 +236,19 @@ return [
                      <b>Outstanding</b> link. Everything is still yours to change.</p>
                 </div>
 
-                <!-- Scene 6: it settles itself + the receipt -->
+                <!-- Scene 6: it settles itself + the receipt. Still the PAYMENTS
+                     page — saving from here returns you here (return_to), so what
+                     you actually see is the flash plus that order row flipped. -->
                 <div class="osc scSet">
-                  <div class="ph3">Payments <span class="paidpill">paid</span></div>
+                  <div class="ph3">Payments</div>
                   <div class="okbanner"><b>&check;</b> Payment recorded: &pound;33.00.</div>
-                  <div class="bnr ok" style="margin-top:.4rem">&check; Fully paid (&pound;66.00)</div>
+                  <div class="pgsum" style="margin-top:.45rem">
+                    <span class="caret"></span><span class="cust">Emma Fletcher</span>
+                    <span class="qlink">PRE-2026-0042</span>
+                    <span class="bit">Total <b>&pound;66.00</b></span>
+                    <span class="bit">Paid <b>&pound;66.00</b> (2)</span>
+                    <span class="pd">&check; Fully paid</span>
+                  </div>
                   <div class="emailcard">
                     <div class="ehead">
                       <div class="subj">Receipt PRE-2026-0042 &mdash; paid in full &middot; Beverley Blinds</div>
@@ -240,7 +260,9 @@ return [
                       <br><span class="eatt">&#128206; Receipt_PRE-2026-0042.pdf</span>
                     </div>
                   </div>
-                  <p class="note">The <b>&#128176; Record a new payment</b> card has gone &mdash; there is nothing left to take.
+                  <p class="note">You stay on the <b>Payments</b> page &mdash; that is where you saved from. Open the order itself and
+                     its own Payments panel now reads the green <b>&check; Fully paid (&pound;66.00)</b>, and the
+                     <b>&#128183; Record a new payment</b> card has gone &mdash; there is nothing left to take.
                      The factory is unaffected: the job carries on through Confirmed, In Production, Ready and Dispatched.</p>
                 </div>
 
@@ -265,7 +287,7 @@ return [
                     </tbody>
                   </table>
                   <div class="modal">Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank reconciliation if needed.)
-                    <div class="mb"><span class="ghost">Cancel</span><span class="save">OK</span></div></div>
+                    <div class="mb"><span class="ghost">Cancel</span><span class="save">Yes, continue</span></div></div>
                 </div>
 
                 <!-- Scene 8: the whole picture + the exports -->
@@ -310,7 +332,7 @@ return [
         'body'    => '
           <p>There are <b>two panels and one page</b>. On the order itself (<b>Quote builder</b> &rarr; the order) you get a <b>Deposit</b>
              panel and, if your account has the <b>Accounts</b> add-on, a <b>Payments</b> panel below it &mdash; the sticky bar at the top
-             even has a <b>&#128176; Take payment</b> link that jumps straight down to it. Then there&rsquo;s the whole-business view:
+             even has a <b>&#128183; Take payment</b> link that jumps straight down to it. Then there&rsquo;s the whole-business view:
              <b>Retail &rarr; Payments</b> in the left-hand menu, titled <b>Payments</b> with the subtitle
              <em>&ldquo;Payments received against your orders.&rdquo;</em> Everything below happens in one of those three spots.</p>
 
@@ -344,12 +366,14 @@ return [
                 <b>Overpaid</b>.</li>
 
             <li><b>Taking the balance.</b> Two ways, same result. On the order, the <b>Payments</b> panel shows an amber
-                <em>&ldquo;Outstanding: &pound;33.00 of &pound;66.00&rdquo;</em> and a card headed <b>&#128176; Record a new payment</b> with
+                <em>&ldquo;Outstanding: &pound;33.00 of &pound;66.00&rdquo;</em> and a card headed <b>&#128183; Record a new payment</b> with
                 the hint <em>&ldquo;Outstanding amount pre-filled. Adjust if it&rsquo;s a part-payment, then click Record payment.&rdquo;</em>
                 It has four boxes &mdash; <b>Amount &pound;</b>, <b>Date received</b>, <b>Method</b> (Cash, Card, Bank transfer, Cheque,
                 PayPal, Stripe, GoCardless, Other &mdash; Bank transfer is pre-picked) and <b>Reference (optional)</b> &mdash; then
                 <b>&check; Record payment</b>. On the Payments page it is the same form inside a <b>+ Record payment</b> drop-down panel
-                (click the row to open it), with two extra boxes: <b>Order (optional)</b> and <b>Received from (optional)</b>. Fill
+                (click the row to open it), with two extra boxes &mdash; <b>Order (optional)</b> and <b>Received from (optional)</b>
+                &mdash; and one small difference of wording: the date box there is labelled <b>Received on</b>, not <b>Date received</b>.
+                Same box, same job. Its button is <b>Save payment</b>, with a <b>Cancel</b> beside it. Fill
                 <b>Reference</b> with whatever will let you find the money on the bank statement &mdash; a cheque number, a Stripe id, a
                 bank reference.</li>
 
@@ -413,21 +437,26 @@ return [
                <li><code>The deposit is managed on the order &mdash; change it from the order&rsquo;s deposit panel.</code> &mdash; you
                    reached the deposit from the Payments page. Open the order and use <b>Amend &pound;</b> or <b>Mark unpaid</b>.</li>
                <li><code>This quote can no longer be edited.</code> &mdash; the quote is locked (cancelled or archived).</li>
-               <li>Removing a payment always asks first: <em>&ldquo;Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on
-                   your bank reconciliation if needed.)&rdquo;</em> Worth reading &mdash; deleting here only tidies <b>your</b> record; the
-                   money is still in the bank and your bookkeeper will still see it.</li>
+               <li>Removing a payment always asks first, in the app&rsquo;s own little dialog with <b>Cancel</b> and a red
+                   <b>Yes, continue</b>. The wording depends on where you pressed the red <b>&times;</b>. On the <b>Payments</b> page it is
+                   the long version: <em>&ldquo;Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank
+                   reconciliation if needed.)&rdquo;</em> In the Payments table on the <b>order</b> it is just
+                   <em>&ldquo;Delete this payment?&rdquo;</em> Both do exactly the same thing, and the long version is worth reading either
+                   way &mdash; deleting here only tidies <b>your</b> record; the money is still in the bank and your bookkeeper will still
+                   see it.</li>
              </ul></div>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Four things worth knowing.</b>
              <b>(1) The figures agree everywhere</b> because one sum drives them all: <em>received = deposit + payments</em>,
-             <em>balance = total &minus; received</em>. That is the same maths on the order, on the Orders list, on the Payments page, on
-             the calendar&rsquo;s money line and on the invoice &mdash; and the deposit is <b>never counted twice</b>, which is why it is
+             <em>balance = total &minus; received</em>. That is the same maths on the order, on the Orders list, on the Payments page and
+             on the invoice &mdash; and the deposit is <b>never counted twice</b>, which is why it is
              hidden from the Payments table on the order but shows (locked) on the Payments page.
              <b>(2) No Accounts add-on?</b> Then there is no <b>Retail &rarr; Payments</b> row in the menu at all, no Payments panel on the
              order, and going to the page directly gives a blocked screen headed <em>&ldquo;Accounts module not enabled&rdquo;</em> saying
              <em>&ldquo;The Accounts add-on isn&rsquo;t enabled for your account. Contact your supplier to enable it.&rdquo;</em> The
              <b>Deposit</b> panel still works, and an order can still settle itself to <b>paid</b> on the deposit alone.
-             <b>(3) Staff see less.</b> A user without <em>&ldquo;can view all customer jobs&rdquo;</em> only sees payments on orders they
+             <b>(3) Staff see less.</b> A user without the <b>View all customer jobs</b> tick box (<b>Setup &rarr; Users</b>, on that
+             user&rsquo;s own record) only sees payments on orders they
              are assigned to, and cannot touch standalone payments at all &mdash; they get <em>&ldquo;You don&rsquo;t have permission to
              record payments for that order.&rdquo;</em> or <em>&ldquo;You don&rsquo;t have permission to delete that payment.&rdquo;</em>
              <b>(4) Paying doesn&rsquo;t stop the making.</b> An order going <b>paid</b> is still a placed order &mdash; the factory side
@@ -447,7 +476,7 @@ return [
             ['1:25', 'Fill in the last two boxes and save.',
              'Received from is who the money came from — most useful when there is no order attached to it. Reference is whatever lets you find it again on the bank statement: a cheque number, a Stripe id, a bank reference. Both are optional, and both save you an argument later. Then, Save payment. If you were only handed part of it, just type the smaller figure — part payments are perfectly fine, and they stack up.', 5],
             ['1:47', 'It settles itself, and they get a receipt.',
-             'The deposit plus the payment now cover the total, so the order marks itself paid. There is no mark as paid button to hunt for. The record a payment box disappears, because there is nothing left to take. And the customer is emailed a receipt automatically — the order, headed Receipt — once, and only once, as long as they have an email address on file. You can switch that off in Settings, under Paid in full receipt. Paying does not disturb the factory: the job carries on through Confirmed, In Production, Ready and Dispatched, exactly as before.', 6],
+             'Saving keeps you here on the Payments page — Payment recorded, thirty three pounds — and the order’s row has already flipped to Fully paid. The deposit plus the payment now cover the total, so the order marks itself paid. There is no mark as paid button to hunt for. Open the order itself and its Payments panel is green too, and the record a payment box has gone, because there is nothing left to take. And the customer is emailed a receipt automatically — the order, headed Receipt — once, and only once, as long as they have an email address on file. You can switch that off in Settings, under Paid in full receipt. Paying does not disturb the factory: the job carries on through Confirmed, In Production, Ready and Dispatched, exactly as before.', 6],
             ['2:15', 'Put a mistake right.',
              'Typed too much, and you get a blue Overpaid line. Nothing is stuck. Edit reopens the box above with that payment loaded — the heading changes to Edit payment, and the button to Update payment — so you can correct the figure, the date, the method, even move it to a different order. The red cross removes it altogether, and the order steps back out of paid, to whatever it was before. The deposit row is the exception: it shows here in green, but it has no buttons, because a deposit is only ever changed on the order itself.', 7],
             ['2:40', 'The whole picture, and the accountant’s CSV.',
