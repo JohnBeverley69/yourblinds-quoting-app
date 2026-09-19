@@ -41,16 +41,16 @@ class QuickBooksProvider implements AccountingProvider
 
     public function environment(): string
     {
-        $e = strtolower((string) (env('QUICKBOOKS_ENV', 'sandbox') ?? 'sandbox'));
+        $e = strtolower((string) (pc_get('QUICKBOOKS_ENV', 'sandbox') ?? 'sandbox'));
         return in_array($e, ['sandbox', 'production'], true) ? $e : 'sandbox';
     }
 
-    private function clientId(): string     { return (string) (env('QUICKBOOKS_CLIENT_ID', '') ?? ''); }
-    private function clientSecret(): string { return (string) (env('QUICKBOOKS_CLIENT_SECRET', '') ?? ''); }
+    private function clientId(): string     { return (string) (pc_get('QUICKBOOKS_CLIENT_ID', '') ?? ''); }
+    private function clientSecret(): string { return (string) (pc_get('QUICKBOOKS_CLIENT_SECRET', '') ?? ''); }
 
     public function redirectUri(): string
     {
-        $explicit = (string) (env('QUICKBOOKS_REDIRECT_URI', '') ?? '');
+        $explicit = (string) (pc_get('QUICKBOOKS_REDIRECT_URI', '') ?? '');
         if ($explicit !== '') return $explicit;
         // Fall back to APP_URL so the callback path stays in one place.
         $base = rtrim((string) (env('APP_URL', 'https://yourblinds.uk') ?? 'https://yourblinds.uk'), '/');

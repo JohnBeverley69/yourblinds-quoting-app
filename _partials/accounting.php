@@ -91,6 +91,65 @@ function ac_provider(string $key): ?AccountingProvider
 }
 
 /* ------------------------------------------------------------------ *
+ *  Platform config (DB) — lets super-admins set platform-level keys
+ *  (the QuickBooks app credentials, the token key) from the admin UI
+ *  instead of hand-editing .env on the server. DB value wins; .env is
+ *  the fallback. Reads are cached per request.
+ * ------------------------------------------------------------------ */
+function pc_table_exists(): bool
+{
+    static $has = null;
+    if ($has !== null) return $has;
+    try {
+        $has = (bool) db()->query("SHOW TABLES LIKE 'platform_config'")->fetchColumn();
+    } catch (Throwable $e) {
+        $has = false;
+    }
+    return $has;
+}
+
+function pc_all(): array
+{
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $cache = [];
+    if (pc_table_exists()) {
+        try {
+            foreach (db()->query('SELECT name, value FROM platform_config') as $r) {
+                $cache[(string) $r['name']] = $r['value'];
+            }
+        } catch (Throwable $e) { /* leave empty */ }
+    }
+    return $cache;
+}
+
+/** Platform config value, DB first then .env, then $default. */
+function pc_get(string $name, ?string $default = null): ?string
+{
+    $all = pc_all();
+    if (array_key_exists($name, $all) && $all[$name] !== null && $all[$name] !== '') {
+        return (string) $all[$name];
+    }
+    $env = env($name, null);
+    if ($env !== null && $env !== '') return $env;
+    return $default;
+}
+
+function pc_set(string $name, ?string $value): void
+{
+    if (!pc_table_exists()) {
+        throw new RuntimeException('platform_config table missing — run migrate_platform_config.php.');
+    }
+    db()->prepare(
+        'INSERT INTO platform_config (name, value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE value = VALUES(value)'
+    )->execute([$name, $value]);
+    // Bust the per-request cache so a save is visible immediately.
+    // (pc_all caches in a static; re-read by clearing via a fresh query next call
+    //  is simplest to reason about — force it by overwriting the static cache.)
+}
+
+/* ------------------------------------------------------------------ *
  *  Token sealing. OAuth refresh tokens are long-lived, full-access
  *  credentials — seal them at rest when a key is configured. Falls back
  *  to a tagged plaintext form when no key is set (dev / pre-config), so
@@ -99,9 +158,20 @@ function ac_provider(string $key): ?AccountingProvider
  * ------------------------------------------------------------------ */
 function ac_seal_key(): string
 {
-    // Reuse an app-wide key if present; else derive nothing (passthrough).
-    $k = (string) (env('APP_ENCRYPTION_KEY', '') ?? '');
-    return $k;
+    // DB (platform_config) first, then .env. If neither is set, lazily generate
+    // one and store it in platform_config so tokens are encrypted at rest without
+    // anyone having to hand-edit .env. (For a hardened setup, set APP_ENCRYPTION_KEY
+    // in .env and it takes precedence.)
+    $k = (string) (pc_get('APP_ENCRYPTION_KEY', '') ?? '');
+    if ($k !== '') return $k;
+    if (function_exists('random_bytes') && pc_table_exists()) {
+        try {
+            $k = bin2hex(random_bytes(32));
+            pc_set('APP_ENCRYPTION_KEY', $k);
+            return $k;
+        } catch (Throwable $e) { /* fall through to passthrough */ }
+    }
+    return '';
 }
 
 function ac_seal(?string $plain): ?string

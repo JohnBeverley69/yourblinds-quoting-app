@@ -24,6 +24,12 @@ $qboProvider = ac_provider('quickbooks');
 $qboConn     = ac_get_connection((int) $clientId, 'quickbooks');
 $qboReady    = $qboProvider && $qboProvider->isConfigured();
 $qboLinked   = ac_is_connected($qboConn);
+// Super-admin platform-credentials form pre-fill (secret never echoed back).
+$qboIsSuper      = is_super_admin();
+$qboCfgEnv       = pc_get('QUICKBOOKS_ENV', 'sandbox') ?? 'sandbox';
+$qboCfgClientId  = pc_get('QUICKBOOKS_CLIENT_ID', '') ?? '';
+$qboCfgRedirect  = $qboProvider ? $qboProvider->redirectUri() : '';
+$qboHasSecret    = (pc_get('QUICKBOOKS_CLIENT_SECRET', '') ?? '') !== '';
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -455,6 +461,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$tradeTerms, $clientId]);
         } catch (Throwable $e) { /* trade column not migrated yet — ignore */ }
         header('Location: /admin/settings.php');
+        exit;
+    }
+
+    if ($action === 'accounting_platform') {
+        // Platform-level QuickBooks app credentials (super-admin only). Stored in
+        // platform_config so they can be set from the UI instead of editing .env.
+        if (!is_super_admin()) {
+            $_SESSION['flash_error'] = 'Only a super-admin can set the accounting app credentials.';
+            header('Location: /admin/settings.php#accounting');
+            exit;
+        }
+        $qbEnv    = strtolower(trim((string) ($_POST['qbo_env'] ?? 'sandbox')));
+        if (!in_array($qbEnv, ['sandbox', 'production'], true)) $qbEnv = 'sandbox';
+        $qbId     = trim((string) ($_POST['qbo_client_id'] ?? ''));
+        $qbSecret = trim((string) ($_POST['qbo_client_secret'] ?? ''));
+        $qbRedir  = trim((string) ($_POST['qbo_redirect_uri'] ?? ''));
+        try {
+            pc_set('QUICKBOOKS_ENV', $qbEnv);
+            pc_set('QUICKBOOKS_CLIENT_ID', $qbId);
+            // Only overwrite the secret when a new value is typed — a blank box
+            // means "keep the stored one" (the field renders empty for safety).
+            if ($qbSecret !== '') pc_set('QUICKBOOKS_CLIENT_SECRET', $qbSecret);
+            pc_set('QUICKBOOKS_REDIRECT_URI', $qbRedir);
+            $_SESSION['flash_success'] = 'QuickBooks app credentials saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+                . ' — have you run migrate_platform_config.php?';
+        }
+        header('Location: /admin/settings.php#accounting');
         exit;
     }
 
@@ -1997,6 +2032,51 @@ $activeNav = 'settings';
                 <strong style="color:var(--text-secondary)">Xero &amp; Sage</strong>
                 <span style="margin-left:.5rem;font-size:.8125rem;color:var(--text-faint)">Coming soon — same one-click connect.</span>
             </div>
+
+            <?php if ($qboIsSuper): ?>
+            <details style="max-width:44rem;margin-top:1.5rem;border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem" <?= $qboReady ? '' : 'open' ?>>
+                <summary style="cursor:pointer;font-weight:600;color:var(--text-secondary)">
+                    QuickBooks app credentials <span style="font-weight:400;color:var(--text-faint)">(super-admin — sets up the connection for everyone)</span>
+                </summary>
+                <p class="ui-hint" style="color:var(--text-secondary);font-size:.875rem;margin:.75rem 0">
+                    Paste the keys from your Intuit app (developer.intuit.com → your app →
+                    Keys &amp; credentials → Development). One app serves every tenant; each
+                    account then connects their own company with the button above.
+                    <?php if ($qboReady): ?>
+                        <span style="color:#065f46;font-weight:600">Currently configured ✓</span>
+                    <?php endif; ?>
+                </p>
+                <form method="post" action="/admin/settings.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="accounting_platform">
+                    <div class="form-row">
+                        <label for="qbo_env">Environment</label>
+                        <select id="qbo_env" name="qbo_env">
+                            <option value="sandbox"    <?= $qboCfgEnv === 'sandbox'    ? 'selected' : '' ?>>Sandbox (test)</option>
+                            <option value="production" <?= $qboCfgEnv === 'production' ? 'selected' : '' ?>>Production (live)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="qbo_client_id">Client ID</label>
+                        <input type="text" id="qbo_client_id" name="qbo_client_id" autocomplete="off"
+                               value="<?= e($qboCfgClientId) ?>" placeholder="ABxxx…">
+                    </div>
+                    <div class="form-row">
+                        <label for="qbo_client_secret">Client Secret</label>
+                        <input type="password" id="qbo_client_secret" name="qbo_client_secret" autocomplete="off"
+                               placeholder="<?= $qboHasSecret ? '•••••• (stored — leave blank to keep)' : 'paste the secret' ?>">
+                    </div>
+                    <div class="form-row">
+                        <label for="qbo_redirect_uri">Redirect URI <span style="font-weight:normal;color:var(--text-faint)">(must match the one registered at Intuit)</span></label>
+                        <input type="text" id="qbo_redirect_uri" name="qbo_redirect_uri" autocomplete="off"
+                               value="<?= e($qboCfgRedirect) ?>">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save credentials</button>
+                    </div>
+                </form>
+            </details>
+            <?php endif; ?>
         </section>
         </div><!-- /tab: accounting -->
 

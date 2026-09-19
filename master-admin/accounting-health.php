@@ -44,13 +44,15 @@ if (is_readable($envFile)) {
     echo ".env keys present       : " . ($names ? implode(', ', $names) : '(none parsed)') . "\n";
 }
 echo "APP_URL                 : " . (string) (env('APP_URL', '(unset)')) . "\n";
-echo "APP_ENCRYPTION_KEY      : " . present(env('APP_ENCRYPTION_KEY', '')) . "\n\n";
+echo "APP_ENCRYPTION_KEY      : " . present(pc_get('APP_ENCRYPTION_KEY', '')) . " (auto-provisions on first connect if unset)\n\n";
 
-echo "--- QuickBooks env vars (values never shown) ---\n";
-echo "QUICKBOOKS_ENV          : " . (string) (env('QUICKBOOKS_ENV', '(unset)')) . "\n";
-echo "QUICKBOOKS_CLIENT_ID    : " . present(env('QUICKBOOKS_CLIENT_ID', '')) . "\n";
-echo "QUICKBOOKS_CLIENT_SECRET: " . present(env('QUICKBOOKS_CLIENT_SECRET', '')) . "\n";
-echo "QUICKBOOKS_REDIRECT_URI : " . (string) (env('QUICKBOOKS_REDIRECT_URI', '(unset — will derive from APP_URL)')) . "\n\n";
+echo "platform_config table   : " . (pc_table_exists() ? 'exists' : 'MISSING — run /migrate_platform_config.php') . "\n\n";
+
+echo "--- QuickBooks config (DB first, then .env; values never shown) ---\n";
+echo "QUICKBOOKS_ENV          : " . (string) (pc_get('QUICKBOOKS_ENV', '(unset)')) . "\n";
+echo "QUICKBOOKS_CLIENT_ID    : " . present(pc_get('QUICKBOOKS_CLIENT_ID', '')) . "\n";
+echo "QUICKBOOKS_CLIENT_SECRET: " . present(pc_get('QUICKBOOKS_CLIENT_SECRET', '')) . "\n";
+echo "QUICKBOOKS_REDIRECT_URI : " . (string) (pc_get('QUICKBOOKS_REDIRECT_URI', '(unset — will derive from APP_URL)')) . "\n\n";
 
 $qbo = ac_provider('quickbooks');
 echo "--- Provider view ---\n";
