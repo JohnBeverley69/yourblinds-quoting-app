@@ -75,6 +75,26 @@ $hasArchive = false;
 try { db()->query('SELECT archived_at FROM quotes LIMIT 0'); $hasArchive = true; } catch (Throwable $e) {}
 $view = ($hasArchive && ($_GET['view'] ?? '') === 'archived') ? 'archived' : 'active';
 
+// Retail vs trade facet. The RETAIL / TRADE sidebar sections link here with
+// ?type=retail|trade; no type = show both (old links / bookmarks unaffected).
+// Driven by quotes.sale_type, with account_client_id as the legacy fallback for
+// trade jobs stamped before sale_type existed. Both columns optional — degrade
+// to "no filter" if a tenant hasn't migrated. The clauses use literals only, so
+// they add no bound params (nothing else to thread).
+$hasSaleType = false; try { db()->query('SELECT sale_type FROM quotes LIMIT 0');         $hasSaleType = true; } catch (Throwable $e) {}
+$hasAcctCol  = false; try { db()->query('SELECT account_client_id FROM quotes LIMIT 0'); $hasAcctCol  = true; } catch (Throwable $e) {}
+$type = in_array($_GET['type'] ?? '', ['retail', 'trade'], true) ? (string) $_GET['type'] : '';
+$typeClause = static function (string $p) use ($type, $hasSaleType, $hasAcctCol): string {
+    if ($type === '' || !$hasSaleType) return '';
+    if ($type === 'trade') {
+        return $hasAcctCol ? "({$p}sale_type = 'trade' OR {$p}account_client_id IS NOT NULL)" : "{$p}sale_type = 'trade'";
+    }
+    return $hasAcctCol
+        ? "(COALESCE({$p}sale_type,'retail') = 'retail' AND {$p}account_client_id IS NULL)"
+        : "COALESCE({$p}sale_type,'retail') = 'retail'";
+};
+$typeQS = $type !== '' ? '&type=' . rawurlencode($type) : '';   // for threading into links
+
 // Filter chips per scope. Quotes scope mirrors the pipeline: draft + sent are
 // one "Quote" group (a draft is just a quote that's not sent yet). Each chip is
 // key => [label, statuses[]].
@@ -106,6 +126,8 @@ foreach ($scopeStatuses as $ss) { $params[] = $ss; }
 if ($hasArchive) {
     $where[] = $view === 'archived' ? 'q.archived_at IS NOT NULL' : 'q.archived_at IS NULL';
 }
+// Retail / trade facet.
+if (($tc = $typeClause('q.')) !== '') $where[] = $tc;
 
 // A chip narrows further to its status group, within this scope.
 if ($status !== '' && isset($chipDefs[$status])) {
@@ -167,6 +189,8 @@ if ($restrictToMine) {
 if ($hasArchive) {
     $countWhere[] = $view === 'archived' ? 'archived_at IS NOT NULL' : 'archived_at IS NULL';
 }
+// …and the current retail/trade facet, so the chip numbers match the rows.
+if (($tcc = $typeClause('')) !== '') $countWhere[] = $tcc;
 $countSt = db()->prepare(
     'SELECT status, COUNT(*) AS n
        FROM quotes
@@ -189,6 +213,7 @@ $archivedCount = 0;
 if ($hasArchive) {
     $azWhere  = ['client_id = ?', 'archived_at IS NOT NULL', "status IN ($scopePlace)"];
     $azParams = array_merge([$clientId], $scopeStatuses);
+    if (($tca = $typeClause('')) !== '') $azWhere[] = $tca;
     if ($restrictToMine) {
         $azWhere[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
         $azParams[] = (int) $user['user_id'];
@@ -213,11 +238,15 @@ $fmtDate = static function (?string $dt): string {
 // so they're shown in the orders scope and hidden in the quotes scope.
 $isOrderView = $scope === 'orders';
 
-$pageTitle = $scope === 'quotes' ? 'Quote history' : 'Order history';
+$typeLabel = $type === 'retail' ? 'Retail ' : ($type === 'trade' ? 'Trade ' : '');
+$pageTitle = $typeLabel . ($scope === 'quotes' ? 'Quotes' : 'Orders');
 $pageSub   = $scope === 'quotes'
     ? 'Quotes still in the pipeline — drafts, sent, and declined.'
     : 'Accepted onward — orders, invoices and paid jobs.';
-$activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
+// Highlight the right sidebar row: RETAIL/TRADE sections use type-prefixed keys.
+if ($type === 'retail')     $activeNav = $scope === 'quotes' ? 'retail-quotes' : 'retail-orders';
+elseif ($type === 'trade')  $activeNav = $scope === 'quotes' ? 'trade-quotes'  : 'trade-orders';
+else                        $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -278,7 +307,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                 <h1 class="page-title"><?= e($pageTitle) ?></h1>
                 <p class="page-subtitle"><?= e($pageSub) ?></p>
                 <div style="display:inline-flex;background:var(--bg-subtle-2);border-radius:8px;padding:0.125rem;margin-top:0.5rem">
-                    <a href="/orders/index.php?scope=<?= e($scope) ?>"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>"
                        style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,0.06)">List</a>
                     <a href="/orders/pipeline.php"
                        style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;color:var(--text-faint)">Pipeline</a>
@@ -300,7 +329,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
 
         <section class="section">
             <div class="filter-chips">
-                <a href="/orders/index.php?scope=<?= e($scope) ?>" class="<?= $status === '' ? 'active' : '' ?>">
+                <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>" class="<?= $status === '' ? 'active' : '' ?>">
                     All (<?= $scopeTotal ?>)
                 </a>
                 <?php foreach ($chipDefs as $chipKey => [$chipLabel, $chipStatuses]):
@@ -308,22 +337,25 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                     foreach ($chipStatuses as $cs) { $chipCount += $counts[$cs] ?? 0; }
                     if ($chipCount === 0) continue;
                 ?>
-                    <a href="/orders/index.php?scope=<?= e($scope) ?>&status=<?= e($chipKey) ?>"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>&status=<?= e($chipKey) ?>"
                        class="<?= $status === $chipKey ? 'active' : '' ?>">
                         <?= e($chipLabel) ?> (<?= $chipCount ?>)
                     </a>
                 <?php endforeach; ?>
                 <?php if ($hasArchive): ?>
                     <?php if ($view === 'archived'): ?>
-                        <a href="/orders/index.php?scope=<?= e($scope) ?>" style="margin-left:auto" class="active">&larr; Back to active</a>
+                        <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>" style="margin-left:auto" class="active">&larr; Back to active</a>
                     <?php elseif ($archivedCount > 0): ?>
-                        <a href="/orders/index.php?scope=<?= e($scope) ?>&view=archived" style="margin-left:auto">🗄 Archived (<?= $archivedCount ?>)</a>
+                        <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>&view=archived" style="margin-left:auto">🗄 Archived (<?= $archivedCount ?>)</a>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
 
             <form method="get" action="/orders/index.php" class="search-form">
                 <input type="hidden" name="scope" value="<?= e($scope) ?>">
+                <?php if ($type !== ''): ?>
+                    <input type="hidden" name="type" value="<?= e($type) ?>">
+                <?php endif; ?>
                 <?php if ($status !== ''): ?>
                     <input type="hidden" name="status" value="<?= e($status) ?>">
                 <?php endif; ?>
@@ -331,7 +363,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
                        placeholder="Search by quote #, customer name, or postcode...">
                 <button type="submit" class="btn btn-secondary">Search</button>
                 <?php if ($q !== ''): ?>
-                    <a href="/orders/index.php?scope=<?= e($scope) ?><?= $status !== '' ? '&status=' . e($status) : '' ?>"
+                    <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?><?= $status !== '' ? '&status=' . e($status) : '' ?>"
                        class="btn btn-secondary">Clear</a>
                 <?php endif; ?>
             </form>
@@ -339,7 +371,7 @@ $activeNav = $scope === 'quotes' ? 'quote-history' : 'order-history';
             <?php if (!$rows): ?>
                 <div class="empty-state">
                     <?php if ($q !== '' || $status !== ''): ?>
-                        Nothing matches your filter. <a href="/orders/index.php?scope=<?= e($scope) ?>">Clear filters</a>.
+                        Nothing matches your filter. <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>">Clear filters</a>.
                     <?php elseif ($canCreateQuotes): ?>
                         No quotes yet.
                         <a href="/quote-builder/new.php">Start a new quote &rarr;</a>

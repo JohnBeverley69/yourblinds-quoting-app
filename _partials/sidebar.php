@@ -13,18 +13,23 @@ declare(strict_types=1);
  * Optional scope (sensible defaults applied if missing):
  *   $isAdmin    bool   defaults to ($user['role'] === 'admin')
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
- *   $activeNav  string one of: calendar, dashboard, pipeline, order-history,
- *                      quote-history, customers, accounts, products, users,
- *                      settings, billing, master-admin, pricing, subscriptions,
- *                      paypal-health, push-updates, backup.
- *                      Empty = no highlight.
+ *   $activeNav  string one of: calendar, dashboard, pipeline, customers,
+ *                      accounts, retail-quotes, retail-orders, trade-accounts,
+ *                      trade-quotes, trade-orders, wholesale, statement-run,
+ *                      commissions, products, users, settings, trade-terms,
+ *                      billing, and the Platform keys (master-admin, pricing,
+ *                      subscriptions, paypal-health, push-updates, backup, …).
+ *                      order-history/quote-history are legacy fallbacks (an
+ *                      untyped /orders view) with no sidebar row. Empty = no
+ *                      highlight.
  *
- * Layout: items are grouped into "Work" (everyday) and "Setup"
- * (admin config) sections, with a collapsible "Master admin" block
- * at the bottom for super-admins. A prominent "+ New quote" call-to-
- * action sits at the very top of the sidebar for users with
- * can_create_quotes — saves a Calendar → Order history → button
- * navigation chain when raising a fresh quote.
+ * Layout (Option A — "two worlds"): a neutral "Work" section (cross-mode daily
+ * tools) above two mirror sections — "Retail" (the tenant's own end customers)
+ * and "Trade" (businesses the factory supplies), each with its own customers →
+ * quotes → orders → money. Then "Setup" (config, collapsible) and "Platform"
+ * (super-admin platform ops, collapsible, sub-grouped). Retail/Trade Quotes &
+ * Orders point at the shared /orders/index.php with a ?type= facet. A prominent
+ * "+ New quote" CTA sits at the very top for users with can_create_quotes.
  *
  * Items dropped in this layout (vs. the legacy flat list):
  *   - "My Schedule"  — duplicated Calendar with ?mine=1. Use the
@@ -141,35 +146,54 @@ $canSeeAnyDashPanel = $isAdmin
 // doesn't see an empty "Setup" header).
 //
 // [href, label, visible]. Within a section: display order.
+// Information architecture (Option A — "two worlds"): a neutral WORK layer of
+// cross-mode daily tools above two mirror sections — RETAIL (the tenant's own
+// end customers) and TRADE (businesses the factory/wholesaler supplies) — each
+// carrying its own customers → quotes → orders → money, so every item has one
+// obvious home. Then SETUP (configure) and PLATFORM (run the platform). The
+// retail/trade split on the shared list page is a ?type= facet on
+// orders/index.php; nav keys retail-*/trade-* drive the active-row highlight.
 $navSections = [
     [
+        // Everyday, cross-mode — not tied to retail vs trade.
         'name'  => 'Work',
         'items' => [
-            'dashboard'     => ['/dashboard/index.php',        'Dashboard',     $hasQuotes && $canSeeAnyDashPanel],
-            'calendar'      => ['/calendar/index.php',         'Calendar',      true],
-            // Pipeline — the Kanban funnel view of every quote/order. Promoted
-            // to its own sidebar entry (it had been reachable only via a link
-            // on the Order-history page); gated like the rest of the orders
-            // module. Sits high in Work as a daily at-a-glance overview.
-            'pipeline'      => ['/orders/pipeline.php',        'Pipeline',      $hasQuotes && $isStaff],
-            'order-history' => ['/orders/index.php?scope=orders', 'Order history', $hasQuotes && $canSeeOrders],
-            'quote-history' => ['/orders/index.php?scope=quotes', 'Quote history', $hasQuotes && $canSeeQuoteHistory],
-            'customers'     => ['/customer-manager/index.php', 'Customers',     $canSeeCustomers],
-            // Labelled "Customer payments" (not "Accounts") so first-time
-            // users don't mistake it for login/staff-account management, AND
-            // so it's unmistakably the tenant's OWN customers' payments — not
-            // the wholesale/trade-account A/R that now lives in its own
-            // section below. The nav key + route stay 'accounts' to avoid churn.
-            'accounts'      => ['/accounts/index.php',         'Customer payments', $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
-            // The production back-office — its own app, but a link here so it's
-            // reachable without typing the URL. Only shown to those who can enter.
-            'factory'       => ['/factory/incoming-orders.php', 'Factory',      $canSeeFactory],
-            'help'          => ['/help/index.php',             'Help & guide',  true],
+            'dashboard' => ['/dashboard/index.php',         'Dashboard', $hasQuotes && $canSeeAnyDashPanel],
+            'calendar'  => ['/calendar/index.php',          'Calendar',  true],
+            'pipeline'  => ['/orders/pipeline.php',         'Pipeline',  $hasQuotes && $isStaff],
+            // Production back-office (its own app) — makes both retail & trade.
+            'factory'   => ['/factory/incoming-orders.php', 'Factory',   $canSeeFactory],
         ],
     ],
     [
-        // Config, not everyday work — collapsible (like Master admin) so it sits
-        // shrunk down by default and only opens when you're on a Setup page.
+        // The tenant's OWN end customers (retail). Quotes/Orders are the shared
+        // list page filtered to retail (type=retail).
+        'name'  => 'Retail',
+        'items' => [
+            'customers'     => ['/customer-manager/index.php',                'Customers', $canSeeCustomers],
+            'retail-quotes' => ['/orders/index.php?scope=quotes&type=retail', 'Quotes',    $hasQuotes && $canSeeQuoteHistory],
+            'retail-orders' => ['/orders/index.php?scope=orders&type=retail', 'Orders',    $hasQuotes && $canSeeOrders],
+            // The tenant's own customers' payments (retail A/R). Key/route stay
+            // 'accounts' to avoid churn; label shortened as the section says Retail.
+            'accounts'      => ['/accounts/index.php',                        'Payments',  $hasQuotes && $hasAccountsFeature && $canSeeAccountsLink],
+        ],
+    ],
+    [
+        // Acting as the factory/wholesaler TO other businesses (was "Wholesale").
+        // Super-admin only — same visibility as the old Wholesale section, so a
+        // retail-only tenant never sees this whole block. Quotes/Orders are the
+        // shared list page filtered to trade (type=trade).
+        'name'  => 'Trade',
+        'items' => [
+            'trade-accounts' => ['/master-admin/trade-accounts.php',          'Trade accounts', $isSuperAdmin],
+            'trade-quotes'   => ['/orders/index.php?scope=quotes&type=trade',  'Quotes',        $isSuperAdmin],
+            'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isSuperAdmin],
+            'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isSuperAdmin],
+            'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isSuperAdmin],
+            'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isSuperAdmin],
+        ],
+    ],
+    [
         'name'        => 'Setup',
         'collapsible' => true,
         'items' => [
@@ -181,51 +205,40 @@ $navSections = [
         ],
     ],
     [
-        // Wholesale / trade-accounts workspace (super-admin only). Grouped
-        // together and ordered by the trade lifecycle: pick the account →
-        // its orders/invoices/credit notes → commission earned on them.
-        // Kept EXPANDED (not collapsible) — it's a primary daily workspace
-        // for the factory owner, not a rarely-touched config block.
-        //
-        // Payments & balance and Statements are reached one-click PER ACCOUNT
-        // from the Trade accounts list (the list is the picker), so they're
-        // deliberately not separate menu items here.
-        'name'  => 'Wholesale',
-        'items' => [
-            'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts',    $isSuperAdmin],
-            'wholesale'      => ['/master-admin/wholesale.php',      'Orders & invoices', $isSuperAdmin],
-            'statement-run'  => ['/master-admin/statement-run.php',  'Statements',        $isSuperAdmin],
-            'commissions'    => ['/master-admin/commissions.php',    'Commissions',       $isSuperAdmin],
-        ],
-    ],
-    [
-        // Super-admin only. Collapsed by default — platform / catalogue ops
-        // that only one user sees, no need to clutter the sidebar with them
-        // all expanded. (Trade accounts, Wholesale & Commissions moved out
-        // to the dedicated "Wholesale" section above.)
-        'name'        => 'Master admin',
+        // Platform / catalogue ops for the operator who runs the whole system
+        // (was "Master admin"). Collapsed by default and split into four
+        // scannable sub-groups so the 20 items aren't a wall of links.
+        'name'        => 'Platform',
         'collapsible' => true,
-        'items'       => [
-            'master-admin'  => ['/master-admin/index.php',          'Overview',         $isSuperAdmin],
-            'promotions'    => ['/master-admin/promotions.php',     'Promotions',       $isSuperAdmin],
-            'factories'     => ['/master-admin/factories.php',      'Factories',        $isSuperAdmin],
-            'client-emails' => ['/master-admin/client-emails.php',  'Client emails',    $isSuperAdmin],
-            'go-live'       => ['/master-admin/go-live.php',        'Go-live checklist', $isSuperAdmin],
-            'monitor'       => ['/master-admin/monitor.php',        'Monitor',          $isSuperAdmin],
-            'master-catalogue' => ['/master-admin/master-catalogue.php', 'Master Catalogue', $isSuperAdmin],
-            'push-updates'  => ['/master-admin/push-updates.php',   'Push updates',      $isSuperAdmin],
-            'library-suppliers' => ['/master-admin/library-suppliers.php', 'Library suppliers', $isSuperAdmin],
-            'fabric-library' => ['/master-admin/fabric-library.php', 'Fabric Library', $isSuperAdmin],
-            'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups', $isSuperAdmin],
-            'supplier-import' => ['/master-admin/supplier-import.php', 'Supplier import',  $isSuperAdmin],
-            'supplier-requests' => ['/master-admin/supplier-requests.php', 'Supplier requests', $isSuperAdmin],
-            'spell-check'   => ['/master-admin/spell-check.php',    'Spell-check',       $isSuperAdmin],
-            'system-check'  => ['/system_check.php',                'System check',      $isSuperAdmin],
-            'pricing'       => ['/master-admin/pricing.php',        'Pricing',          $isSuperAdmin],
-            'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
-            'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
-            'wipe-products' => ['/master-admin/wipe-products.php', 'Wipe products', $isSuperAdmin],
-            'backup'        => ['/master-admin/backup.php',        'Backup',        $isSuperAdmin],
+        'groups'      => [
+            ['heading' => 'Catalogue', 'items' => [
+                'master-catalogue'  => ['/master-admin/master-catalogue.php', 'Master Catalogue', $isSuperAdmin],
+                'push-updates'      => ['/master-admin/push-updates.php',     'Push updates',      $isSuperAdmin],
+                'fabric-library'    => ['/master-admin/fabric-library.php',   'Fabric Library',    $isSuperAdmin],
+                'library-suppliers' => ['/master-admin/library-suppliers.php','Library suppliers', $isSuperAdmin],
+                'supplier-import'   => ['/master-admin/supplier-import.php',  'Supplier import',   $isSuperAdmin],
+                'supplier-requests' => ['/master-admin/supplier-requests.php','Supplier requests', $isSuperAdmin],
+                'wipe-products'     => ['/master-admin/wipe-products.php',    'Wipe products',     $isSuperAdmin],
+            ]],
+            ['heading' => 'Clients', 'items' => [
+                'master-admin'    => ['/master-admin/index.php',           'Overview',          $isSuperAdmin],
+                'pending-signups' => ['/master-admin/pending-signups.php', 'Pending sign-ups',  $isSuperAdmin],
+                'client-emails'   => ['/master-admin/client-emails.php',   'Client emails',     $isSuperAdmin],
+                'go-live'         => ['/master-admin/go-live.php',         'Go-live checklist', $isSuperAdmin],
+                'promotions'      => ['/master-admin/promotions.php',      'Promotions',        $isSuperAdmin],
+                'factories'       => ['/master-admin/factories.php',       'Factories',         $isSuperAdmin],
+            ]],
+            ['heading' => 'Billing & plans', 'items' => [
+                'pricing'       => ['/master-admin/pricing.php',       'Pricing',       $isSuperAdmin],
+                'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
+                'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
+            ]],
+            ['heading' => 'System health', 'items' => [
+                'monitor'      => ['/master-admin/monitor.php',     'Monitor',      $isSuperAdmin],
+                'system-check' => ['/system_check.php',             'System check', $isSuperAdmin],
+                'spell-check'  => ['/master-admin/spell-check.php', 'Spell-check',  $isSuperAdmin],
+                'backup'       => ['/master-admin/backup.php',      'Backup',       $isSuperAdmin],
+            ]],
         ],
     ],
 ];
@@ -341,12 +354,40 @@ window.addEventListener('pageshow', function (e) {
 
         <nav class="app-sidebar-nav">
 <?php foreach ($navSections as $section):
+    $isCollapsible = !empty($section['collapsible']);
+
+    // A section is either flat ('items') or sub-grouped ('groups', e.g. Platform).
+    if (!empty($section['groups'])) {
+        // Filter each group's items by visibility; drop empty groups.
+        $visGroups = [];
+        $anyActive = false;
+        foreach ($section['groups'] as $grp) {
+            $gi = array_filter($grp['items'], static fn ($it) => !empty($it[2]));
+            if (!$gi) continue;
+            if (array_key_exists($activeNav, $gi)) $anyActive = true;
+            $visGroups[] = ['heading' => $grp['heading'], 'items' => $gi];
+        }
+        if (!$visGroups) continue;
+        $isOpen = $isCollapsible && $anyActive;
+?>
+        <details class="nav-section nav-section-collapsible"<?= $isOpen ? ' open' : '' ?>>
+            <summary class="nav-section-heading"><?= e($section['name']) ?></summary>
+            <?php foreach ($visGroups as $vg): ?>
+                <div class="nav-subheading"><?= e($vg['heading']) ?></div>
+                <?php foreach ($vg['items'] as $navKey => [$navHref, $navLabel, $navShow]): ?>
+                    <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                <?php endforeach; ?>
+            <?php endforeach; ?>
+        </details>
+<?php
+        continue;
+    }
+
     $visibleItems = array_filter(
         $section['items'],
         static fn ($it) => !empty($it[2])
     );
     if (!$visibleItems) continue;
-    $isCollapsible = !empty($section['collapsible']);
     // If the active page lives inside a collapsible section, open
     // it by default so the user sees their context.
     $isOpen = $isCollapsible && array_key_exists($activeNav, $visibleItems);
@@ -369,6 +410,8 @@ window.addEventListener('pageshow', function (e) {
 <?php endforeach; ?>
         </nav>
         <div class="app-sidebar-foot">
+            <a href="/help/index.php">Help &amp; guide</a>
+            &middot;
             <a href="/auth/change_password.php">Change password</a>
             &middot;
             <a href="/auth/logout.php">Sign out &rarr;</a>

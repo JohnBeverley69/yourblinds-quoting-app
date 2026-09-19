@@ -317,6 +317,17 @@ a { color: var(--link); }
 .nav-section-collapsible[open] > .nav-section-heading::before {
     transform: rotate(90deg);
 }
+/* Second-level grouping inside a section (e.g. Platform: Catalogue / Clients
+   / Billing & plans / System health) — quieter than a section heading. */
+.nav-subheading {
+    padding: 0.5rem 1.25rem 0.125rem;
+    color: var(--text-on-sidebar-meta);
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.7;
+}
 
 /* Primary "+ New quote" CTA pinned above the nav. White-on-navy
    makes it stand out as the main action without competing with
