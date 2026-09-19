@@ -356,7 +356,7 @@ $activeNav = 'products';
                 <?php if (!$hasCategories): ?>
                     <div class="alert alert-error" role="alert">
                         Product grouping isn't enabled yet — run
-                        <a href="/migrate_product_categories.php"><code>/migrate_product_categories.php</code></a>
+                        <code>/migrate_product_categories.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                         (super-admin) to file products under headings like "Woods".
                     </div>
                 <?php else: ?>

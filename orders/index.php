@@ -388,6 +388,7 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                     <input type="hidden" name="return_q"      value="<?= e($q) ?>">
                     <input type="hidden" name="return_scope"  value="<?= e($scope) ?>">
                     <input type="hidden" name="return_view"   value="<?= e($view) ?>">
+                    <input type="hidden" name="return_type"   value="<?= e($type) ?>">
 
                     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 0.625rem;">
                         <?php if ($hasArchive && $view === 'archived'): ?>

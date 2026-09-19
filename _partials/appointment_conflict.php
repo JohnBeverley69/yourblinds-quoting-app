@@ -66,7 +66,7 @@ if (!function_exists('appointment_find_conflict')) {
         $end    = $endTs ? date('H:i', $endTs) : '';
         $who    = trim($assigneeName) !== '' ? trim($assigneeName) : 'That person';
         $with   = trim((string) ($clash['customer_name'] ?? ''));
-        $window = $end !== '' ? "$start–$end" : $start;
+        $window = $end !== '' ? "{$start}–{$end}" : $start;
         return "$who is already booked $window" . ($with !== '' ? " ($with)" : '')
              . " that day — they can't be in two places at once. "
              . 'Pick another time, assignee, or day.';

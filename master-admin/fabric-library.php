@@ -448,7 +448,7 @@ $activeNav = 'fabric-library';
             <section class="section">
                 <div class="alert alert-error" role="alert">
                     The Fabric Library tables aren't on this database yet — run
-                    <a href="/migrate_fabric_library.php"><code>/migrate_fabric_library.php</code></a>
+                    <code>/migrate_fabric_library.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                     (super-admin) first, then reload.
                 </div>
             </section>
@@ -496,7 +496,7 @@ $activeNav = 'fabric-library';
                 <section class="section">
                     <p style="color:var(--text-faint);font-size:.8125rem;margin:0">
                         Want to file these ranges under a supplier (Decora, Eclipse…)? Run
-                        <a href="/migrate_fabric_supplier_groups.php"><code>/migrate_fabric_supplier_groups.php</code></a>
+                        <code>/migrate_fabric_supplier_groups.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                         (super-admin) to switch on supplier groups.
                     </p>
                 </section>

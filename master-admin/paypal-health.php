@@ -286,7 +286,7 @@ $activeNav = 'paypal-health';
             <div class="alert alert-error" role="alert">
                 <strong>Webhook log table missing.</strong>
                 Webhook events aren't being recorded yet — run
-                <a href="/migrate_paypal_webhook_log.php"><code>/migrate_paypal_webhook_log.php</code></a>
+                <code>/migrate_paypal_webhook_log.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                 once (super-admin only). After that, every event PayPal
                 sends will appear in the table below.
             </div>

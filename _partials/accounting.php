@@ -41,6 +41,19 @@ interface AccountingProvider
     public function isConfigured(): bool;
 
     /**
+     * The OAuth redirect URI this provider will send the tenant back to. It
+     * MUST match the URI registered on the provider's app exactly, so both
+     * Settings and the accounting health page print it for comparison.
+     *
+     * Declared here because both of those pages call it through an
+     * AccountingProvider-typed value (ac_provider() returns ?AccountingProvider).
+     * It only ever worked because QuickBooksProvider happens to be the single
+     * implementation; the moment Xero or Sage is added, an implementation
+     * without it would fatal at the call site instead of failing to compile.
+     */
+    public function redirectUri(): string;
+
+    /**
      * The provider's OAuth authorize URL to send the tenant to. $state is an
      * opaque anti-CSRF token we also stash in the session and re-check on
      * callback.

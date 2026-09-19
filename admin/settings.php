@@ -1185,7 +1185,7 @@ $activeNav = 'settings';
             <?php if (!$defaultMarginsAvailable): ?>
                 <div class="alert alert-error" role="alert">
                     The default-margins columns aren't on this database yet —
-                    run <a href="/migrate_default_margins.php"><code>/migrate_default_margins.php</code></a>
+                    run <code>/migrate_default_margins.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                     (super-admin) to enable this section.
                 </div>
             <?php else: ?>

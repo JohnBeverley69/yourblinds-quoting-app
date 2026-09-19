@@ -169,7 +169,7 @@ $activeNav = 'library-suppliers';
             <section class="section">
                 <div class="alert alert-error" role="alert">
                     The registry table isn't on this database yet — run
-                    <a href="/migrate_library_registry.php"><code>/migrate_library_registry.php</code></a>
+                    <code>/migrate_library_registry.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span>
                     (super-admin) first, then reload this page.
                 </div>
             </section>
