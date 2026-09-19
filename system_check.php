@@ -87,6 +87,15 @@ $factoryOf = static function (array $p) use ($hasSrc): int {
 
 $allReferencedTables = [];   // client => set of table names referenced by a formula
 
+// Columns the renderer injects itself (no product_extras row), as
+// lower(label) => set(lower value). See bv_synthetic_option_cols().
+$syntheticCols = [];
+foreach (bv_synthetic_option_cols() as $lbl => $vals) {
+    $syntheticCols[strtolower(trim($lbl))] = array_fill_keys(array_map(
+        static fn ($v) => strtolower(trim((string) $v)), $vals
+    ), true);
+}
+
 /**
  * " (closest groups here: Fascia Options, Fixings, …)" — the names that DO
  * exist, nearest first, so a rename can be spotted without a second query.
@@ -150,6 +159,9 @@ foreach ($bvByProd as $pid => $vars) {
             $lbl = strtolower(trim((string) ($col['label'] ?? '')));
             $ref = (string) ($col['ref'] ?? '');
             if ($lbl === 'system' || $ref === 'system') { $colValid[$i] = $sysSet; continue; }
+            // Synthetic columns are fed by the renderer, not by a stored option
+            // group, so "no group of that name" is the wrong conclusion for them.
+            if (isset($syntheticCols[$lbl])) { $colValid[$i] = $syntheticCols[$lbl]; continue; }
             if (isset($extras[$lbl])) { $colValid[$i] = $choicesByExtra[$extras[$lbl]['id']] ?? []; }
             else {
                 $colValid[$i] = null;
@@ -228,8 +240,12 @@ foreach ($bvByProd as $pid => $vars) {
 // ---- Global: inert allowance tables -------------------------------------------
 $hdr('INERT ALLOWANCE / CHART TABLES (referenced by no formula)');
 $anyInert = false;
+// Some tables are read straight from PHP instead of by a LOOKUP() in a formula.
+// They are live and editable; a formula-only scan just cannot see the consumer.
+$phpConsumed = array_fill_keys(bv_php_consumed_allowance_tables(), true);
 foreach ($alwByClient as $cid => $tables) {
     foreach ($tables as $t => $_) {
+        if (isset($phpConsumed[$t])) continue;
         if (empty($allReferencedTables[$cid][$t])) {
             $anyInert = true;
             $bad("factory {$cid}: table \"{$t}\" is in allowance_rows but no formula references it (inert — edits do nothing)");

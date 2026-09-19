@@ -55,6 +55,44 @@ if (!function_exists('bv_builtin_vars')) {
     }
 }
 
+if (!function_exists('bv_synthetic_option_cols')) {
+    /**
+     * Option columns a build rule may use that are NOT stored option groups.
+     * The renderer injects the selection itself, keyed on the lowercased label
+     * (build_evaluate falls back to that), so no product_extras row exists.
+     *
+     *   'Multiple Blinds in One Fascia' — factory/worksheet-print.php:272 sets
+     *   $optSel['multiple blinds in one fascia'] = 'Yes' when 2+ lines share a
+     *   fascia_group, firing the Multiple branch of Tube_Cut / Fabric_W.
+     *
+     * Declared here so a checker can tell "this column is fed at render time"
+     * apart from "this column is bound to a group that no longer exists".
+     *
+     * @return array<string, list<string>> label => the values the renderer sets
+     */
+    function bv_synthetic_option_cols(): array
+    {
+        return ['Multiple Blinds in One Fascia' => ['Yes']];
+    }
+}
+
+if (!function_exists('bv_php_consumed_allowance_tables')) {
+    /**
+     * Allowance tables read directly by PHP rather than by a LOOKUP() inside a
+     * build-rule formula. They are editable and they matter; they simply have no
+     * formula referencing them, so a formula-only scan mistakes them for dead.
+     *
+     *   'roller_fascia_join' — quote-builder/_helpers.php:182 reads the 'gap'
+     *   row to widen a shared fascia by one gap per join.
+     *
+     * @return list<string>
+     */
+    function bv_php_consumed_allowance_tables(): array
+    {
+        return ['roller_fascia_join'];
+    }
+}
+
 if (!function_exists('build_evaluate')) {
     /**
      * @param array<string,mixed>  $numVars       name => number/string inputs
