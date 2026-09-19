@@ -1044,7 +1044,7 @@ $activeNav = 'products';
             <h2 style="margin:0 0 0.625rem;font-size:1rem;color:#0c4a6e">
                 Setting this product up
             </h2>
-            <p style="margin:0 0 0.875rem;color:#0c4a6e;font-size:0.875rem;line-height:1.5">
+            <p class="ui-hint" style="margin:0 0 0.875rem;color:#0c4a6e;font-size:0.875rem;line-height:1.5">
                 A product needs at least one system, one fabric / option, and one price table before
                 salespeople can raise quotes against it — set up in that order (price tables are keyed
                 by system). Options are the extra choices a customer makes per blind.
@@ -1104,7 +1104,7 @@ $activeNav = 'products';
                                maxlength="40"
                                value="<?= e((string) $f['option_label']) ?>"
                                placeholder="Fabric">
-                        <small style="color:var(--text-faint);font-size:0.8125rem">
+                        <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                             What this product's "option" axis is called &mdash; used as the
                             label on the quote builder and the options/list pages.
                             Common values: <em>Fabric</em> (rollers, romans),
@@ -1123,7 +1123,7 @@ $activeNav = 'products';
                                 <div class="alert alert-success" role="status" style="margin:0 0 0.5rem">
                                     &#127981; Made by <strong><?= e($factoryLabel) ?></strong> &mdash; orders go straight to their manufacturing.
                                 </div>
-                                <small style="color:var(--text-faint);font-size:0.8125rem">
+                                <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                                     This is a <strong><?= e($factoryLabel) ?></strong> catalogue product, so it&rsquo;s <strong>made for you by them</strong>.
                                     When you place an order it routes <strong>straight into their manufacturing</strong> &mdash; there&rsquo;s
                                     <strong>no order supplier to set</strong> here. (Only your <em>own</em> products need a supplier.)
@@ -1139,7 +1139,7 @@ $activeNav = 'products';
                                                 data-confirm-click="Make &quot;<?= e((string) ($f['name'] ?? 'this product')) ?>&quot; your own product? It becomes yours — made in your factory — and stops taking <?= e($factoryLabel) ?> catalogue updates.">
                                             Make this our own product
                                         </button>
-                                        <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.4rem">
+                                        <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-top:0.4rem">
                                             You run your own factory, so you can take this over: it becomes <strong>your</strong> product,
                                             made by you and routed to <strong>your</strong> queue, and stops receiving
                                             <strong><?= e($factoryLabel) ?></strong> catalogue updates.
@@ -1156,7 +1156,7 @@ $activeNav = 'products';
                                         <option value="<?= e((string) $sn) ?>"></option>
                                     <?php endforeach; ?>
                                 </datalist>
-                                <small style="color:var(--text-faint);font-size:0.8125rem">
+                                <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                                     Who you <strong>order this product from</strong> &mdash; used on purchase orders.
                                     Pick an existing supplier or type a new one (new names appear under
                                     <strong>Settings &rsaquo; Suppliers</strong>, where you add their order email).
@@ -1180,7 +1180,7 @@ $activeNav = 'products';
                                    maxlength="60"
                                    value="<?= e((string) $f['band_label']) ?>"
                                    placeholder="Band">
-                            <small style="color:var(--text-faint);font-size:0.8125rem">
+                            <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                                 What the <strong>band</strong> step is called in the quote
                                 builder &mdash; the price-table tier picked after System.
                                 Leave blank for the default <em>Band</em>. For a wood
@@ -1203,7 +1203,7 @@ $activeNav = 'products';
                                        style="margin-top:0.1875rem">
                                 <span>
                                     <strong>No <?= e(strtolower((string) $f['option_label'])) ?> to choose (headrail only, track, spares).</strong>
-                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                    <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
                                         This is about <em>what the customer picks</em>. Tick it when there's
                                         nothing to choose — no <?= e(strtolower((string) $f['option_label'])) ?>,
                                         colour or material — so the quote builder and InstaPrice hide the
@@ -1231,7 +1231,7 @@ $activeNav = 'products';
                                        style="margin-top:0.1875rem">
                                 <span>
                                     <strong>Sized by width only — no drop (e.g. a headrail cut to length).</strong>
-                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                    <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
                                         This is about <em>how it's sized</em> — separate from the box above.
                                         Tick it when the price depends on width alone: the Drop field is
                                         hidden and each price table is a single width &rarr; price list (load
@@ -1260,7 +1260,7 @@ $activeNav = 'products';
                                        style="margin-top:0.1875rem">
                                 <span>
                                     <strong>Priced per slat (by drop) — e.g. vertical fabric only.</strong>
-                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                    <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
                                         Each price table is a <em>drop &rarr; price-per-slat</em> list.
                                         At quote time you pick a <?= e(strtolower((string) $f['option_label'])) ?> /
                                         band and enter the <strong>drop</strong> + <strong>number of
@@ -1287,7 +1287,7 @@ $activeNav = 'products';
                                        style="margin-top:0.1875rem">
                                 <span>
                                     <strong>Priced per square metre &mdash; e.g. shutters.</strong>
-                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                    <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
                                         The price is a single <strong>&pound;/m&sup2; rate</strong> per
                                         system/band, multiplied by the area (width &times; height). Set
                                         the rate on the price-tables page. Both width and height are
@@ -1306,7 +1306,7 @@ $activeNav = 'products';
                                    step="0.001" min="0"
                                    value="<?= e((string) $f['min_area_m2']) ?>"
                                    placeholder="e.g. 0.5 (blank = none)">
-                            <small style="display:block;color:var(--text-faint);font-size:0.8125rem;margin-top:0.1875rem;line-height:1.5">
+                            <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;margin-top:0.1875rem;line-height:1.5">
                                 The area is billed at no less than this. Blank or 0 = no minimum.
                                 Only applies to per-m&sup2; products.
                             </small>
@@ -1331,7 +1331,7 @@ $activeNav = 'products';
                                        style="margin-top:0.1875rem">
                                 <span>
                                     <strong>Show separate "Colour" column on fabric forms.</strong>
-                                    <small style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
+                                    <small class="ui-hint" style="display:block;color:var(--text-faint);font-size:0.8125rem;font-weight:400;margin-top:0.1875rem;line-height:1.5">
                                         Tick this when one <?= e($f['option_label']) ?>
                                         comes in multiple colour variants (e.g. a roller
                                         fabric like <em>Polaris</em> in Cream, Stone, Black).
@@ -1359,7 +1359,7 @@ $activeNav = 'products';
                     <legend style="padding:0 0.5rem;font-size:0.8125rem;font-weight:600;color:var(--text-body);text-transform:uppercase;letter-spacing:0.05em">
                         Pricing source
                     </legend>
-                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+                    <p class="ui-hint" style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                         What the numbers in this product's price tables actually are. This decides
                         whether a trade account receives them as they stand, or with your buying
                         discount and margin applied.
@@ -1370,7 +1370,7 @@ $activeNav = 'products';
                                <?= $f['price_source'] === PRICE_SOURCE_OWN ? 'checked' : '' ?>>
                         <span>
                             <strong>Our price list</strong> — we make it.
-                            <span style="color:var(--text-faint)">The grid is our selling price (its cost
+                            <span class="ui-hint" style="color:var(--text-faint)">The grid is our selling price (its cost
                             sits in the cost grid). Selling is cost plus a percentage, labour and overhead,
                             so it isn't a straight percentage of cost. Trade accounts get these prices
                             <strong>exactly as they are</strong>.</span>
@@ -1382,7 +1382,7 @@ $activeNav = 'products';
                                <?= $f['price_source'] === PRICE_SOURCE_SUPPLIER ? 'checked' : '' ?>>
                         <span>
                             <strong>Supplier price list</strong> — we buy it in.
-                            <span style="color:var(--text-faint)">The grid is the supplier's standard trade
+                            <span class="ui-hint" style="color:var(--text-faint)">The grid is the supplier's standard trade
                             list. Trade accounts get it <strong>less the discount plus the margin</strong>
                             set below.</span>
                         </span>
@@ -1441,7 +1441,7 @@ $activeNav = 'products';
                             return max($_tradeDiscAll, $s);
                         };
                     ?>
-                    <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+                    <p class="ui-hint" style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                         <?= e(ucfirst($basisWord)) ?> and discount can be tuned per system (premium / motorised /
                         standard are usually priced differently). Your <?= e($basisWord) ?> is applied on top
                         of the price-table base; discount comes off after that.
@@ -1561,7 +1561,7 @@ $activeNav = 'products';
                         <input type="checkbox" id="active" name="active" value="1"
                                <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>
                         Active
-                        <small>uncheck to hide from quote builder</small>
+                        <small class="ui-hint">uncheck to hide from quote builder</small>
                     </label>
                 </div>
 
@@ -2109,7 +2109,7 @@ $activeNav = 'products';
                 <?php endforeach; endif; ?>
 
                 <?php if ($systems): ?>
-                <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.625rem 0 0;line-height:1.45">
+                <p class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem;margin:0.625rem 0 0;line-height:1.45">
                     To add a new band for an existing system, open the system above and use its
                     <em>Add price table</em> form. To bulk-import all bands at once from a single
                     spreadsheet, use the <em>Bulk import</em> link next to each system.
@@ -2146,7 +2146,7 @@ $activeNav = 'products';
             </summary>
             <div class="cat-section-body">
                 <?= catalogue_audit_render_feed($auditRows) ?>
-                <p style="margin:0.625rem 0 0;color:var(--text-faint);font-size:0.75rem;line-height:1.45">
+                <p class="ui-hint" style="margin:0.625rem 0 0;color:var(--text-faint);font-size:0.75rem;line-height:1.45">
                     Shows the 25 most recent changes affecting this product.
                     Click any row to see the field-by-field diff. The log is
                     append-only — events can't be edited or deleted.

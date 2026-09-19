@@ -367,7 +367,7 @@ $activeNav = 'products';
                         <input type="text" name="name" class="form-control" maxlength="120"
                                placeholder="New group name (e.g. Woods)" style="max-width:18rem">
                         <button type="submit" class="btn btn-secondary">+ Add group</button>
-                        <span style="color:var(--text-faint);font-size:0.8125rem">
+                        <span class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
                             Then use the <strong>Group</strong> dropdown on each row to file it. Products keep everything they have.
                         </span>
                     </form>
@@ -447,7 +447,7 @@ $activeNav = 'products';
                         <span style="color:var(--text-faint)">·</span>
                         <button type="button" id="grp-collapse-all">Collapse all</button>
                     </div>
-                    <p style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
+                    <p class="ui-hint" style="color:var(--text-faint);font-size:.8125rem;margin:0 0 .75rem">
                         Click a group's <strong>&#9654;</strong> to show its products. Drag the <strong>⋮⋮</strong> handle onto a group to file a product (or use the <strong>Group</strong> dropdown).
                     </p>
                     <?php foreach ($categories as $c): $cidd = (int) $c['id']; $gRows = $grouped[$cidd] ?? []; ?>

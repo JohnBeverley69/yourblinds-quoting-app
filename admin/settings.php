@@ -846,7 +846,7 @@ $activeNav = 'settings';
                         <input id="vat_number" name="vat_number" type="text" maxlength="50"
                                value="<?= e((string) ($client['vat_number'] ?? '')) ?>"
                                placeholder="e.g. GB123456789">
-                        <small style="color:#6b7280;font-size:0.8125rem">
+                        <small class="ui-hint" style="color:#6b7280;font-size:0.8125rem">
                             Leave blank if your business isn't VAT-registered.
                             When set, it appears below your contact details on every quote PDF.
                         </small>
@@ -906,7 +906,7 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Company logo</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
+            <p class="ui-hint" style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
                 Used in the header of customer-facing quote PDFs and the public
                 accept page. JPG, PNG, or GIF, up to 2 MB.
             </p>
@@ -961,7 +961,7 @@ $activeNav = 'settings';
                                    <?= ((int) ($settings['feature_joke_of_day'] ?? 1)) === 1 ? 'checked' : '' ?>>
                             😄 Show a &ldquo;Joke of the day&rdquo; on the dashboard
                         </label>
-                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                        <p class="ui-hint" style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             A little light relief for your team on the dashboard (staff only — never
                             shown to customers). Dismissible per day. Untick to switch it off.
                         </p>
@@ -987,7 +987,7 @@ $activeNav = 'settings';
                                    <?= ((int) ($settings['calendar_show_money'] ?? 0)) === 1 ? 'checked' : '' ?>>
                             💷 Show order value + balance on the calendar
                         </label>
-                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                        <p class="ui-hint" style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             On the month, week and day calendars, each job linked to a quote shows its
                             order value, amount received (deposit + payments) and outstanding balance —
                             with a PAID badge once it's settled.
@@ -1025,7 +1025,7 @@ $activeNav = 'settings';
                                    <?= $mapProvider === 'waze' ? 'checked' : '' ?>>
                             Waze
                         </label>
-                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                        <p class="ui-hint" style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             When you tap an address on My Schedule or the day calendar, it opens in
                             the app you choose here. Google Maps is the default; pick Waze if your
                             fitters prefer it for live traffic and routing.
@@ -1058,7 +1058,7 @@ $activeNav = 'settings';
                                    <?= $ampmOn ? 'checked' : '' ?>>
                             🕘 Morning / afternoon booking slots
                         </label>
-                        <p style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
+                        <p class="ui-hint" style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
                             When booking a <strong>quote (measure) visit</strong>, offer a <strong>Morning</strong> or
                             <strong>Afternoon</strong> window instead of an exact time — so the customer is given a window,
                             never an exact hour. Set each window’s <strong>times</strong> and how many bookings it holds
@@ -1137,7 +1137,7 @@ $activeNav = 'settings';
                     (super-admin) to enable this section.
                 </div>
             <?php else: ?>
-                <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
+                <p class="ui-hint" style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
                     Set your usual margin once and the engine applies it
                     everywhere &mdash; no need to set markup on every product
                     or option choice. You can still override at the
@@ -1163,7 +1163,7 @@ $activeNav = 'settings';
                             <input type="radio" name="pricing_basis" value="margin"
                                    <?= $pricingBasis === 'margin' ? 'checked' : '' ?>> Margin&nbsp;%
                         </label>
-                        <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.4rem">
+                        <small class="ui-hint" style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.4rem">
                             <strong>Markup</strong> is added on top of your cost
                             (cost&nbsp;+&nbsp;50%&nbsp;=&nbsp;sell). <strong>Margin</strong> is the
                             profit slice of the sell price (50%&nbsp;margin&nbsp;=&nbsp;cost is half the
@@ -1186,7 +1186,7 @@ $activeNav = 'settings';
                                    value="<?= e(number_format($ptShown, 2, '.', '')) ?>">
                             <span id="hint_pt" class="basis-hint"
                                   style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
-                            <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                            <small class="ui-hint" style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
                                 Applied to every (product, system) that
                                 doesn't have an explicit value set on the
                                 product edit page.
@@ -1205,7 +1205,7 @@ $activeNav = 'settings';
                                    value="<?= e(number_format($optShown, 2, '.', '')) ?>">
                             <span id="hint_opt" class="basis-hint"
                                   style="font-size:0.72rem;color:#2563eb;display:block;margin-top:0.2rem"></span>
-                            <small style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
+                            <small class="ui-hint" style="color:#6b7280;font-size:0.75rem;line-height:1.45;display:block;margin-top:0.25rem">
                                 Uniform uplift on every option choice's
                                 price &mdash; fixed-£, per-metre, and
                                 width-table modes all included. Only
@@ -1278,7 +1278,7 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Measurements</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
+            <p class="ui-hint" style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
                 The unit your team enters and sees blind sizes in. Sizes are
                 always stored the same way under the hood, so you can change
                 this any time. On a quote you can still override the unit for
@@ -1337,7 +1337,7 @@ $activeNav = 'settings';
                                    text-transform:uppercase;letter-spacing:0.05em">
                         Default deposit
                     </legend>
-                    <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+                    <p class="ui-hint" style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
                         Seeds the deposit figure on every quote the moment it
                         moves into Accepted. Overrideable per quote. Pick
                         whichever mode matches how you actually take deposits.
@@ -1375,7 +1375,7 @@ $activeNav = 'settings';
                     </div>
                 </fieldset>
 
-                <p style="color:#6b7280;font-size:0.8125rem;margin:-0.25rem 0 0.75rem">
+                <p class="ui-hint" style="color:#6b7280;font-size:0.8125rem;margin:-0.25rem 0 0.75rem">
                     <?= e(pricing_basis_label($pricingBasis)) ?> and discount are set per product
                     (<a href="/admin/products/index.php" style="color:#1f3b5b">Products</a>
                     → Edit → Pricing overrides).
@@ -1401,7 +1401,7 @@ $activeNav = 'settings';
                                style="margin-top:0.2rem">
                         <span>
                             Show the price of each blind
-                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
+                            <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
                                 Ticked: the quote PDF and the customer's online quote list a
                                 unit price and line total for every blind. Unticked: those
                                 per-blind prices are hidden and the customer only sees the
@@ -1431,7 +1431,7 @@ $activeNav = 'settings';
                                style="margin-top:0.2rem">
                         <span>
                             Show the size of each blind
-                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
+                            <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem">
                                 Ticked: the quote PDF and the customer's online quote show each
                                 blind's size (width × drop) — right for trade orders. Unticked:
                                 sizes are hidden (retail style), leaving just the description.
@@ -1455,7 +1455,7 @@ $activeNav = 'settings';
                                style="margin-top:0.2rem">
                         <span>
                             Enable the Wally tax <span style="color:#6b7280;font-weight:400">(WT charge)</span>
-                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                            <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
                                 A discretionary charge you can quietly add to a quote for a job that's more hassle
                                 than it's worth (an awkward customer, a fiddly fit). Adds a <strong>WT</strong> box
                                 on the quote builder. It's <strong>internal only</strong> — the customer never sees
@@ -1484,7 +1484,7 @@ $activeNav = 'settings';
                             <option value="trade"  <?= $defaultSaleType === 'trade'  ? 'selected' : '' ?>>Trade</option>
                             <option value="retail" <?= $defaultSaleType === 'retail' ? 'selected' : '' ?>>Retail</option>
                         </select>
-                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                        <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
                             Most Beverley orders are trade, so the <em>New</em> screen opens on Trade by default —
                             pick an account or enter a one-off. You can flip to Retail on the screen itself for a
                             direct retail sale.
@@ -1506,7 +1506,7 @@ $activeNav = 'settings';
                                value="<?= e((string) ($settings['order_notify_email'] ?? '')) ?>"
                                placeholder="orders@yourbusiness.co.uk"
                                style="display:block;margin-top:0.4rem;width:100%;max-width:22rem;padding:0.4rem 0.6rem;border:1px solid #d1d5db;border-radius:6px">
-                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                        <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
                             When a customer clicks <em>Accept</em> on a quote link you sent them, we'll email this
                             address to let you know a new order has come in. Leave blank to turn it off.
                         </span>
@@ -1527,7 +1527,7 @@ $activeNav = 'settings';
                                value="<?= e((string) ($settings['factory_notify_email'] ?? '')) ?>"
                                placeholder="factory@yourbusiness.co.uk"
                                style="display:block;margin-top:0.4rem;width:100%;max-width:22rem;padding:0.4rem 0.6rem;border:1px solid #d1d5db;border-radius:6px">
-                        <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
+                        <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.4rem;line-height:1.5">
                             When one of your trade accounts places an order that you manufacture, we'll email this
                             address so the workshop knows a job has come in. Leave blank to use the address above.
                         </span>
@@ -1573,7 +1573,7 @@ $activeNav = 'settings';
                                style="margin-top:0.2rem">
                         <span>
                             Send in-house orders straight to the workshop when accepted
-                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                            <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
                                 When a quote is accepted and <strong>every</strong> blind on it is one you make
                                 yourself (no bought-in supplier items), it skips the separate “Place order” step and
                                 goes <strong>straight to the factory queue</strong>. Quotes that contain any
@@ -1600,7 +1600,7 @@ $activeNav = 'settings';
                                style="margin-top:0.2rem">
                         <span>
                             Email a receipt when an order is paid in full
-                            <span style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
+                            <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.2rem;line-height:1.5">
                                 When a payment settles an order's balance to zero, the customer is
                                 automatically emailed a <strong>thank-you receipt</strong> (the order,
                                 headed “Receipt”, showing paid in full). Sent <strong>once</strong> per
@@ -1641,7 +1641,7 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Bank details for customer payments</h2>
             </div>
-            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
+            <p class="ui-hint" style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
                 Printed on the customer's quote / invoice so they can pay by bank transfer.
                 Leave blank to hide the "How to pay" block entirely.
             </p>
@@ -1702,7 +1702,7 @@ $activeNav = 'settings';
                     show nothing.</strong> This is a starting point, not legal advice &mdash;
                     have it reviewed before relying on it.
                 </p>
-                <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 1rem">
+                <p class="ui-hint" style="color:#6b7280;font-size:0.8125rem;margin:0 0 1rem">
                     These placeholders fill in automatically on each quote:
                     <?php foreach (legal_token_list() as $tok => $desc): ?>
                         <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px;font-size:0.8125rem"><?= e($tok) ?></code>
@@ -1748,7 +1748,7 @@ $activeNav = 'settings';
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="accept_email_body">Thank-you email (sent when a customer accepts a quote)</label>
-                        <p style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.5rem">
+                        <p class="ui-hint" style="color:#6b7280;font-size:0.8125rem;margin:0 0 0.5rem">
                             Placeholders: <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{customer_name}}</code>
                             <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{company_name}}</code>
                             <code style="background:var(--bg-subtle-2);padding:0.05rem 0.3rem;border-radius:4px">{{quote_number}}</code>
@@ -1831,7 +1831,7 @@ $activeNav = 'settings';
             <div class="section-header">
                 <h2 class="section-title">Suppliers</h2>
             </div>
-            <p style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
+            <p class="ui-hint" style="color:var(--text-faint);font-size:0.875rem;margin:0 0 0.75rem">
                 Who you <strong>order stock from</strong> — these fill a product's
                 <em>Order supplier</em> field and go on purchase orders. Tick a row's delete box
                 to remove a stray (they get added automatically when you save a product).
@@ -1848,7 +1848,7 @@ $activeNav = 'settings';
                     </div>
                 </div>
 
-                <p style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0.5rem">
+                <p class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem;margin:1.25rem 0 0.5rem">
                     Add the order email for each supplier. You can rename a supplier, tick
                     <strong>Remove</strong> to delete it, or add one in the bottom row — then Save.
                     Suppliers you set on products appear here automatically.
@@ -1928,7 +1928,7 @@ $activeNav = 'settings';
                 <h2 class="section-title">Back up your data</h2>
             </div>
             <?php $lastBackup = $client['last_backup_at'] ?? null; ?>
-            <p style="color:var(--text-secondary);margin:0 0 1rem;max-width:42rem">
+            <p class="ui-hint" style="color:var(--text-secondary);margin:0 0 1rem;max-width:42rem">
                 Download a copy of <strong>your quotes and orders</strong> (with their line
                 items, totals and payments) to keep on your own computer. Useful as a regular
                 off-site backup or to work with your figures in a spreadsheet.
@@ -1973,7 +1973,7 @@ $activeNav = 'settings';
                 <?php endif; ?>
             </div>
 
-            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.875rem 0 0;max-width:42rem">
+            <p class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem;margin:0.875rem 0 0;max-width:42rem">
                 The <strong>Excel</strong> file has two sheets — a Quotes &amp; Orders summary and a
                 full Line items list — and is the one to keep as your backup (you can open, sort and
                 filter it). The <strong>PDF</strong> is a printable one-look summary. Dates filter by
