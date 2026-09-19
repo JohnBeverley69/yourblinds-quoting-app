@@ -285,6 +285,15 @@ $_ybEmailPaused = function_exists('app_setting_on') && app_setting_on('email_pau
         }
         document.documentElement.setAttribute('data-theme', pref);
     } catch (e) { /* swallow — defaults to light */ }
+    // Density = comfortable (default) / compact. Cookie-backed, per device
+    // (a big desktop and a phone can differ). Compact hides the guidance hints
+    // and tightens spacing — see .app-main[data-density] rules in app.css.
+    try {
+        var dm = document.cookie.match(/(?:^|; )yb_density=([^;]+)/);
+        if (dm && decodeURIComponent(dm[1]) === 'compact') {
+            document.documentElement.setAttribute('data-density', 'compact');
+        }
+    } catch (e) { /* swallow — defaults to comfortable */ }
 })();
 </script>
 <script>
@@ -421,6 +430,11 @@ window.addEventListener('pageshow', function (e) {
                     <span class="theme-icon" id="ybThemeIcon">🌙</span>
                     <span id="ybThemeLabel">Dark mode</span>
                 </button>
+                <button type="button" class="theme-toggle" id="ybDensityToggle"
+                        aria-label="Toggle compact mode">
+                    <span class="theme-icon" id="ybDensityIcon">↕</span>
+                    <span id="ybDensityLabel">Compact mode</span>
+                </button>
             </div>
         </div>
     </aside>
@@ -449,6 +463,34 @@ window.addEventListener('pageshow', function (e) {
         var d = new Date();
         d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
         document.cookie = 'yb_theme=' + next
+                        + '; expires=' + d.toUTCString()
+                        + '; path=/; SameSite=Lax';
+        paintLabel();
+    });
+})();
+(function () {
+    // Density toggle (comfortable / compact). Same cookie mechanism as the
+    // theme; the pre-paint script at the top applies it before first paint.
+    var btn   = document.getElementById('ybDensityToggle');
+    var icon  = document.getElementById('ybDensityIcon');
+    var label = document.getElementById('ybDensityLabel');
+    if (!btn || !icon || !label) return;
+
+    function paintLabel() {
+        var compact = document.documentElement.getAttribute('data-density') === 'compact';
+        icon.textContent  = compact ? '↔' : '↕';
+        label.textContent = compact ? 'Comfortable mode' : 'Compact mode';
+    }
+    paintLabel();
+
+    btn.addEventListener('click', function () {
+        var compact = document.documentElement.getAttribute('data-density') === 'compact';
+        var next = compact ? 'comfortable' : 'compact';
+        if (next === 'compact') document.documentElement.setAttribute('data-density', 'compact');
+        else                    document.documentElement.removeAttribute('data-density');
+        var d = new Date();
+        d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
+        document.cookie = 'yb_density=' + next
                         + '; expires=' + d.toUTCString()
                         + '; path=/; SameSite=Lax';
         paintLabel();

@@ -426,6 +426,34 @@ a { color: var(--link); }
     box-shadow: var(--shadow-sm);
     margin-bottom: 1.5rem;
 }
+
+/* ===========================================================================
+   COMPACT MODE — opt-in density (footer toggle → yb_density cookie →
+   <html data-density="compact">). For users who know the system and want less
+   scrolling: hides the guidance hints and tightens the biggest spacing. The
+   default (no attribute) is completely unchanged, so new clients keep the full
+   guidance. Attribute+class selectors outrank the base rules regardless of order.
+   =========================================================================== */
+[data-density="compact"] .app-main      { padding: 1rem 1.5rem; }
+[data-density="compact"] .page-header   { margin-bottom: 0.75rem; }
+[data-density="compact"] .page-title    { font-size: 1.25rem; }
+[data-density="compact"] .section       { padding: 1rem; margin-bottom: 0.875rem; }
+[data-density="compact"] .section + .section { margin-top: 0; }
+/* Tighter form controls — the order-entry pages are the worst for scrolling. */
+[data-density="compact"] input:not([type=checkbox]):not([type=radio]):not([type=range]),
+[data-density="compact"] select,
+[data-density="compact"] textarea       { padding: 0.375rem 0.5rem; }
+[data-density="compact"] .form-row,
+[data-density="compact"] .form-group    { margin-bottom: 0.625rem; }
+/* Guidance hints — hidden in compact. .ui-hint is the shared class we tag
+   inline guidance with (Phase 2); the rest are existing hint styles. The page
+   subtitle (the descriptive line under each title) is hidden too. Deliberately
+   NOT .note / .banner / .alert — those can carry real content or warnings. */
+[data-density="compact"] .page-subtitle,
+[data-density="compact"] .ui-hint,
+[data-density="compact"] .hint,
+[data-density="compact"] .tip,
+[data-density="compact"] .help-hint     { display: none !important; }
 .section-header {
     display: flex;
     align-items: center;
