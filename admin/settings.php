@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/legal_text.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
+require __DIR__ . '/../_partials/accounting.php';
 
 requireAdmin();
 
@@ -15,6 +16,14 @@ $clientId = $user['client_id'];
 // Markup vs margin. Affects only how the default-margins fields below are
 // labelled / entered — the engine still works in markup (see pricing_basis.php).
 $pricingBasis = pricing_basis_for(db(), (int) $clientId);
+
+// Accounting integration state (QuickBooks first; Xero/Sage later behind the
+// same AccountingProvider interface). Degrades safely if the migration hasn't
+// run — ac_get_connection() returns null when the table is absent.
+$qboProvider = ac_provider('quickbooks');
+$qboConn     = ac_get_connection((int) $clientId, 'quickbooks');
+$qboReady    = $qboProvider && $qboProvider->isConfigured();
+$qboLinked   = ac_is_connected($qboConn);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
@@ -800,6 +809,7 @@ $activeNav = 'settings';
             <button type="button" class="settings-tab" id="tab-legal" data-tab="legal" role="tab" aria-selected="false">Legal</button>
             <button type="button" class="settings-tab" id="tab-colours" data-tab="colours" role="tab" aria-selected="false">Status colours</button>
             <button type="button" class="settings-tab" id="tab-suppliers" data-tab="suppliers" role="tab" aria-selected="false">Suppliers</button>
+            <button type="button" class="settings-tab" id="tab-accounting" data-tab="accounting" role="tab" aria-selected="false">Accounting</button>
             <button type="button" class="settings-tab" id="tab-backup" data-tab="backup" role="tab" aria-selected="false">Back up data</button>
         </div>
 
@@ -1921,6 +1931,74 @@ $activeNav = 'settings';
         </section>
 
         </div><!-- /tab: suppliers -->
+
+        <div class="settings-panel" data-panel="accounting" role="tabpanel" aria-labelledby="tab-accounting">
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Accounting integration</h2>
+            </div>
+            <p class="ui-hint" style="color:var(--text-secondary);margin:0 0 1.25rem;max-width:44rem">
+                Link your accounting package so paid sales flow straight through — no re-keying.
+                You connect on the provider's own site, so YourBlinds never sees your accounting
+                password. <strong>Nothing is sent until an invoice is paid</strong> (cash accounting):
+                a paid sale is recorded in your accounts as already received.
+            </p>
+
+            <?php
+            $envBadge = ($qboProvider ? $qboProvider->environment() : 'sandbox');
+            $envLabel = $envBadge === 'production' ? 'Live' : 'Sandbox (test)';
+            ?>
+
+            <div class="section" style="border:1px solid var(--border-strong);border-radius:10px;padding:1rem 1.125rem;max-width:44rem">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                    <div>
+                        <strong style="font-size:1.0625rem">QuickBooks Online</strong>
+                        <span style="margin-left:.5rem;font-size:.75rem;padding:.1rem .45rem;border-radius:6px;background:var(--bg-subtle-2);color:var(--text-secondary)"><?= e($envLabel) ?></span>
+                    </div>
+                    <?php if ($qboLinked): ?>
+                        <span style="font-size:.8125rem;font-weight:600;color:#065f46">● Connected</span>
+                    <?php elseif ($qboReady): ?>
+                        <span style="font-size:.8125rem;color:var(--text-faint)">Not connected</span>
+                    <?php else: ?>
+                        <span style="font-size:.8125rem;color:var(--text-faint)">Not set up</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($qboLinked): ?>
+                    <p style="margin:.75rem 0 0;color:var(--text-secondary);font-size:.9375rem">
+                        Linked to <strong><?= e((string) ($qboConn['company_name'] ?? 'your QuickBooks company')) ?></strong>
+                        <?php if (!empty($qboConn['connected_at'])): ?>
+                            <span style="color:var(--text-faint)"> · since <?= e(date('j M Y', strtotime((string) $qboConn['connected_at']))) ?></span>
+                        <?php endif; ?>
+                    </p>
+                    <p class="ui-hint" style="margin:.5rem 0 1rem;color:var(--text-faint);font-size:.8125rem">
+                        Next: map your VAT code, sales item and income account, then paid invoices push automatically.
+                    </p>
+                    <form method="post" action="/admin/accounting/disconnect.php"
+                          onsubmit="return confirm('Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="provider" value="quickbooks">
+                        <button type="submit" class="btn btn-secondary">Disconnect</button>
+                    </form>
+                <?php elseif ($qboReady): ?>
+                    <p style="margin:.75rem 0 1rem;color:var(--text-secondary);font-size:.9375rem">
+                        Connect your QuickBooks company to get started. You'll sign in at QuickBooks and approve access.
+                    </p>
+                    <a class="btn btn-primary" href="/admin/accounting/connect.php?provider=quickbooks">Connect to QuickBooks</a>
+                <?php else: ?>
+                    <p class="ui-hint" style="margin:.75rem 0 0;color:var(--text-secondary);font-size:.9375rem">
+                        QuickBooks isn't switched on yet — the app keys still need adding to the server
+                        configuration. Once that's done, a <strong>Connect to QuickBooks</strong> button appears here.
+                    </p>
+                <?php endif; ?>
+            </div>
+
+            <div class="section" style="border:1px dashed var(--border);border-radius:10px;padding:.875rem 1.125rem;max-width:44rem;margin-top:1rem">
+                <strong style="color:var(--text-secondary)">Xero &amp; Sage</strong>
+                <span style="margin-left:.5rem;font-size:.8125rem;color:var(--text-faint)">Coming soon — same one-click connect.</span>
+            </div>
+        </section>
+        </div><!-- /tab: accounting -->
 
         <div class="settings-panel" data-panel="backup" role="tabpanel" aria-labelledby="tab-backup">
         <section class="section">
