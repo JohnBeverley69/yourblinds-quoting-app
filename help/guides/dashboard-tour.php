@@ -114,9 +114,10 @@ return [
           .gd .upfit{ color:var(--soft); font-size:.62rem; }
           .gd .upfit i{ color:var(--faint); }
           .gd .upq{ display:flex; align-items:center; gap:.25rem; }
-          .gd .spill{ font-size:.52rem; border-radius:999px; padding:.04rem .3rem; font-weight:700;
-                      background:var(--good-wash); color:var(--good); border:1px solid color-mix(in srgb,var(--good) 35%,transparent); }
-          .gd .spill.ord{ background:var(--accent-wash); color:var(--accent-ink); border-color:var(--accent); }
+          /* the real dashboard has no coloured lozenge here: .up-quote .status-pill only sets
+             size/padding and app.css carries no base .status-pill rule, so the status word
+             renders as plain small text beside the quote number. Drawn that way on purpose. */
+          .gd .spill{ font-size:.52rem; padding:.04rem .2rem; color:var(--ink); }
           .gd .upqn{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--faint); font-size:.56rem; }
 
           /* ---------- KPI tiles: four bordered cards, big value, grey sub-line ---------- */
@@ -277,7 +278,7 @@ return [
                     <div><div class="update">Fri 2 Oct</div><div class="uptime">11:30am</div></div>
                     <div><div class="upname">Miller</div><div class="upplace">BS40 5RL</div></div>
                     <div class="upfit">Dave Perry</div>
-                    <div class="upq"><span class="spill ord">ordered</span><span class="upqn">PRE-2026-0038</span></div>
+                    <div class="upq"><span class="spill">ordered</span><span class="upqn">PRE-2026-0038</span></div>
                   </div>
                   <div class="pfoot">Open calendar &rarr;</div>
                 </div>
@@ -462,7 +463,8 @@ return [
                 appear. Each row is a link straight to that appointment and carries four things: the day
                 (<b>Today</b> is in red, then <b>Tomorrow</b>, then a date like <em>Fri 2 Oct</em>) over the
                 time; the customer&rsquo;s name over the <b>postcode you are driving to</b>; the fitter; and, if
-                the appointment is tied to a quote, that quote&rsquo;s status pill and its number.
+                the appointment is tied to a quote, that quote&rsquo;s status word (plain small text &mdash;
+                there is no coloured badge on this panel) and its number.
                 <b>Open calendar &rarr;</b> at the foot takes you to the full diary. With nothing in the book the
                 sub-line reads <em>&ldquo;Nothing booked yet &mdash; head to the calendar to add one.&rdquo;</em>
                 and the panel says <em>&ldquo;No upcoming jobs booked.&rdquo;</em>
@@ -498,8 +500,10 @@ return [
                 product has since been renamed or deleted, the row falls back to the name that was on the quote
                 at the time, or <b>(unknown)</b>. Empty window:
                 <em>&ldquo;No products sold in this period.&rdquo;</em></li>
-            <li><b>Gross profit</b> &mdash; only for people allowed to see costs, and it <b>disappears entirely</b>
-                (rather than showing zeros) when there is nothing to work from. Its sub-line says exactly what it
+            <li><b>Gross profit</b> &mdash; the only panel that needs <b>two</b> permissions: the <b>Gross
+                profit</b> tick on the user&rsquo;s own page <em>and</em> <b>View costs</b>. Miss either one and
+                the panel is not there at all. An empty window does <b>not</b> hide it &mdash; it still draws,
+                showing <b>&pound;0.00</b>, a dash, a dash and <b>&pound;0.00</b>. Its sub-line says exactly what it
                 does: <em>&ldquo;Sell price minus the price-table cost basis (material + extras). Equivalent to
                 your markup &amp; discount turned into pounds.&rdquo;</em> &mdash; and it says <em>margin</em>
                 instead of <em>markup</em> if that is how your pricing is set up. Four cells: <b>Total profit</b>,
@@ -520,8 +524,10 @@ return [
                   counting two different things, so do not subtract one from the other.</li>
               <li><b>A job you won is missing.</b> The window is measured on the day the <b>quote was started</b>.
                   Widen the period or click <b>All time</b>.</li>
-              <li><b>The Gross profit panel has vanished.</b> Either there is no data in that window, or you have
-                  not been given the <b>View costs</b> permission.</li>
+              <li><b>The Gross profit panel has vanished.</b> That is always permission, never the data &mdash;
+                  an empty window leaves the panel showing zeros. You need <b>both</b> the <b>Gross profit</b>
+                  tick in the user&rsquo;s <b>Dashboard</b> box <b>and</b> the <b>View costs</b> permission above
+                  it; one without the other hides it.</li>
               <li><b>The Revenue share ring has vanished.</b> You are filtered to one person in the
                   <b>View:</b> box. Set it back to <b>All sales team</b>.</li>
               <li><b>There is no Dashboard link in the menu at all.</b> That user has none of the five Dashboard
@@ -557,6 +563,6 @@ return [
             ['2:46', 'Sales team table and the Revenue share ring.',
              'Who is selling it. Every person who raised a quote in the window, richest first, with a gold, silver and bronze medal on the top three. Pipeline is everything they got as far as sending out. Decided is the ones the customer has answered. Won is the ones that turned into work. Close rate is won out of decided — so a big pipeline with a small decided is not a poor salesperson, it just means a lot of quotes still in the air. Revenue is their share of the money, and the ring beside the table is that same revenue drawn as a share of the firm\'s. An empty window reads "No quotes raised in this period."', 7],
             ['3:12', 'What\'s selling, Gross profit and Recent wins.',
-             'And the last three. "What\'s selling" ranks your top eight products by money taken, with a bar showing each one\'s share and the unit count beside it — that is the panel that tells you which range to reorder. "Gross profit" only appears for people allowed to see costs, and it vanishes altogether when there is nothing to show, which is normal rather than broken. It takes each blind\'s sell price and subtracts what the price table says that blind and its extras cost you: total profit, margin percent, per job, and cost of goods. It is net — no VAT, and no Wally tax — which is why it will never match the Revenue tile. If you work in margin rather than markup, the wording follows your setting. Last, "recent wins" is the last ten jobs accepted in the window; click a quote number to open the job. And to finish, who sees what: an admin sees all five panels. For everybody else, your admin ticks them one at a time on the user\'s own page — revenue and KPIs, sales team leaderboard, product mix, gross profit, and recent wins — and gross profit also needs the "view costs" permission. Tick none at all, and that person has no dashboard; they land on the calendar instead.', 8],
+             'And the last three. "What\'s selling" ranks your top eight products by money taken, with a bar showing each one\'s share and the unit count beside it — that is the panel that tells you which range to reorder. "Gross profit" only appears for people who have both the gross profit tick and the view costs permission — if it is missing for somebody, that is always the reason, because an empty window still draws the panel with zeros in it. It takes each blind\'s sell price and subtracts what the price table says that blind and its extras cost you: total profit, margin percent, per job, and cost of goods. It is net — no VAT, and no Wally tax — which is why it will never match the Revenue tile. If you work in margin rather than markup, the wording follows your setting. Last, "recent wins" is the last ten jobs accepted in the window; click a quote number to open the job. And to finish, who sees what: an admin sees all five panels. For everybody else, your admin ticks them one at a time on the user\'s own page — revenue and KPIs, sales team leaderboard, product mix, gross profit, and recent wins — and gross profit also needs the "view costs" permission. Tick none at all, and that person has no dashboard; they land on the calendar instead.', 8],
         ],
 ];

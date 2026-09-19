@@ -154,7 +154,7 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Setup wizard</a><a>Settings</a>
+                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Set up a product <span style="font-weight:400;color:var(--faint);font-size:.74rem">&middot; Guided 4-step setup. <span style="text-decoration:underline">Skip wizard &rarr;</span></span></div>

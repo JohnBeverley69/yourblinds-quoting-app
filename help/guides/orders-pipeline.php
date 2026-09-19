@@ -147,7 +147,6 @@ return [
           .gd .lsub{ font-size:.56rem; color:var(--faint); margin:.05rem 0 .3rem; }
           .gd .lnew{ display:inline-block; background:var(--accent); color:#fff; border-radius:6px; padding:.1rem .45rem;
                      font-size:.58rem; font-weight:700; }
-          .gd .refreshed{ font-size:.6rem; color:var(--good); font-weight:600; margin-top:.3rem; }
           .gd .plnote{ font-size:.68rem; color:var(--faint); margin:.4rem 0 0; }
           .gd .plnote b{ color:var(--ink); }',
         'demo'    => '
@@ -178,7 +177,7 @@ return [
                     <span class="pill">All time</span>
                     <span class="pill">Mine only</span>
                     <span class="plapply">Apply</span>
-                    <span class="plsum"><b>12</b> jobs &middot; <b>&pound;18,450</b> in pipeline</span>
+                    <span class="plsum"><b>12</b> jobs &middot; <b>&pound;17,250</b> in pipeline</span>
                   </div>
                   <div class="plboard plghost">
                     <div class="plcol"><span class="plhead h-quote">Quote</span></div>
@@ -299,7 +298,7 @@ return [
                     <span class="pill sel">All time &times;</span>
                     <span class="pill">Mine only</span>
                     <span class="plapply">Apply</span>
-                    <span class="plsum"><b>12</b> jobs &middot; <b>&pound;18,450</b> in pipeline</span>
+                    <span class="plsum"><b>72</b> jobs &middot; <b>&pound;86,525</b> in pipeline</span>
                   </div>
                   <div class="plboard">
                     <div class="plcol"><span class="plhead h-quote">Quote</span><div class="plmeta"><span class="plcount">4</span><span class="plvalue">&pound;5,120</span></div></div>
@@ -372,7 +371,9 @@ return [
                         <div class="plcol"><span class="plhead h-inv">Inv</span><div class="plmeta"><span class="plcount">1</span></div></div>
                         <div class="plcol"><span class="plhead h-paid">Paid</span><div class="plmeta"><span class="plcount">0</span></div></div>
                       </div>
-                      <div class="refreshed">&#10227; refreshed just now &mdash; checks itself every 20 seconds</div>
+                      <p class="plnote">This board <b>keeps itself up to date</b>: every twenty seconds it quietly asks whether
+                         anything has moved, and reloads only if something has. There is <b>no refresh badge or spinner</b> on the
+                         real screen &mdash; nothing tells you it happened, the cards simply change.</p>
                     </div>
                     <div class="cmpcol">
                       <div class="flagcap">List &mdash; the work (Orders)</div>
@@ -432,7 +433,8 @@ return [
                 board <b>scrolls sideways</b>, and each column scrolls on its own.</li>
             <li><b>Under each column name: the count, then the money.</b> Bold number = how many jobs are sitting in that stage. The grey
                 figure next to it = the total value of them, to the nearest pound. Top right of the filter bar does the same for the whole
-                board: <code>12 jobs &middot; &pound;18,450 in pipeline</code>. If your user record doesn&rsquo;t have
+                board: <code>12 jobs &middot; &pound;17,250 in pipeline</code> &mdash; and it really is just the columns added up, count
+                and money both, so the two always tally. If your user record doesn&rsquo;t have
                 <b>&ldquo;View costs&rdquo;</b>, <b>every &pound; on this page disappears</b> &mdash; the &pound; half of the summary (the
                 job count stays), the column totals, the card totals, the outstanding line, <em>and</em> the amber <b>Part paid</b> chip,
                 because that one only exists to tell you how much of the money is in. The plain green <b>Paid</b> chip is the one thing that

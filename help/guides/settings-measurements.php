@@ -191,8 +191,8 @@ return [
               <table class="minitab">
                 <tr><th>Width (&quot;)</th><th>Price (&pound;)</th>
                     <th class="mo">Cost (&pound;) <span class="mobadge">master only</span></th><th class="mo">Margin</th><th></th></tr>
-                <tr><td>31.5</td><td>42.00</td><td class="mo">33.90</td><td class="mo">+24%</td><td class="rmx">&times;</td></tr>
-                <tr><td>39.37</td><td>48.50</td><td class="mo">39.10</td><td class="mo">+24%</td><td class="rmx">&times;</td></tr>
+                <tr><td>31.5</td><td>42.00</td><td class="mo">33.90</td><td class="mo">&pound;8.10 &middot; 19%</td><td class="rmx">&times;</td></tr>
+                <tr><td>39.37</td><td>48.50</td><td class="mo">39.10</td><td class="mo">&pound;9.40 &middot; 19%</td><td class="rmx">&times;</td></tr>
                 <tr><td><span class="ph">e.g. 31.5</span></td><td><span class="ph">&nbsp;</span></td>
                     <td class="mo"><span class="ph">paste here</span></td><td class="mo">&nbsp;</td><td class="rmx">&times;</td></tr>
               </table>

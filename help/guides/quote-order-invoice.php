@@ -491,7 +491,10 @@ return [
              <b>&#129534; Resend invoice</b> with a blunter question: <em>&ldquo;This invoice has already been sent. Send it to the customer
              AGAIN?&rdquo;</em></p>
           <div class="oops"><b>When it stops you.</b> <em>&ldquo;No valid customer email on this order &mdash; add one on the customer, then try
-             again.&rdquo;</em> &mdash; fill the email in on the Customer details section of the order. <em>&ldquo;You can invoice once the job is
+             again.&rdquo;</em> &mdash; and you cannot simply type it in where you would expect to: open <b>Customer details</b> on an order and the
+             <b>Email</b> box is there but greyed out, because an order is read-only. The way through is <b>Reopen as draft</b> at the top, fill the
+             email in, <b>Save details</b>, then <b>Mark as accepted</b> and <b>Mark as ordered</b> to put it back &mdash; and read the
+             warning below about the unpaid deposit before you do. <em>&ldquo;You can invoice once the job is
              ordered &mdash; move it to Ordered first.&rdquo;</em> &mdash; the job is only accepted, so place it. And a second send without using
              the Resend button is refused outright: <em>&ldquo;Invoice PRE-2026-0042 has already been sent. Use &lsquo;Resend invoice&rsquo; if you
              really need to send it again.&rdquo;</em> You may also meet <em>&ldquo;You don&rsquo;t have permission to invoice orders.&rdquo;</em>,

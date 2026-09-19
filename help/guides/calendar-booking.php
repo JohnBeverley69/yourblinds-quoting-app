@@ -242,7 +242,7 @@ return [
                     <span class="mc tod"><span class="dn">12/08</span><span class="appt" style="background:#2563eb"><span class="aw">Morning</span>ABC-2026-0031 &mdash; Angela Reed <span class="gl">&#9888;&#65039;</span><span class="gl">&#128221;</span></span></span>
                     <span class="mc"><span class="dn">13/08</span></span>
                     <span class="mc"><span class="dn">14/08</span></span>
-                    <span class="mc"><span class="dn">15/08</span><span class="appt fit" style="background:#6366f1"><span class="aw">9:00am</span>ABC-2026-0042 &mdash; Install: Emma Fletcher <span class="gl">&rarr;</span></span></span>
+                    <span class="mc"><span class="dn">15/08</span><span class="appt fit" style="background:#6366f1"><span class="aw">9:00am</span>Install: ABC-2026-0042 &mdash; Emma Fletcher <span class="gl">&rarr;</span></span></span>
                     <span class="mc"><span class="dn">16/08</span></span>
                     <span class="mc"><span class="dn">17/08</span></span>
                     <span class="mc"><span class="dn">18/08</span></span>
@@ -436,7 +436,7 @@ return [
                     Status updated to completed. Linked quote ABC-2026-0042 advanced to &ldquo;fitted&rdquo;.</div>
                   <div class="card-t" style="margin-bottom:.45rem">When &amp; status <span class="spill">Completed</span></div>
                   <dl class="dlr">
-                    <dt>Date</dt><dd>Friday 21 August 2026</dd>
+                    <dt>Date</dt><dd>Friday, 21 August 2026</dd>
                     <dt>Time</dt><dd>9:00am &ndash; 10:00am <span style="color:var(--faint)">(60 mins)</span></dd>
                     <dt>Assigned to</dt><dd><span class="selrow"><span class="selectbox" style="min-width:8rem">Dave Cole (fitter)</span><span class="cbtn sec" style="padding:.24rem .55rem">Save</span></span></dd>
                   </dl>
@@ -481,7 +481,9 @@ return [
           <ul class="steps">
             <li><b>Read the board.</b> Each job is a card showing either a time (<em>9:00am</em>) or, if it was booked into a
                 half-day window, the word <b>Morning</b> or <b>Afternoon</b> &mdash; then the job reference and the title, like
-                <b>&ldquo;ABC-2026-0042 &mdash; Install: Emma Fletcher&rdquo;</b>. The colour is the stage the job has reached,
+                <b>&ldquo;ABC-2026-0031 &mdash; Angela Reed&rdquo;</b>. The reference is only put in front when the title doesn&rsquo;t
+                already contain it &mdash; a fitting the system created for you is already titled
+                <b>&ldquo;Install: ABC-2026-0042 &mdash; Emma Fletcher&rdquo;</b>, so it isn&rsquo;t repeated. The colour is the stage the job has reached,
                 straight from your own <em>Settings &rarr; Status colours</em>: <b>Quote drafted, Quote sent, Accepted,
                 Declined, Ordered, Appointment booked, Fitting booked, Fitted, Invoiced, Paid, Cancelled, No-show</b> &mdash;
                 the legend across the toolbar lists them all. <b>Fittings carry a dark outline</b>; measures do not. Click a card

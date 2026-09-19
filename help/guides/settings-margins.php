@@ -177,7 +177,7 @@ return [
                         <span class="hmk">&asymp; 50.00% margin</span>
                         <span class="hmg">&asymp; 100.00% markup (what the engine uses)</span>
                         <span class="h95">&asymp; 1900.00% markup (what the engine uses)</span>
-                        <span class="h90">&asymp; 999.00% markup (what the engine uses)</span>
+                        <span class="h90">&asymp; 998.90% markup (what the engine uses)</span>
                       </div>
                       <div class="clampnote">&#9888; 95% margin needs 1900% markup &mdash; capped at 999%, so it comes
                            back as 90.90.</div>
@@ -270,7 +270,7 @@ return [
           </ul>
           <div class="heads"><span class="hi">&#9888;</span><div><b>Zero does not mean &ldquo;no profit&rdquo;:</b>
              over on a product&rsquo;s <b>Pricing per system</b> panel, 0 means <b>inherit</b>. Its own hint says
-             &ldquo;Set Markup to 0 to inherit the tenant default (100.00% &mdash; change on Settings)&rdquo;, and
+             &ldquo;Set markup to 0 to inherit the tenant default (100.00% &mdash; change on Settings)&rdquo;, and
              saving 0 there deletes the product&rsquo;s override altogether. So if you genuinely want one product sold
              at cost, you can&rsquo;t do it by typing 0 on that product &mdash; set the <b>Settings</b> default to 0
              instead and give every other product its own rate.</div></div>
@@ -286,7 +286,7 @@ return [
              Marking them up here as well would charge for the same profit twice.</div></div>
           <div class="oops"><b>Screen looks bare?</b> If all you can see is two number boxes with no grey explanation
              under them, you have <b>Compact mode</b> turned on &mdash; it hides every hint line on every screen,
-             including the three on this one. The blue &ldquo;&asymp;&rdquo; line stays put. Turn Compact off and the
+             including the four on this one. The blue &ldquo;&asymp;&rdquo; line stays put. Turn Compact off and the
              wording comes back.</div>
           <p><b>Where these two numbers turn up:</b> on a product&rsquo;s <b>Pricing per system</b> panel, whose column
              is headed with whichever word you chose here; on the price-table screen as <b>Our markup&nbsp;%</b> next to

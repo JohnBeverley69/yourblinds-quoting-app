@@ -189,7 +189,7 @@ return [
                         <div class="dline">hello@demoblinds.example</div>
                         <div class="dline">VAT No. GB 123 4567 89</div>
                       </div>
-                      <div class="docmeta">Quote PRE-2026-0042</div>
+                      <div class="docmeta">Quote DEM-2026-0042</div>
                     </div>
                     <div class="doclines"><span></span><span></span><span></span></div>
                   </div>

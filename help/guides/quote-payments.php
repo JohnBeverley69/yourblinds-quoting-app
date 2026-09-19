@@ -63,12 +63,6 @@ return [
           .gd .sugg{ font-size:.72rem; color:var(--faint); padding-bottom:.42rem; }
           .gd .sugg a{ color:var(--accent); font-weight:600; }
 
-          .gd .bnr{ border-radius:8px; padding:.42rem .6rem; font-size:.74rem; font-weight:600; }
-          .gd .bnr.out{ background:#fef3c7; color:#92400e; }
-          .gd .bnr.over{ background:#dbeafe; color:#1e40af; }
-          .gd .bnr.ok{ background:#d1fae5; color:#065f46; }
-          .gd .bnr .faint{ font-weight:400; opacity:.75; }
-
           /* orders list */
           .gd .otbl{ width:100%; border-collapse:collapse; font-size:.66rem; }
           .gd .otbl th{ text-align:left; font-size:.54rem; text-transform:uppercase; letter-spacing:.03em; color:var(--faint); font-weight:700; border-bottom:1px solid var(--line); padding:.26rem .3rem; white-space:nowrap; }
@@ -89,7 +83,6 @@ return [
           .gd .caret{ width:0; height:0; border-left:5px solid var(--faint); border-top:4px solid transparent; border-bottom:4px solid transparent; }
           .gd .caret.open{ border-left:4px solid transparent; border-right:4px solid transparent; border-top:5px solid var(--faint); border-bottom:none; }
           .gd .npbox{ border:1px solid var(--line); border-top:none; border-radius:0 0 9px 9px; padding:.5rem .6rem .6rem; background:var(--surface); }
-          .gd .ambernote{ font-size:.66rem; color:#92400e; background:#fef3c7; border-radius:6px; padding:.24rem .45rem; margin:.28rem 0 .45rem; line-height:1.4; }
           .gd .pref{ border-color:var(--accent) !important; background:var(--accent-wash) !important; }
           .gd .preflbl{ font-size:.62rem; color:var(--accent); font-weight:700; }
           .gd .frow3{ display:grid; grid-template-columns:1fr 1fr; gap:.4rem .6rem; margin-bottom:.4rem; }
@@ -217,8 +210,6 @@ return [
                   <div class="npbox">
                     <div class="fld"><label>Order (optional)</label>
                       <div class="selectbox pref" style="min-width:16rem">PRE-2026-0042 &mdash; Emma Fletcher (&pound;33.00 outstanding)</div></div>
-                    <div class="ambernote">&check; Deposit of &pound;33.00 is already recorded on this order &mdash; the amount above is
-                      the remaining balance, so don&rsquo;t re-enter the deposit.</div>
                     <div class="frow3">
                       <div class="fld"><label>Amount &pound;</label><div class="boxv pref">33.00</div></div>
                       <div class="fld"><label>Received on</label><div class="boxv pref">2026-08-04</div></div>
@@ -233,7 +224,8 @@ return [
                     <div class="btnrow"><span class="save">Save payment</span><span class="ghost">Cancel</span></div>
                   </div>
                   <p class="note"><span class="preflbl">Blue</span> = filled in for you by the app, because you arrived from the
-                     <b>Outstanding</b> link. Everything is still yours to change.</p>
+                     <b>Outstanding</b> link. Everything is still yours to change. That <b>Amount</b> is the <b>remaining
+                     balance</b> &mdash; the deposit has already been taken off it, so never add the deposit on top.</p>
                 </div>
 
                 <!-- Scene 6: it settles itself + the receipt. Still the PAYMENTS
@@ -269,7 +261,6 @@ return [
                 <!-- Scene 7: the slip and the fix -->
                 <div class="osc scOver">
                   <div class="ph3">Payment history</div>
-                  <div class="bnr over">Overpaid by &pound;5.00</div>
                   <div class="pgsum" style="margin-top:.45rem">
                     <span class="caret open"></span><span class="cust">Emma Fletcher</span>
                     <span class="qlink">PRE-2026-0042</span>
@@ -286,7 +277,7 @@ return [
                         <td class="r">&pound;38.00</td><td><span class="minibtn">Edit</span><span class="xbtn">&times;</span></td></tr>
                     </tbody>
                   </table>
-                  <div class="modal">Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank reconciliation if needed.)
+                  <div class="modal">Delete this payment? (Won\'t undo the bank entry &mdash; adjust on your bank reconciliation if needed.)
                     <div class="mb"><span class="ghost">Cancel</span><span class="save">Yes, continue</span></div></div>
                 </div>
 
@@ -434,12 +425,15 @@ return [
                <li><code>Deposit must be a non-negative number.</code> &mdash; letters, or a minus sign, in the deposit box.</li>
                <li><code>Amount must be a non-zero number.</code> / <code>Received date is required (YYYY-MM-DD).</code> &mdash; the two
                    required boxes on a payment. The date box defaults to today, so this usually means it was cleared.</li>
-               <li><code>The deposit is managed on the order &mdash; change it from the order&rsquo;s deposit panel.</code> &mdash; you
-                   reached the deposit from the Payments page. Open the order and use <b>Amend &pound;</b> or <b>Mark unpaid</b>.</li>
+               <li><code>The deposit is managed on the order &mdash; change it from the order&rsquo;s deposit panel.</code> &mdash; a
+                   back-stop rather than something you can walk into: the deposit row on the Payments page deliberately carries no
+                   <b>Edit</b> and no <b>&times;</b>, so there is no button there to press. You would only meet this if something tried
+                   to change the deposit from the Payments page anyway &mdash; a page left open from before the deposit was recorded,
+                   say. Either way the answer is the same: open the order and use <b>Amend &pound;</b> or <b>Mark unpaid</b>.</li>
                <li><code>This quote can no longer be edited.</code> &mdash; the quote is locked (cancelled or archived).</li>
                <li>Removing a payment always asks first, in the app&rsquo;s own little dialog with <b>Cancel</b> and a red
                    <b>Yes, continue</b>. The wording depends on where you pressed the red <b>&times;</b>. On the <b>Payments</b> page it is
-                   the long version: <em>&ldquo;Delete this payment? (Won&rsquo;t undo the bank entry &mdash; adjust on your bank
+                   the long version: <em>&ldquo;Delete this payment? (Won\'t undo the bank entry &mdash; adjust on your bank
                    reconciliation if needed.)&rdquo;</em> In the Payments table on the <b>order</b> it is just
                    <em>&ldquo;Delete this payment?&rdquo;</em> Both do exactly the same thing, and the long version is worth reading either
                    way &mdash; deleting here only tidies <b>your</b> record; the money is still in the bank and your bookkeeper will still
@@ -472,7 +466,7 @@ return [
             ['0:42', 'The Orders list shows what is owed.',
              'On your Orders list, two money columns do the watching for you. Deposit shows either a green tick with the amount paid, or the amount still due in amber. Outstanding shows what is left on the whole job. That amber figure is a link — click it and the app carries you to the Payments page with the order already chosen and the amount already filled in. That is the quickest way to take money, and it is also the way that cannot go wrong.', 3],
             ['1:04', 'Payments opens with the work half done.',
-             'Here is that page, and everything highlighted in blue was filled in for you. The order, the amount — which is the balance, with the deposit already taken off — today’s date, and Bank transfer as the method. Do read the amber line. It is telling you the deposit is already counted, so do not type it in again. That double count is the commonest mistake on this page.', 4],
+             'Here is that page, and everything highlighted in blue was filled in for you. The order and the amount, because you came in from the Outstanding link — plus today’s date and Bank transfer as the method, which are simply this form’s defaults. Look hard at that amount. It is the balance, with the deposit already taken off, not the whole total — so there is nothing left for the deposit to be added to. Typing the deposit in again on top of it is the commonest mistake on this page.', 4],
             ['1:25', 'Fill in the last two boxes and save.',
              'Received from is who the money came from — most useful when there is no order attached to it. Reference is whatever lets you find it again on the bank statement: a cheque number, a Stripe id, a bank reference. Both are optional, and both save you an argument later. Then, Save payment. If you were only handed part of it, just type the smaller figure — part payments are perfectly fine, and they stack up.', 5],
             ['1:47', 'It settles itself, and they get a receipt.',

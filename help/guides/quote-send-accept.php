@@ -264,7 +264,7 @@ return [
                       <div class="frm">from Beverley Blinds &middot; to emma.fletcher@gmail.com</div>
                     </div>
                     <div class="ebody">
-                      Hello Emma,<br><br>
+                      Hello Emma Fletcher,<br><br>
                       Please find your quote (PRE-2026-0042) attached as a PDF.<br><br>
                       <span class="yours">Hi Emma &mdash; prices held to the end of the month.</span><br><br>
                       You can also view it online and accept it here:<br>
@@ -352,7 +352,7 @@ return [
                           Thanks Emma Fletcher! This quote was accepted on 31 August 2026. Beverley Blinds will be in touch.</div>
                         <div class="tycard">
                           <div class="th">Thank you for accepting quote PRE-2026-0042</div>
-                          <div class="tb">Hello Emma,<br><br>Thank you for accepting your quote PRE-2026-0042 &mdash;
+                          <div class="tb">Hello Emma Fletcher,<br><br>Thank you for accepting your quote PRE-2026-0042 &mdash;
                             we really appreciate your business and are delighted to have you as a customer.&hellip;</div>
                         </div>
                       </div>
@@ -462,7 +462,8 @@ return [
              anywhere until you&rsquo;re happy with the quote.</div></div>
 
           <p><b>What lands in their inbox.</b> A plain-text email &mdash; no colours, no buttons. Subject:
-             <em>&ldquo;Your quote PRE-2026-0042 from Beverley Blinds&rdquo;</em>. Then &ldquo;Hello Emma,&rdquo;, &ldquo;Please
+             <em>&ldquo;Your quote PRE-2026-0042 from Beverley Blinds&rdquo;</em>. Then &ldquo;Hello Emma Fletcher,&rdquo; &mdash; the app greets them by the
+             <b>full name</b> on the quote, never just a first name &mdash; &ldquo;Please
              find your quote (PRE-2026-0042) attached as a PDF.&rdquo;, your optional message, &ldquo;You can also view it online
              and accept it here:&rdquo; followed by <b>the link on its own line</b>, then
              <em>&ldquo;If you have any questions please reply to this email.&rdquo;</em> and your company name. The attachment
@@ -529,7 +530,7 @@ return [
 
           <p><b>The thank-you email is yours to change.</b> If the customer has an email address, a thank-you goes out the
              moment they accept &mdash; subject <em>&ldquo;Thank you for accepting quote &lt;number&gt;&rdquo;</em>, starting
-             &ldquo;Hello Emma, Thank you for accepting your quote &hellip;&rdquo;. It is a template you can edit in
+             &ldquo;Hello Emma Fletcher, Thank you for accepting your quote &hellip;&rdquo;. It is a template you can edit in
              <b>Settings</b>, under <b>&ldquo;Thank-you email (sent when a customer accepts a quote)&rdquo;</b>, using
              <code>{{customer_name}}</code>, <code>{{company_name}}</code>, <code>{{quote_number}}</code> and
              <code>{{quote_link}}</code>. <b>&ldquo;Leave empty to send no thank-you email.&rdquo;</b></p>

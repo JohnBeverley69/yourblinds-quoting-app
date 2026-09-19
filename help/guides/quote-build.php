@@ -97,8 +97,10 @@ return [
           .gd .stage[data-step="3"] .qbar, .gd .stage[data-step="4"] .qbar, .gd .stage[data-step="5"] .qbar,
           .gd .stage[data-step="6"] .qbar, .gd .stage[data-step="7"] .qbar, .gd .stage[data-step="8"] .qbar{ display:flex; }
           .gd .qbar .qn{ font-weight:700; }
+          /* The real .status-pill is text-transform:uppercase (edit.php:268), so a
+             pill on a draft quote reads DRAFT, not Draft. */
           .gd .qpill{ font-size:.58rem; font-weight:700; border-radius:20px; padding:.06rem .5rem;
-                      background:rgba(255,255,255,.22); text-transform:capitalize; }
+                      background:rgba(255,255,255,.22); text-transform:uppercase; letter-spacing:.05em; }
           .gd .qbar .mini{ font-size:.6rem; border:1px solid rgba(255,255,255,.35); border-radius:6px; padding:.08rem .38rem; }
           .gd .qbar .mini.acc{ background:#16a34a; border-color:#16a34a; }
           .gd .qbar .qtot{ margin-left:auto; font-weight:700; }
@@ -221,7 +223,7 @@ return [
                     </div>
                   </div>
 
-                  <div class="pcbox">Find by postcode &mdash; an optional extra: a postcode box and a <b>Find</b> button that fills the address for you. It only shows if it has been switched on for your company.</div>
+                  <div class="pcbox">Find by postcode &mdash; an optional extra: a postcode box and a <b>Find address</b> button, then a <b>Pick an address</b> list you choose the right one from. It only shows if it has been switched on for your company.</div>
 
                   <div class="fld" style="margin-top:.5rem"><label>Address line 1</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">14 Warwick Place</span></div></div>
                   <div class="fld" style="margin-top:.4rem"><label>Address line 2</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">Lillington</span></div></div>
@@ -246,9 +248,11 @@ return [
                   <div class="actrow">
                     <span class="qbtn ghost">View PDF</span>
                     <span class="qbtn ghost">Download PDF</span>
-                    <span class="qbtn ghost">&#128230; Save as order</span>
                     <span class="qbtn ghost">Mark as sent</span>
+                    <span class="qbtn ghost">Mark as accepted</span>
+                    <span class="qbtn ghost">Mark as declined</span>
                   </div>
+                  <p class="ldesc2">No <b>&#128230; Save as order</b> yet &mdash; that button only joins the row once the quote has at least one blind on it.</p>
 
                   <div class="summ"><span class="tri">&#9654;</span>Customer: Emma Fletcher &mdash; Leamington Spa &mdash; CV32 5PJ <span class="cs-hint">(click to edit)</span></div>
                   <p class="ldesc2">Folded away to keep the screen short. Click the line to open the full name / email / phone / address form.</p>
@@ -340,14 +344,14 @@ return [
                   <div class="card-t">Add blind &mdash; the price says no</div>
                   <div class="frow">
                     <div class="fld"><label>Product <span class="req">*</span></label><div class="selectbox">Roller Blind</div></div>
-                    <div class="fld"><label>System</label><div class="selectbox" style="border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.25)">Cassette</div></div>
+                    <div class="fld"><label>System</label><div class="selectbox" style="border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.25)">Grip Fit</div></div>
                   </div>
                   <div class="frow" style="margin-top:.5rem">
                     <div class="fld"><label>Band</label><div class="selectbox">A</div></div>
                     <div class="fld"><label>Fabric <span class="req">*</span></label><div class="boxv">Sunset White / Ivory</div></div>
                   </div>
 
-                  <div class="prev err">No price table for Roller Blind band A on system &lsquo;Cassette&rsquo;.</div>
+                  <div class="prev err">No price table for Roller Blind band A on system &lsquo;Grip Fit&rsquo;.</div>
                   <div class="prev err prev2">Size 2400 &times; 3000 mm exceeds the largest cell in this price table.</div>
 
                   <div class="savebar">
@@ -393,8 +397,8 @@ return [
                   <div class="ovr">
                     <div class="sum"><span class="tri">&#9662;</span>Adjust price for this blind</div>
                     <div class="frow" style="margin-top:.4rem">
-                      <div class="fld"><label>Discount % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
-                      <div class="fld"><label>Markup % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
+                      <div class="fld"><label>Discount % (this blind)</label><div class="numbox" style="width:100%"><span class="ph">product default</span><span class="val"></span><span class="spin">&#9650;<br>&#9660;</span></div></div>
+                      <div class="fld"><label>Markup % (this blind)</label><div class="numbox" style="width:100%"><span class="ph">product default</span><span class="val"></span><span class="spin">&#9650;<br>&#9660;</span></div></div>
                     </div>
                     <p class="ldesc2">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote. On a company set to <b>margin</b> rather than markup, that second label reads <b>Margin % (this blind)</b> and the sentence says <em>margin</em> instead.</p>
                   </div>
@@ -437,8 +441,8 @@ return [
                 box that fills the address for you. None of it is compulsory &mdash; you can finish it later from the builder &mdash;
                 but the email and mobile are what the quote is later sent with, so put them in now if you have them. Then
                 <b>Create quote</b>. You get <em>&ldquo;Quote PRE-2026-0042 created.&rdquo;</em> and land in the builder.</li>
-            <li><b>Coming from the calendar instead.</b> If you raise the quote from a measure appointment, the <b>Create quote</b>
-                link on that appointment carries everything across &mdash; and it prefers the appointment&rsquo;s <b>installation
+            <li><b>Coming from the calendar instead.</b> If you raise the quote from a measure appointment, the blue <b>Start quote</b>
+                button on that appointment carries everything across &mdash; and it prefers the appointment&rsquo;s <b>installation
                 address</b> over the address on the customer record, which is usually what you want. When the appointment already has
                 a customer and a name, this screen is skipped entirely and you drop straight into the builder with the blind form open.
                 If something is missing you see <em>&ldquo;Could not start the quote automatically &mdash; please check the details
@@ -447,7 +451,8 @@ return [
 
           <p><b>In the builder.</b> A dark bar sits at the top with the quote number, a status pill, the one-tap
              <b>&check; Customer accepted</b> / <b>&#10005; Customer declined</b> buttons and the running <b>Total</b>. Below that is a
-             <b>Quote actions</b> row &mdash; View PDF, Download PDF, <b>&#128230; Save as order</b> and the status buttons. The
+             <b>Quote actions</b> row &mdash; View PDF, Download PDF, the status buttons (<b>Mark as sent</b>, <b>Mark as accepted</b>,
+             <b>Mark as declined</b> on a draft) and, once there is at least one blind on the quote, <b>&#128230; Save as order</b>. The
              customer block is <b>folded shut</b>: a single line reading <em>&ldquo;Customer: Emma Fletcher &mdash; Leamington Spa
              &mdash; CV32 5PJ (click to edit)&rdquo;</em>. Click it to open the whole address form, which has its own <b>Save details</b>
              button. <b>Quote notes</b> deliberately sits outside the fold so it stays in view.</p>
@@ -482,19 +487,20 @@ return [
                 your paperwork, not on the customer&rsquo;s quote.</li>
           </ul>
 
-          <div class="oops"><b>&ldquo;No price table for Roller Blind band A on system &lsquo;Cassette&rsquo;.&rdquo;</b> The slip
+          <div class="oops"><b>&ldquo;No price table for Roller Blind band A on system &lsquo;Grip Fit&rsquo;.&rdquo;</b> The slip
              everybody makes once. The <b>Band</b> dropdown only <b>filters the fabric list</b> &mdash; it does not promise a price.
              The price lives on the <b>combination</b> of product + system + band. <b>Fix:</b> change the <b>System</b> to one that is
              priced for that band (the Band list re-scopes as you do), or pick a band that has a price list, then reselect the fabric.
-             Its cousin <em>&ldquo;No price table set up for Roller Blind for system &lsquo;Cassette&rsquo;.&rdquo;</em> means that
+             Its cousin <em>&ldquo;No price table set up for Roller Blind for system &lsquo;Grip Fit&rsquo;.&rdquo;</em> means that
              system has no prices at all yet.</div>
 
           <div class="oops"><b>&ldquo;Size 2400 &times; 3000 mm exceeds the largest cell in this price table.&rdquo;</b> The size is
              past the end of the grid. <b>Before you blame the price list, check the unit</b> &mdash; 150 typed while the quote is in
              millimetres is a 15&nbsp;cm blind; 1500 typed while it is in centimetres is fifteen metres. Related wordings you may see:
-             <em>&ldquo;No exact price for 2400 &times; 3000 mm. Try the next available size.&rdquo;</em>,
              <em>&ldquo;Width 2400 mm exceeds the largest entry in this price list.&rdquo;</em> and
-             <em>&ldquo;No &pound;/m&sup2; rate set for Roller Blind in this price list.&rdquo;</em></div>
+             <em>&ldquo;No &pound;/m&sup2; rate set for Roller Blind in this price list.&rdquo;</em> What you will <b>never</b> see
+             here is a complaint that your exact size is not in the grid: the builder always <b>rounds up to the next cell</b>, so an
+             odd size between two rows simply prices at the larger one. Only a size past the <em>end</em> of the table stops it.</div>
 
           <p><b>The live price box does the checking for you.</b> Grey and italic means it is still waiting &mdash;
              <em>&ldquo;Still need: product, fabric, width, drop.&rdquo;</em>. Red means it tried and could not price it. Green means
@@ -510,9 +516,10 @@ return [
              have more than one &mdash; that is an option with <b>Allow multiple choices</b> ticked in its setup. Some are just a
              <b>number to type</b>: when an option has a measurement box and only one thing to pick, the pointless dropdown is hidden
              and the number box is the whole control, under a small capitalised caption &mdash; <em>Fascia width (mm)</em>,
-             <em>Fit height</em>. A chosen option can open a number box of its very own (<em>Top offset (mm)</em> hanging off one
-             choice), choices can show a little picture, and some options only appear <b>after</b> you have picked the fabric or the
-             system &mdash; that is by design, not a glitch. Before a fabric is picked you may see the stand-in line <em>&ldquo;Pick a
+             <em>Fit height</em>. A single <b>choice</b> can also carry a number box of its own &mdash; hanging off that one choice
+             and nothing else, under whatever caption whoever set the option up gave it, so it appears the moment you pick that choice
+             and vanishes again if you pick another. Choices can show a little picture, and some options only appear <b>after</b> you
+             have picked the fabric or the system &mdash; that is by design, not a glitch. Before a fabric is picked you may see the stand-in line <em>&ldquo;Pick a
              fabric above to see its options.&rdquo;</em> instead of the grid.</p>
 
           <p><b>What the Options grid never shows you is a price.</b> There is no little green &ldquo;+ &pound;5.00&rdquo; beside the
@@ -615,7 +622,7 @@ return [
             ['0:50', 'Product wakes the other three up.',    'Now build it a blind at a time. Choose the Product first, always. Until you do, System says choose product first, Band says all bands, and the Fabric box will not let you type. Pick the product and all three wake up. System fills in and pre picks the default. Band narrows to that system. And watch the words: on some products Fabric reads Slat or Colour, and Band reads tape and string. Same boxes, different names.', 4],
             ['1:10', 'Fabric search panel; room name.',      'Click the fabric box and type. A little panel drops down, with the name and colour on top and the supplier and code underneath. Click the row you want. If nothing matches it simply says, no matching fabrics. Then the room name: click the box or the little arrow and pick from the list, or type your own. The room is only a label, but it is the label the fitter reads, so always fill it in.', 5],
             ['1:28', 'Unit, width, drop, quantity, notes.',  'Measurement unit is set for the whole quote, not for one blind: change it and every size is re-displayed in the new unit, but the actual measurements never change. You can also type a hundred and fifty centimetres, or sixty inches, straight into the width and it is read for you. Quantity is how many identical blinds, and on a slatted product that label changes itself to number of slats. Notes are internal only: they print on your paperwork, never on the customer\'s quote.', 6],
-            ['1:50', 'Red price; both Save buttons blocked.', 'Here is the slip everybody makes once. The price box goes red: no price table for Roller Blind band A on system Cassette. The band dropdown only filters the fabric list, it never promises a price. The price lives on the combination of product, system and band. So change the system to one that is priced, or pick a band that has a price list. You will also meet, size exceeds the largest cell in this price table, and nine times out of ten that is the unit, not the price list. Notice both save buttons are greyed out and will not click. You cannot save a broken line.', 7],
+            ['1:50', 'Red price; both Save buttons blocked.', 'Here is the slip everybody makes once. The price box goes red: no price table for Roller Blind band A on system Grip Fit. The band dropdown only filters the fabric list, it never promises a price. The price lives on the combination of product, system and band. So change the system to one that is priced, or pick a band that has a price list. You will also meet, size exceeds the largest cell in this price table, and nine times out of ten that is the unit, not the price list. Notice both save buttons are greyed out and will not click. You cannot save a broken line.', 7],
             ['2:14', 'Options; green price; Save.',          'Last comes options, and they will look different on every product, because they are set up per product. Some are a dropdown. Some are a list of tick boxes where you can have more than one. Some are just a number to type. Some only appear once you have picked the fabric or the system, and that is on purpose. Adjust price for this blind nudges this one line, and nothing else. The price goes green: fifty pounds a blind. Now Save, or Save and add another blind to carry straight on to the next window.', 8],
         ],
 ];

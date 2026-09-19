@@ -265,7 +265,7 @@ return [
                       </div>
                       <div class="fld" style="flex:1 1 10rem">
                         <label>Reference (optional)</label>
-                        <div class="box vRef"><span class="ph">e.g. cheque #, Stripe id&hellip;</span><span class="val">Ref 8841</span></div>
+                        <div class="box vRef"><span class="ph">e.g. cheque #, Stripe id...</span><span class="val">Ref 8841</span></div>
                       </div>
                     </div>
                     <div class="npa"><span class="mbtn pri">Save payment</span><span class="mbtn gh">Cancel</span></div>
@@ -340,7 +340,7 @@ return [
                     <span class="mbtn gh">Export payments (CSV)</span>
                   </div>
                   <div class="csv">
-                    <div class="csvh">beverley-blinds-payments-2026-09-19.csv</div>
+                    <div class="csvh">Beverley-Blinds-payments-2026-09-19.csv</div>
                     <div class="csvb">
                       <span class="hd">Date,InvoiceNumber,Customer,Amount,Method,Reference,Type</span><br>
                       04/08/2026,PRE-2026-0042,Emma Fletcher,33.00,Bank transfer,Ref 8841,Payment
@@ -416,7 +416,8 @@ return [
             <li><b>Watch it settle itself.</b> You get a green <em>&ldquo;Payment recorded: &pound;33.00.&rdquo;</em> and the card redraws. The
                 moment the money covers the order total, the order <b>flips to Paid on its own</b> &mdash; there is no button to press &mdash; and
                 the customer is emailed their <b>paid-in-full receipt</b> &mdash; a copy of the order headed <b>Receipt</b>, attached to an email
-                subject-lined <em>&ldquo;Receipt PRE-2026-0042 &mdash; paid in full&rdquo;</em>. That email is <b>not</b> unconditional, so do not
+                subject-lined <em>&ldquo;Receipt PRE-2026-0042 &mdash; paid in full &middot; Beverley Blinds&rdquo;</em> (your own company name is
+                tacked on the end like that). That email is <b>not</b> unconditional, so do not
                 promise it to a customer without checking two things. First, <b>the customer must have a proper email address on the order</b>; no
                 valid address, no receipt, and nothing tells you it was skipped. Second, it obeys the <b>Paid-in-full receipt</b> tick in
                 <b>Setup &rarr; Settings</b> &mdash; <em>&ldquo;Email a receipt when an order is paid in full&rdquo;</em> &mdash; which is
@@ -430,8 +431,11 @@ return [
                 <b>Export payments (CSV)</b> gives you <code>&lt;your-company&gt;-payments-&lt;date&gt;.csv</code> with the columns Date,
                 InvoiceNumber, Customer, Amount, Method, Reference and <b>Type</b> (Deposit or Payment). <b>Export invoices (CSV)</b> gives you
                 <code>&lt;your-company&gt;-invoices-&lt;date&gt;.csv</code> &mdash; one row per order line, priced <b>net of VAT</b> so the
-                accounts package works the tax out itself, with the due date set <b>14 days</b> after the invoice date. Both default to account
-                code <b>200 (Sales)</b> and <b>20% VAT</b>; remap them on import if your own chart of accounts is different. Important: the exports
+                accounts package works the tax out itself, with the due date set <b>14 days</b> after the invoice date. The accounting codes are
+                on the <b>invoices</b> file only: every line carries <b>AccountCode 200 (Sales)</b> and a <b>TaxType</b> taken from the order
+                &mdash; <code>20% (VAT on Income)</code> where the order charges VAT, <code>No VAT</code> where it does not. Remap them on import
+                if your own chart of accounts is different. The <b>payments</b> file has no code columns at all &mdash; it is the seven listed
+                above and nothing more. Important: the exports
                 follow <b>only the From and To dates</b> &mdash; not the search box and not the method dropdown.</li>
           </ul>
           <div class="oops"><b>When it will not save.</b> Two things stop it, and it says so in plain words at the top of the page:
@@ -476,6 +480,6 @@ return [
             ['1:09', 'Fixing a slip.',
              'Two things will stop a payment saving, and it tells you in plain words. Amount must be a non-zero number. And, received date is required. Do be warned that the box does not hang on to what you typed. It stays open for you, but empty: the amount gone, the date back on today, the method back on bank transfer and the order back on standalone. So read the red line, then put it all in again. Got the figure wrong? Edit on the row refills that very same box, the heading changes to Edit payment and the button to Update payment, and you can even move the payment onto a different order. Wrong payment altogether? The little red cross asks first, and warns you it will not undo the bank entry, so adjust that on your bank reconciliation. Take money back out and a Paid order steps back out of Paid on its own. The deposit refuses both, and tells you it is managed on the order.', 7],
             ['1:20', 'Filter it, and the bookkeeper CSV.',
-             'Last, finding things and handing them over. The search box looks at the customer name, the quote number and the reference. The two date boxes bracket the day the money came in, and This month and Last month are one-click shortcuts that keep whatever you have searched for. Then the two files. Payments gives your bookkeeper the money received. Invoices gives them the sales themselves, with every line shown before VAT so Xero, QuickBooks or Sage can work the tax out for itself. Both follow the dates you set, but not the search box and not the method. They come out as account code two hundred, sales, at twenty percent VAT, which your bookkeeper may want to remap. And if the live QuickBooks link in Settings, Accounting, is already switched on, these files are the manual alternative. Use one or the other, never both.', 8],
+             'Last, finding things and handing them over. The search box looks at the customer name, the quote number and the reference. The two date boxes bracket the day the money came in, and This month and Last month are one-click shortcuts that keep whatever you have searched for. Then the two files. Payments gives your bookkeeper the money received. Invoices gives them the sales themselves, with every line shown before VAT so Xero, QuickBooks or Sage can work the tax out for itself. Both follow the dates you set, but not the search box and not the method. The accounting codes are only on the invoices file: every line goes out on account code two hundred, sales, with the VAT type taken from the order, which your bookkeeper may want to remap. The payments file carries no codes at all, just the seven columns you can see. And if the live QuickBooks link in Settings, Accounting, is already switched on, these files are the manual alternative. Use one or the other, never both.', 8],
         ],
 ];

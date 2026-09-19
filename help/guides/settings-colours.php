@@ -35,9 +35,9 @@ return [
           .gd .tabs{ display:flex; flex-wrap:wrap; gap:.22rem; border-bottom:1px solid var(--line); margin-bottom:.75rem; padding-bottom:.3rem; }
           .gd .tb{ font-size:.67rem; color:var(--faint); padding:.2rem .42rem; border-radius:6px 6px 0 0; white-space:nowrap; }
           .gd .tb.on{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent); }
-          /* after saving, the page comes back on the Company tab — the real redirect has no #colours */
-          .gd .stage[data-step="8"] .tb-col{ background:none; color:var(--faint); font-weight:400; box-shadow:none; }
-          .gd .stage[data-step="8"] .tb-com{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent); }
+          /* after saving, the page reloads and reopens on the tab you were on — admin/settings.php
+             redirects without a #hash, and the tab script restores localStorage[\'yb_settings_tab\'],
+             so Status colours stays selected */
 
           /* ---- the real grey intro paragraph ---- */
           .gd .scintro{ font-size:.68rem; color:var(--faint); line-height:1.5; margin:0 0 .7rem; max-width:44rem; }
@@ -104,7 +104,10 @@ return [
           .gd .callegend i{ width:.6rem; height:.6rem; border-radius:3px; display:inline-block; }
           .gd .calrow{ display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.6rem; }
           .gd .calchip{ border-radius:7px; padding:.4rem .55rem; font-size:.7rem; font-weight:600; min-width:9.5rem; }
-          .gd .calchip small{ display:block; font-size:.58rem; font-weight:400; opacity:.85; }
+          /* the real card (calendar/index.php .cal-appt) is two lines only: a bold time block, then the
+             job title — the stage never appears in writing, it is the colour */
+          .gd .calchip .ctime{ display:block; font-weight:700; font-size:.68rem; opacity:.95; }
+          .gd .calchip .ctitle{ display:block; font-weight:600; font-size:.64rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
           .gd .ch-acc{ background:#9333ea; color:#fff; }
           .gd .ch-fit{ background:#6366f1; color:#fff; outline:2px solid #111827; outline-offset:-2px; }
           .gd .ch-iss{ background:#0891b2; color:#fff; outline:2px solid #e11d48; outline-offset:-2px; }
@@ -192,7 +195,7 @@ return [
                     </div>
                     <div class="issalone">
                       <div class="calrow" style="margin-top:.25rem">
-                        <div class="calchip ch-iss">09:30 &middot; Mr Dodds<small>Ordered &mdash; flagged</small></div>
+                        <div class="calchip ch-iss"><span class="ctime">09:30</span><span class="ctitle">PRE-2026-0041 &mdash; Mr Dodds</span></div>
                       </div>
                       <span class="issbtn">&#9888;&#65039; Issues (2)</span>
                     </div>
@@ -239,11 +242,12 @@ return [
                     <span style="color:#e11d48;font-weight:700"><i style="background:transparent;outline:2px solid #e11d48;outline-offset:-2px"></i> &#9888;&#65039; Issues (2)</span>
                   </div>
                   <div class="calrow">
-                    <div class="calchip ch-acc">10:00 &middot; Mrs Patel<small>Accepted</small></div>
-                    <div class="calchip ch-acc">13:15 &middot; Mr Okafor<small>Accepted</small></div>
-                    <div class="calchip ch-fit">15:00 &middot; Mrs Hale<small>Fitting booked</small></div>
+                    <div class="calchip ch-acc"><span class="ctime">10:00</span><span class="ctitle">PRE-2026-0042 &mdash; Mrs Patel</span></div>
+                    <div class="calchip ch-acc"><span class="ctime">13:15</span><span class="ctitle">PRE-2026-0045 &mdash; Mr Okafor</span></div>
+                    <div class="calchip ch-fit"><span class="ctime">15:00</span><span class="ctitle">PRE-2026-0044 &mdash; Mrs Hale</span></div>
                   </div>
-                  <p class="pipenote">Fittings carry a dark outline; measures don&rsquo;t.</p>
+                  <p class="pipenote">A card shows the time and the job, and nothing else &mdash; the stage is the colour. Fittings
+                     carry a dark outline; measures don&rsquo;t.</p>
                 </div>
 
                 <div class="pipescene">
@@ -271,7 +275,7 @@ return [
                   <b class="c5"><span class="n">5</span> The pill updates, and picks black or white writing itself.</b>
                   <b class="c6"><span class="n">6</span> The calendar and its key follow along.</b>
                   <b class="c7"><span class="n">7</span> So do your orders list and the Pipeline.</b>
-                  <b class="c8 good"><span class="n">8</span> Saved &mdash; but you land back on Company.</b>
+                  <b class="c8 good"><span class="n">8</span> Saved &mdash; and you come back to this same tab.</b>
                 </div>
               </div>
             </div>
@@ -326,15 +330,20 @@ return [
                 on the whole tab.</li>
           </ul>
 
-          <div class="heads"><span class="hi">&#9888;</span><div><b>You land back on the Company tab.</b> You will see a green
-             <b>&ldquo;Status colours saved.&rdquo;</b> banner at the top of the page &mdash; but the page reopens on the <b>Company</b>
-             tab, not this one. Nothing has been lost. Click <b>Status colours</b> again if you want another look.</div></div>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>The whole page reloads &mdash; and remembers your tab.</b> You will
+             see a green <b>&ldquo;Status colours saved.&rdquo;</b> banner at the top of the page. Saving reloads the whole Settings
+             page, and it puts you straight back on <b>Status colours</b>, because the tab you last clicked is remembered
+             <b>in that browser, on that computer</b>. Sign in somewhere else &mdash; a different machine, a different browser, or
+             after you have cleared your browsing data &mdash; and Settings opens on <b>Company</b>, the first tab, instead. Either
+             way nothing has been lost; just click <b>Status colours</b> again.</div></div>
 
           <p class="prose"><b>Where to check your work.</b> Open the <b>calendar</b> &mdash; it is a rolling six-week grid, not a
              month picker. It opens on the Monday of this week and shows the six weeks that follow, and the <b>&lsaquo;</b> and
              <b>&rsaquo;</b> arrows step it a week at a time. The little key along the top is built
              from this very list, so it is the quickest place to see all your colours together. Fittings carry a dark outline there so
-             you can tell a fitting from a measure at a glance. The same colours turn up as the status pills in your <b>orders list</b>,
+             you can tell a fitting from a measure at a glance. A card itself only ever shows the <b>time</b> and the <b>job</b> &mdash;
+             it never writes the stage out, which is exactly why the colour has to earn its keep. (If you are unsure of one, rest your
+             mouse on the card: the little pop-up names the stage for you.) The same colours turn up as the status pills in your <b>orders list</b>,
              on the <b>Pipeline</b> board, and on the <b>Today&rsquo;s run</b> sheet.</p>
 
           <p class="prose"><b>One thing to know about the Pipeline.</b> The board has seven columns &mdash; <b>Quote</b>, <b>Declined</b>,
@@ -387,6 +396,6 @@ return [
             ['0:55', 'The Accepted swatch and pill turn violet.',           'The sample pill changes straight away so you can see what you have done. Notice the writing stays readable — YourBlinds works out whether black or white letters show up better, so pale colours get black writing and dark ones get white. You never have to think about it.', 5],
             ['1:10', 'Calendar: key plus cards in the new colour.',         'Now look at the calendar. Every job in that stage has turned violet by itself, and the little key along the top has changed with it. Fittings carry a dark outline, so you can tell a fitting from a measure at a glance.', 6],
             ['1:24', 'Orders list pills and the Pipeline columns.',         'It is the same in your orders list and on the Pipeline board. One thing to know — the Quote column holds drafted and sent quotes together, and it uses the Quote sent colour, so changing Quote drafted will not change that column.', 7],
-            ['1:38', 'Save pressed; green banner, Company tab selected.',   'Press Save status colours. You will see Status colours saved in green — but the page comes back on the Company tab, so click Status colours again if you want another look. Nothing has been lost.', 8],
+            ['1:38', 'Save pressed; green banner, Status colours still selected.', 'Press Save status colours. You will see Status colours saved in green. The whole page reloads, but it remembers the tab you were on, so you come straight back to Status colours. That memory lives in this browser — on another computer, Settings opens on the Company tab instead.', 8],
         ],
 ];

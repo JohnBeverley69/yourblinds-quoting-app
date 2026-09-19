@@ -141,6 +141,14 @@ return [
           /* ---------- step 8: the quote builder ---------- */
           .gd .qline{ margin-top:.6rem; border:1px solid var(--line); border-radius:8px; background:var(--panel);
                       padding:.4rem .55rem; font-size:.74rem; color:var(--soft); }
+          /* the real lines table: # / Description / Size / Qty / Unit / Total */
+          .gd .qitems{ width:100%; border-collapse:collapse; font-size:.72rem; }
+          .gd .qitems th{ text-align:left; font-weight:700; color:var(--faint); font-size:.62rem;
+                          text-transform:uppercase; letter-spacing:.04em; padding:.15rem .3rem;
+                          border-bottom:1px solid var(--line); }
+          .gd .qitems td{ padding:.28rem .3rem; vertical-align:top; color:var(--soft); }
+          .gd .qitems td b{ color:var(--ink); }
+          .gd .qitems .n{ text-align:right; font-variant-numeric:tabular-nums; }
           .gd .qbcust{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); background:var(--surface); }
           /* the real page opens on a slim sticky bar: quote number, status pill, total */
           .gd .stickybar{ display:flex; align-items:center; gap:.5rem; margin-top:.7rem; font-size:.78rem;
@@ -251,7 +259,7 @@ return [
                   <div class="frow mt">
                     <div class="fld">
                       <label>Band</label>
-                      <div class="box selb rB"><span class="ph">All bands</span><span class="val">Band A</span></div>
+                      <div class="box selb rB"><span class="ph">All bands</span><span class="val">A</span></div>
                     </div>
                     <div class="fld">
                       <label>Fabric</label>
@@ -285,15 +293,15 @@ return [
                       </div>
                     </div>
                     <div class="opt">
-                      <label>Trims</label>
+                      <label>Bracket Type</label>
                       <div class="multibox">
-                        <span class="mrow"><span class="tick on">&check;</span> Braid</span>
-                        <span class="mrow"><span class="tick">&check;</span> Eyelets</span>
+                        <span class="mrow"><span class="tick on">&check;</span> Box</span>
+                        <span class="mrow"><span class="tick">&check;</span> Top Fix</span>
                       </div>
                     </div>
                     <div class="opt">
-                      <label>Cable length</label>
-                      <div class="box numin"><span class="ph">Cable length (mm)</span></div>
+                      <label>Fit Height</label>
+                      <div class="box numin"><span class="ph">mm</span></div>
                     </div>
                   </div>
 
@@ -356,7 +364,7 @@ return [
                 <!-- Step 8: it is a real quote now -->
                 <div class="qbscene">
                   <div class="okbanner"><span>&check;</span> Quote BEV-2026-0042 started from InstaPrice &mdash; add the customer details (and any more blinds) below.</div>
-                  <div class="stickybar">Quote BEV-2026-0042 <span class="spill">draft</span><span class="stot">Total &pound;194.40</span></div>
+                  <div class="stickybar">Quote BEV-2026-0042 <span class="spill">draft</span><span class="stot">Total &pound;233.28</span></div>
 
                   <!-- Customer details is a collapsible block and it ARRIVES CLOSED:
                        all you get is this one summary line. -->
@@ -380,7 +388,16 @@ return [
                     </div>
                   </div>
 
-                  <div class="qline">Line 1 &mdash; 25mm Venetian &middot; Bev 25mm &middot; Aspen / Auburn &middot; 1200 &times; 1400 mm &middot; Qty 2 &middot; &pound;194.40
+                  <div class="qline">
+                    <table class="qitems">
+                      <thead><tr><th>#</th><th>Description</th><th>Size</th><th class="n">Qty</th><th class="n">Unit</th><th class="n">Total</th></tr></thead>
+                      <tbody><tr>
+                        <td>1</td>
+                        <td><b>25mm Venetian</b> &mdash; Bev 25mm<br>Band A &mdash; Louvolite &mdash; Aspen / Auburn</td>
+                        <td>1200 &times; 1400 mm</td>
+                        <td class="n">2</td><td class="n">&pound;97.20</td><td class="n">&pound;194.40</td>
+                      </tr></tbody>
+                    </table>
                     <span style="display:block;color:var(--err)">re-priced at the product&rsquo;s own 10.00% / 100.00% &mdash; the 15 / 120 you typed did not come with it</span></div>
                 </div>
 
@@ -417,8 +434,10 @@ return [
                 drop down underneath with the supplier and code, then click one. Nothing matching? It says <b>&ldquo;No matching fabrics.&rdquo;</b>
                 &mdash; and if the search itself falls over, <b>&ldquo;Could not search.&rdquo;</b> Once you have picked, the box holds that
                 fabric&rsquo;s <b>name and colour</b>, so clicking back into it shows you the <b>whole list</b> again to switch colour (the text
-                is pre-selected, so your first keystroke replaces it rather than tacking on the end). Changing the <b>System</b>
-                <b>or the Band</b> clears the fabric and reopens the list, so work down the screen in order. These two labels follow the product
+                is pre-selected, so your first keystroke replaces it rather than tacking on the end). Both boxes above it wipe your choice, so
+                work down the screen in order: changing the <b>Band</b> clears the fabric <b>and drops the list straight back open</b> on the new
+                band, while changing the <b>System</b> clears it and <b>leaves the list shut</b> &mdash; click back into the box to search again.
+                These two labels follow the product
                 &mdash; the fabric one is whatever that product calls its material (<b>Fabric</b> on rollers and romans, <b>Colour</b> on a metal
                 venetian, <b>Slat</b> or <b>Finish</b> on a wood one), and the band one can be renamed too (a wood venetian might call it
                 <b>Tape / String</b>).</li>
@@ -478,8 +497,9 @@ return [
              all over again. So if you knocked the price about on this screen while you were haggling, the quote line comes out at the
              <em>standard</em> rates, not the ones on your screen. Say the deal out loud before you press it, then put the agreed figures back on
              the quote line itself: open the blind in the quote builder and use <b>Adjust price for this blind</b>, which has its own
-             <b>Discount % (this blind)</b> and <b>Mark up % (this blind)</b> boxes. (That panel, like the green Trade discount line, is only shown
-             to admins and to users allowed to see cost figures.)</div></div>
+             <b>Discount % (this blind)</b> and <b>Markup % (this blind)</b> boxes &mdash; note the spelling changes over there, one word,
+             <b>Markup</b>, and it reads <b>Margin % (this blind)</b> on a margin company. (That panel, like the green Trade discount line, is
+             only shown to admins and to users allowed to see cost figures.)</div></div>
 
           <p><b>Roller blinds sharing one fascia.</b> Pick the multi-blind choice on a roller and the screen changes: the <b>Width</b> box locks
              itself to a grey italic <b>&ldquo;multi blind&rdquo;</b> (each blind carries its own width instead), and a small table headed
@@ -525,7 +545,9 @@ return [
              <code>Could not price a blind in the group: &hellip;</code> instead.)</p>
 
           <p><b>Where you land, and why it looks empty.</b> The quote builder opens on a slim bar reading <b>Quote BEV-2026-0042</b> with a
-             <b>draft</b> pill and the total, the green message underneath &mdash; and then a <b>closed</b> Customer details block. All you see of
+             <b>draft</b> pill and the total, the green message underneath &mdash; and then a <b>closed</b> Customer details block. That total
+             in the bar is <b>VAT included</b>, so it reads higher than the ex-VAT <b>Sell price</b> you were just looking at on InstaPrice.
+             All you see of
              it is one summary line: <b>&ldquo;Customer: Quick price (add customer) <em>(click to edit)</em>&rdquo;</b>. <b>Click that line</b> and
              the form unfolds: <b>Linked customer</b> first (a type-to-search box reading <b>&ldquo;Type to search by name, town, or
              postcode...&rdquo;</b>, which ties the quote to a customer you already have &mdash; <em>leave blank to unlink</em>), then

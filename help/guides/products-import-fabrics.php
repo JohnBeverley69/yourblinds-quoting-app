@@ -357,9 +357,11 @@ return [
                 per-row <b>Band</b> box on the <b>fabric library</b> screen &mdash; type &ldquo;Band B&rdquo; there and you get
                 a band literally called <em>BAND B</em>, which will not match a price table called <em>B</em>. Put just the
                 code in that box.</li>
-            <li><b>Case:</b> bands you <b>type</b> keep the case you typed; bands that arrive by <b>Excel import or library
-                pull</b> come in as capitals. Either way they match, because band matching ignores case &mdash; but don&rsquo;t
-                be surprised to see <em>Urban</em> and <em>URBAN</em> side by side.</li>
+            <li><b>Case:</b> the <b>paste a list</b> box, the <b>Add one at a time</b> form and a row&rsquo;s own <b>Edit</b>
+                keep the case you typed. Everything else shouts: <b>Excel import</b>, the <b>library pull</b> and
+                <b>Set band on selected</b> all store the band in <b>capitals</b> &mdash; the little Set-band box even types
+                in capitals as you go, so you can see it coming. Either way they match, because band matching ignores case
+                &mdash; but don&rsquo;t be surprised to see <em>Urban</em> and <em>URBAN</em> side by side.</li>
             <li><b>Ordering:</b> all-A bands come first and the <b>longest run of A&rsquo;s counts as the most premium</b>
                 (AAAA, then AAA, then AA, then A), and everything else follows alphabetically.</li>
           </ul>
@@ -376,7 +378,7 @@ return [
 
           <p class="prose"><b>The spreadsheet, properly.</b> <b>Import from Excel</b> is three numbered steps on one page.</p>
           <ul class="steps">
-            <li><b>1. Download the template.</b> The blue <b>Download blank template (.xlsx)</b> button gives you a file named
+            <li><b>1. Download the template.</b> The navy <b>Download blank template (.xlsx)</b> button gives you a file named
                 after your product with five columns: <b>Band*</b>, <b>Fabric name*</b>, Colour, Supplier, Code. Only the two
                 starred ones are required. <b>Each row becomes one fabric.</b> Row 3 of the file reminds you:
                 <code>* = required. Bands like A, B, C, AA, AAA &mdash; case is normalised. Duplicate (band + name + colour)
@@ -450,7 +452,7 @@ return [
              system. Clicking the pill jumps you straight to whichever piece is missing. The catalogue health check on the
              product&rsquo;s own page words it plainly: <code>No fabrics added. Salespeople won&rsquo;t be able to pick a fabric
              for this product.</code> One exception &mdash; a product ticked <b>&ldquo;No fabric to choose (headrail only,
-             track, spares)&rdquo;</b> never needs fabrics at all and is never asked for them. After an import, the green
+             track, spares)&rdquo;</b> never needs fabrics at all and is never asked for them. After an import, the navy
              <b>Continue product setup &rarr;</b> button takes you on to <b>price tables</b>; <b>View imported fabrics</b> takes
              you back to the list.</p>
 

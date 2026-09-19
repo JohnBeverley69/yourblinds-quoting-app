@@ -22,7 +22,7 @@ return [
         'blurb'   => 'All ten boxes on the Company tab, in order — and the letterhead they build on every quote, invoice and legal page.',
         'lede'    => 'These ten boxes are your <b>letterhead</b>. Your name, your contact details,
                       your VAT number and your address get printed at the top-left of every quote,
-                      order and invoice PDF you send &mdash; and all of it bar the VAT line on the
+                      invoice and receipt PDF you send &mdash; and all of it bar the VAT line on the
                       web page your customer opens on their phone. Fill them in once, properly, and
                       everything that leaves the app looks like it came from <b>you</b>. Here&rsquo;s
                       every box, in the order you meet them, and where each one ends up.',
@@ -221,7 +221,7 @@ return [
           <p><b>Work down the form.</b> They&rsquo;re in this order on screen:</p>
           <ul class="steps">
             <li><b>Company name</b> &mdash; the one with the little red <span class="req">*</span>. This is the
-                name that heads every quote, order and invoice; it sits at the very top of your public terms
+                name that heads every quote, invoice and receipt; it sits at the very top of your public terms
                 and privacy pages, above the document&rsquo;s own heading; and it&rsquo;s the second half of
                 those pages&rsquo; browser-tab title. Type it exactly as you want customers to read it.
                 Up to 150 characters.</li>
@@ -294,9 +294,11 @@ return [
           </ul>
 
           <p>You&rsquo;ll set this up once and barely touch it again &mdash; come back if you move premises or
-             register for VAT. While you&rsquo;re on this tab, two more short jobs sit just below this panel:
-             <a href="/help/guide.php?g=settings-logo"><b>your company logo</b></a> and the
-             <a href="/help/guide.php?g=settings-dashboard"><b>dashboard&rsquo;s joke of the day</b></a>.</p>',
+             register for VAT. While you&rsquo;re on this tab, three more short jobs sit just below this panel:
+             <a href="/help/guide.php?g=settings-logo"><b>your company logo</b></a>, the
+             <a href="/help/guide.php?g=settings-dashboard"><b>dashboard&rsquo;s joke of the day</b></a> and the
+             <a href="/help/guide.php?g=settings-calendar"><b>calendar options</b></a> &mdash; money on jobs,
+             your map app, and morning/afternoon booking windows.</p>',
         // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
         'script'  => [
             ['0:00', 'Setup opens; Settings; Company tab.',        'In the menu down the left, click Setup to open it, then click Settings. You land on Company — that\'s the first of the seven tabs along the top, and it\'s the one you want. Everything on this tab is about your business, not about any one job.', 1],

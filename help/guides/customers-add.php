@@ -285,8 +285,8 @@ return [
                     <table class="ctbl">
                       <thead><tr><th>ID</th><th>Email</th><th>Phone</th><th>Town</th><th>Postcode</th><th class="num">Quotes</th><th class="num">Appts</th><th>Created</th></tr></thead>
                       <tbody>
-                        <tr class="keeprow"><td>#312 <span class="kpill">Keeper</span></td><td>emma.f@icloud.com</td><td>01926 555771</td><td>Kenilworth</td><td>CV8 1AA</td><td class="num">0</td><td class="num">1</td><td>4 Jun 2026</td></tr>
-                        <tr><td>#487</td><td>emma.fletcher@gmail.com</td><td>01926 555104</td><td>Leamington Spa</td><td>CV32 5PJ</td><td class="num">4</td><td class="num">2</td><td>2 Aug 2026</td></tr>
+                        <tr class="keeprow"><td>#312 <span class="kpill">Keeper</span></td><td>emma.f@icloud.com</td><td>01926 555771</td><td>Kenilworth</td><td>CV8 1AA</td><td class="num">0</td><td class="num">1</td><td>2026-06-04 09:15:22</td></tr>
+                        <tr><td>#487</td><td>emma.fletcher@gmail.com</td><td>01926 555104</td><td>Leamington Spa</td><td>CV32 5PJ</td><td class="num">4</td><td class="num">2</td><td>2026-08-02 14:03:47</td></tr>
                       </tbody>
                     </table>
                     <div class="gacts"><span class="btns">Merge this group</span></div>

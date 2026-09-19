@@ -79,7 +79,7 @@ return [
           .gd .ghostbtn{ display:inline-flex; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); color:var(--ink); border-radius:7px; padding:.25rem .6rem; font-size:.66rem; font-weight:600; }
 
           /* ---- scene A: the options list ---- */
-          .gd .olist{ display:grid; grid-template-columns:.9rem 1fr 3rem 4.2rem 6.4rem; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+          .gd .olist{ display:grid; grid-template-columns:.9rem 1fr 3rem 6.7rem 6.4rem; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
           .gd .ol{ background:var(--surface); padding:.28rem .35rem; font-size:.66rem; color:var(--ink); }
           .gd .ol.hd{ background:var(--panel); color:var(--faint); font-weight:700; font-size:.58rem; text-transform:uppercase; letter-spacing:.03em; }
           .gd .ol.c{ text-align:center; }
@@ -176,16 +176,16 @@ return [
                     <span class="ol hd"></span><span class="ol hd">Name</span><span class="ol hd c">Choices</span><span class="ol hd">Updated</span><span class="ol hd"></span>
                     <span class="ol">&#8942;&#8942;</span>
                     <span class="ol">Control type <span class="rpill">REQUIRED</span></span>
-                    <span class="ol c">2</span><span class="ol numi">12 Sep 14:05</span>
+                    <span class="ol c">2</span><span class="ol numi">2026-09-12 14:05:33</span>
                     <span class="ol act">Edit &middot; Duplicate &middot; <span class="del">Delete</span></span>
                     <span class="ol">&#8942;&#8942;</span>
                     <span class="ol ind">Motor type <span class="opill">OPTIONAL</span>
                       <span class="pcond">Appears when <b>Control type = Motorised</b> is selected</span></span>
-                    <span class="ol c">3</span><span class="ol numi">12 Sep 14:22</span>
+                    <span class="ol c">3</span><span class="ol numi">2026-09-12 14:22:07</span>
                     <span class="ol act">Edit &middot; Duplicate &middot; <span class="del">Delete</span></span>
                     <span class="ol">&#8942;&#8942;</span>
                     <span class="ol">Fascia width <span class="opill">OPTIONAL</span></span>
-                    <span class="ol c numi">&#9998; number</span><span class="ol numi">12 Sep 15:01</span>
+                    <span class="ol c numi">&#9998; number</span><span class="ol numi">2026-09-12 15:01:41</span>
                     <span class="ol act">Edit &middot; Duplicate &middot; <span class="del">Delete</span></span>
                   </div>
                   <p class="exhelp">The navy <b>REQUIRED</b> pill = the customer must pick one. An indented <b>&#8627;</b> row only shows
@@ -436,13 +436,13 @@ return [
                         <div class="pvqhd">&#128065; Quote builder</div>
                         <div class="pvqbody">
                           <div class="pvqrow"><label>Control type <span class="req">*</span></label>
-                            <div class="selectbox f8"><span class="ph">&mdash; Select &mdash;</span><span class="val">Motorised</span></div></div>
+                            <div class="selectbox f8"><span class="ph">&mdash; Select &mdash;</span><span class="val">Motorised</span></div>
+                            <span class="pvthumb" style="margin-top:.2rem">&#128247;</span></div>
                           <div class="pvqchild">
                             <div class="pvqrow"><label>Motor type <span class="req">*</span></label><div class="selectbox">Tubular</div></div>
                             <div class="pvqrow"><label>Number of brackets</label><div class="boxv" style="height:22px">5</div></div>
-                            <div class="pvqrow"><label>Motorised</label><span class="pvthumb">&#128247;</span></div>
                           </div>
-                          <div class="pvqsum">Options: +&pound;132.50</div>
+                          <div class="pvqsum">+ extras &pound;132.50</div>
                         </div>
                       </div>
                     </div>
