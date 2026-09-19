@@ -31,6 +31,30 @@ if (!function_exists('be_norm_math')) {
     }
 }
 
+if (!function_exists('bv_builtin_vars')) {
+    /**
+     * The numeric inputs the build engine is fed for every blind, before any of
+     * the product's own rules are added. THE one list — every consumer reads it
+     * from here.
+     *
+     * It used to be written out by hand in four places and they drifted:
+     * worksheet-print.php (the real render) passed Fascia_Width, but the Build
+     * Rules editor's validator, its "Try a size" panel and system_check.php all
+     * still listed only four names. So the roller's live Fascia_Cut rule — which
+     * reads Fascia_Width and works correctly on the shop-floor ticket — could not
+     * be saved from the editor ("Unknown variable: Fascia_Width", edit silently
+     * discarded), and system_check.php reported a working rule as an anomaly.
+     *
+     * Adding a fifth input now means adding it here, once.
+     *
+     * @return list<string>
+     */
+    function bv_builtin_vars(): array
+    {
+        return ['Width', 'Drop', 'Fit_height', 'Quantity', 'Fascia_Width'];
+    }
+}
+
 if (!function_exists('build_evaluate')) {
     /**
      * @param array<string,mixed>  $numVars       name => number/string inputs
