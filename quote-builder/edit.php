@@ -3318,17 +3318,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // Noun follows the product type — slats for per-slat products.
             var noun   = perSlat ? 'slat'  : 'blind';
             var nounPl = perSlat ? 'slats' : 'blinds';
-            var bits;
-            if (qty > 1) {
-                bits = ['<strong>£' + total + '</strong> for ' + qty + ' ' + nounPl, '£' + unit + ' each'];
-            } else {
-                bits = ['<strong>£' + unit + '</strong> per ' + noun];
-            }
+            // The bold headline price. On a trade line it reads better LAST, so
+            // the line runs base → trade discount → buying price (the arithmetic
+            // in reading order) rather than result-first.
+            var headline = (qty > 1)
+                ? '<strong>£' + total + '</strong> for ' + qty + ' ' + nounPl + ' &middot; £' + unit + ' each'
+                : '<strong>£' + unit + '</strong> per ' + noun;
+
+            var bits = [];
             if (perSqm && data.width_mm && data.drop_mm) {
                 bits.push(((data.width_mm / 1000) * (data.drop_mm / 1000)).toFixed(2) + ' m²');
             }
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
+
+            var priceLast = false;
             <?php if ($isAdmin || $_perms['can_view_costs']): ?>
             // Internal-cost breakdown (markup % / discount %) — visible
             // only to admins and users with can_view_costs. Hidden from
@@ -3343,11 +3347,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <?php endif; ?>
             }
             if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
-            // Trade (buying) discount from the supplier — already baked into the base above.
+            // Trade (buying) discount from the supplier — already baked into the
+            // buying price. Show just base → discount % → price; the actual
+            // £ knocked off was noise, so it's dropped. Trailing zeros trimmed
+            // (15.00% -> 15%). The bold buying price then follows, at the end.
             if (data.trade_discount_percent > 0) {
-                bits.push('trade discount ' + Number(data.trade_discount_percent).toFixed(2) + '% (−£' + Number(data.trade_discount_amount || 0).toFixed(2) + '/blind)');
+                bits.push('trade discount ' + String(+Number(data.trade_discount_percent).toFixed(2)) + '%');
+                priceLast = true;
             }
             <?php endif; ?>
+
+            // Headline first normally; last on a trade line so it reads
+            // base → discount → buying price.
+            if (priceLast) { bits.push(headline); } else { bits.unshift(headline); }
             // Rounded-up cell size used to be shown here ("rounded up
             // to 1600 × 2000 mm") — trade users found it noisy / not
             // actionable, since the engine always rounds up to the
