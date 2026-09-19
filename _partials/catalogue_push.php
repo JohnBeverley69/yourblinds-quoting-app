@@ -691,11 +691,21 @@ function pp_sync_extras_and_choices(
     $hasLengthLabel = pp_column_exists($pdo, 'product_extras', 'length_input_label');
     $hasAllowMulti  = pp_column_exists($pdo, 'product_extras', 'allow_multi');
     $hasCodeCol     = pp_column_exists($pdo, 'product_extras', 'code');
+    // parent_match_all (AND-gating) and is_width_source drive the roller
+    // multi-blind fascia flow: match_all makes "Blind N Width" appear only as the
+    // count grows, is_width_source makes the "Fascia width" box drive price/cut.
+    // Without pushing them, a tenant's copy defaults to OR-gating (wrong number of
+    // width boxes) and a fascia width that doesn't price. Probe so pre-migration
+    // tenants still push.
+    $hasMatchAll    = pp_column_exists($pdo, 'product_extras', 'parent_match_all');
+    $hasWidthSrc    = pp_column_exists($pdo, 'product_extras', 'is_width_source');
 
     $extraCols = 'id, name, is_required, sort_order, active';
     if ($hasLengthLabel) $extraCols .= ', length_input_label';
     if ($hasAllowMulti)  $extraCols .= ', allow_multi';
     if ($hasCodeCol)     $extraCols .= ', code';
+    if ($hasMatchAll)    $extraCols .= ', parent_match_all';
+    if ($hasWidthSrc)    $extraCols .= ', is_width_source';
 
     $src = $pdo->prepare(
         "SELECT $extraCols FROM product_extras
@@ -754,6 +764,8 @@ function pp_sync_extras_and_choices(
             }
             if ($hasExtraSrc) { $cols[] = 'source_extra_id'; $params[] = $srcExtraId; }
             if ($hasExtraCode) { $cols[] = 'code'; $params[] = ($r['code'] ?? null) !== null && (string) $r['code'] !== '' ? (string) $r['code'] : null; }
+            if ($hasMatchAll) { $cols[] = 'parent_match_all'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
+            if ($hasWidthSrc) { $cols[] = 'is_width_source';  $params[] = (int) ($r['is_width_source']  ?? 0); }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -786,6 +798,10 @@ function pp_sync_extras_and_choices(
             if ($hasExtraCode && ($r['code'] ?? null) !== null && (string) $r['code'] !== '') {
                 $sets[] = 'code = ?'; $params[] = (string) $r['code'];
             }
+            // These are master-owned structural flags, so mirror them outright
+            // (the AND-gate and width-source must match the master exactly).
+            if ($hasMatchAll) { $sets[] = 'parent_match_all = ?'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
+            if ($hasWidthSrc) { $sets[] = 'is_width_source = ?';  $params[] = (int) ($r['is_width_source']  ?? 0); }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'
@@ -831,12 +847,19 @@ function pp_sync_choices(
     // tenants can resolve the same path. Without this the client side
     // shows the choice but no thumbnail, which is what triggered the
     // "wand image doesn't show on client side" report.
+    // code (migrate_extra_code.php) — the stable machine key the front-end keys
+    // the roller multi-blind fascia flow off (choice codes 'multi' / 'oversize').
+    // Without copying it, a tenant's pushed fascia-sizing choices arrive with
+    // code = NULL and the per-blind width fields never render. Probe so a tenant
+    // that hasn't run the migration still pushes (just without codes).
+    $hasChoiceCode = pp_column_exists($pdo, 'product_extra_choices', 'code');
+    $choiceCodeSel = $hasChoiceCode ? ', code' : '';
     $src = $pdo->prepare(
-        'SELECT id, label, system_id, price_delta, price_percent, price_per_metre,
-                is_default, sort_order, active, image_path
+        "SELECT id, label, system_id, price_delta, price_percent, price_per_metre,
+                is_default, sort_order, active, image_path$choiceCodeSel
            FROM product_extra_choices
           WHERE product_extra_id = ?
-          ORDER BY id'
+          ORDER BY id"
     );
     $src->execute([$sourceExtraId]);
 
@@ -915,6 +938,7 @@ function pp_sync_choices(
                 $imagePath,
             ];
             if ($hasSrcCol) { $cols[] = 'source_choice_id'; $params[] = $srcChoiceId; }
+            if ($hasChoiceCode) { $cols[] = 'code'; $params[] = ($r['code'] ?? null) !== null && (string) $r['code'] !== '' ? (string) $r['code'] : null; }
             $pdo->prepare(
                 'INSERT INTO product_extra_choices (' . implode(',', $cols) . ') VALUES ('
                 . implode(',', array_fill(0, count($cols), '?')) . ')'
@@ -946,6 +970,12 @@ function pp_sync_choices(
             // it also re-stamps a legacy row matched by label, which is how
             // identities fill in for rows pushed before the column existed.
             if ($hasSrcCol) { $sets[] = 'source_choice_id = ?'; $params[] = $srcChoiceId; }
+            // Carry the master's machine code so the front-end can spot the
+            // fascia-sizing modes ('multi' / 'oversize') on the tenant copy. Only
+            // fill it, never blank it — the code is master-owned, not tenant-set.
+            if ($hasChoiceCode && ($r['code'] ?? null) !== null && (string) $r['code'] !== '') {
+                $sets[] = 'code = ?'; $params[] = (string) $r['code'];
+            }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extra_choices SET ' . implode(', ', $sets) . ' WHERE id = ?'
