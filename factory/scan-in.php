@@ -54,6 +54,11 @@ $source = (string) ($_REQUEST['s'] ?? $_REQUEST['scanner'] ?? '');
 // whichever this scanner does, it lands. Query/form first, then the raw body.
 $rawBody = file_get_contents('php://input') ?: '';
 $code = trim((string) ($_REQUEST['c'] ?? $_REQUEST['code'] ?? ''));
+// A scanner that posts the code in its BODY (e.g. NetumScan's {"id","msg"}) may
+// still send the URL's literal "{CODE}" placeholder in ?c= if the template wasn't
+// edited. Treat any unsubstituted "{…}" placeholder as empty so we fall through
+// to the body — otherwise "{CODE}" itself gets read as the (unreadable) code.
+if ($code !== '' && strpos($code, '{') !== false) $code = '';
 if ($code === '' && $rawBody !== '') {
     $j = json_decode($rawBody, true);
     if (is_array($j)) {
