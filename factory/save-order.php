@@ -41,6 +41,14 @@ $vi->execute([$qid, $MASTER]);
 $validItems = array_map('intval', $vi->fetchAll(PDO::FETCH_COLUMN));
 $validItemSet = array_flip($validItems);
 
+// Enforce the second half of the contract above. The quotes lookup only proves
+// the order EXISTS — it is not scoped to this factory, so without this an id
+// typed into quote_id reaches another tenant's order. del_item checked itself,
+// but del_order and the header/due-date save below did not: they took $qid raw.
+// One guard here covers every branch. Mirrors the ownership test the sibling
+// handlers already do (boughtin-received.php, set-status.php, blind-action.php).
+if (!$validItems) { $fail("That order isn't yours to make."); }
+
 // Generic clone helpers (mirror the dummy-order seed).
 $freshTokens = static function (array $row): array {
     foreach ($row as $k => $v) {

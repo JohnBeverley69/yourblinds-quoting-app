@@ -22,5 +22,12 @@ RedirectMatch 403 ^/vendor(/|$)
 # Block direct access to the _partials folder (server-side includes only)
 RedirectMatch 403 ^/_partials(/|$)
 
+# Block the server-side library folder (vendored code, include-only).
+RedirectMatch 403 ^/_lib(/|$)
+
+# Block the seed CSVs — these are SUPPLIER WHOLESALE PRICE LISTS. They sit
+# in the web root and were being served to anyone who guessed the filename.
+RedirectMatch 403 ^/seed_data(/|$)
+
 # Block direct access to the .git folder
 RedirectMatch 403 ^/\.git(/|$)

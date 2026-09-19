@@ -53,15 +53,25 @@ $ids = array_values(array_unique(array_filter(
 // Preserve the filter / search the user was on so the redirect lands
 // them back on the same view — useful when they're cleaning up a
 // "drafts only" list and want to keep filtering after the delete.
+//
+// This reads ALL the return_* fields the list sends. It used to take only
+// status and q, so deleting from the Archived view or the Quotes scope
+// dumped you back on the default active-orders list — while "Archive
+// selected", posted from the SAME form, kept them. Keep this in step with
+// orders/archive.php, which builds the identical URL.
+$scope  = (($_POST['return_scope'] ?? '') === 'quotes') ? 'quotes' : 'orders';
 $status = trim((string) ($_POST['return_status'] ?? ''));
 $q      = trim((string) ($_POST['return_q'] ?? ''));
-$qs     = [];
-if ($status !== '') $qs[] = 'status=' . urlencode($status);
-if ($q      !== '') $qs[] = 'q='      . urlencode($q);
+$view   = (($_POST['return_view'] ?? '') === 'archived') ? 'archived' : 'active';
+$type   = in_array($_POST['return_type'] ?? '', ['retail', 'trade'], true)
+        ? (string) $_POST['return_type'] : '';
 // Redirects to the unified Order history page (the old quote-history
-// URL is now just a 301 to /orders/). Preserves the filter the user
-// was on so they land back on the same view.
-$back   = '/orders/index.php' . ($qs ? '?' . implode('&', $qs) : '');
+// URL is now just a 301 to /orders/).
+$back   = '/orders/index.php?scope=' . urlencode($scope)
+        . ($type   !== ''         ? '&type='   . rawurlencode($type)   : '')
+        . ($status !== ''         ? '&status=' . urlencode($status)    : '')
+        . ($q      !== ''         ? '&q='      . urlencode($q)         : '')
+        . ($view   === 'archived' ? '&view=archived'                   : '');
 
 if (!$ids) {
     $_SESSION['flash_error'] = 'No quotes selected.';

@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/_partials/build_eval.php';   // bv_builtin_vars()
 if (PHP_SAPI !== 'cli') {
     require_once __DIR__ . '/auth/middleware.php';
     requireSuperAdmin();
@@ -86,6 +87,24 @@ $factoryOf = static function (array $p) use ($hasSrc): int {
 
 $allReferencedTables = [];   // client => set of table names referenced by a formula
 
+/**
+ * " (closest groups here: Fascia Options, Fixings, …)" — the names that DO
+ * exist, nearest first, so a rename can be spotted without a second query.
+ * Returns '' when there is nothing to suggest.
+ */
+$nearest = static function (string $wanted, array $candidates, string $lead): string {
+    $candidates = array_values(array_unique(array_filter(array_map('strval', $candidates), static fn ($s) => trim($s) !== '')));
+    if (!$candidates) return '';
+    $scored = [];
+    foreach ($candidates as $c) {
+        similar_text(strtolower($wanted), strtolower($c), $pct);
+        $scored[] = [$pct, $c];
+    }
+    usort($scored, static fn ($a, $b) => $b[0] <=> $a[0]);
+    $top = array_slice(array_column($scored, 1), 0, 6);
+    return ' (' . $lead . ': ' . implode(', ', $top) . (count($candidates) > 6 ? ', …' : '') . ')';
+};
+
 $hdr('BUILD RULES — per product');
 foreach ($bvByProd as $pid => $vars) {
     $p = $products[$pid] ?? null;
@@ -113,7 +132,10 @@ foreach ($bvByProd as $pid => $vars) {
     $ss->execute([$pid]);
     foreach ($ss->fetchAll(PDO::FETCH_COLUMN) as $sn) { $sysSet[strtolower(trim((string) $sn))] = true; }
 
-    $validVars = ['width' => 1, 'drop' => 1, 'fit_height' => 1, 'quantity' => 1];
+    // Built-ins come from the engine's own list, not a copy kept here — a copy
+    // is how Fascia_Width came to be reported as an anomaly on a rule that in
+    // fact evaluates correctly on the real worksheet.
+    $validVars = array_fill_keys(array_map('strtolower', bv_builtin_vars()), 1);
     foreach ($vars as $v) { $validVars[strtolower((string) $v['name'])] = 1; }
 
     $seenCellMiss = []; $seenTblMiss = []; $seenVarMiss = [];
@@ -129,7 +151,15 @@ foreach ($bvByProd as $pid => $vars) {
             $ref = (string) ($col['ref'] ?? '');
             if ($lbl === 'system' || $ref === 'system') { $colValid[$i] = $sysSet; continue; }
             if (isset($extras[$lbl])) { $colValid[$i] = $choicesByExtra[$extras[$lbl]['id']] ?? []; }
-            else { $colValid[$i] = null; $bad("{$pname}: rule '{$vname}' column '" . ($col['label'] ?? '?') . "' — no option group of that name on this product"); }
+            else {
+                $colValid[$i] = null;
+                // Say what IS there. "No group of that name" on its own leaves you
+                // guessing whether the group was renamed, deleted, or never existed
+                // — and the usual cause is a rename, because renaming an option
+                // group does not cascade into build_variables (only System does).
+                $bad("{$pname}: rule '{$vname}' column '" . ($col['label'] ?? '?') . "' — no option group of that name on this product"
+                     . $nearest((string) ($col['label'] ?? ''), array_map(static fn ($e) => $e['name'], $extras), 'closest groups here'));
+            }
         }
 
         foreach ($rows as $row) {
@@ -143,7 +173,14 @@ foreach ($bvByProd as $pid => $vars) {
                     $k = $vname . '|' . $i . '|' . $cell;
                     if (!isset($seenCellMiss[$k])) { $seenCellMiss[$k] = 1;
                         $lbl = $cols[$i]['label'] ?? ('col' . $i);
-                        $bad("{$pname}: rule '{$vname}' — '{$cell}' in '{$lbl}' has no matching active choice/system");
+                        $realLabels = [];
+                        if (strtolower(trim((string) $lbl)) === 'system' || (string) ($cols[$i]['ref'] ?? '') === 'system') {
+                            $realLabels = array_keys($sysSet);
+                        } elseif (isset($extras[strtolower(trim((string) $lbl))])) {
+                            $realLabels = array_keys($choicesByExtra[$extras[strtolower(trim((string) $lbl))]['id']] ?? []);
+                        }
+                        $bad("{$pname}: rule '{$vname}' — '{$cell}' in '{$lbl}' has no matching active choice/system"
+                             . $nearest($cell, $realLabels, 'active values there'));
                     }
                 }
             }

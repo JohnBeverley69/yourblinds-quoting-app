@@ -206,7 +206,7 @@ if ($productId > 0) {
 // The names a formula on THIS product may reference: the built-ins plus every
 // rule on the product. Powers the clickable chips AND the "Check" validation.
 require_once __DIR__ . '/../_partials/build_eval.php';   // be_norm_math + formula_eval (via formula_engine)
-$validNames = ['Width', 'Drop', 'Fit_height', 'Quantity'];
+$validNames = bv_builtin_vars();
 foreach ($vars as $v) $validNames[] = (string) $v['name'];
 $validNames = array_values(array_unique(array_filter($validNames)));
 
@@ -258,12 +258,14 @@ $CALC_GLOSS = [
 // / EVEN), so evaluate them here against the picked options and return JSON.
 if (($_GET['action'] ?? '') === 'evalbuild') {
     header('Content-Type: application/json');
-    $numVars = [
-        'Width'      => (float) ($_GET['w'] ?? 0),
-        'Drop'       => (float) ($_GET['d'] ?? 0),
-        'Fit_height' => 0.0,
-        'Quantity'   => 1.0,
-    ];
+    // Start from the canonical built-in list so this pool can never again be
+    // missing an input the real worksheet render supplies — a rule referencing
+    // it would fail here while working perfectly on the shop floor.
+    $numVars = array_fill_keys(bv_builtin_vars(), 0.0);
+    $numVars['Width']        = (float) ($_GET['w']  ?? 0);
+    $numVars['Drop']         = (float) ($_GET['d']  ?? 0);
+    $numVars['Quantity']     = 1.0;
+    $numVars['Fascia_Width'] = (float) ($_GET['fw'] ?? 0);
     $optSel = [];
     foreach ((array) ($_GET['opt'] ?? []) as $lab => $val) {
         // build_evaluate falls back to the lowercased option-group label.

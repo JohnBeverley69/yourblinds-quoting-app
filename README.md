@@ -49,24 +49,45 @@ GRANT ALL PRIVILEGES ON yourblinds.* TO 'yourblinds_app'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### 4. Load schema and seed data
+### 4. Load the schema
+
+> **The base schema is not in this repository.** `database/install.sql` and
+> `database/seed.sql` were removed in commit `1f8a0d2`, and `migrate_calendar.php`
+> in `f23c333`. Nothing in the repo creates the core tables — `products`,
+> `quotes`, `quote_items`, `clients`, `client_settings`, `customers`,
+> `price_tables` and around forty others. The live database is currently the
+> only copy of that schema: a new environment cannot be built from git alone,
+> and a lost database cannot be rebuilt from it either.
+>
+> **To produce one from the live database** (structure only, no customer data):
+>
+> ```sh
+> mysqldump --no-data --routines --skip-add-drop-table \
+>     -u <user> -p <dbname> > database/install.sql
+> ```
+>
+> Commit that file. `.gitignore` excludes only `database/*_dump*.sql` and
+> `database/live_dump*.sql`, so `install.sql` is safe to track. Until then the
+> only way to stand up a new environment is to copy an existing database.
+
+Once you have `install.sql`:
 
 ```sh
 mysql -u yourblinds_app -p yourblinds < database/install.sql
-mysql -u yourblinds_app -p yourblinds < database/seed.sql
 ```
 
-`install.sql` is idempotent (safe to re-run); it drops in dependency order then re-creates all tables. `seed.sql` populates initial reference data (suppliers, fabrics, default pricing).
+### 5. Run the migrations
 
-### 5. Run the calendar migration
-
-The calendar module added tables and columns after the initial schema. Run once:
+The `migrate_*.php` scripts at the repo root carry every schema change made
+since the base schema — the factory floor, production areas, build variables,
+the AR/invoicing tables, the accounting connection. They are idempotent and
+guarded (super-admin over the web, or CLI):
 
 ```sh
-php migrate_calendar.php
+php migrate_<name>.php
 ```
 
-It's also idempotent — safe to re-run anytime.
+Run `/system_check.php` afterwards to confirm the result is coherent.
 
 ### 6. Configure environment
 
@@ -99,7 +120,11 @@ Then open http://localhost:8000/auth/login.php
 
 ### 8. Log in
 
-The first admin user is created by `seed.sql`. Check the seed file for the username and initial password, then change the password immediately via **Admin → Users**.
+There is no seeded admin user (see step 4 — `seed.sql` is not in the repo).
+Create the first login directly in the `client_users` table with a
+`password_hash` produced by PHP's `password_hash()`, then sign in and change
+it via **Admin → Users**. `/grant_super_admin.php` raises an EXISTING login to
+super-admin; it will not create one.
 
 ## Project layout
 

@@ -115,7 +115,7 @@ $activeNav = 'supplier-requests';
         <?php if (!$ready): ?>
             <section class="section">
                 <div class="alert alert-error" role="alert">
-                    Run <a href="/migrate_supplier_requests.php"><code>/migrate_supplier_requests.php</code></a> first.
+                    Run <code>/migrate_supplier_requests.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span> first.
                 </div>
             </section>
         <?php else: ?>

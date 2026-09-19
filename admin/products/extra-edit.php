@@ -178,6 +178,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([$f['before_size'], $id, $clientId]);
             } catch (Throwable $e) { /* column not migrated yet — ignore */ }
 
+            // Build rules bind a column to this group by its NAME (no FK), so a
+            // rename here has to be carried into them or the rule silently stops
+            // matching and the blind sizes wrong at ticket time. Same reason the
+            // System rename cascades in admin/products/systems.php.
+            require_once __DIR__ . '/../../_partials/build_var_rename_system.php';
+            build_var_rename_group($pdo, (int) $extra['product_id'], (string) $extra['name'], (string) $f['name']);
+
             // Replace the junction rows. Validate ids belong to this
             // product's catalogue first (POST inputs aren't trustworthy).
             $pdo->prepare(

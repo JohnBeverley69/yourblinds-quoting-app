@@ -35,7 +35,13 @@ $scope  = (($_POST['return_scope']  ?? '') === 'quotes') ? 'quotes' : 'orders';
 $status = trim((string) ($_POST['return_status'] ?? ''));
 $qStr   = trim((string) ($_POST['return_q'] ?? ''));
 $view   = (($_POST['return_view'] ?? '') === 'archived') ? 'archived' : 'active';
+// The retail/trade facet is threaded into every other link on the list, so it
+// has to survive a bulk action too — otherwise archiving from the Trade view
+// drops you back into the combined list.
+$type   = in_array($_POST['return_type'] ?? '', ['retail', 'trade'], true)
+        ? (string) $_POST['return_type'] : '';
 $return = '/orders/index.php?scope=' . urlencode($scope)
+        . ($type   !== '' ? '&type=' . rawurlencode($type) : '')
         . ($status !== '' ? '&status=' . urlencode($status) : '')
         . ($qStr   !== '' ? '&q=' . urlencode($qStr) : '')
         . ($view === 'archived' ? '&view=archived' : '');

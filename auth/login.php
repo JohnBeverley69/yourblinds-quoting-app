@@ -70,7 +70,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($valid && !$verified) {
+        // Deactivating a whole trade account has to actually stop its logins.
+        // The confirm dialog on master-admin/trade-account.php promises exactly
+        // that — "Their logins won't be able to sign in until you re-activate" —
+        // but only client_users.active was ever checked, never clients.active,
+        // so every login under a deactivated account still worked. Probed on its
+        // own and guarded (same idiom as the verification probe above) so a
+        // schema without clients.active can never lock everyone out.
+        $clientSuspended = false;
+        if ($valid) {
+            try {
+                $cs = db()->prepare('SELECT active FROM clients WHERE id = ? LIMIT 1');
+                $cs->execute([(int) $user['client_id']]);
+                $cAct = $cs->fetchColumn();
+                $clientSuspended = ($cAct !== false) && (int) $cAct !== 1;
+            } catch (Throwable $e) {
+                $clientSuspended = false;
+            }
+        }
+
+        if ($valid && $clientSuspended) {
+            // Only shown once the password is already correct, so this cannot be
+            // used to enumerate which accounts exist or are suspended.
+            $error = 'This account has been suspended. Please contact us to reactivate it.';
+        } elseif ($valid && !$verified) {
             $needsVerification = true;
             $unverifiedEmail   = (string) ($user['email'] ?? '');
             $error = 'Please confirm your email address before signing in — check your inbox for the link we sent.';

@@ -288,7 +288,7 @@ $activeNav = 'fabric-library';
         <?php if (!$ready): ?>
             <section class="section">
                 <div class="alert alert-error" role="alert">
-                    Run <a href="/migrate_fabric_library.php"><code>/migrate_fabric_library.php</code></a> first.
+                    Run <code>/migrate_fabric_library.php</code> <span class="ui-hint">(a one-off script, removed from the repo once it had been applied — restore it from git history if this database still needs it)</span> first.
                 </div>
             </section>
         <?php elseif (!$suppliers): ?>
@@ -358,7 +358,7 @@ $activeNav = 'fabric-library';
                             <?php foreach ($result['sheets'] as $sh): ?>
                                 <span style="display:inline-block;margin-right:1.25rem">
                                     <strong><?= e((string) $sh['name']) ?></strong>: <?= (int) $sh['count'] ?>
-                                    <span style="color:var(--text-faint)">[<?= e(implode(', ', array_map(fn ($f, $c) => "$f→$c", array_keys($sh['mapped']), array_values($sh['mapped'])))) ?>]</span>
+                                    <span style="color:var(--text-faint)">[<?= e(implode(', ', array_map(fn ($f, $c) => "{$f}→{$c}", array_keys($sh['mapped']), array_values($sh['mapped'])))) ?>]</span>
                                 </span>
                             <?php endforeach; ?>
                         </div>

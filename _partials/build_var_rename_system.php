@@ -61,3 +61,98 @@ if (!function_exists('build_var_rename_system')) {
         }
     }
 }
+
+if (!function_exists('build_var_rename_group')) {
+    /**
+     * Same problem, the other two name strings.
+     *
+     * A build variable's COLUMN is bound to an option group by `label` (the
+     * `ref` carries extra:<id>, but every consumer matches on the label —
+     * system_check.php and build_evaluate both look the group up by name). And
+     * each CELL is the choice's label. So renaming an option group, or one of
+     * its choices, silently unbinds the rule: the column matches no group, or
+     * the row matches no choice, and the blind sizes wrong or blank at ticket
+     * time with nothing to show for it but a system_check line.
+     *
+     * Only the System rename used to cascade. These two close the gap.
+     *
+     * Rewrites every column whose label equals $oldLabel. Returns columns changed.
+     */
+    function build_var_rename_group(PDO $pdo, int $productId, string $oldLabel, string $newLabel): int
+    {
+        $oldLabel = trim($oldLabel);
+        $newLabel = trim($newLabel);
+        if ($oldLabel === '' || $newLabel === '' || $oldLabel === $newLabel) return 0;
+        try {
+            $sel = $pdo->prepare('SELECT id, columns_json FROM build_variables WHERE product_id = ?');
+            $sel->execute([$productId]);
+            $upd = $pdo->prepare('UPDATE build_variables SET columns_json = ? WHERE id = ?');
+            $oldLc = mb_strtolower($oldLabel);
+            $changed = 0;
+            foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $v) {
+                $cols = json_decode((string) $v['columns_json'], true) ?: [];
+                $dirty = false;
+                foreach ($cols as &$c) {
+                    if (mb_strtolower(trim((string) ($c['label'] ?? ''))) === $oldLc) {
+                        $c['label'] = $newLabel;
+                        $dirty = true; $changed++;
+                    }
+                }
+                unset($c);
+                if ($dirty) $upd->execute([json_encode($cols), (int) $v['id']]);
+            }
+            return $changed;
+        } catch (Throwable $e) {
+            error_log('build_var_rename_group failed: ' . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('build_var_rename_choice')) {
+    /**
+     * Rewrites cells equal to $oldValue in the column bound to $groupLabel.
+     * Scoped to that one column so renaming "None" in Fascia Options cannot
+     * touch a "None" that legitimately lives in Braid or Eyelets.
+     *
+     * Returns cells changed.
+     */
+    function build_var_rename_choice(PDO $pdo, int $productId, string $groupLabel, string $oldValue, string $newValue): int
+    {
+        $groupLabel = trim($groupLabel);
+        $oldValue   = trim($oldValue);
+        $newValue   = trim($newValue);
+        if ($groupLabel === '' || $oldValue === '' || $newValue === '' || $oldValue === $newValue) return 0;
+        try {
+            $sel = $pdo->prepare('SELECT id, columns_json, rows_json FROM build_variables WHERE product_id = ?');
+            $sel->execute([$productId]);
+            $upd = $pdo->prepare('UPDATE build_variables SET rows_json = ? WHERE id = ?');
+            $groupLc = mb_strtolower($groupLabel);
+            $oldLc   = mb_strtolower($oldValue);
+            $changed = 0;
+            foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $v) {
+                $cols = json_decode((string) $v['columns_json'], true) ?: [];
+                $rows = json_decode((string) $v['rows_json'], true) ?: [];
+                $idx  = null;
+                foreach ($cols as $i => $c) {
+                    if (mb_strtolower(trim((string) ($c['label'] ?? ''))) === $groupLc) { $idx = (int) $i; break; }
+                }
+                if ($idx === null) continue;
+                $dirty = false;
+                foreach ($rows as &$row) {
+                    if (!isset($row['cells'][$idx])) continue;
+                    if (mb_strtolower(trim((string) $row['cells'][$idx])) === $oldLc) {
+                        $row['cells'][$idx] = $newValue;
+                        $dirty = true; $changed++;
+                    }
+                }
+                unset($row);
+                if ($dirty) $upd->execute([json_encode($rows), (int) $v['id']]);
+            }
+            return $changed;
+        } catch (Throwable $e) {
+            error_log('build_var_rename_choice failed: ' . $e->getMessage());
+            return 0;
+        }
+    }
+}

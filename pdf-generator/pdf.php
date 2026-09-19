@@ -193,7 +193,10 @@ function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote
         }
     }
 
-    $html = pdf_quote_html($quote, $items, $extrasByItem);
+    $html = pdf_quote_html(
+        $quote, $items, $extrasByItem,
+        $docLabel, $clientId, $pdfTradeAccount, $received, $balanceDue
+    );
 
     $options = new Options();
     $options->set('isRemoteEnabled',      false);
@@ -327,9 +330,26 @@ function pdf_render_supplier_order(array $ctx, array $items): ?string
  * Build the printable HTML for one quote — customer-facing version.
  * Inline CSS — Dompdf has isRemoteEnabled = false (intentionally), so
  * external stylesheets won't load.
+ *
+ * Everything this needs is passed in. It used to read $docLabel, $clientId,
+ * $pdfTradeAccount, $received and $balanceDue straight out of the air: they are
+ * locals of pdf_render_quote(), and a function does not inherit its caller's
+ * scope (unlike an include). So they were all null here, which meant the
+ * document label vanished, the Paid/Balance-due rows never rendered, the linked
+ * trade account was ignored, the legal links came out as ?c=0 — and, because
+ * this file is strict_types=1, strtolower($docLabel) on the terms line threw a
+ * TypeError and killed PDF generation outright for any tenant with terms text.
  */
-function pdf_quote_html(array $quote, array $items, array $extrasByItem): string
-{
+function pdf_quote_html(
+    array $quote,
+    array $items,
+    array $extrasByItem,
+    string $docLabel,
+    int $clientId,
+    ?array $pdfTradeAccount,
+    float $received,
+    float $balanceDue
+): string {
     $money   = static fn ($n)         => '&pound;' . number_format((float) $n, 2);
     $fmtDate = static function (?string $dt): string {
         if (!$dt) return '&mdash;';

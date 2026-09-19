@@ -25,7 +25,7 @@ declare(strict_types=1);
  *     (roller_fascia), defaults LL/Senses -12 / -4 / +38 (Recess/Exact/Cloth);
  *     Standard (None) → blank.
  *
- *   FABRIC DROP = Drop + 400 for any scallop / trim; + 350 only for "Not Required".
+ *   FABRIC DROP = Drop + 400 for any scallop / trim; + 350 only for "No Scallop".
  *   CHAIN LENGTH = (Drop - 100) * 2 — chain-operated (Side Winder) only.
  *
  * Fascia/Fit/Scallops/Control are decision-table columns (a formula can't read an
@@ -131,8 +131,8 @@ $LL_FASCIAS = ['LL 70mm Cassette', 'LL 40mm Cassette', 'Grip Fix Cassette'];
 // fascia); then Standard (None) / LL (open 70mm, incl Grip Fix) / Senses.
 $tubeRows = [];
 $tubeRows[] = ['cells' => ['', 'Cloth Size'],   'result' => 'Width + LOOKUP("roller_pole", "cloth")'];
-$tubeRows[] = ['cells' => ['None', 'Recess'],   'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];
-$tubeRows[] = ['cells' => ['None', 'Exact'],    'result' => 'Width + LOOKUP("roller_pole", "standard", "exact")'];
+$tubeRows[] = ['cells' => ['No Fascia', 'Recess'],   'result' => 'Width + LOOKUP("roller_pole", "standard", "recess")'];
+$tubeRows[] = ['cells' => ['No Fascia', 'Exact'],    'result' => 'Width + LOOKUP("roller_pole", "standard", "exact")'];
 $tubeRows[] = ['cells' => ['Senses', 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "senses", "recess")'];
 $tubeRows[] = ['cells' => ['Senses', 'Exact'],  'result' => 'Width + LOOKUP("roller_pole", "senses", "exact")'];
 foreach ($LL_FASCIAS as $f) $tubeRows[] = ['cells' => [$f, 'Recess'], 'result' => 'Width + LOOKUP("roller_pole", "ll", "recess")'];
@@ -153,11 +153,11 @@ foreach ($LL_FASCIAS as $f) {
 }
 $fasciaRows[] = ['cells' => ['', ''], 'result' => '""'];   // None / anything else → no fascia piece
 
-// Fabric_Drop — Drop + 400 for any scallop / trim; + 350 only for "Not Required"
+// Fabric_Drop — Drop + 400 for any scallop / trim; + 350 only for "No Scallop"
 // (plain, no scallop). The scallop choices were split per-shape, so the old
 // shaped-label list no longer matched — every scalloped bottom now gets +400.
 $dropRows = [
-    ['cells' => ['Not Required'], 'result' => 'Drop + 350'],
+    ['cells' => ['No Scallop'], 'result' => 'Drop + 350'],
     ['cells' => [''],             'result' => 'Drop + 400'],
 ];
 

@@ -411,6 +411,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
 
+                // A build rule matches a row by the choice's LABEL inside this
+                // group's column (no FK), so renaming a choice has to be carried
+                // into the rules or the row silently stops firing and the blind
+                // sizes wrong — or blank — on the real ticket. Scoped to this
+                // group's column, so renaming "None" here cannot disturb a "None"
+                // that legitimately lives in Braid, Eyelets or Finial.
+                require_once __DIR__ . '/../../_partials/build_var_rename_system.php';
+                build_var_rename_choice(
+                    $pdo,
+                    (int) $choice['product_id'],
+                    (string) $choice['extra_name'],
+                    (string) $choice['label'],
+                    (string) $f['label']
+                );
+
                 // per_metre_basis lives on its own small UPDATE so it doesn't
                 // have to be threaded through both branches above. Skipped on
                 // schemas without the column (defaults to width everywhere).
