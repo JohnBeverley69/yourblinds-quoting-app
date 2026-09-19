@@ -1323,6 +1323,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </div>
                 </div>
 
+                <!-- Options flagged "before size" (e.g. the roller fascia group)
+                     render here, above Width/Drop. Populated by renderExtras(). -->
+                <div id="item-extras-before" class="extras-grid" style="display:none; margin-bottom:0.75rem"></div>
+
                 <div class="form-row cols-3 cols-3-plus-notes">
                     <div class="form-group" id="item-width-group">
                         <label for="item-width">Width (<?= e($unitSuffix) ?>) <span class="required">*</span></label>
@@ -2231,7 +2235,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
     var extrasWrap    = document.getElementById('item-extras-wrap');
     var extrasBox     = document.getElementById('item-extras');
+    var beforeBox     = document.getElementById('item-extras-before');   // options set "before size"
     var previewBox    = document.getElementById('item-preview');
+    // Options can render in two places now (before / after the size row), so
+    // extras lookups must search both boxes.
+    function xNodes(sel) {
+        var a = [];
+        [beforeBox, extrasBox].forEach(function (b) {
+            if (b) b.querySelectorAll(sel).forEach(function (n) { a.push(n); });
+        });
+        return a;
+    }
+    function xNode(sel) {
+        if (beforeBox) { var n = beforeBox.querySelector(sel); if (n) return n; }
+        return extrasBox ? extrasBox.querySelector(sel) : null;
+    }
     var submitBtns    = document.querySelectorAll('#add-item-form .item-submit');
     // Editing an existing line (vs adding) — the item_id hidden field is only
     // present on edit. "Multi blind" can't be applied when editing one line
@@ -2295,6 +2313,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             fabricSearch.placeholder = 'Choose product first';
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
+            if (beforeBox) { beforeBox.innerHTML = ''; beforeBox.style.display = 'none'; }
             requiresOption = true;   // restore default pickers
             widthOnly = false;       // restore drop field
             perSlat = false;         // restore width field
@@ -2524,6 +2543,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     function escapeAttr(s) { return escapeHtml(s); }
 
     function renderExtras() {
+        if (beforeBox) { beforeBox.innerHTML = ''; beforeBox.style.display = 'none'; }
         if (!productData || !productData.extras || productData.extras.length === 0) {
             extrasWrap.style.display = 'none';
             extrasBox.innerHTML = '';
@@ -2538,7 +2558,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         //   preset[<eid>__multi]  — array of choice_ids for multi-pick
         //   preset[<eid>__uv]     — typed user_value (length input)
         var preset = {};
-        extrasBox.querySelectorAll('[data-extra-id]').forEach(function (div) {
+        xNodes('[data-extra-id]').forEach(function (div) {
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             var sel = div.querySelector('select');
             if (sel) preset[eid] = sel.value;
@@ -2935,18 +2955,32 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
 
         var html = '';
+        var htmlBefore = '';
         var anyVisible = false;
+        var anyBefore = false;
         productData.extras.forEach(function (extra) {
             var parents = extra.parent_choice_ids || [];
             if (parents.length > 0) return;   // children handled recursively
             if (!isVisible(extra)) return;
-            anyVisible = true;
-            html += '<div class="extra-cell">' + renderTreeInto(extra, 0) + '</div>';
+            var cell = '<div class="extra-cell">' + renderTreeInto(extra, 0) + '</div>';
+            if (extra.before_size) { htmlBefore += cell; anyBefore = true; }
+            else                   { html += cell;       anyVisible = true; }
         });
+
+        // Before-size slot (above Width/Drop) — its own little grid.
+        if (beforeBox) {
+            beforeBox.innerHTML = anyBefore ? htmlBefore : '';
+            beforeBox.style.display = anyBefore ? '' : 'none';
+        }
 
         if (anyVisible) {
             extrasBox.innerHTML = html;
             extrasWrap.style.display = '';
+        } else if (anyBefore) {
+            // Everything visible went to the before-slot; the "Options" section
+            // below has nothing to show.
+            extrasBox.innerHTML = '';
+            extrasWrap.style.display = 'none';
         } else {
             // Options are band-scoped, so they only appear once a fabric
             // is picked. Rather than silently hiding the whole section
@@ -2971,20 +3005,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // <select>s (single-pick) and the multi-choice tick-boxes need
         // listeners; ticking/unticking a multi-pick parent affects
         // which children are visible.
-        extrasBox.querySelectorAll('select').forEach(function (sel) {
+        xNodes('select').forEach(function (sel) {
             sel.addEventListener('change', function () {
                 renderExtras();
                 schedulePreview();
             });
         });
-        extrasBox.querySelectorAll('input[data-multi-choice]').forEach(function (cb) {
+        xNodes('input[data-multi-choice]').forEach(function (cb) {
             cb.addEventListener('change', function () {
                 renderExtras();
                 schedulePreview();
             });
         });
         // Roller multi-blind: typing a "Blind N Width" re-prices the summary.
-        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
+        xNodes('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
             inp.addEventListener('input', schedulePreview);
         });
         // Reflect the fascia-sizing mode into the Width field + fascia-width box.
@@ -3003,7 +3037,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (!ext) return null;
         // The select is present in the DOM whenever the mode is relevant (a real
         // fascia is picked). Not shown → no sizing mode applies.
-        var sel = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
+        var sel = xNode('[data-extra-code="fascia_sizing"] select');
         if (!sel) return null;
         var cid = parseInt(sel.value, 10);
         if (!cid) return null;
@@ -3017,7 +3051,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         var out = [];
         // Only the number box (data-uv-for) — NOT the hidden extras[][extra_id]
         // input that also lives inside the group (its value is the extra id).
-        extrasBox.querySelectorAll('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
+        xNodes('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
             var v = parseFloat(inp.value);
             if (!isNaN(v) && v > 0) out.push(inp.value.trim());
         });
@@ -3032,7 +3066,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // one line into many; the salesperson deletes and re-adds instead.
         if (qbEditing && productData && productData.extras) {
             var sizExt = productData.extras.find(function (e) { return e.code === 'fascia_sizing'; });
-            var ssel   = extrasBox.querySelector('[data-extra-code="fascia_sizing"] select');
+            var ssel   = xNode('[data-extra-code="fascia_sizing"] select');
             if (sizExt && ssel) {
                 var multiCh = sizExt.choices.find(function (c) { return c.code === 'multi'; });
                 if (multiCh) {
@@ -3173,7 +3207,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // handle this without further special-casing.
     function collectExtras() {
         var out = [];
-        var divs = extrasBox.querySelectorAll('[data-extra-id]');
+        var divs = xNodes('[data-extra-id]');
         divs.forEach(function (div) {
             var eid = parseInt(div.getAttribute('data-extra-id'), 10);
             if (eid <= 0) return;
@@ -3535,7 +3569,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var mode = fasciaSizingMode();
             var widths = (mode === 'multi') ? multiBlindWidths() : [];
             ['fascia_sizing', 'fascia_blind_count', 'fascia_blind_width'].forEach(function (code) {
-                extrasBox.querySelectorAll('[data-extra-code="' + code + '"]').forEach(function (div) {
+                xNodes('[data-extra-code="' + code + '"]').forEach(function (div) {
                     div.querySelectorAll('[name]').forEach(function (el) { el.removeAttribute('name'); });
                 });
             });

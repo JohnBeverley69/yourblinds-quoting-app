@@ -21,7 +21,7 @@ if ($id <= 0) {
 try {
     $loadStmt = db()->prepare(
         'SELECT e.id, e.product_id, e.parent_choice_id, e.name, e.is_required,
-                e.length_input_label, e.allow_multi,
+                e.length_input_label, e.allow_multi, e.before_size,
                 e.sort_order, e.active,
                 p.name AS product_name
            FROM product_extras e
@@ -91,6 +91,9 @@ $f = [
     // allow_multi: 0 (default) = single-pick dropdown in the quote
     // builder. 1 = checkbox list, salesperson can tick any number.
     'allow_multi'        => (int)    ($extra['allow_multi'] ?? 0),
+    // before_size: 1 = render this option (and its children) ABOVE the Width/Drop
+    // size fields in the quote builder / InstaPrice; 0 (default) = below.
+    'before_size'        => (int)    ($extra['before_size'] ?? 0),
 ];
 $error = null;
 
@@ -102,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['active']             = !empty($_POST['active']) ? 1 : 0;
     $f['length_input_label'] = trim((string) ($_POST['length_input_label'] ?? ''));
     $f['allow_multi']        = !empty($_POST['allow_multi']) ? 1 : 0;
+    $f['before_size']        = !empty($_POST['before_size']) ? 1 : 0;
     $f['parent_choice_ids']  = array_values(array_unique(array_filter(array_map(
         'intval',
         is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
@@ -167,6 +171,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $id, $clientId,
                 ]);
             }
+            // before_size is a later column (migrate_extra_before_size.php) —
+            // saved separately and guarded so a pre-migration DB still saves the rest.
+            try {
+                $pdo->prepare('UPDATE product_extras SET before_size = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$f['before_size'], $id, $clientId]);
+            } catch (Throwable $e) { /* column not migrated yet — ignore */ }
 
             // Replace the junction rows. Validate ids belong to this
             // product's catalogue first (POST inputs aren't trustworthy).
@@ -420,6 +430,12 @@ $activeNav = 'products';
                         <small>renders as tick-boxes instead of a dropdown &mdash; salesperson can pick any combination, each ticked choice contributes to the price</small>
                     </label>
                     <?php endif; ?>
+                    <label for="before_size">
+                        <input type="checkbox" id="before_size" name="before_size" value="1"
+                               <?= (int) ($f['before_size'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        Show above the size fields
+                        <small>renders this option (and anything nested under it) before Width / Drop in the quote builder &mdash; e.g. the roller fascia group, so multi-fascia per-blind widths make sense</small>
+                    </label>
                     <label for="active">
                         <input type="checkbox" id="active" name="active" value="1"
                                <?= (int) $f['active'] === 1 ? 'checked' : '' ?>>

@@ -168,7 +168,7 @@ try {
 try {
     $st = $pdo->prepare(
         'SELECT id, name, is_required, parent_choice_id,
-                length_input_label, allow_multi, sort_order
+                length_input_label, allow_multi, before_size, sort_order
            FROM product_extras
           WHERE product_id = ? AND client_id = ? AND active = 1
        ORDER BY sort_order, name'
@@ -186,7 +186,7 @@ try {
         );
         $st->execute([$productId, $clientId]);
         $extrasRaw = $st->fetchAll();
-        foreach ($extrasRaw as &$r) $r['allow_multi'] = 0;
+        foreach ($extrasRaw as &$r) { $r['allow_multi'] = 0; $r['before_size'] = 0; }
         unset($r);
     } catch (Throwable $eB) {
         $st = $pdo->prepare(
@@ -200,6 +200,7 @@ try {
         foreach ($extrasRaw as &$r) {
             $r['length_input_label'] = null;
             $r['allow_multi']        = 0;
+            $r['before_size']        = 0;
         }
         unset($r);
     }
@@ -416,6 +417,9 @@ $extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, 
         // allow_multi — when truthy, the quote builder renders this
         // option as checkboxes (multi-pick) instead of a dropdown.
         'allow_multi'        => (int) ($r['allow_multi'] ?? 0) === 1,
+        // before_size — render this option (and its nested children) ABOVE the
+        // Width/Drop fields when true (e.g. the roller fascia group).
+        'before_size'        => (int) ($r['before_size'] ?? 0) === 1,
         'choices'            => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);
