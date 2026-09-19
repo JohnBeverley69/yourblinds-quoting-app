@@ -425,7 +425,6 @@ table { border-collapse: collapse; }
 .items .desc { color: #4b5563; font-size: 10px; margin-top: 3px; line-height: 1.45; }
 .items .size { color: #111827; font-size: 10.5px; font-weight: 600; margin-top: 3px; }
 .items .extras { color: #6b7280; font-size: 10px; margin-top: 3px; }
-.items .trade-disc { color: #374151; font-size: 10px; margin-top: 4px; }
 .items tfoot td { padding: 6px 8px; font-size: 11px; }
 .items tfoot td.label { text-align: right; color: #6b7280; }
 .items tfoot td.val   { text-align: right; font-weight: 600; }
@@ -495,7 +494,10 @@ VAT No. <?= e((string) $quote['trade_vat_number']) ?>
 <?php
 $showLinePrices = ((int) ($quote['show_line_prices'] ?? 1)) === 1;
 $showLineSizes  = ((int) ($quote['show_line_sizes'] ?? 1)) === 1;
-$colCount = $showLinePrices ? 5 : 3;
+// A trade quote (raised for an account) gets an extra Discount column between
+// Unit and Total; retail quotes are unchanged.
+$isTradeQuote = $showLinePrices && (int) ($quote['account_client_id'] ?? 0) > 0;
+$colCount = $showLinePrices ? ($isTradeQuote ? 6 : 5) : 3;
 
 // Human size string for a line (W × D mm), honouring width-only / per-slat lines.
 $lineSizeStr = static function (array $item): string {
@@ -534,6 +536,7 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 <th class="num" width="40">Qty</th>
 <?php if ($showLinePrices): ?>
 <th class="num" width="75">Unit</th>
+<?php if ($isTradeQuote): ?><th class="num" width="60">Discount</th><?php endif; ?>
 <th class="num" width="80">Total</th>
 <?php endif; ?>
 </tr>
@@ -559,25 +562,26 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
         $descBits[] = implode(' / ', $fabricBits);
     }
 
-    // Trade quote: surface the account's discount on the line, reading
-    // list price · discount % · discounted price. The account discount comes
-    // off the BASE only (pricing_engine.php), so it's derived from the stored
-    // figures — no re-save of existing quotes needed. Only shown on a trade
-    // quote (account linked), when line prices are visible AND a real discount
-    // is present. (Markup-inflated lines yield no positive base discount here,
-    // so nothing misleading is shown.)
-    $tradeDiscNote = '';
-    if ($showLinePrices && (int) ($quote['account_client_id'] ?? 0) > 0) {
+    // Trade quote line: the account discount comes off the BASE only
+    // (pricing_engine.php), so the list unit and discount % are derived from the
+    // stored figures — no re-save of existing quotes needed. $__unit is the price
+    // shown in the Unit column (list price when discounted, else the net), and
+    // $__disc the Discount-column text (null = no discount, shown as "—").
+    // A markup-inflated line yields no positive base discount here, so it simply
+    // reads as no discount rather than anything misleading.
+    $__unit = (float) ($item['sell_price'] ?? 0);   // net unit (default)
+    $__disc = null;
+    if ($isTradeQuote) {
         $__base   = (float) ($item['base_price']   ?? 0);
         $__extras = (float) ($item['extras_total'] ?? 0);
         $__net    = (float) ($item['sell_price']   ?? 0);
         $__list   = round($__base + $__extras, 2);
         $__off    = round($__list - $__net, 2);
         if ($__base > 0 && $__off >= 0.01) {
+            $__unit = $__list;   // Unit column shows the list price
             // 1dp, trailing zeros trimmed — deriving the % from penny-rounded
             // prices gives 15.01/14.99; 1dp reads back as a clean 15%.
-            $__pct = rtrim(rtrim(number_format($__off / $__base * 100, 1, '.', ''), '0'), '.');
-            $tradeDiscNote = $money($__list) . ' &middot; discount ' . $__pct . '% &middot; ' . $money($__net);
+            $__disc = rtrim(rtrim(number_format($__off / $__base * 100, 1, '.', ''), '0'), '.') . '%';
         }
     }
 ?>
@@ -605,9 +609,6 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 <?php endforeach; ?>
 </div>
 <?php endif; ?>
-<?php if ($tradeDiscNote !== ''): ?>
-<div class="trade-disc"><?= $tradeDiscNote ?></div>
-<?php endif; ?>
 </td>
 <td class="num"><?= (int) $item['quantity'] ?></td>
 <?php if ($showLinePrices): ?>
@@ -616,9 +617,11 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
     $__qty = max(1, (int) $item['quantity']);
     $__lt  = (float) $item['line_total'] + $__share; ?>
 <td class="num"><?= $money(round($__lt / $__qty, 2)) ?></td>
+<?php if ($isTradeQuote): ?><td class="num"><?= $__disc !== null ? e($__disc) : '&mdash;' ?></td><?php endif; ?>
 <td class="num"><?= $money($__lt) ?></td>
 <?php else: ?>
-<td class="num"><?= $money($item['sell_price']) ?></td>
+<td class="num"><?= $money($__unit) ?></td>
+<?php if ($isTradeQuote): ?><td class="num"><?= $__disc !== null ? e($__disc) : '&mdash;' ?></td><?php endif; ?>
 <td class="num"><?= $money($item['line_total']) ?></td>
 <?php endif; ?>
 <?php endif; ?>
