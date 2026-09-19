@@ -16,6 +16,7 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require __DIR__ . '/../../_partials/accounting.php';
+require __DIR__ . '/../../_partials/quickbooks.php';   // qbo_query / qbo_list_* helpers
 
 requireAdmin();
 $user     = current_user();
