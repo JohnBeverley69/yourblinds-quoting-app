@@ -37,6 +37,8 @@ declare(strict_types=1);
 $dir = __DIR__ . '/guides';
 
 $ORDER = [
+    // The screen everyone lands on.
+    'dashboard-tour',
     // Settings — done once, before anything else works.
     'settings-company',
     'settings-logo',
@@ -49,6 +51,7 @@ $ORDER = [
     'settings-legal',
     'settings-colours',
     'settings-suppliers',
+    'trade-terms-page',
     'settings-backup',
     // Who can get in.
     'users-add',
@@ -61,11 +64,15 @@ $ORDER = [
     'products-combine',
     // The job itself.
     'customers-add',
+    'instaprice-quick',
     'quote-build',
     'quote-send-accept',
     'quote-order-invoice',
+    'orders-list',
+    'orders-pipeline',
     'calendar-booking',
     'quote-payments',
+    'accounts-money',
 ];
 
 $GUIDES = [];

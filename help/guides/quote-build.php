@@ -7,6 +7,15 @@ declare(strict_types=1);
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
  * lede, open, css, demo, body, script (and optionally js).
+ *
+ * Scope: the NEW QUOTE form (/quote-builder/new.php) and the BUILDER
+ * (/quote-builder/edit.php) — up to the point the quote is built. Sending,
+ * accepting, ordering, invoicing and payments each have their own guide.
+ *
+ * Fill classes: the engine's f1..f5 only hold a value up to data-step="5"
+ * (f1 alone persists to step 8). Scenes here are kept inside their window,
+ * and the two later scenes use the guide-local g6 / g8 fill classes declared
+ * in the css below.
  */
 
 return [
@@ -14,82 +23,144 @@ return [
         'section' => 'Quotes',
         'title'   => 'Building a quote',
         'eyebrow' => 'Quotes',
-        'blurb'   => 'The quote builder end to end: add a blind (product → system → fabric → size → options), watch the live price, read the totals, and send it.',
-        'lede'    => 'The <b>quote builder</b> is where a sale is built &mdash; one blind at a time. Pick the <b>product</b>, <b>fabric</b> and
-                      <b>size</b>, watch the <b>live price</b>, add any <b>options</b>, and it lands on the quote with running <b>totals</b>.
-                      Then <b>send it</b> and move it down the line. Here&rsquo;s the whole thing, including the mistake everyone hits once.',
+        'blurb'   => 'Start a quote, then build it blind by blind — product, system, band, fabric, room, size, options — watching the live price and reading the totals.',
+        'lede'    => 'This is the one you will use every day. It covers <b>both screens</b>: the short <b>New quote</b> form that
+                      creates the job, and the <b>quote builder</b> where you add the blinds. You pick the <b>product</b>, let the
+                      <b>system</b>, <b>band</b> and <b>fabric</b> cascade off it, name the <b>room</b>, type the <b>width</b> and
+                      <b>drop</b>, and watch the <b>live price</b> go green before you can save. We go slowly, we show every field,
+                      and we walk straight into the mistake everybody makes once &mdash; so that when it happens to you, you already
+                      know what it means. <b>Sending it, accepting it, ordering and invoicing all have guides of their own.</b>',
         'open'    => '/quote-builder/new.php',
         'css'     => '
-          .gd .ldesc2{ color:var(--soft); font-size:.76rem; margin:0 0 .55rem; }
+          /* ── scene switching ─────────────────────────────────────────────── */
           .gd .osc{ display:none; }
-          .gd .stage[data-step="1"] .scStart{ display:block; }
-          .gd .stage[data-step="2"] .scAdd, .gd .stage[data-step="3"] .scAdd, .gd .stage[data-step="4"] .scAdd,
-          .gd .stage[data-step="5"] .scAdd, .gd .stage[data-step="6"] .scAdd{ display:block; }
-          .gd .stage[data-step="7"] .scList{ display:block; }
-          .gd .stage[data-step="8"] .scSend{ display:block; }
+          .gd .stage[data-step="0"] .scNew, .gd .stage[data-step="1"] .scNew, .gd .stage[data-step="2"] .scNew{ display:block; }
+          .gd .stage[data-step="3"] .scLand{ display:block; }
+          .gd .stage[data-step="4"] .scCasc, .gd .stage[data-step="5"] .scCasc{ display:block; }
+          .gd .stage[data-step="6"] .scSize{ display:block; }
+          .gd .stage[data-step="7"] .scErr{ display:block; }
+          .gd .stage[data-step="8"] .scOpts{ display:block; }
 
-          /* sticky quote bar (all steps) */
-          .gd .qbar{ display:flex; align-items:center; gap:.5rem; background:var(--nav); color:#fff; border-radius:8px; padding:.42rem .65rem; font-size:.74rem; margin-bottom:.7rem; }
+          /* ── guide-local persistent fills (the engine stops at f5) ────────── */
+          .gd .stage[data-step="6"] .g6 .ph, .gd .stage[data-step="8"] .g8 .ph{ opacity:0; }
+          .gd .stage[data-step="6"] .g6 .val, .gd .stage[data-step="8"] .g8 .val{ opacity:1; animation:gdRoll .8s ease-out both; }
+
+          /* ── small shared scaffolding this guide needs ────────────────────── */
+          .gd .ldesc2{ color:var(--faint); font-size:.68rem; margin:.18rem 0 .5rem; }
+          .gd .ldesc2 b{ color:var(--soft); }
+          .gd .c3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem .7rem; margin-top:.5rem; }
+          .gd .c4{ display:grid; grid-template-columns:1fr 1fr .8fr 1.3fr; gap:.6rem .7rem; margin-top:.5rem; }
+          .gd .boxv{ height:30px; border:1px solid var(--line); border-radius:7px; background:var(--panel);
+                     display:flex; align-items:center; padding:0 .5rem; font-size:.8rem; color:var(--ink); overflow:hidden; }
+          /* .numbox is not global — same ph/val scaffolding as a .box, with spinners */
+          .gd .numbox{ position:relative; display:flex; align-items:center; height:30px; width:5.4rem;
+                       border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:0 .5rem;
+                       background:var(--surface); font-size:.8rem; color:var(--ink); overflow:hidden; }
+          .gd .numbox .ph{ color:var(--faint); transition:opacity .15s; }
+          .gd .numbox .val{ position:absolute; inset:0; display:flex; align-items:center; padding:0 .5rem;
+                            color:var(--ink); opacity:0; white-space:nowrap; overflow:hidden; }
+          .gd .numbox .spin{ position:absolute; right:.35rem; top:50%; transform:translateY(-50%); z-index:2;
+                             display:flex; flex-direction:column; line-height:.72; font-size:.46rem; color:var(--faint); }
+          .gd .chkline{ display:inline-flex; align-items:center; gap:.4rem; font-size:.72rem; color:var(--ink); margin-top:.3rem; }
+          .gd .qbtn{ display:inline-flex; align-items:center; gap:.3rem; border-radius:8px; padding:.4rem .8rem;
+                     font-size:.76rem; font-weight:600; }
+          .gd .qbtn.pri{ background:var(--accent); color:#fff; }
+          .gd .qbtn.ghost{ background:var(--surface); border:1px solid var(--line); color:var(--soft); }
+          .gd .qbtn.off{ background:var(--line); color:var(--faint); }
+          .gd .savebar{ margin-top:.7rem; display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+          .gd .offnote{ font-size:.64rem; color:var(--faint); font-style:italic; }
+
+          /* ── the "New quote" screen ───────────────────────────────────────── */
+          .gd .custres{ display:none; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
+                        background:var(--surface); margin-top:.25rem; padding:.2rem; max-width:24rem;
+                        box-shadow:0 8px 20px rgba(0,0,0,.08); }
+          .gd .stage[data-step="1"] .custres{ display:block; }
+          .gd .custres .cr{ padding:.28rem .45rem; border-radius:6px; font-size:.74rem; color:var(--ink); }
+          .gd .custres .cr.on{ background:var(--accent-wash); }
+          .gd .stage[data-step="2"] .wa{ background:var(--accent); color:#fff; }
+          .gd .pcbox{ border:1px dashed var(--line); border-radius:8px; padding:.35rem .55rem; margin-top:.5rem;
+                      font-size:.68rem; color:var(--faint); background:var(--panel); }
+
+          /* ── sticky quote bar (builder only: steps 3+) ────────────────────── */
+          .gd .qbar{ display:none; align-items:center; gap:.4rem; flex-wrap:wrap; background:var(--nav); color:#fff;
+                     border-radius:8px; padding:.42rem .65rem; font-size:.72rem; margin-bottom:.7rem; }
+          .gd .stage[data-step="3"] .qbar, .gd .stage[data-step="4"] .qbar, .gd .stage[data-step="5"] .qbar,
+          .gd .stage[data-step="6"] .qbar, .gd .stage[data-step="7"] .qbar, .gd .stage[data-step="8"] .qbar{ display:flex; }
           .gd .qbar .qn{ font-weight:700; }
-          .gd .qpill{ font-size:.58rem; font-weight:700; border-radius:20px; padding:.06rem .5rem; background:rgba(255,255,255,.22); text-transform:capitalize; }
-          .gd .qpill.acc{ display:none; background:#16a34a; }
-          .gd .stage[data-step="8"] .qpill.draft{ display:none; }
-          .gd .stage[data-step="8"] .qpill.acc{ display:inline; }
+          .gd .qpill{ font-size:.58rem; font-weight:700; border-radius:20px; padding:.06rem .5rem;
+                      background:rgba(255,255,255,.22); text-transform:capitalize; }
+          .gd .qbar .mini{ font-size:.6rem; border:1px solid rgba(255,255,255,.35); border-radius:6px; padding:.08rem .38rem; }
+          .gd .qbar .mini.acc{ background:#16a34a; border-color:#16a34a; }
           .gd .qbar .qtot{ margin-left:auto; font-weight:700; }
-          .gd .qtot .t1{ display:none; }
-          .gd .stage[data-step="7"] .qtot .t0, .gd .stage[data-step="8"] .qtot .t0{ display:none; }
-          .gd .stage[data-step="7"] .qtot .t1, .gd .stage[data-step="8"] .qtot .t1{ display:inline; }
 
-          /* system slip swap */
-          .gd .sys-cas{ display:none; }
-          .gd .stage[data-step="4"] .sys-std{ display:none; }
-          .gd .stage[data-step="4"] .sys-cas{ display:inline; }
-          .gd .stage[data-step="4"] .sysbox{ box-shadow:0 0 0 2px #ef4444; }
+          /* ── landing scene ────────────────────────────────────────────────── */
+          .gd .actrow{ display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.6rem; }
+          .gd .summ{ border:1px solid var(--line); border-radius:8px; background:var(--panel);
+                     padding:.42rem .6rem; font-size:.76rem; color:var(--ink); }
+          .gd .summ .tri{ color:var(--faint); margin-right:.3rem; }
+          .gd .summ .cs-hint{ color:var(--faint); font-size:.68rem; }
+          .gd .twocol{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.6rem; }
+          .gd .colbox{ border:1px dashed var(--line); border-radius:9px; padding:.45rem .6rem; font-size:.7rem; color:var(--faint); }
+          .gd .colbox b{ display:block; color:var(--soft); font-size:.62rem; text-transform:uppercase;
+                         letter-spacing:.04em; margin-bottom:.2rem; }
 
-          /* live-preview box */
-          .gd .prev{ margin-top:.7rem; border-radius:8px; padding:.5rem .65rem; font-size:.73rem; max-width:24rem; }
+          /* ── cascade scene ────────────────────────────────────────────────── */
+          .gd .asleep{ border-style:dashed; color:var(--faint); background:var(--panel); }
+          .gd .beforestrip{ border:1px solid var(--line-2); border-radius:9px; background:var(--panel);
+                            padding:.4rem .55rem; margin-top:.6rem; }
+          .gd .beforestrip .bs-t{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em;
+                                  color:var(--faint); font-weight:700; margin-bottom:.3rem; }
+          .gd .bs-row{ display:flex; gap:.4rem; flex-wrap:wrap; }
+          .gd .bs-row .selectbox{ min-width:0; font-size:.68rem; padding:.22rem .45rem; }
+          .gd .fabres{ display:none; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
+                       background:var(--surface); margin-top:.25rem; padding:.2rem; max-width:19rem;
+                       box-shadow:0 8px 20px rgba(0,0,0,.08); }
+          .gd .stage[data-step="5"] .fabres, .gd .stage[data-step="5"] .roompop{ display:block; }
+          .gd .fabres .fr{ padding:.26rem .45rem; border-radius:6px; }
+          .gd .fabres .fr.on{ background:var(--accent-wash); }
+          .gd .fabres .fname{ font-size:.74rem; color:var(--ink); }
+          .gd .fabres .fmeta{ font-size:.62rem; color:var(--faint); }
+          .gd .fabres .empty{ padding:.26rem .45rem; font-size:.68rem; color:var(--faint); font-style:italic; }
+          .gd .roomwrap{ position:relative; }
+          .gd .roomwrap .chev{ position:absolute; right:.45rem; top:.42rem; font-size:.66rem; color:var(--faint); }
+          .gd .roompop{ display:none; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
+                        background:var(--surface); margin-top:.25rem; padding:.2rem; max-width:13rem;
+                        box-shadow:0 8px 20px rgba(0,0,0,.08); font-size:.72rem; }
+          .gd .roompop div{ padding:.18rem .4rem; border-radius:5px; color:var(--ink); }
+          .gd .roompop div.on{ background:var(--accent-wash); }
+          .gd .roompop .more{ color:var(--faint); font-style:italic; font-size:.64rem; }
+
+          /* ── unit dropdown (size scene) ───────────────────────────────────── */
+          .gd .unitpop{ border:1px solid var(--border-strong,#c7ccd4); border-radius:8px; background:var(--surface);
+                        margin-top:.25rem; padding:.2rem; max-width:11rem; font-size:.72rem;
+                        box-shadow:0 8px 20px rgba(0,0,0,.08); }
+          .gd .unitpop div{ padding:.16rem .4rem; border-radius:5px; color:var(--ink); }
+          .gd .unitpop div.on{ background:var(--accent-wash); font-weight:600; }
+
+          /* ── live price box ───────────────────────────────────────────────── */
+          .gd .prev{ margin-top:.7rem; border-radius:8px; padding:.5rem .65rem; font-size:.73rem; max-width:26rem; }
           .gd .prev.idle{ background:var(--panel); color:var(--faint); font-style:italic; }
           .gd .prev.err{ background:#fee2e2; color:#991b1b; }
           .gd .prev.ok{ background:#d1fae5; color:#065f46; }
           .gd .prev.ok b{ color:#065f46; }
-          .gd .pv{ display:none; }
-          .gd .stage[data-step="2"] .pv-i1{ display:block; }
-          .gd .stage[data-step="3"] .pv-i2{ display:block; }
-          .gd .stage[data-step="4"] .pv-err{ display:block; }
-          .gd .stage[data-step="5"] .pv-ok1{ display:block; }
-          .gd .stage[data-step="6"] .pv-ok2{ display:block; }
+          .gd .prev2{ margin-top:.35rem; }
 
-          /* options (step 6) */
-          .gd .optwrap{ display:none; margin-top:.6rem; }
-          .gd .stage[data-step="6"] .optwrap{ display:block; }
-          .gd .optrow{ display:flex; align-items:center; gap:.5rem; font-size:.74rem; }
-          .gd .optrow label{ min-width:5.5rem; color:var(--faint); font-size:.64rem; text-transform:uppercase; letter-spacing:.03em; }
-          .gd .plus{ color:#065f46; font-weight:600; }
-
-          /* save bar */
-          .gd .savebar{ margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
-          .gd .qbtn{ display:inline-flex; align-items:center; gap:.3rem; border-radius:8px; padding:.4rem .8rem; font-size:.76rem; font-weight:600; }
-          .gd .qsave{ background:var(--line); color:var(--faint); }
-          .gd .stage[data-step="6"] .qsave{ background:var(--accent); color:#fff; }
-          .gd .qbtn.ghost{ background:var(--surface); border:1px solid var(--line); color:var(--soft); }
-
-          /* blinds list + totals */
-          .gd .btl{ width:100%; border-collapse:collapse; font-size:.7rem; }
-          .gd .btl th{ text-align:left; font-size:.58rem; text-transform:uppercase; letter-spacing:.03em; color:var(--faint); font-weight:700; border-bottom:1px solid var(--line); padding:.3rem .4rem; }
-          .gd .btl td{ padding:.4rem .4rem; border-bottom:1px solid var(--line); color:var(--ink); vertical-align:top; }
-          .gd .btl td b{ color:var(--ink); }
-          .gd .tot{ margin:.7rem 0 0 auto; max-width:20rem; font-size:.74rem; }
-          .gd .tot .r{ display:flex; justify-content:space-between; padding:.2rem 0; color:var(--soft); }
-          .gd .tot .r.wt{ color:#7c3aed; }
-          .gd .tot .r.grand{ font-weight:700; color:var(--ink); border-top:1px solid var(--line); margin-top:.2rem; padding-top:.32rem; }
-          .gd .tot .r.dep{ color:var(--faint); font-style:italic; }
-
-          /* send actions */
-          .gd .actlist{ display:flex; flex-direction:column; gap:.42rem; max-width:20rem; }
-          .gd .actbtn{ display:inline-flex; align-items:center; gap:.45rem; border:1px solid var(--line); border-radius:8px; padding:.42rem .65rem; font-size:.74rem; color:var(--ink); background:var(--surface); }
-          .gd .actbtn.acc{ background:#16a34a; color:#fff; border-color:#16a34a; }
-          .gd .flow{ font-size:.7rem; color:var(--faint); margin-top:.6rem; }
-          .gd .flow b{ color:var(--ink); }',
+          /* ── options grid (final scene) ───────────────────────────────────── */
+          .gd .optgroup{ border:1px solid var(--line); border-radius:9px; padding:.45rem .6rem; margin-top:.5rem; }
+          .gd .optgroup.before{ border-style:dashed; background:var(--panel); }
+          .gd .opthd{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint);
+                      font-weight:700; margin-bottom:.32rem; }
+          .gd .optrow{ display:flex; align-items:center; gap:.5rem; font-size:.73rem; margin:.24rem 0; flex-wrap:wrap; }
+          .gd .optrow > label{ min-width:6.4rem; color:var(--faint); font-size:.62rem; text-transform:uppercase; letter-spacing:.03em; }
+          .gd .optrow .selectbox{ min-width:8.5rem; font-size:.74rem; padding:.26rem .5rem; }
+          .gd .plus{ color:#065f46; font-weight:600; font-size:.7rem; }
+          .gd .multi{ display:flex; gap:.9rem; flex-wrap:wrap; }
+          .gd .child{ margin-left:.7rem; padding-left:.6rem; border-left:2px solid var(--line); }
+          .gd .capn{ font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint);
+                     font-weight:700; margin:.3rem 0 .15rem; }
+          .gd .ovr{ border:1px solid var(--line); border-radius:8px; padding:.4rem .6rem; margin-top:.5rem; }
+          .gd .ovr .sum{ font-size:.73rem; color:var(--soft); }
+          .gd .ovr .sum .tri{ color:var(--faint); margin-right:.3rem; }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / quote-builder</span></div>
@@ -100,144 +171,402 @@ return [
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <!-- persistent quote bar -->
+                <!-- sticky bar — builder screen only (steps 3+) -->
                 <div class="qbar">
                   <span class="qn">Quote PRE-2026-0042</span>
-                  <span class="qpill draft">Draft</span><span class="qpill acc">Accepted</span>
-                  <span class="qtot">Total <span class="t0">&pound;0.00</span><span class="t1">&pound;66.00</span></span>
+                  <span class="qpill">Draft</span>
+                  <span class="mini acc">&check; Customer accepted</span>
+                  <span class="mini">&times; Customer declined</span>
+                  <span class="qtot">Total &pound;0.00</span>
                 </div>
 
-                <!-- Scene: start -->
-                <div class="osc scStart">
+                <!-- ════════ SCENE 1 — the New quote form (steps 0-2) ════════ -->
+                <div class="osc scNew">
                   <div class="card-t">New quote</div>
-                  <div class="fld"><label>Existing customer</label><div class="selectbox">Emma Fletcher &mdash; Leamington Spa &middot; CV32 5PJ</div></div>
-                  <p class="ldesc2" style="margin-top:.5rem">Their details fill in below. New customer? Just type the name.</p>
-                  <div class="savebar"><span class="qbtn qsave" style="background:var(--accent);color:#fff">Create quote</span></div>
-                </div>
+                  <p class="ldesc2">Pick an existing customer (their details auto-fill below), or type a new customer&rsquo;s name. You can flesh out the rest later from the editor.</p>
 
-                <!-- Scene: add a blind (the cascade) -->
-                <div class="osc scAdd">
-                  <div class="card-t">Add a blind</div>
-                  <div class="frow">
-                    <div class="fld"><label>Product</label><div class="selectbox">Roller Blind</div></div>
-                    <div class="fld"><label>System</label><div class="selectbox sysbox"><span class="sys-std">Standard</span><span class="sys-cas">Cassette</span></div></div>
-                  </div>
-                  <div class="frow" style="margin-top:.5rem">
-                    <div class="fld"><label>Band</label><div class="selectbox">All bands</div></div>
-                    <div class="fld"><label>Fabric</label><div class="box f3"><span class="ph">Type to search fabrics&hellip;</span><span class="val">Sunset White &middot; Band A</span></div></div>
-                  </div>
-                  <div class="cols3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.7rem;margin-top:.5rem">
-                    <div class="fld"><label>Width (mm)</label><div class="box f5"><span class="ph">&nbsp;</span><span class="val">1200</span></div></div>
-                    <div class="fld"><label>Drop (mm)</label><div class="box f5"><span class="ph">&nbsp;</span><span class="val">1500</span></div></div>
-                    <div class="fld"><label>Qty</label><div class="boxv" style="height:30px;display:flex;align-items:center;padding:0 .5rem;border:1px solid var(--line);border-radius:7px;background:var(--panel);font-size:.8rem">1</div></div>
+                  <div class="fld">
+                    <label>Existing customer</label>
+                    <div class="box f1"><span class="ph">Type to search by name, town, or postcode&hellip;</span><span class="val">Flet</span></div>
+                    <div class="custres">
+                      <div class="cr on">Emma Fletcher &mdash; Leamington Spa &mdash; CV32 5PJ</div>
+                      <div class="cr">Gordon Fletcher &mdash; Kenilworth &mdash; CV8 1AB</div>
+                    </div>
+                    <p class="ldesc2">Type to filter &mdash; leave blank for a new customer.</p>
                   </div>
 
-                  <!-- options (step 6) -->
-                  <div class="optwrap">
-                    <div class="optrow"><label>Bottom weight</label><span class="selectbox" style="min-width:8rem">Chained</span><span class="plus">+&pound;5.00</span></div>
+                  <div class="fld" style="margin-top:.4rem">
+                    <label>Customer name <span class="req">*</span></label>
+                    <div class="box f2"><span class="ph">&nbsp;</span><span class="val">Emma Fletcher</span></div>
                   </div>
 
-                  <!-- live preview -->
-                  <div class="prev idle pv pv-i1">Still need: fabric, width, drop.</div>
-                  <div class="prev idle pv pv-i2">Still need: width, drop.</div>
-                  <div class="prev err pv pv-err">&#9888; No price table for Roller Blind band A on system &lsquo;Cassette&rsquo;.</div>
-                  <div class="prev ok pv pv-ok1"><b>&pound;45.00</b> per blind &middot; base &pound;45.00</div>
-                  <div class="prev ok pv pv-ok2"><b>&pound;50.00</b> per blind &middot; base &pound;45.00 &middot; + extras &pound;5.00</div>
+                  <div class="c3">
+                    <div class="fld"><label>Email</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">emma.f@example.co.uk</span></div></div>
+                    <div class="fld"><label>Phone (landline)</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">01926 555041</span></div></div>
+                    <div class="fld">
+                      <label>Mobile</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">07700 900118</span></div>
+                      <span class="chkline"><span class="tick wa">&check;</span> Mobile is on WhatsApp</span>
+                    </div>
+                  </div>
+
+                  <div class="pcbox">Find by postcode &mdash; an optional extra: a postcode box and a <b>Find</b> button that fills the address for you. It only shows if it has been switched on for your company.</div>
+
+                  <div class="fld" style="margin-top:.5rem"><label>Address line 1</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">14 Warwick Place</span></div></div>
+                  <div class="fld" style="margin-top:.4rem"><label>Address line 2</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">Lillington</span></div></div>
+
+                  <div class="c3">
+                    <div class="fld"><label>Town</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">Leamington Spa</span></div></div>
+                    <div class="fld"><label>County</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">Warwickshire</span></div></div>
+                    <div class="fld"><label>Postcode</label><div class="box f2"><span class="ph">&nbsp;</span><span class="val">CV32 5PJ</span></div></div>
+                  </div>
+
+                  <div class="fld" style="margin-top:.5rem"><label>Quote notes</label><div class="ta"><span class="ph">&nbsp;</span><span class="val"></span></div></div>
 
                   <div class="savebar">
-                    <span class="qbtn qsave">Save</span>
+                    <span class="qbtn pri">Create quote</span>
+                    <span class="qbtn ghost">Cancel</span>
+                  </div>
+                </div>
+
+                <!-- ════════ SCENE 2 — landing in the builder (step 3) ════════ -->
+                <div class="osc scLand">
+                  <div class="card-t">Quote actions</div>
+                  <div class="actrow">
+                    <span class="qbtn ghost">View PDF</span>
+                    <span class="qbtn ghost">Download PDF</span>
+                    <span class="qbtn ghost">&#128230; Save as order</span>
+                    <span class="qbtn ghost">Mark as sent</span>
+                  </div>
+
+                  <div class="summ"><span class="tri">&#9654;</span>Customer: Emma Fletcher &mdash; Leamington Spa &mdash; CV32 5PJ <span class="cs-hint">(click to edit)</span></div>
+                  <p class="ldesc2">Folded away to keep the screen short. Click the line to open the full name / email / phone / address form.</p>
+
+                  <div class="fld" style="margin-top:.4rem"><label>Quote notes</label><div class="ta"><span class="ph">&nbsp;</span><span class="val"></span></div></div>
+                  <div class="savebar"><span class="qbtn pri">Save details</span></div>
+
+                  <div class="twocol">
+                    <div class="colbox"><b>Left column</b>Customer details, then <b>Add blind</b> &mdash; the form you will live in.</div>
+                    <div class="colbox"><b>Right column</b>Blinds (0) &mdash; <em>No blinds yet</em> &mdash; then totals, deposit and payments.</div>
+                  </div>
+                </div>
+
+                <!-- ════════ SCENE 3 — the cascade (steps 4-5) ════════ -->
+                <div class="osc scCasc">
+                  <div class="card-t">Add blind</div>
+                  <div class="frow">
+                    <div class="fld"><label>Product <span class="req">*</span></label><div class="box f4"><span class="ph">Choose product&hellip;</span><span class="val">Roller Blind</span></div></div>
+                    <div class="fld"><label>System</label><div class="selectbox">Standard</div></div>
+                  </div>
+                  <div class="frow" style="margin-top:.5rem">
+                    <div class="fld"><label>Band</label><div class="selectbox">A</div></div>
+                    <div class="fld"></div>
+                  </div>
+                  <div class="frow" style="margin-top:.5rem">
+                    <div class="fld">
+                      <label>Fabric <span class="req">*</span></label>
+                      <div class="box f5"><span class="ph">Type to search fabrics (or click for recent)</span><span class="val">Sunset White / Ivory</span></div>
+                      <div class="fabres">
+                        <div class="fr on"><div class="fname">Sunset White / Ivory</div><div class="fmeta">Louvolite &middot; Code SW-104</div></div>
+                        <div class="fr"><div class="fname">Sunset White / Linen</div><div class="fmeta">Louvolite &middot; Code SW-106</div></div>
+                        <div class="empty">&hellip; and when nothing matches: No matching fabrics.</div>
+                      </div>
+                    </div>
+                    <div class="fld">
+                      <label>Room name</label>
+                      <div class="roomwrap">
+                        <div class="box f5"><span class="ph">Type or pick &mdash; e.g. Living Room</span><span class="val">Living Room</span></div>
+                        <span class="chev">&#9662;</span>
+                      </div>
+                      <div class="roompop">
+                        <div>Kitchen / Diner</div><div>Landing</div><div class="on">Living Room</div><div>Lounge</div>
+                        <div class="more">21 rooms in the list &mdash; or type your own</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="beforestrip">
+                    <div class="bs-t">Before you pick a product, these three are asleep</div>
+                    <div class="bs-row">
+                      <span class="selectbox asleep">Choose product&hellip;</span>
+                      <span class="selectbox asleep">Choose product first</span>
+                      <span class="selectbox asleep">All bands</span>
+                      <span class="selectbox asleep">Choose product first</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ════════ SCENE 4 — unit, size, quantity, notes (step 6) ════════ -->
+                <div class="osc scSize">
+                  <div class="card-t">Add blind &mdash; the sizes</div>
+                  <div class="fld" style="max-width:13rem">
+                    <label>Measurement unit (this quote)</label>
+                    <div class="selectbox">Millimetres (mm)</div>
+                    <div class="unitpop">
+                      <div class="on">Millimetres (mm)</div><div>Centimetres (cm)</div><div>Metres (m)</div><div>Inches (in)</div>
+                    </div>
+                    <p class="ldesc2">Re-displays this quote&rsquo;s sizes in the chosen unit. Sizes are stored the same way regardless.</p>
+                  </div>
+
+                  <div class="c4">
+                    <div class="fld"><label>Width (mm) <span class="req">*</span></label><div class="box g6"><span class="ph">Width in mm</span><span class="val">1200</span></div></div>
+                    <div class="fld"><label>Drop (mm) <span class="req">*</span></label><div class="box g6"><span class="ph">Drop in mm</span><span class="val">1500</span></div></div>
+                    <div class="fld"><label>Quantity</label><div class="numbox g6"><span class="ph">1</span><span class="val">2</span><span class="spin">&#9650;<br>&#9660;</span></div></div>
+                    <div class="fld"><label>Notes</label><div class="box g6"><span class="ph">Optional internal note</span><span class="val">Bay &mdash; left of three</span></div></div>
+                  </div>
+                  <p class="ldesc2">On a <b>per-slat</b> product the third label changes itself from <b>Quantity</b> to <b>Number of slats</b>.</p>
+
+                  <div class="prev idle">Still need: width, drop.</div>
+                  <div class="savebar">
+                    <span class="qbtn off">Save</span>
+                    <span class="qbtn off">Save and add another blind</span>
+                    <span class="offnote">both greyed out until the price is green</span>
+                  </div>
+                </div>
+
+                <!-- ════════ SCENE 5 — the slip and the fix (step 7) ════════ -->
+                <div class="osc scErr">
+                  <div class="card-t">Add blind &mdash; the price says no</div>
+                  <div class="frow">
+                    <div class="fld"><label>Product <span class="req">*</span></label><div class="boxv">Roller Blind</div></div>
+                    <div class="fld"><label>System</label><div class="selectbox" style="border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.25)">Cassette</div></div>
+                  </div>
+                  <div class="frow" style="margin-top:.5rem">
+                    <div class="fld"><label>Band</label><div class="selectbox">A</div></div>
+                    <div class="fld"><label>Fabric <span class="req">*</span></label><div class="boxv">Sunset White / Ivory</div></div>
+                  </div>
+
+                  <div class="prev err">No price table for Roller Blind band A on system &lsquo;Cassette&rsquo;.</div>
+                  <div class="prev err prev2">Size 2400 &times; 3000 mm exceeds the largest cell in this price table.</div>
+
+                  <div class="savebar">
+                    <span class="qbtn off">Save</span>
+                    <span class="qbtn off">Save and add another blind</span>
+                    <span class="offnote">still disabled &mdash; a broken line cannot be saved</span>
+                  </div>
+                </div>
+
+                <!-- ════════ SCENE 6 — options and save (step 8) ════════ -->
+                <div class="osc scOpts">
+                  <div class="card-t">Add blind &mdash; the options</div>
+
+                  <div class="optgroup before">
+                    <div class="opthd">Fascia Options &mdash; sits ABOVE Width / Drop</div>
+                    <div class="optrow"><label>Fascia Sizing</label><span class="selectbox">Standard</span></div>
+                  </div>
+
+                  <div class="optgroup">
+                    <div class="opthd">Options</div>
+                    <div class="optrow"><label>Bottom weight</label><span class="selectbox">Chained</span><span class="plus">+ &pound;5.00</span></div>
+                    <div class="optrow"><label>Control type</label><span class="selectbox">Motorised</span></div>
+                    <div class="child">
+                      <div class="optrow"><label>Motor extras</label>
+                        <span class="multi">
+                          <span class="chkline"><span class="tick on">&check;</span> Remote handset</span>
+                          <span class="chkline"><span class="tick">&check;</span> Wall switch</span>
+                          <span class="chkline"><span class="tick">&check;</span> Charging cable</span>
+                        </span>
+                      </div>
+                      <p class="capn">Chain drop (mm)</p>
+                      <div class="numbox g8"><span class="ph">&nbsp;</span><span class="val">900</span><span class="spin">&#9650;<br>&#9660;</span></div>
+                    </div>
+                  </div>
+
+                  <div class="ovr">
+                    <div class="sum"><span class="tri">&#9662;</span>Adjust price for this blind</div>
+                    <div class="frow" style="margin-top:.4rem">
+                      <div class="fld"><label>Discount % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
+                      <div class="fld"><label>Markup % (this blind)</label><div class="box"><span class="ph">product default</span><span class="val"></span></div></div>
+                    </div>
+                    <p class="ldesc2">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote.</p>
+                  </div>
+
+                  <div class="prev ok"><b>&pound;50.00</b> per blind &middot; base &pound;45.00 &middot; + extras &pound;5.00</div>
+                  <div class="savebar">
+                    <span class="qbtn pri">Save</span>
                     <span class="qbtn ghost">Save and add another blind</span>
                   </div>
                 </div>
 
-                <!-- Scene: blinds list + totals -->
-                <div class="osc scList">
-                  <div class="card-t">Blinds (1)</div>
-                  <table class="btl">
-                    <thead><tr><th>#</th><th>Description</th><th>Size</th><th>Qty</th><th>Total</th></tr></thead>
-                    <tbody>
-                      <tr><td>1</td><td><b>Living Room</b><br>Roller Blind &mdash; Standard<br>Band A &mdash; Sunset White<br><span style="color:var(--soft)">+ Bottom weight: Chained (&pound;5.00)</span></td><td>1200 &times; 1500</td><td>1</td><td>&pound;50.00</td></tr>
-                    </tbody>
-                  </table>
-                  <div class="tot">
-                    <div class="r wt"><span>WT (internal &mdash; never shown to the customer)</span><span>&pound;5.00</span></div>
-                    <div class="r"><span>Subtotal</span><span>&pound;55.00</span></div>
-                    <div class="r"><span>VAT (20.00%)</span><span>&pound;11.00</span></div>
-                    <div class="r grand"><span>Total</span><span>&pound;66.00</span></div>
-                    <div class="r dep"><span>Deposit due on acceptance</span><span>&pound;33.00</span></div>
-                  </div>
-                </div>
-
-                <!-- Scene: send + status -->
-                <div class="osc scSend">
-                  <div class="card-t">Send &amp; status</div>
-                  <div class="actlist">
-                    <span class="actbtn acc">&check; Customer accepted</span>
-                    <span class="actbtn">&#128231; Email PDF + accept link</span>
-                    <span class="actbtn">&#128172; Send via WhatsApp</span>
-                    <span class="actbtn">&#128279; Copy public link</span>
-                  </div>
-                  <p class="flow">Status moves along: <b>draft &rarr; sent &rarr; accepted &rarr; ordered &rarr; fitted &rarr; invoiced &rarr; paid</b>. Only a <b>draft</b> can be edited.</p>
-                </div>
-
                 <div class="caps">
-                  <b class="c1"><span class="n">1</span> Start from New quote &rarr; pick the customer &rarr; Create.</b>
-                  <b class="c2"><span class="n">2</span> Choose the product; its system fills in.</b>
-                  <b class="c3"><span class="n">3</span> Pick the fabric &mdash; search, or filter by band.</b>
-                  <b class="c4 err"><span class="n">4</span> No prices for that band + system? Save is blocked.</b>
-                  <b class="c5"><span class="n">5</span> Priced system + size &rarr; the price goes green.</b>
-                  <b class="c6"><span class="n">6</span> Add options, then Save the blind.</b>
-                  <b class="c7"><span class="n">7</span> Totals: subtotal, VAT, WT (internal), deposit.</b>
-                  <b class="c8 good"><span class="n">8</span> Send it, and mark it accepted.</b>
+                  <b class="c1"><span class="n">1</span> New quote &rarr; type a few letters of the name, town or postcode.</b>
+                  <b class="c2"><span class="n">2</span> Pick them and their details drop in. Then Create quote.</b>
+                  <b class="c3"><span class="n">3</span> You land on a draft. Every panel saves itself.</b>
+                  <b class="c4"><span class="n">4</span> Product first &mdash; System, Band and Fabric wake up.</b>
+                  <b class="c5"><span class="n">5</span> Search the fabric, then name the room.</b>
+                  <b class="c6"><span class="n">6</span> Unit, width, drop, quantity, internal note.</b>
+                  <b class="c7 err"><span class="n">7</span> Red price = no price for that band on that system.</b>
+                  <b class="c8 good"><span class="n">8</span> Options, green price, Save.</b>
                 </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>The <b>quote builder</b> is the heart of the app. Start it from <b>+ New quote</b>, pick the customer (their address fills in),
-             and <b>Create quote</b> &mdash; you land in the builder on a fresh <b>draft</b>. Now add blinds one at a time.</p>
+          <p>There are <b>two screens</b>. The short <b>New quote</b> form creates the job and the customer behind it. The
+             <b>builder</b> is where you spend your time &mdash; one blind at a time, with the price working itself out as you go.</p>
+
           <ul class="steps">
-            <li><b>The cascade.</b> Pick a <b>Product</b> and its <b>System</b> fills in (a variant &mdash; Standard, Motorised&hellip;). Pick the
-                <b>Fabric</b> &mdash; type to search by name, colour or code, or narrow it with the <b>Band</b> filter first. Give it a
-                <b>Room</b> name, then the <b>Width</b> and <b>Drop</b> (type 1500, or 150cm, or 60in &mdash; the <b>unit</b> selector re-shows
-                every size), a <b>Qty</b>, and any <b>Options</b>.</li>
-            <li><b>Watch the live price.</b> As you fill it in, the price box updates: grey (<em>&ldquo;Still need: &hellip;&rdquo;</em>) until it
-                has enough, then <b>green</b> with the breakdown &mdash; <em>&pound;X per blind &middot; base &middot; + extras</em> (cost-viewers
-                also see the markup &amp; discount). <b>Save stays disabled until the price is valid</b>, so you can&rsquo;t save a broken line.</li>
-            <li><b>Save.</b> <b>Save</b> drops the blind onto the quote (right-hand list); <b>Save and add another blind</b> keeps the form open
-                for the next one. Each blind can carry its own <b>per-blind price tweak</b> (a discount or markup override, cost-viewers only) &mdash;
-                it only affects that one line.</li>
+            <li><b>Start it.</b> From Quotes, click <b>+ New quote</b>. The first box is <b>Existing customer</b> &mdash; a plain
+                text box you type into (<em>&ldquo;Type to search by name, town, or postcode&hellip;&rdquo;</em>). Two or three letters
+                is plenty; the list underneath shows <em>Name &mdash; Town &mdash; Postcode</em> so you can tell two Fletchers apart.
+                Click the right one and the browser <b>copies their details down the form for you</b> &mdash; name, email, landline,
+                mobile, the <b>Mobile is on WhatsApp</b> tick, address, town, county and postcode. That is the one place on this screen
+                where boxes fill themselves; everywhere else you type. For a brand-new customer just <b>leave the search box empty</b>
+                and type their name into <b>Customer name</b> instead &mdash; that is the only <b>required</b> field, and leaving it
+                out gets you <em>&ldquo;Customer name is required.&rdquo;</em></li>
+            <li><b>Fill in what you know.</b> Email, Phone (landline), Mobile, the WhatsApp tick, Address line 1 and 2, Town, County,
+                Postcode and <b>Quote notes</b>. If <b>Find by postcode</b> has been switched on for your company you get a postcode
+                box that fills the address for you. None of it is compulsory &mdash; you can finish it later from the builder &mdash;
+                but the email and mobile are what the quote is later sent with, so put them in now if you have them. Then
+                <b>Create quote</b>. You get <em>&ldquo;Quote PRE-2026-0042 created.&rdquo;</em> and land in the builder.</li>
+            <li><b>Coming from the calendar instead.</b> If you raise the quote from a measure appointment, the <b>Create quote</b>
+                link on that appointment carries everything across &mdash; and it prefers the appointment&rsquo;s <b>installation
+                address</b> over the address on the customer record, which is usually what you want. When the appointment already has
+                a customer and a name, this screen is skipped entirely and you drop straight into the builder with the blind form open.
+                If something is missing you see <em>&ldquo;Could not start the quote automatically &mdash; please check the details
+                below and click Create quote.&rdquo;</em> and you finish it by hand.</li>
           </ul>
-          <div class="oops"><b>&ldquo;No price table for &hellip; band A on system &lsquo;Cassette&rsquo;.&rdquo;</b> The single most common slip:
-             the fabric&rsquo;s <b>band has no price list on the system you picked</b>. The Band filter is just a filter &mdash; it doesn&rsquo;t
-             guarantee a price. <b>Fix:</b> switch to a <b>System</b> that&rsquo;s priced for that band (the Band list re-scopes to it), or pick a
-             band that has a price table, then reselect the fabric. Save unlocks once the price turns green.</div>
-          <div class="oops"><b>&ldquo;Size 2400 &times; 3000 mm exceeds the largest cell in this price table.&rdquo;</b> The size is bigger than the
-             grid goes. <b>Fix:</b> double-check the <b>measurement unit</b> (a value typed as mm while the quote is in cm reads ten times too
-             big!), and confirm the price list actually covers that size.</div>
+
+          <p><b>In the builder.</b> A dark bar sits at the top with the quote number, a status pill, the one-tap
+             <b>&check; Customer accepted</b> / <b>&times; Customer declined</b> buttons and the running <b>Total</b>. Below that is a
+             <b>Quote actions</b> row &mdash; View PDF, Download PDF, <b>&#128230; Save as order</b> and the status buttons. The
+             customer block is <b>folded shut</b>: a single line reading <em>&ldquo;Customer: Emma Fletcher &mdash; Leamington Spa
+             &mdash; CV32 5PJ (click to edit)&rdquo;</em>. Click it to open the whole address form, which has its own <b>Save details</b>
+             button. <b>Quote notes</b> deliberately sits outside the fold so it stays in view.</p>
+
+          <p><b>There is no big &ldquo;Save quote&rdquo; button, because every panel saves itself.</b> Save details saves the customer.
+             <b>Set</b> saves the WT and the override. <b>Save deposit</b> saves the deposit. <b>Save</b> saves the blind. Nothing is
+             waiting on a final button &mdash; if you clicked the button next to it, it is saved.</p>
+
           <ul class="steps">
-            <li><b>The list &amp; totals.</b> Each blind shows its room, product/system, fabric, size, qty and line total, with <b>Edit</b>,
-                <b>Dup</b> (duplicate &mdash; handy for the same blind in another size) and <b>&times;</b> (remove). Totals stack up on the right:
-                <b>Subtotal</b>, <b>VAT</b>, <b>Total</b>, and the <b>Deposit due on acceptance</b>. The purple <b>WT</b> line is your internal
-                <b>Wally tax</b> &mdash; a hassle surcharge folded into the price; the customer <b>never</b> sees it as a line.</li>
-            <li><b>Send it.</b> <b>Email PDF + accept link</b> sends the customer a PDF with a one-click accept button; or <b>Send via WhatsApp</b>
-                (when their number is flagged for it) or <b>Copy public link</b>. You can also <b>View / Download PDF</b> any time.</li>
-            <li><b>Move it along.</b> When they say yes, hit <b>&check; Customer accepted</b> (or Declined). Status runs
-                <b>draft &rarr; sent &rarr; accepted &rarr; ordered &rarr; fitted &rarr; invoiced &rarr; paid</b>. Accepting seeds the <b>deposit</b>
-                and drops a <b>Pending Fitting</b> into the calendar; <b>Send to suppliers</b> and <b>Send invoice</b> live in the Quote actions panel.</li>
+            <li><b>Product first &mdash; always.</b> Until you choose one, <b>System</b> is greyed out reading <em>Choose product
+                first</em>, <b>Band</b> is greyed out on <em>All bands</em>, and the <b>Fabric</b> box will not let you type. Pick the
+                product and all three wake up: System fills with that product&rsquo;s systems and pre-picks its default, Band narrows
+                to just that system&rsquo;s bands (and if there is only one, it picks it for you), and Fabric turns into a live search.
+                <b>These labels rename themselves per product</b> &mdash; &ldquo;Fabric&rdquo; may read <b>Slat</b> or <b>Colour</b>,
+                &ldquo;Band&rdquo; may read <b>Tape / String</b>. Same boxes, same order, different words.</li>
+            <li><b>Find the fabric.</b> Click the box (<em>&ldquo;Type to search fabrics (or click for recent)&rdquo;</em>) and type a
+                name, colour or code. A little panel drops down; each row shows the <b>name and colour</b> on top and a grey
+                <b>supplier and code</b> underneath &mdash; <em>Louvolite &middot; Code SW-104</em>. Click the row. Nothing matching
+                gives you <em>&ldquo;No matching fabrics.&rdquo;</em>; a dropped connection gives
+                <em>&ldquo;Could not search fabrics.&rdquo;</em> &mdash; try it again in a moment.</li>
+            <li><b>Name the room.</b> Click the box or the little <b>&#9662;</b> beside it and a list of twenty-one rooms opens &mdash;
+                Living Room, Master Bedroom, Kitchen / Diner, En-suite and so on &mdash; filtering as you type. Or ignore the list and
+                type your own. The room is only a label, but it is the label the fitter and the workshop read on the ticket, so
+                <b>always fill it in</b>. &ldquo;Blind 3&rdquo; helps nobody on a landing with four windows.</li>
+            <li><b>Sizes.</b> <b>Measurement unit (this quote)</b> offers Millimetres (mm), Centimetres (cm), Metres (m) and Inches
+                (in). It is set <b>per quote, not per blind</b>: change it and every size already on the quote is re-displayed in the
+                new unit &mdash; the stored measurements never change. You can also just type <code>150cm</code>, <code>1.5m</code> or
+                <code>60in</code> straight into Width and it is read for you; something it cannot read comes back as
+                <em>&ldquo;Could not read width &lsquo;abc&rsquo;.&rdquo;</em>. <b>Quantity</b> is how many identical blinds &mdash; on
+                a per-slat product that label changes itself to <b>Number of slats</b>. <b>Notes</b> is <b>internal</b>: it prints on
+                your paperwork, not on the customer&rsquo;s quote.</li>
           </ul>
-          <div class="heads"><span class="hi">&#9888;</span><div><b>There&rsquo;s no big &ldquo;Save quote&rdquo; button &mdash; every panel saves
-             itself.</b> Adding a blind, editing the customer, setting the WT or deposit each save on the spot, and the totals recompute. And
-             <b>only a draft is editable</b> &mdash; once it&rsquo;s sent/accepted it&rsquo;s locked (<em>&ldquo;Quote is locked&hellip; Reopen it
-             to add blinds&rdquo;</em>); use <b>Reopen as draft</b> if you need to change it.</div></div>',
+
+          <div class="oops"><b>&ldquo;No price table for Roller Blind band A on system &lsquo;Cassette&rsquo;.&rdquo;</b> The slip
+             everybody makes once. The <b>Band</b> dropdown only <b>filters the fabric list</b> &mdash; it does not promise a price.
+             The price lives on the <b>combination</b> of product + system + band. <b>Fix:</b> change the <b>System</b> to one that is
+             priced for that band (the Band list re-scopes as you do), or pick a band that has a price list, then reselect the fabric.
+             Its cousin <em>&ldquo;No price table set up for Roller Blind for system &lsquo;Cassette&rsquo;.&rdquo;</em> means that
+             system has no prices at all yet.</div>
+
+          <div class="oops"><b>&ldquo;Size 2400 &times; 3000 mm exceeds the largest cell in this price table.&rdquo;</b> The size is
+             past the end of the grid. <b>Before you blame the price list, check the unit</b> &mdash; 150 typed while the quote is in
+             millimetres is a 15&nbsp;cm blind; 1500 typed while it is in centimetres is fifteen metres. Related wordings you may see:
+             <em>&ldquo;No exact price for 2400 &times; 3000 mm. Try the next available size.&rdquo;</em>,
+             <em>&ldquo;Width 2400 mm exceeds the largest entry in this price list.&rdquo;</em> and
+             <em>&ldquo;No &pound;/m&sup2; rate set for Roller Blind in this price list.&rdquo;</em></div>
+
+          <p><b>The live price box does the checking for you.</b> Grey and italic means it is still waiting &mdash;
+             <em>&ldquo;Still need: product, fabric, width, drop.&rdquo;</em>. Red means it tried and could not price it. Green means
+             you are good: <em>&ldquo;&pound;50.00 per blind &middot; base &pound;45.00 &middot; + extras &pound;5.00&rdquo;</em>, or
+             for more than one, <em>&ldquo;&pound;90.00 for 2 blinds &middot; &pound;45.00 each&rdquo;</em>. If you are allowed to see
+             costs it also tacks on the markup or margin, the discount, and <em>trade discount 15%</em> on a trade line. <b>Both save
+             buttons start disabled and stay disabled until that box is green</b> &mdash; they are greyed and will not click. That is
+             deliberate: a blind with no price cannot go onto a quote.</p>
+
+          <p><b>Options.</b> Once the product loads, its own <b>Options</b> grid appears, and it will not look the same on two
+             products, because options are set up per product. Some are a plain <b>dropdown</b> (with a &ldquo;&mdash; Select
+             &mdash;&rdquo; first line only when nothing is set as the default). Some are a <b>list of tick-boxes</b> where you can
+             have more than one. Some are just a <b>number to type</b>, under a small capitalised caption. A chosen option can open a
+             number box of its own, choices can show a little picture, and some options only appear <b>after</b> you have picked the
+             fabric or the system &mdash; that is by design, not a glitch. A few options are flagged to sit <b>above</b> Width and Drop
+             (the roller fascia group), because you need to answer them before the size makes sense. <b>Adjust price for this blind</b>
+             is a folded-away panel for cost-viewers holding <b>Discount %</b> and <b>Markup %</b> for this line only, both showing
+             <em>product default</em> until you type in them. Then <b>Save</b>, or <b>Save and add another blind</b> to keep the form
+             open and carry on to the next window.</p>
+
+          <p><b>The blinds list.</b> Each saved blind lands in the table on the right &mdash; columns <b>#</b>, <b>Description</b>,
+             <b>Size</b>, <b>Qty</b>, <b>Unit</b>, <b>Total</b>. The description stacks up in the order you built it: the <b>Room</b> in
+             bold, then <em>Roller Blind &mdash; Standard</em>, then <em>Band A &mdash; Louvolite &mdash; Sunset White / Ivory</em>,
+             then a line per option (<em>+ Bottom weight: Chained (&pound;5.00)</em>), then your internal note in italics. Three
+             buttons follow: <b>Edit</b>, <b>Dup</b> (<em>&ldquo;Duplicate this blind &mdash; copies fabric, system, options. New row
+             opens in edit mode for you to tweak the size.&rdquo;</em> &mdash; the fastest way to do four windows in one room) and
+             <b>&times;</b>, which asks <em>&ldquo;Remove this blind?&rdquo;</em> first. Before you add anything it simply says
+             <em>No blinds yet</em>.</p>
+
+          <p><b>The totals, line by line</b>, underneath that same table: the purple <b>WT</b> row, <b>Discount (to agreed price)</b>
+             when an override is in force, <b>Subtotal</b>, <b>VAT (20.00%)</b>, <b>Total</b>, the <b>Override price</b> row, and a
+             faint <b>Deposit due on acceptance</b> until the customer says yes.</p>
+
+          <p><b>Override price.</b> The row reads <em>&ldquo;Override price (agreed price ex VAT &mdash; VAT added on top; blank to
+             clear)&rdquo;</em> and has a little <b>&pound;</b> box and a <b>Set</b> button. You shook hands on &pound;950 on the
+             doorstep &mdash; type <code>950</code>, click <b>Set</b>, and the quote totals &pound;950 plus VAT. The gap between the
+             blinds and the agreed figure appears above as a <b>Discount (to agreed price)</b> line, so the arithmetic still adds up
+             and nobody has to guess later why it does not. Empty the box and Set again to clear it.</p>
+
+          <p><b>The Wally tax (WT charge).</b> The purple row labelled <em>&ldquo;WT (internal &mdash; never shown to the
+             customer)&rdquo;</em> is your hassle money &mdash; the awkward job, the scaffold tower, the two-hour round trip. Type the
+             amount in the <b>&pound;</b> box and click <b>Set</b>. It folds into the price the customer sees; there is <b>never</b> a
+             separate line on their quote, their PDF or their invoice. If you cannot see this row at all, the WT charge simply has not
+             been switched on in Settings for your company.</p>
+
+          <p><b>Deposit.</b> The panel has two faces. <b>Before</b> the customer accepts it reads <em>&ldquo;The deposit due when the
+             customer accepts&hellip;&rdquo;</em> with <b>Deposit due on acceptance &pound;</b> and <b>Save deposit</b> &mdash; plus a
+             handy <em>Suggested 50%: &pound;33.00</em> link you can click to fill the box. <b>After</b> they accept it flips to
+             <em>&ldquo;Enter the deposit the customer has paid.&rdquo;</em> with <b>Deposit paid &pound;</b> and <b>Record deposit
+             paid</b>; once recorded you get <em>&ldquo;&check; Deposit paid &pound;33.00 on 19 Sep 2026&rdquo;</em> with <b>Amend</b>
+             and <b>Mark unpaid</b> if you fat-fingered it.</p>
+
+          <p><b>Rollers only &mdash; several blinds under one fascia.</b> Set the fascia sizing option to <b>multi</b> and the Width box
+             locks itself to the words <em>multi blind</em>, because the individual widths now drive the cut. A panel appears under the
+             price headed <b>Blinds in this fascia</b>: a row per blind with its own width, an optional drop override (leave it
+             <em>same</em> to share the drop) and its price, with a running total. It fit-checks as you type &mdash;
+             <em>&ldquo;&check; Fits: 2850 mm in 2900 mm fascia&rdquo;</em>, <em>&ldquo;&#9888; Won&rsquo;t fit: blinds total 3000 mm
+             vs fascia 2900 mm&rdquo;</em>, or <em>&ldquo;Tip: enter a Fascia width to fit-check.&rdquo;</em> The price reads
+             <em>&ldquo;3 blinds under one fascia &mdash; &pound;135.00 total&rdquo;</em>. Saving fans it out into <b>one line per
+             blind</b>, each tagged with a purple <b>Fascia A</b> pill in the size column so the workshop knows they belong together.</p>
+
+          <div class="oops"><b>&ldquo;Quote is locked (status: sent). Reopen it to add blinds.&rdquo;</b> You have tried to change a
+             quote that has already left the building. The banner at the top says the same thing in longer words:
+             <em>&ldquo;This quote is in <b>sent</b> state and is read-only. Use <b>Reopen as draft</b> above to edit it.&rdquo;</em>
+             Click <b>Reopen as draft</b> in Quote actions, make your change, then send it again.</div>
+
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Five things worth knowing before you go.</b>
+             <b>(1)</b> Only a <b>draft</b> is editable &mdash; everything else is read-only until you reopen it.
+             <b>(2)</b> <b>Paid is never a button.</b> The quote flips itself to paid once the deposit and payments cover the total.
+             <b>(3)</b> Marking it accepted also drops a <b>placeholder fitting</b> into the calendar (a fortnight out, 9am, an hour
+             long) for you to move to the real date.
+             <b>(4)</b> <b>&#128230; Save as order</b> accepts the quote and takes you straight to Place order in one go.
+             <b>(5)</b> On a job raised for a <b>trade account</b>, the customer block is replaced by a <b>Trade account</b> card
+             showing the company&rsquo;s contact, phone, mobile, email and address, with the note <em>&ldquo;These details come from
+             the trade account &mdash; edit them there, not here.&rdquo;</em> You get two extra boxes instead &mdash; <b>Customer
+             reference (their order / PO)</b> and <b>Additional reference</b> &mdash; and the live price shows their
+             <em>trade discount</em> as well.</div></div>
+
+          <p>One last thing: if a screen looks like it is missing its little grey helper lines, you are probably in <b>compact mode</b>,
+             which hides them to fit more on screen. Turn it off and the hints come back.</p>
+
+          <p><b>What happens next.</b> Getting it in front of the customer and getting a yes is <b>Sending &amp; accepting</b>. Turning
+             the yes into a factory order and a bill is <b>Ordering &amp; invoicing</b>. Taking and recording the money is
+             <b>Payments &amp; accounts</b>.</p>',
         'script'  => [
-            ['0:00', 'New quote; pick the customer.',      'A quote starts from New quote. Pick the customer — their address fills in — and Create quote. You land in the builder.', 1],
-            ['0:08', 'Product chosen; system fills in.',   'Now build it a blind at a time. Choose the product, and its system fills in — here, a standard roller.', 2],
-            ['0:15', 'Fabric picked.',                     'Pick the fabric — type to search, or filter by band first. This one is Sunset White, band A.', 3],
-            ['0:22', 'Red: no price for band + system.',   'Keep an eye on the live price. If that band has no prices on the system you picked, it says so — no price table for band A on Cassette — and won\'t let you save.', 4],
-            ['0:32', 'Fixed system + size; price green.',  'Switch to a system that is priced — Standard — then type the width and drop. The price turns green: forty-five pounds a blind.', 5],
-            ['0:41', 'Option added; Save.',                'Add any options — a chained bottom weight adds five pounds — then Save. That is one blind on the quote.', 6],
-            ['0:49', 'Blinds list and totals.',           'It lands on the right with the running totals: subtotal, VAT, grand total. WT is your internal Wally-tax line, never shown to the customer — and it works out the deposit due.', 7],
-            ['1:00', 'Send it; mark accepted.',            'Then send it — email the PDF with an accept link, or WhatsApp. When they say yes, mark it accepted, and it moves along: sent, accepted, ordered.', 8],
+            ['0:00', 'New quote — searching the customer.',  'A quote starts from the Quotes screen: click plus New quote. The first box is a search box. Type two or three letters of their name, their town, or their postcode, and the matches drop down underneath. If this is a brand new customer, leave it blank and just type their name in the box below.', 1],
+            ['0:14', 'Picked — their details copy down.',    'Click the right one and it copies their details down the form for you: name, email, landline, mobile, the WhatsApp tick, and the whole address. Fill in anything it does not know, add a note if you want one, and click Create quote. If you forget the name it tells you: customer name is required. And if you started from a measure appointment in the calendar, it carries the installation address across and usually skips this screen altogether.', 2],
+            ['0:32', 'Landing on the draft.',                'You land on a fresh draft, quote P R E, two thousand and twenty six, forty two. The blind form is down the left, the running quote is down the right. The customer block is folded away to keep it short: click that summary line to open it, and it has its own Save details button. There is no big save quote button anywhere, because every panel saves itself.', 3],
+            ['0:50', 'Product wakes the other three up.',    'Now build it a blind at a time. Choose the Product first, always. Until you do, System says choose product first, Band says all bands, and the Fabric box will not let you type. Pick the product and all three wake up. System fills in and pre picks the default. Band narrows to that system. And watch the words: on some products Fabric reads Slat or Colour, and Band reads tape and string. Same boxes, different names.', 4],
+            ['1:10', 'Fabric search panel; room name.',      'Click the fabric box and type. A little panel drops down, with the name and colour on top and the supplier and code underneath. Click the row you want. If nothing matches it simply says, no matching fabrics. Then the room name: click the box or the little arrow and pick from the list, or type your own. The room is only a label, but it is the label the fitter reads, so always fill it in.', 5],
+            ['1:28', 'Unit, width, drop, quantity, notes.',  'Measurement unit is set for the whole quote, not for one blind: change it and every size is re-displayed in the new unit, but the actual measurements never change. You can also type a hundred and fifty centimetres, or sixty inches, straight into the width and it is read for you. Quantity is how many identical blinds, and on a slatted product that label changes itself to number of slats. Notes are internal only: they print on your paperwork, never on the customer\'s quote.', 6],
+            ['1:50', 'Red price; both Save buttons blocked.', 'Here is the slip everybody makes once. The price box goes red: no price table for Roller Blind band A on system Cassette. The band dropdown only filters the fabric list, it never promises a price. The price lives on the combination of product, system and band. So change the system to one that is priced, or pick a band that has a price list. You will also meet, size exceeds the largest cell in this price table, and nine times out of ten that is the unit, not the price list. Notice both save buttons are greyed out and will not click. You cannot save a broken line.', 7],
+            ['2:14', 'Options; green price; Save.',          'Last comes options, and they will look different on every product, because they are set up per product. Some are a dropdown. Some are a list of tick boxes where you can have more than one. Some are just a number to type. Some only appear once you have picked the fabric or the system, and that is on purpose. Adjust price for this blind nudges this one line, and nothing else. The price goes green: fifty pounds a blind. Now Save, or Save and add another blind to carry straight on to the next window.', 8],
         ],
 ];
