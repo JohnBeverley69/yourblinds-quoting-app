@@ -483,6 +483,22 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <br><br>
                     It contains this area's key and the WiFi password, so don't
                     leave it on screen or print it where it'll be left lying about.
+                    <br><br>
+                    <?php /* The exact bytes the QR carries. Without this, a
+                             scanner that refuses the code gives you nothing to
+                             compare against the vendor tool's own output, and
+                             the only way to read our string is to decode the
+                             image. Same secrets as the QR beside it, behind the
+                             same click. */ ?>
+                    <details>
+                      <summary style="cursor:pointer">Show the exact text this code contains</summary>
+                      <input class="scan-url" readonly onclick="this.select()" style="margin-top:.35rem;width:100%"
+                             value="<?= e($scanAtFor($ar, $wifiSsid, $wifiPass)) ?>">
+                      <span style="display:block;margin-top:.3rem">
+                        Paste this beside what the scanner's own app produces for the
+                        same bench — one character of difference is the whole fault.
+                      </span>
+                    </details>
                   </div>
                 <?php endif; ?>
               </div>
