@@ -83,13 +83,18 @@ $args    = [$MASTER];
 if ($since !== null) { $dateSql .= ' AND q.created_at >= ?'; $args[] = $since; }
 if ($until !== null) { $dateSql .= ' AND q.created_at <= ?'; $args[] = $until; }
 
-// Every Beverley-product line on a placed order. band + system name come from the
-// tenant's own price table (its cost is stripped, but its band/system identify
-// the master grid to price against).
+// Every Beverley-product line on a placed order, with whatever we have to point
+// the line back at the master grid: the tenant table's own identity link first,
+// its band + system name only as a last resort.
+$hasTableSrc = pe_col_exists($pdo, 'price_tables', 'source_table_id');
+$srcTableSel = $hasTableSrc ? 'tpt.source_table_id AS src_table_id,' : 'NULL AS src_table_id,';
 $sql =
     "SELECT qi.width_mm, qi.drop_mm, qi.quantity, qi.base_price, qi.extras_total,
             qi.product_name_snapshot,
             COALESCE(p.source_product_id, p.id) AS master_pid,
+            $srcTableSel
+            tpt.id AS tenant_table_id, tpt.client_id AS tenant_table_client,
+            tpt.system_id AS tenant_system_id,
             tpt.band_code AS band, tsys.name AS system_name
        FROM quote_items qi
        JOIN quotes q   ON q.id = qi.quote_id
@@ -103,14 +108,30 @@ $st = $pdo->prepare($sql);
 $st->execute($args);
 $lines = $st->fetchAll(PDO::FETCH_ASSOC);
 
-// --- Master price-table lookup, cached by (product, system name, band) --------
-// Returns the table's id AND its system id — the system is what the buying
-// discount is scoped by, so a bought-in product can't be costed without it.
-$tableCache = [];
-$findMasterTable = function (int $mpid, ?string $systemName, ?string $band) use ($pdo, $MASTER, &$tableCache): ?array {
+// --- Which master grid does this line price against? --------------------------
+// Three ways, best first:
+//   1. The tenant's copy of the table carries source_table_id — the master
+//      table's own id. Rename-proof, which matters: matching on the SYSTEM NAME
+//      is exactly what left the 25mm Venetian uncosted, because the master's
+//      system had since been renamed from "25mm Slat" to "Standard Slat" while
+//      the tenant's copy still said the old name.
+//   2. The line was raised here, so its table IS a master table.
+//   3. Last resort, the old behaviour: match on system name + band.
+$byIdCache = [];
+$masterTableById = function (int $tid, int $mpid) use ($pdo, $MASTER, &$byIdCache): ?array {
+    $key = $tid . '|' . $mpid;
+    if (array_key_exists($key, $byIdCache)) return $byIdCache[$key];
+    $q = $pdo->prepare('SELECT id, system_id FROM price_tables WHERE id = ? AND client_id = ? AND product_id = ? LIMIT 1');
+    $q->execute([$tid, $MASTER, $mpid]);
+    $row = $q->fetch(PDO::FETCH_ASSOC);
+    return $byIdCache[$key] = ($row ? ['id' => (int) $row['id'], 'system_id' => $row['system_id'] !== null ? (int) $row['system_id'] : null] : null);
+};
+
+$nameCache = [];
+$masterTableByName = function (int $mpid, ?string $systemName, ?string $band) use ($pdo, $MASTER, &$nameCache): ?array {
     if ($systemName === null || $band === null) return null;
     $key = $mpid . '|' . $systemName . '|' . $band;
-    if (array_key_exists($key, $tableCache)) return $tableCache[$key];
+    if (array_key_exists($key, $nameCache)) return $nameCache[$key];
     $q = $pdo->prepare(
         'SELECT pt.id, pt.system_id FROM price_tables pt
            JOIN product_systems s ON s.id = pt.system_id
@@ -119,7 +140,23 @@ $findMasterTable = function (int $mpid, ?string $systemName, ?string $band) use 
     );
     $q->execute([$MASTER, $mpid, $systemName, $band]);
     $row = $q->fetch(PDO::FETCH_ASSOC);
-    return $tableCache[$key] = ($row ? ['id' => (int) $row['id'], 'system_id' => $row['system_id'] !== null ? (int) $row['system_id'] : null] : null);
+    return $nameCache[$key] = ($row ? ['id' => (int) $row['id'], 'system_id' => $row['system_id'] !== null ? (int) $row['system_id'] : null] : null);
+};
+
+$findMasterTable = function (array $ln) use ($MASTER, $masterTableById, $masterTableByName): ?array {
+    $mpid = (int) $ln['master_pid'];
+
+    if (!empty($ln['src_table_id'])) {
+        $hit = $masterTableById((int) $ln['src_table_id'], $mpid);
+        if ($hit !== null) return $hit;
+    }
+    if (!empty($ln['tenant_table_id']) && (int) ($ln['tenant_table_client'] ?? 0) === $MASTER) {
+        return [
+            'id'        => (int) $ln['tenant_table_id'],
+            'system_id' => $ln['tenant_system_id'] !== null ? (int) $ln['tenant_system_id'] : null,
+        ];
+    }
+    return $masterTableByName($mpid, $ln['system_name'], $ln['band']);
 };
 
 // --- Master product facts: which pricing model, and which shape of grid -------
@@ -208,7 +245,7 @@ foreach ($lines as $ln) {
     $p['rev'] += $rev; $p['blinds'] += $qty;
 
     $cost = null;
-    $tbl  = $findMasterTable((int) $ln['master_pid'], $ln['system_name'], $ln['band']);
+    $tbl  = $findMasterTable($ln);
     if ($tbl !== null) {
         $cost = $unitCost(
             (int) $ln['master_pid'], $tbl['id'], $tbl['system_id'],
