@@ -457,7 +457,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php endif; ?>
 
 <?php if ($tot['rev_uncosted'] > 0): ?>
-    <div class="pf-warn"><strong><?= $money($tot['rev_uncosted']) ?></strong> of orders are on products we can't cost yet (<?= e(implode(', ', array_keys($uncostedProducts))) ?>) — their profit isn't counted. A product we make needs its cost grid importing; a product we buy in needs its buying discount setting on Pricing.</div>
+    <div class="pf-warn"><strong><?= $money($tot['rev_uncosted']) ?></strong> of orders are on products we can't cost yet (<?= e(implode(', ', array_keys($uncostedProducts))) ?>) — their profit isn't counted, rather than guessed at. Usually one of two things: a product we make whose cost grid hasn't been imported, or an order raised against a system or band that has since been rebuilt on the master, so there's no telling which grid it priced against. <a href="?<?= e(http_build_query(array_merge($_GET, ['why' => 1]))) ?>">Show me which</a>.</div>
 <?php endif; ?>
 
 <div class="pf-cards">
