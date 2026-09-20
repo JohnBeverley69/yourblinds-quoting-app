@@ -10,10 +10,14 @@ declare(strict_types=1);
  * round sheet and no consolidated note per account. One note per ORDER, because
  * that is what she picked.
  *
- * Printing is separate from invoicing ON PURPOSE. She does not always print every
- * note, and invoice numbers have to come out in sequence, so wiring the invoice to
- * the print would put gaps and surprises in the numbering. Raising the invoice
- * stays its own action over on Wholesale.
+ * Two lists, two buttons, in the order the work actually happens:
+ *   1. Ready to go out — tick, print one delivery note each.
+ *   2. To invoice      — noted out but not invoiced; tick, raise one invoice each.
+ *
+ * They are separate ON PURPOSE. She does not always print every note, and invoice
+ * numbers have to come out in order, so hanging the invoice off the print would
+ * raise some and skip others. Raising is not sending either — invoices go out from
+ * Wholesale when she is ready.
  *
  * The note itself carries: account name + delivery address, their order/PO
  * reference, and each blind's room, size and fabric — with NO prices, and a
@@ -77,14 +81,94 @@ function dispatch_ready_orders(PDO $pdo, int $factory): array
     return $out;
 }
 
-// ── Print the ticked orders' delivery notes as ONE PDF ───────────────────────
+/**
+ * Orders that have gone out on a note but have not been invoiced yet — the
+ * second half of the tray.
+ *
+ * Invoicing is its own action, not something printing triggers. She does not
+ * always print every note, and invoice numbers have to come out in order, so
+ * hanging the invoice off the print would raise some invoices and skip others.
+ * One invoice per order, because that is what she picked (she struck out
+ * "one consolidated invoice per account per run").
+ */
+function dispatch_to_invoice_orders(PDO $pdo, int $factory): array
+{
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return [];
+
+    $out = [];
+    foreach (ar_placed_orders($pdo, $factory) as $o) {
+        $qid = (int) $o['id'];
+        if (((int) ($o['dn_count'] ?? 0)) < 1) continue;          // not noted out yet
+        if (ar_order_invoice_number($pdo, $qid) !== '') continue;  // already invoiced
+        $out[] = $o;
+    }
+    return $out;
+}
+
+// ── POST: print the ticked notes, or raise their invoices ────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+
+    $action = (string) ($_POST['_action'] ?? 'print');
 
     $ids = array_values(array_unique(array_filter(
         array_map('intval', (array) ($_POST['quote_ids'] ?? [])),
         static fn ($n) => $n > 0
     )));
+
+    // ---- Raise one invoice per ticked order ---------------------------------
+    if ($action === 'invoice') {
+        if (!ar_table_ready($pdo, 'factory_ar_invoices')) {
+            $_SESSION['flash_error'] = 'Invoices need their migration — run /migrate_ar_invoices.php first.';
+            header('Location: /master-admin/dispatch.php'); exit;
+        }
+        if (!$ids) {
+            $_SESSION['flash_error'] = 'Tick at least one order to invoice.';
+            header('Location: /master-admin/dispatch.php'); exit;
+        }
+
+        // The tick list came from the browser: re-derive what is genuinely
+        // invoiceable rather than trusting it.
+        $allowed = [];
+        foreach (dispatch_to_invoice_orders($pdo, $factory) as $o) $allowed[(int) $o['id']] = $o;
+
+        $done = []; $failed = []; $total = 0.0;
+        foreach ($ids as $qid) {
+            if (!isset($allowed[$qid])) {
+                $failed[] = 'order ' . $qid . ' is no longer waiting to be invoiced';
+                continue;
+            }
+            try {
+                // Re-check inside the loop: raising one invoice does not change
+                // another order, but a second admin might have got there first.
+                if (ar_order_invoice_number($pdo, $qid) !== '') {
+                    $failed[] = (string) $allowed[$qid]['quote_number'] . ' was already invoiced';
+                    continue;
+                }
+                $inv = ar_create_invoice(
+                    $pdo, $factory, $qid,
+                    (int) $allowed[$qid]['account_id'],
+                    (int) ($user['user_id'] ?? 0),
+                    false                       // raise it; sending stays a separate step
+                );
+                $done[]  = (string) $inv['number'];
+                $total  += (float) $inv['total'];
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $failed[] = (string) $allowed[$qid]['quote_number'] . ' — ' . $e->getMessage();
+            }
+        }
+
+        if ($done) {
+            $_SESSION['flash_success'] = count($done) . ' invoice' . (count($done) === 1 ? '' : 's')
+                . ' raised (£' . number_format($total, 2) . '): ' . implode(', ', $done)
+                . '. Send them from Invoices.';
+        }
+        if ($failed) {
+            $_SESSION['flash_error'] = 'Not done: ' . implode(' · ', $failed);
+        }
+        header('Location: /master-admin/dispatch.php'); exit;
+    }
 
     if (!$dnReady) {
         $_SESSION['flash_error'] = 'Delivery notes need their migration — run /migrate_ar_delivery_notes.php first.';
@@ -196,6 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $ready     = $dnReady ? dispatch_ready_orders($pdo, $factory) : [];
+$toInvoice = $dnReady ? dispatch_to_invoice_orders($pdo, $factory) : [];
 $activeNav = 'dispatch';
 $money     = static fn ($n) => '£' . number_format((float) $n, 2);
 ?><!doctype html>
@@ -238,51 +323,100 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     <div class="alert alert-error" role="alert">
       Delivery notes need their migration — run <code>/migrate_ar_delivery_notes.php</code> once, then reload.
     </div>
-  <?php elseif (!$ready): ?>
-    <div class="card"><div class="dt-empty">
-      Nothing is ready to go out right now. An order lands here once every blind on it is made and
-      every bought-in item has been received.
-    </div></div>
   <?php else: ?>
-    <form method="post">
-      <?= csrf_field() ?>
-      <div class="dt-bar">
-        <label class="dt-count"><input type="checkbox" id="dtAll"> Tick all</label>
-        <span class="ui-hint"><?= count($ready) ?> order<?= count($ready) === 1 ? '' : 's' ?> ready</span>
-        <button class="btn btn-primary" style="margin-left:auto">🖨 Print delivery notes</button>
-      </div>
 
-      <div class="table-wrap">
-        <table class="table">
-          <thead><tr>
-            <th style="width:2.2rem"></th>
-            <th>Account</th><th>Order</th><th>Their ref</th>
-            <th class="num">Blinds</th><th class="num">Value</th><th>Note</th>
-          </tr></thead>
-          <tbody>
-          <?php foreach ($ready as $o): $qid = (int) $o['id']; ?>
-            <tr class="dt-row<?= $o['has_dn'] ? ' is-noted' : '' ?>">
-              <td><input type="checkbox" class="dt-tick" name="quote_ids[]" value="<?= $qid ?>"
-                         <?= $o['has_dn'] ? '' : 'checked' ?>></td>
-              <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
-              <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
-              <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
-              <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
-              <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
-              <td><?= $o['has_dn'] ? '<span class="ui-hint">already noted</span>' : '' ?></td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    </form>
+    <h2 class="section-title" style="margin:.2rem 0 .5rem">Ready to go out</h2>
+    <?php if (!$ready): ?>
+      <div class="card"><div class="dt-empty">
+        Nothing is ready to go out right now. An order lands here once every blind on it is made and
+        every bought-in item has been received.
+      </div></div>
+    <?php else: ?>
+      <form method="post">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="print">
+        <div class="dt-bar">
+          <label class="dt-count"><input type="checkbox" class="dt-all" data-for="go"> Tick all</label>
+          <span class="ui-hint"><?= count($ready) ?> order<?= count($ready) === 1 ? '' : 's' ?> ready</span>
+          <button class="btn btn-primary" style="margin-left:auto">🖨 Print delivery notes</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th style="width:2.2rem"></th>
+              <th>Account</th><th>Order</th><th>Their ref</th>
+              <th class="num">Blinds</th><th class="num">Value</th><th>Note</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($ready as $o): $qid = (int) $o['id']; ?>
+              <tr class="dt-row<?= $o['has_dn'] ? ' is-noted' : '' ?>">
+                <td><input type="checkbox" class="dt-tick go" name="quote_ids[]" value="<?= $qid ?>"
+                           <?= $o['has_dn'] ? '' : 'checked' ?>></td>
+                <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
+                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
+                <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
+                <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
+                <td><?= $o['has_dn'] ? '<span class="ui-hint">already noted</span>' : '' ?></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </form>
+    <?php endif; ?>
+
+    <h2 class="section-title" style="margin:1.6rem 0 .5rem">To invoice</h2>
+    <p class="ui-hint" style="margin:0 0 .6rem">
+      Gone out on a delivery note, not invoiced yet. One invoice per order. Raising it does not send
+      it — send from <a href="/master-admin/wholesale.php">Invoices</a> when you are ready.
+    </p>
+    <?php if (!$toInvoice): ?>
+      <div class="card"><div class="dt-empty">
+        Nothing waiting to be invoiced. An order lands here once its delivery note has been raised.
+      </div></div>
+    <?php else: ?>
+      <form method="post">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="invoice">
+        <div class="dt-bar">
+          <label class="dt-count"><input type="checkbox" class="dt-all" data-for="inv"> Tick all</label>
+          <span class="ui-hint"><?= count($toInvoice) ?> order<?= count($toInvoice) === 1 ? '' : 's' ?> waiting</span>
+          <button class="btn btn-primary" style="margin-left:auto">£ Raise invoices</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th style="width:2.2rem"></th>
+              <th>Account</th><th>Order</th><th>Their ref</th>
+              <th class="num">Blinds</th><th class="num">Value</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($toInvoice as $o): $qid = (int) $o['id']; ?>
+              <tr class="dt-row">
+                <td><input type="checkbox" class="dt-tick inv" name="quote_ids[]" value="<?= $qid ?>" checked></td>
+                <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
+                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
+                <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
+                <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </form>
+    <?php endif; ?>
 
     <script>
       (function () {
-        var all = document.getElementById('dtAll');
-        if (!all) return;
-        all.addEventListener('change', function () {
-          document.querySelectorAll('.dt-tick').forEach(function (t) { t.checked = all.checked; });
+        document.querySelectorAll('.dt-all').forEach(function (all) {
+          all.addEventListener('change', function () {
+            document.querySelectorAll('.dt-tick.' + all.dataset.for)
+              .forEach(function (t) { t.checked = all.checked; });
+          });
         });
       })();
     </script>
