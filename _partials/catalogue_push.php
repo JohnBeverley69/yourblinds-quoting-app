@@ -83,8 +83,12 @@ function push_catalogue_to_client(
     // and must never reach a tenant — same rule as the size-varying
     // price_table_rows.cost (which the row copy also omits) and the extra-choice
     // cost. Behaviour flags push; costs never do.
+    // line_charge DOES belong here even though it is money: it is a flat £ the
+    // engine adds once per line to the CUSTOMER's price (pricing_engine.php:1470),
+    // not a cost. Without it a tenant's mirror of a product that carries one
+    // quotes less than the master for the same blind.
     foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
-              'min_area_m2', 'show_colour_field', 'band_label'] as $col) {
+              'min_area_m2', 'show_colour_field', 'band_label', 'line_charge'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $flagCols[] = $col;
@@ -863,6 +867,21 @@ function pp_sync_choices(
     // that hasn't run the migration still pushes (just without codes).
     $hasChoiceCode = pp_column_exists($pdo, 'product_extra_choices', 'code');
     $choiceCodeSel = $hasChoiceCode ? ', code' : '';
+
+    // Three later PRICING columns that were never carried, so a tenant's mirror of
+    // an option quoted differently from the master for the same choice:
+    //   face_value       — the surcharge is already at face value, so a percent
+    //                      one is not marked up again
+    //   per_metre_basis  — which length a £/m choice multiplies (width | drop |
+    //                      w+d | perimeter). Getting this wrong changes the money.
+    //   price_per_unit   — £ per unit x the typed quantity
+    // Costs still never push (cost_price stays out, same rule as price_table_rows.cost).
+    $hasFaceValue   = pp_column_exists($pdo, 'product_extra_choices', 'face_value');
+    $hasMetreBasis  = pp_column_exists($pdo, 'product_extra_choices', 'per_metre_basis');
+    $hasPerUnit     = pp_column_exists($pdo, 'product_extra_choices', 'price_per_unit');
+    $choiceCodeSel .= ($hasFaceValue  ? ', face_value'      : '')
+                    . ($hasMetreBasis ? ', per_metre_basis' : '')
+                    . ($hasPerUnit    ? ', price_per_unit'  : '');
     $src = $pdo->prepare(
         "SELECT id, label, system_id, price_delta, price_percent, price_per_metre,
                 is_default, sort_order, active, image_path$choiceCodeSel
@@ -948,6 +967,9 @@ function pp_sync_choices(
             ];
             if ($hasSrcCol) { $cols[] = 'source_choice_id'; $params[] = $srcChoiceId; }
             if ($hasChoiceCode) { $cols[] = 'code'; $params[] = ($r['code'] ?? null) !== null && (string) $r['code'] !== '' ? (string) $r['code'] : null; }
+            if ($hasFaceValue)  { $cols[] = 'face_value';      $params[] = (int) ($r['face_value'] ?? 0); }
+            if ($hasMetreBasis) { $cols[] = 'per_metre_basis'; $params[] = (string) ($r['per_metre_basis'] ?? 'width'); }
+            if ($hasPerUnit)    { $cols[] = 'price_per_unit';  $params[] = $r['price_per_unit'] !== null ? (float) $r['price_per_unit'] : null; }
             $pdo->prepare(
                 'INSERT INTO product_extra_choices (' . implode(',', $cols) . ') VALUES ('
                 . implode(',', array_fill(0, count($cols), '?')) . ')'
@@ -982,6 +1004,9 @@ function pp_sync_choices(
             // Carry the master's machine code so the front-end can spot the
             // fascia-sizing modes ('multi' / 'oversize') on the tenant copy. Only
             // fill it, never blank it — the code is master-owned, not tenant-set.
+            if ($hasFaceValue)  { $sets[] = 'face_value = ?';      $params[] = (int) ($r['face_value'] ?? 0); }
+            if ($hasMetreBasis) { $sets[] = 'per_metre_basis = ?'; $params[] = (string) ($r['per_metre_basis'] ?? 'width'); }
+            if ($hasPerUnit)    { $sets[] = 'price_per_unit = ?';  $params[] = $r['price_per_unit'] !== null ? (float) $r['price_per_unit'] : null; }
             if ($hasChoiceCode && ($r['code'] ?? null) !== null && (string) $r['code'] !== '') {
                 $sets[] = 'code = ?'; $params[] = (string) $r['code'];
             }
