@@ -125,6 +125,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['end_customer_county']   = trim((string) ($_POST['end_customer_county']   ?? ''));
     $f['end_customer_postcode'] = trim((string) ($_POST['end_customer_postcode'] ?? ''));
     $f['has_whatsapp']          = !empty($_POST['has_whatsapp']) ? 1 : 0;
+    // Their order / PO number. Asked for here because a trade customer gives it
+    // to you WITH the order — having to raise the order first and add it after
+    // is the wrong way round, and it was getting forgotten.
+    $f['customer_reference']    = trim((string) ($_POST['customer_reference']    ?? ''));
     $f['notes']                 = trim((string) ($_POST['notes']                 ?? ''));
 
     // If a customer is picked, copy their fields into any blank snapshot
@@ -367,6 +371,15 @@ $activeNav = 'order-history';
                         <label for="end_customer_postcode">Postcode</label>
                         <input id="end_customer_postcode" name="end_customer_postcode" type="text" maxlength="20"
                                value="<?= e((string) $f['end_customer_postcode']) ?>">
+                    </div>
+                </div>
+
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="customer_reference">Customer reference
+                            <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
+                        <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
+                               value="<?= e((string) ($f['customer_reference'] ?? '')) ?>">
                     </div>
                 </div>
 
