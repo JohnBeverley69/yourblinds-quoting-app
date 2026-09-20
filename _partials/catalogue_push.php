@@ -699,6 +699,12 @@ function pp_sync_extras_and_choices(
     // tenants still push.
     $hasMatchAll    = pp_column_exists($pdo, 'product_extras', 'parent_match_all');
     $hasWidthSrc    = pp_column_exists($pdo, 'product_extras', 'is_width_source');
+    // before_size ("Show above the size fields") lifts an option group ABOVE
+    // Width/Drop in the quote builder — the roller Fascia Options group is set
+    // that way, because you choose the fascia before you can size to it. It was
+    // never included here, so a tenant's copy kept the group below the size
+    // fields however the master was set.
+    $hasBeforeSize  = pp_column_exists($pdo, 'product_extras', 'before_size');
 
     $extraCols = 'id, name, is_required, sort_order, active';
     if ($hasLengthLabel) $extraCols .= ', length_input_label';
@@ -706,6 +712,7 @@ function pp_sync_extras_and_choices(
     if ($hasCodeCol)     $extraCols .= ', code';
     if ($hasMatchAll)    $extraCols .= ', parent_match_all';
     if ($hasWidthSrc)    $extraCols .= ', is_width_source';
+    if ($hasBeforeSize)  $extraCols .= ', before_size';
 
     $src = $pdo->prepare(
         "SELECT $extraCols FROM product_extras
@@ -766,6 +773,7 @@ function pp_sync_extras_and_choices(
             if ($hasExtraCode) { $cols[] = 'code'; $params[] = ($r['code'] ?? null) !== null && (string) $r['code'] !== '' ? (string) $r['code'] : null; }
             if ($hasMatchAll) { $cols[] = 'parent_match_all'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
             if ($hasWidthSrc) { $cols[] = 'is_width_source';  $params[] = (int) ($r['is_width_source']  ?? 0); }
+            if ($hasBeforeSize) { $cols[] = 'before_size'; $params[] = (int) ($r['before_size'] ?? 0); }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -802,6 +810,7 @@ function pp_sync_extras_and_choices(
             // (the AND-gate and width-source must match the master exactly).
             if ($hasMatchAll) { $sets[] = 'parent_match_all = ?'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
             if ($hasWidthSrc) { $sets[] = 'is_width_source = ?';  $params[] = (int) ($r['is_width_source']  ?? 0); }
+            if ($hasBeforeSize) { $sets[] = 'before_size = ?'; $params[] = (int) ($r['before_size'] ?? 0); }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'
