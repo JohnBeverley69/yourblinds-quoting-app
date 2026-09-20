@@ -188,6 +188,7 @@ $navSections = [
             'trade-accounts' => ['/master-admin/trade-accounts.php',          'Trade accounts', $isSuperAdmin],
             'trade-quotes'   => ['/orders/index.php?scope=quotes&type=trade',  'Quotes',        $isSuperAdmin],
             'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isSuperAdmin],
+            'dispatch'       => ['/master-admin/dispatch.php',                'Dispatch',       $isSuperAdmin],
             'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isSuperAdmin],
             'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isSuperAdmin],
             'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isSuperAdmin],
