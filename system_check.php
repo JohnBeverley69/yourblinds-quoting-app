@@ -354,3 +354,8 @@ $hdr('SUMMARY');
 echo $ISSUES === 0
     ? "  No anomalies found. Everything resolves cleanly.\n"
     : "  {$ISSUES} anomal" . ($ISSUES === 1 ? 'y' : 'ies') . " flagged above — read-only, nothing was changed.\n";
+
+// This check reads the database. The other half of "is anything broken" is how
+// the screens actually draw, which only a browser can measure — so it lives in
+// its own page rather than here.
+echo "\n  Layouts (pages wider than the window): /layout_check.php — open it in a browser.\n";
