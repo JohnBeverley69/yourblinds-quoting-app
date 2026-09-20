@@ -296,23 +296,60 @@ $activeNav = 'help';
                 sel.value = keep && ordered.some(function(v){ return v.name === keep; }) ? keep : (gukf ? gukf.name : (ordered[0] ? ordered[0].name : ''));
             }
             function currentVoice(){ if (!sel) return voices[0]; return voices.filter(function(v){ return v.name === sel.value; })[0] || voices[0]; }
+
+            // Chrome will not speak a long utterance reliably: past roughly fifteen
+            // seconds it cuts the audio and stops firing onstart / onend. These
+            // narration lines run a minute each, so driving the spotlight off those
+            // events left the walkthrough frozen on one panel — everything else
+            // dimmed — with the voice still going, or racing through five steps at
+            // once when a batch of dropped events arrived together.
+            //
+            // So: cut every line into sentence-sized pieces (short utterances ARE
+            // reliable), move the stage when we hand a piece to the engine rather
+            // than when it claims to have started, and keep a watchdog so a piece
+            // the engine silently swallows can't stall the whole walkthrough.
+            function chunk(text){
+                var parts = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+                var out = [], buf = '';
+                parts.forEach(function(s){
+                    if (buf && (buf + s).length > 180){ out.push(buf.trim()); buf = ''; }
+                    buf += s;
+                });
+                if (buf.trim()) out.push(buf.trim());
+                return out;
+            }
+            var queue = [];
+            lines.forEach(function(line, idx){
+                chunk(line).forEach(function(part){ queue.push({ text: part, step: steps[idx] }); });
+            });
+
+            var watchdog = null;
+            function clearWatch(){ if (watchdog){ clearTimeout(watchdog); watchdog = null; } }
+            function advance(from){
+                if (from !== i) return;   // the event and the watchdog both fired
+                clearWatch();
+                i++;
+                speakNext();
+            }
             function speakNext(){
+                clearWatch();
                 if (!playing) return;
-                if (i >= lines.length){ stop(); return; }
-                var idx = i;
-                var u = new SpeechSynthesisUtterance(lines[idx]);
+                if (i >= queue.length){ stop(); return; }
+                var idx = i, item = queue[idx];
+                setStep(item.step);       // visuals lead the audio by milliseconds, never by a whole panel
+                var u = new SpeechSynthesisUtterance(item.text);
                 var v = currentVoice(); if (v) u.voice = v;
                 u.rate = 1; u.pitch = 1;
-                // Advance the walkthrough as each line BEGINS — this is what keeps
-                // the visuals locked to the voice, whatever its speed.
-                u.onstart = function(){ spokeAny = true; setStep(steps[idx]); if (!playing) setPlaying(true); };
-                u.onend = function(){ i++; speakNext(); };
-                u.onerror = function(){ i++; speakNext(); };
+                u.onstart = function(){ spokeAny = true; if (!playing) setPlaying(true); };
+                u.onend   = function(){ advance(idx); };
+                u.onerror = function(){ advance(idx); };
                 synth.speak(u);
+                // Roughly twice as long as the piece could plausibly take to say.
+                watchdog = setTimeout(function(){ advance(idx); }, Math.max(4000, item.text.length * 160));
             }
             // Play once through, in sync — no looping. Ends resting on the final step.
-            function play(){ setPlaying(true); i = 0; setStep(0); synth.cancel(); setTimeout(speakNext, 60); }
-            function stop(){ setPlaying(false); synth.cancel(); }
+            function play(){ setPlaying(true); i = 0; setStep(0); synth.cancel(); setTimeout(speakNext, 150); }
+            function stop(){ clearWatch(); setPlaying(false); synth.cancel(); }
             function toggle(){ playing ? stop() : play(); }
 
             btn.addEventListener('click', toggle);
