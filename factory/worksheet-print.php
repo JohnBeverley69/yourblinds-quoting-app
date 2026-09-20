@@ -93,14 +93,24 @@ try {
     } catch (Throwable $e2) { /* handled below */ }
 }
 
-// For ANY retail quote (no trade account) the "customer" on the ticket is the end
-// customer named on the quote — the person the blind is for — not the business
-// that owns the quote. Without this a tenant's order (e.g. ABC Blinds selling to
-// Tyler Smith) shows "ABC Blinds" instead of "Tyler Smith", and the factory's own
-// retail shows "Beverley Blinds Trade" instead of the customer. Trade-ACCOUNT
-// orders (account_client_id set) are untouched — there the account IS the customer.
+// The "customer" on the ticket is WHO THE FACTORY IS MAKING FOR — the business
+// we ship to and invoice. Three cases:
+//   • account order (account_client_id set) → the trade account.
+//   • a tenant's order (ABC Blinds selling on to Dale Podmore) → ABC Blinds,
+//     because ABC is the factory's customer; Dale Podmore is ABC's. The blind
+//     goes to ABC, and so does the invoice.
+//   • the factory's OWN retail (we own the quote, no account) → the end
+//     customer, since otherwise the ticket reads "Beverley Blinds Trade" and
+//     our own unit address, which tells the bench nothing.
+// Only that last case overrides, hence the client_id === $MASTER test.
+//
+// This was briefly widened to every account-less order so a tenant's ticket
+// named the person rather than the shop — which put the shop's name, address,
+// phone and email off the header entirely. The end customer is worth printing,
+// but as its OWN field (order:end_customer), not by displacing the customer.
 if ($order
     && (int) ($order['account_client_id'] ?? 0) === 0
+    && (int) ($order['client_id'] ?? 0) === $MASTER
     && trim((string) ($order['end_customer_name'] ?? '')) !== '') {
     $order['company_name'] = trim((string) $order['end_customer_name']);
     $order['address1']     = (string) ($order['end_customer_address1'] ?? '');
@@ -220,6 +230,12 @@ $orderVals = $order ? [
     'customer'   => $customerLine,
     'company'    => $company,
     'contact'    => $contact,
+    // Who the blind is ultimately for. On a tenant's order that's THEIR
+    // customer, which the header above deliberately doesn't show — so it gets
+    // a field of its own to be placed wherever it's wanted. Blank on the
+    // factory's own retail, where the end customer IS the customer above.
+    'end_customer' => (int) ($order['client_id'] ?? 0) === $MASTER
+                        ? '' : trim((string) ($order['end_customer_name'] ?? '')),
     'address'    => $addr,   // whole address on one line (kept for existing templates)
     // …and the pieces, so an address block can be built line-by-line on the header.
     'address1'   => (string) ($order['address1'] ?? ''),
