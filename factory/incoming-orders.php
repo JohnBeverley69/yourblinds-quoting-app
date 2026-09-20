@@ -69,7 +69,8 @@ try {
                 q.end_customer_name, q.supplier_ordered_at, q.supplier_received_at,
                 COUNT(qi.id)                  AS bev_lines,
                 COALESCE(SUM(CASE WHEN $inHouse THEN qi.quantity ELSE 0 END), 0)     AS bev_qty,
-                COALESCE(SUM(CASE WHEN NOT ($inHouse) THEN qi.quantity ELSE 0 END), 0) AS boughtin_qty
+                COALESCE(SUM(CASE WHEN NOT ($inHouse) THEN qi.quantity ELSE 0 END), 0) AS boughtin_qty,
+                COALESCE(SUM(qi.quantity), 0) AS order_qty
                 $fjSelect
            FROM quotes q
            JOIN clients c       ON c.id = q.client_id
@@ -310,7 +311,14 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
-                    <span class="cnt"><?= (int) $o['bev_qty'] ?> blind<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?></span>
+                    <?php
+                        // The count is the whole order, not just what we make.
+                        // An order that's entirely bought in used to read
+                        // "0 blinds" next to five blinds' worth of work.
+                        $orderQty = (int) ($o['order_qty'] ?? ((int) $o['bev_qty'] + $boughtinQty));
+                        $madeHere = (int) $o['bev_qty'];
+                    ?>
+                    <span class="cnt"><?= $orderQty ?> blind<?= $orderQty === 1 ? '' : 's' ?><?php if ($boughtinQty > 0 && $madeHere > 0): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400"><?= $madeHere ?> made here</span><?php endif; ?></span>
                     <span class="stat">
                         <?php
                             // Phase 3: the single fulfilment stage IS the status now (Confirmed /
@@ -394,7 +402,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <div class="io-detail" hidden>
                     <?php if ($custRef !== '' || $addRef !== '' || $endCust !== '' || $stageAt): ?>
                         <p class="io-refs">
-                            <?= (int) $o['bev_qty'] ?> unit<?= (int) $o['bev_qty'] === 1 ? '' : 's' ?>
+                            <?= $orderQty ?> unit<?= $orderQty === 1 ? '' : 's' ?>
                             <?php if ($custRef !== ''): ?> &middot; Ref: <strong><?= e($custRef) ?></strong><?php endif; ?>
                             <?php if ($addRef !== ''): ?> &middot; <?= e($addRef) ?><?php endif; ?>
                             <?php if ($endCust !== ''): ?> &middot; <?= e($endCust) ?><?php endif; ?>
