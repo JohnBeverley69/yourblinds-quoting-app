@@ -73,41 +73,13 @@ function ar_letterhead_html(array $factory): string
  */
 function ar_render_delivery_note(array $ctx, array $items): ?string
 {
-    $e   = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-    $nl2 = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
-    $mm  = static fn ($v) => ($v === null || $v === '' || (int) $v === 0) ? '—' : (string) ((int) $v) . 'mm';
+    return ar_pdf_bytes(ar_delivery_note_shell(ar_delivery_note_body($ctx, $items, false)));
+}
 
-    $rows = '';
-    $n = 0;
-    foreach ($items as $it) {
-        $n++;
-        $fabric = trim(implode(' / ', array_filter([
-            (string) ($it['fabric'] ?? ''),
-            (string) ($it['colour'] ?? ''),
-            (string) ($it['code'] ?? ''),
-        ], static fn ($s) => trim($s) !== '')));
-        $optsHtml = '';
-        foreach ((array) ($it['options'] ?? []) as $opt) {
-            if (trim((string) $opt) === '') continue;
-            $optsHtml .= '<br><span class="opt">+ ' . $e($opt) . '</span>';
-        }
-        $rows .= '<tr>'
-              . '<td class="num">' . $n . '</td>'
-              . '<td><strong>' . $e($it['product'] ?? '') . '</strong>'
-              . ((string) ($it['system'] ?? '') !== '' ? '<br><span class="muted">' . $e($it['system']) . '</span>' : '')
-              . $optsHtml . '</td>'
-              . '<td>' . ($fabric !== '' ? $e($fabric) : '—')
-              . ((string) ($it['band'] ?? '') !== '' ? '<br><span class="muted">Band ' . $e($it['band']) . '</span>' : '')
-              . '</td>'
-              . '<td>' . $e($mm($it['width_mm'] ?? null)) . ' &times; ' . $e($mm($it['drop_mm'] ?? null)) . '</td>'
-              . '<td class="num">' . (int) ($it['quantity'] ?? 1) . '</td>'
-              . '<td>' . $e($it['room'] ?? '')
-              . ((string) ($it['notes'] ?? '') !== '' ? '<br><span class="muted">' . $nl2($it['notes']) . '</span>' : '')
-              . '</td></tr>';
-    }
-    $totalQty = array_sum(array_map(static fn ($it) => (int) ($it['quantity'] ?? 1), $items));
-
-    $html = '<!doctype html><html><head><meta charset="utf-8"><style>'
+/** doctype + the delivery-note stylesheet wrapped around one or more note bodies. */
+function ar_delivery_note_shell(string $body): string
+{
+    return '<!doctype html><html><head><meta charset="utf-8"><style>'
         . 'body{font-family:helvetica,arial,sans-serif;font-size:11px;color:#1f2937;margin:0}'
         . '.top{width:100%;margin-bottom:10px}.top td{vertical-align:top;padding:0}'
         . '.title{font-size:22px;font-weight:bold;color:#111827;margin:0 0 2px;text-align:right}'
@@ -122,7 +94,49 @@ function ar_render_delivery_note(array $ctx, array $items): ?string
         . '.muted{color:#6b7280;font-size:10px}.opt{color:#1f3b5b;font-size:10px;font-weight:bold}'
         . '.foot{margin-top:14px;font-size:10px;color:#6b7280}'
         . '.sign{margin-top:26px;font-size:10px;color:#374151}'
-        . '</style></head><body>'
+        . '</style></head><body>' . $body . '</body></html>';
+}
+
+/**
+ * One delivery note's markup without the document wrapper, so a batch can stack
+ * many into a single PDF. $pageBreak starts it on a fresh page (every note after
+ * the first). Identical layout to a single note — same columns, same signature
+ * line — so a note printed from the tray and one printed on its own match.
+ */
+function ar_delivery_note_body(array $ctx, array $items, bool $pageBreak = false): string
+{
+    $e   = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $nl2 = static fn ($s) => nl2br(htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'));
+    $mm  = static fn ($v) => ($v === null || $v === '' || (int) $v === 0) ? '&mdash;' : (string) ((int) $v) . 'mm';
+
+    $rows = ''; $n = 0;
+    foreach ($items as $it) {
+        $n++;
+        $optsHtml = '';
+        foreach ((array) ($it['options'] ?? []) as $opt) {
+            if (trim((string) $opt) === '') continue;
+            $optsHtml .= '<br><span class="opt">+ ' . $e($opt) . '</span>';
+        }
+        $fabric   = trim(implode(' / ', array_filter([
+            (string) ($it['fabric'] ?? ''), (string) ($it['colour'] ?? ''), (string) ($it['code'] ?? ''),
+        ], static fn ($s) => trim($s) !== '')));
+        $rows .= '<tr>'
+              . '<td class="num">' . $n . '</td>'
+              . '<td><strong>' . $e($it['product'] ?? '') . '</strong>'
+              . ((string) ($it['system'] ?? '') !== '' ? '<br><span class="muted">' . $e($it['system']) . '</span>' : '')
+              . $optsHtml . '</td>'
+              . '<td>' . ($fabric !== '' ? $e($fabric) : '&mdash;')
+              . ((string) ($it['band'] ?? '') !== '' ? '<br><span class="muted">Band ' . $e($it['band']) . '</span>' : '')
+              . '</td>'
+              . '<td>' . $mm($it['width_mm'] ?? null) . ' &times; ' . $mm($it['drop_mm'] ?? null) . '</td>'
+              . '<td class="num">' . (int) ($it['quantity'] ?? 1) . '</td>'
+              . '<td>' . $e($it['room'] ?? '')
+              . ((string) ($it['notes'] ?? '') !== '' ? '<br><span class="muted">' . $nl2($it['notes']) . '</span>' : '')
+              . '</td></tr>';
+    }
+    $totalQty = array_sum(array_map(static fn ($it) => (int) ($it['quantity'] ?? 1), $items));
+
+    return ($pageBreak ? '<div style="page-break-before:always"></div>' : '')
         . '<table class="top"><tr>'
         . '<td style="width:55%">' . ar_letterhead_html($ctx['factory'] ?? []) . '</td>'
         . '<td style="width:45%"><div class="title">DELIVERY NOTE</div><div class="meta">'
@@ -140,10 +154,22 @@ function ar_render_delivery_note(array $ctx, array $items): ?string
         . '</tr></thead><tbody>' . $rows . '</tbody></table>'
         . '<div class="foot">' . count($items) . ' line(s), ' . (int) $totalQty . ' item(s) total.'
         . ((string) ($ctx['notes'] ?? '') !== '' ? ' &nbsp; ' . $e($ctx['notes']) : '') . '</div>'
-        . '<div class="sign">Received by: ______________________________ &nbsp;&nbsp; Date: ______________</div>'
-        . '</body></html>';
+        . '<div class="sign">Received by: ______________________________ &nbsp;&nbsp; Date: ______________</div>';
+}
 
-    return ar_pdf_bytes($html);
+/**
+ * A batch of delivery notes in ONE PDF, one per page — what the dispatch tray
+ * prints. $notes = [['ctx'=>[...], 'items'=>[...]], …].
+ */
+function ar_render_delivery_notes_combined(array $notes): ?string
+{
+    $body = ''; $first = true;
+    foreach ($notes as $n) {
+        $body .= ar_delivery_note_body($n['ctx'] ?? [], $n['items'] ?? [], !$first);
+        $first = false;
+    }
+    if ($body === '') return null;
+    return ar_pdf_bytes(ar_delivery_note_shell($body));
 }
 
 /**
@@ -387,6 +413,14 @@ function ar_statement_bm_body(array $ctx, array $data, bool $break = false): str
                 . '<td class="rt">' . $money($r['outstanding'] ?? 0) . '</td>'
                 . '</tr>';
         }
+    }
+    // Money paid or credited that is not attached to any invoice above. Shown as
+    // its own line so the open items still visibly add up to the total — without
+    // it the statement asked for money the account had already sent.
+    $onAcc = round((float) ($data['on_account'] ?? 0), 2);
+    if ($onAcc > 0.004) {
+        $rows .= '<tr><td colspan="6" class="rt">Less: payments / credits on account</td>'
+               . '<td class="rt">-' . $money($onAcc) . '</td></tr>';
     }
     $rows .= '<tr class="tot"><td colspan="6" class="rt">Total outstanding</td>'
            . '<td class="rt">' . $money($data['total_outstanding'] ?? 0) . '</td></tr>';

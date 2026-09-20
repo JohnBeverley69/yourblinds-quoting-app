@@ -80,7 +80,7 @@ if ($type === 'invoices') {
     $whereSql = implode(' AND ', $where);
 
     $orders = $pdo->prepare(
-        "SELECT q.id, q.quote_number, q.vat_percent, q.total, q.accepted_at, q.created_at,
+        "SELECT q.id, q.quote_number, q.vat_percent, q.total, q.subtotal, q.accepted_at, q.created_at,
                 COALESCE(c.name, q.end_customer_name, 'Customer') AS customer_name,
                 COALESCE(c.email, '')                              AS customer_email
            FROM quotes q
@@ -125,15 +125,17 @@ if ($type === 'invoices') {
             // invoice total still lands.
             fputcsv($fh, [
                 $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
-                'Order ' . $o['quote_number'], 1, number_format((float) $o['total'], 2, '.', ''),
+                'Order ' . $o['quote_number'], 1, number_format((float) ($o['subtotal'] ?? $o['total']), 2, '.', ''),
                 $ACCOUNT_CODE, $taxType,
             ]);
             continue;
         }
 
+        $emittedNet = 0.0;
         foreach ($lines as $l) {
             $qty  = (int) $l['quantity'] > 0 ? (int) $l['quantity'] : 1;
             $unit = round((float) $l['line_total'] / $qty, 2);
+            $emittedNet += round($unit * $qty, 2);
 
             $bits = [];
             $prod = trim((string) ($l['product_name_snapshot'] ?? ''));
@@ -151,6 +153,24 @@ if ($type === 'invoices') {
                 $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
                 $desc, $qty, number_format($unit, 2, '.', ''), $ACCOUNT_CODE, $taxType,
             ]);
+        }
+
+        // Reconcile the exported invoice to the order's real net. The lines above
+        // are the natural per-line prices; the order's stored subtotal is what was
+        // actually agreed — it carries quotes.price_override (the "I'll do it for
+        // £X" figure, which the customer's own quote shows as a Discount line) and
+        // the internal surcharge. Without this the bookkeeper's invoice totalled
+        // the full list price and disagreed with what the customer was charged.
+        $orderNet = isset($o['subtotal']) ? round((float) $o['subtotal'], 2) : null;
+        if ($orderNet !== null) {
+            $adjust = round($orderNet - round($emittedNet, 2), 2);
+            if (abs($adjust) >= 0.01) {
+                fputcsv($fh, [
+                    $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
+                    $adjust < 0 ? 'Discount — agreed price' : 'Adjustment',
+                    1, number_format($adjust, 2, '.', ''), $ACCOUNT_CODE, $taxType,
+                ]);
+            }
         }
     }
     fclose($fh);
