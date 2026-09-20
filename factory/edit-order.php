@@ -287,9 +287,26 @@ require __DIR__ . '/../_partials/factory_head.php';
 
         <div class="fe-danger">
             <h3>Danger zone</h3>
-            <button type="submit" name="del_order" value="1" class="fe-btn" formnovalidate
+            <?php /* This button belongs to the SEPARATE form below, not to the
+                     edit form it sits inside — see the note down there. It still
+                     looks and behaves exactly as before. */ ?>
+            <button type="submit" form="fe-del-order" name="del_order" value="1" class="fe-btn" formnovalidate
                     data-confirm="Delete this ENTIRE order (<?= (int) count($items) ?> blind<?= count($items) === 1 ? '' : 's' ?>)? This cannot be undone.">Delete whole order</button>
         </div>
+    </form>
+
+    <?php /*
+      Deleting the whole order lives in its own form, carrying nothing but the
+      order id. The edit form above therefore has no del_order field anywhere in
+      it, so anything that gathers that form's fields and posts them — which is
+      how an order got deleted by a request that only meant to set a customer
+      reference — cannot ask for a deletion however hard it tries. The button
+      above is wired here by its form= attribute, so the Danger zone looks and
+      behaves exactly as it did.
+    */ ?>
+    <form method="post" action="/factory/save-order.php" id="fe-del-order" hidden>
+        <?= csrf_field() ?>
+        <input type="hidden" name="quote_id" value="<?= $qid ?>">
     </form>
 
     <script>

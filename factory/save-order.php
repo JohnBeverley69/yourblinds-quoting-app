@@ -25,6 +25,24 @@ $qid    = (int) ($_POST['quote_id'] ?? 0);
 $backEdit = '/factory/edit-order.php?order=' . $qid;
 $fail = static function (string $msg) use ($backEdit) { $_SESSION['flash_error'] = $msg; header('Location: ' . $backEdit); exit; };
 
+// ---- Exactly one action, please -------------------------------------------
+// A browser sends the name of the ONE submit button that was pressed. Anything
+// posting more than one of these did not come from a person pressing a button:
+// it built the request from the form's fields, which include every button, and
+// del_order is checked first. That is precisely how a whole order was deleted
+// by something that only meant to set a customer reference.
+//
+// This costs a real submit nothing — it can never carry two — and it turns that
+// accident into a refusal instead of a deletion.
+$posted = array_values(array_filter(
+    ['save', 'add_item', 'del_item', 'del_order'],
+    static fn (string $k): bool => isset($_POST[$k])
+));
+if (count($posted) > 1) {
+    $fail('That request asked for ' . implode(' and ', $posted) . ' at once, so nothing was done. '
+        . 'A form sends one button at a time — this looks like an automated post rather than a click.');
+}
+
 // Order must exist and carry Beverley lines.
 $ord = $pdo->prepare('SELECT id, client_id FROM quotes WHERE id = ? LIMIT 1');
 $ord->execute([$qid]);
