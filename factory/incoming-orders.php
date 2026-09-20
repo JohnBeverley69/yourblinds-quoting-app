@@ -323,8 +323,10 @@ require __DIR__ . '/../_partials/factory_head.php';
             $custLabel  = $accCompany !== ''
                 ? $accCompany
                 : (($ownRetail && $endCustName !== '') ? $endCustName : $tenant);
-            // Their customer, shown alongside when it isn't already the label.
-            $forWhom    = ($endCustName !== '' && $endCustName !== $custLabel) ? $endCustName : '';
+            // Their customer is deliberately NOT on this row: we don't deal with
+            // them, and the order number plus the customer reference are what
+            // tie the job back to the client's paperwork. It's still in the
+            // expanded detail below, and still searchable.
             $status   = (string) ($o['status'] ?? '');
             $custRef  = trim((string) ($o['customer_reference'] ?? ''));
             $addRef   = trim((string) ($o['additional_reference'] ?? ''));
@@ -345,7 +347,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?><?= ($stageBy[$qid] ?? '') === 'confirmed' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
-                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?><?php if ($forWhom !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400" title="Their customer — the blinds are for this person">&rarr; <?= e($forWhom) ?></span><?php endif; ?></span>
+                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
                     <?php
                         // The count is the whole order, not just what we make.
