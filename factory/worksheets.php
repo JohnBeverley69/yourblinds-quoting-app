@@ -401,7 +401,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .sec-top .tag { font-size:0.68rem; letter-spacing:0.05em; text-transform:uppercase; color:#64748b; font-weight:700; background:#eef2f7; padding:0.2rem 0.5rem; border-radius:6px; }
     .sec-top input.title { font-weight:600; width:14rem; }
     .sec-top .rm { margin-left:auto; }
-    .fld { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0; border-top:2px solid transparent; border-bottom:2px solid transparent; }
+    /* A field row is a grip, caption, source, when-to-show, alignment and a
+       remove button. That's more than fits on a narrow screen, so let it wrap,
+       and let each control shrink rather than set the row's width. */
+    .fld { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0; border-top:2px solid transparent; border-bottom:2px solid transparent; flex-wrap:wrap; }
+    .fld > * { min-width:0; max-width:100%; }
     .fld .grip { cursor:grab; color:#94a3b8; font-size:1.15rem; line-height:1; padding:0 0.35rem; user-select:none; touch-action:none; align-self:stretch; display:flex; align-items:center; }
     .fld .grip:hover { color:#334155; }
     .fld .grip:active { cursor:grabbing; }
@@ -415,7 +419,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld-break { background:#f8fafc; border-radius:6px; }
     .fld-break .break-label { flex:1; font-size:0.78rem; color:#64748b; font-style:italic; padding:0.15rem 0; }
     .fld input.cap { width:9rem; }
-    .fld select.src { min-width:12rem; }
+    .fld select.src { width:12rem; max-width:100%; min-width:0; }
     .fld select.show { width:8.5rem; }
     .fld select.align { width:6rem; }
     .fld .free { font-size:0.7rem; color:#94a3b8; width:8.5rem; text-align:center; }
