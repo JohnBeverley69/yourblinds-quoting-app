@@ -74,6 +74,10 @@ $emptyToNull = static function (string $k): ?string {
     $v = trim((string) ($_POST[$k] ?? ''));
     return $v === '' ? null : $v;
 };
+$refTrim = static function (string $k): ?string {
+    $v = trim((string) ($_POST[$k] ?? ''));
+    return $v === '' ? null : mb_substr($v, 0, 100);
+};
 
 $hasWhatsapp = !empty($_POST['has_whatsapp']) ? 1 : 0;
 
@@ -84,7 +88,8 @@ $u = db()->prepare(
             has_whatsapp = ?,
             end_customer_address1 = ?, end_customer_address2 = ?,
             end_customer_town = ?, end_customer_county = ?, end_customer_postcode = ?,
-            notes = ?
+            notes = ?,
+            customer_reference = ?, additional_reference = ?
       WHERE id = ? AND client_id = ?'
 );
 $u->execute([
@@ -100,6 +105,13 @@ $u->execute([
     $emptyToNull('end_customer_county'),
     $emptyToNull('end_customer_postcode'),
     $emptyToNull('notes'),
+    // The two references. They were missing here because the panel used to show
+    // them on trade orders only, so this branch never saw one — which meant that
+    // the moment a retail order grew the fields, you could type a reference,
+    // press Save details, and watch it vanish. Capped at 100 like the trade
+    // branch above, matching the inputs' maxlength.
+    $refTrim('customer_reference'),
+    $refTrim('additional_reference'),
     $quoteId,
     $clientId,
 ]);
