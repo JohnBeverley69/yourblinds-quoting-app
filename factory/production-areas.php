@@ -43,21 +43,30 @@ $scanUrlFor = static function (array $ar) use ($scanPathFor, $scanHost): string 
 
 /**
  * The scanner's provisioning string — what its WiFi-configuration QR carries.
- * Two AT commands, semicolon-separated, exactly as the vendor's Windows tool
- * emits them:
+ * Two AT commands, semicolon-separated:
  *
- *   AT+URL=1.<host>.<path+query>;AT+RAP=<ssid>,<password>
+ *   AT+URL=1,<host>,<path+query>;AT+RAP=<ssid>,<password>
  *
- * The leading "1." is the protocol selector (1 = https), and the "." after the
- * host separates it from the path — so
- * "https://yourblinds.uk/factory/scan-in.php?..." is written
- * "1.yourblinds.uk./factory/scan-in.php?...". AT+RAP carries the network the
- * scanner joins, SSID first.
+ * AT+URL takes three COMMA-separated arguments: the protocol selector (1 =
+ * https), the host, and the path with its leading slash. AT+RAP carries the
+ * network the scanner joins, SSID first.
+ *
+ * This used to join them with dots — "AT+URL=1.host./path" — and the scanner
+ * refused every code built that way while giving no clue why. Settled by
+ * decoding the vendor tool's own QR for the same bench and diffing: 129 bytes
+ * each, identical but for those two separators. So if this ever has to change
+ * again, don't reason about it — generate one in the vendor's app and compare.
+ * The Setup QR popup shows our string for exactly that purpose.
+ *
+ * Commas therefore separate BOTH commands, which is why set_wifi refuses an
+ * SSID or password containing one. Host and path are safe: the host comes from
+ * the request, and the path's only free text is the scanner name, which
+ * rawurlencode turns into %2C.
  *
  * The literal {CODE} stays in: the scanner substitutes the barcode it reads.
  */
 $scanAtFor = static function (array $ar, string $ssid, string $pass) use ($scanPathFor, $scanHost): string {
-    return 'AT+URL=1.' . $scanHost . '.' . $scanPathFor($ar)
+    return 'AT+URL=1,' . $scanHost . ',' . $scanPathFor($ar)
          . ';AT+RAP=' . $ssid . ',' . $pass;
 };
 
