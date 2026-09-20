@@ -488,6 +488,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$byProduct): ?>
     <p class="pf-sub">No placed orders in this period.</p>
 <?php else: ?>
+    <div class="table-wrap">
     <table class="pf">
         <thead><tr><th>Product</th><th class="r">Blinds</th><th class="r">Revenue</th><th class="r">Cost</th><th class="r">Profit</th><th class="r">Margin</th></tr></thead>
         <tbody>
@@ -511,6 +512,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <p class="pf-sub" style="margin-top:.6rem">Profit and margin are shown against costed blinds only. A part-costed product shows its ratio; import the rest of its cost grid for the full picture.</p>
 <?php endif; ?>
 
@@ -520,6 +522,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php if (!$whyRows): ?>
         <p class="pf-sub">Every line in this window is costed.</p>
     <?php else: ?>
+        <div class="table-wrap">
         <table class="pf">
             <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th class="r">Cell</th><th class="r">Sys id</th><th class="r">→ master</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
             <tbody>
@@ -542,6 +545,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
     <?php endif; ?>
 <?php endif; ?>
 

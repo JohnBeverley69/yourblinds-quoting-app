@@ -728,7 +728,20 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 select{ font:inherit; padding:.45rem .7rem; border:1px solid var(--line); border-radius:8px;
       background:var(--surface); color:var(--ink); font-weight:600; }
   .brv2 .layout{ display:grid; grid-template-columns:1fr 320px; gap:1.4rem; align-items:start; }
+  /* A grid item is min-width:auto by default, so it refuses to be narrower than
+     its widest child — the 16rem formula input — and shoves the column past its
+     track, taking the whole page sideways with it. min-width:0 lets the columns
+     hold their ground and leaves the scrolling to .scroll, where it belongs. */
+  .brv2 .layout > *{ min-width:0; }
   @media(max-width:900px){ .brv2 .layout{ grid-template-columns:1fr; } }
+  /* Phone: the fixed minimums on the label + field pairs add up to more than the
+     screen, so let them wrap and shrink instead. */
+  @media(max-width:760px){
+    .brv2 .calc .cn{ min-width:0; }
+    .brv2 input.formula{ min-width:0; flex:1 1 100%; }
+    .brv2 .af-row label{ min-width:0; }
+    .brv2 .af-row input[type=text]{ min-width:0; }
+  }
 
   .brv2 .grouplabel{ display:flex; align-items:center; gap:.6rem; margin:1.6rem 0 .8rem; font-size:.72rem;
       letter-spacing:.13em; text-transform:uppercase; color:var(--faint); font-weight:600; }
