@@ -388,6 +388,14 @@ function ar_statement_bm_body(array $ctx, array $data, bool $break = false): str
                 . '</tr>';
         }
     }
+    // Money paid or credited that is not attached to any invoice above. Shown as
+    // its own line so the open items still visibly add up to the total — without
+    // it the statement asked for money the account had already sent.
+    $onAcc = round((float) ($data['on_account'] ?? 0), 2);
+    if ($onAcc > 0.004) {
+        $rows .= '<tr><td colspan="6" class="rt">Less: payments / credits on account</td>'
+               . '<td class="rt">-' . $money($onAcc) . '</td></tr>';
+    }
     $rows .= '<tr class="tot"><td colspan="6" class="rt">Total outstanding</td>'
            . '<td class="rt">' . $money($data['total_outstanding'] ?? 0) . '</td></tr>';
 

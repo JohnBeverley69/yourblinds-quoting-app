@@ -914,6 +914,49 @@ function ar_statement_invoices(PDO $pdo, int $factory, int $accountId, string $a
         ];
         $res['total_outstanding'] = round($res['total_outstanding'] + $out, 2);
     }
+
+    // Money the account has paid or been credited that is not attached to any
+    // invoice — an unallocated payment, or a standalone credit note
+    // (against_invoice_id IS NULL). The open-item rows above can't show it, so
+    // without this the statement chased a customer for money they had already
+    // sent. ar_account_ar_summary() already nets it off on screen, so the
+    // emailed statement was contradicting the account page.
+    $onAccount = 0.0;
+    if ($hasPay) {
+        try {
+            $q = $pdo->prepare(
+                "SELECT COALESCE(SUM(p.amount),0)
+                      - COALESCE((SELECT SUM(a.amount)
+                                    FROM factory_ar_payment_allocations a
+                                    JOIN factory_ar_payments p2 ON p2.id = a.payment_id
+                                   WHERE p2.factory_client_id = p.factory_client_id
+                                     AND p2.account_client_id = p.account_client_id
+                                     AND p2.voided_at IS NULL
+                                     AND p2.payment_date <= ?), 0)
+                   FROM factory_ar_payments p
+                  WHERE p.factory_client_id = ? AND p.account_client_id = ?
+                    AND p.voided_at IS NULL AND p.payment_date <= ?"
+            );
+            $q->execute([$toD, $factory, $accountId, $toD]);
+            $onAccount += round((float) $q->fetchColumn(), 2);
+        } catch (Throwable $e) { /* leave at 0 rather than misstate */ }
+    }
+    if ($hasCN) {
+        try {
+            $q = $pdo->prepare(
+                "SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes
+                  WHERE factory_client_id = ? AND account_client_id = ?
+                    AND against_invoice_id IS NULL AND status <> 'void'
+                    AND COALESCE(issue_date, DATE(created_at)) <= ?"
+            );
+            $q->execute([$factory, $accountId, $toD]);
+            $onAccount += round((float) $q->fetchColumn(), 2);
+        } catch (Throwable $e) { /* leave as is */ }
+    }
+
+    $res['on_account']        = round(max(0.0, $onAccount), 2);
+    $res['total_outstanding'] = round($res['total_outstanding'] - $res['on_account'], 2);
+
     return $res;
 }
 
@@ -1024,6 +1067,7 @@ function ar_statement_bundle(PDO $pdo, int $factory, int $accountId, string $asA
         'data' => [
             'invoices'          => $inv['rows'],
             'total_outstanding' => $inv['total_outstanding'],
+            'on_account'        => $inv['on_account'] ?? 0.0,
             'aging'             => $aging,
         ],
     ];
