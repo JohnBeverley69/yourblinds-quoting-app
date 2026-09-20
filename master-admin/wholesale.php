@@ -474,8 +474,13 @@ foreach ($creditNotes as $cn) {
     if ($iid) $cnByInvoice[$iid][] = $cn;
 }
 
-// One-step (auto-invoice on DN print) is the default; two-step is the manual fallback.
-$autoInvoice = app_setting_get('wholesale_dn_auto_invoice', '1') === '1';
+// TWO-step (print the note, raise the invoice yourself) is the default. One-step
+// invoices off the back of printing, which does not survive how the office
+// actually works: they do not always print every delivery note, and invoice
+// numbers have to come out in sequence — so a part-printed batch would silently
+// raise invoices and leave gaps. Switchable on this page once there is more
+// confidence in it.
+$autoInvoice = app_setting_get('wholesale_dn_auto_invoice', '0') === '1';
 // Phase 2: auto-invoice when an order is dispatched (any path). Default OFF.
 $autoInvoiceDispatch = app_setting_get('auto_invoice_on_dispatch', '0') === '1';
 
