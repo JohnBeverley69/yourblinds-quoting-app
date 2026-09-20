@@ -209,7 +209,7 @@ function ar_render_invoice(array $ctx, array $items, array $totals): ?string
             $discAmt  = round((float) ($it['discount_amount'] ?? 0), 2);
             $discPct  = (float) ($it['discount_percent'] ?? 0);
             $discCell = $discAmt > 0
-                ? '&minus;' . $money($discAmt)
+                ? '-' . $money($discAmt)
                   . ($discPct > 0 ? '<br><span class="muted">' . rtrim(rtrim(number_format($discPct, 2), '0'), '.') . '%</span>' : '')
                 : '';
             $discCols = '<td class="rt">' . $money($listUnit) . '</td>'
