@@ -300,7 +300,10 @@ require __DIR__ . '/../_partials/factory_head.php';
   input[type=text], select { font:inherit; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; padding:.4rem .55rem; background:var(--bg-input,#fff); color:inherit; }
   .btn { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:.4rem .8rem; background:#166534; color:#fff; }
   .btn.ghost { background:#eef2f6; color:#334155; } .btn.mini{ padding:.2rem .5rem; font-size:.8rem; }
-  .area-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-bottom:1px solid var(--border,#eef); }
+  /* wrap + min-width:0 so a long scan URL folds onto the next line instead of
+     setting the row's width and pushing the page off the side of the screen. */
+  .area-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap; }
+  .area-row > * { min-width:0; }
   .area-row:last-child { border-bottom:none; }
   .seq { width:1.6rem; height:1.6rem; border-radius:50%; background:#0f766e; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex:0 0 auto; }
   .count { color:var(--text-muted,#667); font-size:.8rem; }
@@ -313,7 +316,7 @@ require __DIR__ . '/../_partials/factory_head.php';
   .scan-row { display:flex; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap; }
   .scan-row:last-child { border-bottom:none; }
   .scan-name { font-weight:600; min-width:9rem; }
-  .scan-url { flex:1; min-width:16rem; font-family:ui-monospace,Consolas,monospace; font-size:.8rem; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-subtle,#f8fafc); color:inherit; }
+  .scan-url { flex:1 1 16rem; min-width:0; font-family:ui-monospace,Consolas,monospace; font-size:.8rem; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-subtle,#f8fafc); color:inherit; }
   .scan-none { color:var(--text-muted,#667); font-size:.85rem; }
   .wifi-bar { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:0 0 .7rem;
               padding:.55rem .65rem; border:1px solid var(--border,#eef); border-radius:10px;

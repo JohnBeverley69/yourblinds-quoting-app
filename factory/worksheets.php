@@ -491,7 +491,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .ws-layout { display:flex; gap:1rem; align-items:flex-start; }
     .ws-layout > .ws-card { flex:1 1 480px; min-width:0; margin:0; }
     .ws-layout > .ws-preview { flex:0 0 auto; width:50%; max-width:900px; position:sticky; top:0.6rem; margin:0; }
-    @media (max-width:1100px) { .ws-layout { flex-direction:column; } .ws-layout > .ws-preview { position:static; width:auto; max-width:none; } }
+    /* The preview is a label drawn at its real size, so it can't be made
+       narrower — below the two-column layout it needs min-width:0 (a flex item
+       won't go under its content otherwise) and its own sideways scroll, or it
+       sets the page width and everything shifts right. */
+    @media (max-width:1100px) { .ws-layout { flex-direction:column; } .ws-layout > .ws-preview { position:static; width:auto; max-width:none; min-width:0; overflow-x:auto; } }
 </style>
 
 <div class="ws-head">
