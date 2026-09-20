@@ -495,7 +495,14 @@ require __DIR__ . '/../_partials/factory_head.php';
        narrower — below the two-column layout it needs min-width:0 (a flex item
        won't go under its content otherwise) and its own sideways scroll, or it
        sets the page width and everything shifts right. */
-    @media (max-width:1100px) { .ws-layout { flex-direction:column; } .ws-layout > .ws-preview { position:static; width:auto; max-width:none; min-width:0; overflow-x:auto; } }
+    @media (max-width:1100px) {
+      /* align-items:flex-start is right side-by-side, but once this stacks the
+         cross axis is the horizontal one — so the items sized themselves to
+         their content and the preview stayed 722px wide inside a 373px column.
+         Stretch them back to the container and let the preview scroll. */
+      .ws-layout { flex-direction:column; align-items:stretch; }
+      .ws-layout > .ws-preview { position:static; width:auto; max-width:none; min-width:0; overflow-x:auto; }
+    }
 </style>
 
 <div class="ws-head">
