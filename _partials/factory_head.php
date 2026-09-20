@@ -108,6 +108,14 @@ $factoryNavItems += [
             .factory-topbar { gap: 0.75rem; padding: 0 0.75rem; }
             .factory-user  { gap: 0.6rem; }
         }
+        /* Phone / small tablet: one row can't hold the brand, nine links and the
+           user block, and squeezing them left the nav at zero width with the bar
+           still hanging off the side. Give the nav its own row underneath. */
+        @media (max-width: 760px) {
+            .factory-topbar { flex-wrap: wrap; height: auto; padding: 0.45rem 0.75rem 0; gap: 0 0.75rem; }
+            .factory-brand  { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+            .factory-nav    { order: 3; flex: 1 0 100%; padding: 0.35rem 0 0.4rem; }
+        }
         .factory-brand {
             font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap;
             flex: 0 0 auto;
