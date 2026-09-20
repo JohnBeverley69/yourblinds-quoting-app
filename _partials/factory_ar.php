@@ -292,8 +292,19 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
         // trade_price_per_blind is the sell BEFORE their account discount and
         // trade_discount_amount the £ off (both sell-basis, set by the engine).
         // ($optNet is still summed above only to flag uncaptured options.)
+        //
+        // line_net comes from the STORED line_total, not sell_price × qty. The
+        // engine builds it as `round($sellPrice * $quantity + $lineCharge, 2)`
+        // (pricing_engine.php:1470) — products.line_charge is a flat £ added
+        // ONCE per line, after the × quantity step. Recomputing here silently
+        // dropped it and under-billed the account on every product that carries
+        // one (e.g. Arena "Louvres Only" £6.98 per set).
+        //
+        // unit_net stays the per-blind sell price, so unit × qty can differ from
+        // line_net by that flat charge. That is exactly what the customer's own
+        // quote shows, so the two documents agree.
         $unitNet  = round((float) $ln['sell_price'], 2);
-        $lineNet  = round($unitNet * $qty, 2);
+        $lineNet  = round((float) $ln['line_total'], 2);
         $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['sell_price']), 2);
 
         $desc = trim((string) $ln['product_name_snapshot']);
@@ -320,6 +331,68 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
             'sort_order'           => $so++,
         ];
     }
+
+    // ---- Reconcile the invoice to the ORDER's real net -----------------------
+    // Summing the billed lines is not the order's net. Two things live above the
+    // line level and were both being dropped:
+    //
+    //   * quotes.price_override — the agreed NET price ("I'll do it for £X").
+    //     qb_recompute_totals() assigns it straight to quotes.subtotal and adds
+    //     VAT on top (_helpers.php), and the customer's quote shows the gap as a
+    //     single "Discount" line. The invoice ignored it entirely and billed the
+    //     full list, so an agreed price was never honoured.
+    //     (NB migrate_quote_price_override.php's header calls it inc-VAT; the
+    //     code is the authority and treats it as net.)
+    //   * the Wally tax (WT charge) — folded into the stored subtotal, never a
+    //     line of its own, so a line-by-line rebuild loses it.
+    //
+    // So: take the order's stored net as the truth and add ONE adjust line for the
+    // difference, mirroring what the quote already showed. Pro-rated by the billed
+    // share, because a quote can hold lines this factory does not own and we must
+    // only ever bill our own portion of an order-level figure.
+    if ($lines) {
+        try {
+            $qs = $pdo->prepare('SELECT subtotal FROM quotes WHERE id = ? LIMIT 1');
+            $qs->execute([$quoteId]);
+            $orderNet = $qs->fetchColumn();
+
+            $as = $pdo->prepare('SELECT COALESCE(SUM(line_total),0) FROM quote_items WHERE quote_id = ?');
+            $as->execute([$quoteId]);
+            $allLinesNet = (float) $as->fetchColumn();
+
+            $billedNet = 0.0;
+            foreach ($lines as $l) $billedNet += (float) $l['line_net'];
+
+            if ($orderNet !== false && $orderNet !== null && $allLinesNet > 0.005) {
+                $share  = $billedNet / $allLinesNet;          // our slice of the order
+                $target = round(((float) $orderNet) * $share, 2);
+                $adjust = round($target - round($billedNet, 2), 2);
+
+                if (abs($adjust) >= 0.01) {
+                    $lines[] = [
+                        'source_quote_id'      => $quoteId,
+                        'source_quote_item_id' => null,
+                        'line_type'            => 'adjust',
+                        'description'          => $adjust < 0 ? 'Discount — agreed price' : 'Adjustment',
+                        'width_mm'             => null,
+                        'drop_mm'              => null,
+                        'quantity'             => 1,
+                        'unit_net'             => $adjust,
+                        'line_net'             => $adjust,
+                        'list_trade_unit'      => null,
+                        'discount_percent'     => null,
+                        'discount_amount'      => null,
+                        'sort_order'           => $so++,
+                    ];
+                }
+            }
+        } catch (Throwable $e) {
+            // quotes.subtotal or quote_items.line_total absent on an un-migrated
+            // database — bill the lines as they stand rather than failing to invoice.
+            error_log('ar_invoice_lines_from_order: order-net reconcile skipped — ' . $e->getMessage());
+        }
+    }
+
     return ['lines' => $lines, 'uncaptured' => $uncaptured];
 }
 

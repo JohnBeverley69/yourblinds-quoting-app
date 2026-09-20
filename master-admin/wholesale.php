@@ -230,11 +230,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $reason = trim((string) ($_POST['void_reason'] ?? '')) ?: 'Voided';
                 // Never mutate a sent invoice's figures — void keeps its number (gap-free).
+                $ownTx = !$pdo->inTransaction();
+                if ($ownTx) $pdo->beginTransaction();
                 $pdo->prepare("UPDATE factory_ar_invoices SET status = 'void', voided_at = NOW(), void_reason = ? WHERE id = ? AND factory_client_id = ? AND status <> 'void'")
                     ->execute([$reason, $invId, $factory]);
-                $_SESSION['flash_success'] = 'Invoice voided (its number is kept). Raise a fresh one if needed.';
+
+                // Void its credit notes too. A credit note credits a specific
+                // invoice; leaving one live against a voided invoice left the
+                // account holding a credit it never earned — ar_account_ar_summary
+                // counts every non-void credit note, so the phantom showed up as a
+                // real balance on the statement.
+                $cnVoided = 0;
+                if ($cnReady) {
+                    $cnv = $pdo->prepare(
+                        "UPDATE factory_ar_credit_notes SET status = 'void', voided_at = NOW()
+                          WHERE against_invoice_id = ? AND factory_client_id = ? AND status <> 'void'"
+                    );
+                    $cnv->execute([$invId, $factory]);
+                    $cnVoided = $cnv->rowCount();
+                }
+                if ($ownTx) $pdo->commit();
+
+                $_SESSION['flash_success'] = 'Invoice voided (its number is kept).'
+                    . ($cnVoided > 0
+                        ? ' Its ' . $cnVoided . ' credit note' . ($cnVoided === 1 ? ' was' : 's were') . ' voided with it.'
+                        : '')
+                    . ' Raise a fresh one if needed.';
             }
         } catch (Throwable $e) {
+            // The void now spans two tables, so a half-done void must not stand.
+            if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not update invoice: ' . $e->getMessage();
         }
         header('Location: /master-admin/wholesale.php'); exit;
@@ -251,6 +276,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $inv = $iv->fetch(PDO::FETCH_ASSOC);
             if (!$inv) throw new RuntimeException('Invoice not found.');
             if ($inv['status'] === 'void') throw new RuntimeException('That invoice is void — nothing to credit.');
+
+            // Refuse a second full-value credit note against the same invoice.
+            // Nothing stopped it before, so pressing the button twice raised two
+            // credit notes for the FULL total and left the account showing a
+            // credit balance it had never earned. Void credit notes do not count.
+            $already = $pdo->prepare(
+                "SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes
+                  WHERE against_invoice_id = ? AND factory_client_id = ? AND status <> 'void'"
+            );
+            $already->execute([$invId, $factory]);
+            $credited = round((float) $already->fetchColumn(), 2);
+            $invTotal = round((float) $inv['total'], 2);
+            if ($credited >= $invTotal - 0.005) {
+                throw new RuntimeException(
+                    $credited > 0.005
+                        ? 'That invoice is already credited in full (' . number_format($credited, 2)
+                          . ') — void the existing credit note first if it needs redoing.'
+                        : 'That invoice has nothing left to credit.'
+                );
+            }
 
             $il = $pdo->prepare('SELECT * FROM factory_ar_invoice_lines WHERE invoice_id = ? ORDER BY sort_order, id');
             $il->execute([$invId]);
