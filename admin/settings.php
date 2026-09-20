@@ -240,6 +240,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // per-product (Product → Edit → Markup %). The column is still
         // in the DB for back-compat but no longer written from the UI.
         $prefix     = strtoupper(trim((string) ($_POST['quote_prefix'] ?? '')));
+
+        // The prefix has to be unique ACROSS tenants, not just within one.
+        // Quote numbers are PREFIX-YYYY-NNNN and the sequence is counted per
+        // client, so two tenants picking the same prefix both start at 0001 and
+        // hand out identical order numbers. That is survivable inside a tenant
+        // (nothing looks an order up by its number — every lookup is by id) but
+        // it breaks the factory's wholesale documents, which are numbered from
+        // the ORDER number: the second account's invoice comes out as
+        // INV-BB-2026-0001-2, and that "-2" means "void-and-reissue of the same
+        // order" everywhere else. Two customers' paperwork then reads as one
+        // order reissued.
+        if ($prefix !== '') {
+            try {
+                $dup = db()->prepare(
+                    'SELECT c.company_name FROM client_settings cs
+                       JOIN clients c ON c.id = cs.client_id
+                      WHERE UPPER(TRIM(cs.quote_prefix)) = ? AND cs.client_id <> ? LIMIT 1'
+                );
+                $dup->execute([$prefix, $clientId]);
+                $takenBy = (string) ($dup->fetchColumn() ?: '');
+                if ($takenBy !== '') {
+                    $_SESSION['flash_error'] = 'Quote prefix "' . $prefix . '" is already used by '
+                        . $takenBy . '. Pick a different one — two accounts sharing a prefix end up '
+                        . 'with the same order numbers.';
+                    header('Location: /admin/settings.php#quoting'); exit;
+                }
+            } catch (Throwable $e) {
+                // Can't check (odd schema) — don't block the save over it.
+            }
+        }
+
         $vat        = (float) ($_POST['vat_percent'] ?? 20);
         // VAT bounded like the deposit % — accept 0–100 only.
         if ($vat < 0)   $vat = 0;
