@@ -180,37 +180,50 @@ $masterTableByRow = function (int $rowId, int $mpid) use ($pdo, $MASTER, $master
     return $rowTableCache[$key] = $hit;
 };
 
-// The master system behind a system on an order line, then its grid for a band.
+// The master system behind a system on an order line — its own id if the line
+// was raised here, otherwise the source_system_id the catalogue push wrote.
 $hasSysSrc = pe_col_exists($pdo, 'product_systems', 'source_system_id');
-$sysCache = $bandCache = [];
-$masterTableBySystem = function (?int $lineSysId, int $mpid, ?string $band)
-    use ($pdo, $MASTER, $hasSysSrc, &$sysCache, &$bandCache): ?array {
-    if ($lineSysId === null || $lineSysId <= 0 || $band === null || $band === '') return null;
-
-    if (!array_key_exists($lineSysId, $sysCache)) {
-        $sysCache[$lineSysId] = null;
-        $sel = $hasSysSrc ? 'id, client_id, source_system_id' : 'id, client_id';
-        $q = $pdo->prepare("SELECT $sel FROM product_systems WHERE id = ? LIMIT 1");
-        $q->execute([$lineSysId]);
-        $r = $q->fetch(PDO::FETCH_ASSOC);
-        if ($r) {
-            $sysCache[$lineSysId] = (int) $r['client_id'] === $MASTER
-                ? (int) $r['id']
-                : (!empty($r['source_system_id']) ? (int) $r['source_system_id'] : null);
-        }
+$sysCache  = [];
+$masterSystemOf = function (?int $lineSysId) use ($pdo, $MASTER, $hasSysSrc, &$sysCache): ?int {
+    if ($lineSysId === null || $lineSysId <= 0) return null;
+    if (array_key_exists($lineSysId, $sysCache)) return $sysCache[$lineSysId];
+    $sysCache[$lineSysId] = null;
+    $sel = $hasSysSrc ? 'id, client_id, source_system_id' : 'id, client_id';
+    $q = $pdo->prepare("SELECT $sel FROM product_systems WHERE id = ? LIMIT 1");
+    $q->execute([$lineSysId]);
+    $r = $q->fetch(PDO::FETCH_ASSOC);
+    if ($r) {
+        $sysCache[$lineSysId] = (int) $r['client_id'] === $MASTER
+            ? (int) $r['id']
+            : (!empty($r['source_system_id']) ? (int) $r['source_system_id'] : null);
     }
-    $masterSys = $sysCache[$lineSysId];
+    return $sysCache[$lineSysId];
+};
+
+$bandCache = [];
+$masterTableBySystem = function (?int $lineSysId, int $mpid, ?string $band)
+    use ($pdo, $MASTER, $masterSystemOf, &$bandCache): ?array {
+    $masterSys = $masterSystemOf($lineSysId);
     if ($masterSys === null) return null;
 
-    $key = $mpid . '|' . $masterSys . '|' . $band;
+    $key = $mpid . '|' . $masterSys . '|' . (string) $band;
     if (array_key_exists($key, $bandCache)) return $bandCache[$key];
-    $q = $pdo->prepare(
-        'SELECT id, system_id FROM price_tables
-          WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ? LIMIT 1'
-    );
-    $q->execute([$MASTER, $mpid, $masterSys, $band]);
-    $r = $q->fetch(PDO::FETCH_ASSOC);
-    return $bandCache[$key] = ($r ? ['id' => (int) $r['id'], 'system_id' => (int) $masterSys] : null);
+
+    // The band the order was quoted at, if that band still exists. It often
+    // doesn't: band codes get renamed on the master (STANDARD becoming Std,
+    // Infusions' slat sizes becoming A/B/C/D) and the order keeps the old one.
+    // So when the system has exactly ONE grid there is nothing to choose
+    // between, and the band not matching is beside the point.
+    $q = $pdo->prepare('SELECT id FROM price_tables WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ? LIMIT 1');
+    $q->execute([$MASTER, $mpid, $masterSys, (string) $band]);
+    $id = $q->fetchColumn();
+    if ($id === false || $id === null) {
+        $q = $pdo->prepare('SELECT id FROM price_tables WHERE client_id = ? AND product_id = ? AND system_id = ? LIMIT 2');
+        $q->execute([$MASTER, $mpid, $masterSys]);
+        $all = $q->fetchAll(PDO::FETCH_COLUMN);
+        $id  = count($all) === 1 ? $all[0] : null;
+    }
+    return $bandCache[$key] = ($id ? ['id' => (int) $id, 'system_id' => (int) $masterSys] : null);
 };
 
 // A product with exactly one grid leaves nothing to choose between.
@@ -371,6 +384,7 @@ foreach ($lines as $ln) {
                 'table_owner'=> $ln['tenant_table_client'] !== null ? (int) $ln['tenant_table_client'] : null,
                 'line_row'  => $ln['line_row_id']    !== null ? (int) $ln['line_row_id']    : null,
                 'line_sys'  => $ln['line_system_id'] !== null ? (int) $ln['line_system_id'] : null,
+                'master_sys'=> $masterSystemOf(!empty($ln['line_system_id']) ? (int) $ln['line_system_id'] : null),
                 'system'    => $ln['system_name'] ?: ($ln['sys_snap'] ?? null),
                 'band'      => $ln['band'] ?: ($ln['band_snap'] ?? null),
                 'master_tbl'=> $tbl['id'] ?? null,
@@ -504,7 +518,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <p class="pf-sub">Every line in this window is costed.</p>
     <?php else: ?>
         <table class="pf">
-            <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th class="r">Cell</th><th class="r">Sys id</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
+            <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th class="r">Cell</th><th class="r">Sys id</th><th class="r">→ master</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
             <tbody>
             <?php foreach ($whyRows as $w): ?>
                 <tr>
@@ -516,6 +530,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <td class="r"><?= $w['table_owner'] !== null ? (int) $w['table_owner'] : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['line_row'] !== null ? (int) $w['line_row'] : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['line_sys'] !== null ? (int) $w['line_sys'] : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['master_sys'] !== null ? (int) $w['master_sys'] : '<span class="muted">—</span>' ?></td>
                     <td><?= $w['system'] !== null ? e((string) $w['system']) : '<span class="muted">—</span>' ?></td>
                     <td><?= $w['band']   !== null ? e((string) $w['band'])   : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['master_tbl'] !== null ? (int) $w['master_tbl'] : '<span class="muted">—</span>' ?></td>
