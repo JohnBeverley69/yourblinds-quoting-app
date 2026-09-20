@@ -33,6 +33,7 @@ $ORDER_FIELDS = [
     'order_date'   => ['Order date',   '10/07/2026'],
     'customer'     => ['Customer',     'Sample Trade Co.'],
     'phone'        => ['Phone',        '01234 567890'],
+    'email'        => ['Email',        'orders@sampletrade.co.uk'],
     'address'      => ['Address (one line)', '12 Example Street, Sampleton'],
     'address1'     => ['Address line 1', '12 Example Street'],
     'address2'     => ['Address line 2', 'Sample Industrial Estate'],

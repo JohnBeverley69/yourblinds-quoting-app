@@ -57,6 +57,7 @@ try {
         "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
                 q.end_customer_name, q.end_customer_address1, q.end_customer_address2,
                 q.end_customer_town, q.end_customer_county, q.end_customer_postcode, q.end_customer_phone,
+                q.end_customer_email,
                 q.client_id, q.account_client_id,
                 COALESCE(ac.company_name, c.company_name) AS company_name,
                 ac.contact_name                           AS contact_name,
@@ -65,7 +66,8 @@ try {
                 COALESCE(ac.town, c.town)                 AS town,
                 COALESCE(ac.county, c.county)             AS county,
                 COALESCE(ac.postcode, c.postcode)         AS postcode,
-                COALESCE(ac.phone, c.phone)               AS phone
+                COALESCE(ac.phone, c.phone)               AS phone,
+                COALESCE(ac.email, c.email)               AS email
            FROM quotes q
            JOIN clients c  ON c.id = q.client_id
       LEFT JOIN clients ac ON ac.id = q.account_client_id
@@ -80,8 +82,9 @@ try {
             "SELECT q.id, q.quote_number, q.created_at, q.customer_reference, q.additional_reference,
                     q.end_customer_name, q.end_customer_address1, q.end_customer_address2,
                     q.end_customer_town, q.end_customer_county, q.end_customer_postcode, q.end_customer_phone,
+                    q.end_customer_email,
                     q.client_id,
-                    c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone
+                    c.company_name, c.address1, c.address2, c.town, c.county, c.postcode, c.phone, c.email
                FROM quotes q JOIN clients c ON c.id = q.client_id
               WHERE q.id = ? LIMIT 1"
         );
@@ -225,6 +228,11 @@ $orderVals = $order ? [
     'county'     => (string) ($order['county'] ?? ''),
     'post_code'  => (string) ($order['postcode'] ?? ''),
     'phone'      => (string) ($order['phone'] ?? ''),
+    // The trade account's address book email, falling back to the one captured
+    // on the order itself — which is all a retail job has.
+    'email'      => (string) (($order['email'] ?? '') !== ''
+                        ? $order['email']
+                        : ($order['end_customer_email'] ?? '')),
     'cust_ref'   => (string) ($order['customer_reference'] ?? ''),
 ] : [];
 
