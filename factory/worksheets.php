@@ -387,7 +387,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     code { background:var(--bg-subtle,#f1f5f9); padding:0.05rem 0.3rem; border-radius:4px; font-size:0.85em; }
 
     .sec { border:1px solid #e5e7eb; border-radius:12px; padding:0.9rem 1rem; margin-bottom:0.9rem; background:#fcfcfd; }
-    .sec-top { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem; }
+    /* Tag, title, three size controls and a Remove button: more than fits on a
+       narrow screen, so let the row wrap rather than run off the side of it. */
+    .sec-top { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem; flex-wrap:wrap; }
+    .sec-top > * { min-width:0; }
+    @media (max-width:760px) { .sec-top input.title { width:100%; } .sec-top .rm { margin-left:0; } }
     .sec-toggle { cursor:pointer; border:none; background:none; color:#64748b; font-size:0.9rem; line-height:1; padding:0.1rem 0.3rem; border-radius:6px; transition:transform 0.12s; }
     .sec-toggle:hover { background:#eef2f7; color:#334155; }
     .sec.is-collapsed .sec-toggle { transform:rotate(-90deg); }
