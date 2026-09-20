@@ -506,6 +506,8 @@ function qb_generate_quote_number(int $clientId): string
     $year = date('Y');
     $like = $prefix . '-' . $year . '-%';
 
+    // Count within this tenant, so each one's own numbering stays tidy and
+    // gap-free — that is what the customer sees.
     $st = $pdo->prepare(
         "SELECT MAX(CAST(SUBSTRING_INDEX(quote_number, '-', -1) AS UNSIGNED))
            FROM quotes
@@ -514,7 +516,25 @@ function qb_generate_quote_number(int $clientId): string
     $st->execute([$clientId, $like]);
     $next = ((int) ($st->fetchColumn() ?? 0)) + 1;
 
-    return sprintf('%s-%s-%04d', $prefix, $year, $next);
+    // …but the number must be unique ACROSS tenants, because the factory's
+    // wholesale documents are numbered from it (INV-<order number>). Two tenants
+    // that chose the same prefix would otherwise both hand out PREFIX-YYYY-0001,
+    // and the second account's invoice would come out as …-0001-2 — which means
+    // "void-and-reissue of that same order" everywhere else in the system.
+    //
+    // Settings now refuses a prefix another tenant already holds, so this only
+    // bites where a duplicate prefix already existed. Bump past anything taken.
+    $taken = $pdo->prepare('SELECT 1 FROM quotes WHERE quote_number = ? LIMIT 1');
+    for ($guard = 0; $guard < 1000; $guard++) {
+        $candidate = sprintf('%s-%s-%04d', $prefix, $year, $next);
+        $taken->execute([$candidate]);
+        if (!$taken->fetchColumn()) return $candidate;
+        $next++;
+    }
+
+    // Pathological only (1000 straight collisions) — fall back to something that
+    // cannot collide rather than looping or handing back a duplicate.
+    return sprintf('%s-%s-%04d-%s', $prefix, $year, $next, bin2hex(random_bytes(2)));
 }
 
 /* ── Wholesale-price capture (Phase 2A) ──────────────────────────────────────
