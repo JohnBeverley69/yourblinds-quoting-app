@@ -314,7 +314,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     code { background:var(--bg-subtle,#f1f5f9); padding:0.05rem 0.3rem; border-radius:4px; font-size:0.85em; }
 
     .var-card { border:1px solid #e5e7eb; border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem; background:#fcfcfd; }
-    .var-top { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.2rem; }
+    /* Label, a 13rem name field and a Remove button — wider than a phone unless
+       it wraps, and the name field must be able to give ground. */
+    .var-top { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.2rem; flex-wrap:wrap; }
+    .var-top > * { min-width:0; max-width:100%; }
     .var-top .lbl { font-size:0.72rem; letter-spacing:0.04em; text-transform:uppercase; color:#94a3b8; font-weight:600; }
     .var-top input.vname { font-weight:600; width:13rem; font-family:ui-monospace,Consolas,monospace; }
     .var-top .rm-var { margin-left:auto; }
