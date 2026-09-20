@@ -158,6 +158,12 @@ $factoryNavItems += [
            scrollbar on a screen that had the room all along. */
         .factory-main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 1.5rem; }
         .factory-main.is-wide { max-width: none; }
+        /* If you add a screen here and it has a table wider than a phone, wrap it
+           in <div class="table-wrap"> (app.css) so the table scrolls inside its
+           own box. Left bare, a table narrower than its own content drags the
+           whole page sideways on every screen size below it. Same trap with a
+           grid: give its children min-width:0, or the widest child sets the
+           column width and the page goes with it. */
     </style>
 </head>
 <body class="factory-body">
