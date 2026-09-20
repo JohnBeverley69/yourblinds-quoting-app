@@ -315,10 +315,12 @@ require __DIR__ . '/../_partials/factory_head.php';
                         // The count is the whole order, not just what we make.
                         // An order that's entirely bought in used to read
                         // "0 blinds" next to five blinds' worth of work.
+                        // The bought-in split is already on the status badge, so
+                        // this column stays a single figure and the row stays
+                        // in its columns.
                         $orderQty = (int) ($o['order_qty'] ?? ((int) $o['bev_qty'] + $boughtinQty));
-                        $madeHere = (int) $o['bev_qty'];
                     ?>
-                    <span class="cnt"><?= $orderQty ?> blind<?= $orderQty === 1 ? '' : 's' ?><?php if ($boughtinQty > 0 && $madeHere > 0): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400"><?= $madeHere ?> made here</span><?php endif; ?></span>
+                    <span class="cnt"><?= $orderQty ?> blind<?= $orderQty === 1 ? '' : 's' ?></span>
                     <span class="stat">
                         <?php
                             // Phase 3: the single fulfilment stage IS the status now (Confirmed /
