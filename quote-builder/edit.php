@@ -981,20 +981,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     </p>
                 </div>
 
-                <div class="form-row cols-2" style="margin-top:1rem">
-                    <div class="form-group">
-                        <label for="customer_reference">Customer reference <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
-                        <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
-                               <?= !$editable ? 'readonly' : '' ?>
-                               value="<?= e((string) ($quote['customer_reference'] ?? '')) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label for="additional_reference">Additional reference <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
-                        <input id="additional_reference" name="additional_reference" type="text" maxlength="100"
-                               <?= !$editable ? 'readonly' : '' ?>
-                               value="<?= e((string) ($quote['additional_reference'] ?? '')) ?>">
-                    </div>
-                </div>
             <?php else: ?>
             <details class="customer-collapse"<?= $startOpen ? ' open' : '' ?>>
                 <summary>
@@ -1130,6 +1116,27 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </div>
             </details>
             <?php endif; ?>
+
+            <!-- The two references sit out here with the notes, OUTSIDE the
+                 trade/retail branch above. They used to be inside the trade
+                 half, so a retail order had nowhere to record the customer's
+                 own reference at all — and once New quote started asking for
+                 one, a retail job could carry a reference you could never see
+                 again. A retail customer has job numbers too. -->
+            <div class="form-row cols-2" style="margin-top:1rem">
+                <div class="form-group">
+                    <label for="customer_reference">Customer reference <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
+                    <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
+                           <?= !$editable ? 'readonly' : '' ?>
+                           value="<?= e((string) ($quote['customer_reference'] ?? '')) ?>">
+                </div>
+                <div class="form-group">
+                    <label for="additional_reference">Additional reference <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                    <input id="additional_reference" name="additional_reference" type="text" maxlength="100"
+                           <?= !$editable ? 'readonly' : '' ?>
+                           value="<?= e((string) ($quote['additional_reference'] ?? '')) ?>">
+                </div>
+            </div>
 
             <!-- Quote notes lives OUTSIDE <details> so it stays visible
                  even when the customer summary is collapsed. Still inside
