@@ -468,7 +468,16 @@ require __DIR__ . '/../_partials/factory_head.php';
        no-wrap so short fields stay side by side. */
     .pv-labelbox[data-sec="header"] .pv-ln .pv-fld { white-space:normal; overflow-wrap:anywhere; min-width:0; }
     .pv-ln .pv-alignright { margin-left:auto; }                    /* JS reserves QR width when level with QR */
-    .pv-ln .pv-aligncentre { margin-left:auto; margin-right:auto; } /* true centre */
+    /* Three equal-outer slots, matching the printer: the middle one is the true
+       centre of the label whatever sits either side. Auto margins can't do it —
+       flex shares the free space between every auto margin on the line. */
+    .pv-ln.pv-has-c { display:grid; grid-template-columns:1fr auto 1fr; align-items:baseline; }
+    .pv-ln.pv-has-c > .pv-g { display:flex; flex-wrap:wrap; gap:0 5px; min-width:0; }
+    .pv-ln.pv-has-c > .pv-gl { justify-content:flex-start; }
+    .pv-ln.pv-has-c > .pv-gc { justify-content:center; }
+    .pv-ln.pv-has-c > .pv-gr { justify-content:flex-end; }
+    .pv-ln.pv-has-c .pv-alignright,
+    .pv-ln.pv-has-c .pv-aligncentre { margin-left:0; margin-right:0; }   /* the slots do it now */
     /* QR is drawn at real size (--qrpx) and pinned ABSOLUTELY to the corner — it
        never moves and can't be pushed off the label by the content flow. */
     .pv-qr { position:absolute; right:2px; bottom:2px; box-sizing:border-box; width:var(--qrpx,24px); height:var(--qrpx,24px);
@@ -1120,18 +1129,30 @@ require __DIR__ . '/../_partials/factory_head.php';
             lineGroups[lineGroups.length - 1].push({ f: ff, i: i });
             if (f.source === '__break__') lineGroups.push([]);
         });
+        // Mirrors renderLineFields in worksheet-print.php: a line holding a
+        // CENTRE field is laid out in three slots so the middle one is the true
+        // centre of the label. Auto margins couldn't do that — flex shares the
+        // free space between every auto margin on the line, so a centred field
+        // landed a third of the way across whenever a right-aligned field was
+        // beside it. Keep the two in step or the preview stops telling the truth.
         var lines = lineGroups.map(function (grp) {
-            var hasRight = grp.some(function (x) { return x.f.align === 'right'; });
-            return grp.map(function (x) {
-                var ff = x.f;
-                if (hasRight && ff.align === 'centre') { ff = {}; for (var k in x.f) ff[k] = x.f[k]; ff.align = ''; }
-                return fieldSpan(ff, x.i, interactive);
-            }).join('');
+            var hasCentre = grp.some(function (x) { return x.f.align === 'centre'; });
+            if (!hasCentre) {
+                return { html: grp.map(function (x) { return fieldSpan(x.f, x.i, interactive); }).join(''), c: false };
+            }
+            var slot = { '': '', centre: '', right: '' };
+            grp.forEach(function (x) {
+                var a = (x.f.align === 'centre' || x.f.align === 'right') ? x.f.align : '';
+                slot[a] += fieldSpan(x.f, x.i, interactive);
+            });
+            return { html: '<span class="pv-g pv-gl">' + slot[''] + '</span>'
+                         + '<span class="pv-g pv-gc">' + slot.centre + '</span>'
+                         + '<span class="pv-g pv-gr">' + slot.right + '</span>', c: true };
         });
         var out = '';
-        lines.forEach(function (h) { out += '<div class="pv-ln">' + h + '</div>'; });
+        lines.forEach(function (l) { out += '<div class="pv-ln' + (l.c ? ' pv-has-c' : '') + '">' + l.html + '</div>'; });
         qr = qr ? fieldSpan(qr.f, qr.i, interactive) : '';
-        if (!lines.some(function (h) { return h; }) && !qr) {
+        if (!lines.some(function (l) { return l.html; }) && !qr) {
             return '<span class="pv-empty" style="color:#cbd5e1">(no fields — add some on the left)</span>';
         }
         return out + qr;
