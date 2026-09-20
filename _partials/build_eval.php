@@ -175,6 +175,14 @@ if (!function_exists('build_evaluate')) {
                 $results[] = ['name' => $name, 'ok' => false, 'value' => 'no rule matched'];
                 continue;
             }
+            // A blank formula is a deliberate "this combination doesn't have
+            // this measurement" — Split Draw 2 Wands has no draw cord. Leave the
+            // variable unset so the ticket simply prints nothing for it, and say
+            // so plainly rather than reporting a broken formula.
+            if (trim((string) ($match['result'] ?? '')) === '') {
+                $results[] = ['name' => $name, 'ok' => true, 'blank' => true, 'value' => ''];
+                continue;
+            }
             try {
                 $val = formula_eval(be_norm_math((string) $match['result']), $vars, $allowances);
                 $vars[$name] = $val;
