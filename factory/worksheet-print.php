@@ -686,7 +686,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label.outline { outline:0.2mm solid #c9c9c9; outline-offset:-0.2mm; }
     .rl-label .flds { position:absolute; inset:0; padding:2.5mm 3mm; transform:translate(var(--nx),var(--ny));
                       line-height:1.18;
-                      font-family:ui-monospace,Consolas,monospace; font-size:var(--fs); color:#000; }
+                      font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; font-variant-numeric:tabular-nums; font-size:var(--fs); color:#000; }
     /* Each line is a flex row → true Left / Centre / Right via auto margins; a script
        reserves the QR width for right fields level with the QR. */
     .rl-label .flds .ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 2.4mm; }
@@ -839,7 +839,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .nudge button:hover { background:#3a4d61; }
     .sheet { position:relative; width:210mm; height:297mm; background:#fff; margin:60px auto 40px; box-shadow:0 4px 24px rgba(0,0,0,0.4); overflow:hidden; }
     #sheet-inner { position:absolute; inset:0; }
-    .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:ui-monospace,Consolas,monospace; color:#000; }
+    .dc-label { position:absolute; overflow:hidden; padding:0.8mm 1.2mm; font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; font-variant-numeric:tabular-nums; color:#000; }
     .dc-label .flds { position:relative; height:100%; line-height:1.05; }
     /* QR pinned ABSOLUTELY to the bottom-right corner — fixed, so the content flow
        can never push it off the label. line-height:0 keeps the span padding out of
@@ -966,11 +966,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .wp-sheet .qr { line-height:0; display:inline-block; position:absolute; right:0.6rem; bottom:0.6rem; }
     .wp-sheet .qr svg { display:block; }
     .wp-label:has(.qr) .fields { padding-right:15mm; }
-    .wp-header { border-bottom:2px solid #111; padding-bottom:0.6rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; gap:0.2rem 1.4rem; font-family:ui-monospace,Consolas,monospace; font-size:0.9rem; }
+    .wp-header { border-bottom:2px solid #111; padding-bottom:0.6rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; gap:0.2rem 1.4rem; font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; font-variant-numeric:tabular-nums; font-size:0.9rem; }
     .wp-line { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:0.7rem 0; border-bottom:1px dashed #d1d5db; }
     .wp-label { border:1px solid #cbd5e1; border-radius:8px; padding:0.5rem 0.7rem; position:relative; }
     .wp-label .lt { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:#94a3b8; margin-bottom:0.3rem; font-weight:600; }
-    .wp-label .fields { font-family:ui-monospace,Consolas,monospace; font-size:0.82rem; line-height:1.6; display:flex; flex-wrap:wrap; gap:0.1rem 0.7rem; }
+    .wp-label .fields { font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; font-variant-numeric:tabular-nums; font-size:0.82rem; line-height:1.6; display:flex; flex-wrap:wrap; gap:0.1rem 0.7rem; }
     .wp-break { flex:0 0 100%; height:0; }
     .wp-right { margin-left:auto; }
     .wp-centre { margin-left:auto; margin-right:auto; }
