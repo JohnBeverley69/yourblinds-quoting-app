@@ -1336,11 +1336,11 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                        end_customer_name, end_customer_email, end_customer_phone, end_customer_mobile, has_whatsapp,
                        end_customer_address1, end_customer_address2,
                        end_customer_town, end_customer_county, end_customer_postcode,
-                       status, vat_percent, notes,
+                       status, vat_percent, notes, customer_reference,
                        public_token, created_by_user_id)
                      VALUES
                       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       "draft", ?, ?, ?, ?)'
+                       "draft", ?, ?, ?, ?, ?)'
                 );
                 $st->execute([
                     $clientId,
@@ -1358,6 +1358,10 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                     (string) $f['end_customer_postcode'] !== '' ? (string) $f['end_customer_postcode'] : null,
                     $vatPct,
                     (string) ($f['notes'] ?? '') !== '' ? (string) $f['notes'] : null,
+                    // Their order / PO, when the screen that raised the quote
+                    // asked for it. Callers that don't pass one leave it null,
+                    // exactly as before — it's still editable on the order.
+                    (string) ($f['customer_reference'] ?? '') !== '' ? (string) $f['customer_reference'] : null,
                     $token,
                     $userId,
                 ]);

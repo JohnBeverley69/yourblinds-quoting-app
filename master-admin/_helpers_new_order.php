@@ -168,6 +168,9 @@ function no_create_oneoff_trade_quote(PDO $pdo, int $factoryClientId, array $fie
         'end_customer_county'   => trim((string) ($fields['county']   ?? '')),
         'end_customer_postcode' => trim((string) ($fields['postcode'] ?? '')),
         'has_whatsapp'          => trim((string) ($fields['mobile'] ?? '')) !== '' && !empty($fields['has_whatsapp']) ? 1 : 0,
+        // A trade customer hands you their PO with the order, so take it here
+        // rather than making someone go back for it afterwards.
+        'customer_reference'    => trim((string) ($fields['customer_reference'] ?? '')),
         'notes'                 => '',
     ];
 

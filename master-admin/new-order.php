@@ -31,6 +31,7 @@ $error = null;
 $m = [
     'company_name' => '', 'contact_name' => '', 'email' => '', 'phone' => '', 'mobile' => '',
     'address1' => '', 'address2' => '', 'town' => '', 'county' => '', 'postcode' => '',
+    'customer_reference' => '',
 ];
 $dupAccountId = 0;   // set when a "save as account" name clashes with an existing one
 
@@ -281,6 +282,14 @@ $activeNav = '';
                             <div class="form-group">
                                 <label for="postcode">Postcode</label>
                                 <input id="postcode" name="postcode" type="text" maxlength="20" value="<?= e($m['postcode']) ?>">
+                            </div>
+                        </div>
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label for="m_customer_reference">Customer reference
+                                    <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
+                                <input id="m_customer_reference" name="customer_reference" type="text" maxlength="100"
+                                       value="<?= e($m['customer_reference']) ?>">
                             </div>
                         </div>
                         <label style="display:inline-flex;align-items:center;gap:0.5rem;margin:0.25rem 0 0.75rem;font-weight:500;cursor:pointer">
