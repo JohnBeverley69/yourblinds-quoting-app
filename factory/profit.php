@@ -13,37 +13,75 @@ declare(strict_types=1);
  * on your own master price tables — it is never stored on a tenant's order, so
  * no cost ever leaves your side.
  *
+ * Cost comes from whichever of the two pricing models the product uses:
+ *   'own'      we make it — cost is the parallel cost grid you import alongside
+ *              the selling grid (price_table_rows.cost).
+ *   'supplier' we buy it in — the grid IS the supplier's list price, so the cost
+ *              is simply list − our buying discount. There is no cost grid to
+ *              import and there never will be, which is why bought-in ranges
+ *              (Forest Wood, 25mm Venetian) used to sit in the "no cost grid
+ *              imported" bucket showing no profit at all.
+ *
  * Honest by design:
- *   - Only products whose cost grid you've imported contribute a cost. A line on
- *     an un-costed product shows as revenue with no cost, kept separate so the
- *     margin can't look falsely huge.
- *   - Each order size is costed at the next grid cell up (a 1240×1680 blind costs
- *     at the 1600×2000 cell) — the same round-up your pricing uses.
- *   - Revenue is the list trade price; any per-customer discount you give isn't
- *     netted off yet.
+ *   - A line we still can't cost shows as revenue with no cost, kept separate so
+ *     the margin can't look falsely huge.
+ *   - Each order size is costed at the same cell your pricing charged at — next
+ *     cell up, and on whichever axes the product actually uses (full grid,
+ *     width-only, per-slat, or a £/m² rate).
+ *   - Revenue is base_price: the trade price after our buying discount, before
+ *     the tenant's own markup. Options revenue is shown but never costed.
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/pricing_engine.php';
+require_once __DIR__ . '/../_partials/price_source.php';
 
 requireSuperAdmin();
 
 $pdo    = db();
 $MASTER = current_factory_id();
 
-// Period: this month / this year / all. Default this year.
-$period = (string) ($_GET['period'] ?? 'year');
-$since  = null;
-if ($period === 'month') $since = date('Y-m-01 00:00:00');
-elseif ($period === 'year') $since = date('Y-01-01 00:00:00');
+// Period: this month / this year / all time / a From–To range you type yourself.
+$period  = (string) ($_GET['period'] ?? 'year');
+$fromIn  = trim((string) ($_GET['from'] ?? ''));
+$toIn    = trim((string) ($_GET['to']   ?? ''));
+$since   = null;
+$until   = null;
+$rangeNote = null;
+
+$realDate = static function (string $s): bool {
+    return (bool) preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m)
+        && checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
+};
+
+if ($period === 'custom') {
+    // A bad bound is ignored rather than silently changing the window to
+    // something you didn't ask for — you're told which one was dropped.
+    if ($fromIn !== '' && !$realDate($fromIn)) { $rangeNote = 'That "from" date isn\'t a real date, so it\'s been left off.'; $fromIn = ''; }
+    if ($toIn   !== '' && !$realDate($toIn))   { $rangeNote = 'That "to" date isn\'t a real date, so it\'s been left off.';   $toIn   = ''; }
+    if ($fromIn !== '' && $toIn !== '' && $fromIn > $toIn) {
+        [$fromIn, $toIn] = [$toIn, $fromIn];
+        $rangeNote = 'The dates were the wrong way round, so they\'ve been swapped.';
+    }
+    if ($fromIn !== '') $since = $fromIn . ' 00:00:00';
+    if ($toIn   !== '') $until = $toIn   . ' 23:59:59';   // the "to" day is included
+} elseif ($period === 'month') {
+    $since = date('Y-m-01 00:00:00');
+} elseif ($period === 'all') {
+    $since = null;
+} else {
+    $period = 'year';
+    $since  = date('Y-01-01 00:00:00');
+}
 
 $PLACED = ['ordered', 'fitted', 'invoiced', 'paid'];
 $inPl   = "'" . implode("','", $PLACED) . "'";
 
-$dateSql = $since !== null ? 'AND q.created_at >= ?' : '';
+$dateSql = '';
 $args    = [$MASTER];
-if ($since !== null) $args[] = $since;
+if ($since !== null) { $dateSql .= ' AND q.created_at >= ?'; $args[] = $since; }
+if ($until !== null) { $dateSql .= ' AND q.created_at <= ?'; $args[] = $until; }
 
 // Every Beverley-product line on a placed order. band + system name come from the
 // tenant's own price table (its cost is stripped, but its band/system identify
@@ -66,28 +104,88 @@ $st->execute($args);
 $lines = $st->fetchAll(PDO::FETCH_ASSOC);
 
 // --- Master price-table lookup, cached by (product, system name, band) --------
+// Returns the table's id AND its system id — the system is what the buying
+// discount is scoped by, so a bought-in product can't be costed without it.
 $tableCache = [];
-$findMasterTable = function (int $mpid, ?string $systemName, ?string $band) use ($pdo, $MASTER, &$tableCache): ?int {
+$findMasterTable = function (int $mpid, ?string $systemName, ?string $band) use ($pdo, $MASTER, &$tableCache): ?array {
     if ($systemName === null || $band === null) return null;
     $key = $mpid . '|' . $systemName . '|' . $band;
     if (array_key_exists($key, $tableCache)) return $tableCache[$key];
     $q = $pdo->prepare(
-        'SELECT pt.id FROM price_tables pt
+        'SELECT pt.id, pt.system_id FROM price_tables pt
            JOIN product_systems s ON s.id = pt.system_id
           WHERE pt.client_id = ? AND pt.product_id = ? AND s.name = ? AND pt.band_code = ?
           LIMIT 1'
     );
     $q->execute([$MASTER, $mpid, $systemName, $band]);
-    $id = $q->fetchColumn();
-    return $tableCache[$key] = ($id === false ? null : (int) $id);
+    $row = $q->fetch(PDO::FETCH_ASSOC);
+    return $tableCache[$key] = ($row ? ['id' => (int) $row['id'], 'system_id' => $row['system_id'] !== null ? (int) $row['system_id'] : null] : null);
 };
 
-// Cost for a size on a master table — round up to the next grid cell, like pricing.
+// --- Master product facts: which pricing model, and which shape of grid -------
+// Schema-tolerant, same as the pricing engine: a column a migration hasn't added
+// yet simply reads as "off".
+$prodCols = ['id'];
+foreach (['price_source', 'width_only', 'price_per_slat', 'price_per_sqm', 'min_area_m2'] as $c) {
+    if (pe_col_exists($pdo, 'products', $c)) $prodCols[] = $c;
+}
+$prodSt    = $pdo->prepare('SELECT ' . implode(', ', $prodCols) . ' FROM products WHERE id = ? LIMIT 1');
+$prodCache = [];
+$masterProduct = function (int $mpid) use ($prodSt, &$prodCache): array {
+    if (isset($prodCache[$mpid])) return $prodCache[$mpid];
+    $prodSt->execute([$mpid]);
+    $r = $prodSt->fetch(PDO::FETCH_ASSOC);
+    return $prodCache[$mpid] = ($r ?: []);
+};
+
+// Cost of one blind at the master grid, or null if we genuinely can't cost it.
+$rowCost = $pdo->prepare('SELECT cost FROM price_table_rows WHERE id = ? LIMIT 1');
+// Fallback for a patchy cost grid: the next cell up that actually carries a cost.
 $costCell = $pdo->prepare(
     'SELECT cost FROM price_table_rows
       WHERE price_table_id = ? AND width_mm >= ? AND drop_mm >= ? AND cost IS NOT NULL
       ORDER BY width_mm ASC, drop_mm ASC LIMIT 1'
 );
+
+$unitCost = function (int $mpid, int $tableId, ?int $sysId, int $w, int $d)
+    use ($pdo, $MASTER, $masterProduct, $rowCost, $costCell): ?float {
+
+    $prod      = $masterProduct($mpid);
+    $widthOnly = (int) ($prod['width_only']    ?? 0) === 1;
+    $perSlat   = !$widthOnly && (int) ($prod['price_per_slat'] ?? 0) === 1;
+    $perSqm    = !$widthOnly && !$perSlat && (int) ($prod['price_per_sqm'] ?? 0) === 1;
+
+    // The same cell the pricing engine would have charged at.
+    if     ($widthOnly) $row = pe_find_matrix_row_width_only($pdo, $tableId, $w, true);
+    elseif ($perSlat)   $row = pe_find_matrix_row_by_drop   ($pdo, $tableId, $d, true);
+    elseif ($perSqm)    $row = pe_find_rate_per_sqm         ($pdo, $tableId);
+    else                $row = pe_find_matrix_row           ($pdo, $tableId, $w, $d, true);
+    if ($row === null) return null;
+
+    if (ps_normalise($prod['price_source'] ?? null) === PRICE_SOURCE_SUPPLIER) {
+        // Bought in: the grid is the supplier's list, our cost is list less the
+        // buying discount we've negotiated on this product/system.
+        $disc = pe_discount_for_system($pdo, $MASTER, $mpid, $sysId);
+        $unit = (float) $row['price'] * (1 - $disc / 100);
+    } else {
+        // Ours to make: the cost grid, at the cell we priced from — falling back
+        // to the next cell up that carries a cost if that one was left blank.
+        $rowCost->execute([(int) $row['id']]);
+        $c = $rowCost->fetchColumn();
+        if ($c === null || $c === false) {
+            $costCell->execute([$tableId, $w, $d]);
+            $c = $costCell->fetchColumn();
+        }
+        if ($c === null || $c === false) return null;
+        $unit = (float) $c;
+    }
+
+    // A £/m² rate is a rate, not a price — it still needs the area.
+    if ($perSqm) {
+        $unit *= max(($w / 1000.0) * ($d / 1000.0), (float) ($prod['min_area_m2'] ?? 0));
+    }
+    return $unit;
+};
 
 $tot = [
     'lines' => 0, 'blinds' => 0,
@@ -110,11 +208,12 @@ foreach ($lines as $ln) {
     $p['rev'] += $rev; $p['blinds'] += $qty;
 
     $cost = null;
-    $tid = $findMasterTable((int) $ln['master_pid'], $ln['system_name'], $ln['band']);
-    if ($tid !== null) {
-        $costCell->execute([$tid, (int) $ln['width_mm'], (int) $ln['drop_mm']]);
-        $c = $costCell->fetchColumn();
-        if ($c !== false && $c !== null) $cost = (float) $c;
+    $tbl  = $findMasterTable((int) $ln['master_pid'], $ln['system_name'], $ln['band']);
+    if ($tbl !== null) {
+        $cost = $unitCost(
+            (int) $ln['master_pid'], $tbl['id'], $tbl['system_id'],
+            (int) $ln['width_mm'], (int) $ln['drop_mm']
+        );
     }
 
     if ($cost !== null) {
@@ -140,9 +239,13 @@ require __DIR__ . '/../_partials/factory_head.php';
 <style>
   .pf-h { font-size:1.5rem; font-weight:700; margin:0 0 .2rem; }
   .pf-sub { color:var(--text-muted,#667); margin:0 0 1rem; font-size:.92rem; }
-  .pf-periods { display:flex; gap:.4rem; margin:0 0 1.2rem; }
-  .pf-periods a { text-decoration:none; font-size:.9rem; font-weight:600; padding:.35rem .8rem; border-radius:8px; background:var(--bg-subtle,#f1f5f9); color:#334155; }
-  .pf-periods a.on { background:#1f2a37; color:#fff; }
+  .pf-periods { display:flex; gap:.4rem; margin:0 0 .6rem; flex-wrap:wrap; align-items:center; }
+  .pf-periods a, .pf-periods button { text-decoration:none; font-size:.9rem; font-weight:600; padding:.35rem .8rem; border-radius:8px; background:var(--bg-subtle,#f1f5f9); color:#334155; border:0; cursor:pointer; font-family:inherit; }
+  .pf-periods a.on, .pf-periods.range button { background:#1f2a37; color:#fff; }
+  .pf-periods.range { margin:0 0 1.2rem; }
+  .pf-periods label { font-size:.8rem; color:var(--text-muted,#667); font-weight:600; }
+  .pf-periods input[type=date] { font:inherit; font-size:.85rem; padding:.3rem .5rem; border:1px solid var(--border,#e5e7eb); border-radius:8px; background:var(--bg-card,#fff); color:inherit; }
+  .pf-note { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; padding:.5rem .9rem; border-radius:10px; margin:0 0 1rem; font-size:.85rem; }
   .pf-cards { display:flex; gap:1rem; flex-wrap:wrap; margin:0 0 1.4rem; }
   .pf-card { flex:1 1 12rem; background:var(--bg-card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:1rem 1.2rem; box-shadow:0 1px 2px rgba(0,0,0,.04); }
   .pf-card .k { font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint,#94a3b8); font-weight:700; }
@@ -168,8 +271,21 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php endforeach; ?>
 </div>
 
+<form class="pf-periods <?= $period === 'custom' ? 'range' : '' ?>" method="get" action="">
+    <input type="hidden" name="period" value="custom">
+    <label for="pfFrom">From</label>
+    <input type="date" id="pfFrom" name="from" max="<?= date('Y-m-d') ?>" value="<?= e($fromIn) ?>">
+    <label for="pfTo">to</label>
+    <input type="date" id="pfTo" name="to" max="<?= date('Y-m-d') ?>" value="<?= e($toIn) ?>">
+    <button type="submit">Show</button>
+</form>
+
+<?php if ($rangeNote !== null): ?>
+    <div class="pf-note"><?= e($rangeNote) ?></div>
+<?php endif; ?>
+
 <?php if ($tot['rev_uncosted'] > 0): ?>
-    <div class="pf-warn"><strong><?= $money($tot['rev_uncosted']) ?></strong> of orders are on products with no cost grid imported yet (<?= e(implode(', ', array_keys($uncostedProducts))) ?>) — their profit isn't counted. Import those costs to include them.</div>
+    <div class="pf-warn"><strong><?= $money($tot['rev_uncosted']) ?></strong> of orders are on products we can't cost yet (<?= e(implode(', ', array_keys($uncostedProducts))) ?>) — their profit isn't counted. A product we make needs its cost grid importing; a product we buy in needs its buying discount setting on Pricing.</div>
 <?php endif; ?>
 
 <div class="pf-cards">
