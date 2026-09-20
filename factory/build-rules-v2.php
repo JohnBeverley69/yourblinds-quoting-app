@@ -279,7 +279,8 @@ if (($_GET['action'] ?? '') === 'evalbuild') {
                 'name'     => (string) $r['name'],
                 'friendly' => $FRIENDLY[$r['name']] ?? (string) $r['name'],
                 'ok'       => (bool) $r['ok'],
-                'value'    => $r['value'],
+                'blank'    => !empty($r['blank']),
+                'value'    => !empty($r['blank']) ? '—' : $r['value'],
             ];
         }
         echo json_encode(['ok' => true, 'vars' => $out]);
@@ -483,6 +484,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // Calcs: an edited formula string per row. A formula that won't run is
         // left unchanged (not saved), so a typo can't silently break a ticket.
+        //
+        // An EMPTY box is a real answer, not a no-op: it means this combination
+        // doesn't have this measurement at all — Split Draw 2 Wands has no draw
+        // cord, so C_L shouldn't print for it. Blank used to be skipped, so the
+        // old formula came straight back on the next page load and there was no
+        // way to say "none" at all.
         $badCalcs = [];
         foreach ((array) ($_POST['calc'] ?? []) as $vname => $rowsMap) {
             $vname = (string) $vname;
@@ -496,7 +503,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ri = (int) $ri;
                 if (!isset($rows[$ri])) continue;
                 $f = trim((string) $formula);
-                if ($f === '') continue;
+                if ($f === '') {
+                    if (trim((string) ($rows[$ri]['result'] ?? '')) !== '') {
+                        $rows[$ri]['result'] = ''; $changed = true;
+                    }
+                    continue;
+                }
                 if (!$checkFormula($f)['ok']) { $badCalcs[] = $vname; continue; }
                 $rows[$ri]['result'] = $f; $changed = true;
             }
@@ -968,6 +980,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
               <div class="calcrow">
                 <?php if ($ctx): ?><span class="calcwhen"><?= $e2(implode(' · ', $ctx)) ?></span><?php endif; ?>
                 <input class="formula" type="text" spellcheck="false"
+                    placeholder="leave empty — this combination has no <?= $e2(strtolower($cc['friendly'])) ?>"
                     name="calc[<?= $e2($cc['name']) ?>][<?= (int) $ri ?>]"
                     value="<?= $e2((string) ($r['result'] ?? '')) ?>">
               </div>
@@ -977,7 +990,8 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         </div>
         <div class="saverow">
           <button type="submit" class="savebtn">Save calcs</button>
-          <span>These are the real formulas. Change a number or the sum; keep the variable names (Width, Drop, Vanes…) as they are.</span>
+          <span>These are the real formulas. Change a number or the sum; keep the variable names (Width, Drop, Vanes…) as they are.
+                <b>Clear a box</b> to say that combination doesn't have this measurement at all — it then prints nothing on the ticket.</span>
         </div>
       </form>
       <?php endif; ?>
@@ -1330,7 +1344,15 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
           var row = document.createElement('div'); row.className = 'o';
           var lab = document.createElement('span'); lab.className = 'ol'; lab.textContent = v.friendly;
           var val = document.createElement('span'); val.className = 'ov';
-          val.textContent = v.ok ? ((typeof v.value === 'number') ? Math.round(v.value * 100) / 100 : v.value) : '—';
+          if (v.blank) {
+            // Deliberately empty, not broken — keep the two apart or you can't
+            // tell "no draw cord on this one" from "the formula won't run".
+            val.textContent = 'none';
+            val.style.opacity = '0.55';
+            val.title = "This combination has no such measurement — nothing prints on the ticket.";
+          } else {
+            val.textContent = v.ok ? ((typeof v.value === 'number') ? Math.round(v.value * 100) / 100 : v.value) : '—';
+          }
           row.appendChild(lab); row.appendChild(val); outEl.appendChild(row);
         });
       })
