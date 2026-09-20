@@ -211,7 +211,13 @@ require __DIR__ . '/../_partials/factory_head.php';
        flexible column has to be the last one before the buttons: when it was the
        customer, a row with fewer buttons handed its spare width to the customer
        and pushed that row's date and count out of line with every other row. */
-    .io-cols { display: grid; grid-template-columns: 8.5rem minmax(9rem, 16rem) 7rem 5.5rem minmax(11rem, 1fr) minmax(0, max-content); gap: 0.5rem 1rem; align-items: center; }
+    /* Every column can give ground, so the row narrows with the window instead
+       of spilling out of it. They all shrink by the same amount on every row,
+       so the columns stay lined up whatever is in them. */
+    .io-cols { display: grid; grid-template-columns:
+        minmax(7rem, 8.5rem) minmax(7rem, 16rem) minmax(5.5rem, 7rem) minmax(4.5rem, 5.5rem)
+        minmax(8rem, 1fr) minmax(0, max-content);
+        gap: 0.5rem 1rem; align-items: center; }
     .io-list-head { padding: 0.55rem 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint, #94a3b8); font-weight: 600; border-bottom: 1px solid var(--border, #e5e7eb); background: var(--bg-subtle, #f8fafc); }
     .io-list-head span:last-child { text-align: right; }
     .io-item { border-bottom: 1px solid var(--border, #e5e7eb); }
@@ -256,6 +262,15 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-lines tr:last-child td { border-bottom: none; }
     .io-lines .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .io-lines .prod { font-weight: 600; }
+    /* Laptop width: the date is the first thing worth losing — you can still see
+       it by opening the row — and dropping it keeps everything else readable
+       rather than squeezing all six columns. */
+    @media (max-width: 1040px) {
+        .io-cols { grid-template-columns:
+            minmax(7rem, 8.5rem) minmax(6rem, 14rem) minmax(4.5rem, 5.5rem)
+            minmax(7rem, 1fr) minmax(0, max-content); }
+        .io-summary .date, .io-list-head span:nth-child(3) { display: none; }
+    }
     @media (max-width: 720px) {
         .io-cols { grid-template-columns: 1fr auto; }
         .io-summary .date, .io-summary .stat, .io-list-head span:nth-child(3), .io-list-head span:nth-child(5) { display: none; }
