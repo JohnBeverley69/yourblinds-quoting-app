@@ -566,7 +566,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <input type="text" id="tpl-name" value="<?= e($currentName) ?>" style="width:16rem;">
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;"><input type="checkbox" id="tpl-default" <?= $currentIsDef ? 'checked' : '' ?>> Default for printing</label>
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="Print ONE label for the whole order line, showing the quantity — instead of one label per unit. For fabric-only cuts (e.g. 50 identical slats), where you want a single Qty 50 ticket. Use the Qty field, not Slat/Unit."><input type="checkbox" id="tpl-oneline"> One label per line (qty)</label>
-        <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="QR code size on every label of this worksheet. Smaller frees space — 10mm has tested fine on your stock.">QR size <input type="number" id="tpl-qr" min="6" max="40" step="0.5" style="width:4.2rem;"> mm</label>
+        <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="QR code size on every label of this worksheet. Smaller frees space, but the symbol is always 29 modules across — shrink it and each module shrinks with it, until the printer's ink spread merges them and the scanner sees mush.">QR size <input type="number" id="tpl-qr" min="6" max="40" step="0.5" style="width:4.2rem;"> mm<span id="tpl-qr-note" style="font-weight:600"></span></label>
         <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.35rem;" title="Roll of labels = one label per blind on a thermal roll, no order header (rollers). A4 die-cut sheet = an order header once at the top, then labels below (verticals).">Stock
             <select id="tpl-stock" style="font:inherit; padding:0.2rem 0.3rem;">
                 <option value="a4-diecut">A4 die-cut sheet</option>
@@ -1401,10 +1401,33 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     // QR size control (one per worksheet). Its own input — outside the section
     // editors — updates STATE.qr and re-renders the preview live.
-    function refreshQrInput() { var q = document.getElementById('tpl-qr'); if (q) q.value = STATE.qr; }
+    // A version-1 symbol is 29 modules across INCLUDING its quiet zone, whatever
+    // size you print it at — so the module size is simply mm/29, and that is the
+    // number that decides whether a scanner can read it. 10mm (0.34mm a module)
+    // is what tested fine on this stock; below that the inkjet's ink spread
+    // starts merging modules and the code becomes unreadable while still looking
+    // perfectly fine on screen. Say so where the number is typed, because the
+    // symptom — codes that print but won't scan — gives no clue as to the cause.
+    var QR_MODULES = 29, QR_TESTED_MM = 10;
+    function qrNote() {
+        var el = document.getElementById('tpl-qr-note');
+        if (!el) return;
+        var mm  = num(STATE.qr, 12);
+        var per = (mm / QR_MODULES).toFixed(2);
+        if (mm < QR_TESTED_MM) {
+            el.style.color = '#b45309';
+            el.textContent = ' — ' + per + 'mm a module; under the ' + QR_TESTED_MM
+                           + 'mm proven on this stock, so it may print but not scan';
+        } else {
+            el.style.color = '#64748b';
+            el.textContent = ' — ' + per + 'mm a module';
+        }
+    }
+    function refreshQrInput() { var q = document.getElementById('tpl-qr'); if (q) q.value = STATE.qr; qrNote(); }
     (function () {
         var q = document.getElementById('tpl-qr');
-        if (q) q.addEventListener('input', function () { STATE.qr = num(q.value, STATE.qr); renderPreview(); });
+        if (q) q.addEventListener('input', function () { STATE.qr = num(q.value, STATE.qr); qrNote(); renderPreview(); });
+        qrNote();
     })();
 
     // Stock selector: A4 die-cut sheet (header + labels) vs roll of labels
