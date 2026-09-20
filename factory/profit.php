@@ -100,7 +100,11 @@ $sql =
             $srcTableSel
             tpt.id AS tenant_table_id, tpt.client_id AS tenant_table_client,
             tpt.system_id AS tenant_system_id,
-            tpt.band_code AS band, tsys.name AS system_name
+            tpt.band_code AS band, tsys.name AS system_name,
+            qi.price_table_row_id AS line_row_id,
+            qi.system_id           AS line_system_id,
+            qi.system_name_snapshot AS sys_snap,
+            qi.fabric_band_snapshot AS band_snap
        FROM quote_items qi
        JOIN quotes q   ON q.id = qi.quote_id
        JOIN products p ON p.id = qi.product_id
@@ -114,14 +118,18 @@ $st->execute($args);
 $lines = $st->fetchAll(PDO::FETCH_ASSOC);
 
 // --- Which master grid does this line price against? --------------------------
-// Three ways, best first:
-//   1. The tenant's copy of the table carries source_table_id — the master
-//      table's own id. Rename-proof, which matters: matching on the SYSTEM NAME
-//      is exactly what left the 25mm Venetian uncosted, because the master's
-//      system had since been renamed from "25mm Slat" to "Standard Slat" while
-//      the tenant's copy still said the old name.
-//   2. The line was raised here, so its table IS a master table.
-//   3. Last resort, the old behaviour: match on system name + band.
+// An order line can carry the link in several forms depending on how it was
+// raised, and only the first two used to be tried — which is why perfectly
+// ordinary lines (the 25mm Venetian among them, whose price_table_id was never
+// written) came out uncosted. Try them all, best first:
+//   1. The line's table carries source_table_id — the master table's own id.
+//   2. The line's table IS a master table (the order was raised here).
+//   3. The cell it priced from names its table, even when the line didn't.
+//   4. The line's SYSTEM points at a master system (source_system_id), so the
+//      master table is (product, that system, the band it was quoted at).
+//   5. Match on the system name — the snapshot taken at order time first, then
+//      the table's live name. Fragile: a renamed system breaks it.
+//   6. The product has exactly one grid, so there is nothing to choose between.
 $byIdCache = [];
 $masterTableById = function (int $tid, int $mpid) use ($pdo, $MASTER, &$byIdCache): ?array {
     $key = $tid . '|' . $mpid;
@@ -148,8 +156,81 @@ $masterTableByName = function (int $mpid, ?string $systemName, ?string $band) us
     return $nameCache[$key] = ($row ? ['id' => (int) $row['id'], 'system_id' => $row['system_id'] !== null ? (int) $row['system_id'] : null] : null);
 };
 
-$findMasterTable = function (array $ln) use ($MASTER, $masterTableById, $masterTableByName): ?array {
+// The table a priced cell belongs to, and — if that table is a tenant's copy —
+// the master table behind it.
+$rowTableCache = [];
+$masterTableByRow = function (int $rowId, int $mpid) use ($pdo, $MASTER, $masterTableById, &$rowTableCache): ?array {
+    $key = $rowId . '|' . $mpid;
+    if (array_key_exists($key, $rowTableCache)) return $rowTableCache[$key];
+    $q = $pdo->prepare('SELECT price_table_id FROM price_table_rows WHERE id = ? LIMIT 1');
+    $q->execute([$rowId]);
+    $tid = $q->fetchColumn();
+    if ($tid === false || $tid === null) return $rowTableCache[$key] = null;
+
+    $hit = $masterTableById((int) $tid, $mpid);
+    if ($hit === null) {
+        // A tenant's own cell — hop to the master table it was copied from.
+        try {
+            $s = $pdo->prepare('SELECT source_table_id FROM price_tables WHERE id = ? LIMIT 1');
+            $s->execute([(int) $tid]);
+            $src = $s->fetchColumn();
+            if ($src) $hit = $masterTableById((int) $src, $mpid);
+        } catch (Throwable $e) { /* column not migrated — nothing else to try */ }
+    }
+    return $rowTableCache[$key] = $hit;
+};
+
+// The master system behind a system on an order line, then its grid for a band.
+$hasSysSrc = pe_col_exists($pdo, 'product_systems', 'source_system_id');
+$sysCache = $bandCache = [];
+$masterTableBySystem = function (?int $lineSysId, int $mpid, ?string $band)
+    use ($pdo, $MASTER, $hasSysSrc, &$sysCache, &$bandCache): ?array {
+    if ($lineSysId === null || $lineSysId <= 0 || $band === null || $band === '') return null;
+
+    if (!array_key_exists($lineSysId, $sysCache)) {
+        $sysCache[$lineSysId] = null;
+        $sel = $hasSysSrc ? 'id, client_id, source_system_id' : 'id, client_id';
+        $q = $pdo->prepare("SELECT $sel FROM product_systems WHERE id = ? LIMIT 1");
+        $q->execute([$lineSysId]);
+        $r = $q->fetch(PDO::FETCH_ASSOC);
+        if ($r) {
+            $sysCache[$lineSysId] = (int) $r['client_id'] === $MASTER
+                ? (int) $r['id']
+                : (!empty($r['source_system_id']) ? (int) $r['source_system_id'] : null);
+        }
+    }
+    $masterSys = $sysCache[$lineSysId];
+    if ($masterSys === null) return null;
+
+    $key = $mpid . '|' . $masterSys . '|' . $band;
+    if (array_key_exists($key, $bandCache)) return $bandCache[$key];
+    $q = $pdo->prepare(
+        'SELECT id, system_id FROM price_tables
+          WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code = ? LIMIT 1'
+    );
+    $q->execute([$MASTER, $mpid, $masterSys, $band]);
+    $r = $q->fetch(PDO::FETCH_ASSOC);
+    return $bandCache[$key] = ($r ? ['id' => (int) $r['id'], 'system_id' => (int) $masterSys] : null);
+};
+
+// A product with exactly one grid leaves nothing to choose between.
+$soleCache = [];
+$masterSoleTable = function (int $mpid) use ($pdo, $MASTER, &$soleCache): ?array {
+    if (array_key_exists($mpid, $soleCache)) return $soleCache[$mpid];
+    $q = $pdo->prepare('SELECT id, system_id FROM price_tables WHERE client_id = ? AND product_id = ? LIMIT 2');
+    $q->execute([$MASTER, $mpid]);
+    $rows = $q->fetchAll(PDO::FETCH_ASSOC);
+    return $soleCache[$mpid] = (count($rows) === 1
+        ? ['id' => (int) $rows[0]['id'], 'system_id' => $rows[0]['system_id'] !== null ? (int) $rows[0]['system_id'] : null]
+        : null);
+};
+
+$findMasterTable = function (array $ln) use (
+    $MASTER, $masterTableById, $masterTableByName, $masterTableByRow, $masterTableBySystem, $masterSoleTable
+): ?array {
     $mpid = (int) $ln['master_pid'];
+    $band = $ln['band'] !== null && $ln['band'] !== '' ? (string) $ln['band'] : (string) ($ln['band_snap'] ?? '');
+    $band = $band !== '' ? $band : null;
 
     if (!empty($ln['src_table_id'])) {
         $hit = $masterTableById((int) $ln['src_table_id'], $mpid);
@@ -161,7 +242,21 @@ $findMasterTable = function (array $ln) use ($MASTER, $masterTableById, $masterT
             'system_id' => $ln['tenant_system_id'] !== null ? (int) $ln['tenant_system_id'] : null,
         ];
     }
-    return $masterTableByName($mpid, $ln['system_name'], $ln['band']);
+    if (!empty($ln['line_row_id'])) {
+        $hit = $masterTableByRow((int) $ln['line_row_id'], $mpid);
+        if ($hit !== null) return $hit;
+    }
+    $hit = $masterTableBySystem(
+        !empty($ln['line_system_id']) ? (int) $ln['line_system_id'] : null, $mpid, $band
+    );
+    if ($hit !== null) return $hit;
+
+    foreach ([$ln['sys_snap'] ?? null, $ln['system_name'] ?? null] as $name) {
+        if ($name === null || $name === '') continue;
+        $hit = $masterTableByName($mpid, (string) $name, $band);
+        if ($hit !== null) return $hit;
+    }
+    return $masterSoleTable($mpid);
 };
 
 // --- Master product facts: which pricing model, and which shape of grid -------
@@ -274,8 +369,10 @@ foreach ($lines as $ln) {
                 'src_table' => $ln['src_table_id']      !== null ? (int) $ln['src_table_id']      : null,
                 'line_table'=> $ln['tenant_table_id']   !== null ? (int) $ln['tenant_table_id']   : null,
                 'table_owner'=> $ln['tenant_table_client'] !== null ? (int) $ln['tenant_table_client'] : null,
-                'system'    => $ln['system_name'],
-                'band'      => $ln['band'],
+                'line_row'  => $ln['line_row_id']    !== null ? (int) $ln['line_row_id']    : null,
+                'line_sys'  => $ln['line_system_id'] !== null ? (int) $ln['line_system_id'] : null,
+                'system'    => $ln['system_name'] ?: ($ln['sys_snap'] ?? null),
+                'band'      => $ln['band'] ?: ($ln['band_snap'] ?? null),
                 'master_tbl'=> $tbl['id'] ?? null,
                 'source'    => $tbl !== null ? ps_normalise($masterProduct((int) $ln['master_pid'])['price_source'] ?? null) : null,
                 'reason'    => $tbl === null
@@ -407,7 +504,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <p class="pf-sub">Every line in this window is costed.</p>
     <?php else: ?>
         <table class="pf">
-            <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
+            <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th class="r">Cell</th><th class="r">Sys id</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
             <tbody>
             <?php foreach ($whyRows as $w): ?>
                 <tr>
@@ -417,6 +514,8 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <td class="r"><?= $w['src_table']  !== null ? (int) $w['src_table']  : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['line_table'] !== null ? (int) $w['line_table'] : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['table_owner'] !== null ? (int) $w['table_owner'] : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['line_row'] !== null ? (int) $w['line_row'] : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['line_sys'] !== null ? (int) $w['line_sys'] : '<span class="muted">—</span>' ?></td>
                     <td><?= $w['system'] !== null ? e((string) $w['system']) : '<span class="muted">—</span>' ?></td>
                     <td><?= $w['band']   !== null ? e((string) $w['band'])   : '<span class="muted">—</span>' ?></td>
                     <td class="r"><?= $w['master_tbl'] !== null ? (int) $w['master_tbl'] : '<span class="muted">—</span>' ?></td>
