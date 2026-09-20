@@ -460,21 +460,45 @@ $renderLineFields = static function (array $fields, array $ctx, array $computed,
     }
     $out = '';
     foreach ($lineGroups as $grp) {
-        // On a line with a right-aligned field, centre fields flow left so the right
-        // one can sit hard against the edge (flex can't do both at once).
-        $hasRight = false;
-        foreach ($grp as $f) { if (($f['align'] ?? '') === 'right') { $hasRight = true; break; } }
-        $lineHtml = '';
+        // A line with a CENTRE field is laid out in three slots — left, centre,
+        // right — with the outer two sharing the leftover space equally. That is
+        // what makes the centre an actual centre of the LABEL.
+        //
+        // It used to be margin-left:auto + margin-right:auto on the field, and a
+        // right-aligned field on the same line was given margin-left:auto too.
+        // Flex splits the free space equally between every auto margin, so with
+        // three of them in play the "centred" field landed a third of the way
+        // across, biased toward whichever side had less text. Which is why a
+        // field set to Centre sat left of centre, and why centre used to be
+        // quietly downgraded to left whenever the line also had a right field.
+        $hasCentre = false;
+        foreach ($grp as $f) { if (($f['align'] ?? '') === 'centre') { $hasCentre = true; break; } }
+
+        $slots = ['' => '', 'centre' => '', 'right' => ''];   // used only when centred
+        $inOrder = '';                                        // used otherwise
         foreach ($grp as $f) {
             if ((string) ($f['source'] ?? '') === '__break__') continue;   // boundary only
             $t = $fieldHtml($f, $ctx, $computed, $qrMm);
             if ($t === null) continue;
-            $al = (string) ($f['align'] ?? '');
-            if ($hasRight && $al === 'centre') $al = '';
+            $al  = (string) ($f['align'] ?? '');
+            if ($al !== 'centre' && $al !== 'right') $al = '';
             $cls = $al === 'right' ? ' class="r"' : ($al === 'centre' ? ' class="c"' : '');
-            $lineHtml .= '<span' . $cls . '>' . $t . '</span>';
+            $span = '<span' . $cls . '>' . $t . '</span>';
+            $slots[$al] .= $span;
+            $inOrder    .= $span;
         }
-        $out .= '<div class="ln">' . $lineHtml . '</div>';
+
+        if ($hasCentre) {
+            $out .= '<div class="ln has-c">'
+                  . '<span class="g gl">' . $slots[''] . '</span>'
+                  . '<span class="g gc">' . $slots['centre'] . '</span>'
+                  . '<span class="g gr">' . $slots['right'] . '</span>'
+                  . '</div>';
+        } else {
+            // No centre field on this line: emitted in the authored order, exactly
+            // as before, so every existing label prints identically.
+            $out .= '<div class="ln">' . $inOrder . '</div>';
+        }
     }
     return $out . $qr;
 };
@@ -696,7 +720,16 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .rl-label .flds .qr { position:absolute; right:3mm; bottom:2.5mm; line-height:0; }
     .rl-label .flds .qr svg { display:block; }
     .rl-label .flds .ln .r { margin-left:auto; }
-    .rl-label .flds .ln .c { margin-left:auto; margin-right:auto; }
+    /* Three equal-outer slots: the middle one is the true centre of the label,
+       whatever is either side of it. See renderLineFields for why auto margins
+       couldn't do this. */
+    .rl-label .flds .ln.has-c { display:grid; grid-template-columns:1fr auto 1fr; align-items:baseline; }
+    .rl-label .flds .ln.has-c > .g { display:flex; flex-wrap:wrap; gap:0 2.4mm; min-width:0; }
+    .rl-label .flds .ln.has-c > .gl { justify-content:flex-start; }
+    .rl-label .flds .ln.has-c > .gc { justify-content:center; }
+    .rl-label .flds .ln.has-c > .gr { justify-content:flex-end; }
+    .rl-label .flds .ln.has-c .r,
+    .rl-label .flds .ln.has-c .c { margin-left:0; margin-right:0; }   /* the slots do it now */
     /* Boxed, ruled roller label (Excel-style grid) — rows share the height, each
        cell stacks a small uppercase caption over the value. Nudge shifts the
        whole label for a mis-registered printer. */
@@ -729,8 +762,10 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     @media print {
         body { background:#fff; } .toolbar { display:none; }
         .stack { padding:0; gap:0; display:block; }
-        .rl-label { box-shadow:none; page-break-after:always; break-after:page; }
-        .rl-label:last-child { page-break-after:auto; break-after:auto; }
+        /* Same shape as the die-cut sheets below: break BEFORE each label but the
+           first, so nothing added after the last one can leave a blank at the end. */
+        .rl-label { box-shadow:none; }
+        .rl-label + .rl-label { page-break-before:always; break-before:page; }
         @page { size:<?= $mm($LW) ?>mm <?= $mm($LH) ?>mm; margin:0; }
     }
 </style></head>
@@ -858,15 +893,29 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .dc-label .flds .ln { display:flex; flex-wrap:wrap; align-content:flex-start; gap:0 1.8mm; }
     .dc-label .flds .ln span { white-space:nowrap; }
     .dc-label .flds .ln .r { margin-left:auto; }
-    .dc-label .flds .ln .c { margin-left:auto; margin-right:auto; }
+    /* Same three slots as the roll label — see the .rl-label rules above. */
+    .dc-label .flds .ln.has-c { display:grid; grid-template-columns:1fr auto 1fr; align-items:baseline; }
+    .dc-label .flds .ln.has-c > .g { display:flex; flex-wrap:wrap; gap:0 1.8mm; min-width:0; }
+    .dc-label .flds .ln.has-c > .gl { justify-content:flex-start; }
+    .dc-label .flds .ln.has-c > .gc { justify-content:center; }
+    .dc-label .flds .ln.has-c > .gr { justify-content:flex-end; }
+    .dc-label .flds .ln.has-c .r,
+    .dc-label .flds .ln.has-c .c { margin-left:0; margin-right:0; }
     .dc-outline { border:0.2mm solid #c9c9c9; }
     .mk-h { position:absolute; border-top:0.3mm solid #111; } .mk-v { position:absolute; border-left:0.3mm solid #111; }
     .cal-txt { position:absolute; font-size:6pt; color:#333; white-space:nowrap; }
     .sheet-page { position:absolute; right:4mm; bottom:2mm; font:600 10px system-ui,sans-serif; color:#94a3b8; }
     @media print {
         body { background:#fff; } .toolbar { display:none; } .sheet-page { display:none; }
-        .sheet { margin:0; box-shadow:none; page-break-after:always; break-after:page; }
-        .sheet:last-child { page-break-after:auto; break-after:auto; }
+        .sheet { margin:0; box-shadow:none; }
+        /* Every sheet after the first starts a new page. This used to be
+           "break AFTER every sheet, except the last one" — but the sheets are
+           direct children of <body> and a <script> sits after them, so
+           .sheet:last-child matched nothing, the final sheet kept its break, and
+           the printer spat out a blank page on every single run. Breaking
+           BEFORE each sheet but the first can't have that fault: it doesn't care
+           what comes after the last one. */
+        .sheet + .sheet { page-break-before:always; break-before:page; }
         @page { size:A4 portrait; margin:0; }
     }
 </style></head>
