@@ -106,8 +106,9 @@ try {
 //
 // This was briefly widened to every account-less order so a tenant's ticket
 // named the person rather than the shop — which put the shop's name, address,
-// phone and email off the header entirely. The end customer is worth printing,
-// but as its OWN field (order:end_customer), not by displacing the customer.
+// phone and email off the header entirely. The ticket doesn't want the client's
+// own customer at all: the order number and the customer reference are what tie
+// it back to their paperwork, and both are already on the header.
 if ($order
     && (int) ($order['account_client_id'] ?? 0) === 0
     && (int) ($order['client_id'] ?? 0) === $MASTER
@@ -230,12 +231,6 @@ $orderVals = $order ? [
     'customer'   => $customerLine,
     'company'    => $company,
     'contact'    => $contact,
-    // Who the blind is ultimately for. On a tenant's order that's THEIR
-    // customer, which the header above deliberately doesn't show — so it gets
-    // a field of its own to be placed wherever it's wanted. Blank on the
-    // factory's own retail, where the end customer IS the customer above.
-    'end_customer' => (int) ($order['client_id'] ?? 0) === $MASTER
-                        ? '' : trim((string) ($order['end_customer_name'] ?? '')),
     'address'    => $addr,   // whole address on one line (kept for existing templates)
     // …and the pieces, so an address block can be built line-by-line on the header.
     'address1'   => (string) ($order['address1'] ?? ''),

@@ -32,7 +32,6 @@ $ORDER_FIELDS = [
     'order_no'     => ['Order no',     'ON066564'],
     'order_date'   => ['Order date',   '10/07/2026'],
     'customer'     => ['Customer',     'Sample Trade Co.'],
-    'end_customer' => ['End customer', 'D. Podmore'],
     'phone'        => ['Phone',        '01234 567890'],
     'email'        => ['Email',        'orders@sampletrade.co.uk'],
     'address'      => ['Address (one line)', '12 Example Street, Sampleton'],
