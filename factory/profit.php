@@ -75,6 +75,11 @@ if ($period === 'custom') {
     $since  = date('Y-01-01 00:00:00');
 }
 
+// ?why=1 collects, for every line we could NOT cost, which link in the chain is
+// missing. Read-only, super-admin like the rest of the page, off unless asked.
+$why     = isset($_GET['why']);
+$whyRows = [];
+
 $PLACED = ['ordered', 'fitted', 'invoiced', 'paid'];
 $inPl   = "'" . implode("','", $PLACED) . "'";
 
@@ -259,6 +264,25 @@ foreach ($lines as $ln) {
     } else {
         $tot['rev_uncosted'] += $rev;
         $uncostedProducts[$prod] = true;
+        // ?why=1 — for when a line you expected to be costed isn't, and you need
+        // to know WHICH link in the chain is missing rather than guess at it.
+        if ($why) {
+            $whyRows[] = [
+                'product'   => $prod,
+                'size'      => (int) $ln['width_mm'] . ' × ' . (int) $ln['drop_mm'],
+                'master_pid'=> (int) $ln['master_pid'],
+                'src_table' => $ln['src_table_id']      !== null ? (int) $ln['src_table_id']      : null,
+                'line_table'=> $ln['tenant_table_id']   !== null ? (int) $ln['tenant_table_id']   : null,
+                'table_owner'=> $ln['tenant_table_client'] !== null ? (int) $ln['tenant_table_client'] : null,
+                'system'    => $ln['system_name'],
+                'band'      => $ln['band'],
+                'master_tbl'=> $tbl['id'] ?? null,
+                'source'    => $tbl !== null ? ps_normalise($masterProduct((int) $ln['master_pid'])['price_source'] ?? null) : null,
+                'reason'    => $tbl === null
+                    ? 'no master price table found for this line'
+                    : 'master table found, but no priced cell at this size (or no cost in the grid)',
+            ];
+        }
     }
     unset($p);
 }
@@ -374,6 +398,34 @@ require __DIR__ . '/../_partials/factory_head.php';
         </tbody>
     </table>
     <p class="pf-sub" style="margin-top:.6rem">Profit and margin are shown against costed blinds only. A part-costed product shows its ratio; import the rest of its cost grid for the full picture.</p>
+<?php endif; ?>
+
+<?php if ($why): ?>
+    <h2 class="pf-h" style="font-size:1.05rem;margin:1.6rem 0 .2rem">Why these lines aren't costed</h2>
+    <p class="pf-sub">Add <code>?why=1</code> to this page's address to see it. <b>src table</b> is the identity link from the order's price table back to your master grid — blank there is usually the whole story.</p>
+    <?php if (!$whyRows): ?>
+        <p class="pf-sub">Every line in this window is costed.</p>
+    <?php else: ?>
+        <table class="pf">
+            <thead><tr><th>Product</th><th>Size</th><th class="r">Master id</th><th class="r">Src table</th><th class="r">Line table</th><th class="r">Owner</th><th>System</th><th>Band</th><th class="r">Matched</th><th>Reason</th></tr></thead>
+            <tbody>
+            <?php foreach ($whyRows as $w): ?>
+                <tr>
+                    <td><?= e((string) $w['product']) ?></td>
+                    <td><?= e($w['size']) ?></td>
+                    <td class="r"><?= (int) $w['master_pid'] ?></td>
+                    <td class="r"><?= $w['src_table']  !== null ? (int) $w['src_table']  : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['line_table'] !== null ? (int) $w['line_table'] : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['table_owner'] !== null ? (int) $w['table_owner'] : '<span class="muted">—</span>' ?></td>
+                    <td><?= $w['system'] !== null ? e((string) $w['system']) : '<span class="muted">—</span>' ?></td>
+                    <td><?= $w['band']   !== null ? e((string) $w['band'])   : '<span class="muted">—</span>' ?></td>
+                    <td class="r"><?= $w['master_tbl'] !== null ? (int) $w['master_tbl'] : '<span class="muted">—</span>' ?></td>
+                    <td><?= e($w['reason']) ?><?= $w['source'] !== null ? ' <span class="muted">(' . e(ps_label((string) $w['source'])) . ')</span>' : '' ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php require __DIR__ . '/../_partials/factory_foot.php'; ?>
