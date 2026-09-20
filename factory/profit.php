@@ -354,7 +354,7 @@ foreach ($lines as $ln) {
     $tot['extras'] += (float) ($ln['extras_total'] ?? 0) * $qty;
 
     $p = &$byProduct[$prod];
-    if ($p === null) $p = ['rev' => 0.0, 'cost' => 0.0, 'blinds' => 0, 'costed' => 0];
+    if ($p === null) $p = ['rev' => 0.0, 'rev_costed' => 0.0, 'cost' => 0.0, 'blinds' => 0, 'costed' => 0];
     $p['rev'] += $rev; $p['blinds'] += $qty;
 
     $cost = null;
@@ -368,7 +368,7 @@ foreach ($lines as $ln) {
 
     if ($cost !== null) {
         $tot['rev_costed'] += $rev; $tot['cost'] += $cost * $qty;
-        $p['cost'] += $cost * $qty; $p['costed'] += $qty;
+        $p['cost'] += $cost * $qty; $p['costed'] += $qty; $p['rev_costed'] += $rev;
     } else {
         $tot['rev_uncosted'] += $rev;
         $uncostedProducts[$prod] = true;
@@ -493,17 +493,20 @@ require __DIR__ . '/../_partials/factory_head.php';
         <tbody>
         <?php foreach ($byProduct as $prod => $r):
             $hasCost = $r['costed'] > 0;
-            $pr = $hasCost ? $r['rev'] - $r['cost'] : null;   // rev here is all lines; profit only meaningful if fully costed
-            // Only show profit/margin against the COSTED portion to stay honest.
-            $costedRev = $r['costed'] === $r['blinds'] ? $r['rev'] : null;
+            $part    = $hasCost && $r['costed'] < $r['blinds'];
+            // Profit and margin come off the COSTED revenue only. Taking the
+            // whole product's revenue and only the costed blinds' cost is how
+            // a part-costed row used to claim a 41% margin on blinds that were
+            // really running at 29%.
+            $profitP = $hasCost ? $r['rev_costed'] - $r['cost'] : null;
         ?>
             <tr>
-                <td><?= e($prod) ?><?php if ($hasCost && $r['costed'] < $r['blinds']): ?> <span class="muted">(<?= (int) $r['costed'] ?>/<?= (int) $r['blinds'] ?> costed)</span><?php endif; ?></td>
+                <td><?= e($prod) ?><?php if ($part): ?> <span class="muted">(<?= (int) $r['costed'] ?>/<?= (int) $r['blinds'] ?> costed)</span><?php endif; ?></td>
                 <td class="r"><?= (int) $r['blinds'] ?></td>
-                <td class="r"><?= $money($r['rev']) ?></td>
+                <td class="r"><?= $money($r['rev']) ?><?php if ($part): ?><br><span class="muted" style="font-size:.78rem"><?= $money($r['rev_costed']) ?> costed</span><?php endif; ?></td>
                 <td class="r"><?= $hasCost ? $money($r['cost']) : '<span class="muted">—</span>' ?></td>
-                <td class="r"><?= $hasCost ? '<span class="pos">' . $money($r['rev'] - $r['cost']) . '</span>' : '<span class="muted">no cost</span>' ?></td>
-                <td class="r"><?= ($hasCost && $r['rev'] > 0) ? number_format(($r['rev'] - $r['cost']) / $r['rev'] * 100, 0) . '%' : '<span class="muted">—</span>' ?></td>
+                <td class="r"><?= $hasCost ? '<span class="pos">' . $money($profitP) . '</span>' : '<span class="muted">no cost</span>' ?></td>
+                <td class="r"><?= ($hasCost && $r['rev_costed'] > 0) ? number_format($profitP / $r['rev_costed'] * 100, 0) . '%' : '<span class="muted">—</span>' ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
