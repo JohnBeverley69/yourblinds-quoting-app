@@ -313,7 +313,18 @@ require __DIR__ . '/../_partials/factory_head.php';
             $accCompany = trim((string) ($o['account_company'] ?? ''));
             $accContact = trim((string) ($o['account_contact'] ?? ''));
             $endCustName = trim((string) ($o['end_customer_name'] ?? ''));
-            $custLabel  = $accCompany !== '' ? $accCompany : ($endCustName !== '' ? $endCustName : $tenant);
+            // Who we're MAKING FOR: the trade account, else the tenant whose
+            // order it is. A tenant's own customer used to win over the tenant,
+            // so ABC Blinds' order for Dale Podmore was filed under Dale
+            // Podmore — but the blinds go to ABC and so does the invoice.
+            // The exception is the factory's own retail, where the tenant is us
+            // and "Beverley Blinds Trade" tells the bench nothing.
+            $ownRetail  = $accCompany === '' && (int) ($o['client_id'] ?? 0) === $MASTER;
+            $custLabel  = $accCompany !== ''
+                ? $accCompany
+                : (($ownRetail && $endCustName !== '') ? $endCustName : $tenant);
+            // Their customer, shown alongside when it isn't already the label.
+            $forWhom    = ($endCustName !== '' && $endCustName !== $custLabel) ? $endCustName : '';
             $status   = (string) ($o['status'] ?? '');
             $custRef  = trim((string) ($o['customer_reference'] ?? ''));
             $addRef   = trim((string) ($o['additional_reference'] ?? ''));
@@ -334,7 +345,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?><?= ($stageBy[$qid] ?? '') === 'confirmed' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
-                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
+                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?><?php if ($forWhom !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400" title="Their customer — the blinds are for this person">&rarr; <?= e($forWhom) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
                     <?php
                         // The count is the whole order, not just what we make.
