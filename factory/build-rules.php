@@ -295,6 +295,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .br-flash.ok  { background:#dcfce7; color:#166534; border:1px solid #86efac; }
     .br-flash.err { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
     .br-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:1.25rem; align-items:start; }
+    /* The tracks are minmax(0,…) but the ITEMS are min-width:auto, so the card
+       still refused to be narrower than the rules table inside it and pushed the
+       page sideways — .dt-wrap was ready to scroll the table and never got the
+       chance. This lets the card hold its track, and the table scrolls. */
+    .br-grid > * { min-width:0; }
     @media (max-width:1000px){ .br-grid{ grid-template-columns:1fr; } }
     .br-card { background:var(--bg-card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:1.1rem 1.25rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
     .br-card h2 { font-size:1rem; margin:0 0 0.9rem; }
