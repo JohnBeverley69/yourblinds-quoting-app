@@ -698,7 +698,10 @@ require __DIR__ . '/../_partials/factory_head.php';
             { source: 'order:customer',   caption: 'Customer',  show: 'always' },
             { source: 'order:address',    caption: '',          show: 'ifvalue' },
             { source: 'order:post_code',  caption: '',          show: 'ifvalue' },
-            { source: 'order:cust_ref',   caption: 'Cust Ref',  show: 'always' }
+            // Plenty of orders have no customer reference, and "always" printed
+            // a bare "Cust Ref" caption with nothing after it. Still just the
+            // per-field setting — change it on any template that wants it.
+            { source: 'order:cust_ref',   caption: 'Cust Ref',  show: 'ifvalue' }
         ] },
         labels: [
             { title: 'Cutting label', w: 80, h: 18, fields: [
