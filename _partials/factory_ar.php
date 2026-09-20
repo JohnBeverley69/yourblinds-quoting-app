@@ -278,6 +278,34 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
 {
     $src   = ar_order_lines_for_doc($pdo, $factoryId, $quoteId);
     $lines = []; $uncaptured = false; $so = 0;
+
+    // WHICH BASIS DO WE BILL THIS ACCOUNT ON?
+    //
+    // An order BEVERLEY raised FOR an account is priced with the account in mind
+    // ($forAccountId > 0 in the engine): sell_price is already what that account
+    // pays, and trade_price_per_blind / trade_discount_amount are the sell before
+    // and after their account discount. Billing sell_price is right.
+    //
+    // An order the account placed through THEIR OWN PORTAL is priced for THEIR
+    // customer. pricing_engine.php:1462 assigns only $sellPrice on that path, so
+    // sell_price is the tenant's RETAIL price — their own markup included — while
+    // trade_price_per_blind (set back at :1272) is still Beverley's trade price to
+    // them, and trade_discount_* their buying discount. Billing sell_price there
+    // charged a trade account its own retail price, close to double what it owed.
+    // Confirmed on a live document 2026-09-20: list £57.20, buying discount 15%,
+    // and the invoice billing £97.24.
+    //
+    // So: portal order → bill the trade price (discounted base + options at their
+    // trade amount). Beverley-raised order → bill sell, as before.
+    $isPortal = true;
+    try {
+        $c = $pdo->prepare('SELECT client_id FROM quotes WHERE id = ? LIMIT 1');
+        $c->execute([$quoteId]);
+        $isPortal = ((int) $c->fetchColumn()) !== $factoryId;
+    } catch (Throwable $e) {
+        $isPortal = false;   // can't tell — keep the old behaviour rather than guess
+    }
+
     foreach ($src as $ln) {
         $qty    = max(1, (int) $ln['quantity']);
         $optNet = 0.0;
@@ -303,9 +331,31 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
         // unit_net stays the per-blind sell price, so unit × qty can differ from
         // line_net by that flat charge. That is exactly what the customer's own
         // quote shows, so the two documents agree.
-        $unitNet  = round((float) $ln['sell_price'], 2);
-        $lineNet  = round((float) $ln['line_total'], 2);
-        $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['sell_price']), 2);
+        // The flat per-line charge, recovered from what the engine stored rather
+        // than re-reading products.line_charge: line_total = sell × qty + charge.
+        // It is pass-through (never marked up), so it bills the same either way.
+        $lineCharge = round((float) $ln['line_total'] - round((float) $ln['sell_price'], 2) * $qty, 2);
+
+        if ($isPortal) {
+            $tradeUnit = $ln['trade_price_per_blind'];
+            if ($tradeUnit === null) {
+                // Pre-capture line: we have no trade price, and billing the retail
+                // one would overcharge. Flag it so ar_create_invoice refuses and
+                // asks for the line to be re-saved, rather than inventing a figure.
+                $uncaptured = true;
+                $tradeUnit  = (float) $ln['sell_price'];
+            }
+            $discAmt  = round((float) ($ln['trade_discount_amount'] ?? 0), 2);
+            $unitNet  = round(((float) $tradeUnit - $discAmt) + $optNet, 2);
+            $lineNet  = round($unitNet * $qty + $lineCharge, 2);
+            // List = trade before their buying discount, plus options (options are
+            // never discounted), so List − Discount = Net reads correctly on the PDF.
+            $listUnit = round((float) $tradeUnit + $optNet, 2);
+        } else {
+            $unitNet  = round((float) $ln['sell_price'], 2);
+            $lineNet  = round((float) $ln['line_total'], 2);
+            $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['sell_price']), 2);
+        }
 
         $desc = trim((string) $ln['product_name_snapshot']);
         if (($ln['system_name_snapshot'] ?? '') !== '') $desc .= ' — ' . $ln['system_name_snapshot'];
@@ -350,7 +400,14 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
     // difference, mirroring what the quote already showed. Pro-rated by the billed
     // share, because a quote can hold lines this factory does not own and we must
     // only ever bill our own portion of an order-level figure.
-    if ($lines) {
+    //
+    // ONLY on the sell basis. quotes.subtotal is the tenant's own RETAIL total on
+    // a portal order, so reconciling a trade-priced invoice to it would add an
+    // "Adjustment" dragging the bill straight back up to retail — undoing the
+    // whole point. A portal invoice is built from trade components and needs no
+    // order-level reconcile; the tenant's own price_override and internal
+    // surcharge are theirs, not Beverley's to bill.
+    if ($lines && !$isPortal) {
         try {
             $qs = $pdo->prepare('SELECT subtotal FROM quotes WHERE id = ? LIMIT 1');
             $qs->execute([$quoteId]);
