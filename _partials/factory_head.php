@@ -99,23 +99,38 @@ $factoryNavItems += [
         :root { --fac-bar: #1f2a37; --fac-bar-2: #111a24; --fac-accent: #38bdf8; }
         body.factory-body { margin: 0; background: var(--bg, #f6f7f9); }
         .factory-topbar {
-            display: flex; align-items: center; gap: 1.5rem;
+            display: flex; align-items: center; gap: 1.5rem; min-width: 0;
             background: var(--fac-bar); color: #e5edf5;
             padding: 0 1.25rem; height: 56px; position: sticky; top: 0; z-index: 20;
             box-shadow: 0 1px 0 rgba(0,0,0,0.25);
         }
+        @media (max-width: 900px) {
+            .factory-topbar { gap: 0.75rem; padding: 0 0.75rem; }
+            .factory-user  { gap: 0.6rem; }
+        }
         .factory-brand {
             font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap;
+            flex: 0 0 auto;
         }
         .factory-brand span { color: var(--fac-accent); font-weight: 600; }
-        .factory-nav { display: flex; gap: 0.25rem; flex: 1; }
+        /* Nine nav links plus the brand and the user block stop fitting at about
+           1130px. Nothing here used to wrap or shrink, so below that the whole
+           BAR pushed the page sideways — every factory screen, on exactly the
+           smaller displays the floor and scan stations run on. The nav now keeps
+           to the space it's given and scrolls within itself instead. */
+        .factory-nav {
+            display: flex; gap: 0.25rem; flex: 1 1 auto; min-width: 0;
+            overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .factory-nav::-webkit-scrollbar { display: none; }
         .factory-nav a {
             color: #b9c6d3; text-decoration: none; font-size: 0.9375rem; font-weight: 500;
             padding: 0.4rem 0.75rem; border-radius: 8px;
+            flex: 0 0 auto; white-space: nowrap;
         }
         .factory-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
         .factory-nav a.is-active { background: rgba(56,189,248,0.15); color: #fff; }
-        .factory-user { display: flex; align-items: center; gap: 0.9rem; font-size: 0.875rem; color: #b9c6d3; }
+        .factory-user { display: flex; align-items: center; gap: 0.9rem; font-size: 0.875rem; color: #b9c6d3; flex: 0 0 auto; }
         .factory-user a { color: #e5edf5; text-decoration: none; font-weight: 600; }
         .factory-user a:hover { text-decoration: underline; }
         .factory-switch { margin: 0; }
