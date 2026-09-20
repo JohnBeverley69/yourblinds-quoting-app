@@ -177,6 +177,10 @@ $pollVersion = fx_poll_version($pdo, 'incoming', $MASTER);
 
 $factoryTitle = 'Incoming Orders';
 $factoryNav   = 'incoming';
+// Six columns plus a row of buttons: this is a wide table, not prose. Capped at
+// reading width it crushed the status pills into the buttons and pushed the
+// expand chevron off the edge. Same treatment as Floor and Scan log.
+$factoryWide  = true;
 require __DIR__ . '/../_partials/factory_head.php';
 ?>
 <style>
@@ -203,7 +207,11 @@ require __DIR__ . '/../_partials/factory_head.php';
 
     /* Compact one-row-per-order list; click a row to open its blinds. */
     .io-list { border: 1px solid var(--border, #e5e7eb); border-radius: 12px; overflow: hidden; background: var(--bg-card, #fff); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-    .io-cols { display: grid; grid-template-columns: 8.5rem minmax(7rem, 1fr) 7rem 5.5rem minmax(7rem, auto) minmax(max-content, auto); gap: 0.5rem 1rem; align-items: center; }
+    /* Each row is its own grid, so only FIXED columns line up between rows. The
+       flexible column has to be the last one before the buttons: when it was the
+       customer, a row with fewer buttons handed its spare width to the customer
+       and pushed that row's date and count out of line with every other row. */
+    .io-cols { display: grid; grid-template-columns: 8.5rem minmax(9rem, 16rem) 7rem 5.5rem minmax(11rem, 1fr) minmax(0, max-content); gap: 0.5rem 1rem; align-items: center; }
     .io-list-head { padding: 0.55rem 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint, #94a3b8); font-weight: 600; border-bottom: 1px solid var(--border, #e5e7eb); background: var(--bg-subtle, #f8fafc); }
     .io-list-head span:last-child { text-align: right; }
     .io-item { border-bottom: 1px solid var(--border, #e5e7eb); }
@@ -218,8 +226,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-summary .ref { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .io-summary .cust { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .io-summary .date, .io-summary .cnt { color: var(--text-muted, #667); font-size: 0.875rem; white-space: nowrap; }
-    .io-summary .stat { min-width: 0; }
-    .io-summary .io-actions { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
+    /* Several pills can land here at once (stage, floor progress, bought-in).
+       Lay them out properly instead of letting them run into the buttons. */
+    .io-summary .stat { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
+    .io-summary .io-actions { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
     .io-chev { color: var(--text-faint, #94a3b8); transition: transform 0.15s ease; display: inline-block; }
     .io-item.open .io-chev { transform: rotate(90deg); }
     .io-item.done .io-summary .ref, .io-item.done .io-summary .cust { opacity: 0.6; }
