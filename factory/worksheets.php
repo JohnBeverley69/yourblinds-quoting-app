@@ -420,7 +420,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld select.align { width:6rem; }
     .fld .free { font-size:0.7rem; color:#94a3b8; width:8.5rem; text-align:center; }
     .add-fld { margin-top:0.5rem; }
-    .add-fld select { min-width:14rem; }
+    /* 14rem is a good width for the option labels, but it must be a preference,
+       not a floor — on a 360px screen a floor puts it through the side. */
+    .add-fld select { width:14rem; max-width:100%; min-width:0; }
     /* palette — drag a field onto a label */
     .palette { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:0.55rem 0.75rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.9rem; }
     .pal-hint { font-size:0.75rem; color:#64748b; font-weight:600; width:100%; }
