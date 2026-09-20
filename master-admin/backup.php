@@ -374,9 +374,29 @@ $tenants = $pdo->query(
                 once you're sure the restore worked.
                 All stored in <code>/_backups/</code> on the server, blocked from
                 direct download.
-                <?php if (!array_filter($snapshots, static fn ($s) => strncmp($s['name'], 'auto-daily-', 11) === 0)): ?>
-                    <br><strong style="color:#b45309">No scheduled backup has run yet</strong> —
-                    add a daily cron for <code>php <?= e(dirname(__DIR__)) ?>/cron_backup.php</code>.
+                <?php
+                    // Say how old the newest scheduled dump is. A single stale file
+                    // sitting here reads as "backups are fine" when nothing has run
+                    // for a month — the page has to be honest about its own age.
+                    $dailies = array_values(array_filter(
+                        $snapshots,
+                        static fn ($s) => strncmp($s['name'], 'auto-daily-', 11) === 0
+                    ));
+                    $newest  = $dailies ? (int) $dailies[0]['mtime'] : 0;   // list is newest-first
+                    $ageDays = $newest ? (int) floor((time() - $newest) / 86400) : null;
+                ?>
+                <?php if ($ageDays === null): ?>
+                    <br>This one hasn't been set up. It's optional if your host already
+                    takes daily backups — to use it as well, run
+                    <code>php <?= e(dirname(__DIR__)) ?>/cron_backup.php</code> on a cron.
+                <?php elseif ($ageDays >= 2): ?>
+                    <br><strong style="color:#b45309">The newest scheduled backup here is
+                    <?= $ageDays ?> days old</strong> — so nothing is running on a
+                    cron. Fine if your host backs up for you; otherwise that file is the
+                    only copy this app has, and it's stale.
+                <?php else: ?>
+                    <br><span style="color:#166534">Newest scheduled backup:
+                    <?= $ageDays === 0 ? 'today' : 'yesterday' ?>.</span>
                 <?php endif; ?>
             </p>
             <?php if (!$snapshots): ?>
