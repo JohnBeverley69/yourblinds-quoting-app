@@ -278,6 +278,40 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .item-desc { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.45; }
         .item-desc strong { color: var(--text-primary); font-weight: 600; }
         .item-extras { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.25rem; }
+
+        /* An order of sixteen near-identical blinds printed ten option lines
+           each, which is four screens of scrolling to reach the total. The
+           options fold away behind a proper button — big enough to hit and to
+           see, because the small pills elsewhere are easy to miss. */
+        .ln-opts { margin-top: 0.4rem; }
+        .ln-opts > summary {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            cursor: pointer; list-style: none; user-select: none;
+            font-size: 0.875rem; font-weight: 600; line-height: 1;
+            color: var(--text-muted, #4b5563);
+            background: var(--bg-subtle, #f1f5f9);
+            border: 1px solid var(--border, #d7dee7);
+            border-radius: 8px; padding: 0.45rem 0.8rem;
+        }
+        .ln-opts > summary::-webkit-details-marker { display: none; }
+        .ln-opts > summary:hover { background: var(--bg-card, #fff); border-color: var(--text-faint, #94a3b8); }
+        .ln-opts > summary:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }
+        .ln-opts-chev { transition: transform 0.15s ease; font-size: 0.8em; }
+        .ln-opts[open] > summary .ln-opts-chev { transform: rotate(90deg); }
+        .ln-opts[open] > summary .ln-opts-show,
+        .ln-opts:not([open]) > summary .ln-opts-hide { display: none; }
+        /* Open, the button is a quieter thing — you've already found it. */
+        .ln-opts[open] > summary { background: transparent; border-color: transparent; padding-left: 0; }
+        .ln-opts[open] > summary:hover { background: var(--bg-subtle, #f1f5f9); border-color: var(--border, #d7dee7); padding-left: 0.8rem; }
+
+        .qb-blinds-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .qb-opts-all { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: auto; }
+        .qb-opts-all button {
+            font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+            color: var(--text-muted, #4b5563); background: var(--bg-subtle, #f1f5f9);
+            border: 1px solid var(--border, #d7dee7); border-radius: 8px; padding: 0.35rem 0.7rem;
+        }
+        .qb-opts-all button:hover { background: var(--bg-card, #fff); }
         .totals-row td { font-weight: 600; }
         .totals-row.grand td { font-size: 1.0625rem; color: var(--text-primary); }
         #item-preview {
@@ -1436,8 +1470,14 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <div class="col-right">
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
-            <div class="section-header">
+            <div class="section-header qb-blinds-head">
                 <h2 class="section-title">Blinds (<?= count($items) ?>)</h2>
+                <?php if (!empty($items)): ?>
+                    <span class="qb-opts-all">
+                        <button type="button" id="qbOptsOpen">Show all options</button>
+                        <button type="button" id="qbOptsShut" hidden>Hide all options</button>
+                    </span>
+                <?php endif; ?>
             </div>
 
             <?php if (empty($items)): ?>
@@ -1479,7 +1519,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                             <?php if (!empty($it['fabric_supplier_snapshot'])): ?> — <?= e((string) $it['fabric_supplier_snapshot']) ?><?php endif; ?>
                                             — <?= e((string) $it['fabric_name_snapshot']) ?><?php if (!empty($it['fabric_colour_snapshot'])): ?> / <?= e((string) $it['fabric_colour_snapshot']) ?><?php endif; ?>
                                         </span>
-                                        <?php if (!empty($extrasByItem[(int) $it['id']])): ?>
+                                        <?php if (!empty($extrasByItem[(int) $it['id']])): $nOpts = count($extrasByItem[(int) $it['id']]); ?>
+                                            <details class="ln-opts">
+                                                <summary>
+                                                    <span class="ln-opts-chev" aria-hidden="true">&#9656;</span>
+                                                    <span class="ln-opts-show"><?= $nOpts ?> option<?= $nOpts === 1 ? '' : 's' ?></span>
+                                                    <span class="ln-opts-hide">Hide options</span>
+                                                </summary>
                                             <div class="item-extras">
                                                 <?php foreach ($extrasByItem[(int) $it['id']] as $ex): ?>
                                                     + <?= e((string) $ex['extra_name_snapshot']) ?><?php if (($ex['choice_label_snapshot'] ?? '') !== ''): ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php endif; ?>
@@ -1492,7 +1538,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                                     <br>
                                                 <?php endforeach; ?>
                                             </div>
+                                            </details>
                                         <?php endif; ?>
+                                        <?php /* Notes stay out in the open — they're the thing you wrote
+                                                 down because somebody needs to see it. */ ?>
                                         <?php if (!empty($it['notes'])): ?>
                                             <div class="item-extras"><em><?= e((string) $it['notes']) ?></em></div>
                                         <?php endif; ?>
@@ -3813,6 +3862,41 @@ window.__editingBlind__ = <?= json_encode([
             }
         }, 350);
     });
+})();
+</script>
+<script>
+/* Show all / hide all options on the blinds list. Whichever you last chose is
+   remembered on this device, so someone who wants the full detail every time
+   isn't re-opening sixteen lines on every visit. */
+(function () {
+    var openBtn = document.getElementById('qbOptsOpen');
+    var shutBtn = document.getElementById('qbOptsShut');
+    if (!openBtn || !shutBtn) return;
+    var KEY = 'yb_qb_opts_open';
+
+    function all() { return document.querySelectorAll('details.ln-opts'); }
+    function apply(on, remember) {
+        all().forEach(function (d) { d.open = on; });
+        openBtn.hidden = on;
+        shutBtn.hidden = !on;
+        if (remember) { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} }
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    if (saved === '1') apply(true, false);
+
+    openBtn.addEventListener('click', function () { apply(true, true); });
+    shutBtn.addEventListener('click', function () { apply(false, true); });
+
+    // Opening or closing one line on its own shouldn't leave the header button
+    // claiming the opposite of what you can see.
+    document.addEventListener('toggle', function (ev) {
+        if (!ev.target.classList || !ev.target.classList.contains('ln-opts')) return;
+        var opened = [].some.call(all(), function (d) { return d.open; });
+        openBtn.hidden = opened;
+        shutBtn.hidden = !opened;
+    }, true);
 })();
 </script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
