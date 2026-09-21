@@ -722,3 +722,42 @@ function bj_order_progress(PDO $pdo, array $quoteIds): array
     }
     return $out;
 }
+
+/**
+ * Per-order "waiting on" breakdown for a set of quote ids: which parts are still
+ * to make, grouped by stream (Headrail, Fabric, …). Returns
+ *   [quoteId => ['Headrail' => 4, 'Fabric' => 3], …]
+ * counting streams that aren't 'done'. Lets Incoming Orders show WHY an order
+ * isn't finished ("waiting on 4 headrails, 3 fabrics") next to the made count.
+ *
+ * The pseudo 'main' stream (single-stream products with no split route) is
+ * omitted — its outstanding count just mirrors the "X/Y made" pill, so listing
+ * it would be noise. Degrades to [] if the streams table isn't there.
+ */
+function bj_order_waiting(PDO $pdo, array $quoteIds): array
+{
+    $quoteIds = array_values(array_filter(array_map('intval', $quoteIds)));
+    if (!$quoteIds) return [];
+    $ph = implode(',', array_fill(0, count($quoteIds), '?'));
+    try {
+        $st = $pdo->prepare(
+            "SELECT j.quote_id, s.stream, COUNT(*) AS outstanding
+               FROM factory_blind_streams s
+               JOIN factory_blind_jobs j ON j.id = s.blind_job_id
+              WHERE j.quote_id IN ($ph)
+                AND (s.status IS NULL OR s.status <> 'done')
+           GROUP BY j.quote_id, s.stream
+           ORDER BY outstanding DESC"
+        );
+        $st->execute($quoteIds);
+    } catch (Throwable $e) {
+        return [];   // streams table not migrated / renamed — just show no breakdown
+    }
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $stream = trim((string) $r['stream']);
+        if ($stream === '' || strcasecmp($stream, 'main') === 0) continue;
+        $out[(int) $r['quote_id']][$stream] = (int) $r['outstanding'];
+    }
+    return $out;
+}

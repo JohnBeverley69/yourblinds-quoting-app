@@ -116,8 +116,11 @@ try {
 
 // Floor progress per order (blinds made / total) once released — Phase B.
 $floorProg = [];
+$waitingBy = [];
 if (bj_tables_ready($pdo) && !empty($ids)) {
     try { $floorProg = bj_order_progress($pdo, $ids); } catch (Throwable $e) { $floorProg = []; }
+    // "Waiting on …" — which parts (streams) are still outstanding per order.
+    try { $waitingBy = bj_order_waiting($pdo, $ids); } catch (Throwable $e) { $waitingBy = []; }
 }
 
 // Phase 0: the single derived fulfilment stage, shown next to the old pills so
@@ -245,6 +248,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-prog { display: inline-block; margin-left: 0.4rem; font-size: 0.6875rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; background: #fef3c7; color: #92600a; text-decoration: none; white-space: nowrap; }
     .io-prog.all { background: #dcfce7; color: #166534; }
     .io-prog:hover { text-decoration: underline; }
+    /* "Waiting on …" — the per-component backlog (headrails, fabrics) still to
+       make. Understated so it reads as detail beside the made pill, not another
+       loud status. */
+    .io-waiting { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted, #667); white-space: nowrap; }
+    .io-waiting b { font-weight: 700; color: var(--text-secondary, #475569); }
     .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.35rem 0.8rem; }
     .io-btn.advance { background: #1f2a37; color: #fff; }
     .io-btn.advance:hover { background: #111a24; }
@@ -380,6 +388,20 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php endif; ?>
                         <?php if ($prog !== null && $prog['total'] > 0): ?>
                             <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>
+                        <?php endif; ?>
+                        <?php
+                            // "Waiting on …" — the outstanding parts by bench/stream, so
+                            // the queue shows WHY an order isn't finished at a glance.
+                            $waiting = $waitingBy[$qid] ?? [];
+                            $parts = [];
+                            foreach ($waiting as $streamName => $cnt) {
+                                $lbl = strtolower(trim((string) $streamName));
+                                if ($cnt !== 1 && $lbl !== '' && substr($lbl, -1) !== 's') $lbl .= 's';
+                                $parts[] = e((int) $cnt . ' ' . $lbl);   // escaped, then wrapped in <b> below
+                            }
+                        ?>
+                        <?php if ($parts): ?>
+                            <span class="io-waiting" title="Parts still to make on the floor">Waiting on <b><?= implode('</b> · <b>', $parts) ?></b></span>
                         <?php endif; ?>
                         <?php if ($boughtinQty > 0): ?>
                             <?php if ($supReceived): ?>
