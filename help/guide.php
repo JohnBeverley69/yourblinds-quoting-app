@@ -269,7 +269,24 @@ $activeNav = 'help';
 
             // The engine is generic: it only moves the stage's data-step in time
             // with the narration. All per-scenario visuals are CSS in the guide.
-            function setStep(n){ if (stage) stage.setAttribute('data-step', String(n)); }
+            var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            // The mock can be much taller than the screen (the dashboard is ~1130px).
+            // The spotlight dims everything but the narrated zone — so if that zone is
+            // off-screen the viewer just sees the dimmed top ("washed out, no
+            // interaction") while the voice plays on. Scroll the active zone/field
+            // into view as each step lights up, but only when it's actually out of
+            // sight, so a guide that already fits never jumps around.
+            function scrollStepIntoView(n){
+                if (!stage || n < 1) return;
+                var el = stage.querySelector('.z' + n) || stage.querySelector('.f' + n);
+                if (!el) return;
+                var r = el.getBoundingClientRect();
+                if (r.top < 70 || r.bottom > window.innerHeight - 20){
+                    try { el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' }); }
+                    catch (e) { el.scrollIntoView(); }
+                }
+            }
+            function setStep(n){ if (stage){ stage.setAttribute('data-step', String(n)); scrollStepIntoView(n); } }
             setStep(0); // resting poster — nothing plays until asked (no looping)
 
             if (!synth){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
