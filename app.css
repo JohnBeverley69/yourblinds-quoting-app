@@ -449,6 +449,21 @@ a { color: var(--link); }
 [data-density="compact"] input:not([type=checkbox]):not([type=radio]):not([type=range]),
 [data-density="compact"] select,
 [data-density="compact"] textarea       { padding: 0.25rem 0.5rem; line-height: 1.35; }
+/* …and again, scoped, because the rule above LOSES to the base styling for
+   selects and textareas. `.form-group select` is (0,2,0); the rule above is
+   only (0,1,1), so every <select> in the app kept its roomy 9px padding while
+   the <input> beside it went to 4px — the input selector only won by accident,
+   its :not() chain taking it to (0,4,1). That is why Product / System / Band
+   stood visibly taller than Customer reference right next to them. */
+[data-density="compact"] .form-group input:not([type=checkbox]):not([type=radio]):not([type=range]),
+[data-density="compact"] .form-group select,
+[data-density="compact"] .form-group textarea,
+[data-density="compact"] #add-line select,
+[data-density="compact"] .extras-grid select,
+[data-density="compact"] .extras-grid input:not([type=checkbox]):not([type=radio]) {
+    padding: 0.25rem 0.5rem;
+    line-height: 1.35;
+}
 [data-density="compact"] .form-row,
 [data-density="compact"] .form-group    { margin-bottom: 0.375rem; }
 [data-density="compact"] .form-row      { row-gap: 0.375rem; }
