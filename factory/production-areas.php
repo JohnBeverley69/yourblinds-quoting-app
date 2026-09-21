@@ -241,7 +241,21 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
     }
-    header('Location: /factory/production-areas.php');
+
+    // Come back to the bench you were working on, not the top of the page.
+    // Regenerating a key used to bounce you to the top with the QR you'd just
+    // made now closed and somewhere below the fold — so the one thing you did
+    // it for was the one thing you couldn't see. Generating or regenerating a
+    // key also re-opens that bench's Setup QR, so the new code is on screen
+    // when you land. Removing an area is the exception: there's no row to
+    // return to.
+    $back = '/factory/production-areas.php';
+    $aidBack = (int) ($_POST['area_id'] ?? 0);
+    if ($aidBack > 0 && $action !== 'remove_area') {
+        if ($action === 'gen_scan_key') $back .= '?qr_open=' . $aidBack;
+        $back .= '#area-' . $aidBack;
+    }
+    header('Location: ' . $back);
     exit;
 }
 
@@ -311,7 +325,10 @@ require __DIR__ . '/../_partials/factory_head.php';
   .btn.ghost { background:#eef2f6; color:#334155; } .btn.mini{ padding:.2rem .5rem; font-size:.8rem; }
   /* wrap + min-width:0 so a long scan URL folds onto the next line instead of
      setting the row's width and pushing the page off the side of the screen. */
-  .area-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap; }
+  .area-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap;
+              /* The factory bar is sticky at 56px, so an #area-N anchor would
+                 land the row underneath it. Leave it room to sit below. */
+              scroll-margin-top:5rem; }
   .area-row > * { min-width:0; }
   .area-row:last-child { border-bottom:none; }
   .seq { width:1.6rem; height:1.6rem; border-radius:50%; background:#0f766e; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex:0 0 auto; }
@@ -364,8 +381,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     <h2>Areas</h2>
     <p class="pa-sub" style="margin:.2rem 0 .8rem">Add the areas your workshop is split into — e.g. Vertical Blinds, Roller Blinds, Pleated Blinds.</p>
     <?php if (!$areas): ?><p class="pa-sub">No areas yet — add the first below.</p><?php endif; ?>
+    <?php
+      // Which bench's Setup QR to open on arrival — set by the redirect after a
+      // key is generated, so you land looking at the code you just made.
+      $qrOpenId = (int) ($_GET['qr_open'] ?? 0);
+    ?>
     <?php foreach ($areas as $i => $ar): $aid = (int) $ar['id']; ?>
-      <div class="area-row">
+      <div class="area-row" id="area-<?= $aid ?>">
         <span class="seq"><?= $i + 1 ?></span>
         <form method="post" class="inline" style="flex:1;display:flex;gap:.3rem">
           <?= csrf_field() ?><input type="hidden" name="_action" value="rename_area"><input type="hidden" name="area_id" value="<?= $aid ?>">
@@ -475,7 +497,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="_action" value="gen_scan_key"><input type="hidden" name="area_id" value="<?= $aid ?>"><button class="btn mini">Generate key</button></form>
           <?php else: ?>
             <input type="text" class="scan-url" readonly onclick="this.select()" value="<?= e($url) ?>">
-            <details class="scan-qr">
+            <details class="scan-qr"<?= $qrOpenId === $aid ? ' open' : '' ?>>
               <summary class="btn ghost mini" title="Show this bench's scanner setup code">Setup QR</summary>
               <div class="scan-qr-pop">
                 <?php if (trim($wifiSsid) === ''): ?>
