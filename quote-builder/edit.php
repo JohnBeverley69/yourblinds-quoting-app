@@ -1378,19 +1378,25 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         </script>
                     </div>
                     <div class="form-group">
-                        <label for="item-unit">Measurement unit (this quote)</label>
-                        <select id="item-unit">
-                            <?php foreach (['mm' => 'Millimetres (mm)', 'cm' => 'Centimetres (cm)',
-                                            'm' => 'Metres (m)', 'in' => 'Inches (in)'] as $uVal => $uLabel): ?>
+                        <?php /* Short label and short options: this now sits in the
+                                 narrow third of the row, where "Measurement unit
+                                 (this quote)" wrapped to two lines and the select
+                                 truncated to "Millimetres (r…". The stored VALUES
+                                 are untouched — only what you read changes. */ ?>
+                        <label for="item-unit" title="The unit this quote's sizes are shown in. Sizes are stored the same way whichever you pick.">Measurement</label>
+                        <select id="item-unit" title="The unit this quote's sizes are shown in. Sizes are stored the same way whichever you pick.">
+                            <?php foreach (['mm' => 'mm', 'cm' => 'cm',
+                                            'm' => 'm', 'in' => 'inch'] as $uVal => $uLabel): ?>
                                 <option value="<?= e($uVal) ?>" <?= $measureUnit === $uVal ? 'selected' : '' ?>>
                                     <?= e($uLabel) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small class="ui-hint" style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.25rem">
-                            Re-displays this quote's sizes in the chosen unit. Sizes are stored
-                            the same way regardless.
-                        </small>
+                        <?php /* No hint under it. "Re-displays this quote's sizes in
+                                 the chosen unit…" is settings-page prose sitting in
+                                 a form you fill in twenty times a day — three lines
+                                 of a narrow column to say what the control's name
+                                 already says. It's on the tooltip if anyone wonders. */ ?>
                     </div>
                 </div>
 
