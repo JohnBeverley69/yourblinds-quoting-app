@@ -302,10 +302,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $vat        = (float) ($_POST['vat_percent'] ?? 20);
+        // Absent (the field is disabled when there's no VAT number) means no VAT,
+        // not the old default of 20 — otherwise a disabled field would post nothing
+        // and the VAT-number guard below would wrongly block an unrelated save.
+        $vat        = (float) ($_POST['vat_percent'] ?? 0);
         // VAT bounded like the deposit % — accept 0–100 only.
         if ($vat < 0)   $vat = 0;
         if ($vat > 100) $vat = 100;
+        // You can't charge VAT without being VAT-registered — so a VAT rate is
+        // only valid once a VAT number is set in Company settings. Block a
+        // positive rate otherwise and point them to where it's fixed.
+        if ($vat > 0) {
+            $vatNo = '';
+            try {
+                $vs = db()->prepare('SELECT vat_number FROM clients WHERE id = ? LIMIT 1');
+                $vs->execute([$clientId]);
+                $vatNo = trim((string) ($vs->fetchColumn() ?: ''));
+            } catch (Throwable $e) { /* if we can't check, don't block the save */ }
+            if ($vatNo === '') {
+                $_SESSION['flash_error'] = 'Add your VAT number on the Company tab before setting a VAT rate — '
+                    . 'you can only charge VAT once you\'re VAT-registered.';
+                header('Location: /admin/settings.php#company'); exit;
+            }
+        }
         $depMode    = (string) ($_POST['default_deposit_mode'] ?? 'percent');
         if (!in_array($depMode, ['percent', 'flat'], true)) {
             $depMode = 'percent';
@@ -1436,11 +1455,20 @@ $activeNav = 'settings';
                                placeholder="e.g. BRI"
                                value="<?= e((string) ($prefixFill ?? ($settings['quote_prefix'] ?? ''))) ?>">
                     </div>
+                    <?php $hasVatNo = trim((string) ($client['vat_number'] ?? '')) !== ''; ?>
                     <div class="form-group">
                         <label for="vat_percent">VAT %</label>
                         <input id="vat_percent" name="vat_percent" type="number"
                                step="0.01" min="0" max="99"
-                               value="<?= e((string) ($settings['vat_percent'] ?? '20')) ?>">
+                               value="<?= $hasVatNo ? e((string) ($settings['vat_percent'] ?? '20')) : '0' ?>"
+                               <?= $hasVatNo ? '' : 'disabled' ?>>
+                        <?php if (!$hasVatNo): ?>
+                            <?php /* Plain span, NOT .ui-hint — compact mode hides .ui-hint, and this
+                                     explains why the field is greyed out, so it must always show. */ ?>
+                            <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.25rem">
+                                Add your <a href="/admin/settings.php#company">VAT number</a> on the Company tab to set a VAT rate.
+                            </span>
+                        <?php endif; ?>
                     </div>
                 </div>
 
