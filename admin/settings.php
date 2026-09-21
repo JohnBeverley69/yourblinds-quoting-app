@@ -253,17 +253,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // order reissued.
         if ($prefix !== '') {
             try {
+                // Detect a clash WITHOUT revealing which account holds the prefix.
+                // Naming the other tenant to this one is a cross-tenant privacy
+                // leak — we only need to know that a clash exists, not whose.
                 $dup = db()->prepare(
-                    'SELECT c.company_name FROM client_settings cs
-                       JOIN clients c ON c.id = cs.client_id
-                      WHERE UPPER(TRIM(cs.quote_prefix)) = ? AND cs.client_id <> ? LIMIT 1'
+                    'SELECT 1 FROM client_settings
+                      WHERE UPPER(TRIM(quote_prefix)) = ? AND client_id <> ? LIMIT 1'
                 );
                 $dup->execute([$prefix, $clientId]);
-                $takenBy = (string) ($dup->fetchColumn() ?: '');
-                if ($takenBy !== '') {
-                    $_SESSION['flash_error'] = 'Quote prefix "' . $prefix . '" is already used by '
-                        . $takenBy . '. Pick a different one — two accounts sharing a prefix end up '
-                        . 'with the same order numbers.';
+                if ($dup->fetchColumn()) {
+                    $_SESSION['flash_error'] = 'Quote prefix "' . $prefix . '" is already in use — '
+                        . 'please choose another. Two accounts sharing a prefix would end up with the '
+                        . 'same order numbers.';
                     header('Location: /admin/settings.php#quoting'); exit;
                 }
             } catch (Throwable $e) {
