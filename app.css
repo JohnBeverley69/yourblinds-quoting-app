@@ -464,6 +464,19 @@ a { color: var(--link); }
     padding: 0.25rem 0.5rem;
     line-height: 1.35;
 }
+/* Matching the padding still left selects 3px taller than the inputs beside
+   them: a <select> sizes its box from its own metrics and ignores line-height,
+   so trimming its padding alone changes nothing (measured — 34px either way).
+   An explicit height is the only lever it honours, so both get the same one
+   and every control on a row lands on the same baseline. Textareas are
+   excluded, being the one control that should grow. */
+[data-density="compact"] .form-group input:not([type=checkbox]):not([type=radio]):not([type=range]),
+[data-density="compact"] .form-group select,
+[data-density="compact"] #add-line select,
+[data-density="compact"] .extras-grid select,
+[data-density="compact"] .extras-grid input:not([type=checkbox]):not([type=radio]) {
+    height: 2rem;
+}
 [data-density="compact"] .form-row,
 [data-density="compact"] .form-group    { margin-bottom: 0.375rem; }
 [data-density="compact"] .form-row      { row-gap: 0.375rem; }
