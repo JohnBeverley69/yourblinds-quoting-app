@@ -12,7 +12,59 @@ declare(strict_types=1);
 $orderAreas  = $orderAreas  ?? [];
 $orderTotals = $orderTotals ?? [];
 $areaNames   = $areaNames   ?? [];
+
+// Rows arrive grouped by order (the query orders by due, then q.id, line, unit),
+// so a header can simply be emitted whenever the order changes. Everything that
+// describes the ORDER rather than the blind lives on that header now: it used to
+// be repeated on every single row, which on a 16-blind order meant four
+// identical lines printed sixteen times and one order filling two screens.
+$flLastOrder = null;
 foreach ($rows as $r):
+    $qidRow = (int) $r['quote_id'];
+    if ($qidRow !== $flLastOrder):
+        $flLastOrder = $qidRow;
+        $ot       = $orderTotals[$qidRow] ?? null;
+        $ordTotal = $ot ? (int) $ot['total'] : 0;
+        $ordDone  = $ot ? (int) $ot['done']  : 0;
+        $ordPct   = $ordTotal > 0 ? (int) round($ordDone / $ordTotal * 100) : 0;
+        $oa       = $orderAreas[$qidRow] ?? [];
+        [$oDueCls, $oDueTxt] = $dueTag($r['due_date'] ?? null, $ordTotal > 0 && $ordDone >= $ordTotal);
+?>
+    <tr class="fl-ohead" data-ohead="1" data-order="<?= $qidRow ?>">
+        <td colspan="7">
+            <button type="button" class="fl-otog" aria-expanded="false"
+                    title="Show or hide this order's blinds">
+                <span class="fl-ocar" aria-hidden="true">&#9656;</span>
+                <span class="fl-onum"><?= e((string) $r['quote_number']) ?></span>
+            </button>
+            <span class="fl-otenant"><?= e((string) $r['tenant']) ?></span>
+            <span class="fl-oprog" title="<?= $ordDone ?> of <?= $ordTotal ?> blinds made">
+                <span class="fl-prog-track"><span class="fl-prog-fill<?= $ordPct >= 100 ? ' full' : '' ?>" style="width:<?= $ordPct ?>%"></span></span>
+                <span class="fl-oprog-txt"><?= $ordDone ?>/<?= $ordTotal ?> made</span>
+            </span>
+            <?php if ($ordTotal > 0): ?>
+                <?php if ($ordDone >= $ordTotal): ?>
+                    <a class="fl-ord ready" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="Every blind on this order is made — it can be dispatched">&#10003; ready to dispatch</a>
+                <?php else: ?>
+                    <a class="fl-ord wait" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> still to make</a>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if (count($oa) > 1): ?>
+                <a class="fl-others" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="See the whole order across every area">
+                    <?php foreach ($oa as $aid => $ag):
+                        $nm  = $aid === 0 ? 'Unassigned' : ($areaNames[$aid] ?? ('Area ' . $aid));
+                        $cls = $ag['done'] >= $ag['total'] ? 'done' : ($ag['done'] > 0 ? 'part' : '');
+                    ?>
+                        <span class="fl-oa <?= $cls ?>"><?= e($nm) ?> <?= (int) $ag['done'] ?>/<?= (int) $ag['total'] ?></span>
+                    <?php endforeach; ?>
+                </a>
+            <?php endif; ?>
+            <span class="fl-odue fl-due <?= $oDueCls ?>"><?= e($oDueTxt) ?></span>
+            <span class="fl-oshown"></span>
+        </td>
+    </tr>
+<?php endif; ?>
+<?php
     $jobId   = (int) $r['id'];
     $qty     = max(1, (int) $r['quantity']);
     $unit    = (int) $r['unit_no'];
@@ -50,40 +102,12 @@ foreach ($rows as $r):
     $sys = trim((string) $r['system_name_snapshot']);
     $searchKey = strtolower(trim($ref . ' ' . $r['product_name_snapshot'] . ' ' . $sys . ' ' . $fab . ' ' . $col . ' ' . $r['room_name'] . ' ' . $r['tenant']));
 ?>
-    <tr class="<?= $done ? 'is-made' : '' ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-area="<?= e($dataArea) ?>" data-made="<?= $done ? 1 : 0 ?>">
+    <?php /* Tenant, order convergence and the area chips used to be repeated here
+             on every blind. They describe the ORDER, so they live on the header
+             above and this row carries only what is true of this one blind. */ ?>
+    <tr class="fl-job <?= $done ? 'is-made' : '' ?>" data-order="<?= $qidRow ?>" data-search="<?= e($searchKey) ?>" data-station="<?= e(implode(',', $atStations)) ?>" data-area="<?= e($dataArea) ?>" data-made="<?= $done ? 1 : 0 ?>">
         <td>
             <a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $r['quote_id'] ?>" target="_blank" rel="noopener"><?= e($ref) ?></a>
-            <span class="fl-tenant"><?= e((string) $r['tenant']) ?></span>
-            <?php
-            $oa  = $orderAreas[(int) $r['quote_id']] ?? [];
-            // Order-level convergence: is the WHOLE order made yet? The dispatch gate
-            // made visible — "ready to dispatch" only when every blind on the order is
-            // done. Blind-level (not per-area), so it stays right for split verticals.
-            $ot       = $orderTotals[(int) $r['quote_id']] ?? null;
-            $ordTotal = $ot ? (int) $ot['total'] : 0;
-            $ordDone  = $ot ? (int) $ot['done']  : 0;
-            if ($ordTotal > 0):
-                if ($ordDone >= $ordTotal): ?>
-                    <a class="fl-ord ready" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="Every blind on this order is made — it can be dispatched">✓ order ready to dispatch</a>
-                <?php else: ?>
-                    <a class="fl-ord wait" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> of <?= $ordTotal ?> still to make</a>
-                <?php endif;
-            endif;
-            // Cross-area awareness: if this order spans more than one area, show each
-            // area as a read-only chip so a bench sees the whole order converging.
-            // Links to the whole-order view.
-            if (count($oa) > 1):
-            ?>
-            <a class="fl-others" href="/factory/order-areas.php?order=<?= (int) $r['quote_id'] ?>" title="See the whole order across every area">
-                <span class="fl-oa-lead">across areas:</span>
-                <?php foreach ($oa as $aid => $ag):
-                    $nm  = $aid === 0 ? 'Unassigned' : ($areaNames[$aid] ?? ('Area ' . $aid));
-                    $cls = $ag['done'] >= $ag['total'] ? 'done' : ($ag['done'] > 0 ? 'part' : '');
-                ?>
-                    <span class="fl-oa <?= $cls ?>"><?= e($nm) ?> <?= (int) $ag['done'] ?>/<?= (int) $ag['total'] ?></span>
-                <?php endforeach; ?>
-            </a>
-            <?php endif; ?>
         </td>
         <td>
             <div class="fl-prog" title="<?= $doneCount ?> of <?= $total ?> stages done">
