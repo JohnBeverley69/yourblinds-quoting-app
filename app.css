@@ -470,10 +470,14 @@ a { color: var(--link); }
    An explicit height is the only lever it honours, so both get the same one
    and every control on a row lands on the same baseline. Textareas are
    excluded, being the one control that should grow. */
+/* :not([size]) spares MULTI-ROW list boxes (e.g. the postcode address picker,
+   <select size="6">): the fixed 2rem height squashed those 6 rows into a single
+   line, so the dropdown looked like it had disappeared. A normal single-line
+   <select> has no size attribute and still gets the tidy compact height. */
 [data-density="compact"] .form-group input:not([type=checkbox]):not([type=radio]):not([type=range]),
-[data-density="compact"] .form-group select,
-[data-density="compact"] #add-line select,
-[data-density="compact"] .extras-grid select,
+[data-density="compact"] .form-group select:not([size]),
+[data-density="compact"] #add-line select:not([size]),
+[data-density="compact"] .extras-grid select:not([size]),
 [data-density="compact"] .extras-grid input:not([type=checkbox]):not([type=radio]) {
     height: 2rem;
 }
