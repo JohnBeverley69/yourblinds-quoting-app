@@ -55,7 +55,7 @@ return [
           .gd .stage[data-step="2"] .ptr.r1{ box-shadow:inset 0 0 0 2px var(--accent); border-radius:6px; }
           .gd .stage[data-step="2"] .ptr.ven .tick{ background:var(--accent); color:#fff; }
 
-          /* ---- the bulk bar under the tables ---- */
+          /* ---- the bulk bar above the tables ---- */
           .gd .bbar{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-top:.55rem; font-size:.72rem; }
           .gd .bcount{ color:var(--faint); }
           .gd .bsel{ display:none; }
@@ -124,13 +124,25 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+                <div class="navh">Work</div>
+                <a>Dashboard</a><a>Calendar</a>
+                <div class="navh">Retail</div>
+                <a>Customers</a><a>Quotes</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
+                <a class="on">Products</a><a>Users</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
                 <!-- ============ screen 1: the Products list ============ -->
                 <div class="scr scr-list">
                   <div class="card-t">Products</div>
+                  <div class="bbar">
+                    <span class="bcount"><span class="bnone">(none selected)</span><span class="bsel">3 selected</span></span>
+                    <span class="selectbox" style="min-width:9.5rem;font-size:.72rem;padding:.24rem .5rem">Move selected to&hellip;</span>
+                    <span class="bbtn cmb" title="Make these the systems (e.g. slat sizes) of one product">Combine into product&hellip;</span>
+                    <span class="bbtn danger">Delete selected</span>
+                    <span class="bclear">Clear</span>
+                  </div>
                   <p class="ghead"><span class="cart">&#9654;</span> Ungrouped <span class="gcount">4</span></p>
                   <div class="ptab">
                     <div class="pth">
@@ -158,13 +170,6 @@ return [
                       <span class="st">&check; Ready</span><span class="n2">2</span><span class="n2">96</span><span class="n2">2</span>
                       <span class="n2">9</span><span class="selectbox">&mdash; Ungrouped &mdash;</span><span class="upd">1 wk ago</span>
                       <span class="racts"><span>Deactivate</span><span>Duplicate</span><span>Delete</span></span></div>
-                  </div>
-                  <div class="bbar">
-                    <span class="bcount"><span class="bnone">(none selected)</span><span class="bsel">3 selected</span></span>
-                    <span class="selectbox" style="min-width:9.5rem;font-size:.72rem;padding:.24rem .5rem">Move selected to&hellip;</span>
-                    <span class="bbtn cmb" title="Make these the systems (e.g. slat sizes) of one product">Combine into product&hellip;</span>
-                    <span class="bbtn danger">Delete selected</span>
-                    <span class="bclear">Clear</span>
                   </div>
                   <p class="ldesc2" style="margin-top:.55rem">Greyed out until <b>two or more</b> rows are ticked. The
                      <b>topmost ticked row</b> becomes the master &mdash; drag <b>&#8942;&#8942;</b> to reorder.</p>
@@ -294,7 +299,7 @@ return [
              <b>System</b> dropdown &mdash; Product &rarr; System &rarr; Band &rarr; Fabric &mdash; and InstaPrice gains the same
              <b>System</b> select.</p>
           <ul class="steps">
-            <li><b>Open the Products list</b> and <b>tick</b> two or more products with the box on the left of each row. The count under
+            <li><b>Open the Products list</b> and <b>tick</b> two or more products with the box on the left of each row. The bulk bar above
                 the tables changes from <em>(none selected)</em> to <em>3 selected</em>, a <b>Clear</b> link appears, and
                 <b>&ldquo;Combine into product&hellip;&rdquo;</b> stays <b>greyed out until at least two</b> are ticked.</li>
             <li><b>Get the master to the top first.</b> The master is <b>not</b> the one you clicked first &mdash; it is the ticked row

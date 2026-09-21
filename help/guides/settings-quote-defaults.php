@@ -106,7 +106,12 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a class="on">Settings</a>
+                <div class="navh">Work</div>
+                <a>Dashboard</a><a>Calendar</a>
+                <div class="navh">Retail</div>
+                <a>Customers</a><a>Quotes</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
+                <a>Products</a><a>Users</a><a class="on">Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="alertbar">Quote settings saved.</div>
@@ -212,7 +217,7 @@ return [
 
                 <div class="caps">
                   <b class="c1"><span class="n">1</span> The letters in front of your quote numbers.</b>
-                  <b class="c2"><span class="n">2</span> VAT &mdash; already set to 20, and remembered per quote.</b>
+                  <b class="c2"><span class="n">2</span> VAT &mdash; unlocks once your VAT number is set; remembered per quote.</b>
                   <b class="c3"><span class="n">3</span> The deposit that lands when a quote is accepted.</b>
                   <b class="c4"><span class="n">4</span> What the customer sees: prices, sizes&hellip;</b>
                   <b class="c5"><span class="n">5</span> &hellip;and the Wally tax (WT charge) &mdash; internal only.</b>
@@ -237,10 +242,14 @@ return [
                 <b>PREFIX-YEAR-0001</b> &mdash; your first quote of this year is <code>BRI-2026-0001</code>, then <code>0002</code>, and it
                 starts again at <code>0001</code> each January. Leave it <b>blank</b> and the system uses the first three letters of your
                 company name instead (and <code>QTE</code> if even that is empty), so it is worth setting properly.</li>
-            <li><b>VAT %</b> &mdash; a number box that <b>already contains 20</b>. Change it only if your rate is different. Set it to
-                <b>0</b> and the quote hides the <b>Subtotal</b> and <b>VAT</b> lines completely &mdash; the customer just sees a
-                <b>Total</b>. The box accepts up to 99; the server allows 0&ndash;100 and trims anything outside that. It also decides what
-                your accounting export says: above zero it exports as <code>20% (VAT on Income)</code>, at zero as <code>No VAT</code>.</li>
+            <li><b>VAT %</b> &mdash; you can only charge VAT once you are <b>VAT-registered</b>, so this box is
+                <b>locked until you have entered your VAT number</b> on the <b>Company</b> tab. With no VAT number it sits
+                <b>greyed out at 0</b>, with a note pointing you to the Company tab, and the server refuses to save any rate
+                above zero. Put your VAT number in first and the box unlocks &mdash; it then reads your rate (<b>20</b> for
+                most), which you change only if yours is different. At <b>0</b> the quote hides the <b>Subtotal</b> and
+                <b>VAT</b> lines completely &mdash; the customer just sees a <b>Total</b>. The box accepts up to 99; the
+                server allows 0&ndash;100 and trims anything outside that. It also decides what your accounting export says:
+                above zero it exports as <code>20% (VAT on Income)</code>, at zero as <code>No VAT</code>.</li>
             <li><b>Default deposit</b> &mdash; two radio buttons, each with its own number box: <b>Percentage of total</b> (50 to start with)
                 or <b>Flat amount</b> in pounds. Both boxes stay editable whichever radio is picked; the radio only decides which figure is
                 used. The figure is <b>seeded onto a quote the moment it moves into Accepted</b>, and only if that quote&rsquo;s deposit is
@@ -328,8 +337,8 @@ return [
         'script'  => [
             ['0:00', 'Scene A. Quote prefix types in: BRI.',
                 'Your quote numbers need a few letters in front of them. Type up to twenty characters — it is stored in capitals whatever you type, so b-r-i becomes B-R-I. Your first quote of this year becomes B-R-I, twenty twenty-six, oh-oh-oh-one, then oh-oh-oh-two, and so on. Leave it blank and the system takes the first three letters of your company name instead, so it is worth setting properly.', 1],
-            ['0:20', 'VAT % box highlighted — already reads 20.',
-                'VAT sits next to it, already set to twenty. Change it only if your rate is different. Set it to nought if you are not VAT registered, and the quote shows just a total, with no subtotal or VAT line at all. And here is the important bit: each quote remembers the rate it was created with, so changing this today will not touch a single quote you have already raised. Only the new ones.', 2],
+            ['0:20', 'VAT % box highlighted — needs a VAT number first.',
+                'VAT sits next to it — but you can only charge VAT once you are VAT registered, so this box stays locked, greyed out at nought, until you have put your VAT number on the Company tab. Do that and it unlocks, reading your rate, twenty for most; change it only if yours is different. Set it to nought and the quote shows just a total, with no subtotal or VAT line at all. And here is the important bit: each quote remembers the rate it was created with, so changing this today will not touch a single quote you have already raised. Only the new ones.', 2],
             ['0:40', 'Percentage radio selected; its box reads 50.',
                 'Next, the default deposit. A percentage of the total, or a flat pound amount — pick the one that matches how you actually take money. Fifty per cent of a four hundred pound order seeds two hundred pounds the moment that quote is accepted, and only if the deposit is still blank, so anything you typed yourself is safe. A flat amount is capped at the order total, so a hundred pound deposit on an eighty pound order asks for eighty. You will see it beforehand as deposit due on acceptance. And that grey line underneath is just a signpost: your markup and discount are set per product, not here.', 3],
             ['1:10', 'Scene B. Prices, sizes and WT all ticked.',

@@ -227,7 +227,12 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <a class="ipcta on">&#9889; InstaPrice</a>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a>Products</a><a>Settings</a>
+                <div class="navh">Work</div>
+                <a>Dashboard</a><a>Calendar</a>
+                <div class="navh">Retail</div>
+                <a>Customers</a>
+                <div class="navh">Setup</div>
+                <a>Products</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
