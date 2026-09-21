@@ -136,6 +136,11 @@ if (!empty($ids)) {
     } catch (Throwable $e) { $stageBy = []; }
 }
 
+// Per-factory order colour-coding — tint each row by its state (configurable in
+// the factory Settings tab).
+require_once __DIR__ . '/../_partials/factory_order_colours.php';
+$ocolours = foc_colours($pdo, $MASTER);
+
 $newCount = 0;
 foreach ($orders as $o) {
     if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
@@ -352,7 +357,13 @@ require __DIR__ . '/../_partials/factory_head.php';
             $supReceived = $o['supplier_received_at'] ?? null;
             $searchKey = strtolower(trim($ref . ' ' . $custLabel . ' ' . $accContact . ' ' . $custRef . ' ' . $addRef . ' ' . $endCust));
         ?>
-            <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?><?= ($stageBy[$qid] ?? '') === 'confirmed' ? ' is-new' : '' ?>" data-search="<?= e($searchKey) ?>">
+            <?php
+                // Whole-row colour by state (New / In production / Ready / Dispatched
+                // / Invoiced / Paid), from the factory's configurable palette.
+                $ostate    = foc_state_for_order($stageBy[$qid] ?? null, $status);
+                $orowStyle = isset($ocolours[$ostate]) ? foc_row_style($ocolours[$ostate]['color']) : '';
+            ?>
+            <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>" style="<?= e($orowStyle) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
