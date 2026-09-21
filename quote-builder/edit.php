@@ -1165,13 +1165,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <!-- ============== ADD / EDIT BLIND (left column, directly below
              customer details — keeps input + output side by side) ============== -->
         <section class="section" id="add-line">
-            <div class="section-header">
+            <div class="section-header" style="display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap">
                 <h2 class="section-title">
                     <?= $editingItemId > 0 ? 'Edit blind ' . (int) $editingItem['line_no'] : 'Add blind' ?>
                 </h2>
                 <?php if ($editingItemId > 0): ?>
                     <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>"
                        style="font-size:0.875rem">Cancel edit</a>
+                <?php else: ?>
+                    <?php /* The page opens here rather than at the top, so say where
+                             the customer details went — otherwise it looks as though
+                             the quote has none. */ ?>
+                    <a href="#top" id="add-line-up"
+                       style="margin-left:auto;font-size:0.8125rem;color:var(--text-faint);text-decoration:none;white-space:nowrap"
+                       title="Customer, references and quote notes are above this">&uarr; Scroll up for customer details</a>
                 <?php endif; ?>
             </div>
 
@@ -3940,6 +3947,40 @@ window.__editingBlind__ = <?= json_encode([
         openBtn.hidden = opened;
         shutBtn.hidden = !opened;
     }, true);
+})();
+</script>
+<script>
+/* Land on "Add blind" when we were sent here to add one.
+ *
+ * The redirect after creating a quote already ends in #add-line, and the
+ * browser does honour it — but only once, at parse time. Everything that
+ * renders afterwards (the flash strip, the customer panel settling, the
+ * options grid) grows ABOVE the anchor and pushes it back down the page:
+ * measured 240px below the top by the time it had finished, so the form you
+ * came here to fill in was never actually at the top.
+ *
+ * So re-seat it once things have stopped moving. Bounded and cheap — a few
+ * frames, and it gives up the moment the target stops drifting or you touch
+ * the page yourself, so it can never fight you for the scrollbar.
+ */
+(function () {
+    if (location.hash !== '#add-line') return;
+    var target = document.getElementById('add-line');
+    if (!target || !target.scrollIntoView) return;
+
+    var stop = false;
+    ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (ev) {
+        window.addEventListener(ev, function () { stop = true; }, { passive: true, once: true });
+    });
+
+    var last = null, settled = 0, tries = 0;
+    (function seat() {
+        if (stop || tries++ > 40) return;              // ~2s ceiling
+        var top = Math.round(target.getBoundingClientRect().top);
+        if (top !== last) { last = top; settled = 0; } else { settled++; }
+        if (top > 2 || top < -2) target.scrollIntoView({ block: 'start' });
+        if (settled < 3) setTimeout(seat, 50);         // three quiet frames = done
+    })();
 })();
 </script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
