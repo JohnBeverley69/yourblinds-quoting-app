@@ -262,9 +262,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $dup->execute([$prefix, $clientId]);
                 if ($dup->fetchColumn()) {
-                    $_SESSION['flash_error'] = 'Quote prefix "' . $prefix . '" is already in use — '
-                        . 'please choose another. Two accounts sharing a prefix would end up with the '
-                        . 'same order numbers.';
+                    // Offer a free alternative derived from THIS tenant's own name
+                    // (e.g. "ABC Blinds" -> ABC), falling back to numbered variants.
+                    // Only ever suggests an UNUSED prefix, so it reveals nothing
+                    // about who holds the clashing one.
+                    $co    = strtoupper((string) preg_replace('/[^A-Za-z]/', '', (string) ($user['company_name'] ?? '')));
+                    $base  = $co !== '' ? substr($co, 0, 3) : 'QTE';
+                    $cands = [];
+                    if (strlen($co) >= 3) $cands[] = substr($co, 0, 3);
+                    if (strlen($co) >= 4) $cands[] = substr($co, 0, 4);
+                    if (strlen($co) >= 2) $cands[] = substr($co, 0, 2);
+                    for ($n = 1; $n <= 99; $n++) $cands[] = $base . $n;
+                    $suggestion = '';
+                    $chk = db()->prepare('SELECT 1 FROM client_settings WHERE UPPER(TRIM(quote_prefix)) = ? AND client_id <> ? LIMIT 1');
+                    foreach (array_values(array_unique($cands)) as $c) {
+                        if ($c === '' || $c === $prefix) continue;
+                        $chk->execute([$c, $clientId]);
+                        if (!$chk->fetchColumn()) { $suggestion = $c; break; }
+                    }
+                    $msg = 'Quote prefix "' . $prefix . '" is already in use — please choose another.';
+                    if ($suggestion !== '') $msg .= ' "' . $suggestion . '" is free, if you\'d like it.';
+                    $msg .= ' Two accounts sharing a prefix would end up with the same order numbers.';
+                    $_SESSION['flash_error'] = $msg;
                     header('Location: /admin/settings.php#quoting'); exit;
                 }
             } catch (Throwable $e) {
