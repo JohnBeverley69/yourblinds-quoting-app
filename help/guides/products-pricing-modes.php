@@ -96,7 +96,12 @@ return [
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a>Dashboard</a><a>Calendar</a><a>Customers</a><a class="on">Products</a><a>Settings</a>
+                <div class="navh">Work</div>
+                <a>Dashboard</a><a>Calendar</a>
+                <div class="navh">Retail</div>
+                <a>Customers</a><a>Quotes</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
+                <a class="on">Products</a><a>Users</a><a>Settings</a><a>Trade terms</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
                 <div class="card-t">Edit product &mdash; Roller Blind</div>

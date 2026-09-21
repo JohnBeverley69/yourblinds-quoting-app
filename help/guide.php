@@ -98,6 +98,11 @@ $activeNav = 'help';
       .gd .side small{ display:block; font-size:.56rem; letter-spacing:.14em; color:#6a7d8c; margin:.1rem 0 1rem; }
       .gd .side a{ display:block; font-size:.78rem; color:var(--nav-ink); padding:.3rem .5rem; border-radius:7px; margin:.05rem 0; text-decoration:none; }
       .gd .side a.on{ background:rgba(91,155,255,.16); color:#fff; }
+      /* Grouped-nav headings inside the mock sidebar (Work / Retail / Setup …),
+         so every guide's sidebar matches the real reorganised menu. Shared here
+         so guides only need the grouped markup, not their own copy of this. */
+      .gd .side .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.6rem 0 .1rem; padding:0 .5rem; }
+      .gd .side .navh .chev{ font-size:.6rem; margin-left:.15rem; }
       .gd .stage{ position:relative; padding:1.1rem 1.2rem; background:var(--surface); }
       .gd .card-t{ font-weight:700; font-size:.95rem; margin-bottom:.9rem; color:var(--ink); }
       .gd .frow{ display:grid; grid-template-columns:1fr 1fr; gap:.7rem .8rem; }
