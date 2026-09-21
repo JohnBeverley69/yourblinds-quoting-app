@@ -477,10 +477,17 @@ window.addEventListener('pageshow', function (e) {
     var label = document.getElementById('ybDensityLabel');
     if (!btn || !icon || !label) return;
 
+    // Say which mode you're IN, not only the one the button would switch to.
+    // Reading "Comfortable mode" while sitting in compact makes it look like a
+    // statement of where you are — John took it for exactly that and concluded
+    // the tight mode wasn't working.
     function paintLabel() {
         var compact = document.documentElement.getAttribute('data-density') === 'compact';
         icon.textContent  = compact ? '↔' : '↕';
-        label.textContent = compact ? 'Comfortable mode' : 'Compact mode';
+        label.textContent = compact ? 'Compact · go roomier' : 'Roomy · go compact';
+        btn.title = compact
+            ? 'Spacing is compact on this device — click for the roomier layout.'
+            : 'Spacing is roomy on this device — click to fit more on screen.';
     }
     paintLabel();
 
