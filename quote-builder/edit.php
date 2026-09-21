@@ -659,6 +659,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         .quote-cols .col-left > .section { margin-bottom: 0; }
         .quote-cols .col-right > .section { margin-bottom: 1rem; }
 
+        /* Add blind sits FIRST in the left column.
+           It used to come after the customer panel, which put it 554px down a
+           column whose own maximum scroll was 314 — it could not be brought to
+           the top by scrolling, because there wasn't that much column below it.
+           The anchor in the redirect was being honoured and still landing short.
+           Ordering it first removes the problem rather than chasing it: the form
+           you came to fill in is simply at the top, on every screen size, with
+           the customer details (collapsed to one line) underneath.
+           Flex order, not a DOM move — the markup, the form and every id stay
+           exactly where they were. */
+        .quote-cols .col-left > #add-line { order: -1; }
+
         @media (max-width: 1000px) {
             .quote-cols { grid-template-columns: 1fr; gap: 0; }
             .quote-cols .col-left {
@@ -928,7 +940,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // page load whether the user needed it or not. Click is one tap.
             $startOpen   = false;
         ?>
-        <section class="section">
+        <section class="section" id="customer-details" style="scroll-margin-top:1rem">
             <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -1173,12 +1185,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>"
                        style="font-size:0.875rem">Cancel edit</a>
                 <?php else: ?>
-                    <?php /* The page opens here rather than at the top, so say where
-                             the customer details went — otherwise it looks as though
-                             the quote has none. */ ?>
-                    <a href="#top" id="add-line-up"
+                    <?php /* This is the top of the column now, so say where the
+                             customer went — otherwise a new quote looks as though
+                             it hasn't got one. */ ?>
+                    <a href="#customer-details" id="add-line-up"
                        style="margin-left:auto;font-size:0.8125rem;color:var(--text-faint);text-decoration:none;white-space:nowrap"
-                       title="Customer, references and quote notes are above this">&uarr; Scroll up for customer details</a>
+                       title="Customer, references and quote notes are below this">Customer details &amp; references below &darr;</a>
                 <?php endif; ?>
             </div>
 
@@ -3950,38 +3962,11 @@ window.__editingBlind__ = <?= json_encode([
 })();
 </script>
 <script>
-/* Land on "Add blind" when we were sent here to add one.
- *
- * The redirect after creating a quote already ends in #add-line, and the
- * browser does honour it — but only once, at parse time. Everything that
- * renders afterwards (the flash strip, the customer panel settling, the
- * options grid) grows ABOVE the anchor and pushes it back down the page:
- * measured 240px below the top by the time it had finished, so the form you
- * came here to fill in was never actually at the top.
- *
- * So re-seat it once things have stopped moving. Bounded and cheap — a few
- * frames, and it gives up the moment the target stops drifting or you touch
- * the page yourself, so it can never fight you for the scrollbar.
- */
-(function () {
-    if (location.hash !== '#add-line') return;
-    var target = document.getElementById('add-line');
-    if (!target || !target.scrollIntoView) return;
-
-    var stop = false;
-    ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (ev) {
-        window.addEventListener(ev, function () { stop = true; }, { passive: true, once: true });
-    });
-
-    var last = null, settled = 0, tries = 0;
-    (function seat() {
-        if (stop || tries++ > 40) return;              // ~2s ceiling
-        var top = Math.round(target.getBoundingClientRect().top);
-        if (top !== last) { last = top; settled = 0; } else { settled++; }
-        if (top > 2 || top < -2) target.scrollIntoView({ block: 'start' });
-        if (settled < 3) setTimeout(seat, 50);         // three quiet frames = done
-    })();
-})();
+/* Add blind is the first thing in its column now (CSS order), so nothing has
+ * to scroll to reach it and the #add-line in the redirect is already satisfied
+ * on arrival. An earlier attempt re-seated the anchor after the page settled;
+ * it could never work, because the column's own maximum scroll was 314px and
+ * the section sat 554px down it. Ordering beat scrolling. */
 </script>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
