@@ -1197,7 +1197,22 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     Systems + Fabric), then System (gates which fabric
                     bands apply), then Fabric, then Room (purely a label).
                 -->
-                <div class="form-row cols-2">
+                <?php /*
+                    Product / System / Band on one row, and Fabric / Room /
+                    Measurement unit on the next. Band and the unit each used to
+                    own a full-width row with nothing beside them — Band's row
+                    even carried an empty spacer div — which cost a whole row's
+                    height apiece for one short control, on the form you fill in
+                    most often.
+
+                    Safe to pack because .form-row is CSS grid: a display:none
+                    item leaves no cell behind, so when a product has no bands or
+                    no fabric the remaining controls simply close up rather than
+                    leaving a hole. cols-3 is 2fr 2fr 1fr, which puts the two
+                    narrow controls in the narrow track, and collapses to a single
+                    column below 1100px.
+                */ ?>
+                <div class="form-row cols-3">
                     <div class="form-group">
                         <label for="item-product">Product <span class="required">*</span></label>
                         <select id="item-product" name="product_id" required>
@@ -1211,25 +1226,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             <option value="">Choose product first</option>
                         </select>
                     </div>
-                </div>
-
-                <!--
-                    Band filter — narrows the Fabric typeahead below to a
-                    single price band so the salesperson isn't scrolling a
-                    huge list. UI-only (no name attr): the picked fabric
-                    still carries the band; this just filters the search.
-                -->
-                <div class="form-row cols-2" id="item-band-row">
-                    <div class="form-group">
+                    <!--
+                        Band filter — narrows the Fabric typeahead below to a
+                        single price band so the salesperson isn't scrolling a
+                        huge list. UI-only (no name attr): the picked fabric
+                        still carries the band; this just filters the search.
+                    -->
+                    <div class="form-group" id="item-band-group">
                         <label for="item-band"><span id="item-band-label">Band</span></label>
                         <select id="item-band" disabled>
                             <option value="">All bands</option>
                         </select>
                     </div>
-                    <div class="form-group"></div>
                 </div>
 
-                <div class="form-row cols-2">
+                <div class="form-row cols-3">
                     <div class="form-group" id="item-fabric-group">
                         <label for="item-fabric-search"><span id="item-fabric-label">Fabric</span> <span class="required">*</span></label>
                         <div class="fabric-picker">
@@ -1366,15 +1377,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         })();
                         </script>
                     </div>
-                </div>
-
-                <!-- On wide screens this row morphs into a 4-up grid (the
-                     CSS turns cols-3-plus-notes into Width|Drop|Qty|Notes
-                     side by side) so we don't burn two rows on four short
-                     inputs. Below 1100px it falls back to cols-3 and the
-                     standalone notes row below takes over. -->
-                <div class="form-row full">
-                    <div class="form-group" style="max-width:18rem">
+                    <div class="form-group">
                         <label for="item-unit">Measurement unit (this quote)</label>
                         <select id="item-unit">
                             <?php foreach (['mm' => 'Millimetres (mm)', 'cm' => 'Centimetres (cm)',
@@ -2240,7 +2243,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var productSel    = document.getElementById('item-product');
     var systemSel     = document.getElementById('item-system');
     var bandSel       = document.getElementById('item-band');
-    var bandRow       = document.getElementById('item-band-row');
+    var bandGroup     = document.getElementById('item-band-group');
     var fabricGroup   = document.getElementById('item-fabric-group');
     var bandLabelEl   = document.getElementById('item-band-label');
     var fabricLabelEl = document.getElementById('item-fabric-label');
@@ -2360,7 +2363,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // Show / hide the Band + Fabric pickers based on requiresOption,
     // and the Drop field based on widthOnly.
     function applyFabricVisibility() {
-        if (bandRow)     bandRow.style.display     = requiresOption ? '' : 'none';
+        if (bandGroup)   bandGroup.style.display   = requiresOption ? '' : 'none';   // a hidden grid item leaves no gap
         if (fabricGroup) fabricGroup.style.display = requiresOption ? '' : 'none';
         if (fabricId) {
             fabricId.required = requiresOption;
