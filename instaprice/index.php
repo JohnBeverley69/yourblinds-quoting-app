@@ -59,6 +59,27 @@ $activeNav = 'instaprice';
             border-radius: 8px; background: var(--bg-input); color: var(--text-body); font: inherit;
         }
         .ip-field select:disabled, .ip-field input:disabled { background: var(--bg-subtle-2); }
+
+        /* Compact mode has to be restated here. The page styles above outrank
+           the global ones — `.ip-field select` is (0,2,0) against the app's
+           (0,1,1), and `#ip-extras select` is an ID, which beats anything
+           app.css can say without !important. Left alone, InstaPrice kept 42px
+           selects next to 31px inputs while the rest of the app tightened.
+           A <select> ignores line-height and sizes from its own metrics, so
+           the explicit height is what actually levels them — same 2rem as the
+           quote builder, so both screens match. */
+        [data-density="compact"] .ip-field select,
+        [data-density="compact"] .ip-field input:not([type=checkbox]):not([type=radio]),
+        [data-density="compact"] .ip-dims input:not([type=checkbox]):not([type=radio]),
+        [data-density="compact"] #ip-extras select,
+        [data-density="compact"] #ip-extras input:not([type=checkbox]):not([type=radio]) {
+            padding: 0.25rem 0.5rem;
+            line-height: 1.35;
+            height: 2rem;
+        }
+        [data-density="compact"] .ip-field { margin-bottom: 0.375rem; }
+        [data-density="compact"] .ip-grid  { gap: 0.375rem 1rem; }
+        [data-density="compact"] #ip-extras > div[data-extra-id] { margin-bottom: 0.375rem; }
         .ip-dims { display:grid; grid-template-columns: 1fr 1fr 5rem; gap: 0.625rem; }
         @media (max-width: 520px) { .ip-dims { grid-template-columns: 1fr; } }
 
