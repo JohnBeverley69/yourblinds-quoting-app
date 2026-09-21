@@ -40,7 +40,10 @@ $qboMapped = !empty($qboMapping['sales_item_id']);
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
-unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+// One-shot: a suggested quote prefix to drop into the field after a clash, so
+// the tenant can just click Save to accept it.
+$prefixFill = $_SESSION['flash_prefix_fill'] ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error'], $_SESSION['flash_prefix_fill']);
 
 /**
  * Does the suppliers table have the optional account_number column?
@@ -280,8 +283,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $chk->execute([$c, $clientId]);
                         if (!$chk->fetchColumn()) { $suggestion = $c; break; }
                     }
-                    $msg = 'Quote prefix "' . $prefix . '" is already in use — please choose another.';
-                    if ($suggestion !== '') $msg .= ' "' . $suggestion . '" is free, if you\'d like it.';
+                    $msg = 'Quote prefix "' . $prefix . '" is already in use.';
+                    if ($suggestion !== '') {
+                        // Drop the free suggestion straight into the field so the
+                        // tenant only has to press Save to accept it.
+                        $_SESSION['flash_prefix_fill'] = $suggestion;
+                        $msg .= ' We\'ve put a free one — "' . $suggestion . '" — in the box for you: '
+                              . 'click Save below to use it, or type your own and click Save.';
+                    } else {
+                        $msg .= ' Please choose another and click Save.';
+                    }
                     $msg .= ' Two accounts sharing a prefix would end up with the same order numbers.';
                     $_SESSION['flash_error'] = $msg;
                     header('Location: /admin/settings.php#quoting'); exit;
@@ -1423,7 +1434,7 @@ $activeNav = 'settings';
                         <label for="quote_prefix">Quote prefix</label>
                         <input id="quote_prefix" name="quote_prefix" type="text" maxlength="20"
                                placeholder="e.g. BRI"
-                               value="<?= e((string) ($settings['quote_prefix'] ?? '')) ?>">
+                               value="<?= e((string) ($prefixFill ?? ($settings['quote_prefix'] ?? ''))) ?>">
                     </div>
                     <div class="form-group">
                         <label for="vat_percent">VAT %</label>
