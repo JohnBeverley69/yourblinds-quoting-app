@@ -1297,11 +1297,38 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                             if (!wrap || !input || !popup) return;
                             var opts = popup.querySelectorAll('.room-opt');
 
-                            function open()  { popup.hidden = false; filter(input.value); }
+                            // Opening the list shows EVERY room. It used to filter by
+                            // whatever was already in the box, so a blind duplicated
+                            // from one in the Master Bedroom offered exactly one
+                            // choice — Master Bedroom — and the only way to reach the
+                            // rest was to delete the text first. Filtering is for
+                            // typing; opening is for browsing.
+                            function open() {
+                                popup.hidden = false;
+                                filter('');
+                                markCurrent();
+                            }
                             function close() { popup.hidden = true;  }
                             function toggle() {
                                 if (popup.hidden) { open(); input.focus(); }
                                 else close();
+                            }
+                            // Show which room is already chosen, and bring it into view
+                            // — with twenty-odd of them the current one is often below
+                            // the fold of the popup.
+                            function markCurrent() {
+                                var cur = (input.value || '').toLowerCase().trim();
+                                var found = null;
+                                opts.forEach(function (el) {
+                                    var on = cur !== '' && el.dataset.room.toLowerCase() === cur;
+                                    // Marked with weight and a rule down the left edge,
+                                    // NOT a background: the options set their own
+                                    // background inline on hover, which would win.
+                                    el.style.fontWeight = on ? '700' : '';
+                                    el.style.boxShadow  = on ? 'inset 3px 0 0 var(--accent, #2563eb)' : '';
+                                    if (on) found = el;
+                                });
+                                if (found && found.scrollIntoView) found.scrollIntoView({ block: 'nearest' });
                             }
                             function filter(q) {
                                 var s = (q || '').toLowerCase().trim();
