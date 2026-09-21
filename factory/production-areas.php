@@ -99,7 +99,6 @@ if (isset($_GET['qr'])) {
         exit("Need both a scan key for that area and the workshop WiFi set.\n");
     }
 
-    header('Content-Type: image/svg+xml; charset=utf-8');
     // It encodes the scan key AND the WiFi password — keep it out of shared
     // caches, proxies and browser history.
     header('Cache-Control: no-store, private');
@@ -107,7 +106,37 @@ if (isset($_GET['qr'])) {
     // ECC M, not the label default of Q: this is read off a screen rather than
     // a greasy workshop label, and the lower level keeps the symbol smaller, so
     // each module stays fatter at the same physical size.
-    echo qr_svg($scanAtFor($row, $qrSsid, $qrPass), 44.0, 'M');
+    $svg = qr_svg($scanAtFor($row, $qrSsid, $qrPass), 44.0, 'M');
+
+    // &big=1 — the same code on a page of its own, as large as the screen will
+    // take it. A scanner reading off a monitor fights the glare, and the bigger
+    // the modules the less that matters; a bare white page with nothing else on
+    // it gives the least to reflect. The CSS width beats the SVG's own mm
+    // attributes, so one encode serves both.
+    if (isset($_GET['big'])) {
+        header('Content-Type: text/html; charset=utf-8');
+        $name = (string) ($row['name'] ?? 'Bench');
+        echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+           . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+           . '<title>Setup code · ' . e($name) . '</title><style>'
+           . 'html,body{margin:0;height:100%;background:#fff;}'
+           . 'body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;'
+           . 'font:600 1rem system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#111;}'
+           . 'svg{width:min(86vw,72vh);height:auto;}'
+           . 'p{margin:0;color:#555;font-weight:400;font-size:.9rem;text-align:center;padding:0 1rem;}'
+           . '@media print{p{display:none}}'
+           . '</style></head><body>'
+           . '<div>' . $svg . '</div>'
+           . '<div>' . e($name) . ' — scanner setup code</div>'
+           . '<p>Put the scanner in WiFi-config mode and read this. Tilt the screen away from'
+           . ' the light if it won\'t take. Close this when you\'re done — it carries the'
+           . ' area key and the WiFi password.</p>'
+           . '</body></html>';
+        exit;
+    }
+
+    header('Content-Type: image/svg+xml; charset=utf-8');
+    echo $svg;
     exit;
 }
 
@@ -518,8 +547,10 @@ require __DIR__ . '/../_partials/factory_head.php';
                     the network <strong><?= e($wifiSsid) ?></strong> and this
                     bench's URL in one code, so there's nothing to type.
                     <br><br>
-                    <strong>Press the trigger twice</strong> to commit it — one
-                    press looks like it worked but doesn't save.
+                    Reading it off a screen is fiddly — that's glare, not a
+                    fault, and a little patience gets it.
+                    <a href="?qr=<?= $aid ?>&amp;big=1" target="_blank" rel="noopener"><strong>Open it full screen</strong></a>
+                    for a bigger code on a plain white page, which helps.
                     <br><br>
                     It contains this area's key and the WiFi password, so don't
                     leave it on screen or print it where it'll be left lying about.
