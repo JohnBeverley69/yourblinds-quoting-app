@@ -249,11 +249,18 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // key also re-opens that bench's Setup QR, so the new code is on screen
     // when you land. Removing an area is the exception: there's no row to
     // return to.
-    $back = '/factory/production-areas.php';
+    // Chosen by ACTION, not merely by "this post had an area_id" — the scanner
+    // blocks are a separate card from the Areas list, so the two need different
+    // anchors and anything else is better left where it lands.
+    $back    = '/factory/production-areas.php';
     $aidBack = (int) ($_POST['area_id'] ?? 0);
-    if ($aidBack > 0 && $action !== 'remove_area') {
-        if ($action === 'gen_scan_key') $back .= '?qr_open=' . $aidBack;
-        $back .= '#area-' . $aidBack;
+    if ($aidBack > 0) {
+        if (in_array($action, ['gen_scan_key', 'clear_scan_key', 'set_scanner_name'], true)) {
+            if ($action === 'gen_scan_key') $back .= '?qr_open=' . $aidBack;
+            $back .= '#scanner-' . $aidBack;
+        } elseif (in_array($action, ['rename_area', 'move_area'], true)) {
+            $back .= '#area-' . $aidBack;
+        }
     }
     header('Location: ' . $back);
     exit;
@@ -339,7 +346,9 @@ require __DIR__ . '/../_partials/factory_head.php';
   table.prods { width:100%; border-collapse:collapse; }
   table.prods td { padding:.4rem .3rem; border-bottom:1px solid var(--border,#eef); }
   table.prods td.pname { font-weight:600; }
-  .scan-row { display:flex; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap; }
+  .scan-row { display:flex; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid var(--border,#eef); flex-wrap:wrap;
+              /* Clears the sticky factory bar when arrived at by #scanner-N. */
+              scroll-margin-top:5rem; }
   .scan-row:last-child { border-bottom:none; }
   .scan-name { font-weight:600; min-width:9rem; }
   .scan-url { flex:1 1 16rem; min-width:0; font-family:ui-monospace,Consolas,monospace; font-size:.8rem; padding:.35rem .5rem; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; background:var(--bg-subtle,#f8fafc); color:inherit; }
@@ -484,7 +493,7 @@ require __DIR__ . '/../_partials/factory_head.php';
               $sname = trim((string) ($ar['scanner_name'] ?? ''));
               $url   = $scanUrlFor($ar);
       ?>
-        <div class="scan-row">
+        <div class="scan-row" id="scanner-<?= $aid ?>">
           <div class="scan-name"><?= e((string) $ar['name']) ?></div>
           <?php if ($hasScannerName): ?>
             <form method="post" class="inline" style="display:flex;gap:.3rem;align-items:center">
