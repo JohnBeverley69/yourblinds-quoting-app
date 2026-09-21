@@ -177,6 +177,59 @@ try {
     $rows = $st->fetchAll();
 }
 
+// ---- Which of these orders have already been placed? ------------------------
+// The "Send to suppliers" link under an order number used to say that whatever
+// had happened, so an order already sent still invited you to send it. Two ways
+// an order goes out, and it needs both:
+//   - a supplier EMAIL went out — logged in supplier_orders;
+//   - or it is ours to make, in which case nothing is emailed at all: the
+//     factory queue pulls it off the "ordered" status. A tenant's vertical
+//     order is this case, which is the one that looked wrong.
+// The manufacturing test is the same one order_suppliers.php uses, so the list
+// and the page can't disagree: a factory-owned product with no external
+// supplier ("In House" counts as none).
+$supplierSent = [];   // quote_id => ['n' => int, 'last' => string]
+$mfgOrders    = [];   // quote_id => true
+$rowIds       = array_values(array_filter(array_map(static fn ($r) => (int) $r['id'], $rows)));
+if ($rowIds) {
+    $ph = implode(',', array_fill(0, count($rowIds), '?'));
+    try {
+        $s = db()->prepare(
+            "SELECT quote_id, COUNT(*) AS n, MAX(sent_at) AS last_sent
+               FROM supplier_orders
+              WHERE client_id = ? AND quote_id IN ($ph)
+           GROUP BY quote_id"
+        );
+        $s->execute(array_merge([$clientId], $rowIds));
+        foreach ($s->fetchAll() as $x) {
+            $supplierSent[(int) $x['quote_id']] = ['n' => (int) $x['n'], 'last' => (string) $x['last_sent']];
+        }
+    } catch (Throwable $e) { /* supplier_orders absent pre-migration */ }
+
+    // Same accessor order_suppliers.php uses, so the two can't disagree on what
+    // counts as ours to make.
+    $factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+    if ($factoryId > 0) {
+        try {
+            $hasSrc = true;
+            try { db()->query('SELECT source_client_id FROM products LIMIT 0'); }
+            catch (Throwable $e) { $hasSrc = false; }
+            $owner = $hasSrc ? 'COALESCE(NULLIF(p.source_client_id,0), p.client_id)' : 'p.client_id';
+            $s = db()->prepare(
+                "SELECT DISTINCT qi.quote_id
+                   FROM quote_items qi
+                   JOIN products p ON p.id = qi.product_id
+                  WHERE qi.quote_id IN ($ph)
+                    AND $owner = ?
+                    AND (p.supplier_name IS NULL
+                         OR REPLACE(REPLACE(LOWER(TRIM(p.supplier_name)), ' ', ''), '-', '') IN ('', 'inhouse'))"
+            );
+            $s->execute(array_merge($rowIds, [$factoryId]));
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $qid) $mfgOrders[(int) $qid] = true;
+        } catch (Throwable $e) { /* products.supplier_name absent — fall back to unsent */ }
+    }
+}
+
 // Per-status counts for the chip bar. Mirrors the row filter so
 // counts and the visible rows agree.
 $countWhere   = ['client_id = ?'];
@@ -462,12 +515,32 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                             <a href="/quote-builder/edit.php?id=<?= (int) $r['id'] ?>" class="q-link">
                                                 <?= e((string) $r['quote_number']) ?>
                                             </a>
-                                            <?php if ($isOrderRow && ($isAdmin || !empty($_perms['can_create_orders']))): ?>
+                                            <?php if ($isOrderRow && ($isAdmin || !empty($_perms['can_create_orders']))):
+                                                $qidRow = (int) $r['id'];
+                                                $sent   = $supplierSent[$qidRow] ?? null;
+                                                $isMfg  = !empty($mfgOrders[$qidRow]);
+                                                // An order we make ourselves is placed by reaching
+                                                // "ordered" — the factory pulls it off that status,
+                                                // nothing is emailed — so status IS the evidence.
+                                                $gone   = $sent !== null || $isMfg;
+                                                if ($gone) {
+                                                    $when  = $sent !== null ? $fmtDate($sent['last']) : '';
+                                                    $tip   = $sent !== null
+                                                        ? ('Sent to ' . $sent['n'] . ' supplier' . ($sent['n'] === 1 ? '' : 's')
+                                                           . ($when !== '' ? ' on ' . $when : '') . ' — open to send again')
+                                                        : 'Handed to production — open to send again or add a supplier';
+                                                }
+                                            ?>
                                                 <div style="margin-top:0.1875rem">
-                                                    <a href="/quote-builder/order_suppliers.php?id=<?= (int) $r['id'] ?>"
-                                                       title="Send this order to its suppliers"
-                                                       style="font-size:0.6875rem;color:var(--link);text-decoration:none;white-space:nowrap">
-                                                        &#128230; Send to suppliers
+                                                    <a href="/quote-builder/order_suppliers.php?id=<?= $qidRow ?>"
+                                                       title="<?= e($gone ? $tip : 'Send this order to its suppliers') ?>"
+                                                       style="font-size:0.6875rem;text-decoration:none;white-space:nowrap;color:<?= $gone ? '#166534' : 'var(--link)' ?>">
+                                                        <?php if ($gone): ?>
+                                                            &#10003; Sent to suppliers
+                                                            <span style="color:var(--text-faint)">&middot; resend</span>
+                                                        <?php else: ?>
+                                                            &#128230; Send to suppliers
+                                                        <?php endif; ?>
                                                     </a>
                                                 </div>
                                             <?php endif; ?>
