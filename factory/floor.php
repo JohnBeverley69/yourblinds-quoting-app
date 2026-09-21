@@ -213,6 +213,35 @@ require __DIR__ . '/../_partials/blind_styles.php';
     .fl-oa.done { background:#dcfce7; color:#166534; }
     .fl-others:hover .fl-oa { filter:brightness(.97); }
     /* Order-level convergence badge — the dispatch gate made visible on the floor. */
+    /* ---- Order header row ------------------------------------------------
+       One line per order, its blinds folded underneath. Everything that
+       describes the order sits here instead of being reprinted on every blind. */
+    .fl-ohead > td { background:var(--bg-subtle,#f1f5f9); border-top:2px solid var(--border,#d7dee7);
+                     padding:.4rem .7rem; }
+    .fl-ohead.is-open > td { background:#e8eef6; }
+    .fl-ohead > td { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+    .fl-otog { font:inherit; display:inline-flex; align-items:center; gap:.4rem; cursor:pointer;
+               border:0; background:none; padding:.15rem .2rem; border-radius:6px; color:inherit; }
+    .fl-otog:hover { background:rgba(0,0,0,.05); }
+    .fl-otog:focus-visible { outline:2px solid #2563eb; outline-offset:1px; }
+    .fl-ocar { display:inline-block; transition:transform .12s ease; color:var(--text-faint,#94a3b8); }
+    .fl-ohead.is-open .fl-ocar { transform:rotate(90deg); }
+    .fl-onum { font-weight:800; font-variant-numeric:tabular-nums; }
+    .fl-otenant { font-weight:600; color:var(--text-muted,#4b5563); }
+    .fl-oprog { display:inline-flex; align-items:center; gap:.4rem; }
+    .fl-oprog .fl-prog-track { display:inline-block; width:5.5rem; }
+    .fl-oprog-txt { font-size:.75rem; font-weight:700; color:var(--text-muted,#4b5563);
+                    font-variant-numeric:tabular-nums; }
+    .fl-odue { font-size:.75rem; }
+    .fl-oshown { margin-left:auto; font-size:.75rem; color:var(--text-faint,#94a3b8); white-space:nowrap; }
+    .fl-obtns { display:inline-flex; gap:.3rem; }
+    .fl-obtn { font:inherit; font-size:.8rem; font-weight:600; cursor:pointer; padding:.28rem .6rem;
+               border:1px solid var(--border,#d7dee7); border-radius:8px; background:var(--bg-card,#fff);
+               color:var(--text-muted,#4b5563); }
+    .fl-obtn:hover { background:var(--bg-subtle,#f1f5f9); }
+    /* The order header carries its own chips, so these need no top margin there. */
+    .fl-ohead .fl-ord, .fl-ohead .fl-others { margin-top:0; }
+
     .fl-ord { display:inline-block; margin-top:.25rem; font-size:.72rem; font-weight:700; padding:.1rem .5rem; border-radius:999px; text-decoration:none; white-space:nowrap; }
     .fl-ord.ready { background:#dcfce7; color:#166534; }
     .fl-ord.wait  { background:#fef3c7; color:#92600a; }
@@ -224,7 +253,7 @@ require __DIR__ . '/../_partials/blind_styles.php';
         <span class="fl-live" title="This board updates itself as blinds are scanned — no need to refresh."><span class="fl-live-dot" id="fl-live-dot"></span> Live</span>
     <?php endif; ?>
 </div>
-<p class="fl-sub ui-hint">Every blind in production, one row each &mdash; the board updates itself as scans come in. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
+<p class="fl-sub ui-hint">One line per order, newest work first &mdash; <strong>click an order</strong> to open its blinds. The board updates itself as scans come in. <strong>Click a stage</strong> to move that blind to it &mdash; green is done, orange is where it is now.</p>
 
 <?php if ($flashOk !== ''): ?><div class="fl-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="fl-flash err"><?= e($flashErr) ?></div><?php endif; ?>
@@ -255,6 +284,10 @@ require __DIR__ . '/../_partials/blind_styles.php';
         <?php endforeach; ?>
     </select>
     <label><input type="checkbox" id="fl-made" <?= $showMade ? 'checked' : '' ?>> Show made</label>
+    <span class="fl-obtns">
+        <button type="button" id="fl-expand" class="fl-obtn">Open all</button>
+        <button type="button" id="fl-collapse" class="fl-obtn">Close all</button>
+    </span>
     <span class="fl-stat" id="fl-shown"></span>
 </div>
 
@@ -304,13 +337,49 @@ require __DIR__ . '/../_partials/blind_styles.php';
 
     // Search / process / area filter. Re-reads the rows each pass so it keeps
     // working after the live update swaps fresh ones in.
+    // ---- Order grouping --------------------------------------------------
+    // One header row per order with its blinds folded underneath, because a
+    // 16-blind order used to fill two screens and you could never see the board.
+    // Which orders you opened is remembered on THIS computer; anything you
+    // haven't touched follows the default below.
+    var OKEY = 'fl-open-orders';
+    function loadOpen() { try { return JSON.parse(localStorage.getItem(OKEY) || '{}') || {}; } catch (e) { return {}; } }
+    function saveOpen(s) { try { localStorage.setItem(OKEY, JSON.stringify(s)); } catch (e) {} }
+    var openState = loadOpen();
+
+    function setAll(open) {
+        [].slice.call(tbody.querySelectorAll('tr.fl-ohead')).forEach(function (h) {
+            openState[h.dataset.order] = open ? 1 : 0;
+        });
+        saveOpen(openState);
+        apply();
+    }
+    var expAll = document.getElementById('fl-expand');
+    var colAll = document.getElementById('fl-collapse');
+    if (expAll) expAll.addEventListener('click', function () { setAll(true); });
+    if (colAll) colAll.addEventListener('click', function () { setAll(false); });
+
+    // Clicking a header's toggle opens or shuts that order.
+    if (tbody) tbody.addEventListener('click', function (ev) {
+        var tog = ev.target.closest('.fl-otog');
+        if (!tog) return;
+        var head = tog.closest('tr.fl-ohead');
+        if (!head) return;
+        var id = head.dataset.order;
+        openState[id] = (openState[id] ? 0 : 1);
+        saveOpen(openState);
+        apply();
+    });
+
     function apply() {
         if (!tbody || !search) return;
         var q = (search.value || '').trim().toLowerCase();
         var s = station.value;
         var ar = area ? area.value : '';
         var n = 0;
-        [].slice.call(tbody.querySelectorAll('tr')).forEach(function (tr) {
+        // First pass: which blinds match, counted per order.
+        var perOrder = {};
+        [].slice.call(tbody.querySelectorAll('tr.fl-job')).forEach(function (tr) {
             // A blind needs two processes at once (headrail + fabric), so
             // data-station is a list of "<product>|<stream>". data-area is likewise
             // a list — a split vertical belongs to both its headrail and fabric area.
@@ -319,10 +388,44 @@ require __DIR__ . '/../_partials/blind_styles.php';
             var ok = (!q || (tr.dataset.search || '').indexOf(q) !== -1)
                   && (!s || at.indexOf(s) !== -1)
                   && (!ar || ars.indexOf(ar) !== -1);
-            tr.style.display = ok ? '' : 'none';
-            if (ok) n++;
+            tr.dataset.match = ok ? '1' : '0';
+            var oid = tr.dataset.order || '';
+            if (!perOrder[oid]) perOrder[oid] = 0;
+            if (ok) { perOrder[oid]++; n++; }
         });
-        if (shown) shown.textContent = n + (n === 1 ? ' blind' : ' blinds');
+
+        // Second pass: an order is shown when it still has a matching blind, and
+        // is open if you said so. Default is shut — that is the whole point —
+        // EXCEPT when the filtering has left a single order on the board, which
+        // is the bench case: filtered to its own area, it should land on its
+        // work rather than on one more thing to click.
+        var heads = [].slice.call(tbody.querySelectorAll('tr.fl-ohead'));
+        var liveOrders = heads.filter(function (h) { return perOrder[h.dataset.order] > 0; });
+        var soleOrder  = liveOrders.length === 1 ? liveOrders[0].dataset.order : null;
+
+        heads.forEach(function (h) {
+            var id  = h.dataset.order;
+            var cnt = perOrder[id] || 0;
+            h.style.display = cnt ? '' : 'none';
+            var open = (id in openState) ? !!openState[id] : (id === soleOrder);
+            h.classList.toggle('is-open', open);
+            var tog = h.querySelector('.fl-otog');
+            if (tog) tog.setAttribute('aria-expanded', open ? 'true' : 'false');
+            var cnl = h.querySelector('.fl-oshown');
+            if (cnl) cnl.textContent = cnt + (cnt === 1 ? ' blind' : ' blinds')
+                                     + (open ? '' : ' — click to open');
+            h.dataset.open = open ? '1' : '0';
+        });
+
+        // Third pass: a blind shows only if it matched AND its order is open.
+        var openById = {};
+        heads.forEach(function (h) { openById[h.dataset.order] = h.dataset.open === '1'; });
+        [].slice.call(tbody.querySelectorAll('tr.fl-job')).forEach(function (tr) {
+            tr.style.display = (tr.dataset.match === '1' && openById[tr.dataset.order]) ? '' : 'none';
+        });
+
+        if (shown) shown.textContent = n + (n === 1 ? ' blind' : ' blinds')
+                                     + ' · ' + liveOrders.length + (liveOrders.length === 1 ? ' order' : ' orders');
     }
     if (search)  search.addEventListener('input', apply);
     if (station) station.addEventListener('change', apply);
