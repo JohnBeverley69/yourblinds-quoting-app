@@ -31,7 +31,7 @@ foreach ($rows as $r):
         [$oDueCls, $oDueTxt] = $dueTag($r['due_date'] ?? null, $ordTotal > 0 && $ordDone >= $ordTotal);
 ?>
     <tr class="fl-ohead" data-ohead="1" data-order="<?= $qidRow ?>">
-        <td colspan="7">
+        <td colspan="7"><div class="fl-ohead-inner">
             <button type="button" class="fl-otog" aria-expanded="false"
                     title="Show or hide this order's blinds">
                 <span class="fl-ocar" aria-hidden="true">&#9656;</span>
@@ -61,7 +61,7 @@ foreach ($rows as $r):
             <?php endif; ?>
             <span class="fl-odue fl-due <?= $oDueCls ?>"><?= e($oDueTxt) ?></span>
             <span class="fl-oshown"></span>
-        </td>
+        </div></td>
     </tr>
 <?php endif; ?>
 <?php

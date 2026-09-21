@@ -219,7 +219,11 @@ require __DIR__ . '/../_partials/blind_styles.php';
     .fl-ohead > td { background:var(--bg-subtle,#f1f5f9); border-top:2px solid var(--border,#d7dee7);
                      padding:.4rem .7rem; }
     .fl-ohead.is-open > td { background:#e8eef6; }
-    .fl-ohead > td { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+    /* The flex layout lives on an inner wrapper, NOT the <td>: setting display:flex
+       on a table cell cancels its colspan, collapsing the header into one column so
+       everything wraps into a tall stack. The td stays a real colspan cell (full
+       width); this div spreads the summary across it. */
+    .fl-ohead-inner { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
     .fl-otog { font:inherit; display:inline-flex; align-items:center; gap:.4rem; cursor:pointer;
                border:0; background:none; padding:.15rem .2rem; border-radius:6px; color:inherit; }
     .fl-otog:hover { background:rgba(0,0,0,.05); }
@@ -319,6 +323,7 @@ require __DIR__ . '/../_partials/blind_styles.php';
     var made    = document.getElementById('fl-made');
     var shown   = document.getElementById('fl-shown');
     var tbody   = document.querySelector('.fl-tbl tbody');
+    var thead   = document.querySelector('.fl-tbl thead');
 
     // Per-area filter, remembered on THIS computer. On first load use whatever
     // this computer chose last; failing that, the logged-in user's home area.
@@ -423,6 +428,14 @@ require __DIR__ . '/../_partials/blind_styles.php';
         [].slice.call(tbody.querySelectorAll('tr.fl-job')).forEach(function (tr) {
             tr.style.display = (tr.dataset.match === '1' && openById[tr.dataset.order]) ? '' : 'none';
         });
+
+        // The Job ref / Progress / Blind / … column header only describes blind
+        // rows, so it's meaningless when every order is collapsed. Show it only
+        // while at least one order is open (i.e. blind rows are on screen).
+        if (thead) {
+            var anyOpen = heads.some(function (h) { return h.dataset.open === '1' && (perOrder[h.dataset.order] || 0) > 0; });
+            thead.style.display = anyOpen ? '' : 'none';
+        }
 
         if (shown) shown.textContent = n + (n === 1 ? ' blind' : ' blinds')
                                      + ' · ' + liveOrders.length + (liveOrders.length === 1 ? ' order' : ' orders');
