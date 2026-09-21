@@ -35,13 +35,20 @@ return [
                       once and the numbers will stop arguing with you.',
         'open'    => '/dashboard/index.php',
         'css'     => '
-          /* ---------- the spotlight: everything dims except the panel being narrated ---------- */
-          .gd .zone{ transition:opacity .3s, filter .3s; }
-          .gd .stage:not([data-step="0"]) .zone{ opacity:.24; filter:saturate(.2); }
+          /* ---------- the spotlight: the narrated panel lifts, the rest stays readable ----------
+             A hard dim (opacity .24 + desaturate) made this tall page look dead and
+             "washed out" — and because the first narration line runs ~50s, it sat like
+             that long enough to look broken. Keep the page readable (gentle .62) and put
+             a clear ring on the ACTIVE panel so the focus is obvious and every step is
+             visibly a MOVE, not a static grey screen. */
+          .gd .zone{ transition:opacity .3s, box-shadow .3s; border-radius:10px; }
+          .gd .stage:not([data-step="0"]) .zone{ opacity:.62; }
           .gd .stage[data-step="1"] .z1, .gd .stage[data-step="2"] .z2,
           .gd .stage[data-step="3"] .z3, .gd .stage[data-step="4"] .z4,
           .gd .stage[data-step="5"] .z5, .gd .stage[data-step="6"] .z6,
-          .gd .stage[data-step="7"] .z7, .gd .stage[data-step="8"] .z8{ opacity:1; filter:none; }
+          .gd .stage[data-step="7"] .z7, .gd .stage[data-step="8"] .z8{
+              opacity:1; box-shadow:0 0 0 2px var(--accent), 0 10px 26px -12px rgba(37,99,235,.5);
+          }
 
           /* ---------- sidebar group heading (the real nav is grouped Work / Retail / …) ---------- */
           .gd .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c;
