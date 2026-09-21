@@ -74,6 +74,7 @@ $factoryNavItems += [
     // charts and the rules that use them can't drift apart on two separate screens.
     'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
     'labelsheet' => ['/factory/label-test-sheet.php', 'Label sheet'],
+    'settings'   => ['/factory/settings.php',        'Settings'],
 ];
 ?><!doctype html>
 <html lang="en">
