@@ -18,7 +18,7 @@ declare(strict_types=1);
  * git pull without running composer, so a new SDK package isn't an option.
  */
 
-if (function_exists('support_ai_enabled')) {
+if (defined('SUPPORT_AI_MODEL')) {
     return;
 }
 
