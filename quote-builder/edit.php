@@ -631,6 +631,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             font-style: italic;
         }
         .customer-collapse > .form { margin-top: 0.75rem; }
+        /* Prominent prompt shown when a quote has no real customer yet (e.g. an
+           InstaPrice conversion). Sits at the very top so it's the first thing on
+           a phone/tablet, and jumps to the (auto-opened) customer form. */
+        .needs-customer { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+            background: #fef3c7; border: 1px solid #fcd34d; color: #92600a;
+            border-radius: 10px; padding: 0.6rem 0.9rem; margin: 0 0 1rem;
+            text-decoration: none; font-size: 0.95rem; font-weight: 600; }
+        .needs-customer:hover { background: #fde68a; }
+        .needs-customer .nc-go { margin-left: auto; background: #92600a; color: #fff;
+            border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.85rem; white-space: nowrap; }
+        [data-theme="dark"] .needs-customer { background: rgba(250,204,21,0.12); border-color: rgba(250,204,21,0.35); color: #fbbf24; }
+        [data-theme="dark"] .needs-customer .nc-go { background: #fbbf24; color: #1c2733; }
 
         /* ===========================================================
            Two-column layout: customer details + Add Blind form on the
@@ -922,6 +934,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </div>
         <?php endif; ?>
 
+        <?php if (!$hasCustomer): ?>
+            <a class="needs-customer" href="#customer-details">
+                <span aria-hidden="true">&#9888;</span>
+                <span>This quote has <b>no customer yet</b> &mdash; add their details.</span>
+                <span class="nc-go">Add customer &darr;</span>
+            </a>
+        <?php endif; ?>
         <div class="quote-cols">
         <div class="col-left">
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
@@ -932,13 +951,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $csName     = trim((string) ($quote['end_customer_name'] ?? ''));
             $csTown     = trim((string) ($quote['end_customer_town'] ?? ''));
             $csPostcode = trim((string) ($quote['end_customer_postcode'] ?? ''));
-            $hasCustomer = $csName !== '';
-            // Customer details starts COLLAPSED by default — the summary
-            // line tells the user what's in there and how to expand it
-            // ("click to edit" / "click to add the customer's contact info").
-            // Used to auto-open for new quotes; that ate ~250px on every
-            // page load whether the user needed it or not. Click is one tap.
-            $startOpen   = false;
+            // An InstaPrice conversion lands with a PLACEHOLDER name (see
+            // instaprice/to-quote.php), not a real customer — treat that as "no
+            // customer yet" so the form opens and the name field is blank, ready
+            // to type, rather than looking like the customer is already filled in.
+            $csPlaceholder     = 'Quick price (add customer)';
+            $isCustPlaceholder = ($csName === $csPlaceholder);
+            $hasCustomer = $csName !== '' && !$isCustPlaceholder;
+            // Collapsed once there's a REAL customer (saves ~250px on load); OPEN
+            // when there isn't one yet (brand-new quote or an InstaPrice
+            // conversion) so the form is visible, not a one-line tag stranded at
+            // the bottom of the page — which is invisible on a phone or tablet.
+            $startOpen   = !$hasCustomer;
         ?>
         <section class="section" id="customer-details" style="scroll-margin-top:1rem">
             <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
@@ -1047,7 +1071,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                         <label for="end_customer_name">Customer name <span class="required">*</span></label>
                         <input id="end_customer_name" name="end_customer_name" type="text"
                                required maxlength="150" <?= !$editable ? 'readonly' : '' ?>
-                               value="<?= e((string) $quote['end_customer_name']) ?>">
+                               value="<?= e($isCustPlaceholder ? '' : (string) $quote['end_customer_name']) ?>">
                     </div>
                 </div>
 

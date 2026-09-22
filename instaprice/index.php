@@ -195,13 +195,13 @@ $activeNav = 'instaprice';
                              so the field's meaning stays visible while typing (and for
                              screen readers). */ ?>
                     <div class="ip-dims">
-                        <div style="flex:1 1 0;min-width:0">
+                        <div style="flex:1 1 0;min-width:0" id="ip-width-col">
                             <label for="ip-width" class="ip-dim-cap">Width</label>
                             <input id="ip-width" type="text" inputmode="numeric" style="width:100%;box-sizing:border-box"
                                    autocomplete="off" autocorrect="off" autocapitalize="off"
                                    data-lpignore="true" data-1p-ignore="true" placeholder="Width">
                         </div>
-                        <div style="flex:1 1 0;min-width:0">
+                        <div style="flex:1 1 0;min-width:0" id="ip-drop-col">
                             <label for="ip-drop" class="ip-dim-cap">Drop</label>
                             <input id="ip-drop"  type="text" inputmode="numeric" style="width:100%;box-sizing:border-box"
                                    autocomplete="off" autocorrect="off" autocapitalize="off"
@@ -326,14 +326,15 @@ $activeNav = 'instaprice';
     function applyFabricVisibility() {
         if (fabricGrid) fabricGrid.style.display = requiresOption ? '' : 'none';
         if (!requiresOption) { clearFabric(); closeFabricResults(); }
-        if (dropIn) {
-            dropIn.style.display = widthOnly ? 'none' : '';
-            if (widthOnly) dropIn.value = '';
-        }
-        if (widthIn) {
-            widthIn.style.display = perSlat ? 'none' : '';
-            if (perSlat) widthIn.value = '';   // priced per slat by drop
-        }
+        // Hide the whole Drop COLUMN (label + field) for width-only products, not
+        // just the input — otherwise an orphaned "Drop" label sits there with no box.
+        var dropCol = document.getElementById('ip-drop-col');
+        if (dropCol) dropCol.style.display = widthOnly ? 'none' : '';
+        if (dropIn && widthOnly) dropIn.value = '';
+        // Same for the Width COLUMN on per-slat products (priced by drop alone).
+        var widthCol = document.getElementById('ip-width-col');
+        if (widthCol) widthCol.style.display = perSlat ? 'none' : '';
+        if (widthIn && perSlat) widthIn.value = '';
     }
 
     // ----- Product load -------------------------------------------------
