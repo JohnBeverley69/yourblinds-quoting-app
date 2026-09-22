@@ -302,8 +302,11 @@ try {
     qb_recompute_totals($quoteId);
     $pdo->commit();
 
-    $_SESSION['flash_success'] = 'Quote ' . $quoteNumber
-        . ' started from InstaPrice — add the customer details (and any more blinds) below.';
+    // No flash message here: the editor already shows a dedicated amber
+    // "This quote has no customer yet — add their details" banner (edit.php),
+    // so a green "started from InstaPrice — add the customer details" flash on
+    // top of it is pure duplication and, on a phone, pushes that banner off
+    // the screen. Land straight on the editor; the banner does the prompting.
     header('Location: /quote-builder/edit.php?id=' . $quoteId);
     exit;
 } catch (Throwable $e) {
