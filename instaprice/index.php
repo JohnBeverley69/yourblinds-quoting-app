@@ -83,6 +83,29 @@ $activeNav = 'instaprice';
         .ip-dims { display:grid; grid-template-columns: 1fr 1fr 5rem; gap: 0.625rem; }
         @media (max-width: 520px) { .ip-dims { grid-template-columns: 1fr; } }
 
+        /* Section spacer between field groups. A class (not the old inline
+           margin-top:1rem) so the phone rule below can tighten it — inline
+           styles can't be overridden without !important. */
+        .ip-sec { margin-top: 1rem; }
+
+        /* Phone: the fields and the air between them ate the whole screen
+           (same complaint as the main form). Shorten the fields, pull the
+           labels in, and close the gaps so the form fits. Mirrors the
+           app-wide phone tightening the .ip-* scoped styles otherwise dodge. */
+        @media (max-width: 768px) {
+            .ip-sec { margin-top: 0.5rem; }
+            .ip-grid { gap: 0.5rem; }
+            .ip-field label,
+            #ip-extras label { margin-bottom: 0.1875rem; }
+            .ip-field select,
+            .ip-field input[type="text"],
+            .ip-field input[type="number"],
+            .ip-dims input:not([type=checkbox]):not([type=radio]),
+            #ip-extras select,
+            #ip-extras input[type="number"] { padding: 0.375rem 0.5rem; }
+            #ip-extras > div[data-extra-id] { margin-bottom: 0.5rem; }
+        }
+
         /* Slat typeahead */
         .ip-fab { position: relative; }
         .ip-fab-results {
@@ -158,7 +181,7 @@ $activeNav = 'instaprice';
                     </div>
                 </div>
 
-                <div class="ip-grid" style="margin-top:1rem" id="ip-fabric-grid">
+                <div class="ip-grid ip-sec" id="ip-fabric-grid">
                     <div class="ip-field" id="ip-band-field">
                         <label for="ip-band"><span id="ip-band-label">Band</span></label>
                         <select id="ip-band" disabled><option value="">All bands</option></select>
@@ -172,9 +195,9 @@ $activeNav = 'instaprice';
                     </div>
                 </div>
 
-                <div id="ip-extras" style="margin-top:1rem"></div>
+                <div id="ip-extras" class="ip-sec"></div>
 
-                <div class="ip-grid" style="margin-top:1rem">
+                <div class="ip-grid ip-sec">
                     <div class="ip-field">
                         <label for="ip-unit">Measurement unit</label>
                         <select id="ip-unit">
@@ -189,7 +212,7 @@ $activeNav = 'instaprice';
                     <div class="ip-field"></div>
                 </div>
 
-                <div class="ip-field" style="margin-top:1rem">
+                <div class="ip-field ip-sec">
                     <label><span id="ip-dim-label">Dimensions</span> &amp; quantity</label>
                     <?php /* QA #007: persistent per-field labels, not placeholder-only,
                              so the field's meaning stays visible while typing (and for
