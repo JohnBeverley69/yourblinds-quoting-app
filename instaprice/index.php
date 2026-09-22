@@ -106,6 +106,37 @@ $activeNav = 'instaprice';
             #ip-extras > div[data-extra-id] { margin-bottom: 0.5rem; }
         }
 
+        /* Space-saver (phone AND tablet): these fields already name themselves
+           from the text inside the box (placeholder / first option / chosen
+           value), so the heading above is a duplicate line. Hide the heading
+           visually but keep it in the DOM (clipped, not display:none) so screen
+           readers still announce the field. Covers the self-describing top
+           fields and the Width/Drop/Qty caps — but NOT the Dimensions GROUP
+           heading (it carries the unit, e.g. "Dimensions (mm) & quantity") and
+           NOT the option/extra dropdowns (their box shows the chosen value,
+           e.g. "White", not the field name). 1024px matches the tablet
+           breakpoint used for the off-canvas sidebar. */
+        @media (max-width: 1024px) {
+            #ip-form label[for="ip-product"],
+            #ip-form label[for="ip-system"],
+            #ip-form label[for="ip-band"],
+            #ip-form label[for="ip-fabric-search"],
+            #ip-form label[for="ip-unit"],
+            /* Width/Drop/Qty caps too: each box now shows its name in grey
+               (Width, Drop, and Qty via its placeholder). */
+            .ip-dim-cap {
+                position: absolute; width: 1px; height: 1px; padding: 0;
+                margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+                white-space: nowrap; border: 0;
+            }
+            /* Drop the idle "Choose a product…" prompt — it's a big empty box
+               stating the obvious. Real errors (.is-error) still show, and the
+               price panel appears as soon as there's a price. Collapse the
+               wrapper's own gap while it's idle so no dead space is left. */
+            #ip-price-wrap > .ip-price.is-idle { display: none; }
+            #ip-price-wrap:has(> .ip-price.is-idle) { margin-top: 0; }
+        }
+
         /* Slat typeahead */
         .ip-fab { position: relative; }
         .ip-fab-results {
@@ -232,14 +263,17 @@ $activeNav = 'instaprice';
                         </div>
                         <div style="flex:0 0 5rem">
                             <label for="ip-qty" class="ip-dim-cap">Qty</label>
-                            <input id="ip-qty"   type="number" min="1" value="1" autocomplete="off" style="width:100%;box-sizing:border-box">
+                            <?php /* No value="1": a placeholder only shows on an EMPTY field, and
+                                     the user wants "Qty" in grey like Width/Drop. Blank is treated
+                                     as qty 1 everywhere it's read (recompute / to-quote). */ ?>
+                            <input id="ip-qty"   type="number" min="1" placeholder="Qty" autocomplete="off" style="width:100%;box-sizing:border-box">
                         </div>
                     </div>
                     <div id="ip-dim-echo" hidden
                          style="margin-top:0.4rem;font-size:0.8125rem;color:var(--text-faint)"></div>
                 </div>
 
-                <div style="margin-top:1.25rem">
+                <div id="ip-price-wrap" class="ip-sec">
                     <div id="ip-price" class="ip-price is-idle">Choose a product and enter a size to see the price.</div>
                 </div>
 
@@ -1140,7 +1174,7 @@ $activeNav = 'instaprice';
     refreshDimLabel();
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
-        productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';
+        productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '';  // blank = qty 1 (shows the "Qty" placeholder)
         // Clear any Multi-Blind lock so Width is a real, editable field again.
         widthIn.dataset.multiLock = ''; widthIn.readOnly = false;
         widthIn.style.fontStyle = ''; widthIn.style.color = '';
