@@ -20,20 +20,33 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/units.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
+require_once __DIR__ . '/../_partials/instaprice_public.php';
 
-requireLogin();
+// InstaPrice is a lead-gen hook: anyone can price against the public showcase
+// catalogue WITHOUT logging in. Logged-in tenants get their own catalogue and
+// the full "turn into quote" flow exactly as before.
+$publicMode = instaprice_is_public();   // = !is_logged_in()
 
-$user     = current_user();
-$clientId = (int) $user['client_id'];
+if ($publicMode) {
+    $user            = null;
+    $clientId        = instaprice_showcase_client_id();
+    $isAdmin         = false;
+    $canCreateQuotes = false;            // no saving/converting until they sign up
+} else {
+    requireLogin();
+    $user     = current_user();
+    $clientId = (int) $user['client_id'];
+    $isAdmin  = ($user['role'] ?? '') === 'admin';
+    $_perms   = current_user_permissions();
+    $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
+}
+
 // Markup vs margin. The breakdown panel still computes in markup; this only
 // changes how the editable rate is labelled / typed (pricing_basis.php).
 $pricingBasis = pricing_basis_for(db(), $clientId);
 // Company default measurement unit — InstaPrice has no quote of its own,
 // so it starts on the company default with a local switcher.
 $defaultUnit = client_default_unit(db(), $clientId);
-$isAdmin  = ($user['role'] ?? '') === 'admin';
-$_perms   = current_user_permissions();
-$canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
 
 // Active products for the picker, grouped by category via the shared helper.
 require_once __DIR__ . '/../_partials/product_picker.php';
@@ -174,9 +187,47 @@ $activeNav = 'instaprice';
         .ip-sell .val { font-weight:800; font-size:1.375rem; color: var(--brand, #1f3b5b); }
         [data-theme="dark"] .ip-sell .val { color: var(--brand-accent); }
         .ip-total { font-size:0.8125rem; color: var(--text-faint); text-align:right; margin-top:0.25rem; }
+
+        /* Public (logged-out) shop-window chrome — replaces the app sidebar. */
+        .ip-public-top { display:flex; align-items:center; justify-content:space-between;
+            gap:1rem; flex-wrap:wrap; padding:0.85rem 1.25rem; border-bottom:1px solid var(--border);
+            background: var(--bg-card); }
+        .ip-public-brand { font-size:1.25rem; font-weight:800; letter-spacing:-0.01em;
+            color: var(--brand, #1f3b5b); text-decoration:none; }
+        .ip-public-brand .accent { color: var(--brand-accent, #2563eb); }
+        [data-theme="dark"] .ip-public-brand { color: var(--text-primary); }
+        .ip-public-links { display:flex; align-items:center; gap:0.9rem; }
+        .ip-public-links a { font-size:0.95rem; text-decoration:none; color: var(--text-secondary); }
+        .ip-public-links a.cta { font-weight:700; color: var(--brand-accent, #2563eb); }
+        .ip-public-links a:hover { color: var(--link); }
+        .ip-public-main { max-width: 960px; margin: 0 auto; }
+        /* Small "what's this?" note under the InstaPrice title in public mode. */
+        .ip-public-note { font-size:0.85rem; color: var(--text-faint); margin:0.35rem 0 0; }
+        .ip-public-note a { color: var(--link); }
     </style>
 </head>
 <body>
+<?php if ($publicMode): ?>
+    <header class="ip-public-top">
+        <a class="ip-public-brand" href="/welcome.php">Your<span class="accent">Blinds</span></a>
+        <nav class="ip-public-links">
+            <a href="/welcome.php">What's it all about?</a>
+            <a class="cta" href="/auth/signup.php">Start free</a>
+            <a href="/auth/login.php">Sign in</a>
+        </nav>
+    </header>
+    <main class="app-main ip-public-main">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">InstaPrice</h1>
+                <p class="page-subtitle">Quick price — no sign-in needed.</p>
+                <p class="ip-public-note">
+                    Prices are live YourBlinds trade prices. Like what you see?
+                    <a href="/welcome.php">See what YourBlinds can do &rarr;</a>
+                </p>
+            </div>
+        </div>
+<?php else: ?>
 <div class="app-shell">
     <?php require __DIR__ . '/../_partials/sidebar.php'; ?>
 
@@ -187,6 +238,7 @@ $activeNav = 'instaprice';
                 <p class="page-subtitle">Quick price — no customer details needed.</p>
             </div>
         </div>
+<?php endif; ?>
 
         <?php
             $ipFlashErr = $_SESSION['flash_error'] ?? null;
@@ -282,6 +334,13 @@ $activeNav = 'instaprice';
                         <button type="button" id="ip-to-quote" class="btn btn-primary" disabled>
                             Turn into full quote &rarr;
                         </button>
+                    <?php elseif ($publicMode): ?>
+                        <?php /* The gate: anonymous visitors can price freely, but saving,
+                                 quoting or adding a customer needs an account. Send them to
+                                 the pitch/pricing page (which leads to self-signup). */ ?>
+                        <a class="btn btn-primary" href="/welcome.php?from=quote">
+                            Save &amp; send this quote &rarr;
+                        </a>
                     <?php endif; ?>
                     <button type="button" id="ip-reset" class="btn btn-secondary">Reset</button>
                 </div>
@@ -307,11 +366,18 @@ $activeNav = 'instaprice';
             <?php endif; ?>
         </section>
     </main>
+<?php if (!$publicMode): ?>
 </div>
+<?php endif; ?>
 
 <script>
 (function () {
     'use strict';
+
+    // Public (logged-out) showcase mode: the read-only pricing APIs need the
+    // ?public=1 flag to serve the showcase catalogue anonymously.
+    var IP_PUBLIC = <?= $publicMode ? 'true' : 'false' ?>;
+    function apiUrl(u) { return IP_PUBLIC ? (u + (u.indexOf('?') > -1 ? '&' : '?') + 'public=1') : u; }
 
     // Markup vs margin. The breakdown still computes in MARKUP; these only
     // convert the editable rate the tenant sees / types. Mirror of
@@ -412,8 +478,8 @@ $activeNav = 'instaprice';
         try {
             setIdle(systemSel, 'Loading…');
             fabricSearch.disabled = true; fabricSearch.placeholder = 'Loading…';
-            var r = await fetch('/quote-builder/api/product-data.php?product_id=' + encodeURIComponent(productSel.value)
-                                + '&_=' + Date.now(),   // cache-buster: defeat any edge page-cache
+            var r = await fetch(apiUrl('/quote-builder/api/product-data.php?product_id=' + encodeURIComponent(productSel.value)
+                                + '&_=' + Date.now()),   // cache-buster: defeat any edge page-cache
                                 { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             productData = await r.json();
@@ -483,8 +549,8 @@ $activeNav = 'instaprice';
         try {
             var sysQ = systemSel.value ? '&system_id=' + encodeURIComponent(systemSel.value) : '';
             var bandQ = bandSel.value ? '&band=' + encodeURIComponent(bandSel.value) : '';
-            var r = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(productSel.value)
-                + '&q=' + encodeURIComponent(query || '') + sysQ + bandQ + '&_=' + Date.now(), { credentials: 'same-origin' });
+            var r = await fetch(apiUrl('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(productSel.value)
+                + '&q=' + encodeURIComponent(query || '') + sysQ + bandQ + '&_=' + Date.now()), { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
             renderFabricResults(data.fabrics || []);
@@ -925,7 +991,7 @@ $activeNav = 'instaprice';
         var myseq = ++previewSeq;
         try {
             params.append('_', Date.now());
-            var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
+            var r = await fetch(apiUrl('/quote-builder/api/preview.php?' + params), { credentials: 'same-origin' });
             var data = await r.json();
             if (myseq !== previewSeq) return;
             if (!data || !data.multi) { setPriceIdle((data && data.error) || 'Could not price the group.', true); return; }
@@ -984,7 +1050,7 @@ $activeNav = 'instaprice';
         var myseq = ++previewSeq;   // only the latest request may update the panel
         try {
             params.append('_', Date.now());   // cache-buster
-            var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
+            var r = await fetch(apiUrl('/quote-builder/api/preview.php?' + params), { credentials: 'same-origin' });
             var data = await r.json();
             if (myseq !== previewSeq) return;   // a newer size change superseded this one
             if (data.error) { setPriceIdle(data.error, true); return; }
