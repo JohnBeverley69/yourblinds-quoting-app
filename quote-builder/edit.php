@@ -972,7 +972,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $startOpen   = !$hasCustomer;
         ?>
         <section class="section" id="customer-details" style="scroll-margin-top:1rem">
-            <form method="post" action="/quote-builder/save_details.php" class="form" novalidate>
+            <form method="post" action="/quote-builder/save_details.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
 
@@ -1077,7 +1077,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="end_customer_name">Customer name <span class="required">*</span></label>
                         <input id="end_customer_name" name="end_customer_name" type="text"
-                               required maxlength="150" <?= !$editable ? 'readonly' : '' ?>
+                               required maxlength="150" placeholder="Customer name *" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e($isCustPlaceholder ? '' : (string) $quote['end_customer_name']) ?>">
                     </div>
                 </div>
@@ -1086,19 +1086,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="end_customer_email">Email</label>
                         <input id="end_customer_email" name="end_customer_email" type="email" maxlength="150"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Email" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_email'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_phone">Phone <span style="color:var(--text-faint);font-weight:400">(landline)</span></label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Phone (landline)" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_phone'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_mobile">Mobile</label>
                         <input id="end_customer_mobile" name="end_customer_mobile" type="tel" maxlength="40"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Mobile" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_mobile'] ?? '')) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:var(--text-muted);<?= !$editable ? 'cursor:default' : 'cursor:pointer' ?>">
                             <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
@@ -1126,13 +1126,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="end_customer_address1">Address line 1</label>
                         <input id="end_customer_address1" name="end_customer_address1" type="text" maxlength="150"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Address line 1" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_address1'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_address2">Address line 2</label>
                         <input id="end_customer_address2" name="end_customer_address2" type="text" maxlength="150"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Address line 2" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_address2'] ?? '')) ?>">
                     </div>
                 </div>
@@ -1141,19 +1141,19 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <div class="form-group">
                         <label for="end_customer_town">Town</label>
                         <input id="end_customer_town" name="end_customer_town" type="text" maxlength="100"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Town" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_town'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_county">County</label>
                         <input id="end_customer_county" name="end_customer_county" type="text" maxlength="100"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="County" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_county'] ?? '')) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_postcode">Postcode</label>
                         <input id="end_customer_postcode" name="end_customer_postcode" type="text" maxlength="20"
-                               <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Postcode" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_postcode'] ?? '')) ?>">
                     </div>
                 </div>
@@ -1170,13 +1170,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <div class="form-group">
                     <label for="customer_reference">Customer reference <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
                     <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
-                           <?= !$editable ? 'readonly' : '' ?>
+                           placeholder="Customer reference (their order / PO)" <?= !$editable ? 'readonly' : '' ?>
                            value="<?= e((string) ($quote['customer_reference'] ?? '')) ?>">
                 </div>
                 <div class="form-group">
                     <label for="additional_reference">Additional reference <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
                     <input id="additional_reference" name="additional_reference" type="text" maxlength="100"
-                           <?= !$editable ? 'readonly' : '' ?>
+                           placeholder="Additional reference (optional)" <?= !$editable ? 'readonly' : '' ?>
                            value="<?= e((string) ($quote['additional_reference'] ?? '')) ?>">
                 </div>
             </div>
@@ -1190,7 +1190,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <div class="form-row full" style="margin-top:1rem">
                 <div class="form-group">
                     <label for="notes">Quote notes</label>
-                    <textarea id="notes" name="notes" rows="1"
+                    <textarea id="notes" name="notes" rows="1" placeholder="Quote notes"
                               style="resize:vertical;min-height:2.5rem"
                               <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
                 </div>

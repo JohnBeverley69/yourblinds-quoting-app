@@ -696,6 +696,32 @@ a { color: var(--link); }
     font-family: inherit;
 }
 
+/* ---------------------------------------------------------------------------
+   Compact "labels in the box" forms  (opt-in via class="form form-box-labels")
+   On phones AND tablets each field's heading is dropped and the field names
+   itself from the grey placeholder already in the box — the same space-saver
+   used on InstaPrice. The <label> stays in the DOM (clipped, not removed) so
+   screen readers still announce every field and the for=/id link is intact.
+   Only real field headings are hidden: a direct-child label[for] inside a
+   .form-group. Checkbox-wrapping labels have no for= and stay visible.
+   REQUIREMENT: every field in such a form must carry a placeholder, or its box
+   is blank once the heading is hidden. 1024px = the tablet/off-canvas-sidebar
+   breakpoint. Desktop keeps the headings (there's room).
+   ------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+    .form-box-labels .form-group > label[for] {
+        position: absolute; width: 1px; height: 1px; padding: 0;
+        margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+        white-space: nowrap; border: 0;
+    }
+}
+@media (max-width: 768px) {
+    .form-box-labels .form-group input,
+    .form-box-labels .form-group select,
+    .form-box-labels .form-group textarea { padding: 0.4375rem 0.625rem; }
+    .form-box-labels .form-row { margin-bottom: 0.5rem; }
+}
+
 /* Dropdown option legibility (Safari / macOS).
  *
  * The native <select> pop-up list is rendered by the OS. On a Mac in Dark
