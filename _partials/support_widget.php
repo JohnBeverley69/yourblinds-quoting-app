@@ -60,6 +60,12 @@ require_once __DIR__ . '/support.php';
 .ybs-bub.is-wait{color:var(--text-faint,#6b7280);font-style:italic}
 .ybs-chatform{display:flex;gap:.4rem;align-items:flex-end}
 .ybs-chatform textarea{min-height:2.6rem;flex:1}
+.ybs-mic{flex:none;width:2.6rem;height:2.6rem;border-radius:8px;border:1px solid var(--border-strong,#d1d5db);
+    background:var(--bg-input,#fff);cursor:pointer;font-size:1.1rem;line-height:1}
+.ybs-mic[aria-pressed="true"]{background:#b91c1c;border-color:#b91c1c;animation:ybsPulse 1.2s ease-in-out infinite}
+@keyframes ybsPulse{50%{box-shadow:0 0 0 5px rgba(185,28,28,.25)}}
+@media (prefers-reduced-motion: reduce){.ybs-mic[aria-pressed="true"]{animation:none}}
+#ybsSpeak{font-size:1rem}
 .ybs-chatfoot{margin-top:.5rem;font-size:.78rem;color:var(--text-faint,#6b7280)}
 .ybs-link{border:0;background:none;padding:0;color:var(--link,#2563eb);cursor:pointer;font:inherit;text-decoration:underline}
 .ybs-notice{margin:0 0 .6rem;padding:.5rem .6rem;border-radius:8px;background:var(--bg-subtle,#f9fafb);font-size:.82rem;color:var(--text-secondary,#374151)}
@@ -73,13 +79,17 @@ require_once __DIR__ . '/support.php';
 <div class="ybs-panel" id="ybsPanel" role="dialog" aria-modal="false" aria-labelledby="ybsTitle" hidden>
     <div class="ybs-head">
         <h2 id="ybsTitle">Report a problem</h2>
-        <button type="button" class="ybs-x" id="ybsClose" aria-label="Close">&times;</button>
+        <span>
+            <button type="button" class="ybs-x" id="ybsSpeak" aria-label="Read replies aloud" aria-pressed="false" title="Read replies aloud" hidden>🔇</button>
+            <button type="button" class="ybs-x" id="ybsClose" aria-label="Close">&times;</button>
+        </span>
     </div>
     <div id="ybsChat" hidden>
         <div class="ybs-log" id="ybsLog" aria-live="polite"></div>
         <form id="ybsChatForm" class="ybs-chatform" novalidate>
             <label for="ybsChatInput" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Your message</label>
             <textarea id="ybsChatInput" rows="2" maxlength="4000" placeholder="Ask a question or describe a problem…"></textarea>
+            <button type="button" class="ybs-mic" id="ybsMic" aria-label="Speak your message" aria-pressed="false" title="Speak instead of typing" hidden>🎤</button>
             <button type="submit" class="btn btn-primary" id="ybsChatSend">Send</button>
         </form>
         <div class="ybs-chatfoot">
@@ -204,6 +214,8 @@ require_once __DIR__ . '/support.php';
         var status = null;   // fetched once per page load
         function showForm(note) {
             chat.hidden = true; form.hidden = false; done.hidden = true;
+            document.getElementById('ybsSpeak').hidden = true;
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
             title.textContent = 'Report a problem';
             notice.hidden = !note; notice.textContent = note || '';
             setTimeout(function () { text.focus(); }, 0);
@@ -211,6 +223,7 @@ require_once __DIR__ . '/support.php';
         function showChat() {
             chat.hidden = false; form.hidden = true; done.hidden = true;
             title.textContent = 'Help';
+            document.getElementById('ybsSpeak').hidden = !window.speechSynthesis;
             setTimeout(function () { chatInput.focus(); log.scrollTop = log.scrollHeight; }, 0);
         }
 
@@ -234,6 +247,75 @@ require_once __DIR__ . '/support.php';
             log.appendChild(d); log.scrollTop = log.scrollHeight;
             return d;
         }
+        // ── Voice ──
+        // Speak-to-type via the browser's own speech recognition (Chrome, Edge,
+        // Safari; the mic hides where it's missing, e.g. Firefox), and optional
+        // read-aloud of replies in the Help guide's voice ("Google UK English
+        // Female", else the best British voice). Both free, both in-browser.
+        var mic = document.getElementById('ybsMic'), speakBtn = document.getElementById('ybsSpeak');
+        var Rec = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false;
+        if (Rec) {
+            mic.hidden = false;
+            mic.addEventListener('click', function () {
+                if (listening) { rec && rec.stop(); return; }
+                stopSpeaking();
+                var base = chatInput.value.replace(/\s+$/, '');
+                rec = new Rec();
+                rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = false;
+                rec.onresult = function (e) {
+                    var said = '';
+                    for (var i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
+                    chatInput.value = (base ? base + ' ' : '') + said;
+                };
+                rec.onerror = function (e) {
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                        bubble('note', 'Microphone blocked — allow it in your browser\'s address bar to speak your message.');
+                    }
+                };
+                rec.onend = function () { listening = false; mic.setAttribute('aria-pressed', 'false'); chatInput.focus(); };
+                try { rec.start(); listening = true; mic.setAttribute('aria-pressed', 'true'); } catch (err) { listening = false; }
+            });
+        }
+        function stopListening() { if (listening && rec) rec.stop(); }
+
+        var synth = window.speechSynthesis, voice = null, speakOn = false;
+        try { speakOn = localStorage.getItem('ybs_speak') === '1'; } catch (e) {}
+        function pickVoice() {
+            var vs = (synth && synth.getVoices()) || [];
+            function score(v) { var s = 0; if (/google uk english female/i.test(v.name)) s += 10; if (/google uk english/i.test(v.name)) s += 4; if (/en[-_]GB/i.test(v.lang)) s += 2; if (/natural|online|neural|premium|enhanced/i.test(v.name)) s += 3; if (/^en/i.test(v.lang)) s += 1; return s; }
+            voice = vs.slice().sort(function (a, b) { return score(b) - score(a); })[0] || null;
+        }
+        function paintSpeak() {
+            speakBtn.textContent = speakOn ? '🔊' : '🔇';
+            speakBtn.setAttribute('aria-pressed', speakOn ? 'true' : 'false');
+            speakBtn.title = speakOn ? 'Reading replies aloud — click to stop' : 'Read replies aloud';
+        }
+        function stopSpeaking() { if (synth) synth.cancel(); }
+        function speak(textToSay) {
+            if (!synth || !speakOn) return;
+            stopSpeaking();
+            if (!voice) pickVoice();
+            var plain = String(textToSay).replace(/\*\*/g, '').replace(/^\s*(?:[-*•]|\d+\.)\s+/gm, '').replace(/→/g, ', then ');
+            // Short pieces: Chrome drops long utterances part-way (see help/guide.php).
+            (plain.match(/[^.!?\n]+[.!?]*\s*/g) || [plain]).forEach(function (part) {
+                if (!part.trim()) return;
+                var u = new SpeechSynthesisUtterance(part.trim());
+                if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'en-GB'; }
+                synth.speak(u);
+            });
+        }
+        if (synth) {
+            pickVoice();
+            if (synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice);
+            paintSpeak();
+            speakBtn.addEventListener('click', function () {
+                speakOn = !speakOn;
+                try { localStorage.setItem('ybs_speak', speakOn ? '1' : '0'); } catch (e) {}
+                paintSpeak();
+                if (!speakOn) stopSpeaking();
+            });
+        }
+
         function greet() {
             bubble('bot', 'Hi! I\'m the YourBlinds assistant. Ask me how to do something, or tell me what\'s gone wrong and I\'ll get it to the team.');
         }
@@ -252,7 +334,10 @@ require_once __DIR__ . '/support.php';
                 showChat();
             }).catch(function () { status = { available: false }; });
         }
-        function close() { panel.hidden = true; fab.setAttribute('aria-expanded', 'false'); fab.focus(); }
+        function close() {
+            stopListening(); stopSpeaking();
+            panel.hidden = true; fab.setAttribute('aria-expanded', 'false'); fab.focus();
+        }
         fab.addEventListener('click', function () { panel.hidden ? open() : close(); });
         document.getElementById('ybsClose').addEventListener('click', close);
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) close(); });
@@ -273,6 +358,7 @@ require_once __DIR__ . '/support.php';
             e.preventDefault();
             var t = chatInput.value.trim();
             if (!t || chatSend.disabled) return;
+            stopListening(); stopSpeaking();
             bubble('user', t);
             chatInput.value = ''; chatSend.disabled = true;
             var wait = bubble('bot', 'Thinking…'); wait.classList.add('is-wait');
@@ -281,6 +367,7 @@ require_once __DIR__ . '/support.php';
                 wait.remove();
                 if (res && res.ok) {
                     bubble('bot', res.reply || '…');
+                    speak(res.reply || '');
                     if (res.tickets && res.tickets.length) { try { sessionStorage.removeItem(KEY_ERR); } catch (e2) {} }
                 } else if (res && res.fallback) {
                     status = { available: false };
