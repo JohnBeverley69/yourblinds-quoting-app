@@ -17,6 +17,14 @@ require __DIR__ . '/../_partials/pricing_engine.php';
 require __DIR__ . '/../_partials/price_table_parser.php';
 require __DIR__ . '/../_partials/units.php';
 
+// The signup gate: a prospect using the public InstaPrice can't convert to a
+// real quote. Send them to the pitch/pricing page (→ self-signup) rather than a
+// bare login form. requireLogin() below is the hard backstop either way, so no
+// quote is ever created anonymously.
+if (!is_logged_in()) {
+    header('Location: /welcome.php?from=quote');
+    exit;
+}
 requireLogin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
