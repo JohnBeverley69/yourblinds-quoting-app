@@ -18,6 +18,7 @@ require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/support.php';
 require_once __DIR__ . '/../_partials/time_ago.php';
 require_once __DIR__ . '/../_partials/support_ai.php';
+require_once __DIR__ . '/../_partials/support_fix.php';
 
 requireSuperAdmin();
 
@@ -25,6 +26,23 @@ $user     = current_user();
 $pdo      = db();
 $statuses = support_statuses();
 $cats     = support_categories();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'draft_fix') {
+    csrf_check();
+    $id    = (int) ($_POST['id'] ?? 0);
+    $brief = trim(str_replace("\r\n", "\n", (string) ($_POST['brief'] ?? '')));
+    if ($id > 0 && $brief !== '') {
+        $err = support_fix_dispatch($id, $brief);
+        if ($err === null) {
+            $_SESSION['flash_success'] = "Draft fix started for ticket #{$id}. Claude usually takes 5–20 minutes; "
+                . 'the pull request will appear below (refresh) and GitHub will email you.';
+        } else {
+            $_SESSION['flash_error'] = $err;
+        }
+    }
+    header('Location: /master-admin/support.php?id=' . $id . '#fix');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', ['ai_settings', 'ai_test'], true)) {
     csrf_check();
@@ -35,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', [
             $key = trim((string) ($_POST['ai_key'] ?? ''));
             // Write-only: a blank box keeps the stored key; it's never shown again.
             if ($key !== '') pc_set('SUPPORT_AI_API_KEY', ac_seal($key));
+            $gh = trim((string) ($_POST['fix_github_token'] ?? ''));
+            if ($gh !== '') pc_set('SUPPORT_FIX_GITHUB_TOKEN', ac_seal($gh));
             $exp = trim((string) ($_POST['ai_key_expires'] ?? ''));
             pc_set('SUPPORT_AI_KEY_EXPIRES', preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp) ? $exp : '');
             pc_set('SUPPORT_AI_MONTHLY_CAP_GBP', (string) max(0, round((float) ($_POST['ai_cap'] ?? SUPPORT_AI_DEFAULT_CAP_GBP), 2)));
@@ -275,6 +295,43 @@ $activeNav = 'support';
                 <textarea id="supBrief" hidden><?= e($brief) ?></textarea>
             </section>
 
+            <?php $fixPrs = support_fix_prs((int) $ticket['id']); ?>
+            <section class="section" id="fix">
+                <h2 style="font-size:1rem;margin:0 0 .4rem">🛠 Draft a fix</h2>
+                <?php if ($fixPrs): ?>
+                    <ul style="margin:0 0 .75rem;padding-left:1.1rem">
+                        <?php foreach ($fixPrs as $pr): ?>
+                            <li><a href="<?= e($pr['url']) ?>" target="_blank" rel="noopener">Pull request #<?= (int) $pr['number'] ?></a>
+                                &mdash; <?= e(['draft' => 'draft, waiting for your review', 'open' => 'ready for review', 'merged' => 'merged ✓', 'closed' => 'closed without merging'][$pr['state']]) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php elseif (!empty($ticket['fix_requested_at'])): ?>
+                    <p style="margin:0 0 .75rem">Started <?= e(time_ago((string) $ticket['fix_requested_at'])) ?>. No pull request yet &mdash;
+                        Claude usually takes 5&ndash;20 minutes, and if it decides there's nothing to change it won't open one.
+                        <a href="https://github.com/<?= e(SUPPORT_FIX_REPO) ?>/actions/workflows/<?= e(SUPPORT_FIX_WORKFLOW) ?>" target="_blank" rel="noopener">See the runs on GitHub</a>.</p>
+                <?php endif; ?>
+                <p style="color:var(--text-secondary);font-size:.88rem;margin:0 0 .5rem">
+                    Sends the brief below to Claude Code on GitHub (your Claude subscription). It looks into the code and opens a
+                    <strong>draft</strong> pull request for you to review &mdash; nothing goes live until you merge it.
+                    <strong>The repository is public, so this brief will be public too.</strong> Names, emails, phone numbers and
+                    postcodes have been taken out &mdash; check for anything else private (a customer's name in the message, say) and edit it out.
+                </p>
+                <form method="post" action="/master-admin/support.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="draft_fix">
+                    <input type="hidden" name="id" value="<?= (int) $ticket['id'] ?>">
+                    <textarea name="brief" rows="12" style="width:100%;font:.82rem/1.5 ui-monospace,Consolas,monospace"><?= e(support_fix_brief($ticket)) ?></textarea>
+                    <p style="margin:.5rem 0 0">
+                        <button type="submit" class="btn btn-primary"<?= support_fix_github_token() === '' ? ' disabled title="Add a GitHub token in the AI assistant settings first"' : '' ?>>
+                            <?= !empty($ticket['fix_requested_at']) ? 'Try again' : '🛠 Draft a fix' ?>
+                        </button>
+                        <?php if (support_fix_github_token() === ''): ?>
+                            <span style="color:var(--text-faint);font-size:.85rem;margin-left:.5rem">Add a GitHub token under <a href="/master-admin/support.php#ai">AI assistant</a> first.</span>
+                        <?php endif; ?>
+                    </p>
+                </form>
+            </section>
+
             <section class="section">
                 <form method="post" action="/master-admin/support.php">
                     <?= csrf_field() ?>
@@ -386,6 +443,14 @@ $activeNav = 'support';
                         <input type="password" id="aiKey" name="ai_key" autocomplete="off" spellcheck="false"
                                placeholder="<?= $aiCfg['has_key'] ? 'Saved ✓ — leave blank to keep it, or paste a new key to replace it' : 'Paste the key (sk-ant-…)' ?>">
                         <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">Stored encrypted and never shown again.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="fixGh">GitHub token for &ldquo;🛠 Draft a fix&rdquo;</label>
+                        <input type="password" id="fixGh" name="fix_github_token" autocomplete="off" spellcheck="false"
+                               placeholder="<?= support_fix_github_token() !== '' ? 'Saved ✓ — leave blank to keep it' : 'Paste a fine-grained token (github_pat_…)' ?>">
+                        <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">
+                            Fine-grained token for this repository only: <em>Actions</em> read &amp; write, <em>Pull requests</em> read. Stored encrypted.
+                        </p>
                     </div>
                     <div class="form-row" style="display:flex;gap:1rem;flex-wrap:wrap">
                         <div class="form-group">
