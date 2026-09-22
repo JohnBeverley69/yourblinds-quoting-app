@@ -196,4 +196,5 @@ $factoryNavItems += [
         <a href="/auth/logout.php">Log out</a>
     </div>
 </header>
+<?php if ($fu) require __DIR__ . '/support_widget.php'; ?>
 <main class="factory-main<?= $factoryWide ? ' is-wide' : '' ?>">

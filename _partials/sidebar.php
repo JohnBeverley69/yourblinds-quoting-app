@@ -141,6 +141,15 @@ $canSeeAnyDashPanel = $isAdmin
     || !empty($_perms['dash_view_profit'])
     || !empty($_perms['dash_view_recent']);
 
+// Support inbox label carries the count of untouched reports (super-admin
+// only — one indexed COUNT). Plain text: nav labels are escaped.
+$_ybSupportLabel = 'Support inbox';
+if ($isSuperAdmin) {
+    require_once __DIR__ . '/support.php';
+    $_ybSupportNew = support_new_count();
+    if ($_ybSupportNew > 0) $_ybSupportLabel .= ' (' . $_ybSupportNew . ' new)';
+}
+
 // Grouped navigation. Each section emits a small heading; sections
 // with no visible items get suppressed entirely (so a pure fitter
 // doesn't see an empty "Setup" header).
@@ -235,6 +244,7 @@ $navSections = [
                 'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
             ]],
             ['heading' => 'System health', 'items' => [
+                'support'      => ['/master-admin/support.php',     $_ybSupportLabel, $isSuperAdmin],
                 'monitor'      => ['/master-admin/monitor.php',     'Monitor',      $isSuperAdmin],
                 'system-check' => ['/system_check.php',             'System check', $isSuperAdmin],
                 'spell-check'  => ['/master-admin/spell-check.php', 'Spell-check',  $isSuperAdmin],
@@ -439,6 +449,7 @@ window.addEventListener('pageshow', function (e) {
             </div>
         </div>
     </aside>
+<?php require __DIR__ . '/support_widget.php'; ?>
 <script>
 (function () {
     // Theme toggle. Writes the cookie (1 year) and flips the
