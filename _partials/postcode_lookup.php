@@ -39,7 +39,7 @@ $pcFieldMap = $pcFieldMap ?? [
     <div class="form-group" style="margin-bottom: 0;">
         <label for="postcode_lookup_input">Find by postcode</label>
         <input type="text" id="postcode_lookup_input"
-               placeholder="e.g. BS1 4ST"
+               placeholder="Find by postcode (e.g. BS1 4ST)"
                autocomplete="off" maxlength="8">
     </div>
     <div class="form-group" style="margin-bottom: 0;">

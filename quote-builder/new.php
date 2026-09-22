@@ -260,7 +260,7 @@ $activeNav = 'order-history';
                 Pick an existing customer (their details auto-fill below), or type a new
                 customer's name. You can flesh out the rest later from the editor.
             </p>
-            <form method="post" action="/quote-builder/new.php" class="form" novalidate>
+            <form method="post" action="/quote-builder/new.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
                 <?php if ($appointmentId > 0): ?>
                     <input type="hidden" name="appointment_id" value="<?= (int) $appointmentId ?>">
@@ -300,7 +300,7 @@ $activeNav = 'order-history';
                     <div class="form-group">
                         <label for="end_customer_name">Customer name <span class="required">*</span></label>
                         <input id="end_customer_name" name="end_customer_name" type="text"
-                               required maxlength="150"
+                               required maxlength="150" placeholder="Customer name *"
                                value="<?= e((string) $f['end_customer_name']) ?>">
                     </div>
                 </div>
@@ -309,16 +309,19 @@ $activeNav = 'order-history';
                     <div class="form-group">
                         <label for="end_customer_email">Email</label>
                         <input id="end_customer_email" name="end_customer_email" type="email" maxlength="150"
+                               placeholder="Email"
                                value="<?= e((string) $f['end_customer_email']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_phone">Phone <span style="color:#9ca3af;font-weight:400">(landline)</span></label>
                         <input id="end_customer_phone" name="end_customer_phone" type="tel" maxlength="50"
+                               placeholder="Phone (landline)"
                                value="<?= e((string) $f['end_customer_phone']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_mobile">Mobile</label>
                         <input id="end_customer_mobile" name="end_customer_mobile" type="tel" maxlength="40"
+                               placeholder="Mobile"
                                value="<?= e((string) $f['end_customer_mobile']) ?>">
                         <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.5rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
                             <input type="checkbox" id="end_customer_has_whatsapp" name="has_whatsapp" value="1"
@@ -345,6 +348,7 @@ $activeNav = 'order-history';
                     <div class="form-group">
                         <label for="end_customer_address1">Address line 1</label>
                         <input id="end_customer_address1" name="end_customer_address1" type="text" maxlength="150"
+                               placeholder="Address line 1"
                                value="<?= e((string) $f['end_customer_address1']) ?>">
                     </div>
                 </div>
@@ -352,6 +356,7 @@ $activeNav = 'order-history';
                     <div class="form-group">
                         <label for="end_customer_address2">Address line 2</label>
                         <input id="end_customer_address2" name="end_customer_address2" type="text" maxlength="150"
+                               placeholder="Address line 2"
                                value="<?= e((string) $f['end_customer_address2']) ?>">
                     </div>
                 </div>
@@ -360,16 +365,19 @@ $activeNav = 'order-history';
                     <div class="form-group">
                         <label for="end_customer_town">Town</label>
                         <input id="end_customer_town" name="end_customer_town" type="text" maxlength="100"
+                               placeholder="Town"
                                value="<?= e((string) $f['end_customer_town']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_county">County</label>
                         <input id="end_customer_county" name="end_customer_county" type="text" maxlength="100"
+                               placeholder="County"
                                value="<?= e((string) $f['end_customer_county']) ?>">
                     </div>
                     <div class="form-group">
                         <label for="end_customer_postcode">Postcode</label>
                         <input id="end_customer_postcode" name="end_customer_postcode" type="text" maxlength="20"
+                               placeholder="Postcode"
                                value="<?= e((string) $f['end_customer_postcode']) ?>">
                     </div>
                 </div>
@@ -379,6 +387,7 @@ $activeNav = 'order-history';
                         <label for="customer_reference">Customer reference
                             <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
                         <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
+                               placeholder="Customer reference (their order / PO)"
                                value="<?= e((string) ($f['customer_reference'] ?? '')) ?>">
                     </div>
                 </div>
@@ -386,7 +395,7 @@ $activeNav = 'order-history';
                 <div class="form-row full">
                     <div class="form-group">
                         <label for="notes">Quote notes</label>
-                        <textarea id="notes" name="notes" rows="3"><?= e((string) $f['notes']) ?></textarea>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Quote notes"><?= e((string) $f['notes']) ?></textarea>
                     </div>
                 </div>
 

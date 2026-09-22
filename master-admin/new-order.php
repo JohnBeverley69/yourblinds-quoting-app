@@ -209,7 +209,7 @@ $activeNav = '';
                     trade discount is applied. Not on the list? Enter them below.
                 </p>
 
-                <form method="post" action="/master-admin/new-order.php" class="form" novalidate>
+                <form method="post" action="/master-admin/new-order.php" class="form form-box-labels" novalidate>
                     <?= csrf_field() ?>
                     <input type="hidden" name="mode" value="account">
                     <div class="form-row full">
@@ -233,55 +233,55 @@ $activeNav = '';
 
                 <details class="manual" <?= $manualOpen ? 'open' : '' ?>>
                     <summary>Customer not listed? Enter them manually</summary>
-                    <form method="post" action="/master-admin/new-order.php" class="form manual-fields" novalidate>
+                    <form method="post" action="/master-admin/new-order.php" class="form manual-fields form-box-labels" novalidate>
                         <?= csrf_field() ?>
                         <input type="hidden" name="mode" value="manual">
                         <div class="form-row cols-2">
                             <div class="form-group">
                                 <label for="company_name">Company name</label>
-                                <input id="company_name" name="company_name" type="text" maxlength="150" value="<?= e($m['company_name']) ?>">
+                                <input id="company_name" name="company_name" type="text" maxlength="150" placeholder="Company name" value="<?= e($m['company_name']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="contact_name">Contact name</label>
-                                <input id="contact_name" name="contact_name" type="text" maxlength="150" value="<?= e($m['contact_name']) ?>">
+                                <input id="contact_name" name="contact_name" type="text" maxlength="150" placeholder="Contact name" value="<?= e($m['contact_name']) ?>">
                             </div>
                         </div>
                         <div class="form-row cols-epm">
                             <div class="form-group">
                                 <label for="email">Email</label>
-                                <input id="email" name="email" type="email" maxlength="150" value="<?= e($m['email']) ?>">
+                                <input id="email" name="email" type="email" maxlength="150" placeholder="Email" value="<?= e($m['email']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="phone">Phone <span style="color:var(--text-faint);font-weight:400">(landline)</span></label>
-                                <input id="phone" name="phone" type="tel" maxlength="50" value="<?= e($m['phone']) ?>">
+                                <input id="phone" name="phone" type="tel" maxlength="50" placeholder="Phone (landline)" value="<?= e($m['phone']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="mobile">Mobile <span style="color:var(--text-faint);font-weight:400">(WhatsApp)</span></label>
-                                <input id="mobile" name="mobile" type="tel" maxlength="40" value="<?= e($m['mobile']) ?>">
+                                <input id="mobile" name="mobile" type="tel" maxlength="40" placeholder="Mobile (WhatsApp)" value="<?= e($m['mobile']) ?>">
                             </div>
                         </div>
                         <div class="form-row cols-2">
                             <div class="form-group">
                                 <label for="address1">Address line 1</label>
-                                <input id="address1" name="address1" type="text" maxlength="150" value="<?= e($m['address1']) ?>">
+                                <input id="address1" name="address1" type="text" maxlength="150" placeholder="Address line 1" value="<?= e($m['address1']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="address2">Address line 2</label>
-                                <input id="address2" name="address2" type="text" maxlength="150" value="<?= e($m['address2']) ?>">
+                                <input id="address2" name="address2" type="text" maxlength="150" placeholder="Address line 2" value="<?= e($m['address2']) ?>">
                             </div>
                         </div>
                         <div class="form-row cols-3">
                             <div class="form-group">
                                 <label for="town">Town</label>
-                                <input id="town" name="town" type="text" maxlength="100" value="<?= e($m['town']) ?>">
+                                <input id="town" name="town" type="text" maxlength="100" placeholder="Town" value="<?= e($m['town']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="county">County</label>
-                                <input id="county" name="county" type="text" maxlength="100" value="<?= e($m['county']) ?>">
+                                <input id="county" name="county" type="text" maxlength="100" placeholder="County" value="<?= e($m['county']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="postcode">Postcode</label>
-                                <input id="postcode" name="postcode" type="text" maxlength="20" value="<?= e($m['postcode']) ?>">
+                                <input id="postcode" name="postcode" type="text" maxlength="20" placeholder="Postcode" value="<?= e($m['postcode']) ?>">
                             </div>
                         </div>
                         <div class="form-row full">
@@ -289,6 +289,7 @@ $activeNav = '';
                                 <label for="m_customer_reference">Customer reference
                                     <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
                                 <input id="m_customer_reference" name="customer_reference" type="text" maxlength="100"
+                                       placeholder="Customer reference (their order / PO)"
                                        value="<?= e($m['customer_reference']) ?>">
                             </div>
                         </div>
