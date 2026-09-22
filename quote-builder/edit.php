@@ -917,7 +917,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </div>
         </section>
 
-        <div class="page-header">
+        <div class="page-header" style="margin-bottom:0.6rem">
             <div>
                 <p class="page-subtitle" style="margin:0">
                     <a href="/orders/index.php">&larr; Order history</a>
