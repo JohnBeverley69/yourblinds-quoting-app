@@ -104,6 +104,7 @@ session_write_close();
 $res = support_ai_turn($chat, $user, $text, support_capture_ctx($_POST));
 @session_start();
 $_SESSION['_support_chat'] = $chat;
+try { support_ai_alerts_if_due(); } catch (Throwable $e) { error_log('[YourBlinds] support_ai alerts: ' . $e->getMessage()); }
 
 if ($res['error'] !== null) {
     $msg = $res['error'] === 'auth'

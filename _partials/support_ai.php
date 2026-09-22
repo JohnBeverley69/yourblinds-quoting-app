@@ -162,6 +162,79 @@ function support_ai_unavailable_reason(array $user): ?string
 }
 
 /* ------------------------------------------------------------------ *
+ *  Owner alerts (email)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Email the owner about the key running out and the monthly cap filling up.
+ * Called lazily from the chat endpoint, super-admin page loads and the daily
+ * backup cron; each alert is sent once per key / per month:
+ *   key   — 30, 7 and 1 day(s) before expiry, and once it has expired
+ *   spend — 80% of the monthly cap, and cap reached (chat switched to form)
+ */
+function support_ai_alerts_if_due(): void
+{
+    require_once __DIR__ . '/app_settings.php';
+    $today = date('Y-m-d');
+    // Key checks run once a day; spend checks every call (one indexed SUM) so
+    // a cap hit is reported the moment it happens.
+    $keyCheckDue = app_setting_get('support_ai_alerts_checked') !== $today;
+    if ($keyCheckDue) app_setting_set('support_ai_alerts_checked', $today);
+
+    $cfg = support_ai_config();
+    if (!$cfg['has_key']) return;
+    $to = support_notify_recipients();
+    if (!$to) return;
+    require_once APP_ROOT . '/mailer.php';
+
+    $link  = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/master-admin/support.php#ai';
+    $alert = static function (string $slot, string $subject, string $body) use ($to, $link): void {
+        if (app_setting_get('support_ai_alert_' . $slot) !== null) return;   // already sent
+        if (mailer_send($to, '[YourBlinds] ' . $subject, $body . "\n\nAI assistant settings: {$link}\n")) {
+            app_setting_set('support_ai_alert_' . $slot, date('c'));
+        }
+    };
+
+    // Key expiry — slots are keyed on the expiry date, so a renewed key re-arms them.
+    $days = support_ai_key_days_left();
+    if ($keyCheckDue && $days !== null) {
+        $exp = $cfg['key_expires'];
+        $how = "To renew: create a new key in the Anthropic console (console.anthropic.com → API keys), "
+             . "paste it into the AI assistant box with its new expiry date, press Test connection, "
+             . "then delete the old key in the console.";
+        if ($days < 0) {
+            $alert("key_{$exp}_expired", 'AI assistant key has EXPIRED',
+                "The Anthropic API key for the Help chat expired on {$exp}. The chat is switched off "
+              . "(the Help button shows the plain report form) until a new key is added.\n\n{$how}");
+        } else {
+            foreach ([1, 7, 30] as $mark) {
+                if ($days <= $mark) {
+                    $alert("key_{$exp}_{$mark}", "AI assistant key expires in {$days} day" . ($days === 1 ? '' : 's'),
+                        "The Anthropic API key for the Help chat expires on {$exp}.\n\n{$how}");
+                    break;
+                }
+            }
+        }
+    }
+
+    // Spend — slots are keyed on the month.
+    if ($cfg['enabled'] && $cfg['cap_gbp'] > 0) {
+        $month = date('Y-m');
+        $spent = support_ai_month_spend_gbp();
+        $line  = sprintf('About £%.2f of the £%.2f monthly cap used so far in %s.', $spent, $cfg['cap_gbp'], date('F'));
+        if ($spent >= $cfg['cap_gbp']) {
+            $alert("spend_{$month}_100", 'AI assistant hit its monthly cap',
+                "{$line}\n\nThe Help button has switched to the plain report form for the rest of the month. "
+              . "Raise the cap in the AI assistant box if you want it back sooner (keep it under the "
+              . "Anthropic console's own spend limit).");
+        } elseif ($spent >= 0.8 * $cfg['cap_gbp']) {
+            $alert("spend_{$month}_80", 'AI assistant at 80% of its monthly cap',
+                "{$line}\n\nNothing to do unless you expect heavy use — at 100% the chat switches to the plain report form until next month.");
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ *
  *  Prompt
  * ------------------------------------------------------------------ */
 
