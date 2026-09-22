@@ -51,6 +51,18 @@ require_once __DIR__ . '/support.php';
 .ybs-msg.is-err{color:#b91c1c}
 .ybs-done{text-align:center;padding:.75rem .25rem}
 .ybs-done strong{display:block;font-size:1rem;margin-bottom:.3rem;color:var(--text-primary,#111827)}
+.ybs-log{display:flex;flex-direction:column;gap:.5rem;max-height:min(52vh,420px);overflow-y:auto;margin:0 0 .6rem;padding:.1rem}
+.ybs-bub{padding:.5rem .7rem;border-radius:10px;max-width:88%;word-wrap:break-word;font-size:.88rem}
+.ybs-bub p{margin:0 0 .4rem}.ybs-bub p:last-child{margin:0}.ybs-bub ul{margin:.2rem 0 .4rem;padding-left:1.1rem}
+.ybs-bub.is-user{align-self:flex-end;background:var(--brand,#1f3b5b);color:var(--text-on-brand,#fff);white-space:pre-wrap}
+.ybs-bub.is-bot{align-self:flex-start;background:var(--bg-subtle,#f9fafb);border:1px solid var(--border,#e5e7eb)}
+.ybs-bub.is-note{align-self:center;background:none;color:var(--text-faint,#6b7280);font-size:.8rem;text-align:center}
+.ybs-bub.is-wait{color:var(--text-faint,#6b7280);font-style:italic}
+.ybs-chatform{display:flex;gap:.4rem;align-items:flex-end}
+.ybs-chatform textarea{min-height:2.6rem;flex:1}
+.ybs-chatfoot{margin-top:.5rem;font-size:.78rem;color:var(--text-faint,#6b7280)}
+.ybs-link{border:0;background:none;padding:0;color:var(--link,#2563eb);cursor:pointer;font:inherit;text-decoration:underline}
+.ybs-notice{margin:0 0 .6rem;padding:.5rem .6rem;border-radius:8px;background:var(--bg-subtle,#f9fafb);font-size:.82rem;color:var(--text-secondary,#374151)}
 /* Keep bottom-pinned action bars (quote builder Save) clear of the button. */
 .form-actions.sticky-save{padding-right:6.5rem!important}
 @media print{.ybs-fab,.ybs-panel{display:none!important}}
@@ -63,7 +75,21 @@ require_once __DIR__ . '/support.php';
         <h2 id="ybsTitle">Report a problem</h2>
         <button type="button" class="ybs-x" id="ybsClose" aria-label="Close">&times;</button>
     </div>
+    <div id="ybsChat" hidden>
+        <div class="ybs-log" id="ybsLog" aria-live="polite"></div>
+        <form id="ybsChatForm" class="ybs-chatform" novalidate>
+            <label for="ybsChatInput" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Your message</label>
+            <textarea id="ybsChatInput" rows="2" maxlength="4000" placeholder="Ask a question or describe a problem…"></textarea>
+            <button type="submit" class="btn btn-primary" id="ybsChatSend">Send</button>
+        </form>
+        <div class="ybs-chatfoot">
+            <button type="button" class="ybs-link" id="ybsNew">New chat</button>
+            &middot; <button type="button" class="ybs-link" id="ybsToForm">Send to the team instead</button>
+            &middot; <a href="/help/index.php">Help &amp; guide</a>
+        </div>
+    </div>
     <form id="ybsForm" novalidate>
+        <p class="ybs-notice" id="ybsNotice" hidden></p>
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
         <fieldset class="ybs-cats">
             <legend class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">What is it?</legend>
@@ -139,40 +165,141 @@ require_once __DIR__ . '/support.php';
     }, true);
     document.addEventListener('submit', function (e) {
         var f = e.target;
-        if (!f || f.id === 'ybsForm') return;
+        if (!f || (f.closest && f.closest('#ybsPanel'))) return;
         push(KEY_BC, { t: stamp(), act: 'submit', what: clip(f.getAttribute('action') || where(), 120), page: where() }, MAX_BC);
     }, true);
 
+
     // ── Panel ───────────────────────────────────────────────────────────
+    // Two modes: the AI chat (when the assistant is on for this user) and the
+    // plain report form (always available — the fallback for everything).
     function ready(fn) { document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn(); }
     ready(function () {
         var fab = document.getElementById('ybsFab'), panel = document.getElementById('ybsPanel');
         var form = document.getElementById('ybsForm'), msg = document.getElementById('ybsMsg');
         var send = document.getElementById('ybsSend'), done = document.getElementById('ybsDone');
-        var text = document.getElementById('ybsMessage');
+        var text = document.getElementById('ybsMessage'), title = document.getElementById('ybsTitle');
+        var chat = document.getElementById('ybsChat'), log = document.getElementById('ybsLog');
+        var chatForm = document.getElementById('ybsChatForm'), chatInput = document.getElementById('ybsChatInput');
+        var chatSend = document.getElementById('ybsChatSend'), notice = document.getElementById('ybsNotice');
         if (!fab || !panel || !form) return;
+        var csrf = form.querySelector('input[name=_csrf]').value;
+
+        function addContext(fd) {
+            fd.append('page_url', location.href);
+            fd.append('page_title', document.title);
+            fd.append('viewport', window.innerWidth + '×' + window.innerHeight);
+            fd.append('js_errors', JSON.stringify(load(KEY_ERR)));
+            fd.append('breadcrumbs', JSON.stringify(load(KEY_BC)));
+            return fd;
+        }
+        function post(url, fd) {
+            fd.append('_csrf', csrf);
+            return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (r) { return r.json().catch(function () { return { ok: false }; }); });
+        }
+        function fields(obj) { var fd = new FormData(); for (var k in obj) fd.append(k, obj[k]); return fd; }
+
+        // ── Mode switching ──
+        var status = null;   // fetched once per page load
+        function showForm(note) {
+            chat.hidden = true; form.hidden = false; done.hidden = true;
+            title.textContent = 'Report a problem';
+            notice.hidden = !note; notice.textContent = note || '';
+            setTimeout(function () { text.focus(); }, 0);
+        }
+        function showChat() {
+            chat.hidden = false; form.hidden = true; done.hidden = true;
+            title.textContent = 'Help';
+            setTimeout(function () { chatInput.focus(); log.scrollTop = log.scrollHeight; }, 0);
+        }
+
+        // ── Chat rendering: escape first, then a tiny safe markdown ──
+        function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+        function md(s) {
+            var html = '', inList = false;
+            esc(s).split(/\n/).forEach(function (line) {
+                line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+                var li = line.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)$/);
+                if (li) { if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + li[1] + '</li>'; return; }
+                if (inList) { html += '</ul>'; inList = false; }
+                if (line.trim() !== '') html += '<p>' + line + '</p>';
+            });
+            return html + (inList ? '</ul>' : '');
+        }
+        function bubble(role, content) {
+            var d = document.createElement('div');
+            d.className = 'ybs-bub is-' + role;
+            if (role === 'bot') d.innerHTML = md(content); else d.textContent = content;
+            log.appendChild(d); log.scrollTop = log.scrollHeight;
+            return d;
+        }
+        function greet() {
+            bubble('bot', 'Hi! I\'m the YourBlinds assistant. Ask me how to do something, or tell me what\'s gone wrong and I\'ll get it to the team.');
+        }
 
         function open() {
             panel.hidden = false; fab.setAttribute('aria-expanded', 'true');
-            setTimeout(function () { (done.hidden ? text : document.getElementById('ybsAnother')).focus(); }, 0);
+            if (status) { status.available ? showChat() : showForm(status.notice); return; }
+            showForm();
+            post('/support/chat.php', fields({ action: 'status' })).then(function (res) {
+                status = res && res.ok ? res : { available: false };
+                if (!status.available) { showForm(status.notice); return; }
+                log.innerHTML = '';
+                if (status.history && status.history.length) {
+                    status.history.forEach(function (m) { bubble(m.role === 'user' ? 'user' : 'bot', m.text); });
+                } else { greet(); }
+                showChat();
+            }).catch(function () { status = { available: false }; });
         }
         function close() { panel.hidden = true; fab.setAttribute('aria-expanded', 'false'); fab.focus(); }
         fab.addEventListener('click', function () { panel.hidden ? open() : close(); });
         document.getElementById('ybsClose').addEventListener('click', close);
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) close(); });
         document.getElementById('ybsAnother').addEventListener('click', function () {
-            done.hidden = true; form.hidden = false; text.value = ''; msg.textContent = ''; text.focus();
+            text.value = ''; msg.textContent = '';
+            status && status.available ? showChat() : showForm();
+        });
+        document.getElementById('ybsToForm').addEventListener('click', function () { showForm(); });
+        document.getElementById('ybsNew').addEventListener('click', function () {
+            post('/support/chat.php', fields({ action: 'reset' })).then(function () { log.innerHTML = ''; greet(); chatInput.focus(); });
         });
 
+        // ── Chat send ──
+        chatInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend.click(); }
+        });
+        chatForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var t = chatInput.value.trim();
+            if (!t || chatSend.disabled) return;
+            bubble('user', t);
+            chatInput.value = ''; chatSend.disabled = true;
+            var wait = bubble('bot', 'Thinking…'); wait.classList.add('is-wait');
+            var fd = addContext(fields({ action: 'send', message: t }));
+            post('/support/chat.php', fd).then(function (res) {
+                wait.remove();
+                if (res && res.ok) {
+                    bubble('bot', res.reply || '…');
+                    if (res.tickets && res.tickets.length) { try { sessionStorage.removeItem(KEY_ERR); } catch (e2) {} }
+                } else if (res && res.fallback) {
+                    status = { available: false };
+                    text.value = t;
+                    showForm(res.error);
+                } else {
+                    bubble('note', (res && res.error) || 'Sorry — that didn\'t send. Please try again.');
+                }
+            }).catch(function () {
+                wait.remove();
+                bubble('note', 'Couldn\'t reach the server — check your connection and try again.');
+            }).then(function () { chatSend.disabled = false; chatInput.focus(); });
+        });
+
+        // ── Plain report form ──
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             if (!text.value.trim()) { msg.className = 'ybs-msg is-err'; msg.textContent = 'Please describe the problem first.'; text.focus(); return; }
-            var fd = new FormData(form);
-            fd.append('page_url', location.href);
-            fd.append('page_title', document.title);
-            fd.append('viewport', window.innerWidth + '×' + window.innerHeight);
-            fd.append('js_errors', JSON.stringify(load(KEY_ERR)));
-            fd.append('breadcrumbs', JSON.stringify(load(KEY_BC)));
+            var fd = addContext(new FormData(form));
             send.disabled = true; msg.className = 'ybs-msg'; msg.textContent = 'Sending…';
             fetch('/support/report.php', { method: 'POST', body: fd, credentials: 'same-origin' })
                 .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })

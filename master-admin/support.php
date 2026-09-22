@@ -17,6 +17,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/support.php';
 require_once __DIR__ . '/../_partials/time_ago.php';
+require_once __DIR__ . '/../_partials/support_ai.php';
 
 requireSuperAdmin();
 
@@ -24,6 +25,39 @@ $user     = current_user();
 $pdo      = db();
 $statuses = support_statuses();
 $cats     = support_categories();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', ['ai_settings', 'ai_test'], true)) {
+    csrf_check();
+    require_once __DIR__ . '/../_partials/support_ai.php';
+    if ($_POST['_action'] === 'ai_settings') {
+        try {
+            pc_set('SUPPORT_AI_ENABLED', !empty($_POST['ai_enabled']) ? '1' : '0');
+            $key = trim((string) ($_POST['ai_key'] ?? ''));
+            // Write-only: a blank box keeps the stored key; it's never shown again.
+            if ($key !== '') pc_set('SUPPORT_AI_API_KEY', ac_seal($key));
+            $exp = trim((string) ($_POST['ai_key_expires'] ?? ''));
+            pc_set('SUPPORT_AI_KEY_EXPIRES', preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp) ? $exp : '');
+            pc_set('SUPPORT_AI_MONTHLY_CAP_GBP', (string) max(0, round((float) ($_POST['ai_cap'] ?? SUPPORT_AI_DEFAULT_CAP_GBP), 2)));
+            pc_set('SUPPORT_AI_DAILY_USER_LIMIT', (string) max(0, (int) ($_POST['ai_daily'] ?? SUPPORT_AI_DEFAULT_DAILY)));
+            $_SESSION['flash_success'] = 'AI assistant settings saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        }
+    } else {
+        [$code, $resp, $err] = support_ai_request([
+            'model' => SUPPORT_AI_MODEL, 'max_tokens' => 1000, 'fallbacks' => 'default',
+            'output_config' => ['effort' => 'low'],
+            'messages' => [['role' => 'user', 'content' => 'Reply with just: OK']],
+        ]);
+        if ($resp !== null) {
+            $_SESSION['flash_success'] = 'Connected to Claude (' . (string) ($resp['model'] ?? SUPPORT_AI_MODEL) . ') — the key works.';
+        } else {
+            $_SESSION['flash_error'] = 'Connection test failed (HTTP ' . $code . '): ' . $err;
+        }
+    }
+    header('Location: /master-admin/support.php#ai');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -71,8 +105,7 @@ try {
             default                                  => "status <> 'resolved'",
         };
         $tickets = $pdo->query(
-            "SELECT id, category, message, company_name, user_name, page_url, status, created_at,
-                    (js_errors IS NOT NULL) AS has_errors
+            "SELECT *, (js_errors IS NOT NULL) AS has_errors
                FROM support_tickets WHERE $where
            ORDER BY (status = 'new') DESC, created_at DESC LIMIT 200"
         )->fetchAll();
@@ -160,6 +193,14 @@ $activeNav = 'support';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
+        <?php $keyDays = support_ai_key_days_left(); if ($keyDays !== null && $keyDays <= 30): ?>
+            <div class="alert alert-error" role="alert">
+                <?= $keyDays < 0 ? '<strong>The AI assistant\'s API key has expired</strong> — the chat is off until you add a new one.'
+                                 : '<strong>The AI assistant\'s API key expires in ' . $keyDays . ' day' . ($keyDays === 1 ? '' : 's') . '.</strong>' ?>
+                Create a new key in the Anthropic console, paste it into <a href="#ai">AI assistant</a> below with the new expiry date, then delete the old key.
+            </div>
         <?php endif; ?>
 
         <?php if ($missing): ?>
@@ -301,7 +342,7 @@ $activeNav = 'support';
                                         <a href="/master-admin/support.php?id=<?= (int) $t['id'] ?>" class="sup-snip" style="display:block">
                                             <?= (int) $t['has_errors'] ? '<span class="sup-err" title="JavaScript errors captured">⚠</span> ' : '' ?><?= e((string) $t['message']) ?>
                                         </a>
-                                        <span style="font-size:.78rem;color:var(--text-faint)"><?= e($cats[$t['category']] ?? $t['category']) ?></span>
+                                        <span style="font-size:.78rem;color:var(--text-faint)"><?= e($cats[$t['category']] ?? $t['category']) ?><?= ($t['source'] ?? '') === 'ai' ? ' &middot; 🤖 via AI assistant' : '' ?></span>
                                     </td>
                                     <td><?= e((string) $t['user_name']) ?><br><span style="font-size:.8rem;color:var(--text-faint)"><?= e((string) $t['company_name']) ?></span></td>
                                     <td style="font-size:.82rem"><?= e((string) (parse_url((string) $t['page_url'], PHP_URL_PATH) ?: '')) ?></td>
@@ -312,6 +353,61 @@ $activeNav = 'support';
                         </table>
                     </div>
                 <?php endif; ?>
+            </section>
+
+            <?php
+            $aiCfg   = support_ai_config();
+            $aiStats = support_ai_month_stats();
+            $aiDays  = support_ai_key_days_left();
+            ?>
+            <section class="section" id="ai">
+                <h2 style="font-size:1.1rem;margin:0 0 .25rem">AI assistant</h2>
+                <p style="color:var(--text-secondary);margin:0 0 1rem;font-size:.9rem">
+                    Turns the <strong>? Help</strong> button into a chat (Claude Opus 5) that answers from the Help topics
+                    and files bug reports here for you. When it's off, over the cap or the key has expired, the button
+                    quietly falls back to the plain report form.
+                </p>
+                <p style="margin:0 0 1rem">
+                    <strong>This month:</strong> <?= (int) $aiStats['convs'] ?> chats &middot; <?= (int) $aiStats['msgs'] ?> messages &middot;
+                    about &pound;<?= number_format($aiStats['gbp'], 2) ?> of your &pound;<?= number_format($aiCfg['cap_gbp'], 2) ?> cap
+                    <span style="color:var(--text-faint);font-size:.82rem">(estimate from token counts &mdash; the Anthropic console has the exact bill)</span>
+                </p>
+                <form method="post" action="/master-admin/support.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="ai_settings">
+                    <div class="form-group">
+                        <label style="display:flex;gap:.5rem;align-items:center;font-weight:600">
+                            <input type="checkbox" name="ai_enabled" value="1"<?= $aiCfg['enabled'] ? ' checked' : '' ?>>
+                            Chat assistant on (for everyone signed in)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="aiKey">Anthropic API key</label>
+                        <input type="password" id="aiKey" name="ai_key" autocomplete="off" spellcheck="false"
+                               placeholder="<?= $aiCfg['has_key'] ? 'Saved ✓ — leave blank to keep it, or paste a new key to replace it' : 'Paste the key (sk-ant-…)' ?>">
+                        <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">Stored encrypted and never shown again.</p>
+                    </div>
+                    <div class="form-row" style="display:flex;gap:1rem;flex-wrap:wrap">
+                        <div class="form-group">
+                            <label for="aiExp">Key expires</label>
+                            <input type="date" id="aiExp" name="ai_key_expires" value="<?= e($aiCfg['key_expires']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="aiCap">Monthly cap (&pound;)</label>
+                            <input type="number" id="aiCap" name="ai_cap" min="0" step="1" value="<?= e((string) $aiCfg['cap_gbp']) ?>" style="max-width:8rem">
+                        </div>
+                        <div class="form-group">
+                            <label for="aiDaily">Messages per person per day</label>
+                            <input type="number" id="aiDaily" name="ai_daily" min="0" step="1" value="<?= (int) $aiCfg['daily_limit'] ?>" style="max-width:8rem">
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <?php if ($aiCfg['has_key']): ?>
+                            <button type="submit" class="btn btn-secondary" name="_action" value="ai_test">Test connection</button>
+                        <?php endif; ?>
+                    </div>
+                </form>
             </section>
         <?php endif; ?>
     </main>

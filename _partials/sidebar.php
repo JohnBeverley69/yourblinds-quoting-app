@@ -148,6 +148,10 @@ if ($isSuperAdmin) {
     require_once __DIR__ . '/support.php';
     $_ybSupportNew = support_new_count();
     if ($_ybSupportNew > 0) $_ybSupportLabel .= ' (' . $_ybSupportNew . ' new)';
+    // AI key renewal nudge, from 30 days out (see master-admin/support.php).
+    require_once __DIR__ . '/support_ai.php';
+    $_ybKeyDays = support_ai_key_days_left();
+    if ($_ybKeyDays !== null && $_ybKeyDays <= 30) $_ybSupportLabel .= ' ⚠ key';
 }
 
 // Grouped navigation. Each section emits a small heading; sections

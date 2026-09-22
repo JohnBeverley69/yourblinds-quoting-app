@@ -89,6 +89,128 @@ function support_notify_recipients(): array
     )));
 }
 
+function support_clip($v, int $max): string
+{
+    $s = trim(str_replace("\0", '', (string) $v));
+    return function_exists('mb_substr') ? mb_substr($s, 0, $max) : substr($s, 0, $max);
+}
+
+/**
+ * The page context the widget posts with every report / chat message, cleaned
+ * and size-capped. js_errors / breadcrumbs are re-encoded JSON (or null);
+ * js_errors_list is the decoded error list for callers that want it.
+ */
+function support_capture_ctx(array $post): array
+{
+    $jsonList = static function ($raw, int $maxItems): array {
+        $arr = json_decode((string) $raw, true);
+        if (!is_array($arr)) return [];
+        $out = [];
+        foreach (array_slice(array_values($arr), -$maxItems) as $item) {
+            if (!is_array($item)) continue;
+            $row = [];
+            foreach ($item as $k => $v) {
+                if (!is_scalar($v)) continue;
+                $row[support_clip($k, 20)] = support_clip($v, 1000);
+            }
+            if ($row) $out[] = $row;
+        }
+        return $out;
+    };
+    $errs = $jsonList($post['js_errors'] ?? '', 10);
+    $bcs  = $jsonList($post['breadcrumbs'] ?? '', 20);
+    $enc  = static fn (array $a) => $a ? json_encode($a, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
+    $url  = (string) ($post['page_url'] ?? '');
+    return [
+        // Only a real http(s) address is kept — it's rendered as a link in the inbox.
+        'page_url'       => preg_match('#^https?://#i', $url) ? support_clip($url, 1000) : '',
+        'page_title'     => support_clip($post['page_title'] ?? '', 255),
+        'viewport'       => support_clip($post['viewport'] ?? '', 40),
+        'js_errors'      => $enc($errs),
+        'breadcrumbs'    => $enc($bcs),
+        'js_errors_list' => $errs,
+    ];
+}
+
+/**
+ * Save a support ticket and email the owner. $source = 'form' (the report
+ * form) or 'ai' (filed by the chat assistant). Returns the new id, or null
+ * if the insert failed. The email is best-effort.
+ */
+function support_create_ticket(array $user, string $category, string $message, array $ctx, string $source = 'form'): ?int
+{
+    require_once APP_ROOT . '/mailer.php';
+
+    $email = null;
+    try {
+        $st = db()->prepare('SELECT email FROM client_users WHERE id = ? LIMIT 1');
+        $st->execute([(int) $user['user_id']]);
+        $email = ($v = $st->fetchColumn()) !== false && $v !== null ? (string) $v : null;
+    } catch (Throwable $e) { /* optional */ }
+
+    $row = [
+        'client_id'    => (int) $user['client_id'],
+        'user_id'      => (int) $user['user_id'],
+        'user_name'    => support_clip($user['full_name'] ?? '', 190),
+        'company_name' => support_clip($user['company_name'] ?? '', 190),
+        'user_email'   => $email !== null ? support_clip($email, 190) : null,
+        'category'     => array_key_exists($category, support_categories()) ? $category : 'problem',
+        'message'      => support_clip($message, 20000),
+        'page_url'     => $ctx['page_url'] ?? '',
+        'page_title'   => $ctx['page_title'] ?? '',
+        'app_version'  => support_app_version(),
+        'user_agent'   => support_clip($_SERVER['HTTP_USER_AGENT'] ?? '', 500),
+        'viewport'     => $ctx['viewport'] ?? '',
+        'js_errors'    => $ctx['js_errors'] ?? null,
+        'breadcrumbs'  => $ctx['breadcrumbs'] ?? null,
+    ];
+
+    // `source` arrived with migrate_support_ai.php — include it only once the
+    // column exists so the report form keeps working before that runs.
+    $cols = array_keys($row);
+    $vals = array_values($row);
+    try {
+        db()->query('SELECT source FROM support_tickets LIMIT 0');
+        $cols[] = 'source';
+        $vals[] = $source === 'ai' ? 'ai' : 'form';
+    } catch (Throwable $e) { /* pre-migration */ }
+
+    try {
+        db()->prepare(
+            'INSERT INTO support_tickets (' . implode(', ', $cols) . ')
+             VALUES (' . implode(', ', array_fill(0, count($cols), '?')) . ')'
+        )->execute($vals);
+        $id = (int) db()->lastInsertId();
+    } catch (Throwable $e) {
+        error_log('[YourBlinds] support ticket insert failed: ' . $e->getMessage());
+        return null;
+    }
+
+    $to = support_notify_recipients();
+    if ($to) {
+        $cats   = support_categories();
+        $errs   = count($ctx['js_errors_list'] ?? []);
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $link   = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/master-admin/support.php?id=' . $id;
+        $via    = $source === 'ai' ? ' (filed by the AI assistant)' : '';
+        $body = "New support report #{$id} — {$cats[$row['category']]}{$via}\n\n"
+              . "From:    {$row['user_name']} ({$row['company_name']})" . ($row['user_email'] ? " <{$row['user_email']}>" : '') . "\n"
+              . "Page:    {$row['page_url']}\n"
+              . "Version: " . ($row['app_version'] !== '' ? $row['app_version'] : 'unknown') . "\n"
+              . "JS errors captured: {$errs}\n\n"
+              . "----\n{$row['message']}\n----\n\n"
+              . "Open it: {$link}\n";
+        try {
+            mailer_send($to, "[YourBlinds support] #{$id} " . support_clip(preg_replace('/\s+/', ' ', $row['message']), 60), $body,
+                null, null,
+                $row['user_email'] ? ['reply_to_email' => $row['user_email'], 'reply_to_name' => $row['user_name']] : null);
+        } catch (Throwable $e) {
+            error_log('[YourBlinds] support ticket email failed: ' . $e->getMessage());
+        }
+    }
+    return $id;
+}
+
 /** Count of tickets still marked New — for the sidebar badge. Defensive. */
 function support_new_count(): int
 {
