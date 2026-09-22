@@ -23,14 +23,14 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require_once __DIR__ . '/../../_partials/band_sort.php';
-
-requireLogin();
+require_once __DIR__ . '/../../_partials/instaprice_public.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-$user      = current_user();
-$clientId  = (int) $user['client_id'];
+// Read-only: logged-in tenants (their fabrics) AND anonymous public InstaPrice
+// visitors with ?public=1 (the showcase catalogue's fabrics).
+[$clientId, $ipPublic] = instaprice_api_client();
 $productId = (int) ($_GET['product_id'] ?? 0);
 $q         = trim((string) ($_GET['q'] ?? ''));
 // Optional system filter — passed by the quote builder once the
