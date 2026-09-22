@@ -16,7 +16,7 @@ declare(strict_types=1);
  * Pull requests: read) saved in Master Admin → Support inbox → AI assistant.
  */
 
-if (function_exists('support_fix_brief')) {
+if (defined('SUPPORT_FIX_REPO')) {
     return;
 }
 
