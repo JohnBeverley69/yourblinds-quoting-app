@@ -106,6 +106,27 @@ $activeNav = 'instaprice';
             #ip-extras > div[data-extra-id] { margin-bottom: 0.5rem; }
         }
 
+        /* Space-saver (phone AND tablet): these fields already name themselves
+           from the text inside the box (placeholder / first option / chosen
+           value), so the heading above is a duplicate line. Hide the heading
+           visually but keep it in the DOM (clipped, not display:none) so screen
+           readers still announce the field. Only the self-describing top fields
+           — NOT the Dimensions group (its Qty box shows just "1") and NOT the
+           option/extra dropdowns (their box shows the chosen value, e.g.
+           "White", not the field name). 1024px matches the tablet breakpoint
+           used for the off-canvas sidebar. */
+        @media (max-width: 1024px) {
+            #ip-form label[for="ip-product"],
+            #ip-form label[for="ip-system"],
+            #ip-form label[for="ip-band"],
+            #ip-form label[for="ip-fabric-search"],
+            #ip-form label[for="ip-unit"] {
+                position: absolute; width: 1px; height: 1px; padding: 0;
+                margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+                white-space: nowrap; border: 0;
+            }
+        }
+
         /* Slat typeahead */
         .ip-fab { position: relative; }
         .ip-fab-results {
