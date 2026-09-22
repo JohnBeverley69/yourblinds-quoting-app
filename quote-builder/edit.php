@@ -375,6 +375,13 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 grid-column: 1 / -1;
             }
         }
+        @media (max-width: 768px) {
+            /* Phone: this row stayed 3-up (Width/Drop/Qty) and spilled off the
+               screen — and because it's id-scoped (#add-line) the generic
+               .form-row.cols-3 phone stack in app.css can't override it. Stack
+               every field to its own full-width row, like the new-quote form. */
+            #add-line .form-row.cols-3-plus-notes { grid-template-columns: 1fr; }
+        }
 
         /* Sticky save bar inside the add-blind form. Once you scroll down
            past the form, the Save button rides along at the bottom of the
