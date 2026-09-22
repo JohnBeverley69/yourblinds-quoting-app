@@ -124,3 +124,13 @@ if (count($existing) > $KEEP) {
 }
 
 echo 'Kept ' . min(count($existing), $KEEP) . " daily backup(s).\n";
+
+// ---- Other daily housekeeping -----------------------------------------------
+// AI assistant key-expiry / spend emails (see _partials/support_ai.php). Also
+// checked lazily on page loads, but the cron catches quiet spells.
+try {
+    require_once __DIR__ . '/_partials/support_ai.php';
+    support_ai_alerts_if_due();
+} catch (Throwable $e) {
+    echo 'AI assistant alert check failed: ' . $e->getMessage() . "\n";
+}

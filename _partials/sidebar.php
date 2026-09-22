@@ -152,6 +152,7 @@ if ($isSuperAdmin) {
     require_once __DIR__ . '/support_ai.php';
     $_ybKeyDays = support_ai_key_days_left();
     if ($_ybKeyDays !== null && $_ybKeyDays <= 30) $_ybSupportLabel .= ' ⚠ key';
+    try { support_ai_alerts_if_due(); } catch (Throwable $e) { /* never break the page for an alert */ }
 }
 
 // Grouped navigation. Each section emits a small heading; sections
