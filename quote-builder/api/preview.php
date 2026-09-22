@@ -31,14 +31,15 @@ require __DIR__ . '/../../_partials/pricing_engine.php';
 require __DIR__ . '/../../_partials/price_table_parser.php';
 require __DIR__ . '/../../_partials/units.php';
 require __DIR__ . '/../_helpers.php';   // qb_price_multi_fascia (shared multi-blind pricer)
-
-requireLogin();
+require_once __DIR__ . '/../../_partials/instaprice_public.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-$user     = current_user();
-$clientId = (int) $user['client_id'];
+// Read-only price probe: served to logged-in tenants (their catalogue) AND to
+// anonymous public InstaPrice visitors with ?public=1 (the showcase catalogue).
+[$clientId, $ipPublic] = instaprice_api_client();
+$user = current_user();   // null in public mode
 
 // When a super-admin is previewing a line on a factory quote raised FOR a trade
 // account, price with the account's buying discount so the live preview matches
@@ -115,7 +116,8 @@ if (isset($_GET['extras']) && is_array($_GET['extras'])) {
 
 // Cost-viewers only: the per-line markup/discount override IS the trade
 // margin, so it's gated the same way the cost figures are.
-$isAdmin  = ($user['role'] ?? '') === 'admin';
+$isAdmin  = is_array($user) && ($user['role'] ?? '') === 'admin';
+// Public (anonymous) visitors never see the cost/margin breakdown.
 $canCosts = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
 
 $input = [

@@ -1,0 +1,74 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Public (anonymous) InstaPrice support — the lead-gen hook.
+ *
+ * InstaPrice doubles as a shop window: anyone can price against the public
+ * SHOWCASE catalogue without logging in. The moment they try to do more —
+ * save/send a quote, add a customer — they hit the signup gate (welcome.php).
+ *
+ * The showcase catalogue is ONE designated tenant's real catalogue: by
+ * default the factory (YourBlinds' own), whose prices the owner is happy to
+ * show publicly. Override with the INSTAPRICE_PUBLIC_CLIENT_ID env var.
+ *
+ * SECURITY: the anonymous path is READ-ONLY and hard-scoped to the single
+ * showcase client. Only the read-only pricing endpoints (product-data,
+ * fabrics-search, preview) and the InstaPrice page itself may use it — never
+ * anything that writes or that reads another tenant's data.
+ */
+
+require_once __DIR__ . '/../auth/middleware.php';
+
+/**
+ * The tenant whose catalogue the public InstaPrice prices against.
+ */
+function instaprice_showcase_client_id(): int
+{
+    $env = function_exists('env') ? env('INSTAPRICE_PUBLIC_CLIENT_ID') : null;
+    if ($env !== null && (int) $env > 0) {
+        return (int) $env;
+    }
+    return factory_client_id();
+}
+
+/**
+ * True when the current request is an anonymous visitor using the public
+ * showcase (i.e. nobody is logged in). Logged-in tenants always get their
+ * own catalogue, exactly as before.
+ */
+function instaprice_is_public(): bool
+{
+    return !is_logged_in();
+}
+
+/**
+ * Resolve the client id for the read-only InstaPrice-family APIs, allowing an
+ * anonymous public showcase mode.
+ *
+ *   - Logged in           -> their own client_id (unchanged behaviour).
+ *   - Anonymous + public=1 -> the showcase client, read-only.
+ *   - Anonymous, no flag   -> 401 JSON, then exit.
+ *
+ * Returns [int $clientId, bool $isPublic]. MUST only be called by endpoints
+ * that are strictly read-only.
+ */
+function instaprice_api_client(): array
+{
+    if (is_logged_in()) {
+        // Per-tenant response — never let a shared cache store it.
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, private, max-age=0');
+        }
+        return [(int) current_user()['client_id'], false];
+    }
+
+    if ((int) ($_GET['public'] ?? 0) === 1) {
+        return [instaprice_showcase_client_id(), true];
+    }
+
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => 'Not authorised — please sign in.']);
+    exit;
+}
