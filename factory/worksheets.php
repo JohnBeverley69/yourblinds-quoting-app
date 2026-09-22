@@ -428,8 +428,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     /* 14rem is a good width for the option labels, but it must be a preference,
        not a floor — on a 360px screen a floor puts it through the side. */
     .add-fld select { width:14rem; max-width:100%; min-width:0; }
-    /* palette — drag a field onto a label */
-    .palette { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:0.55rem 0.75rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.9rem; }
+    /* palette — drag a field onto a label. Sticky to the top of the viewport
+       (matching the preview's top:0.6rem) so you can always grab a field to drag,
+       however far down the editor you've scrolled. Solid background + a small
+       shadow so the editor scrolls cleanly underneath it. Goes static on mobile,
+       where the layout is a single stacked column (like the preview). */
+    .palette { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:0.55rem 0.75rem; margin-bottom:0.9rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.9rem;
+        position:sticky; top:0.6rem; z-index:20; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
     .pal-hint { font-size:0.75rem; color:#64748b; font-weight:600; width:100%; }
     .pal-group { display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem; }
     .pal-glabel { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.03em; color:#94a3b8; margin-right:0.1rem; }
@@ -522,6 +527,7 @@ require __DIR__ . '/../_partials/factory_head.php';
          Stretch them back to the container and let the preview scroll. */
       .ws-layout { flex-direction:column; align-items:stretch; }
       .ws-layout > .ws-preview { position:static; width:auto; max-width:none; min-width:0; overflow-x:auto; }
+      .palette { position:static; box-shadow:none; }
     }
 </style>
 
