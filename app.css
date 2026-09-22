@@ -911,7 +911,12 @@ select optgroup {
 .nav-close,
 .nav-backdrop { display: none; }
 
-@media (max-width: 768px) {
+/* Off-canvas sidebar for TABLETS as well as phones (<=1024px). Above 768px the
+   sidebar used to stay in the flex flow and eat ~a third of a tablet's screen,
+   scrunching every input; now it slides away behind the top-right toggle at
+   tablet widths too. Form-stacking stays phone-only (below) so a tablet uses the
+   freed-up width for multi-column forms instead of wasting it. */
+@media (max-width: 1024px) {
     .app-shell { flex-direction: column; min-height: auto; }
 
     .app-sidebar {
@@ -961,6 +966,12 @@ select optgroup {
     }
     .nav-toggle-input:checked ~ .nav-backdrop { display: block; }
 
+    .app-main { padding-top: 3.75rem; }   /* clear the fixed toggle button */
+}
+
+/* Phone-only tightening: full-bleed padding, smaller title, and stack the
+   multi-column forms (a tablet has the width for columns, a phone doesn't). */
+@media (max-width: 768px) {
     .app-main { padding: 1.25rem; padding-top: 3.75rem; }
     .page-title { font-size: 1.25rem; }
     .form-row,
