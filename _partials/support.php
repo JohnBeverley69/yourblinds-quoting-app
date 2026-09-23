@@ -129,12 +129,15 @@ function support_github_main_sha(): string
 }
 
 /**
- * Who gets the "new support report" email: SUPPORT_NOTIFY_EMAIL from .env if
+ * Who gets the "new support report" email: "Send support alerts to" in the
+ * Support inbox settings (platform_config SUPPORT_NOTIFY_EMAIL, .env fallback) if
  * set (comma-separated allowed), otherwise every super-admin with an email.
  */
 function support_notify_recipients(): array
 {
-    $env = trim((string) (env('SUPPORT_NOTIFY_EMAIL', '') ?? ''));
+    // "Send support alerts to" in Support inbox settings wins, then .env.
+    require_once __DIR__ . '/accounting.php';   // pc_get
+    $env = trim((string) (pc_get('SUPPORT_NOTIFY_EMAIL', '') ?? ''));
     $list = [];
     if ($env !== '') {
         $list = array_map('trim', explode(',', $env));
