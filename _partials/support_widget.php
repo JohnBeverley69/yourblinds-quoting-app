@@ -114,8 +114,11 @@ if (support_widget_paused()) {
             <?php $first = false; endforeach; ?>
         </fieldset>
         <label for="ybsMessage" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Describe it</label>
-        <textarea id="ybsMessage" name="message" maxlength="5000" required
-                  placeholder="What were you doing, and what happened? e.g. &ldquo;Clicked Save on the quote and nothing happened.&rdquo;"></textarea>
+        <div style="display:flex;gap:.4rem;align-items:flex-end">
+            <textarea id="ybsMessage" name="message" maxlength="5000" required style="flex:1"
+                      placeholder="What were you doing, and what happened? e.g. &ldquo;Clicked Save on the quote and nothing happened.&rdquo;"></textarea>
+            <button type="button" class="ybs-mic" id="ybsFormMic" aria-label="Speak your report" aria-pressed="false" title="Speak instead of typing" hidden>🎤</button>
+        </div>
         <p class="ybs-note">We automatically attach the page you're on, your browser and any error details
             &mdash; never anything you've typed into forms.</p>
         <div class="ybs-actions">
@@ -222,6 +225,7 @@ if (support_widget_paused()) {
             chat.hidden = true; form.hidden = false; done.hidden = true;
             document.getElementById('ybsSpeak').hidden = true;
             if (window.speechSynthesis) window.speechSynthesis.cancel();
+            stopListening();
             title.textContent = 'Report a problem';
             notice.hidden = !note; notice.textContent = note || '';
             setTimeout(function () { text.focus(); }, 0);
@@ -258,30 +262,34 @@ if (support_widget_paused()) {
         // Safari; the mic hides where it's missing, e.g. Firefox), and optional
         // read-aloud of replies in the Help guide's voice ("Google UK English
         // Female", else the best British voice). Both free, both in-browser.
-        var mic = document.getElementById('ybsMic'), speakBtn = document.getElementById('ybsSpeak');
+        var speakBtn = document.getElementById('ybsSpeak');
         var Rec = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false;
-        if (Rec) {
-            mic.hidden = false;
-            mic.addEventListener('click', function () {
+        var BLOCKED = 'Microphone blocked — allow it in your browser\'s address bar to speak your message.';
+        // One mic per text box (the chat, and the "send to the team" form);
+        // only one listens at a time.
+        function attachMic(btn, input, onBlocked) {
+            if (!Rec || !btn) return;
+            btn.hidden = false;
+            btn.addEventListener('click', function () {
                 if (listening) { rec && rec.stop(); return; }
                 stopSpeaking();
-                var base = chatInput.value.replace(/\s+$/, '');
+                var base = input.value.replace(/\s+$/, '');
                 rec = new Rec();
                 rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = false;
                 rec.onresult = function (e) {
                     var said = '';
                     for (var i = 0; i < e.results.length; i++) said += e.results[i][0].transcript;
-                    chatInput.value = (base ? base + ' ' : '') + said;
+                    input.value = (base ? base + ' ' : '') + said;
                 };
                 rec.onerror = function (e) {
-                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                        bubble('note', 'Microphone blocked — allow it in your browser\'s address bar to speak your message.');
-                    }
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onBlocked();
                 };
-                rec.onend = function () { listening = false; mic.setAttribute('aria-pressed', 'false'); chatInput.focus(); };
-                try { rec.start(); listening = true; mic.setAttribute('aria-pressed', 'true'); } catch (err) { listening = false; }
+                rec.onend = function () { listening = false; btn.setAttribute('aria-pressed', 'false'); input.focus(); };
+                try { rec.start(); listening = true; btn.setAttribute('aria-pressed', 'true'); } catch (err) { listening = false; }
             });
         }
+        attachMic(document.getElementById('ybsMic'), chatInput, function () { bubble('note', BLOCKED); });
+        attachMic(document.getElementById('ybsFormMic'), text, function () { msg.className = 'ybs-msg is-err'; msg.textContent = BLOCKED; });
         function stopListening() { if (listening && rec) rec.stop(); }
 
         var synth = window.speechSynthesis, voice = null, speakOn = false;
