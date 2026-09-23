@@ -51,25 +51,20 @@ function support_widget_paused(): bool
 }
 
 /**
- * The deployed app version = the short git commit the site is running.
- * Cloudways deploys with a git pull, so .git is on the server; read HEAD
- * straight off disk (no shell-out). Returns '' if it can't be worked out.
+ * Read the current commit sha straight off disk (no shell-out). Returns ''
+ * if it can't be worked out (e.g. .git missing, or unreadable by whichever
+ * user PHP-FPM runs as).
  */
-function support_app_version(): string
+function support_git_sha(): string
 {
-    static $ver = null;
-    if ($ver !== null) {
-        return $ver;
-    }
-    $ver = '';
     $git = APP_ROOT . '/.git';
     $head = @file_get_contents($git . '/HEAD');
     if ($head === false) {
-        return $ver;
+        return '';
     }
     $head = trim($head);
     if (strpos($head, 'ref: ') !== 0) {
-        return $ver = substr($head, 0, 7);           // detached HEAD = the sha
+        return substr($head, 0, 7);           // detached HEAD = the sha
     }
     $ref = substr($head, 5);
     $sha = @file_get_contents($git . '/' . $ref);
@@ -80,7 +75,28 @@ function support_app_version(): string
             $sha = $m[1];
         }
     }
-    return $ver = ($sha !== false && $sha !== null) ? substr(trim((string) $sha), 0, 7) : '';
+    return ($sha !== false && $sha !== null) ? substr(trim((string) $sha), 0, 7) : '';
+}
+
+/**
+ * The deployed app version = the short git commit the site is running.
+ * Cloudways deploys with a git pull, so .git is normally on the server —
+ * but the deploy user and the PHP-FPM user aren't guaranteed to be the same
+ * account, so .git can exist and still be unreadable to this process. Falls
+ * back to APP_GIT_COMMIT (set by hand in .env) when the on-disk read fails,
+ * rather than always showing "unknown".
+ */
+function support_app_version(): string
+{
+    static $ver = null;
+    if ($ver !== null) {
+        return $ver;
+    }
+    $ver = support_git_sha();
+    if ($ver === '') {
+        $ver = trim((string) (env('APP_GIT_COMMIT', '') ?? ''));
+    }
+    return $ver;
 }
 
 /**
