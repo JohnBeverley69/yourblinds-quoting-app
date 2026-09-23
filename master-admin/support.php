@@ -85,6 +85,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', [
     exit;
 }
 
+// One-tap status change (✓ Mark resolved / Reopen, on the ticket and the list)
+// — status only, so private notes are never touched.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'quick_status') {
+    csrf_check();
+    $id     = (int) ($_POST['id'] ?? 0);
+    $status = (string) ($_POST['status'] ?? '');
+    if ($id > 0 && array_key_exists($status, $statuses)) {
+        try {
+            $pdo->prepare('UPDATE support_tickets SET status = ? WHERE id = ?')->execute([$status, $id]);
+            $_SESSION['flash_success'] = "Ticket #{$id} marked " . strtolower($statuses[$status]) . '.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not update the ticket.';
+        }
+    }
+    $back = (string) ($_POST['back'] ?? '');
+    header('Location: ' . ($back === 'list' ? '/master-admin/support.php' : '/master-admin/support.php?id=' . $id));
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $id     = (int) ($_POST['id'] ?? 0);
@@ -242,11 +261,23 @@ $activeNav = 'support';
         <?php elseif ($ticket): ?>
             <?php $errs = $decode($ticket['js_errors']); $bcs = $decode($ticket['breadcrumbs']); ?>
             <section class="section">
-                <p style="margin:0 0 .5rem">
-                    <span class="badge <?= e($badge[$ticket['status']] ?? 'badge-draft') ?>"><?= e($statuses[$ticket['status']] ?? $ticket['status']) ?></span>
-                    &nbsp;<strong><?= e($cats[$ticket['category']] ?? $ticket['category']) ?></strong>
-                    &middot; <?= e(time_ago((string) $ticket['created_at'])) ?>
-                </p>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0 0 .5rem">
+                    <p style="margin:0">
+                        <span class="badge <?= e($badge[$ticket['status']] ?? 'badge-draft') ?>"><?= e($statuses[$ticket['status']] ?? $ticket['status']) ?></span>
+                        &nbsp;<strong><?= e($cats[$ticket['category']] ?? $ticket['category']) ?></strong>
+                        &middot; <?= e(time_ago((string) $ticket['created_at'])) ?>
+                    </p>
+                    <form method="post" action="/master-admin/support.php" style="margin:0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="_action" value="quick_status">
+                        <input type="hidden" name="id" value="<?= (int) $ticket['id'] ?>">
+                        <?php if ($ticket['status'] === 'resolved'): ?>
+                            <button type="submit" name="status" value="in_progress" class="btn btn-secondary">Reopen</button>
+                        <?php else: ?>
+                            <button type="submit" name="status" value="resolved" class="btn btn-primary">✓ Mark resolved</button>
+                        <?php endif; ?>
+                    </form>
+                </div>
                 <div class="sup-msg"><?= e((string) $ticket['message']) ?></div>
 
                 <dl class="sup-meta">
@@ -400,7 +431,20 @@ $activeNav = 'support';
                             <?php foreach ($tickets as $t): ?>
                                 <tr>
                                     <td><a href="/master-admin/support.php?id=<?= (int) $t['id'] ?>"><?= (int) $t['id'] ?></a></td>
-                                    <td><span class="badge <?= e($badge[$t['status']] ?? 'badge-draft') ?>"><?= e($statuses[$t['status']] ?? $t['status']) ?></span></td>
+                                    <td style="white-space:nowrap">
+                                        <span class="badge <?= e($badge[$t['status']] ?? 'badge-draft') ?>"><?= e($statuses[$t['status']] ?? $t['status']) ?></span>
+                                        <?php if ($t['status'] !== 'resolved'): ?>
+                                            <form method="post" action="/master-admin/support.php" style="display:inline;margin:0">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="_action" value="quick_status">
+                                                <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                                                <input type="hidden" name="back" value="list">
+                                                <button type="submit" name="status" value="resolved" class="btn btn-secondary"
+                                                        style="padding:.15rem .5rem;font-size:.8rem;margin-left:.25rem"
+                                                        title="Mark ticket #<?= (int) $t['id'] ?> resolved" aria-label="Mark ticket #<?= (int) $t['id'] ?> resolved">✓</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <a href="/master-admin/support.php?id=<?= (int) $t['id'] ?>" class="sup-snip" style="display:block">
                                             <?= (int) $t['has_errors'] ? '<span class="sup-err" title="JavaScript errors captured">⚠</span> ' : '' ?><?= e((string) $t['message']) ?>
