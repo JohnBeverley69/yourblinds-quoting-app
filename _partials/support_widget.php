@@ -20,6 +20,12 @@ if (!empty($GLOBALS['_ybSupportWidgetShown'])) {
 }
 $GLOBALS['_ybSupportWidgetShown'] = true;
 require_once __DIR__ . '/support.php';
+
+// Master pause switch — defaults to paused, so the widget ships dark until the
+// owner turns it on from Master Admin → Support inbox. Renders nothing at all.
+if (support_widget_paused()) {
+    return;
+}
 ?>
 <style>
 .ybs-fab{position:fixed;right:1rem;bottom:1rem;z-index:900;display:inline-flex;align-items:center;gap:.4rem;
