@@ -52,24 +52,35 @@ function support_widget_paused(): bool
 
 /**
  * The deployed app version = the short git commit the site is running.
- * Cloudways deploys with a git pull, so .git is on the server; read HEAD
- * straight off disk (no shell-out). Returns '' if it can't be worked out.
+ *
+ * Locally that's read straight off .git. The live site has NO .git folder —
+ * Cloudways' git deploy syncs the working files only (confirmed with
+ * master-admin/diag-app-version.php, 2026-09-23) — so there it falls back to
+ * the latest commit on main from GitHub. Every merge to main deploys within a
+ * minute or two (.github/workflows/deploy.yml), so that is what's running
+ * except in that short window. Cached for 10 minutes; '' if both fail.
  */
 function support_app_version(): string
 {
     static $ver = null;
-    if ($ver !== null) {
-        return $ver;
+    if ($ver === null) {
+        $ver = support_git_head_sha();
+        if ($ver === '') $ver = support_github_main_sha();
     }
-    $ver = '';
-    $git = APP_ROOT . '/.git';
+    return $ver;
+}
+
+/** Short sha of HEAD read off disk (no shell-out), or '' if there's no .git. */
+function support_git_head_sha(): string
+{
+    $git  = APP_ROOT . '/.git';
     $head = @file_get_contents($git . '/HEAD');
     if ($head === false) {
-        return $ver;
+        return '';
     }
     $head = trim($head);
     if (strpos($head, 'ref: ') !== 0) {
-        return $ver = substr($head, 0, 7);           // detached HEAD = the sha
+        return substr($head, 0, 7);           // detached HEAD = the sha
     }
     $ref = substr($head, 5);
     $sha = @file_get_contents($git . '/' . $ref);
@@ -80,7 +91,41 @@ function support_app_version(): string
             $sha = $m[1];
         }
     }
-    return $ver = ($sha !== false && $sha !== null) ? substr(trim((string) $sha), 0, 7) : '';
+    return ($sha !== false && $sha !== null) ? substr(trim((string) $sha), 0, 7) : '';
+}
+
+/**
+ * Short sha of the latest commit on main, from GitHub's public API (the repo
+ * is public, so no token). Cached in app_settings for 10 minutes so ticket
+ * creation never waits on GitHub more than once in a while; a failed lookup
+ * falls back to the last known value.
+ */
+function support_github_main_sha(): string
+{
+    require_once __DIR__ . '/app_settings.php';
+    $cached = (string) (app_setting_get('support_app_version_cache', '') ?? '');
+    [$sha, $at] = array_pad(explode('|', $cached, 2), 2, '0');
+    if ($sha !== '' && time() - (int) $at < 600) {
+        return $sha;
+    }
+    $ch = curl_init('https://api.github.com/repos/JohnBeverley69/yourblinds-quoting-app/commits/main');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT        => 4,
+        CURLOPT_HTTPHEADER     => [
+            'Accept: application/vnd.github.sha',   // body is just the 40-char sha
+            'User-Agent: YourBlinds-support',
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($code === 200 && is_string($body) && preg_match('/^[0-9a-f]{40}$/', trim($body))) {
+        $sha = substr(trim($body), 0, 7);
+        app_setting_set('support_app_version_cache', $sha . '|' . time());
+    }
+    return $sha;
 }
 
 /**
