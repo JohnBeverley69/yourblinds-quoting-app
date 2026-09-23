@@ -49,6 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', [
     require_once __DIR__ . '/../_partials/support_ai.php';
     if ($_POST['_action'] === 'ai_settings') {
         try {
+            // Master pause switch for the whole widget. Ticked = live (unpaused).
+            pc_set('SUPPORT_WIDGET_PAUSED', empty($_POST['widget_live']) ? '1' : '0');
             pc_set('SUPPORT_AI_ENABLED', !empty($_POST['ai_enabled']) ? '1' : '0');
             $key = trim((string) ($_POST['ai_key'] ?? ''));
             // Write-only: a blank box keeps the stored key; it's never shown again.
@@ -432,6 +434,15 @@ $activeNav = 'support';
                 <form method="post" action="/master-admin/support.php">
                     <?= csrf_field() ?>
                     <input type="hidden" name="_action" value="ai_settings">
+                    <div class="form-group" style="padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-subtle)">
+                        <label style="display:flex;gap:.5rem;align-items:center;font-weight:700">
+                            <input type="checkbox" name="widget_live" value="1"<?= support_widget_paused() ? '' : ' checked' ?>>
+                            Support widget is live (visible to users)
+                        </label>
+                        <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">
+                            Master switch. Off (the default) = the <strong>? Help</strong> button is hidden for everyone and reports are refused — the whole feature is paused. Tick this when you're ready to field problems. The chat assistant below is a separate switch.
+                        </p>
+                    </div>
                     <div class="form-group">
                         <label style="display:flex;gap:.5rem;align-items:center;font-weight:600">
                             <input type="checkbox" name="ai_enabled" value="1"<?= $aiCfg['enabled'] ? ' checked' : '' ?>>

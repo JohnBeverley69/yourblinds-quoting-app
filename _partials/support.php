@@ -31,6 +31,26 @@ function support_categories(): array
 }
 
 /**
+ * Master pause switch for the whole support widget.
+ *
+ * Defaults to PAUSED when unset, so the feature ships DARK — the "? Help"
+ * button never renders and /support/report.php refuses — until the owner turns
+ * it on from Master Admin → Support inbox → AI assistant ("Support widget is
+ * live"). This is how the widget "starts paused": no user sees it, and it
+ * flips on with one tick when you're ready to field reports.
+ */
+function support_widget_paused(): bool
+{
+    require_once __DIR__ . '/accounting.php';   // pc_get lives here
+    // Defensive: any read failure (e.g. table missing) leaves it paused.
+    try {
+        return pc_get('SUPPORT_WIDGET_PAUSED', '1') !== '0';
+    } catch (Throwable $e) {
+        return true;
+    }
+}
+
+/**
  * The deployed app version = the short git commit the site is running.
  * Cloudways deploys with a git pull, so .git is on the server; read HEAD
  * straight off disk (no shell-out). Returns '' if it can't be worked out.

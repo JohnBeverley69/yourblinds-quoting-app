@@ -32,6 +32,11 @@ $supplied = $_POST['_csrf'] ?? '';
 if (!is_string($supplied) || !hash_equals(csrf_token(), $supplied)) {
     $reply(419, ['ok' => false, 'error' => 'This page has expired — refresh it and try again.']);
 }
+// Master pause switch: while paused the widget is hidden, but refuse here too so
+// a hand-crafted POST can't file a ticket before the owner has gone live.
+if (support_widget_paused()) {
+    $reply(403, ['ok' => false, 'error' => 'Support isn\'t open just yet — please email hello@yourblinds.uk.']);
+}
 
 // Light per-session throttle: 10 reports an hour is plenty for a real person
 // and stops a stuck script flooding the inbox (and John's email).
