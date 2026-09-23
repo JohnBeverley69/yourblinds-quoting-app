@@ -197,7 +197,7 @@ $activeNav = 'support';
             <div>
                 <h1 class="page-title"><?= $ticket ? 'Support ticket #' . (int) $ticket['id'] : 'Support inbox' ?></h1>
                 <p class="page-subtitle">
-                    Reports sent from the <strong>? Help</strong> button on every page, with the page, version,
+                    Reports sent from the <strong>💬 Support</strong> button on every page, with the page, version,
                     browser, JavaScript errors and last clicks captured automatically.
                 </p>
             </div>
@@ -422,7 +422,7 @@ $activeNav = 'support';
             <section class="section" id="ai">
                 <h2 style="font-size:1.1rem;margin:0 0 .25rem">AI assistant</h2>
                 <p style="color:var(--text-secondary);margin:0 0 1rem;font-size:.9rem">
-                    Turns the <strong>? Help</strong> button into a chat (Claude Opus 5) that answers from the Help topics
+                    Turns the <strong>💬 Support</strong> button into a chat (Claude Opus 5) that answers from the Help topics
                     and files bug reports here for you. When it's off, over the cap or the key has expired, the button
                     quietly falls back to the plain report form.
                 </p>
@@ -440,7 +440,7 @@ $activeNav = 'support';
                             Support widget is live (visible to users)
                         </label>
                         <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">
-                            Master switch. Off (the default) = the <strong>? Help</strong> button is hidden for everyone and reports are refused — the whole feature is paused. Tick this when you're ready to field problems. The chat assistant below is a separate switch.
+                            Master switch. Off (the default) = the <strong>💬 Support</strong> button is hidden for everyone and reports are refused — the whole feature is paused. Tick this when you're ready to field problems. The chat assistant below is a separate switch.
                         </p>
                     </div>
                     <div class="form-group">

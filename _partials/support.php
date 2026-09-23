@@ -33,7 +33,7 @@ function support_categories(): array
 /**
  * Master pause switch for the whole support widget.
  *
- * Defaults to PAUSED when unset, so the feature ships DARK — the "? Help"
+ * Defaults to PAUSED when unset, so the feature ships DARK — the "💬 Support"
  * button never renders and /support/report.php refuses — until the owner turns
  * it on from Master Admin → Support inbox → AI assistant ("Support widget is
  * live"). This is how the widget "starts paused": no user sees it, and it
