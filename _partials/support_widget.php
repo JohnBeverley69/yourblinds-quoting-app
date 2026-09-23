@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Floating "Help / Report a problem" widget — on every logged-in page (included
+ * Floating "💬 Support" widget (chat + report a problem) — on every logged-in page (included
  * from _partials/sidebar.php and the factory shell, _partials/factory_head.php).
  *
  * The user types what went wrong; the widget quietly attaches the context that
@@ -80,7 +80,7 @@ if (support_widget_paused()) {
 @media print{.ybs-fab,.ybs-panel{display:none!important}}
 </style>
 <button type="button" class="ybs-fab" id="ybsFab" aria-haspopup="dialog" aria-controls="ybsPanel" aria-expanded="false">
-    <span class="ybs-fab-q" aria-hidden="true">?</span> Help
+    <span aria-hidden="true">💬</span> Support
 </button>
 <div class="ybs-panel" id="ybsPanel" role="dialog" aria-modal="false" aria-labelledby="ybsTitle" hidden>
     <div class="ybs-head">
@@ -228,7 +228,7 @@ if (support_widget_paused()) {
         }
         function showChat() {
             chat.hidden = false; form.hidden = true; done.hidden = true;
-            title.textContent = 'Help';
+            title.textContent = 'Support';
             document.getElementById('ybsSpeak').hidden = !window.speechSynthesis;
             setTimeout(function () { chatInput.focus(); log.scrollTop = log.scrollHeight; }, 0);
         }
