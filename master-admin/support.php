@@ -51,6 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', [
         try {
             // Master pause switch for the whole widget. Ticked = live (unpaused).
             pc_set('SUPPORT_WIDGET_PAUSED', empty($_POST['widget_live']) ? '1' : '0');
+            // Alert recipients: keep only valid addresses; blank = super-admins.
+            $notify = array_filter(array_map('trim', explode(',', (string) ($_POST['notify_email'] ?? ''))),
+                static fn ($a) => filter_var($a, FILTER_VALIDATE_EMAIL) !== false);
+            pc_set('SUPPORT_NOTIFY_EMAIL', implode(', ', $notify));
             pc_set('SUPPORT_AI_ENABLED', !empty($_POST['ai_enabled']) ? '1' : '0');
             $key = trim((string) ($_POST['ai_key'] ?? ''));
             // Write-only: a blank box keeps the stored key; it's never shown again.
@@ -441,6 +445,15 @@ $activeNav = 'support';
                         </label>
                         <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">
                             Master switch. Off (the default) = the <strong>💬 Support</strong> button is hidden for everyone and reports are refused — the whole feature is paused. Tick this when you're ready to field problems. The chat assistant below is a separate switch.
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="supNotify">Send support alerts to</label>
+                        <input type="text" id="supNotify" name="notify_email" maxlength="500" inputmode="email" autocomplete="email"
+                               value="<?= e((string) (pc_get('SUPPORT_NOTIFY_EMAIL', '') ?? '')) ?>"
+                               placeholder="Blank = every super-admin's login email">
+                        <p class="ui-hint" style="font-size:.8rem;color:var(--text-faint);margin:.3rem 0 0">
+                            New tickets, key-expiry and spending alerts. Separate several addresses with commas.
                         </p>
                     </div>
                     <div class="form-group">
