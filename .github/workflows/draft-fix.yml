@@ -98,7 +98,8 @@ jobs:
           # Never let the run change CI config or env files.
           git checkout -- .github 2>/dev/null || true
           git clean -fdq -- .github 2>/dev/null || true
-          git ls-files --others --exclude-standard | grep -E '(^|/)\.env' | xargs -r rm -f
+          # (grep exits 1 on no match, which pipefail would turn into a failed run)
+          git ls-files --others --exclude-standard | { grep -E '(^|/)\.env' || true; } | xargs -r rm -f
 
           if [ -z "$(git status --porcelain)" ]; then
             echo "No code changes — nothing to open."
