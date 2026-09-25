@@ -34,7 +34,7 @@ if ($clientId > 0) {
 if ($company === null) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
-    echo "Document not found.";
+    echo "Document not found. If you followed a link on an old quote, please ask for an up-to-date copy.";
     exit;
 }
 
@@ -76,15 +76,14 @@ $tokenCtx = [
     'trade_email'        => (string) $company['email'],
     'trade_phone'        => (string) $company['phone'],
 ];
-// Unsigned (old or hand-typed) link: show the terms with the company NAME only,
-// so stepping through ?c= ids can't harvest addresses, emails and phones.
+// Unsigned (old or hand-typed) link: refuse it, exactly like an unknown id,
+// so stepping through ?c= ids reveals nothing — not even which accounts exist
+// or their company names. Every link the app prints is signed (k=).
 if (!hash_equals(legal_link_key($clientId), (string) ($_GET['k'] ?? ''))) {
-    foreach (['trade_addr1', 'trade_addr2', 'trade_town', 'trade_county',
-              'trade_postcode', 'trade_email', 'trade_phone'] as $f) {
-        $tokenCtx[$f] = '';
-    }
-    $company = ['company_name' => $company['company_name']]
-             + array_fill_keys(['address1', 'address2', 'town', 'county', 'postcode', 'email', 'phone'], '');
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Document not found. If you followed a link on an old quote, please ask for an up-to-date copy.";
+    exit;
 }
 $rendered = legal_render_tokens((string) $text, $tokenCtx);
 

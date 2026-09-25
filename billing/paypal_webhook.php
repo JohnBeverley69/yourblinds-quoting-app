@@ -45,6 +45,19 @@ if ($cfg['webhook_id'] === '') {
 $payload = (string) file_get_contents('php://input');
 $headers = paypal_request_headers();
 
+// Cheap pre-check: a real PayPal delivery always carries its signature
+// headers. Anything without them is dropped here — no call out to PayPal's
+// verify API and no log row — so a script POSTing junk can't make us burn
+// PayPal API calls or fill the log table.
+$hLower = array_change_key_case($headers, CASE_LOWER);
+foreach (['paypal-transmission-id', 'paypal-transmission-sig', 'paypal-transmission-time',
+          'paypal-cert-url', 'paypal-auth-algo'] as $req) {
+    if (trim((string) ($hLower[$req] ?? '')) === '') {
+        http_response_code(400);
+        exit('Missing PayPal headers');
+    }
+}
+
 // Log every webhook attempt — even ones that fail verification, so we
 // can see attempted forgeries / mis-configured endpoints in the
 // audit trail. Anything written here is best-effort; if the log
@@ -91,7 +104,20 @@ if (!paypal_verify_webhook($payload, $headers, $cfg['webhook_id'])) {
     error_log('PayPal webhook signature verification FAILED. Headers: '
         . json_encode($headers) . ' Body: ' . substr($payload, 0, 500));
     // Try to extract the event type even from an unverified payload so
-    // the operator can see "spoof attempt" with context.
+    // the operator can see "spoof attempt" with context — but only while
+    // failures are rare, so a flood of forgeries can't fill the table.
+    $recentFail = 0;
+    try {
+        $recentFail = (int) db()->query(
+            "SELECT COUNT(*) FROM paypal_webhook_log
+              WHERE received_at > (NOW() - INTERVAL 10 MINUTE)
+                AND outcome = 'verification_failed'"
+        )->fetchColumn();
+    } catch (Throwable $e) { $recentFail = 0; }
+    if ($recentFail >= 20) {
+        http_response_code(400);
+        exit('Verification failed');
+    }
     $maybe = json_decode($payload, true);
     $pwl_log(
         is_array($maybe) ? (string) ($maybe['event_type'] ?? 'unknown') : 'unknown',

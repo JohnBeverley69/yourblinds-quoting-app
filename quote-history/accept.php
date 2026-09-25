@@ -257,9 +257,16 @@ if ($action === 'accept') {
 }
 
 if ($action === 'decline') {
-    $pdo->prepare(
-        'UPDATE quotes SET status = "declined" WHERE id = ?'
-    )->execute([(int) $quote['id']]);
+    // AND status = "sent": a decline racing an accept can't overwrite it
+    // (the accept may already have placed the order and emailed suppliers).
+    $decSt = $pdo->prepare(
+        'UPDATE quotes SET status = "declined" WHERE id = ? AND status = "sent"'
+    );
+    $decSt->execute([(int) $quote['id']]);
+    if ($decSt->rowCount() === 0) {
+        header('Location: ' . $publicUrl);
+        exit;
+    }
 
     // Customer declined — clear the pending install off the calendar too.
     qb_remove_fitting_for_quote($pdo, (int) $quote['id'], (int) $quote['client_id']);
