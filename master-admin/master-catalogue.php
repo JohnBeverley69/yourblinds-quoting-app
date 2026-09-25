@@ -102,20 +102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tids = db()->prepare('SELECT id FROM price_tables WHERE product_id = ? AND client_id = ?');
                 $tids->execute([$pid, $masterId]);
                 $tableIds = array_map('intval', $tids->fetchAll(PDO::FETCH_COLUMN));
-                $snapId = pbu_before(db(), $masterId, 'product:' . $pid, $tableIds, $pName . ' ' . $shown);
-                try {
-                    $st = db()->prepare(
-                        'UPDATE price_table_rows r
-                           JOIN price_tables t ON t.id = r.price_table_id
-                            SET r.price = ROUND(r.price * ?, 2)
-                          WHERE t.product_id = ? AND t.client_id = ?'
-                    );
-                    $st->execute([$factor, $pid, $masterId]);
-                } catch (Throwable $e) {
-                    pbu_after(db(), $snapId, $tableIds, false);
-                    throw $e;
-                }
-                pbu_after(db(), $snapId, $tableIds, true);
+                $snapId = pu_begin(db(), $masterId, 'product:' . $pid, $tableIds, $pName . ' ' . $shown);
+                $st = db()->prepare(
+                    'UPDATE price_table_rows r
+                       JOIN price_tables t ON t.id = r.price_table_id
+                        SET r.price = ROUND(r.price * ?, 2)
+                      WHERE t.product_id = ? AND t.client_id = ?'
+                );
+                $st->execute([$factor, $pid, $masterId]);
                 $cells = $st->rowCount();
                 $logPriceChange('product', $pName, $pct, $cells);
                 $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells) . ' prices by ' . $shown . '.'
@@ -140,21 +134,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $tids->execute([$masterId, $likePrefix]);
                 $tableIds = array_map('intval', $tids->fetchAll(PDO::FETCH_COLUMN));
-                $snapId = pbu_before(db(), $masterId, 'supplier:' . $key, $tableIds, $supName . ' ' . $shown);
-                try {
-                    $st = db()->prepare(
-                        'UPDATE price_table_rows r
-                           JOIN price_tables t ON t.id = r.price_table_id
-                           JOIN products     p ON p.id = t.product_id
-                            SET r.price = ROUND(r.price * ?, 2)
-                          WHERE p.client_id = ? AND p.name LIKE ?'
-                    );
-                    $st->execute([$factor, $masterId, $likePrefix]);
-                } catch (Throwable $e) {
-                    pbu_after(db(), $snapId, $tableIds, false);
-                    throw $e;
-                }
-                pbu_after(db(), $snapId, $tableIds, true);
+                $snapId = pu_begin(db(), $masterId, 'supplier:' . $key, $tableIds, $supName . ' ' . $shown);
+                $st = db()->prepare(
+                    'UPDATE price_table_rows r
+                       JOIN price_tables t ON t.id = r.price_table_id
+                       JOIN products     p ON p.id = t.product_id
+                        SET r.price = ROUND(r.price * ?, 2)
+                      WHERE p.client_id = ? AND p.name LIKE ?'
+                );
+                $st->execute([$factor, $masterId, $likePrefix]);
                 $cells = $st->rowCount();
                 $logPriceChange('supplier', $supName, $pct, $cells);
                 $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells)
@@ -170,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!preg_match('/^(product|supplier):.{1,70}$/su', $scope)) {
                 $_SESSION['flash_error'] = 'Nothing to undo.';
             } else {
-                [$ok, $msg, $cells] = pbu_undo(db(), $masterId, $scope);
+                [$ok, $msg, $cells] = pu_undo(db(), $masterId, $scope);
                 if ($ok) {
                     $logPriceChange('undo', $msg, 0.0, $cells);
                     $_SESSION['flash_success'] = 'Undone: ' . $msg . ' — ' . number_format($cells) . ' prices are back to what they were.';
@@ -259,7 +247,7 @@ foreach ($products as $p) {
 }
 
 /** Render one product table for a group. */
-$undoScopes = $onMaster ? pbu_latest_all(db(), $masterId) : [];
+$undoScopes = $onMaster ? pu_latest_all(db(), $masterId) : [];
 
 /** A small "↶ Undo +4%" button for a product/supplier with an undoable % change. */
 $undoButton = function (string $scope, bool $asBtn = false) use ($undoScopes): void {

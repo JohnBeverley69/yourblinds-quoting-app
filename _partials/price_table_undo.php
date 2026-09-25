@@ -2,189 +2,46 @@
 declare(strict_types=1);
 
 /**
- * Undo for "Adjust all prices by %" on the price-table editor.
+ * Undo for price-table changes — Save grid, uploads/imports, "Adjust all
+ * prices by %" (single table and Master Catalogue product/supplier).
  *
- * A bump rounds every cell to 2dp, so bumping back by the opposite % does
- * NOT restore the original prices. Instead, before each bump we snapshot the
- * table's prices (width, drop, price) and, after it commits, a hash of the
- * resulting prices. Undo restores the newest snapshot — but only while the
- * table still holds exactly the prices that bump produced, so it can never
- * silently overwrite edits made afterwards. Undoing one bump leaves the table
- * matching the previous bump's result, so several bumps unwind in order.
+ * Before a change we snapshot every row (width, drop, price, cost) of the
+ * tables it can touch, keyed by a SCOPE:
+ *   'table:163'     one price table (the editor page)
+ *   'system:12'     every band table on a system (band imports, cost import)
+ *   'product:119'   every table on a product (width/rate imports, Master bump)
+ *   'supplier:bev'  every table under a supplier prefix (Master bump)
+ * When the request ends the snapshot is finalised with the set of tables that
+ * exist afterwards and a hash of their rows; if nothing actually changed
+ * (validation error, no-op) the snapshot is thrown away.
  *
- * Only price is touched on restore; cost and the set of cells are left alone.
- * The table self-creates (no migration needed); everything is best-effort so
- * a missing/broken history never blocks the bump itself.
+ * Undo puts back EXACTLY the before rows — so added/removed cells, cost and
+ * 2dp rounding all come back — and deletes any band tables the change
+ * created. It only runs while those tables still hold exactly what the change
+ * left behind, so it can never overwrite edits made afterwards. Undoing one
+ * change leaves things as the previous change left them, so a scope's history
+ * unwinds newest-first.
+ *
+ * Self-creating table, best-effort throughout: a history failure never
+ * blocks the change itself.
  */
 
-const PTU_KEEP = 10;   // snapshots kept per price table
+const PU_KEEP = 10;   // snapshots kept per scope
 
-function ptu_ensure(PDO $pdo): void
+function pu_ensure(PDO $pdo): void
 {
     static $done = false;
     if ($done) return;
-    // DDL implicitly commits — only ever call this OUTSIDE a transaction.
+    // DDL implicitly commits — only ever reached OUTSIDE a transaction.
     $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS price_table_undo (
-            id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            client_id      INT UNSIGNED NOT NULL,
-            price_table_id INT UNSIGNED NOT NULL,
-            label          VARCHAR(120) NOT NULL,
-            prices_json    MEDIUMTEXT   NOT NULL,
-            after_hash     CHAR(40)     NULL,
-            created_by     INT UNSIGNED NULL,
-            created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            KEY idx_table (price_table_id, id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-    );
-    $done = true;
-}
-
-/** Current prices as [[w, d, price], ...] in a stable order. */
-function ptu_prices(PDO $pdo, int $tableId): array
-{
-    $st = $pdo->prepare(
-        'SELECT width_mm, drop_mm, price FROM price_table_rows
-          WHERE price_table_id = ? ORDER BY width_mm, drop_mm'
-    );
-    $st->execute([$tableId]);
-    $out = [];
-    foreach ($st->fetchAll(PDO::FETCH_NUM) as [$w, $d, $p]) {
-        $out[] = [(int) $w, (int) $d, number_format((float) $p, 4, '.', '')];
-    }
-    return $out;
-}
-
-function ptu_hash(array $prices): string
-{
-    return sha1(json_encode($prices));
-}
-
-/** Snapshot before a bump. Returns the snapshot id, or 0 if it couldn't be taken. */
-function ptu_before(PDO $pdo, int $clientId, int $tableId, string $label): int
-{
-    try {
-        ptu_ensure($pdo);
-        $userId = null;
-        if (function_exists('current_user')) {
-            $u = current_user();
-            $userId = isset($u['id']) ? (int) $u['id'] : null;
-        }
-        $pdo->prepare(
-            'INSERT INTO price_table_undo (client_id, price_table_id, label, prices_json, created_by)
-             VALUES (?, ?, ?, ?, ?)'
-        )->execute([$clientId, $tableId, mb_substr($label, 0, 120), json_encode(ptu_prices($pdo, $tableId)), $userId]);
-        $id = (int) $pdo->lastInsertId();
-
-        // Prune to the newest PTU_KEEP for this table.
-        $old = $pdo->prepare(
-            'SELECT id FROM price_table_undo WHERE price_table_id = ? ORDER BY id DESC LIMIT 1000 OFFSET ' . PTU_KEEP
-        );
-        $old->execute([$tableId]);
-        $ids = array_map('intval', $old->fetchAll(PDO::FETCH_COLUMN));
-        if ($ids) {
-            $pdo->exec('DELETE FROM price_table_undo WHERE id IN (' . implode(',', $ids) . ')');
-        }
-        return $id;
-    } catch (Throwable $e) {
-        return 0;
-    }
-}
-
-/** After the bump commits: record what the prices became. Drops the snapshot on failure. */
-function ptu_after(PDO $pdo, int $snapId, int $tableId, bool $ok): void
-{
-    if ($snapId <= 0) return;
-    try {
-        if ($ok) {
-            $pdo->prepare('UPDATE price_table_undo SET after_hash = ? WHERE id = ?')
-                ->execute([ptu_hash(ptu_prices($pdo, $tableId)), $snapId]);
-        } else {
-            $pdo->prepare('DELETE FROM price_table_undo WHERE id = ?')->execute([$snapId]);
-        }
-    } catch (Throwable $e) { /* best-effort */ }
-}
-
-/**
- * The newest undoable bump for this table, or null. 'stale' = true when the
- * prices have been changed since (undo would clobber those edits → refused).
- */
-function ptu_latest(PDO $pdo, int $clientId, int $tableId): ?array
-{
-    try {
-        $st = $pdo->prepare(
-            'SELECT id, label, after_hash, created_at FROM price_table_undo
-              WHERE price_table_id = ? AND client_id = ? AND after_hash IS NOT NULL
-              ORDER BY id DESC LIMIT 1'
-        );
-        $st->execute([$tableId, $clientId]);
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        return null;   // table not created yet → nothing to undo
-    }
-    if (!$row) return null;
-    $row['stale'] = $row['after_hash'] !== ptu_hash(ptu_prices($pdo, $tableId));
-    return $row;
-}
-
-/**
- * Restore the newest bump's snapshot. Returns [true, label] or [false, message].
- */
-function ptu_undo(PDO $pdo, int $clientId, int $tableId): array
-{
-    $latest = ptu_latest($pdo, $clientId, $tableId);
-    if (!$latest) return [false, 'Nothing to undo.'];
-    if ($latest['stale']) {
-        return [false, 'Can’t undo “' . $latest['label'] . '” — the prices have been edited since. Change them back by hand.'];
-    }
-    $st = $pdo->prepare('SELECT prices_json FROM price_table_undo WHERE id = ?');
-    $st->execute([(int) $latest['id']]);
-    $prices = json_decode((string) $st->fetchColumn(), true);
-    if (!is_array($prices)) return [false, 'Undo data is damaged — nothing changed.'];
-
-    $pdo->beginTransaction();
-    try {
-        $up = $pdo->prepare(
-            'UPDATE price_table_rows SET price = ? WHERE price_table_id = ? AND width_mm = ? AND drop_mm = ?'
-        );
-        foreach ($prices as [$w, $d, $p]) {
-            $up->execute([$p, $tableId, (int) $w, (int) $d]);
-        }
-        $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
-        $pdo->prepare('DELETE FROM price_table_undo WHERE id = ?')->execute([(int) $latest['id']]);
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        return [false, 'Undo failed: ' . $e->getMessage()];
-    }
-    return [true, (string) $latest['label']];
-}
-
-// ===========================================================================
-// Multi-table undo — the Master Catalogue's "Apply %" per product and per
-// supplier bumps every price table under that product/supplier in one go.
-// Same idea as above, keyed by a scope string ('product:12', 'supplier:bev')
-// and covering the set of tables that existed at bump time. Staleness is
-// checked when Undo is pressed (hashing a whole supplier on every page load
-// would be wasteful); a stale scope's snapshots are dropped so its button
-// goes away.
-// ===========================================================================
-
-const PBU_KEEP = 5;   // snapshots kept per scope (a supplier snapshot can be large)
-
-function pbu_ensure(PDO $pdo): void
-{
-    static $done = false;
-    if ($done) return;
-    // DDL implicitly commits — only ever call this OUTSIDE a transaction.
-    $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS price_bump_undo (
+        'CREATE TABLE IF NOT EXISTS price_undo (
             id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             client_id   INT UNSIGNED NOT NULL,
             scope       VARCHAR(80)  NOT NULL,
             label       VARCHAR(200) NOT NULL,
-            table_ids   MEDIUMTEXT   NOT NULL,
-            prices_json MEDIUMTEXT   NOT NULL,
+            before_ids  MEDIUMTEXT   NOT NULL,
+            rows_json   MEDIUMTEXT   NOT NULL,
+            after_ids   MEDIUMTEXT   NULL,
             after_hash  CHAR(40)     NULL,
             created_by  INT UNSIGNED NULL,
             created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -194,80 +51,178 @@ function pbu_ensure(PDO $pdo): void
     $done = true;
 }
 
-/** Prices across a set of tables as [[table, w, d, price], ...], stable order. */
-function pbu_prices(PDO $pdo, array $tableIds): array
+function pu_has_cost(PDO $pdo): bool
 {
-    $tableIds = array_values(array_filter(array_map('intval', $tableIds)));
+    static $has = null;
+    if ($has === null) {
+        try { $pdo->query('SELECT cost FROM price_table_rows LIMIT 0'); $has = true; }
+        catch (Throwable $e) { $has = false; }
+    }
+    return $has;
+}
+
+function pu_ids(array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    sort($ids);
+    return $ids;
+}
+
+/** Every row of the given tables as [[table, w, d, price, cost|null], ...], stable order. */
+function pu_rows(PDO $pdo, array $tableIds): array
+{
+    $tableIds = pu_ids($tableIds);
     if (!$tableIds) return [];
     $st = $pdo->query(
-        'SELECT price_table_id, width_mm, drop_mm, price FROM price_table_rows
+        'SELECT price_table_id, width_mm, drop_mm, price, '
+        . (pu_has_cost($pdo) ? 'cost' : 'NULL') . '
+           FROM price_table_rows
           WHERE price_table_id IN (' . implode(',', $tableIds) . ')
           ORDER BY price_table_id, width_mm, drop_mm'
     );
     $out = [];
-    foreach ($st->fetchAll(PDO::FETCH_NUM) as [$t, $w, $d, $p]) {
-        $out[] = [(int) $t, (int) $w, (int) $d, number_format((float) $p, 4, '.', '')];
+    foreach ($st->fetchAll(PDO::FETCH_NUM) as [$t, $w, $d, $p, $c]) {
+        $out[] = [
+            (int) $t, (int) $w, (int) $d,
+            $p === null ? null : number_format((float) $p, 4, '.', ''),
+            $c === null ? null : number_format((float) $c, 4, '.', ''),
+        ];
     }
     return $out;
 }
 
-/** Snapshot before a multi-table bump. Returns the snapshot id, or 0. */
-function pbu_before(PDO $pdo, int $clientId, string $scope, array $tableIds, string $label): int
+function pu_hash(array $ids, array $rows): string
+{
+    return sha1(json_encode([pu_ids($ids), $rows]));
+}
+
+/** Table ids for the common scopes (tenant-scoped). */
+function pu_system_table_ids(PDO $pdo, int $clientId, int $systemId): array
+{
+    $st = $pdo->prepare('SELECT id FROM price_tables WHERE client_id = ? AND system_id = ?');
+    $st->execute([$clientId, $systemId]);
+    return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function pu_product_table_ids(PDO $pdo, int $clientId, int $productId): array
+{
+    $st = $pdo->prepare('SELECT id FROM price_tables WHERE client_id = ? AND product_id = ?');
+    $st->execute([$clientId, $productId]);
+    return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/** Pending snapshots of this request: id => [before ids, callable|null for after ids]. */
+function &pu_pending(): array
+{
+    static $pending = [];
+    return $pending;
+}
+
+/**
+ * Snapshot before a change. $afterIds re-lists the scope's tables once the
+ * change is done (for changes that can create tables); omit it when the set
+ * of tables can't change. Call OUTSIDE any transaction. Returns the id, or 0.
+ */
+function pu_begin(PDO $pdo, int $clientId, string $scope, array $tableIds, string $label, ?callable $afterIds = null): int
 {
     try {
-        pbu_ensure($pdo);
-        $tableIds = array_values(array_unique(array_map('intval', $tableIds)));
+        pu_ensure($pdo);
+        $tableIds = pu_ids($tableIds);
         $userId = null;
         if (function_exists('current_user')) {
             $u = current_user();
             $userId = isset($u['id']) ? (int) $u['id'] : null;
         }
         $pdo->prepare(
-            'INSERT INTO price_bump_undo (client_id, scope, label, table_ids, prices_json, created_by)
+            'INSERT INTO price_undo (client_id, scope, label, before_ids, rows_json, created_by)
              VALUES (?, ?, ?, ?, ?, ?)'
         )->execute([
-            $clientId, $scope, mb_substr($label, 0, 200), json_encode($tableIds),
-            json_encode(pbu_prices($pdo, $tableIds)), $userId,
+            $clientId, $scope, mb_substr($label, 0, 200),
+            json_encode($tableIds), json_encode(pu_rows($pdo, $tableIds)), $userId,
         ]);
         $id = (int) $pdo->lastInsertId();
-
-        $old = $pdo->prepare(
-            'SELECT id FROM price_bump_undo WHERE client_id = ? AND scope = ?
-              ORDER BY id DESC LIMIT 1000 OFFSET ' . PBU_KEEP
-        );
-        $old->execute([$clientId, $scope]);
-        $ids = array_map('intval', $old->fetchAll(PDO::FETCH_COLUMN));
-        if ($ids) {
-            $pdo->exec('DELETE FROM price_bump_undo WHERE id IN (' . implode(',', $ids) . ')');
-        }
-        return $id;
     } catch (Throwable $e) {
         return 0;
     }
+    $pending = &pu_pending();
+    if (!$pending) register_shutdown_function('pu_finish_all');   // safety net for exit()/redirects
+    $pending[$id] = [$tableIds, $afterIds];
+    return $id;
 }
 
-/** After the bump: record what the prices became, or drop the snapshot on failure. */
-function pbu_after(PDO $pdo, int $snapId, array $tableIds, bool $ok): void
+/**
+ * Finalise this request's snapshots: record what the tables hold now, or
+ * discard the snapshot if nothing changed. Idempotent — called before a page
+ * renders its Undo bar and again (harmlessly) at shutdown.
+ */
+function pu_finish_all(): void
 {
-    if ($snapId <= 0) return;
+    $pending = &pu_pending();
+    if (!$pending) return;
+    $pdo = db();
+    if ($pdo->inTransaction()) return;   // a change still in flight — try again at shutdown
+    foreach ($pending as $id => [$beforeIds, $afterFn]) {
+        unset($pending[$id]);
+        try {
+            $afterIds = pu_ids($afterFn ? (array) $afterFn() : $beforeIds);
+            $afterRows = pu_rows($pdo, $afterIds);
+            $st = $pdo->prepare('SELECT client_id, scope, rows_json FROM price_undo WHERE id = ?');
+            $st->execute([$id]);
+            $snap = $st->fetch(PDO::FETCH_ASSOC);
+            if (!$snap) continue;
+            $beforeRows = json_decode((string) $snap['rows_json'], true) ?: [];
+            if ($afterIds === $beforeIds && $afterRows === $beforeRows) {
+                $pdo->prepare('DELETE FROM price_undo WHERE id = ?')->execute([$id]);   // nothing changed
+                continue;
+            }
+            $pdo->prepare('UPDATE price_undo SET after_ids = ?, after_hash = ? WHERE id = ?')
+                ->execute([json_encode($afterIds), pu_hash($afterIds, $afterRows), $id]);
+
+            // Prune the scope to the newest PU_KEEP.
+            $old = $pdo->prepare(
+                'SELECT id FROM price_undo WHERE client_id = ? AND scope = ?
+                  ORDER BY id DESC LIMIT 1000 OFFSET ' . PU_KEEP
+            );
+            $old->execute([(int) $snap['client_id'], (string) $snap['scope']]);
+            $ids = array_map('intval', $old->fetchAll(PDO::FETCH_COLUMN));
+            if ($ids) $pdo->exec('DELETE FROM price_undo WHERE id IN (' . implode(',', $ids) . ')');
+        } catch (Throwable $e) { /* best-effort */ }
+    }
+}
+
+/** Newest undoable change for a scope, or null. 'stale' = edited since (undo refused). */
+function pu_latest(PDO $pdo, int $clientId, string $scope, bool $checkStale = true): ?array
+{
+    pu_finish_all();
     try {
-        if ($ok) {
-            $pdo->prepare('UPDATE price_bump_undo SET after_hash = ? WHERE id = ?')
-                ->execute([ptu_hash(pbu_prices($pdo, $tableIds)), $snapId]);
-        } else {
-            $pdo->prepare('DELETE FROM price_bump_undo WHERE id = ?')->execute([$snapId]);
-        }
-    } catch (Throwable $e) { /* best-effort */ }
+        $st = $pdo->prepare(
+            'SELECT id, scope, label, after_ids, after_hash, created_at FROM price_undo
+              WHERE client_id = ? AND scope = ? AND after_hash IS NOT NULL
+              ORDER BY id DESC LIMIT 1'
+        );
+        $st->execute([$clientId, $scope]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return null;   // table not created yet → nothing to undo
+    }
+    if (!$row) return null;
+    $row['stale'] = false;
+    if ($checkStale) {
+        $ids = json_decode((string) $row['after_ids'], true) ?: [];
+        $row['stale'] = $row['after_hash'] !== pu_hash($ids, pu_rows($pdo, $ids));
+    }
+    return $row;
 }
 
-/** Newest undoable bump per scope for this client: scope => [id, scope, label, created_at]. */
-function pbu_latest_all(PDO $pdo, int $clientId): array
+/** Newest undoable change per scope for this client (no staleness check): scope => row. */
+function pu_latest_all(PDO $pdo, int $clientId): array
 {
+    pu_finish_all();
     try {
         $st = $pdo->prepare(
             'SELECT u.id, u.scope, u.label, u.created_at
-               FROM price_bump_undo u
-               JOIN (SELECT scope, MAX(id) AS id FROM price_bump_undo
+               FROM price_undo u
+               JOIN (SELECT scope, MAX(id) AS id FROM price_undo
                       WHERE client_id = ? AND after_hash IS NOT NULL GROUP BY scope) m
                  ON m.id = u.id'
         );
@@ -276,20 +231,21 @@ function pbu_latest_all(PDO $pdo, int $clientId): array
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(string) $r['scope']] = $r;
         return $out;
     } catch (Throwable $e) {
-        return [];   // table not created yet
+        return [];
     }
 }
 
 /**
- * Restore the newest bump for a scope. Returns [true, label, cells] or
- * [false, message, 0]. If prices were edited since, the scope's snapshots are
- * discarded (they can never apply cleanly again) and the undo is refused.
+ * Undo the newest change for a scope. Returns [true, label, cells] or
+ * [false, message, 0]. If the tables were edited since, the scope's history
+ * is discarded (it can never apply cleanly again) and the undo refused.
  */
-function pbu_undo(PDO $pdo, int $clientId, string $scope): array
+function pu_undo(PDO $pdo, int $clientId, string $scope): array
 {
+    pu_finish_all();
     try {
         $st = $pdo->prepare(
-            'SELECT id, label, table_ids, prices_json, after_hash FROM price_bump_undo
+            'SELECT * FROM price_undo
               WHERE client_id = ? AND scope = ? AND after_hash IS NOT NULL
               ORDER BY id DESC LIMIT 1'
         );
@@ -300,49 +256,81 @@ function pbu_undo(PDO $pdo, int $clientId, string $scope): array
     }
     if (!$snap) return [false, 'Nothing to undo.', 0];
 
-    $tableIds = json_decode((string) $snap['table_ids'], true) ?: [];
-    if ($snap['after_hash'] !== ptu_hash(pbu_prices($pdo, $tableIds))) {
-        $pdo->prepare('DELETE FROM price_bump_undo WHERE client_id = ? AND scope = ?')->execute([$clientId, $scope]);
-        return [false, 'Can’t undo “' . $snap['label'] . '” — some of those prices have been changed since. Change them back by hand.', 0];
+    $beforeIds = pu_ids(json_decode((string) $snap['before_ids'], true) ?: []);
+    $afterIds  = pu_ids(json_decode((string) $snap['after_ids'], true) ?: []);
+    if ($snap['after_hash'] !== pu_hash($afterIds, pu_rows($pdo, $afterIds))) {
+        $pdo->prepare('DELETE FROM price_undo WHERE client_id = ? AND scope = ?')->execute([$clientId, $scope]);
+        return [false, 'Can’t undo “' . $snap['label'] . '” — those prices have been changed again since. Change them back by hand.', 0];
     }
-    $prices = json_decode((string) $snap['prices_json'], true);
-    if (!is_array($prices)) return [false, 'Undo data is damaged — nothing changed.', 0];
+    $rows = json_decode((string) $snap['rows_json'], true);
+    if (!is_array($rows)) return [false, 'Undo data is damaged — nothing changed.', 0];
 
-    // A supplier can be tens of thousands of cells — load the snapshot into a
-    // temp table and restore with one joined UPDATE rather than row by row.
-    // (CREATE TEMPORARY TABLE does not implicitly commit.)
-    $pdo->exec('DROP TEMPORARY TABLE IF EXISTS tmp_pbu_restore');
-    $pdo->exec(
-        'CREATE TEMPORARY TABLE tmp_pbu_restore (
-            t INT UNSIGNED NOT NULL, w INT NOT NULL, d INT NOT NULL, p DECIMAL(14,4) NOT NULL,
-            PRIMARY KEY (t, w, d)
-        ) ENGINE=InnoDB'
-    );
+    $allIds  = pu_ids(array_merge($beforeIds, $afterIds));
+    $created = array_values(array_diff($afterIds, $beforeIds));
+    $hasCost = pu_has_cost($pdo);
+
     $pdo->beginTransaction();
     try {
-        foreach (array_chunk($prices, 500) as $chunk) {
+        if ($allIds) {
+            $pdo->exec('DELETE FROM price_table_rows WHERE price_table_id IN (' . implode(',', $allIds) . ')');
+        }
+        if ($created) {
+            // Band tables the change created didn't exist before — remove them.
+            $pdo->prepare('DELETE FROM price_tables WHERE client_id = ? AND id IN (' . implode(',', $created) . ')')
+                ->execute([$clientId]);
+        }
+        foreach (array_chunk($rows, 500) as $chunk) {
+            $args = [];
+            foreach ($chunk as [$t, $w, $d, $p, $c]) {
+                array_push($args, $t, $w, $d, $p);
+                if ($hasCost) $args[] = $c;
+            }
             $pdo->prepare(
-                'INSERT INTO tmp_pbu_restore (t, w, d, p) VALUES '
-                . implode(',', array_fill(0, count($chunk), '(?,?,?,?)'))
-            )->execute(array_merge(...$chunk));
+                'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price' . ($hasCost ? ', cost' : '') . ') VALUES '
+                . implode(',', array_fill(0, count($chunk), $hasCost ? '(?,?,?,?,?)' : '(?,?,?,?)'))
+            )->execute($args);
         }
-        $pdo->exec(
-            'UPDATE price_table_rows r
-               JOIN tmp_pbu_restore x
-                 ON x.t = r.price_table_id AND x.w = r.width_mm AND x.d = r.drop_mm
-                SET r.price = x.p'
-        );
-        if ($tableIds) {
-            $pdo->exec('UPDATE price_tables SET updated_at = NOW() WHERE id IN ('
-                . implode(',', array_map('intval', $tableIds)) . ')');
+        if ($beforeIds) {
+            $pdo->exec('UPDATE price_tables SET updated_at = NOW() WHERE id IN (' . implode(',', $beforeIds) . ')');
         }
-        $pdo->prepare('DELETE FROM price_bump_undo WHERE id = ?')->execute([(int) $snap['id']]);
+        $pdo->prepare('DELETE FROM price_undo WHERE id = ?')->execute([(int) $snap['id']]);
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $pdo->exec('DROP TEMPORARY TABLE IF EXISTS tmp_pbu_restore');
         return [false, 'Undo failed: ' . $e->getMessage(), 0];
     }
-    $pdo->exec('DROP TEMPORARY TABLE IF EXISTS tmp_pbu_restore');
-    return [true, (string) $snap['label'], count($prices)];
+    return [true, (string) $snap['label'], count($rows)];
+}
+
+/**
+ * Render the Undo strip for a scope (nothing when there's nothing to undo).
+ * Posts to /admin/products/price-undo.php, which comes back to $returnTo.
+ */
+function pu_render_bar(int $clientId, string $scope, string $returnTo, string $what = ''): void
+{
+    $u = pu_latest(db(), $clientId, $scope);
+    if (!$u) return;
+    $when = date('j M H:i', strtotime((string) $u['created_at']));
+    $lbl  = (string) $u['label'] . ($what !== '' ? ' (' . $what . ')' : '');
+    ?>
+    <div class="alert" role="status" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-secondary);padding:.5rem .75rem;margin:0 0 .875rem">
+        <?php if ($u['stale']): ?>
+            <span style="font-size:.875rem">
+                Last change: <strong><?= e($lbl) ?></strong> &middot; <?= e($when) ?>
+                &mdash; can’t be undone, the prices have been edited since.
+            </span>
+        <?php else: ?>
+            <span style="font-size:.875rem">
+                Last change: <strong><?= e($lbl) ?></strong> &middot; <?= e($when) ?>
+            </span>
+            <form method="post" action="/admin/products/price-undo.php" style="margin:0 0 0 auto"
+                  onsubmit="return confirm(<?= e(json_encode('Undo “' . $lbl . '”? Every price it changed goes back to exactly what it was before (' . $when . '). Unsaved edits on this page will be lost.')) ?>);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="scope" value="<?= e($scope) ?>">
+                <input type="hidden" name="return" value="<?= e($returnTo) ?>">
+                <button type="submit" class="btn btn-secondary btn-sm">&#8630; Undo <?= e((string) $u['label']) ?></button>
+            </form>
+        <?php endif; ?>
+    </div>
+    <?php
 }

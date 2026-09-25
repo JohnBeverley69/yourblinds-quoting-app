@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 
 // Cost prices are super-admin ONLY. They must never be seen by tenant admins,
 // office staff, or the trade customers the catalogue is pushed to — leaking
@@ -136,6 +137,8 @@ $marginStats = function () use ($clientId, $productId, $systemId): array {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    // Undo: snapshot before the import writes; discarded if nothing changes.
+    pu_begin(db(), (int) $clientId, 'system:' . $systemId, pu_system_table_ids(db(), (int) $clientId, $systemId), 'Cost import', fn () => pu_system_table_ids(db(), (int) $clientId, $systemId));
     require __DIR__ . '/../../vendor/autoload.php';
     require __DIR__ . '/../../_partials/price_table_parser.php';
     $action = (string) ($_POST['action'] ?? 'upload');
@@ -222,6 +225,8 @@ $activeNav = 'products';
     <p style="color:#667;margin:0 0 1.2rem"><?= e((string) $system['product_name']) ?> &middot; <?= e((string) $system['system_name']) ?><?= $singleBand ? ' &middot; Band ' . e($bandCode) : '' ?> &mdash; overlays your cost onto <?= $singleBand ? 'just this band' : "this system's price grid" ?>, so <strong>margin = price − cost</strong> at every size.</p>
 
     <?php if ($error): ?><div style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:.7rem 1rem;border-radius:10px;margin:0 0 1rem"><?= e($error) ?></div><?php endif; ?>
+
+    <?php pu_render_bar((int) $clientId, 'system:' . $systemId, '/admin/products/price-tables.php?system_id=' . $systemId); ?>
 
     <?php if ($summary !== null): ?>
         <div style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:1rem 1.2rem;border-radius:12px;margin:0 0 1rem">

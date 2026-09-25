@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 
 requireAdmin();
 
@@ -139,6 +140,8 @@ $bpi_import = function (array $bands) use ($clientId, $productId, $systemId): ar
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    // Undo: snapshot before the import writes; discarded if nothing changes.
+    pu_begin(db(), (int) $clientId, 'system:' . $systemId, pu_system_table_ids(db(), (int) $clientId, $systemId), 'Band import', fn () => pu_system_table_ids(db(), (int) $clientId, $systemId));
     $action = (string) ($_POST['action'] ?? 'upload');
     require __DIR__ . '/../../vendor/autoload.php';
     require __DIR__ . '/../../_partials/price_table_parser.php';
@@ -246,6 +249,8 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <?php pu_render_bar((int) $clientId, 'system:' . $systemId, '/admin/products/price-tables.php?system_id=' . $systemId); ?>
 
         <?php if ($summary !== null): ?>
             <div class="alert alert-success" role="status">

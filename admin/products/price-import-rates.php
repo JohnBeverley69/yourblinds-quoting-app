@@ -25,6 +25,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 require __DIR__ . '/../../_partials/units.php';
 
 requireAdmin();
@@ -132,6 +133,8 @@ $stage    = 'upload';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    // Undo: snapshot before the import writes; discarded if nothing changes.
+    pu_begin(db(), (int) $clientId, 'product:' . $productId, pu_product_table_ids(db(), (int) $clientId, $productId), 'Rate import', fn () => pu_product_table_ids(db(), (int) $clientId, $productId));
     $act = (string) ($_POST['action'] ?? 'upload');
 
     if ($act === 'upload') {

@@ -105,6 +105,33 @@ try {
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
 
 // ---------------------------------------------------------------------------
+// Undo: snapshot the table before ANY change to its cells, so the Undo strip
+// can put it back exactly. The snapshot finalises when the request ends and
+// is discarded if nothing actually changed (validation error etc).
+// ---------------------------------------------------------------------------
+$puSnapId = 0;
+$puLabels = [
+    'save_grid'      => 'Save grid',
+    'save_width'     => 'Save prices',
+    'save_sqm'       => 'Save £/m² rate',
+    'upload'         => 'Spreadsheet upload',
+    'upload_flex'    => 'Supplier sheet import',
+    'copy_from'      => 'Copy from another band',
+    'bulk_axis_edit' => 'Edit sizes',
+    'rename_axis'    => 'Rename a size',
+    'bump_prices'    => 'Adjust all prices',
+];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($puLabels[$action])) {
+    csrf_check();
+    $puLabel = $puLabels[$action];
+    if ($action === 'bump_prices' && is_numeric(trim((string) ($_POST['bump_percent'] ?? '')))) {
+        $bp = (float) trim((string) $_POST['bump_percent']);
+        $puLabel = 'Adjust by ' . ($bp > 0 ? '+' : '') . rtrim(rtrim(number_format($bp, 2, '.', ''), '0'), '.') . '%';
+    }
+    $puSnapId = pu_begin(db(), (int) $clientId, 'table:' . $tableId, [$tableId], $puLabel);
+}
+
+// ---------------------------------------------------------------------------
 // Bulk-edit ALL widths or drops at once via a paste-friendly dialog.
 //
 // Semantics: positional rename. Sort both old and new lists ascending,
@@ -451,8 +478,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bump_prices') {
         $pct = (float) $pctRaw;
         $pdo = db();
         $shown = rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.');
-        // Snapshot first — the bump rounds to 2dp, so only a snapshot can undo it.
-        $snapId = ptu_before($pdo, (int) $clientId, $tableId, 'Adjust by ' . ($pct > 0 ? '+' : '') . $shown . '%');
         $pdo->beginTransaction();
         try {
             $pdo->prepare(
@@ -470,38 +495,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bump_prices') {
             $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')
                 ->execute([$tableId]);
             $pdo->commit();
-            ptu_after($pdo, $snapId, $tableId, true);
 
             $_SESSION['flash_success'] = 'Adjusted ' . $n . ' price'
                 . ($n === 1 ? '' : 's') . ' by ' . ($pct > 0 ? '+' : '') . $shown . '%.'
-                . ($snapId ? ' Wrong number? Press Undo beside the adjust box.' : '');
+                . ($puSnapId ? ' Wrong number? Press Undo just below.' : '');
         } catch (Throwable $e) {
             $pdo->rollBack();
-            ptu_after($pdo, $snapId, $tableId, false);
             $_SESSION['flash_error'] = 'Could not adjust prices: ' . $e->getMessage();
         }
-    }
-
-    $back = '/admin/products/price-table.php?id=' . (int) $tableId;
-    if (($_GET['from'] ?? '') === 'wizard') {
-        $back .= '&from=wizard&product_id=' . (int) ($_GET['product_id'] ?? 0);
-    }
-    header('Location: ' . $back, true, 303);
-    exit;
-}
-
-// ---------------------------------------------------------------------------
-// Undo the most recent "Adjust all prices by %". Restores the exact pre-bump
-// prices from the snapshot; refused if the prices were edited since.
-// ---------------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'undo_bump') {
-    csrf_check();
-
-    [$ok, $msg] = ptu_undo(db(), (int) $clientId, $tableId);
-    if ($ok) {
-        $_SESSION['flash_success'] = 'Undone: ' . $msg . ' — prices are back to what they were.';
-    } else {
-        $_SESSION['flash_error'] = $msg;
     }
 
     $back = '/admin/products/price-table.php?id=' . (int) $tableId;
@@ -1064,6 +1065,8 @@ if ($perSqm) {
                 <div class="alert alert-error" role="alert"><?= e((string) $error) ?></div>
             <?php endif; ?>
 
+            <?php pu_render_bar((int) $clientId, 'table:' . $tableId, '/admin/products/price-table.php?id=' . (int) $tableId . $wizSuffix); ?>
+
             <section class="section">
                 <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $wizSuffix ?>">
                     <?= csrf_field() ?>
@@ -1221,6 +1224,8 @@ if ($oneDimEditor) {
                     </ul>
                 </div>
             <?php endif; ?>
+
+            <?php pu_render_bar((int) $clientId, 'table:' . $tableId, '/admin/products/price-table.php?id=' . (int) $tableId); ?>
 
             <section class="section">
                 <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?>">
@@ -2377,6 +2382,9 @@ $activeNav = 'products';
                 }</script>
             <?php endif; ?>
 
+            <?php pu_render_bar((int) $clientId, 'table:' . $tableId,
+                '/admin/products/price-table.php?id=' . (int) $tableId . ($fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '')); ?>
+
             <?php if (!$isEmpty): ?>
                 <!-- Per-table % adjust. Operates on the SAVED cells, so we
                      warn to save any unsaved edits first. -->
@@ -2398,33 +2406,7 @@ $activeNav = 'products';
                     <span style="font-size:0.8125rem;color:var(--text-faint)">
                         Multiplies every cell (use a negative number to reduce). Rounded to 2 dp.
                     </span>
-                    <?php $undoBump = ptu_latest(db(), (int) $clientId, $tableId); ?>
-                    <?php if ($undoBump): ?>
-                        <?php $undoWhen = date('j M H:i', strtotime((string) $undoBump['created_at'])); ?>
-                        <?php if ($undoBump['stale']): ?>
-                            <span style="margin-left:auto;font-size:0.8125rem;color:var(--text-faint)"
-                                  title="Prices were edited after this adjustment, so it can no longer be undone automatically.">
-                                Undo unavailable &mdash; edited since <?= e((string) $undoBump['label']) ?>
-                            </span>
-                        <?php else: ?>
-                            <!-- Submits the separate undo form below (forms can't nest). -->
-                            <button type="submit" form="undo-bump-form" class="btn btn-secondary btn-sm"
-                                    style="margin-left:auto"
-                                    title="Put every price back to exactly what it was before this adjustment (<?= e($undoWhen) ?>)">
-                                &#8630; Undo <?= e((string) $undoBump['label']) ?>
-                            </button>
-                        <?php endif; ?>
-                    <?php endif; ?>
                 </form>
-                <?php if (!empty($undoBump) && !$undoBump['stale']): ?>
-                    <form id="undo-bump-form" method="post"
-                          action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"
-                          onsubmit="return confirm(<?= e(json_encode('Undo “' . $undoBump['label'] . '”? Every price goes back to exactly what it was before (' . $undoWhen . '). Unsaved cell edits will be lost.')) ?>);">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="undo_bump">
-                        <input type="hidden" name="id" value="<?= (int) $tableId ?>">
-                    </form>
-                <?php endif; ?>
             <?php endif; ?>
 
             <form method="post" action="/admin/products/price-table.php?id=<?= (int) $tableId ?><?= $fromWizard ? '&from=wizard&product_id=' . $wizardBackId : '' ?>"

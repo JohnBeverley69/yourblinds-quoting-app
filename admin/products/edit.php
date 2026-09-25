@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require_once __DIR__ . '/../../_partials/band_sort.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 require __DIR__ . '/../../_partials/units.php';
 require __DIR__ . '/../../_partials/pricing_basis.php';
 
@@ -916,6 +917,7 @@ $activeNav = 'products';
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
+        <?php pu_render_bar((int) $clientId, 'product:' . (int) $id, '/admin/products/edit.php?id=' . (int) $id, 'all price tables'); ?>
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
