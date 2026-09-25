@@ -344,26 +344,29 @@ return [
       <em>Danger zone</em> at the bottom of a customer) is also permanent &mdash; their quotes stay, they just stop being
       linked to anybody.</p>'],
 
-    ['admin', 'Calendar & customers', 'Can I book a Morning or Afternoon instead of a time?', 'am pm morning afternoon window half day slot slots time capacity bookings per day measure quote visit full fully booked appointment window email customer',
-     '<p>Yes &mdash; switch on <strong>&ldquo;&#128344; Morning / afternoon booking slots&rdquo;</strong>. It&rsquo;s in
+    ['admin', 'Calendar & customers', 'Can I book a Morning, Afternoon or Evening slot instead of a time?', 'am pm morning afternoon evening add time slot window half day slot slots time capacity bookings per day measure quote visit full fully booked appointment window email customer',
+     '<p>Yes &mdash; switch on <strong>&ldquo;&#128344; Booking time slots&rdquo;</strong>. It&rsquo;s in
       <strong>Setup &rarr; Settings &rarr; Company</strong> tab, in the <strong>Calendar</strong> section. There is no
       &ldquo;Calendar&rdquo; tab &mdash; the tabs are Company, Quoting, Legal, Status colours, Suppliers, Accounting and
       Back up data, and this lives on the first one.</p>
-      <p>Tick the box, then set each window&rsquo;s <strong>From</strong> and <strong>To</strong> time and its
-      <strong>Bookings / day</strong> limit, and press <strong>Save</strong>. Out of the box that&rsquo;s
-      <strong>Morning 9am&ndash;1pm</strong> and <strong>Afternoon 1pm&ndash;5pm</strong>, four bookings each. You should
-      see <em>&ldquo;Morning/afternoon booking slots saved.&rdquo;</em></p>
+      <p>Tick the box, then give each slot a <strong>Name</strong>, a <strong>From</strong> and <strong>To</strong> time and
+      its <strong>Bookings / day</strong> limit, and press <strong>Save</strong>. Out of the box that&rsquo;s
+      <strong>Morning 9am&ndash;1pm</strong> and <strong>Afternoon 1pm&ndash;5pm</strong>, four bookings each. Want an
+      evening? Press <strong>+ Add a time slot</strong>, call it <em>Evening</em>, set say 6pm&ndash;8pm, and Save. Gaps
+      between slots are fine (Morning 10&ndash;1, Afternoon 2&ndash;4), you can have up to six, and
+      <strong>&#10005; Remove</strong> takes one away (bookings already in it are kept). You should see
+      <em>&ldquo;Booking time slots saved.&rdquo;</em></p>
       <p><strong>What changes.</strong> On <strong>+ Book Appointment</strong> the Time and Duration boxes are replaced by
-      a <strong>Time slot</strong> choice: two cards, each showing its hours and how many are left
+      a <strong>Time slot</strong> choice: one card per slot, each showing its hours and how many are left
       (e.g. <em>&ldquo;2 of 4 left&rdquo;</em>). Once a window is full that card reads <strong>Full</strong> and
-      can&rsquo;t be chosen &mdash; the message is <em>&ldquo;Morning is fully booked on 3 Oct 2026. Please choose the
-      other window or another day.&rdquo;</em> Leave one unpicked and you get
-      <em>&ldquo;Please choose Morning or Afternoon.&rdquo;</em> There&rsquo;s also a tick to
+      can&rsquo;t be chosen &mdash; the message is <em>&ldquo;Morning is fully booked on 3 Oct 2026. Please choose
+      another window or another day.&rdquo;</em> Leave one unpicked and you get
+      <em>&ldquo;Please choose a time slot.&rdquo;</em> There&rsquo;s also a tick to
       <strong>email the customer their appointment window</strong>, which needs an email address on the booking.</p>
       <p><strong>The two things people trip over.</strong> It applies to <strong>quote (measure) visits only</strong>
       &mdash; fittings still take an exact time, as they must. And the customer is given a <strong>window, never an exact
       hour</strong>, which is rather the point. If saving fails with <em>&ldquo;Could not save: &hellip; have you run
-      migrate_ampm_window_config.php?&rdquo;</em>, the database update hasn&rsquo;t been run yet &mdash; ask whoever runs
+      migrate_ampm_windows_list.php?&rdquo;</em>, the database update hasn&rsquo;t been run yet &mdash; ask whoever runs
       the platform for you.</p>'],
 
     ['admin', 'Calendar & customers', 'Can the calendar show what a job is worth?', 'calendar money value balance outstanding paid deposit show figures costs fitters navigation app google maps waze',

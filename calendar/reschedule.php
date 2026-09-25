@@ -142,7 +142,7 @@ if ($newDate !== null) {
         // no override — so a drag can't push a window past its cap. The drag
         // reverts on the client when ok is false.
         $taken  = ampm_window_count($pdo, $clientId, $newDate, $selfWindow, $apptId);
-        $winCap = $selfWindow === 'pm' ? (int) $ampm['pm_capacity'] : (int) $ampm['am_capacity'];
+        $winCap = ampm_window_capacity($pdo, $clientId, $selfWindow);
         if ($taken >= $winCap) {
             echo json_encode([
                 'ok'    => false,
