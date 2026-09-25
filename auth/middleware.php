@@ -161,8 +161,9 @@ function safe_local_redirect(string $url, string $fallback = '/calendar/index.ph
     if ($url[0] !== '/')                return $fallback;   // must be absolute path
     if (strncmp($url, '//', 2) === 0)   return $fallback;   // protocol-relative — escapes origin
     if (strncmp($url, '/\\', 2) === 0)  return $fallback;   // backslash bypass (some old browsers)
-    // Defensive: anything containing a "\r" or "\n" is a header-injection attempt.
-    if (strpbrk($url, "\r\n") !== false) return $fallback;
+    // Control chars: CR/LF are header injection; TAB etc. are stripped by
+    // browsers, so "/<TAB>/evil.com" would become "//evil.com" — reject them all.
+    if (preg_match('/[\x00-\x1f\x7f]/', $url)) return $fallback;
     return $url;
 }
 
@@ -481,12 +482,8 @@ function record_login_attempt(string $ip, string $identifier, bool $success): vo
 function redirect_after_login(): void
 {
     $next = $_POST['next'] ?? $_GET['next'] ?? '';
-    if (is_string($next) && $next !== ''
-        && str_starts_with($next, '/')
-        && !str_starts_with($next, '//')
-        && strpos($next, "\r") === false
-        && strpos($next, "\n") === false
-    ) {
+    // safe_local_redirect() also blocks "/\evil.com" and control-char tricks.
+    if (is_string($next) && $next !== '' && safe_local_redirect($next, '') !== '') {
         header('Location: ' . $next);
         exit;
     }

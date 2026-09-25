@@ -36,6 +36,7 @@ $clientId = (int) $user['client_id'];
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $action   = (string) ($_POST['_action'] ?? '');
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
+qb_require_quote_access($quote, $user, current_user_permissions());
 
 // Setting the deposit AMOUNT (save_amount) is allowed before acceptance too:
 // a draft/sent quote can carry an override that the accept-seed then keeps

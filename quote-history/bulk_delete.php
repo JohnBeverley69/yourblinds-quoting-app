@@ -122,10 +122,12 @@ if ($deletable) {
         )->execute(array_merge($deletable, [$clientId]));
     } catch (Throwable $e) { /* table absent — nothing to clean */ }
     // Remove the deleted orders' calendar appointments (e.g. pending fittings) so
-    // they don't linger as phantoms. Keyed on quote_id (globally unique).
+    // they don't linger as phantoms. Scoped to the tenant: $deletable is the
+    // posted id list, so without client_id another tenant's quote ids would
+    // wipe THEIR appointments even though their quotes survive.
     try {
-        $pdo->prepare("DELETE FROM appointments WHERE quote_id IN ($delPh)")
-            ->execute($deletable);
+        $pdo->prepare("DELETE FROM appointments WHERE quote_id IN ($delPh) AND client_id = ?")
+            ->execute(array_merge($deletable, [$clientId]));
     } catch (Throwable $e) { /* appointments table absent — nothing to clean */ }
     $stmt   = $pdo->prepare(
         "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"

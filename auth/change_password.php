@@ -31,10 +31,7 @@ $flashMsg   = $_SESSION['flash_success'] ?? null;
 unset($_SESSION['flash_success']);
 
 // Where to send the user on success — sanitised to local paths only.
-$return = (string) ($_GET['return'] ?? '/admin/settings.php');
-if ($return === '' || $return[0] !== '/' || str_starts_with($return, '//')) {
-    $return = '/admin/settings.php';
-}
+$return = safe_local_redirect((string) ($_GET['return'] ?? ''), '/admin/settings.php');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();

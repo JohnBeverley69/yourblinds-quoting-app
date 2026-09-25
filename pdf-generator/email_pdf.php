@@ -21,6 +21,7 @@ csrf_check();
 $user     = current_user();
 $id       = (int) ($_POST['id'] ?? $_POST['quote_id'] ?? 0);
 $quote    = qb_load_quote_or_404($id, (int) $user['client_id']);
+qb_require_quote_access($quote, $user, current_user_permissions());
 $backUrl  = '/quote-builder/edit.php?id=' . $id;
 
 if (!class_exists(\Dompdf\Dompdf::class)) {
