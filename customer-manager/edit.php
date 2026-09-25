@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -25,6 +26,9 @@ if (!$customer) {
     http_response_code(404);
     exit('Customer not found.');
 }
+// A restricted user (fitter) only reaches customers they're working for.
+cm_require_customer_access($id, $user);
+$canDelete = cm_can_view_all_customers($user);
 
 $error    = null;
 $flashMsg = $_SESSION['flash_success'] ?? null;
@@ -243,6 +247,7 @@ $activeNav = 'customers';
             </section>
         <?php endif; ?>
 
+        <?php if ($canDelete): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title" style="color:#b91c1c;">Danger zone</h2>
@@ -257,6 +262,7 @@ $activeNav = 'customers';
                 <button type="submit" class="btn btn-danger">Delete customer</button>
             </form>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -79,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $customer['notes']    !== '' ? $customer['notes']    : null,
         ]);
         $newId = (int) db()->lastInsertId();
+        cm_remember_created($newId);
         $_SESSION['flash_success'] = 'Customer added.';
         header('Location: /customer-manager/edit.php?id=' . $newId);
         exit;
