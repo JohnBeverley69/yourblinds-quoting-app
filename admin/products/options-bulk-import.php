@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
+require_once __DIR__ . '/../../_partials/product_lock.php';
 
 /**
  * Bulk fabric/option import — upload ONE multi-sheet workbook and distribute
@@ -107,6 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // product the admin chose. All tenant-scoped.
         $payload = json_decode((string) ($_POST['payload'] ?? ''), true);
         $map     = $_POST['map'] ?? [];   // sheet idx => product id (0 = skip)
+        // Factory-catalogue pricing lock (_partials/product_lock.php).
+        pl_require_unlocked_any(array_map('intval', (array) $map), '/admin/products/options-bulk-import.php');
         if (!is_array($payload)) {
             $error = 'That upload expired — please upload the file again.';
         } else {

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -10,6 +12,10 @@ $user     = current_user();
 $clientId = $user['client_id'];
 
 $productId = (int) ($_GET['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/extras.php?product_id=' . $productId);
+}
 if ($productId <= 0) {
     header('Location: /admin/products/index.php');
     exit;

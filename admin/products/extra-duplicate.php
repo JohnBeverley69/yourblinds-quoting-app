@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Duplicate an entire option (product_extras) — clones the option row,
  * all its choices, and per-choice band scoping + width-table pricing,
@@ -31,6 +33,10 @@ $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $id        = (int) ($_POST['id']         ?? 0);
 $productId = (int) ($_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId, pl_product_of('extra', $id)], '/admin/products/extras.php?product_id=' . $productId);
+}
 
 $redirect = $productId > 0
     ? '/admin/products/extras.php?product_id=' . $productId

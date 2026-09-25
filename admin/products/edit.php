@@ -7,6 +7,7 @@ require __DIR__ . '/../../auth/middleware.php';
 require_once __DIR__ . '/../../_partials/price_table_undo.php';
 require __DIR__ . '/../../_partials/units.php';
 require __DIR__ . '/../../_partials/pricing_basis.php';
+require_once __DIR__ . '/../../_partials/product_lock.php';
 
 requireAdmin();
 
@@ -687,6 +688,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cols[] = 'cost_price = ?';
                 $vals[] = $costValue;
             }
+            // Factory-catalogue pricing lock: on a factory product only the
+            // on/off switch is the account's to change here; name, pricing
+            // mode, per-slat / per-m² rates, minimum area etc. are the
+            // factory's. Markup and discount (saved below) stay editable.
+            if (pl_product_locked((int) $id)) {
+                $cols = ['active = ?'];
+                $vals = [$f['active']];
+            }
             $vals[] = $id;
             $vals[] = $clientId;
 
@@ -916,6 +925,9 @@ $activeNav = 'products';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+        <?php if (pl_product_locked((int) $id)): ?>
+            <div class="alert alert-info" role="status">🔒 <?= e(PRODUCT_LOCK_MSG) ?></div>
         <?php endif; ?>
         <?php pu_render_bar((int) $clientId, 'product:' . (int) $id, '/admin/products/edit.php?id=' . (int) $id, 'all price tables'); ?>
         <?php if ($error !== null): ?>

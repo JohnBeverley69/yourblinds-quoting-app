@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -17,6 +19,10 @@ csrf_check();
 
 $user      = current_user();
 $productId = (int) ($_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any(array_merge([$productId], array_map(static fn ($i) => pl_product_of('option', (int) $i), (array) ($_POST['ids'] ?? [])), [pl_product_of('option', (int) ($_POST['id'] ?? 0))]), '/admin/products/options.php?product_id=' . $productId);
+}
 
 // Accept either ?id=N (single-row delete from per-row forms) or ?ids[]=N&ids[]=M
 // (bulk delete from the checkbox toolbar). Filter to positive ints.

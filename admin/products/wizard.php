@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Guided "set up your first product" wizard.
  *
@@ -45,6 +47,10 @@ $clientId = (int) $user['client_id'];
 $pdo      = db();
 
 $productId = (int) ($_GET['id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/edit.php?id=' . $productId);
+}
 $forcedStep = isset($_GET['step']) ? (int) $_GET['step'] : 0;
 
 // Optional columns (migrations may or may not have run). Detected once so

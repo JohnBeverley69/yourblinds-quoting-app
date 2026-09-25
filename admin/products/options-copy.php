@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Copy FABRICS (product_options) from one product to another.
  *
@@ -38,6 +40,10 @@ $clientId = (int) $user['client_id'];
 $pdo      = db();
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/options.php?product_id=' . $productId);
+}
 $sourceId  = (int) ($_GET['source_id']  ?? $_POST['source_id']  ?? 0);
 
 // ── Target product ────────────────────────────────────────────────────

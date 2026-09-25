@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Bulk re-band fabrics on a product. POST + CSRF. Reuses the Fabrics page's
  * bulk-select checkboxes (ids[]) + a band, posted from the "Set band on
@@ -23,6 +25,10 @@ csrf_check();
 $user      = current_user();
 $clientId  = (int) $user['client_id'];
 $productId = (int) ($_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any(array_merge([$productId], array_map(static fn ($i) => pl_product_of('option', (int) $i), (array) ($_POST['ids'] ?? [])), [pl_product_of('option', (int) ($_POST['id'] ?? 0))]), '/admin/products/options.php?product_id=' . $productId);
+}
 
 // Normalise the band the same way the Fabrics page does: drop a "Band " prefix,
 // uppercase. An empty band is allowed (clears it) but won't price.

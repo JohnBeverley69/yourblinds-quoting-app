@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
 
 /**
@@ -105,6 +107,10 @@ try {
 } catch (Throwable $e) { /* column absent — keep false */ }
 
 $action = (string) ($_GET['action'] ?? $_POST['action'] ?? '');
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') && $action !== 'update_trade_terms') {
+    pl_require_unlocked_any([pl_product_of('table', $tableId)], '/admin/products/price-table.php?id=' . $tableId);
+}
 
 // ---------------------------------------------------------------------------
 // Undo: snapshot the table before ANY change to its cells, so the Undo strip
@@ -2229,6 +2235,9 @@ $activeNav = 'products';
 
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
+        <?php endif; ?>
+        <?php if (pl_product_locked((int) $table['product_id'])): ?>
+            <div class="alert alert-info" role="status">🔒 <?= e(PRODUCT_LOCK_MSG) ?></div>
         <?php endif; ?>
 
         <?php if ($justSaved || $flashMsg !== null): ?>
