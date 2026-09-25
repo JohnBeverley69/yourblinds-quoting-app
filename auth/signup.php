@@ -128,9 +128,15 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     // ── Best-effort onboarding extras — never block signup ──
                     // Grant a 30-day trial on the paid add-ons so they can try
                     // them; the core app is free regardless.
+                    // One trial per person: skipped (silently — the free plan is
+                    // fully usable) if this email or a recent sign-up from this
+                    // IP has had one before. See _partials/signup_trial.php.
+                    require_once __DIR__ . '/../_partials/signup_trial.php';
+                    $giveTrial = !trial_already_used($form['email'], $ip);
                     try {
                         require_once __DIR__ . '/../_partials/billing_helpers.php';
-                        if (function_exists('billing_paid_plans')) {
+                        if ($giveTrial && function_exists('billing_paid_plans')) {
+                            trial_record((int) $newClientId, $form['email'], $ip);
                             $trialExpiry = date('Y-m-d', strtotime('+' . SIGNUP_TRIAL_DAYS . ' days'));
                             foreach (array_keys(billing_paid_plans()) as $planCode) {
                                 try {
