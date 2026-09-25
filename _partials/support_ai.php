@@ -100,6 +100,47 @@ function support_ai_month_spend_gbp(): float
     return $usd * SUPPORT_AI_USD_TO_GBP;
 }
 
+/** One tenant's spend today, in £ — so a single account can't drain the month. */
+function support_ai_tenant_spend_today_gbp(int $clientId): float
+{
+    try {
+        $st = db()->prepare(
+            'SELECT COALESCE(SUM(cost_usd), 0) FROM support_ai_usage
+              WHERE client_id = ? AND created_at >= CURRENT_DATE'
+        );
+        $st->execute([$clientId]);
+        return (float) $st->fetchColumn() * SUPPORT_AI_USD_TO_GBP;
+    } catch (Throwable $e) {
+        return 0.0;
+    }
+}
+
+/**
+ * One chat request per user at a time. The cap/daily checks run BEFORE the
+ * API call but usage is only recorded AFTER it, so ~50 simultaneous requests
+ * all passed the checks and blew through the monthly cap at once. A named
+ * MySQL lock (held by this request's connection until released or the
+ * request ends) makes a user's turns strictly one-after-another. Returns
+ * false if another turn for this user is already in flight.
+ */
+function support_ai_acquire_turn_lock(int $userId): bool
+{
+    try {
+        $st = db()->prepare('SELECT GET_LOCK(?, 0)');
+        $st->execute(['ybs_ai_turn_' . $userId]);
+        return (int) $st->fetchColumn() === 1;
+    } catch (Throwable $e) {
+        return true;   // lock unsupported — don't break the chat
+    }
+}
+
+function support_ai_release_turn_lock(int $userId): void
+{
+    try {
+        db()->prepare('SELECT RELEASE_LOCK(?)')->execute(['ybs_ai_turn_' . $userId]);
+    } catch (Throwable $e) { /* released when the connection closes */ }
+}
+
 function support_ai_user_messages_today(int $userId): int
 {
     try {
@@ -158,6 +199,11 @@ function support_ai_unavailable_reason(array $user): ?string
     if ($days !== null && $days < 0) return 'key_expired';
     if ($cfg['cap_gbp'] > 0 && support_ai_month_spend_gbp() >= $cfg['cap_gbp']) return 'cap';
     if ($cfg['daily_limit'] > 0 && support_ai_user_messages_today((int) $user['user_id']) >= $cfg['daily_limit']) return 'daily';
+    // Per-tenant daily ceiling: a quarter of the monthly cap. Stops one
+    // account (e.g. many logins, or a throwaway signup) switching the chat off
+    // for everyone else. Super-admin is exempt.
+    if ($cfg['cap_gbp'] > 0 && empty($user['is_super_admin'])
+        && support_ai_tenant_spend_today_gbp((int) $user['client_id']) >= $cfg['cap_gbp'] / 4) return 'daily';
     return null;
 }
 

@@ -86,6 +86,15 @@ if ($action === 'status') {
 }
 
 // ---- send ------------------------------------------------------------
+// Serialise this user's turns, then re-check the limits INSIDE the lock so
+// concurrent requests can't all pass the checks before any usage is recorded.
+if ($why === null) {
+    if (!support_ai_acquire_turn_lock((int) $user['user_id'])) {
+        $reply(429, ['ok' => false, 'error' => 'Still working on your last message — give it a moment.']);
+    }
+    register_shutdown_function('support_ai_release_turn_lock', (int) $user['user_id']);
+    $why = support_ai_unavailable_reason($user);
+}
 if ($why !== null) {
     $reply(200, ['ok' => false, 'fallback' => true, 'error' => $whyText[$why] ?? 'The assistant isn\'t available — please use the form.']);
 }
