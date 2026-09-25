@@ -198,4 +198,10 @@ if (!$canCosts && !isset($result['error'])) {
     }
 }
 
+// Anonymous public InstaPrice visitors never get the supplier's name (the
+// page doesn't show it; fabrics-search.php hides it the same way).
+if ($ipPublic && !isset($result['error'])) {
+    unset($result['fabric_supplier']);
+}
+
 echo json_encode($result);

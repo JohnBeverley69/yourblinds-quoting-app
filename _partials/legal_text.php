@@ -303,12 +303,11 @@ if (!function_exists('legal_link_key')) {
             $secret = (string) app_setting_get('legal_link_secret', '');
             if ($secret === '') {
                 $secret = bin2hex(random_bytes(32));
-                if (!app_setting_set('legal_link_secret', $secret)) {
-                    // No app_settings table — fall back to a server secret so
-                    // links are at least stable; APP_KEY-less installs get a
-                    // key that changes per request (links then show name only).
-                    $secret = (string) (env('APP_ENCRYPTION_KEY') ?: $secret);
-                }
+                // If it can't be saved (no app_settings table) the random key
+                // only lives for this request, so links simply don't verify and
+                // the page shows the terms without contact details. Deliberately
+                // no fallback to APP_ENCRYPTION_KEY (leaked in git history).
+                app_setting_set('legal_link_secret', $secret);
             }
         }
         return substr(hash_hmac('sha256', 'legal:' . $clientId, $secret), 0, 20);

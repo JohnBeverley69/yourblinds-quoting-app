@@ -36,6 +36,17 @@ $hdr = static function (string $t) { echo "\n" . str_repeat('=', 74) . "\n{$t}\n
 $bad = static function (string $m) use (&$ISSUES) { $ISSUES++; echo "  [!] {$m}\n"; };
 $okc = static function (string $m) { echo "  ok  {$m}\n"; };
 
+// Client IP as the app sees it. Login lockouts, the public InstaPrice throttle
+// and acceptance IPs all key on REMOTE_ADDR — if this shows a proxy address
+// (127.0.0.1 / 10.x / 172.16–31.x) instead of your real IP, every visitor
+// shares one bucket and those limits need the proxy header instead.
+if (PHP_SAPI !== 'cli') {
+    $hdr('Request IP (for rate limits)');
+    echo '  REMOTE_ADDR     : ' . ($_SERVER['REMOTE_ADDR'] ?? '(none)') . "\n";
+    echo '  X-Forwarded-For : ' . ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '(none)') . "\n";
+    echo '  X-Real-IP       : ' . ($_SERVER['HTTP_X_REAL_IP'] ?? '(none)') . "\n";
+}
+
 $FUNCS = ['if','and','or','not','round','roun_up','roundup','roun_down','rounddown',
           'evn','even','find','max','min','lookup','bestfit','true','false'];
 
