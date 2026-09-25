@@ -556,6 +556,19 @@ function rate_limited(string $ip, string $identifier = '', int $maxAttempts = 5,
         );
         $stmt->execute([$ip, $identifier, $windowSeconds]);
         if ((int) $stmt->fetchColumn() >= $maxAttempts) return true;
+
+        // Per-account ceiling across ALL IPs: password-guessing spread over
+        // many addresses never tripped the per-IP locks above. A higher bar so
+        // a genuine user fumbling on two devices isn't caught; it clears when
+        // the window passes.
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM login_attempts
+              WHERE identifier = ?
+                AND successful = 0
+                AND created_at > (NOW() - INTERVAL ? SECOND)'
+        );
+        $stmt->execute([$identifier, $windowSeconds]);
+        if ((int) $stmt->fetchColumn() >= $maxAttempts * 4) return true;
     }
 
     // Backstop: a much higher IP-wide ceiling still stops one IP hammering

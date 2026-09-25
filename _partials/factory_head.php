@@ -193,7 +193,8 @@ $factoryNavItems += [
             </form>
         <?php endif; ?>
         <span><?= e((string) ($fu['full_name'] ?? 'Factory staff')) ?></span>
-        <a href="/auth/logout.php">Log out</a>
+        <a href="/auth/logout.php" onclick="document.getElementById('ybLogoutForm').submit(); return false;">Log out</a>
+        <form id="ybLogoutForm" method="post" action="/auth/logout.php" style="display:none"><?= csrf_field() ?></form>
     </div>
 </header>
 <?php if ($fu) require __DIR__ . '/support_widget.php'; ?>

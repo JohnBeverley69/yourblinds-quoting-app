@@ -45,7 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $st->execute([$userId]);
     $hash = (string) ($st->fetchColumn() ?: '');
 
-    if ($current === '' || !password_verify($current, $hash)) {
+    // Same lockout as login: a stolen session can't brute-force the current
+    // password here (5 wrong tries per 10 minutes).
+    $cpIp = client_ip();
+    $cpId = 'changepw:' . $userId;
+    if (rate_limited($cpIp, $cpId)) {
+        $error = 'Too many wrong attempts. Please wait a few minutes and try again.';
+    } elseif ($current === '' || !password_verify($current, $hash)) {
+        record_login_attempt($cpIp, $cpId, false);
         $error = 'Current password is incorrect.';
     } elseif (strlen($new) < 8) {
         $error = 'New password must be at least 8 characters.';

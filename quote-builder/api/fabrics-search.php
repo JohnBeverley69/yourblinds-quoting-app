@@ -144,6 +144,9 @@ if ($q === '') {
 
 $fabrics = [];
 foreach ($st->fetchAll() as $r) {
+    // Anonymous public InstaPrice visitors don't get the supplier — who the
+    // factory buys from is commercially sensitive, and the showcase is public.
+    if ($ipPublic) $r['supplier_name'] = '';
     $bits = array_filter([
         (string) ($r['supplier_name'] ?? ''),
         (string) $r['name'],

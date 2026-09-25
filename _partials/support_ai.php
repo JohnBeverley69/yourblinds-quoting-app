@@ -233,7 +233,7 @@ function support_ai_alerts_if_due(): void
     if (!$to) return;
     require_once APP_ROOT . '/mailer.php';
 
-    $link  = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/master-admin/support.php#ai';
+    $link  = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/') . '/master-admin/support.php#ai';   // APP_URL, never the request Host header
     $alert = static function (string $slot, string $subject, string $body) use ($to, $link): void {
         if (app_setting_get('support_ai_alert_' . $slot) !== null) return;   // already sent
         if (mailer_send($to, '[YourBlinds] ' . $subject, $body . "\n\nAI assistant settings: {$link}\n")) {

@@ -97,7 +97,21 @@ $area = fx_area_by_scan_key($pdo, $key);
 if ($area === null) {
     $expected = fx_scan_key($pdo);
     if ($expected === '' || !hash_equals($expected, $key)) {
-        $log('bad_key', null, $code, null, $source);
+        // This endpoint is public (scanners carry no login), so a script
+        // hammering it with wrong keys used to write one log row per hit,
+        // without limit. Log bad keys only while they're rare — a
+        // misconfigured scanner still shows up, a flood doesn't fill the table.
+        try {
+            $recentBad = (int) $pdo->query(
+                "SELECT COUNT(*) FROM factory_scan_log
+                  WHERE result = 'bad_key' AND created_at > (NOW() - INTERVAL 10 MINUTE)"
+            )->fetchColumn();
+        } catch (Throwable $e) {
+            $recentBad = 0;
+        }
+        if ($recentBad < 20) {
+            $log('bad_key', null, $code, null, $source);
+        }
         $reply(403, 'NO');
     }
 }

@@ -227,6 +227,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newUser  = trim((string) ($_POST['username'] ?? ''));
                 if ($newEmail === '' && $newUser === '') {
                     $_SESSION['flash_error'] = 'Enter an email or a username.';
+                } elseif (strpos($newUser, '@') !== false) {
+                    $_SESSION['flash_error'] = "A username can't contain @ — put email addresses in the Email field.";
                 } elseif ($newEmail !== '' && !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
                     $_SESSION['flash_error'] = 'That email address isn\'t valid.';
                 } else {

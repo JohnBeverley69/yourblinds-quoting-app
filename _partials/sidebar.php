@@ -439,7 +439,8 @@ window.addEventListener('pageshow', function (e) {
             &middot;
             <a href="/auth/change_password.php">Change password</a>
             &middot;
-            <a href="/auth/logout.php">Sign out &rarr;</a>
+            <a href="/auth/logout.php" onclick="document.getElementById('ybLogoutForm').submit(); return false;">Sign out &rarr;</a>
+            <form id="ybLogoutForm" method="post" action="/auth/logout.php" style="display:none"><?= csrf_field() ?></form>
             <div>
                 <button type="button" class="theme-toggle" id="ybThemeToggle"
                         aria-label="Toggle dark mode">

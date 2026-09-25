@@ -89,6 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
 
     if ($form['email'] === '' && $form['username'] === '') {
         $error = 'Enter an email address or a username — workshop staff can log in with just a username.';
+    } elseif (strpos($form['username'], '@') !== false) {
+        // A username that looks like an email could shadow someone's login.
+        $error = "A username can't contain @ — put email addresses in the Email field.";
     } elseif ($form['email'] !== '' && !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } elseif (strlen($password) < 8) {

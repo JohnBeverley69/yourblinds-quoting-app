@@ -726,8 +726,9 @@ $legalText = trim((string) ($legalDoc === 'trade'
     ? ($quote['trade_terms_conditions'] ?? '')
     : ($quote['terms_conditions'] ?? '')));
 $ppText    = trim((string) ($quote['privacy_policy'] ?? ''));
-$legalHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
-$legalBase = 'https://' . ($legalHost !== '' ? $legalHost : 'yourblinds.uk');
+// APP_URL, never the request Host header (a forged Host would print a
+// look-alike domain into the customer's PDF).
+$legalBase = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
 $termsUrl  = legal_view_url($legalBase, (int) $clientId, $legalDoc);
 $privUrl   = legal_view_url($legalBase, (int) $clientId, 'privacy');
 ?>

@@ -122,7 +122,17 @@ $hasBank = $bank['name'] !== '' || $bank['acc'] !== '';
 // hand, so it has effectively been sent. Flip status + stamp sent_at on the
 // first view from the public URL; subsequent views are no-ops. Token in the
 // URL is the auth — anyone with it has been given it deliberately.
-if ((string) $quote['status'] === 'draft') {
+// ...but only for a PERSON opening it. Link previews (WhatsApp, Slack, iMessage,
+// Outlook/Teams safe-links, email scanners) fetch the page the moment a link is
+// pasted — often a HEAD request or a bot user-agent — and used to flip the
+// draft to "sent" before anyone had actually been sent it.
+$uaLower   = strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+$isPreview = ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET'
+    || $uaLower === ''
+    || preg_match('/bot|crawl|spider|preview|whatsapp|facebookexternalhit|slack|telegram|discord|skype|'
+        . 'linkedin|twitter|embedly|iframely|outlook|ms-office|microsoft office|teams|proofpoint|'
+        . 'mimecast|barracuda|safelinks|curl|wget|python|go-http|headless/', $uaLower) === 1;
+if ((string) $quote['status'] === 'draft' && !$isPreview) {
     db()->prepare(
         'UPDATE quotes SET status = "sent", sent_at = NOW()
           WHERE id = ? AND status = "draft"'
