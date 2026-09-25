@@ -262,40 +262,43 @@ return [
              inside Today&rsquo;s run</b> always stays Google, because Waze cannot be embedded in a page. The tappable address
              links still go where you chose.</p>
 
-          <p><b>&#128344; Morning / afternoon booking slots.</b> This one changes how you <b>book a measure (quote) visit</b>.
-             Instead of promising ten past eleven, you promise a <b>morning</b> or an <b>afternoon</b> &mdash; the customer is
+          <p><b>&#128344; Booking time slots.</b> This one changes how you <b>book a measure (quote) visit</b>.
+             Instead of promising ten past eleven, you promise a <b>morning</b>, an <b>afternoon</b> or an <b>evening</b> &mdash; the customer is
              given the window, never an exact hour. <b>Fittings are unaffected</b>: they keep the ordinary time picker.</p>
           <ul class="steps">
-            <li><b>The tick box</b> turns the feature on. Underneath it you always get two rows, <b>Morning</b> and
-                <b>Afternoon</b>.</li>
-            <li><b>Each row has three boxes:</b> <b>From</b> and <b>To</b> (proper time boxes &mdash; use the little clock or
+            <li><b>The tick box</b> turns the feature on. Underneath it is one row per time slot &mdash; out of the box,
+                <b>Morning</b> and <b>Afternoon</b>.</li>
+            <li><b>+ Add a time slot</b> adds another row (up to six) &mdash; name it <i>Evening</i>, say, 18:00 to 20:00.
+                <b>&#10005; Remove</b> takes one away; bookings already in it are kept. Gaps between slots are fine.</li>
+            <li><b>Each row has four boxes:</b> <b>Name</b> (what the customer sees), <b>From</b> and <b>To</b> (proper time boxes &mdash; use the little clock or
                 just type <code>08:00</code>) and <b>Bookings / day</b> (a number box, <b>1 to 99</b>).</li>
             <li><b>The defaults are</b> Morning <b>09:00 to 13:00</b> and Afternoon <b>13:00 to 17:00</b>, with <b>4 bookings
                 a day</b> in each. Change them to your own hours.</li>
-            <li><b>The two limits are independent</b> &mdash; six mornings and three afternoons is perfectly fine.</li>
-            <li><b>Save</b> gives you <b>&ldquo;Morning/afternoon booking slots saved.&rdquo;</b>, or
-                <b>&ldquo;Morning/afternoon booking slots are off.&rdquo;</b> when you untick it.</li>
+            <li><b>Every limit is independent</b> &mdash; six mornings, three afternoons and two evenings is perfectly fine.</li>
+            <li><b>Save</b> gives you <b>&ldquo;Booking time slots saved.&rdquo;</b>, or
+                <b>&ldquo;Booking time slots are off.&rdquo;</b> when you untick it. A slot with no name, or a To time before
+                its From, is refused with a message saying which one.</li>
           </ul>
           <p>Now go to <b>Calendar &rarr; Book appointment</b> for a quote visit and the time picker is replaced by
-             <b>Time slot <span class="req">*</span></b> and two choices, each showing your hours and a <b>live count</b> of
+             <b>Time slot <span class="req">*</span></b> and one choice per slot, each showing your hours and a <b>live count</b> of
              what is left that day &mdash; <code>6 of 6 left</code>. Change the date and the counts follow, without reloading
              the page. A window with no room left reads <code>Full</code>, goes grey and cannot be picked. Under the choices
              sits a tick: <b>&ldquo;Email the customer their appointment window (needs an email above)&rdquo;</b>, already
              ticked for you. Pick a window and the booking confirms with
              <b>&ldquo;Appointment booked for Mrs Patel on 24 Sep 2026, Morning (8am&ndash;12:30pm).&rdquo;</b></p>
           <div class="oops"><b>Two refusals you may meet.</b> Save the booking without choosing and it says
-             <b>&ldquo;Please choose Morning or Afternoon.&rdquo;</b> Try to squeeze one into a window that is already full and
-             it says <b>&ldquo;Afternoon (12:30pm&ndash;5pm) is fully booked on 24 Sep 2026. Please choose the other window or
+             <b>&ldquo;Please choose a time slot.&rdquo;</b> Try to squeeze one into a window that is already full and
+             it says <b>&ldquo;Afternoon (12:30pm&ndash;5pm) is fully booked on 24 Sep 2026. Please choose another window or
              another day.&rdquo;</b> Neither loses your typing &mdash; fix the one thing and save again.</div>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Worth knowing before you start:</b>
              <br>&bull; <b>Set your windows before you start booking.</b> Appointments already in the diary keep the time they
              were booked at, but the wording of a window is drawn from <i>today&rsquo;s</i> settings &mdash; so an old
              nine-o&rsquo;clock morning will start describing itself as &ldquo;Morning (8am&ndash;12:30pm)&rdquo;.
-             <br>&bull; <b>A time the box cannot read is quietly replaced</b> with the standard one (09:00, 13:00, 13:00, 17:00)
-             rather than telling you off &mdash; so glance back at the four boxes after you save.
+             <br>&bull; <b>A slot&rsquo;s times must make sense</b> &mdash; a From at or after its To is refused and nothing is
+             saved, so fix that row and Save again.
              <br>&bull; If saving fails you will see <b>&ldquo;Could not save: &hellip; &mdash; have you run
-             migrate_ampm_window_config.php?&rdquo;</b> (the money and map forms have their own versions,
+             migrate_ampm_windows_list.php?&rdquo;</b> (the money and map forms have their own versions,
              <b>migrate_calendar_money.php</b> and <b>migrate_map_provider.php</b>). That means the database update has not been
              run yet &mdash; nothing you can fix from this screen, so tell whoever looks after the system.
              <br>&bull; If you have <b>Compact mode</b> switched on, the little grey explanations under each tick are hidden, so

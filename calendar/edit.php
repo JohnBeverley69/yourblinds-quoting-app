@@ -61,10 +61,11 @@ $useAmpm   = $ampm['on'] && $isMeasure;
 $ampmCap   = $ampm['capacity'];
 
 // Default window for the picker: the stored slot_window if set, otherwise
-// inferred from the existing start time (before 1pm = morning).
+// the window the existing start time falls in (or the nearest one) — also
+// used when the stored window has since been removed in Settings.
 $storedWindow = (string) ($appt['slot_window'] ?? '');
-if (!is_ampm_window($storedWindow)) {
-    $storedWindow = ((int) substr((string) $appt['appointment_time'], 0, 2)) < 13 ? 'am' : 'pm';
+if (!ampm_window_bookable($storedWindow)) {
+    $storedWindow = ampm_window_for_time((string) $appt['appointment_time']);
 }
 
 // Form defaults — refilled from $_POST after a validation error, otherwise
@@ -192,8 +193,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($f['appointment_date'] === ''
               || DateTimeImmutable::createFromFormat('!Y-m-d', $f['appointment_date']) === false) {
         $error = 'Please choose a valid appointment date.';
-    } elseif ($useAmpm && !is_ampm_window($f['slot_window'])) {
-        $error = 'Please choose Morning or Afternoon.';
+    } elseif ($useAmpm && !ampm_window_bookable($f['slot_window'])) {
+        $error = 'Please choose a time slot.';
     } elseif (!$useAmpm && ($f['appointment_time'] === ''
               || (DateTimeImmutable::createFromFormat('H:i', $f['appointment_time']) === false
                   && DateTimeImmutable::createFromFormat('G:i', $f['appointment_time']) === false
@@ -231,12 +232,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $taken  = ampm_window_count(
                     db(), (int) $clientId, $f['appointment_date'], $slotWindow, $id
                 );
-                $winCap = $slotWindow === 'pm' ? (int) $ampm['pm_capacity'] : (int) $ampm['am_capacity'];
+                $winCap = ampm_window_capacity(db(), (int) $clientId, $slotWindow);
                 if ($taken >= $winCap) {
                     $error = ampm_window_label($slotWindow)
                         . ' is fully booked on '
                         . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
-                        . '. Please choose the other window or another day.';
+                        . '. Please choose another window or another day.';
                 }
             } else {
                 // Free-time mode — normalise to HH:MM:SS for storage.

@@ -670,22 +670,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'ampm_slots') {
-        // Morning/afternoon booking slots for quote visits — configurable window
-        // times + per-window capacity (migrate_ampm_slots.php + migrate_ampm_window_config.php).
-        $on    = !empty($_POST['feature_ampm_slots']) ? 1 : 0;
-        $amCap = max(1, min(99, (int) ($_POST['ampm_am_capacity'] ?? 4)));
-        $pmCap = max(1, min(99, (int) ($_POST['ampm_pm_capacity'] ?? 4)));
-        // Normalise a time field to HH:MM:SS; fall back to the default if unparseable.
-        $normTime = static function ($v, string $def): string {
+        // Booking windows ("time slots") for quote visits — a per-tenant LIST:
+        // name, From/To and bookings/day each, add/remove (migrate_ampm_slots.php
+        // + migrate_ampm_window_config.php + migrate_ampm_windows_list.php).
+        require_once __DIR__ . '/../_partials/slot_window.php';
+        $on = !empty($_POST['feature_ampm_slots']) ? 1 : 0;
+        // Normalise a time field to HH:MM:SS; null if unparseable.
+        $normTime = static function ($v): ?string {
             if (preg_match('/^([01]?\d|2[0-3]):([0-5]\d)/', trim((string) $v), $m)) {
                 return sprintf('%02d:%02d:00', (int) $m[1], (int) $m[2]);
             }
-            return $def;
+            return null;
         };
-        $amS = $normTime($_POST['ampm_am_start'] ?? '', '09:00:00');
-        $amE = $normTime($_POST['ampm_am_end']   ?? '', '13:00:00');
-        $pmS = $normTime($_POST['ampm_pm_start'] ?? '', '13:00:00');
-        $pmE = $normTime($_POST['ampm_pm_end']   ?? '', '17:00:00');
+        $old    = ampm_settings(db(), (int) $clientId)['config'];   // incl. removed windows
+        $keys   = (array) ($_POST['win_key']   ?? []);
+        $labels = (array) ($_POST['win_label'] ?? []);
+        $starts = (array) ($_POST['win_start'] ?? []);
+        $ends   = (array) ($_POST['win_end']   ?? []);
+        $caps   = (array) ($_POST['win_cap']   ?? []);
+        $rows = [];
+        $winErr = null;
+        foreach ($labels as $i => $lbl) {
+            $lbl = mb_substr(trim((string) $lbl), 0, 30);
+            $s   = $normTime($starts[$i] ?? '');
+            $e   = $normTime($ends[$i] ?? '');
+            if ($lbl === '' && $s === null && $e === null) continue;   // blank added row
+            if ($lbl === '') { $winErr = 'Every time slot needs a name.'; break; }
+            if ($s === null || $e === null || $e <= $s) {
+                $winErr = "“{$lbl}” needs a From time before its To time."; break;
+            }
+            $k = (string) ($keys[$i] ?? '');
+            $rows[] = [
+                'k' => (ampm_is_window_key($k) && isset($old[$k])) ? $k : '',
+                'label' => $lbl, 'start' => $s, 'end' => $e,
+                'cap' => max(1, min(99, (int) ($caps[$i] ?? 4))), 'off' => false,
+            ];
+        }
+        if ($winErr === null && !$rows)                        $winErr = 'Keep at least one time slot.';
+        if ($winErr === null && count($rows) > AMPM_MAX_WINDOWS) $winErr = 'At most ' . AMPM_MAX_WINDOWS . ' time slots.';
+        if ($winErr !== null) {
+            $_SESSION['flash_error'] = 'Time slots not saved: ' . $winErr;
+            header('Location: /admin/settings.php');
+            exit;
+        }
+        // New rows get a fresh key: 'w1'…'w9' never used before, then a removed one.
+        $taken = array_filter(array_column($rows, 'k'));
+        $fresh = [];
+        foreach (range(1, 9) as $n) if (!isset($old["w$n"])) $fresh[] = "w$n";
+        foreach (range(1, 9) as $n) if (isset($old["w$n"]) && !in_array("w$n", $taken, true)) $fresh[] = "w$n";
+        foreach ($rows as &$r) {
+            if ($r['k'] === '') { $r['k'] = array_shift($fresh) ?? ''; $taken[] = $r['k']; }
+        }
+        unset($r);
+        $rows = array_values(array_filter($rows, static fn ($r) => $r['k'] !== ''));
+        // Windows no longer listed stay as "off" so their old bookings keep a label.
+        $posted = array_column($rows, 'k');
+        foreach ($old as $k => $w) {
+            if (!in_array($k, $posted, true)) $rows[] = ['k' => $k] + $w + ['off' => true];
+        }
+        foreach ($rows as &$r) if (!in_array($r['k'], $posted, true)) $r['off'] = true;
+        unset($r);
+        usort($rows, static fn ($a, $b) => strcmp($a['start'], $b['start']));
+
+        // Legacy am/pm columns still written (read back if the list is ever blank).
+        $byKey = array_column($rows, null, 'k');
+        $amCap = (int) ($byKey['am']['cap'] ?? 4);
+        $pmCap = (int) ($byKey['pm']['cap'] ?? 4);
+        $amS = $byKey['am']['start'] ?? '09:00:00'; $amE = $byKey['am']['end'] ?? '13:00:00';
+        $pmS = $byKey['pm']['start'] ?? '13:00:00'; $pmE = $byKey['pm']['end'] ?? '17:00:00';
         try {
             db()->prepare(
                 'INSERT INTO client_settings
@@ -702,12 +754,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                          ampm_pm_end        = VALUES(ampm_pm_end)'
             // ampm_slot_capacity kept = morning capacity, for pre-migration fallback code.
             )->execute([$clientId, $on, $amCap, $amCap, $pmCap, $amS, $amE, $pmS, $pmE]);
+            db()->prepare('UPDATE client_settings SET ampm_windows_json = ? WHERE client_id = ?')
+                ->execute([json_encode($rows, JSON_UNESCAPED_UNICODE), $clientId]);
             $_SESSION['flash_success'] = $on
-                ? 'Morning/afternoon booking slots saved.'
-                : 'Morning/afternoon booking slots are off.';
+                ? 'Booking time slots saved.'
+                : 'Booking time slots are off.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
-                . ' — have you run migrate_ampm_window_config.php?';
+                . ' — have you run migrate_ampm_windows_list.php?';
         }
         header('Location: /admin/settings.php');
         exit;
@@ -1171,16 +1225,11 @@ $activeNav = 'settings';
             </form>
 
             <?php
-                $ampmOn = ((int) ($settings['feature_ampm_slots'] ?? 0)) === 1;
-                $amCap  = max(1, (int) ($settings['ampm_am_capacity'] ?? $settings['ampm_slot_capacity'] ?? 4));
-                $pmCap  = max(1, (int) ($settings['ampm_pm_capacity'] ?? $settings['ampm_slot_capacity'] ?? 4));
-                $hm     = static fn ($v, $d) => substr((string) ($v ?? $d), 0, 5); // HH:MM for <input type=time>
-                $amS = $hm($settings['ampm_am_start'] ?? null, '09:00');
-                $amE = $hm($settings['ampm_am_end']   ?? null, '13:00');
-                $pmS = $hm($settings['ampm_pm_start'] ?? null, '13:00');
-                $pmE = $hm($settings['ampm_pm_end']   ?? null, '17:00');
+                require_once __DIR__ . '/../_partials/slot_window.php';
+                $ampmOn   = ((int) ($settings['feature_ampm_slots'] ?? 0)) === 1;
+                $ampmRows = array_filter(ampm_settings(db(), (int) $clientId)['config'], static fn ($w) => !$w['off']);
             ?>
-            <form method="post" action="/admin/settings.php" class="form" novalidate
+            <form method="post" action="/admin/settings.php" class="form" novalidate id="ampm-form"
                   style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="ampm_slots">
@@ -1189,40 +1238,79 @@ $activeNav = 'settings';
                         <label style="display:inline-flex;align-items:center;gap:.5rem;font-weight:600;">
                             <input type="checkbox" name="feature_ampm_slots" value="1"
                                    <?= $ampmOn ? 'checked' : '' ?>>
-                            🕘 Morning / afternoon booking slots
+                            🕘 Booking time slots
                         </label>
                         <p class="ui-hint" style="margin:0.5rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
-                            When booking a <strong>quote (measure) visit</strong>, offer a <strong>Morning</strong> or
-                            <strong>Afternoon</strong> window instead of an exact time — so the customer is given a window,
-                            never an exact hour. Set each window’s <strong>times</strong> and how many bookings it holds
-                            <strong>per day</strong> below; once a window is full it can’t be booked. Fittings are unaffected.
+                            When booking a <strong>quote (measure) visit</strong>, offer a time slot such as
+                            <strong>Morning</strong>, <strong>Afternoon</strong> or <strong>Evening</strong> instead of an exact
+                            time — so the customer is given a window, never an exact hour. Name each slot, set its
+                            <strong>times</strong> and how many bookings it holds <strong>per day</strong>; once a slot is full
+                            it can’t be booked. Add or remove slots to suit you (up to <?= (int) AMPM_MAX_WINDOWS ?>). Fittings are unaffected.
                         </p>
                     </div>
                 </div>
-                <?php foreach ([
-                        ['Morning',   'ampm_am_start', $amS, 'ampm_am_end', $amE, 'ampm_am_capacity', $amCap],
-                        ['Afternoon', 'ampm_pm_start', $pmS, 'ampm_pm_end', $pmE, 'ampm_pm_capacity', $pmCap],
-                    ] as [$lbl, $sN, $sV, $eN, $eV, $cN, $cV]): ?>
-                <div class="form-row full" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:.75rem 1.25rem;">
-                    <div style="font-weight:600;min-width:5.5rem;padding-bottom:.45rem;"><?= e($lbl) ?></div>
-                    <div class="form-group" style="margin:0;max-width:8rem;">
-                        <label for="<?= e($sN) ?>" style="font-size:.8125rem;">From</label>
-                        <input id="<?= e($sN) ?>" name="<?= e($sN) ?>" type="time" value="<?= e($sV) ?>">
+                <div id="ampm-rows">
+                <?php foreach ($ampmRows as $wk => $w): ?>
+                <div class="form-row full ampm-row" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:.75rem 1.25rem;">
+                    <input type="hidden" name="win_key[]" value="<?= e((string) $wk) ?>">
+                    <div class="form-group" style="margin:0;max-width:10rem;">
+                        <label style="font-size:.8125rem;">Name</label>
+                        <input name="win_label[]" type="text" maxlength="30" value="<?= e($w['label']) ?>" placeholder="e.g. Evening">
                     </div>
                     <div class="form-group" style="margin:0;max-width:8rem;">
-                        <label for="<?= e($eN) ?>" style="font-size:.8125rem;">To</label>
-                        <input id="<?= e($eN) ?>" name="<?= e($eN) ?>" type="time" value="<?= e($eV) ?>">
+                        <label style="font-size:.8125rem;">From</label>
+                        <input name="win_start[]" type="time" value="<?= e(substr($w['start'], 0, 5)) ?>">
+                    </div>
+                    <div class="form-group" style="margin:0;max-width:8rem;">
+                        <label style="font-size:.8125rem;">To</label>
+                        <input name="win_end[]" type="time" value="<?= e(substr($w['end'], 0, 5)) ?>">
                     </div>
                     <div class="form-group" style="margin:0;max-width:9rem;">
-                        <label for="<?= e($cN) ?>" style="font-size:.8125rem;">Bookings / day</label>
-                        <input id="<?= e($cN) ?>" name="<?= e($cN) ?>" type="number" min="1" max="99" step="1" value="<?= e((string) $cV) ?>">
+                        <label style="font-size:.8125rem;">Bookings / day</label>
+                        <input name="win_cap[]" type="number" min="1" max="99" step="1" value="<?= (int) $w['cap'] ?>">
                     </div>
+                    <button type="button" class="btn btn-secondary btn-sm ampm-remove" style="margin-bottom:.2rem;"
+                            title="Remove this time slot">✕ Remove</button>
                 </div>
                 <?php endforeach; ?>
+                </div>
+                <div class="form-row full">
+                    <button type="button" class="btn btn-secondary btn-sm" id="ampm-add">+ Add a time slot</button>
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
+            <script>
+            // Booking time slots: add / remove rows (server validates + keys them on save).
+            (function () {
+                var rows = document.getElementById('ampm-rows'), add = document.getElementById('ampm-add');
+                if (!rows || !add) return;
+                var max = <?= (int) AMPM_MAX_WINDOWS ?>;
+                function sync() {
+                    var n = rows.querySelectorAll('.ampm-row').length;
+                    add.disabled = n >= max;
+                    rows.querySelectorAll('.ampm-remove').forEach(function (b) { b.disabled = n <= 1; });
+                }
+                rows.addEventListener('click', function (e) {
+                    var b = e.target.closest('.ampm-remove');
+                    if (!b || b.disabled) return;
+                    b.closest('.ampm-row').remove();
+                    sync();
+                });
+                add.addEventListener('click', function () {
+                    var tpl = rows.querySelector('.ampm-row');
+                    if (!tpl) return;
+                    var row = tpl.cloneNode(true);
+                    row.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+                    row.querySelector('[name="win_cap[]"]').value = '2';
+                    rows.appendChild(row);
+                    row.querySelector('[name="win_label[]"]').focus();
+                    sync();
+                });
+                sync();
+            })();
+            </script>
         </section>
 
         </div><!-- /tab: company -->

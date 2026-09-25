@@ -83,7 +83,7 @@ $f = [
     'billing_postcode'          => '',
     'appointment_date'          => $defaultDate,
     'appointment_time'          => $defaultTime,
-    'slot_window'               => 'am',   // only used when $ampmOn
+    'slot_window'               => (string) (array_key_first(ampm_windows()) ?? 'am'),   // only used when $ampmOn
     'duration_minutes'          => 60,
     'assigned_to'               => $defaultAssigned,
     'notes'                     => '',
@@ -115,8 +115,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($f['appointment_date'] === ''
               || DateTimeImmutable::createFromFormat('!Y-m-d', $f['appointment_date']) === false) {
         $error = 'Please choose a valid appointment date.';
-    } elseif ($ampmOn && !is_ampm_window($f['slot_window'])) {
-        $error = 'Please choose Morning or Afternoon.';
+    } elseif ($ampmOn && !ampm_window_bookable($f['slot_window'])) {
+        $error = 'Please choose a time slot.';
     } elseif (!$ampmOn && ($f['appointment_time'] === ''
               || (DateTimeImmutable::createFromFormat('H:i', $f['appointment_time']) === false
                   && DateTimeImmutable::createFromFormat('G:i', $f['appointment_time']) === false
@@ -155,12 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $taken   = ampm_window_count(
                     db(), (int) $clientId, $f['appointment_date'], $slotWindow
                 );
-                $winCap  = $slotWindow === 'pm' ? (int) $ampm['pm_capacity'] : (int) $ampm['am_capacity'];
+                $winCap  = ampm_window_capacity(db(), (int) $clientId, $slotWindow);
                 if ($taken >= $winCap) {
                     $error = ampm_window_label($slotWindow)
                         . ' is fully booked on '
                         . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
-                        . '. Please choose the other window or another day.';
+                        . '. Please choose another window or another day.';
                 }
             } else {
                 // Free-time mode — normalise to HH:MM:SS for storage.

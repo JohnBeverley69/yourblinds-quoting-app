@@ -2,22 +2,36 @@
 declare(strict_types=1);
 
 /**
- * AM/PM booking-slot helpers (feature_ampm_slots — see migrate_ampm_slots.php
- * and migrate_ampm_window_config.php).
+ * Booking-window ("time slot") helpers (feature_ampm_slots — see
+ * migrate_ampm_slots.php, migrate_ampm_window_config.php and
+ * migrate_ampm_windows_list.php).
  *
- * A quote (measure) visit can be booked into a half-day WINDOW instead of a
- * clock time: a Morning and an Afternoon window. The window START time and
- * LENGTH, and the per-window daily CAPACITY, are configurable per tenant
- * (Settings → Calendar). Defaults: Morning 9am-1pm, Afternoon 1pm-5pm, 4 each.
+ * A quote (measure) visit can be booked into a WINDOW instead of a clock time.
+ * Each tenant keeps its own LIST of windows (Settings → Calendar): a name,
+ * From/To times and a per-day CAPACITY each, and can add or remove windows —
+ * e.g. Morning 10–1, Afternoon 2–4, Evening 6–8. Default: Morning 9am-1pm and
+ * Afternoon 1pm-5pm, 4 each.
  *
- * The window is stored canonically as appointment_time + duration_minutes so
- * every existing calendar view keeps working, plus a slot_window marker
- * ('am' | 'pm') so renderers can show the label and capacity is counted per
- * window per day. Capacity counts purely on slot_window (only ever set on
- * slot-booked measure visits) so it never includes fittings.
+ * Storage: client_settings.ampm_windows_json — a JSON list of
+ *   {"k":"am","label":"Morning","start":"09:00:00","end":"13:00:00","cap":4,"off":false}
+ * Keys: the first two stay 'am' / 'pm' (every booking made before the list
+ * existed uses them); added windows get 'w1'…'w9'. A key is never reused —
+ * a removed window stays in the list with "off":true so its old bookings keep
+ * their label. When the JSON is empty/absent the list is built from the legacy
+ * ampm_am_* / ampm_pm_* columns, so nothing changes until a tenant saves.
+ *
+ * The window is stored on the booking canonically as appointment_time +
+ * duration_minutes so every calendar view keeps working, plus a slot_window
+ * marker (the key, VARCHAR(2)) so renderers can show the label and capacity is
+ * counted per window per day. Capacity counts purely on slot_window (only ever
+ * set on slot-booked measure visits) so it never includes fittings.
  *
  * Pure-ish functions; safe to require more than once.
  */
+
+if (!defined('AMPM_MAX_WINDOWS')) {
+    define('AMPM_MAX_WINDOWS', 6);   // bookable windows per tenant
+}
 
 if (!function_exists('ampm_fmt_time')) {
     /** "09:00:00" -> "9am"; "13:30:00" -> "1:30pm". */
@@ -54,25 +68,50 @@ if (!function_exists('ampm_one_window')) {
     }
 }
 
-if (!function_exists('ampm_windows_default')) {
-    /** The out-of-the-box windows (used as a fallback pre-migration / no tenant). */
-    function ampm_windows_default(): array
+if (!function_exists('ampm_is_window_key')) {
+    /** A syntactically valid window key: 'am', 'pm' or 'w1'…'w9'. */
+    function ampm_is_window_key(?string $k): bool
+    {
+        return $k === 'am' || $k === 'pm' || (is_string($k) && preg_match('/^w[1-9]$/', $k) === 1);
+    }
+}
+
+if (!function_exists('ampm_default_config')) {
+    /** The out-of-the-box window list (keyed config rows). */
+    function ampm_default_config(): array
     {
         return [
-            'am' => ampm_one_window('09:00:00', '13:00:00', 'Morning'),
-            'pm' => ampm_one_window('13:00:00', '17:00:00', 'Afternoon'),
+            'am' => ['label' => 'Morning',   'start' => '09:00:00', 'end' => '13:00:00', 'cap' => 4, 'off' => false],
+            'pm' => ['label' => 'Afternoon', 'start' => '13:00:00', 'end' => '17:00:00', 'cap' => 4, 'off' => false],
         ];
     }
 }
 
-if (!function_exists('ampm_build_windows')) {
-    /** Build the window defs from a tenant settings array (see ampm_settings). */
-    function ampm_build_windows(array $s): array
+if (!function_exists('ampm_parse_config')) {
+    /**
+     * Decode + sanitise a stored ampm_windows_json value into keyed config
+     * rows (sorted by start time). Returns [] if blank/invalid.
+     */
+    function ampm_parse_config(?string $json): array
     {
-        return [
-            'am' => ampm_one_window((string) ($s['am_start'] ?? '09:00:00'), (string) ($s['am_end'] ?? '13:00:00'), 'Morning'),
-            'pm' => ampm_one_window((string) ($s['pm_start'] ?? '13:00:00'), (string) ($s['pm_end'] ?? '17:00:00'), 'Afternoon'),
-        ];
+        if ($json === null || trim($json) === '') return [];
+        $list = json_decode($json, true);
+        if (!is_array($list)) return [];
+        $out = [];
+        foreach ($list as $row) {
+            if (!is_array($row)) continue;
+            $k = (string) ($row['k'] ?? '');
+            if (!ampm_is_window_key($k) || isset($out[$k])) continue;
+            $out[$k] = [
+                'label' => trim((string) ($row['label'] ?? '')) ?: 'Window',
+                'start' => (string) ($row['start'] ?? '09:00:00'),
+                'end'   => (string) ($row['end'] ?? '13:00:00'),
+                'cap'   => max(1, (int) ($row['cap'] ?? 4)),
+                'off'   => !empty($row['off']),
+            ];
+        }
+        uasort($out, static fn ($a, $b) => strcmp($a['start'], $b['start']));
+        return $out;
     }
 }
 
@@ -80,71 +119,85 @@ if (!function_exists('ampm_settings')) {
     /**
      * Read the tenant's slot settings, guarded so a tenant that hasn't run the
      * migrations simply gets the feature off / the defaults (never a 500).
-     * Returns: on(bool), capacity(int legacy = morning), am_capacity, pm_capacity,
-     *          am_start, am_end, pm_start, pm_end.
+     * Returns: on(bool), config (keyed rows incl. removed ones — see
+     * ampm_parse_config), capacity (first window's, legacy), and the legacy
+     * am_/pm_ start/end/capacity keys.
      */
     function ampm_settings(PDO $pdo, int $clientId): array
     {
         static $cache = [];
         if (isset($cache[$clientId])) return $cache[$clientId];
 
-        $def = [
-            'on' => false, 'capacity' => 4, 'am_capacity' => 4, 'pm_capacity' => 4,
-            'am_start' => '09:00:00', 'am_end' => '13:00:00',
-            'pm_start' => '13:00:00', 'pm_end' => '17:00:00',
-        ];
+        $on  = false;
+        $cfg = ampm_default_config();
 
-        // Full read (post window-config migration).
         try {
-            $st = $pdo->prepare(
-                'SELECT COALESCE(feature_ampm_slots, 0)                        AS on_flag,
-                        COALESCE(ampm_slot_capacity, 4)                        AS cap,
-                        COALESCE(ampm_am_capacity, ampm_slot_capacity, 4)      AS am_cap,
-                        COALESCE(ampm_pm_capacity, ampm_slot_capacity, 4)      AS pm_cap,
-                        COALESCE(ampm_am_start, \'09:00:00\')                    AS am_s,
-                        COALESCE(ampm_am_end,   \'13:00:00\')                    AS am_e,
-                        COALESCE(ampm_pm_start, \'13:00:00\')                    AS pm_s,
-                        COALESCE(ampm_pm_end,   \'17:00:00\')                    AS pm_e
-                   FROM client_settings WHERE client_id = ? LIMIT 1'
-            );
+            $st = $pdo->prepare('SELECT * FROM client_settings WHERE client_id = ? LIMIT 1');
             $st->execute([$clientId]);
-            $r = $st->fetch(PDO::FETCH_ASSOC);
-            if ($r) {
-                return $cache[$clientId] = [
-                    'on'          => (int) $r['on_flag'] === 1,
-                    'capacity'    => max(1, (int) $r['am_cap']),
-                    'am_capacity' => max(1, (int) $r['am_cap']),
-                    'pm_capacity' => max(1, (int) $r['pm_cap']),
-                    'am_start'    => (string) $r['am_s'], 'am_end' => (string) $r['am_e'],
-                    'pm_start'    => (string) $r['pm_s'], 'pm_end' => (string) $r['pm_e'],
-                ];
-            }
-            return $cache[$clientId] = $def;
+            $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable $e) {
-            // Pre-window-config migration: only feature + single capacity exist.
-            try {
-                $st = $pdo->prepare(
-                    'SELECT COALESCE(feature_ampm_slots, 0) AS on_flag,
-                            COALESCE(ampm_slot_capacity, 4) AS cap
-                       FROM client_settings WHERE client_id = ? LIMIT 1'
-                );
-                $st->execute([$clientId]);
-                $r = $st->fetch(PDO::FETCH_ASSOC);
-                if ($r) {
-                    $cap = max(1, (int) $r['cap']);
-                    return $cache[$clientId] = array_merge($def, [
-                        'on' => (int) $r['on_flag'] === 1,
-                        'capacity' => $cap, 'am_capacity' => $cap, 'pm_capacity' => $cap,
-                    ]);
-                }
-            } catch (Throwable $e2) { /* column not migrated at all — feature off */ }
-            return $cache[$clientId] = $def;
+            $r = [];
         }
+
+        if ($r) {
+            $on = (int) ($r['feature_ampm_slots'] ?? 0) === 1;
+            $listed = ampm_parse_config(isset($r['ampm_windows_json']) ? (string) $r['ampm_windows_json'] : null);
+            if ($listed) {
+                $cfg = $listed;
+            } else {
+                // Legacy two-window columns (pre list migration, or never saved since).
+                $legacyCap = (int) ($r['ampm_slot_capacity'] ?? 4);
+                $cfg['am']['start'] = (string) ($r['ampm_am_start'] ?? '09:00:00');
+                $cfg['am']['end']   = (string) ($r['ampm_am_end']   ?? '13:00:00');
+                $cfg['pm']['start'] = (string) ($r['ampm_pm_start'] ?? '13:00:00');
+                $cfg['pm']['end']   = (string) ($r['ampm_pm_end']   ?? '17:00:00');
+                $cfg['am']['cap']   = max(1, (int) ($r['ampm_am_capacity'] ?? $legacyCap));
+                $cfg['pm']['cap']   = max(1, (int) ($r['ampm_pm_capacity'] ?? $legacyCap));
+            }
+        }
+
+        $live  = array_filter($cfg, static fn ($w) => !$w['off']);
+        $first = reset($live) ?: ['cap' => 4];
+        return $cache[$clientId] = [
+            'on'          => $on,
+            'config'      => $cfg,
+            'capacity'    => (int) $first['cap'],
+            // Legacy keys — kept for any caller still reading them.
+            'am_capacity' => (int) ($cfg['am']['cap'] ?? 4),
+            'pm_capacity' => (int) ($cfg['pm']['cap'] ?? 4),
+            'am_start'    => (string) ($cfg['am']['start'] ?? '09:00:00'), 'am_end' => (string) ($cfg['am']['end'] ?? '13:00:00'),
+            'pm_start'    => (string) ($cfg['pm']['start'] ?? '13:00:00'), 'pm_end' => (string) ($cfg['pm']['end'] ?? '17:00:00'),
+        ];
+    }
+}
+
+if (!function_exists('ampm_build_windows')) {
+    /**
+     * Window defs (time, duration, label, range) from a settings array. Removed
+     * windows are left out unless $withOff — used for LABELS, so a booking in a
+     * since-removed window still reads e.g. "Evening" rather than a bare time.
+     */
+    function ampm_build_windows(array $s, bool $withOff = false): array
+    {
+        $out = [];
+        foreach (($s['config'] ?? ampm_default_config()) as $k => $w) {
+            if ($w['off'] && !$withOff) continue;
+            $out[$k] = ampm_one_window($w['start'], $w['end'], $w['label']);
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('ampm_windows_default')) {
+    /** The out-of-the-box windows (used as a fallback pre-migration / no tenant). */
+    function ampm_windows_default(): array
+    {
+        return ampm_build_windows(['config' => ampm_default_config()]);
     }
 }
 
 if (!function_exists('ampm_windows_for')) {
-    /** The window defs for a specific tenant (cached per request). */
+    /** The bookable window defs for a specific tenant (cached per request). */
     function ampm_windows_for(PDO $pdo, int $clientId): array
     {
         static $cache = [];
@@ -153,15 +206,27 @@ if (!function_exists('ampm_windows_for')) {
     }
 }
 
+if (!function_exists('ampm_current_client_id')) {
+    /** The logged-in tenant's client id, or 0. */
+    function ampm_current_client_id(): int
+    {
+        try {
+            $u = function_exists('current_user') ? current_user() : null;
+            return (int) ($u['client_id'] ?? 0);
+        } catch (Throwable $e) {
+            return 0;
+        }
+    }
+}
+
 if (!function_exists('ampm_current_windows')) {
-    /** The window defs for the CURRENT logged-in tenant (falls back to defaults). */
+    /** The bookable window defs for the CURRENT logged-in tenant (falls back to defaults). */
     function ampm_current_windows(): array
     {
         static $c = null;
         if ($c !== null) return $c;
         try {
-            $u   = function_exists('current_user') ? current_user() : null;
-            $cid = (int) ($u['client_id'] ?? 0);
+            $cid = ampm_current_client_id();
             if ($cid > 0 && function_exists('db')) {
                 return $c = ampm_windows_for(db(), $cid);
             }
@@ -170,11 +235,26 @@ if (!function_exists('ampm_current_windows')) {
     }
 }
 
+if (!function_exists('ampm_label_windows')) {
+    /** Every window the current tenant has ever had (removed ones too), for labels. */
+    function ampm_label_windows(): array
+    {
+        static $c = null;
+        if ($c !== null) return $c;
+        try {
+            $cid = ampm_current_client_id();
+            if ($cid > 0 && function_exists('db')) {
+                return $c = ampm_build_windows(ampm_settings(db(), $cid), true);
+            }
+        } catch (Throwable $e) { /* fall through to defaults */ }
+        return $c = ampm_windows_default();
+    }
+}
+
 if (!function_exists('ampm_windows')) {
     /**
-     * Window definitions for the current tenant: start time, duration, and
-     * labels. Back-compatible no-arg accessor used across the calendar; it now
-     * resolves the tenant's configured times rather than a fixed 9-1 / 1-5.
+     * Bookable window definitions for the current tenant: start time, duration
+     * and labels, in start-time order. No-arg accessor used across the calendar.
      */
     function ampm_windows(): array
     {
@@ -183,10 +263,40 @@ if (!function_exists('ampm_windows')) {
 }
 
 if (!function_exists('is_ampm_window')) {
-    /** True if $w is a recognised window key ('am' | 'pm'). */
+    /** True if $w is a window key the current tenant has (or had) — for labelling. */
     function is_ampm_window(?string $w): bool
     {
-        return $w === 'am' || $w === 'pm';
+        return $w !== null && isset(ampm_label_windows()[$w]);
+    }
+}
+
+if (!function_exists('ampm_window_bookable')) {
+    /** True if $w is one of the current tenant's bookable (not removed) windows. */
+    function ampm_window_bookable(?string $w): bool
+    {
+        return $w !== null && isset(ampm_windows()[$w]);
+    }
+}
+
+if (!function_exists('ampm_window_for_time')) {
+    /**
+     * Which bookable window a clock time falls in — or, if it's in none (a gap
+     * between windows, or before/after them all), the nearest one.
+     */
+    function ampm_window_for_time(string $time): string
+    {
+        $wins = ampm_windows();
+        $t    = strtotime('1970-01-01 ' . $time);
+        $best = (string) (array_key_first($wins) ?? 'am');
+        $bestDist = PHP_INT_MAX;
+        foreach ($wins as $wk => $win) {
+            $s = strtotime('1970-01-01 ' . $win['time']);
+            if ($t === false || $s === false) continue;
+            $e = $s + $win['duration'] * 60;
+            $dist = $t < $s ? $s - $t : ($t >= $e ? $t - $e + 1 : 0);
+            if ($dist < $bestDist) { $best = (string) $wk; $bestDist = $dist; }
+        }
+        return $best;
     }
 }
 
@@ -197,19 +307,19 @@ if (!function_exists('ampm_window_label')) {
      */
     function ampm_window_label(?string $w): string
     {
-        $win = ampm_windows()[$w] ?? null;
+        $win = ampm_label_windows()[$w] ?? null;
         return $win ? "{$win['label']} ({$win['range']})" : '';
     }
 }
 
 if (!function_exists('slot_window_short_label')) {
     /**
-     * Compact window label for calendar cards, e.g. "Morning" / "Afternoon".
+     * Compact window label for calendar cards, e.g. "Morning" / "Evening".
      * Returns '' for an unrecognised window so callers fall back to the time.
      */
     function slot_window_short_label(?string $w): string
     {
-        $win = ampm_windows()[$w] ?? null;
+        $win = ampm_label_windows()[$w] ?? null;
         return $win ? $win['label'] : '';
     }
 }
@@ -238,28 +348,26 @@ if (!function_exists('ampm_window_count')) {
 }
 
 if (!function_exists('ampm_window_capacity')) {
-    /** The per-day capacity for one window ('am' | 'pm') for this tenant. */
+    /** The per-day capacity for one window for this tenant. */
     function ampm_window_capacity(PDO $pdo, int $clientId, string $window): int
     {
         $s = ampm_settings($pdo, $clientId);
-        return $window === 'pm' ? (int) $s['pm_capacity'] : (int) $s['am_capacity'];
+        return (int) ($s['config'][$window]['cap'] ?? $s['capacity']);
     }
 }
 
 if (!function_exists('ampm_availability')) {
     /**
-     * Remaining capacity for both windows on a date, using each window's own
-     * per-day capacity. Returns:
-     *   ['am' => ['taken'=>int,'remaining'=>int,'full'=>bool,'capacity'=>int], 'pm' => [...]].
+     * Remaining capacity for each bookable window on a date, using each
+     * window's own per-day capacity. Returns, in start-time order:
+     *   ['am' => ['taken'=>int,'remaining'=>int,'full'=>bool,'capacity'=>int], 'pm' => [...], 'w1' => [...]].
      */
     function ampm_availability(PDO $pdo, int $clientId, string $date, int $excludeId = 0): array
     {
-        $s     = ampm_settings($pdo, $clientId);
-        $capBy = ['am' => (int) $s['am_capacity'], 'pm' => (int) $s['pm_capacity']];
-        $out   = [];
+        $out = [];
         foreach (array_keys(ampm_windows_for($pdo, $clientId)) as $w) {
-            $taken = ampm_window_count($pdo, $clientId, $date, $w, $excludeId);
-            $cap   = $capBy[$w] ?? (int) $s['capacity'];
+            $taken = ampm_window_count($pdo, $clientId, $date, (string) $w, $excludeId);
+            $cap   = ampm_window_capacity($pdo, $clientId, (string) $w);
             $rem   = $cap - $taken;
             if ($rem < 0) $rem = 0;
             $out[$w] = ['taken' => $taken, 'remaining' => $rem, 'full' => $rem <= 0, 'capacity' => $cap];
