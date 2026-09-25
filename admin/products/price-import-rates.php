@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
+
 /**
  * Per-slat RATE importer (products.price_per_slat = 1).
  *
@@ -145,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 require __DIR__ . '/../../vendor/autoload.php';
-                $ss = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
+                $ss = yb_safe_load_spreadsheet($_FILES['file']['tmp_name']);
                 $sheets = [];
                 foreach ($ss->getAllSheets() as $sheet) {
                     $rows = $sheet->toArray(null, true, false, false);

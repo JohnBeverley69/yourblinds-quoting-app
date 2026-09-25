@@ -91,6 +91,17 @@ function support_fix_brief(array $ticket): string
     $cats = support_categories();
     $path = (string) (parse_url((string) $ticket['page_url'], PHP_URL_PATH) ?? '');
     $qs   = (string) (parse_url((string) $ticket['page_url'], PHP_URL_QUERY) ?? '');
+    // Secrets ride in some query strings (customer quote links' token=, scan
+    // keys' key=, signed legal links' k=, cron token=) — never publish them.
+    if ($qs !== '') {
+        parse_str($qs, $qArr);
+        foreach ($qArr as $qk => $qv) {
+            if (preg_match('/^(token|key|k|t|sig|signature|code|secret|password|pass)$/i', (string) $qk)) {
+                $qArr[$qk] = 'REDACTED';
+            }
+        }
+        $qs = http_build_query($qArr);
+    }
     $lines = [
         'Type: ' . ($cats[$ticket['category']] ?? $ticket['category']),
         // Page title left out on purpose: it often names the customer.

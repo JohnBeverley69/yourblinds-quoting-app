@@ -2,6 +2,6 @@
 # safeguard — the upload validator already rejects non-images via getimagesize(),
 # but if a malicious file ever sneaks in, Apache won't execute it as code.
 
-<FilesMatch "\.(?i:php|phar|phtml|php5|php7|inc)$">
+<FilesMatch "\.(?i:php\d*|phps|pht|phtml|phar|inc|shtml|cgi|pl|py|sh|asp|aspx|jsp|svg|html?|xhtml)$">
     Require all denied
 </FilesMatch>

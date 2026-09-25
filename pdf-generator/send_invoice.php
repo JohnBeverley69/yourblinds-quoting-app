@@ -41,6 +41,7 @@ $clientId = (int) $user['client_id'];
 
 $id      = (int) ($_POST['id'] ?? $_POST['quote_id'] ?? 0);
 $quote   = qb_load_quote_or_404($id, $clientId);
+qb_require_quote_access($quote, $user, current_user_permissions());
 $backUrl = '/quote-builder/edit.php?id=' . $id;
 
 // Invoicing is an order-side action.

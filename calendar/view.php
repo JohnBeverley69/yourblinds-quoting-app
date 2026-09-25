@@ -106,11 +106,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // the appointment was previously marked complete, which
         // auto-advanced the quote).
         require_once __DIR__ . '/../quote-builder/_helpers.php';
-        $qSt = db()->prepare(
-            'SELECT quote_id FROM appointments
-              WHERE id = ? AND client_id = ? LIMIT 1'
-        );
-        $qSt->execute([$id, $clientId]);
+        require_once __DIR__ . '/../_partials/customer_access.php';
+        // Same rule as update_status above: a restricted user (fitter) may
+        // only rewind the quote on an appointment assigned to them.
+        $rwSql    = 'SELECT quote_id FROM appointments WHERE id = ? AND client_id = ?';
+        $rwParams = [$id, $clientId];
+        if (!cm_can_view_all_customers($user)) {
+            $rwSql    .= ' AND client_user_id = ?';
+            $rwParams[] = (int) $user['user_id'];
+        }
+        $qSt = db()->prepare($rwSql . ' LIMIT 1');
+        $qSt->execute($rwParams);
         $quoteId = (int) ($qSt->fetchColumn() ?: 0);
         if ($quoteId > 0) {
             $rewoundRef = qb_rewind_quote_from_fitted(db(), $quoteId, $clientId);

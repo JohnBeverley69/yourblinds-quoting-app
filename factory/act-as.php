@@ -26,9 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Return to wherever they were; only same-site absolute paths.
-$back = (string) ($_POST['return_to'] ?? '');
-if ($back === '' || $back[0] !== '/' || str_starts_with($back, '//')) {
-    $back = '/factory/incoming-orders.php';
-}
+$back = safe_local_redirect((string) ($_POST['return_to'] ?? ''), '/factory/incoming-orders.php');
 header('Location: ' . $back);
 exit;

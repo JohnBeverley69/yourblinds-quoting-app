@@ -68,6 +68,17 @@ if ($tokenValid && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->commit();
             $success    = true;
+
+            // Proving control of the email clears any lockout on the account,
+            // so someone hammering wrong passwords can't keep the real owner out.
+            try {
+                $ids = $pdo->prepare('SELECT email, username FROM client_users WHERE id = ?');
+                $ids->execute([(int) $reset['user_id']]);
+                foreach (array_filter((array) $ids->fetch(PDO::FETCH_NUM)) as $ident) {
+                    $pdo->prepare('DELETE FROM login_attempts WHERE identifier = ? AND successful = 0')
+                        ->execute([(string) $ident]);
+                }
+            } catch (Throwable $e) { /* lockout just expires on its own */ }
             $tokenValid = false; // hide the form once the password is changed
         } catch (Throwable $e) {
             $pdo->rollBack();

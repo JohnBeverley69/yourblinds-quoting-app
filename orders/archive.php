@@ -24,6 +24,15 @@ csrf_check();
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 
+// Archiving hides jobs from everyone's lists — admin / view-all only, so a
+// restricted user (fitter) can't hide or restore other staff's jobs.
+require_once __DIR__ . '/../_partials/customer_access.php';
+if (!cm_can_view_all_customers($user)) {
+    $_SESSION['flash_error'] = 'Only an admin can archive jobs.';
+    header('Location: /orders/index.php');
+    exit;
+}
+
 $ids = $_POST['quote_ids'] ?? [];
 if (!is_array($ids)) $ids = [];
 $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
+
 /**
  * Width-only price importer.
  *
@@ -82,7 +84,7 @@ foreach ($systems as $s) {
 //     no matter where the first data column sits.
 $parseSheet = static function (string $path): array {
     require_once __DIR__ . '/../../vendor/autoload.php';
-    $ss    = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+    $ss    = yb_safe_load_spreadsheet($path);
     $sheet = $ss->getActiveSheet();
     $rows  = array_values($sheet->toArray(null, true, false, false));
     $n     = count($rows);

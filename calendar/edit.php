@@ -197,6 +197,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $vq->execute([$f['quote_id'], $clientId]);
         if (!$vq->fetchColumn()) {
             $f['quote_id'] = 0;
+        } elseif (!cm_can_view_all_customers($user)
+                  && $f['quote_id'] !== (int) ($appt['quote_id'] ?? 0)) {
+            // A restricted user (fitter) linking their appointment to some
+            // other quote would make that quote — and its customer and
+            // payments — "theirs". Only allow a quote they already reach
+            // through one of their own appointments; otherwise keep the
+            // existing link.
+            $mq = db()->prepare(
+                'SELECT 1 FROM appointments
+                  WHERE quote_id = ? AND client_id = ? AND client_user_id = ? LIMIT 1'
+            );
+            $mq->execute([$f['quote_id'], $clientId, (int) $user['user_id']]);
+            if (!$mq->fetchColumn()) {
+                $f['quote_id'] = (int) ($appt['quote_id'] ?? 0);
+            }
         }
     }
 

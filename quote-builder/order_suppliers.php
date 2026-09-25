@@ -44,6 +44,7 @@ if (!$isAdmin && empty($_perms['can_create_orders'])) {
 
 $quoteId = (int) ($_GET['id'] ?? $_POST['quote_id'] ?? 0);
 $quote   = qb_load_quote_or_404($quoteId, $clientId);
+qb_require_quote_access($quote, $user, current_user_permissions());
 
 $backToQuote = '/quote-builder/edit.php?id=' . $quoteId;
 
