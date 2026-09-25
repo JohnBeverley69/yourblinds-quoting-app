@@ -110,7 +110,7 @@ if ($canViewAll) {
 // lifecycle. Quotes table may be missing on Phase 2 builds — the
 // LEFT JOIN handles that (NULLs everywhere on the quote columns).
 $apStmt = $pdo->prepare(
-    "SELECT a.id, a.title, a.appointment_time, a.duration_minutes,
+    "SELECT {$slotColSql}a.id, a.title, a.appointment_time, a.duration_minutes,
             a.status, a.appt_kind, a.quote_id, a.client_user_id,
             a.has_issue, a.issue_note,
             a.installation_town, a.installation_postcode,
