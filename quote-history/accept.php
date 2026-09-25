@@ -41,6 +41,7 @@ $pdo = db();
 $qStmt = $pdo->prepare(
     'SELECT q.id, q.status, q.end_customer_name, q.client_id,
             q.end_customer_email, q.quote_number, q.public_token, q.total,
+            q.sent_at, q.created_at,
             c.company_name AS trade_company_name
        FROM quotes q
        JOIN clients c ON c.id = q.client_id
@@ -60,6 +61,16 @@ if ((string) $quote['status'] !== 'sent') {
     // Already moved on — or never sent. Don't transition anything; just bounce
     // back to the public page where the appropriate state will render.
     $_SESSION['flash_error'] = 'This quote is no longer awaiting your response.';
+    header('Location: ' . $publicUrl);
+    exit;
+}
+
+// Past its acceptance window (_partials/quote_expiry.php) — the price may
+// have changed, so the business has to renew or re-send it first.
+require_once __DIR__ . '/../_partials/quote_expiry.php';
+if (quote_is_expired($quote)) {
+    $_SESSION['flash_error'] = 'This quote has expired. Please contact '
+        . (string) ($quote['trade_company_name'] ?? 'us') . ' for an updated quote.';
     header('Location: ' . $publicUrl);
     exit;
 }

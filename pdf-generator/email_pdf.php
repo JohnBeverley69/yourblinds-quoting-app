@@ -7,6 +7,7 @@ require __DIR__ . '/../mailer.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/pdf.php';
 require_once __DIR__ . '/../_partials/send_quota.php';
+require_once __DIR__ . '/../_partials/quote_expiry.php';
 
 requireLogin();
 
@@ -103,7 +104,9 @@ if (!$ok) {
 if ((string) $quote['status'] === 'draft') {
     db()->prepare('UPDATE quotes SET status = "sent", sent_at = NOW() WHERE id = ?')
         ->execute([$id]);
-} elseif (empty($quote['sent_at'])) {
+} elseif (empty($quote['sent_at']) || quote_is_expired($quote)) {
+    // No send date yet, or re-sending an EXPIRED quote: that's a fresh issue,
+    // so restart its acceptance window from today.
     db()->prepare('UPDATE quotes SET sent_at = NOW() WHERE id = ?')
         ->execute([$id]);
 }
