@@ -15,12 +15,18 @@ declare(strict_types=1);
  * log table isn't there yet, sending is allowed (the app never breaks on it).
  */
 
-if (function_exists('send_quota_allows')) {
-    return;
+// Constants BEFORE the include guard: PHP hoists this file's functions, so
+// function_exists() is already true on the first include and the guard
+// returns — anything below it (like a const) would never be defined.
+if (!defined('SEND_QUOTA_FREE')) {
+    define('SEND_QUOTA_FREE', 40);
+    define('SEND_QUOTA_PAID', 300);
 }
 
-const SEND_QUOTA_FREE = 40;
-const SEND_QUOTA_PAID = 300;
+if (function_exists('send_quota_allows') && defined('SEND_QUOTA_GUARD')) {
+    return;
+}
+define('SEND_QUOTA_GUARD', true);
 
 function send_quota_limit(int $clientId): int
 {

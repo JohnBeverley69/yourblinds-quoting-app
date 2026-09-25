@@ -191,7 +191,9 @@ $fmtDate = static function (?string $dt): string {
 };
 
 $status      = (string) $quote['status'];
-$canAccept   = in_array($status, ['sent'], true);
+require_once __DIR__ . '/../_partials/quote_expiry.php';
+$isExpired   = quote_is_expired($quote);
+$canAccept   = in_array($status, ['sent'], true) && !$isExpired;
 $alreadyDone = in_array($status, ['accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'], true);
 
 $tradeLines = array_values(array_filter([
@@ -594,6 +596,14 @@ if ($depositStored !== null) {
             <p>This quote has moved on to <strong><?= e($status) ?></strong>.
                If you have questions please contact
                <?= e((string) ($quote['trade_company_name'] ?? 'your supplier')) ?>.</p>
+        </div>
+    <?php elseif ($isExpired): ?>
+        <div class="accept-card declined">
+            <h2>This quote has expired</h2>
+            <p>Quotes can be accepted for <?= (int) QUOTE_ACCEPT_DAYS ?> days, and this one
+               ran out on <?= e(date('j F Y', (int) quote_accept_deadline($quote))) ?>.
+               Prices may have changed since — please contact
+               <?= e((string) ($quote['trade_company_name'] ?? 'your supplier')) ?> for an updated quote.</p>
         </div>
     <?php elseif ($canAccept): ?>
         <div class="accept-card">

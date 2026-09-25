@@ -932,6 +932,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
 
+        <?php
+        // Sent quote past its acceptance window: the customer's link now says
+        // "expired" instead of offering Accept. Offer a one-click renewal.
+        require_once __DIR__ . '/../_partials/quote_expiry.php';
+        if (quote_is_expired($quote)):
+        ?>
+            <div class="alert alert-error" role="status" style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between">
+                <span>This quote expired on <?= e(date('j F Y', (int) quote_accept_deadline($quote))) ?>
+                    (<?= (int) QUOTE_ACCEPT_DAYS ?> days after it was sent) — the customer can no longer accept it
+                    from their link. Check the prices, then renew it or email it again.</span>
+                <form method="post" action="/quote-builder/renew_link.php" style="margin:0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                    <button type="submit" class="btn btn-secondary">Renew for <?= (int) QUOTE_ACCEPT_DAYS ?> days</button>
+                </form>
+            </div>
+        <?php endif; ?>
+
         <?php if (!$editable): ?>
             <div class="read-only-banner">
                 This quote is in <strong><?= e((string) $quote['status']) ?></strong> state and is read-only.
