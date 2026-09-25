@@ -28,6 +28,7 @@ $unit     = (string) ($_POST['unit'] ?? '');
 
 // Tenant-scope + editability check (reuses the builder's gate).
 $quote = qb_load_quote_or_404($quoteId, $clientId);
+qb_require_quote_access($quote, $user, current_user_permissions());
 if (!qb_is_editable($quote)) {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error',
         'Quote is locked — reopen it to change the measurement unit.');

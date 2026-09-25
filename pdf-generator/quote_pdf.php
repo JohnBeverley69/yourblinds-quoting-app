@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/pdf.php';
 
 requireLogin();
@@ -10,10 +11,13 @@ requireLogin();
 $user = current_user();
 $id   = (int) ($_GET['id'] ?? 0);
 
-if ($id <= 0) {
-    http_response_code(404);
-    exit('Quote not found.');
-}
+// Same gate as the quote editor: a restricted user (fitter) only gets PDFs
+// of the orders they're assigned to, not every quote in the tenant.
+qb_require_quote_access(
+    qb_load_quote_or_404($id, (int) $user['client_id']),
+    $user,
+    current_user_permissions()
+);
 
 if (!class_exists(\Dompdf\Dompdf::class)) {
     http_response_code(500);

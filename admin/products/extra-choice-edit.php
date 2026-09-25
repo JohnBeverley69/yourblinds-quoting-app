@@ -219,8 +219,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && (string) ($_POST['_action'] ?? '') === 'remove_image'
 ) {
     csrf_check();
-    if (!empty($choice['image_path'])) {
-        $abs = APP_ROOT . '/' . ltrim((string) $choice['image_path'], '/');
+    // Only delete the file if it is THIS choice's own upload (<id>.<ext>).
+    // A pushed choice points at the master's image, shared by the factory and
+    // every other tenant — for those, just clear the reference.
+    $imgPath = (string) ($choice['image_path'] ?? '');
+    if ($imgPath !== ''
+        && preg_match('/^' . $id . '\.(jpe?g|png|gif)$/i', basename($imgPath))
+        && strpos($imgPath, '..') === false
+    ) {
+        $abs = APP_ROOT . '/' . ltrim($imgPath, '/');
         if (is_file($abs)) @unlink($abs);
     }
     db()->prepare('UPDATE product_extra_choices SET image_path = NULL WHERE id = ?')
