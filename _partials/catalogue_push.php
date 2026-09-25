@@ -167,7 +167,31 @@ function push_one_product(
     }
 
     // ---- 1. The product itself ----
-    $tgtPid = pp_find_product_by_name($pdo, $targetClientId, (string) $sourceProduct['name']);
+    // Match the tenant's copy by its source id first. Falling back to NAME and
+    // then stamping it used to adopt a tenant's OWN product that merely shared
+    // a name (e.g. a duplicate renamed back) — it became a factory product and
+    // its orders started flowing into the factory. A same-named product that
+    // isn't our copy is now refused and reported, never taken over.
+    $tgtPid = null;
+    if ($hasSourceCols) {
+        $bySrc = $pdo->prepare(
+            'SELECT id FROM products
+              WHERE client_id = ? AND source_client_id = ? AND source_product_id = ?
+              LIMIT 1'
+        );
+        $bySrc->execute([$targetClientId, $sourceClientId, $sourceProductId]);
+        $found  = $bySrc->fetchColumn();
+        $tgtPid = $found !== false ? (int) $found : null;
+    }
+    if ($tgtPid === null) {
+        $tgtPid = pp_find_product_by_name($pdo, $targetClientId, (string) $sourceProduct['name']);
+        if ($tgtPid !== null && $hasSourceCols) {
+            throw new RuntimeException(
+                'The account already has its own product called "' . $sourceProduct['name']
+                . '" — not overwritten. Rename theirs (or delete it) and push again.'
+            );
+        }
+    }
     if ($tgtPid === null) {
         // New product on the target.
         $sortStmt = $pdo->prepare(

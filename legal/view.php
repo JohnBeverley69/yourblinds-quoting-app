@@ -76,6 +76,16 @@ $tokenCtx = [
     'trade_email'        => (string) $company['email'],
     'trade_phone'        => (string) $company['phone'],
 ];
+// Unsigned (old or hand-typed) link: show the terms with the company NAME only,
+// so stepping through ?c= ids can't harvest addresses, emails and phones.
+if (!hash_equals(legal_link_key($clientId), (string) ($_GET['k'] ?? ''))) {
+    foreach (['trade_addr1', 'trade_addr2', 'trade_town', 'trade_county',
+              'trade_postcode', 'trade_email', 'trade_phone'] as $f) {
+        $tokenCtx[$f] = '';
+    }
+    $company = ['company_name' => $company['company_name']]
+             + array_fill_keys(['address1', 'address2', 'town', 'county', 'postcode', 'email', 'phone'], '');
+}
 $rendered = legal_render_tokens((string) $text, $tokenCtx);
 
 header('Content-Type: text/html; charset=utf-8');

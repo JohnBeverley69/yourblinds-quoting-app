@@ -261,6 +261,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             }
             $pdo->commit();
 
+            // A new password ends that user's other sessions (see
+            // session_still_valid); keep OUR session if we changed our own.
+            if ($id === $myUserId && $newPassword !== '') {
+                session_refresh_fingerprint();
+            }
+
             // If we just edited our own roles, refresh the live session
             // so the change takes effect without needing a log-out.
             if ($id === $myUserId) {

@@ -286,3 +286,37 @@ TXT;
         return $stored === null ? legal_default_accept_email() : $stored;
     }
 }
+
+/*
+ * Signed public links to /legal/view.php. The page is public (no login), so a
+ * bare ?c=<id> let anyone step through ids and harvest every account's address,
+ * email and phone. The link now carries k = HMAC(client id); without a valid k
+ * the page still renders the terms but only with the company NAME (so links on
+ * quotes sent before this change keep working).
+ */
+if (!function_exists('legal_link_key')) {
+    function legal_link_key(int $clientId): string
+    {
+        require_once __DIR__ . '/app_settings.php';
+        static $secret = null;
+        if ($secret === null) {
+            $secret = (string) app_setting_get('legal_link_secret', '');
+            if ($secret === '') {
+                $secret = bin2hex(random_bytes(32));
+                if (!app_setting_set('legal_link_secret', $secret)) {
+                    // No app_settings table — fall back to a server secret so
+                    // links are at least stable; APP_KEY-less installs get a
+                    // key that changes per request (links then show name only).
+                    $secret = (string) (env('APP_ENCRYPTION_KEY') ?: $secret);
+                }
+            }
+        }
+        return substr(hash_hmac('sha256', 'legal:' . $clientId, $secret), 0, 20);
+    }
+
+    function legal_view_url(string $base, int $clientId, string $doc): string
+    {
+        return rtrim($base, '/') . '/legal/view.php?c=' . $clientId
+             . '&doc=' . rawurlencode($doc) . '&k=' . legal_link_key($clientId);
+    }
+}

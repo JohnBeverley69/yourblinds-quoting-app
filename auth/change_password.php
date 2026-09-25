@@ -57,6 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newHash = password_hash($new, PASSWORD_DEFAULT);
         db()->prepare('UPDATE client_users SET password_hash = ? WHERE id = ?')
             ->execute([$newHash, $userId]);
+        // Every OTHER session of this user now ends (password fingerprint
+        // changed); keep this one signed in.
+        session_refresh_fingerprint();
 
         // Invalidate any outstanding reset tokens for this user so a
         // stale reset link can't be used to set it back.
