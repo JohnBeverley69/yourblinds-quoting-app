@@ -10,7 +10,9 @@ declare(strict_types=1);
  * on branch fix/ticket-<id>-<run>. Nothing merges or deploys without a person.
  *
  * The repo is PUBLIC, so the brief carries no names, emails, phone numbers,
- * postcodes or tenant ids — and the owner sees and can edit it before sending.
+ * postcodes, street addresses or tenant ids — the tenant's own customers,
+ * addresses and staff names are redacted too, the page title is left out —
+ * and the owner sees and can edit it before sending.
  *
  * Needs a fine-grained GitHub token (this repo only; Actions: read & write,
  * Pull requests: read) saved in Master Admin → Support inbox → AI assistant.
@@ -32,12 +34,50 @@ function support_fix_github_token(): string
     return ($stored !== null && $stored !== '') ? (string) (ac_open($stored) ?? '') : '';
 }
 
+/**
+ * Personal values held by the ticket's tenant that could turn up in a report:
+ * its end-customers' names and street addresses (customers + quotes), and its
+ * staff's names. Returned as value => tag, longest first so "Mrs Jane Smith"
+ * is replaced before "Jane Smith". The regexes below catch emails, phones and
+ * postcodes; this catches what a regex can't — who the customer is and where
+ * they live.
+ */
+function support_fix_tenant_pii(int $clientId): array
+{
+    $out = [];
+    if ($clientId <= 0) return $out;
+    $grab = static function (string $sql, string $tag) use ($clientId, &$out): void {
+        try {
+            $st = db()->prepare($sql);
+            $st->execute([$clientId]);
+            foreach ($st->fetchAll(PDO::FETCH_NUM) as $row) {
+                foreach ($row as $v) {
+                    $v = trim((string) $v);
+                    if (mb_strlen($v) >= 4 && !isset($out[$v])) $out[$v] = $tag;
+                }
+            }
+        } catch (Throwable $e) { /* column/table absent — skip */ }
+    };
+    $grab('SELECT name FROM customers WHERE client_id = ? LIMIT 20000', '[customer]');
+    $grab('SELECT address1, address2 FROM customers WHERE client_id = ? LIMIT 20000', '[address]');
+    $grab('SELECT end_customer_name FROM quotes WHERE client_id = ? LIMIT 20000', '[customer]');
+    $grab('SELECT end_customer_address1, end_customer_address2 FROM quotes WHERE client_id = ? LIMIT 20000', '[address]');
+    $grab('SELECT full_name FROM client_users WHERE client_id = ?', '[user]');
+    uksort($out, static fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+    return $out;
+}
+
 /** Strip personal details from free text before it can leave for GitHub. */
 function support_fix_redact(string $s, array $ticket): string
 {
     foreach (['user_name' => '[user]', 'company_name' => '[business]', 'user_email' => '[email]'] as $col => $tag) {
         $v = trim((string) ($ticket[$col] ?? ''));
         if (mb_strlen($v) >= 3) $s = str_ireplace($v, $tag, $s);
+    }
+    // The tenant's own customers / addresses / staff, matched as whole words.
+    foreach (support_fix_tenant_pii((int) ($ticket['client_id'] ?? 0)) as $v => $tag) {
+        if (mb_stripos($s, $v) === false) continue;
+        $s = (string) preg_replace('/(?<![\p{L}\p{N}])' . preg_quote($v, '/') . '(?![\p{L}\p{N}])/iu', $tag, $s);
     }
     $s = preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', '[email]', $s);
     $s = preg_replace('/(?<!\d)(?:\+44\s?|0)\d(?:[\s-]?\d){8,9}(?!\d)/', '[phone]', $s);
@@ -53,7 +93,8 @@ function support_fix_brief(array $ticket): string
     $qs   = (string) (parse_url((string) $ticket['page_url'], PHP_URL_QUERY) ?? '');
     $lines = [
         'Type: ' . ($cats[$ticket['category']] ?? $ticket['category']),
-        'Page: ' . $path . ($qs !== '' ? '?' . $qs : '') . ($ticket['page_title'] ? ' ("' . $ticket['page_title'] . '")' : ''),
+        // Page title left out on purpose: it often names the customer.
+        'Page: ' . $path . ($qs !== '' ? '?' . $qs : ''),
         'App version (git commit): ' . ($ticket['app_version'] ?: 'unknown'),
         'Browser: ' . $ticket['user_agent'] . ' | viewport ' . $ticket['viewport'],
         'Reporter role: ' . support_fix_reporter_role((int) $ticket['user_id']),

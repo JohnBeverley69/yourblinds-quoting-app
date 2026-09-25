@@ -32,6 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'draf
     $id    = (int) ($_POST['id'] ?? 0);
     $brief = trim(str_replace("\r\n", "\n", (string) ($_POST['brief'] ?? '')));
     if ($id > 0 && $brief !== '') {
+        // Re-redact the (possibly edited) brief on the way out — anything
+        // pasted into the box goes to a PUBLIC repo's run inputs.
+        $tst = $pdo->prepare('SELECT * FROM support_tickets WHERE id = ?');
+        $tst->execute([$id]);
+        $brief = support_fix_redact($brief, $tst->fetch() ?: []);
         $err = support_fix_dispatch($id, $brief);
         if ($err === null) {
             $_SESSION['flash_success'] = "Draft fix started for ticket #{$id}. Claude usually takes 5–20 minutes; "
