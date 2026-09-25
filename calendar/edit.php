@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
 require __DIR__ . '/../_partials/bookable_users.php';
 require __DIR__ . '/../_partials/slot_window.php';
@@ -45,6 +46,18 @@ $loadStmt->execute([$id, $clientId]);
 $appt = $loadStmt->fetch();
 
 if (!$appt) {
+    http_response_code(404);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+       . '<h1>Appointment not found</h1>'
+       . '<p><a href="/calendar/index.php">Back to calendar</a></p>';
+    exit;
+}
+
+// A restricted user (no can_view_all_customer_jobs — typical fitter) may only
+// edit appointments assigned to them, the same rule as reschedule.php and
+// the calendar views. 404, not 403, so other fitters' jobs aren't confirmed.
+if (!cm_can_view_all_customers($user) && (int) ($appt['client_user_id'] ?? 0) !== (int) $user['user_id']) {
     http_response_code(404);
     header('Content-Type: text/html; charset=utf-8');
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
