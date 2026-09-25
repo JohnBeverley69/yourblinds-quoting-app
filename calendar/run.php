@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
@@ -58,6 +59,14 @@ $homeAddress = $homeParts ? implode(', ', $homeParts) : '';
 // ---------------------------------------------------------------------------
 // Day's appointments, time-ordered.
 // ---------------------------------------------------------------------------
+// A restricted user (fitter) plans only their own run — not every fitter's
+// customers and addresses for the day.
+$mineSql    = '';
+$mineParams = [];
+if (!cm_can_view_all_customers($user)) {
+    $mineSql    = ' AND a.client_user_id = ?';
+    $mineParams = [(int) $user['user_id']];
+}
 $stmt = db()->prepare(
     'SELECT a.id, a.title, a.appointment_time, a.duration_minutes, a.status, a.appt_kind,
             a.has_issue, a.issue_note,
@@ -70,10 +79,10 @@ $stmt = db()->prepare(
   LEFT JOIN customers    c ON c.id = a.customer_id
   LEFT JOIN client_users u ON u.id = a.client_user_id
   LEFT JOIN quotes       q ON q.id = a.quote_id
-      WHERE a.client_id = ? AND a.appointment_date = ?
+      WHERE a.client_id = ? AND a.appointment_date = ?' . $mineSql . '
    ORDER BY a.appointment_time'
 );
-$stmt->execute([$clientId, $date]);
+$stmt->execute(array_merge([$clientId, $date], $mineParams));
 $appts = $stmt->fetchAll();
 
 // "Fittings only" users see just fitting jobs.
