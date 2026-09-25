@@ -29,6 +29,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 
 requireAdmin();
 
@@ -45,7 +46,7 @@ if (!$product) {
     header('Location: /admin/products/index.php');
     exit;
 }
-$redirect = '/admin/products/price-tables.php?product_id=' . $productId;
+$redirect = '/admin/products/edit.php?id=' . $productId;
 
 // Product systems → normalised-name lookup.
 $sysStmt = $pdo->prepare(
@@ -176,6 +177,8 @@ $stage    = 'upload';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    // Undo: snapshot before the import writes; discarded if nothing changes.
+    pu_begin(db(), (int) $clientId, 'product:' . $productId, pu_product_table_ids(db(), (int) $clientId, $productId), 'Width price import', fn () => pu_product_table_ids(db(), (int) $clientId, $productId));
     $action = (string) ($_POST['action'] ?? 'upload');
 
     // ── Stage: parse the uploaded file → preview ──────────────────────

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 require_once __DIR__ . '/../../_partials/band_sort.php';
 
 requireAdmin();
@@ -336,6 +337,7 @@ $activeNav = 'products';
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
+        <?php pu_render_bar((int) $clientId, 'system:' . $systemId, '/admin/products/price-tables.php?system_id=' . $systemId, 'this system'); ?><?php pu_render_bar((int) $clientId, 'product:' . $productId, '/admin/products/price-tables.php?system_id=' . $systemId, 'all systems'); ?>
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>

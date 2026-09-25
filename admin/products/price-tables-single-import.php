@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
+require_once __DIR__ . '/../../_partials/price_table_undo.php';
 
 requireAdmin();
 
@@ -38,6 +39,8 @@ $error   = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+    // Undo: snapshot before the import writes; discarded if nothing changes.
+    pu_begin(db(), (int) $clientId, 'system:' . $systemId, pu_system_table_ids(db(), (int) $clientId, $systemId), 'Single-band import', fn () => pu_system_table_ids(db(), (int) $clientId, $systemId));
 
     if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';
@@ -166,6 +169,8 @@ $activeNav = 'products';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+
+        <?php pu_render_bar((int) $clientId, 'system:' . $systemId, '/admin/products/price-tables.php?system_id=' . $systemId); ?>
 
         <?php if ($summary !== null): ?>
             <div class="alert alert-success" role="status">
