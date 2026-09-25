@@ -12,6 +12,12 @@ name: Draft a fix (support ticket)
 #   and logs are visible to anyone.
 # - The ticket text is untrusted: Claude only gets file tools + `php -l` + a
 #   few read-only git commands; no network, no general shell.
+# - Its file reads are denied outside the checkout (/proc, /etc, the runner's
+#   home + temp dirs, .git) so a prompt-injected ticket can't lift a token
+#   into the (public) PR. The checkout keeps no git credentials — only the
+#   final commit step gets the token, after Claude has finished.
+# - Before anything is pushed, the diff and summary are scanned for tokens;
+#   a hit aborts the run.
 # - Any change under .github/ or to .env files is discarded before commit.
 #
 # Secret needed: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`).
@@ -45,6 +51,8 @@ jobs:
           [[ "$TICKET" =~ ^[0-9]+$ ]] || { echo "::error::ticket_id must be a number"; exit 1; }
 
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Claude investigates and edits
         uses: anthropics/claude-code-action@v1
@@ -53,8 +61,8 @@ jobs:
           github_token: ${{ github.token }}
           claude_args: |
             --max-turns 60
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(php -l:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*)"
-            --disallowedTools "WebFetch,WebSearch"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(php -l:*),Bash(git status:*),Bash(git log:*)"
+            --disallowedTools "WebFetch,WebSearch,Read(//proc/**),Read(//sys/**),Read(//etc/**),Read(//root/**),Read(//var/**),Read(//run/**),Read(//tmp/**),Read(~/.config/**),Read(~/.claude/**),Read(~/.ssh/**),Read(~/.gitconfig),Read(~/.docker/**),Read(~/.npmrc),Read(~/.git-credentials),Read(//home/runner/work/_temp/**),Read(./.git/**),Edit(./.git/**),Write(./.git/**)"
           prompt: |
             You are drafting a fix for a bug reported through the YourBlinds in-app support widget.
             YourBlinds is a PHP 8 / MySQL web app (no framework; pages include _partials/*.php;
@@ -101,6 +109,15 @@ jobs:
           # (grep exits 1 on no match, which pipefail would turn into a failed run)
           git ls-files --others --exclude-standard | { grep -E '(^|/)\.env' || true; } | xargs -r rm -f
 
+          # Refuse to publish anything that looks like a credential (the PR and
+          # its description are public).
+          SECRET_RE='gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{10,}|x-access-token|CLAUDE_CODE_OAUTH_TOKEN|-----BEGIN [A-Z ]*PRIVATE KEY'
+          git add -A -N
+          if { git diff; cat "$RUNNER_TEMP/summary.md"; } | grep -Eq "$SECRET_RE"; then
+            echo "::error::Possible credential in the drafted change or summary — nothing pushed."
+            exit 1
+          fi
+
           if [ -z "$(git status --porcelain)" ]; then
             echo "No code changes — nothing to open."
             { echo "## Ticket #$TICKET — no code changes"; echo; cat "$RUNNER_TEMP/summary.md"; } >> "$GITHUB_STEP_SUMMARY"
@@ -111,6 +128,7 @@ jobs:
           git config user.name "YourBlinds draft-fix"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git add -A
           git commit -q -m "Draft fix for support ticket #${TICKET}" -m "Drafted by Claude Code from the Support inbox. Review before merging."
           git push -q origin "$BRANCH"
