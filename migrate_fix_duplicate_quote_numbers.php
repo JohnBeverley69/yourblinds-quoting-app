@@ -39,6 +39,7 @@ require_once __DIR__ . '/quote-builder/_helpers.php';
 if (PHP_SAPI !== 'cli') {
     require_once __DIR__ . '/auth/middleware.php';
     requireSuperAdmin();
+    require_run_confirmation();
     header('Content-Type: text/plain; charset=utf-8');
 }
 ini_set('display_errors', '1');

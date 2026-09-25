@@ -16,7 +16,91 @@ if (!function_exists('e')) {
 // ---------------------------------------------------------------------------
 function is_logged_in(): bool
 {
-    return isset($_SESSION['user_id'], $_SESSION['client_id'], $_SESSION['role']);
+    if (!isset($_SESSION['user_id'], $_SESSION['client_id'], $_SESSION['role'])) {
+        return false;
+    }
+    if (!session_still_valid()) {
+        // Deactivated / suspended / password changed since this session
+        // signed in — drop it so every guard sees "logged out".
+        $_SESSION = [];
+        if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+            session_regenerate_id(true);
+        }
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Fingerprint of the user's current password hash, stored in the session at
+ * sign-in. A password change or reset alters the hash, so every OTHER open
+ * session (e.g. a thief's stolen cookie) stops matching and is ended.
+ */
+function session_password_fingerprint(string $passwordHash): string
+{
+    return substr(hash('sha256', 'pwfp:' . $passwordHash), 0, 32);
+}
+
+/** Re-stamp THIS session after the user changes their own password. */
+function session_refresh_fingerprint(): void
+{
+    try {
+        $st = db()->prepare('SELECT password_hash FROM client_users WHERE id = ? LIMIT 1');
+        $st->execute([(int) ($_SESSION['user_id'] ?? 0)]);
+        $h = $st->fetchColumn();
+        if ($h !== false) {
+            $_SESSION['pw_fp']           = session_password_fingerprint((string) $h);
+            $_SESSION['auth_checked_at'] = time();
+        }
+    } catch (Throwable $e) { /* next request re-checks */ }
+}
+
+/**
+ * Sessions used to live for their full lifetime whatever happened to the
+ * account: deactivating a user, suspending a trade account, removing
+ * super-admin or resetting a password left open sessions working, with the
+ * roles frozen at sign-in. Re-check against the DB (at most every 30s):
+ * the user must still exist in this tenant and be active, the tenant must
+ * be active, the password must be the one they signed in with, and a
+ * session claiming super-admin must still have it. Defensive: a DB error
+ * never logs anyone out.
+ */
+function session_still_valid(): bool
+{
+    static $verdict = null;
+    if ($verdict !== null) return $verdict;
+    if (time() - (int) ($_SESSION['auth_checked_at'] ?? 0) < 30) {
+        return $verdict = true;
+    }
+    try {
+        $st = db()->prepare(
+            'SELECT u.active, u.password_hash, u.is_super_admin
+               FROM client_users u
+              WHERE u.id = ? AND u.client_id = ? LIMIT 1'
+        );
+        $st->execute([(int) $_SESSION['user_id'], (int) $_SESSION['client_id']]);
+        $u = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return $verdict = true;
+    }
+    if (!$u || (int) $u['active'] !== 1) return $verdict = false;
+    if (!empty($_SESSION['is_super_admin']) && (int) ($u['is_super_admin'] ?? 0) !== 1) {
+        return $verdict = false;
+    }
+    $fp = session_password_fingerprint((string) $u['password_hash']);
+    if (!isset($_SESSION['pw_fp'])) {
+        $_SESSION['pw_fp'] = $fp;          // session from before this check existed
+    } elseif (!hash_equals((string) $_SESSION['pw_fp'], $fp)) {
+        return $verdict = false;
+    }
+    try {
+        $cs = db()->prepare('SELECT active FROM clients WHERE id = ? LIMIT 1');
+        $cs->execute([(int) $_SESSION['client_id']]);
+        $cAct = $cs->fetchColumn();
+        if ($cAct !== false && (int) $cAct !== 1) return $verdict = false;
+    } catch (Throwable $e) { /* no clients.active column — skip */ }
+    $_SESSION['auth_checked_at'] = time();
+    return $verdict = true;
 }
 
 function current_user(): ?array
@@ -410,6 +494,40 @@ function csrf_check(): void
            . '<p>This page has expired. <a href="javascript:history.back()">Go back</a> and try again.</p>';
         exit;
     }
+}
+
+/**
+ * Confirm-before-run gate for the root migrate_/seed_/fix_ scripts. They
+ * write (some wipe and rebuild), and used to run on a plain GET — the session
+ * cookie is SameSite=Lax, so any link a signed-in super-admin clicked could
+ * re-run one. A GET now shows a "Run" button; the script only proceeds on a
+ * POST carrying the CSRF token. The query string (?run=1, ?delete=1 …) is
+ * kept on the POST. CLI runs are never gated. Call after requireSuperAdmin().
+ */
+function require_run_confirmation(): void
+{
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['_run_confirm'])) {
+        csrf_check();
+        return;
+    }
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'script'));
+    $query  = (string) ($_SERVER['QUERY_STRING'] ?? '');
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo '<!doctype html><meta charset="utf-8"><title>Run ' . e($script) . '?</title>'
+       . '<body style="font-family:system-ui,sans-serif;max-width:560px;margin:3rem auto;padding:0 16px">'
+       . '<h1 style="font-size:1.3rem">Run <code>' . e($script) . '</code>?</h1>'
+       . ($query !== '' ? '<p>With: <code>' . e($query) . '</code></p>' : '')
+       . '<p>This script changes the database. Nothing has run yet.</p>'
+       . '<form method="post" action="' . e((string) ($_SERVER['REQUEST_URI'] ?? '')) . '">'
+       . csrf_field()
+       . '<input type="hidden" name="_run_confirm" value="1">'
+       . '<button type="submit" style="font-size:1rem;padding:.5rem 1.2rem">Run it</button>'
+       . '</form></body>';
+    exit;
 }
 
 // ---------------------------------------------------------------------------

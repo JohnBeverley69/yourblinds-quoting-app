@@ -107,6 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['company_name']   = (string) $user['company_name'];
             $_SESSION['full_name']      = (string) $user['full_name'];
             $_SESSION['is_super_admin'] = (int) ($user['is_super_admin'] ?? 0) === 1;
+            $_SESSION['pw_fp']          = session_password_fingerprint((string) $user['password_hash']);
+            $_SESSION['auth_checked_at'] = time();
 
             // Load the user's full role set into the session. Falls back
             // gracefully if migrate_user_multi_roles.php hasn't been run

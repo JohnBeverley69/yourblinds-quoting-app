@@ -728,8 +728,8 @@ $legalText = trim((string) ($legalDoc === 'trade'
 $ppText    = trim((string) ($quote['privacy_policy'] ?? ''));
 $legalHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
 $legalBase = 'https://' . ($legalHost !== '' ? $legalHost : 'yourblinds.uk');
-$termsUrl  = $legalBase . '/legal/view.php?c=' . (int) $clientId . '&doc=' . $legalDoc;
-$privUrl   = $legalBase . '/legal/view.php?c=' . (int) $clientId . '&doc=privacy';
+$termsUrl  = legal_view_url($legalBase, (int) $clientId, $legalDoc);
+$privUrl   = legal_view_url($legalBase, (int) $clientId, 'privacy');
 ?>
 <?php if ($legalText !== '' || $ppText !== ''): ?>
 <div class="legal-links">

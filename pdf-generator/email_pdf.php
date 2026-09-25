@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../mailer.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/pdf.php';
+require_once __DIR__ . '/../_partials/send_quota.php';
 
 requireLogin();
 
@@ -33,6 +34,9 @@ if (!class_exists(\Dompdf\Dompdf::class)) {
 }
 
 $to = trim((string) ($_POST['to'] ?? ($quote['end_customer_email'] ?? '')));
+if (!send_quota_allows((int) $user['client_id'])) {
+    qb_flash_redirect($backUrl, 'error', 'Daily email limit reached for this account — please try again tomorrow, or contact support if you need more.');
+}
 if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
     qb_flash_redirect($backUrl, 'error', 'Please provide a valid recipient email address.');
 }
@@ -84,6 +88,9 @@ $ok = mailer_send(
     ]
 );
 
+if ($ok) {
+    send_quota_record((int) $user['client_id'], (int) $user['user_id'], 'quote');
+}
 if (!$ok) {
     qb_flash_redirect(
         $backUrl,
