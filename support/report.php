@@ -45,7 +45,15 @@ $recent = array_values(array_filter(
     (array) ($_SESSION['_support_sent'] ?? []),
     static fn ($t) => is_int($t) && $t > $now - 3600
 ));
-if (count($recent) >= 10) {
+// The session list resets on a fresh login, so also count this user's
+// tickets in the database (a new session can't dodge the limit).
+$dbRecent = 0;
+try {
+    $st = db()->prepare('SELECT COUNT(*) FROM support_tickets WHERE user_id = ? AND created_at > (NOW() - INTERVAL 1 HOUR)');
+    $st->execute([(int) (current_user()['user_id'] ?? 0)]);
+    $dbRecent = (int) $st->fetchColumn();
+} catch (Throwable $e) { /* no created_at / table — session check still applies */ }
+if (count($recent) >= 10 || $dbRecent >= 10) {
     $reply(429, ['ok' => false, 'error' => 'That\'s a lot of reports in an hour — please email hello@yourblinds.uk instead.']);
 }
 

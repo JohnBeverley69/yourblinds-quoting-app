@@ -258,8 +258,7 @@ function support_create_ticket(array $user, string $category, string $message, a
     if ($to) {
         $cats   = support_categories();
         $errs   = count($ctx['js_errors_list'] ?? []);
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $link   = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk') . '/master-admin/support.php?id=' . $id;
+        $link   = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/') . '/master-admin/support.php?id=' . $id;   // APP_URL, never the request Host header
         $via    = $source === 'ai' ? ' (filed by the AI assistant)' : '';
         $body = "New support report #{$id} — {$cats[$row['category']]}{$via}\n\n"
               . "From:    {$row['user_name']} ({$row['company_name']})" . ($row['user_email'] ? " <{$row['user_email']}>" : '') . "\n"

@@ -43,14 +43,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                FROM client_users u
                JOIN clients c ON c.id = u.client_id
               WHERE u.email = ? OR u.username = ?
+              ORDER BY (u.email = ?) DESC, u.id
               LIMIT 1'
         );
-        $stmt->execute([$identifier, $identifier]);
+        // An email match always wins over a username that happens to equal
+        // someone's email, so another account can't shadow (lock out) a login.
+        $stmt->execute([$identifier, $identifier, $identifier]);
         $user = $stmt->fetch();
 
-        $valid = $user
-              && (int) $user['active'] === 1
-              && password_verify($password, (string) $user['password_hash']);
+        // Always run one bcrypt verify, even for an unknown account, so the
+        // response time doesn't reveal which usernames/emails exist.
+        $dummyHash = '$2y$10$ogczWX3r3aDpi3Mo9YDIH.6XiR/QeP1C2F.vOROFLycnKs5D6zPFe';
+        $hashOk = password_verify($password, $user ? (string) $user['password_hash'] : $dummyHash);
+        $valid  = $user && (int) $user['active'] === 1 && $hashOk;
 
         record_login_attempt($ip, $identifier, $valid);
 

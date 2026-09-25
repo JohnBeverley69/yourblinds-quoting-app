@@ -241,9 +241,12 @@ $orderVals = $order ? [
     'phone'      => (string) ($order['phone'] ?? ''),
     // The trade account's address book email, falling back to the one captured
     // on the order itself — which is all a retail job has.
+    // Only the factory's OWN retail job falls back to the end-customer email;
+    // a trade tenant's retail customer isn't the factory's to see.
     'email'      => (string) (($order['email'] ?? '') !== ''
                         ? $order['email']
-                        : ($order['end_customer_email'] ?? '')),
+                        : ((int) ($order['client_id'] ?? 0) === (int) $MASTER
+                            ? ($order['end_customer_email'] ?? '') : '')),
     'cust_ref'   => (string) ($order['customer_reference'] ?? ''),
 ] : [];
 

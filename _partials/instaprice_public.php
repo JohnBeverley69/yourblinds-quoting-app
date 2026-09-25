@@ -64,6 +64,7 @@ function instaprice_api_client(): array
     }
 
     if ((int) ($_GET['public'] ?? 0) === 1) {
+        instaprice_public_throttle();
         return [instaprice_showcase_client_id(), true];
     }
 
@@ -71,4 +72,36 @@ function instaprice_api_client(): array
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => 'Not authorised — please sign in.']);
     exit;
+}
+
+/**
+ * Anonymous public InstaPrice calls are unauthenticated, so without a limit a
+ * script could scrape the whole showcase price grid or burn server CPU. Cap
+ * each IP at a generous rate for a person using the page (live pricing fires
+ * on most changes); a scraper hits 429. File-based counter per 10-minute
+ * bucket — no DB writes on this hot path. Best-effort: any file error allows.
+ */
+function instaprice_public_throttle(int $max = 400, int $window = 600): void
+{
+    $ip     = function_exists('client_ip') ? client_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    $bucket = intdiv(time(), $window);
+    $file   = rtrim(sys_get_temp_dir(), '/' . DIRECTORY_SEPARATOR) . '/yb_ipub_' . md5($ip . '|' . $bucket);
+    $fh = @fopen($file, 'c+');
+    if (!$fh) return;
+    $n = 0;
+    if (@flock($fh, LOCK_EX)) {
+        $n = (int) stream_get_contents($fh) + 1;
+        ftruncate($fh, 0);
+        rewind($fh);
+        fwrite($fh, (string) $n);
+        flock($fh, LOCK_UN);
+    }
+    fclose($fh);
+    if ($n > $max) {
+        http_response_code(429);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Retry-After: ' . $window);
+        echo json_encode(['error' => 'Too many requests — please slow down and try again shortly.']);
+        exit;
+    }
 }

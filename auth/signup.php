@@ -69,7 +69,25 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk = db()->prepare('SELECT 1 FROM client_users WHERE email = ? LIMIT 1');
             $chk->execute([$form['email']]);
             if ($chk->fetchColumn()) {
-                $error = 'An account with that email already exists. Try signing in, or reset your password.';
+                // Don't confirm on screen that this email is registered (that
+                // lets anyone test which addresses have accounts). Show the
+                // same "check your email" page, and tell the real owner by
+                // email instead — the same approach as forgot-password.
+                try {
+                    require_once __DIR__ . '/../mailer.php';
+                    $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
+                    mailer_send(
+                        $form['email'],
+                        'Someone tried to create a YourBlinds account with your email',
+                        "Hello,\n\nSomeone (hopefully you) tried to create a new YourBlinds account using this email address, "
+                        . "but you already have one.\n\nSign in: {$base}/auth/login.php\n"
+                        . "Forgotten your password? {$base}/auth/forgot_password.php\n\n"
+                        . "If this wasn't you, you can ignore this email — nothing has changed on your account.\n"
+                    );
+                } catch (Throwable $e) {
+                    error_log('[YourBlinds] signup duplicate notice failed: ' . $e->getMessage());
+                }
+                $created = true;
             } else {
                 $pdo = db();
                 $newClientId = null;
@@ -188,9 +206,9 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php elseif ($created): ?>
             <h1>Check your email</h1>
             <div class="alert alert-success" role="status">
-                Your account is created. We've sent a confirmation link to
+                We've sent an email to
                 <strong><?= e($form['email'] !== '' ? $form['email'] : 'your email address') ?></strong>
-                — click it to activate your account, then sign in.
+                — click the link in it to activate your account, then sign in.
             </div>
             <p class="auth-subtitle">
                 The link is valid for 24 hours. Didn't get it? Check your spam folder,
