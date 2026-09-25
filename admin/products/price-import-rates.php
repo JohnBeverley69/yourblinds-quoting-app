@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
 
 /**
@@ -37,6 +39,10 @@ $clientId = (int) $user['client_id'];
 $pdo      = db();
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/edit.php?id=' . $productId);
+}
 
 $pStmt = $pdo->prepare('SELECT id, name FROM products WHERE id = ? AND client_id = ?');
 $pStmt->execute([$productId, $clientId]);

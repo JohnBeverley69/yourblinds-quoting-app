@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -18,6 +20,10 @@ csrf_check();
 $user     = current_user();
 $id       = (int) ($_POST['id']        ?? 0);
 $systemId = (int) ($_POST['system_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([pl_product_of('table', $id), pl_product_of('system', $systemId)], '/admin/products/index.php');
+}
 
 if ($id > 0) {
     // FK cascades wipe price_table_rows for this table.

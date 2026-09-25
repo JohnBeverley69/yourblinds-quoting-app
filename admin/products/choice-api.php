@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * AJAX endpoint for the inline-editable choices grid on extra.php.
  *
@@ -85,6 +87,10 @@ if (!$extra) {
     exit;
 }
 $productId = (int) $extra['product_id'];
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '', true);
+}
 
 // Audit trail — log create / update / re-scope / delete / bulk "set all"
 // so catalogue changes are traceable ("did this choice get removed or

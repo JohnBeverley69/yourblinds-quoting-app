@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Choices editor — spreadsheet-style inline grid.
  *
@@ -29,6 +31,10 @@ $user     = current_user();
 $clientId = $user['client_id'];
 
 $extraId = (int) ($_GET['id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([pl_product_of('extra', $extraId)], '/admin/products/extra.php?id=' . $extraId);
+}
 if ($extraId <= 0) {
     header('Location: /admin/products/index.php');
     exit;

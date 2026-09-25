@@ -10,6 +10,7 @@ declare(strict_types=1);
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require_once __DIR__ . '/../../_partials/price_table_undo.php';
+require_once __DIR__ . '/../../_partials/product_lock.php';
 
 requireAdmin();
 
@@ -32,6 +33,9 @@ $scope = (string) ($_POST['scope'] ?? '');
 if (!preg_match('/^(table|system|product):\d+$/', $scope)) {
     $_SESSION['flash_error'] = 'Nothing to undo.';
 } else {
+    // Factory-catalogue pricing lock (_partials/product_lock.php).
+    [$uKind, $uId] = explode(':', $scope);
+    pl_require_unlocked($uKind === 'product' ? (int) $uId : pl_product_of($uKind, (int) $uId), $return);
     [$ok, $msg, $cells] = pu_undo(db(), $clientId, $scope);
     if ($ok) {
         $_SESSION['flash_success'] = 'Undone: ' . $msg . ' — ' . number_format($cells)

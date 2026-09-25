@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Pull fabrics from the master Fabric Library into THIS product's fabrics
  * (product_options). Phase 2 of the Fabric Library.
@@ -25,6 +27,10 @@ $clientId = (int) $user['client_id'];
 $pdo      = db();
 
 $productId  = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/options.php?product_id=' . $productId);
+}
 $supplierId = (int) ($_GET['supplier_id'] ?? $_POST['supplier_id'] ?? 0);
 // When launched from the setup wizard (ret=wizard), bounce back there after
 // adding so the flow continues straight to price tables instead of dead-ending

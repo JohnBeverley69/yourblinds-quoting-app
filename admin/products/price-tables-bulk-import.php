@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
 
 require __DIR__ . '/../../bootstrap.php';
@@ -35,6 +37,10 @@ if (!$system) {
     exit;
 }
 $productId = (int) $system['product_id'];
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any([$productId], '/admin/products/price-tables.php?system_id=' . $systemId);
+}
 
 // Other systems on this product — so the import-success screen can offer
 // "now import the next one" (e.g. Special Frame after Standard Frame)

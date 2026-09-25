@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/product_lock.php';
+
 /**
  * Combine several single-size products into ONE product whose sizes become
  * SYSTEMS — e.g. "Arena 15/25/35/50mm Venetian" → one "Metal Venetian" with
@@ -81,6 +83,10 @@ $baseIsMaster = $sysCount[(int) $products[0]['id']] > 1;
 
 $error = null;
 $action = (string) ($_POST['_action'] ?? '');
+// Factory-catalogue pricing lock (_partials/product_lock.php).
+if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
+    pl_require_unlocked_any(array_map('intval', (array) ($_POST['product_ids'] ?? [])), '/admin/products/index.php');
+}
 
 if ($action === 'combine') {
     csrf_check();
