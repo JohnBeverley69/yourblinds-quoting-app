@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -18,6 +19,13 @@ csrf_check();
 
 $user = current_user();
 $id   = (int) ($_POST['id'] ?? 0);
+
+// Deleting a customer is for admins / view-all users only — a restricted
+// user (fitter) could otherwise delete customers they can't even see.
+if (!cm_can_view_all_customers($user)) {
+    http_response_code(404);
+    exit('Customer not found.');
+}
 
 if ($id > 0) {
     $stmt = db()->prepare('DELETE FROM customers WHERE id = ? AND client_id = ?');

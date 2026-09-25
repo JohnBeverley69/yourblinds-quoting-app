@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -12,17 +13,9 @@ $isAdmin  = $user['role'] === 'admin';
 
 // Permission gate: non-admin users without can_view_all_customer_jobs
 // only see customers linked to jobs they're personally assigned to.
-// Admin (and users with the permission) see everything.
-$canViewAll = $isAdmin;
-if (!$canViewAll) {
-    $permSt = db()->prepare(
-        'SELECT COALESCE(can_view_all_customer_jobs, 0)
-           FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
-    );
-    $permSt->execute([(int) $user['user_id'], $clientId]);
-    $canViewAll = ((int) $permSt->fetchColumn()) === 1;
-}
-$restrictToMine = !$canViewAll;
+// Admin (and users with the permission) see everything. Same rule as the
+// edit/delete pages — see _partials/customer_access.php.
+$restrictToMine = !cm_can_view_all_customers($user);
 $myUserId = (int) $user['user_id'];
 
 $q = trim((string) ($_GET['q'] ?? ''));
@@ -46,25 +39,15 @@ if ($hasQuotes) {
     $groupBy     = '';
 }
 
-// Permission filter: only customers whose quotes have at least one
-// appointment assigned to the current user. Skipped when the user can
-// see everything. Defensive against quotes/appointments tables not
-// existing (early in the schema lifecycle) — the EXISTS subquery just
-// never fires under those conditions.
+// Permission filter: only customers one of the user's appointments is for
+// (directly or via a quote), plus any they added this session.
 $permClause = '';
 $permParams = [];
 if ($restrictToMine && $hasQuotes) {
-    $permClause = ' AND c.id IN (
-        SELECT q.customer_id FROM quotes q
-        WHERE q.client_id = ?
-          AND q.customer_id IS NOT NULL
-          AND EXISTS (
-            SELECT 1 FROM appointments a
-             WHERE a.quote_id = q.id
-               AND a.client_user_id = ?
-          )
-    )';
-    $permParams = [$clientId, $myUserId];
+    $created    = array_map('intval', (array) ($_SESSION['cm_created'] ?? []));
+    $createdSql = $created ? ' OR c.id IN (' . implode(',', $created) . ')' : '';
+    $permClause = ' AND (' . cm_mine_sql() . $createdSql . ')';
+    $permParams = [$myUserId, $myUserId];
 }
 
 if ($q !== '') {
