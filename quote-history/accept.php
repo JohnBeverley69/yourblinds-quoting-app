@@ -103,14 +103,20 @@ if ($action === 'accept') {
         exit;
     }
     $ip = client_ip();
-    $pdo->prepare(
+    // AND status = "sent": two submits arriving together can only accept once.
+    $accSt = $pdo->prepare(
         'UPDATE quotes
             SET status                    = "accepted",
                 acceptance_signature_name = ?,
                 acceptance_ip             = ?,
                 accepted_at               = NOW()
-          WHERE id = ?'
-    )->execute([substr($name, 0, 150), substr($ip, 0, 45), (int) $quote['id']]);
+          WHERE id = ? AND status = "sent"'
+    );
+    $accSt->execute([substr($name, 0, 150), substr($ip, 0, 45), (int) $quote['id']]);
+    if ($accSt->rowCount() === 0) {
+        header('Location: ' . $publicUrl);
+        exit;
+    }
 
     // Auto-create the installation appointment so the trade business
     // sees the job land on their calendar the moment the customer

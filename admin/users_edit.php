@@ -26,6 +26,15 @@ if (!$target) {
     exit('User not found.');
 }
 
+// A super-admin (platform owner) can sit inside an ordinary tenant (Beverley).
+// Only another super-admin may edit their login — otherwise any admin of that
+// tenant could set the owner's password or email and sign in as them.
+if ((int) ($target['is_super_admin'] ?? 0) === 1 && !is_super_admin()) {
+    $_SESSION['flash_error'] = 'That account can only be changed by the platform owner.';
+    header('Location: /admin/users.php');
+    exit;
+}
+
 $validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
 // 'factory' role only on factory accounts (is_factory = 1); see admin/users.php.
 $isFactoryAccount = function_exists('is_factory_client') && is_factory_client((int) $clientId);
@@ -263,6 +272,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                 }
             }
             $pdo->commit();
+
+            // New password or email: any reset link already emailed (maybe to
+            // the OLD address) must stop working.
+            if ($newPassword !== '' || strcasecmp((string) ($target['email'] ?? ''), $email) !== 0) {
+                try {
+                    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL')
+                        ->execute([$id]);
+                } catch (Throwable $e) { /* no resets table */ }
+            }
 
             // A new password ends that user's other sessions (see
             // session_still_valid); keep OUR session if we changed our own.

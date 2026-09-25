@@ -99,6 +99,23 @@ function session_still_valid(): bool
         $cAct = $cs->fetchColumn();
         if ($cAct !== false && (int) $cAct !== 1) return $verdict = false;
     } catch (Throwable $e) { /* no clients.active column — skip */ }
+    // Roles too: they were copied into the session at sign-in, so taking a
+    // role away (e.g. admin or factory) didn't bite until the user logged out.
+    try {
+        $rs = db()->prepare('SELECT role FROM client_users WHERE id = ? LIMIT 1');
+        $rs->execute([(int) $_SESSION['user_id']]);
+        $primary = $rs->fetchColumn();
+        if ($primary !== false) {
+            $roles = [(string) $primary];
+            try {
+                $rr = db()->prepare('SELECT role FROM client_user_roles WHERE user_id = ?');
+                $rr->execute([(int) $_SESSION['user_id']]);
+                $roles = array_values(array_unique(array_merge($roles, array_map('strval', $rr->fetchAll(PDO::FETCH_COLUMN)))));
+            } catch (Throwable $e) { /* no roles table — primary only */ }
+            $_SESSION['role']  = (string) $primary;
+            $_SESSION['roles'] = $roles;
+        }
+    } catch (Throwable $e) { /* keep the session's roles */ }
     $_SESSION['auth_checked_at'] = time();
     return $verdict = true;
 }

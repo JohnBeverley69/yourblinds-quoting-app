@@ -105,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($valid) {
             // Session fixation defence: regenerate ID at the privilege boundary.
             session_regenerate_id(true);
+            unset($_SESSION['_csrf']);   // fresh CSRF token for the signed-in session
 
             $_SESSION['user_id']        = (int) $user['id'];
             $_SESSION['client_id']      = (int) $user['client_id'];

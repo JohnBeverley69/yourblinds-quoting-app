@@ -26,6 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';
+        } elseif (rate_limited($ip, 'reset:' . $email, 3, 3600)) {
+            // Per-address cap too (3 an hour), so requests spread across many
+            // IPs can't flood one person's inbox. Same wording as the IP cap.
+            $error = 'Too many requests. Please wait a few minutes and try again.';
         } else {
             // Always record the attempt as "unsuccessful" — it's a request,
             // not a credential check, but we want it to count for rate-limiting.

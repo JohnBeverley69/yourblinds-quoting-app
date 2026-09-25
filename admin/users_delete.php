@@ -24,7 +24,13 @@ if ($id <= 0 || $id === $user['user_id']) {
     exit;
 }
 
-$stmt = db()->prepare('DELETE FROM client_users WHERE id = ? AND client_id = ?');
+// Never let a tenant admin delete a super-admin (platform owner) who sits in
+// their tenant — see admin/users_edit.php.
+$stmt = db()->prepare(
+    is_super_admin()
+        ? 'DELETE FROM client_users WHERE id = ? AND client_id = ?'
+        : 'DELETE FROM client_users WHERE id = ? AND client_id = ? AND COALESCE(is_super_admin, 0) = 0'
+);
 $stmt->execute([$id, $user['client_id']]);
 
 if ($stmt->rowCount() > 0) {

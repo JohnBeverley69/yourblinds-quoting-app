@@ -266,6 +266,17 @@ function pu_undo(PDO $pdo, int $clientId, string $scope): array
     if (!is_array($rows)) return [false, 'Undo data is damaged — nothing changed.', 0];
 
     $allIds  = pu_ids(array_merge($beforeIds, $afterIds));
+    // Second guard: the snapshot's table ids were written by the server from
+    // tenant-scoped lookups, but only ever touch tables this tenant owns.
+    if ($allIds) {
+        $own = $pdo->prepare('SELECT id FROM price_tables WHERE client_id = ? AND id IN (' . implode(',', $allIds) . ')');
+        $own->execute([$clientId]);
+        $allIds = pu_ids($own->fetchAll(PDO::FETCH_COLUMN));
+        $beforeIds = array_values(array_intersect($beforeIds, $allIds));
+        $afterIds  = array_values(array_intersect($afterIds, $allIds));
+        $ownSet = array_flip($allIds);
+        $rows   = array_values(array_filter($rows, static fn ($r) => isset($ownSet[(int) ($r[0] ?? 0)])));
+    }
     $created = array_values(array_diff($afterIds, $beforeIds));
     $hasCost = pu_has_cost($pdo);
 

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 
@@ -101,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
     } else {
         require __DIR__ . '/../../vendor/autoload.php';
         try {
-            $ss      = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
+            $ss      = yb_safe_load_spreadsheet($_FILES['file']['tmp_name']);
             $sheet   = $ss->getActiveSheet();
             $rows    = $sheet->toArray(null, true, true, true);
 

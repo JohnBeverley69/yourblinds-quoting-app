@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/safe_spreadsheet.php';
+
 /**
  * Shared price-table parser used by both:
  *   - admin/products/price-tables-bulk-import.php (multi-band, multi-system)
@@ -98,7 +100,7 @@ if (!function_exists('ptp_parse_width_price_input')) {
         if ($filePath !== null && is_readable($filePath)) {
             require_once __DIR__ . '/../vendor/autoload.php';
             try {
-                $ss        = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
+                $ss        = yb_safe_load_spreadsheet($filePath);
                 $sheetRows = $ss->getActiveSheet()->toArray(null, true, true, true);
 
                 // ── Layout auto-detection ─────────────────────────────

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../_partials/safe_spreadsheet.php';
+
 require __DIR__ . '/../../bootstrap.php';
 require __DIR__ . '/../../auth/middleware.php';
 require_once __DIR__ . '/../../_partials/price_table_undo.php';
@@ -50,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require __DIR__ . '/../../vendor/autoload.php';
         require __DIR__ . '/../../_partials/price_table_parser.php';
         try {
-            $ss     = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['file']['tmp_name']);
+            $ss     = yb_safe_load_spreadsheet($_FILES['file']['tmp_name']);
             $bands  = [];
             foreach ($ss->getAllSheets() as $sheet) {
                 $rows = $sheet->toArray(null, true, true, true);
