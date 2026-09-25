@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/csv_safe.php';
 
 requireSuperAdmin();
 
@@ -53,9 +54,9 @@ if (isset($_GET['csv'])) {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="client-emails.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Company', 'Active', 'Business email', 'Login email(s)']);
+    fputcsv_safe($out, ['Company', 'Active', 'Business email', 'Login email(s)']);
     foreach ($rows as $r) {
-        fputcsv($out, [
+        fputcsv_safe($out, [
             (string) $r['company_name'],
             ((int) ($r['active'] ?? 1)) === 1 ? 'yes' : 'no',
             (string) ($r['business_email'] ?? ''),
