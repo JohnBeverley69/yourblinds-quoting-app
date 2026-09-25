@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/csv_safe.php';
 require __DIR__ . '/_helpers.php';
 
 requireAdmin();
@@ -106,7 +107,7 @@ if ($type === 'invoices') {
     }
 
     $fh = $openCsv($slug . '-invoices-' . date('Y-m-d') . '.csv');
-    fputcsv($fh, [
+    fputcsv_safe($fh, [
         'ContactName', 'EmailAddress', 'InvoiceNumber', 'InvoiceDate', 'DueDate',
         'Description', 'Quantity', 'UnitAmount', 'AccountCode', 'TaxType',
     ]);
@@ -123,7 +124,7 @@ if ($type === 'invoices') {
         if (!$lines) {
             // Order with no captured lines — emit a single summary line so the
             // invoice total still lands.
-            fputcsv($fh, [
+            fputcsv_safe($fh, [
                 $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
                 'Order ' . $o['quote_number'], 1, number_format((float) ($o['subtotal'] ?? $o['total']), 2, '.', ''),
                 $ACCOUNT_CODE, $taxType,
@@ -149,7 +150,7 @@ if ($type === 'invoices') {
             if (trim((string) ($l['room_name'] ?? '')) !== '') $bits[] = '(' . trim((string) $l['room_name']) . ')';
             $desc = $bits ? implode(' / ', $bits) : ('Line ' . (int) $l['line_no']);
 
-            fputcsv($fh, [
+            fputcsv_safe($fh, [
                 $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
                 $desc, $qty, number_format($unit, 2, '.', ''), $ACCOUNT_CODE, $taxType,
             ]);
@@ -165,7 +166,7 @@ if ($type === 'invoices') {
         if ($orderNet !== null) {
             $adjust = round($orderNet - round($emittedNet, 2), 2);
             if (abs($adjust) >= 0.01) {
-                fputcsv($fh, [
+                fputcsv_safe($fh, [
                     $o['customer_name'], $o['customer_email'], $o['quote_number'], $invGb, $dueGb,
                     $adjust < 0 ? 'Discount — agreed price' : 'Adjustment',
                     1, number_format($adjust, 2, '.', ''), $ACCOUNT_CODE, $taxType,
@@ -200,9 +201,9 @@ $rows = $pdo->prepare(
 $rows->execute($params);
 
 $fh = $openCsv($slug . '-payments-' . date('Y-m-d') . '.csv');
-fputcsv($fh, ['Date', 'InvoiceNumber', 'Customer', 'Amount', 'Method', 'Reference', 'Type']);
+fputcsv_safe($fh, ['Date', 'InvoiceNumber', 'Customer', 'Amount', 'Method', 'Reference', 'Type']);
 foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $p) {
-    fputcsv($fh, [
+    fputcsv_safe($fh, [
         $gbDate($p['received_at'] ?? null),
         $p['quote_number'],
         $p['customer_name'],

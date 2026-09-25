@@ -182,6 +182,18 @@ if ($format === 'pdf') {
 // ───────────────────────────────────────────────────────── XLSX (full)
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Formula-injection guard: PhpSpreadsheet's default binder turns any string
+// starting with "=" into a live formula, so a customer named
+// "=HYPERLINK(...)" would run when the file is opened. StringValueBinder
+// stores such strings as text (quote-prefixed); numbers, booleans and nulls
+// keep their native types so totals still sum.
+\PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(
+    (new \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder())
+        ->setNumericConversion(false)
+        ->setBooleanConversion(false)
+        ->setNullConversion(false)
+);
+
 $ss = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 
 // Sheet 1 — Quotes & Orders summary.
