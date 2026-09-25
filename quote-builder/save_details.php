@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -68,6 +69,14 @@ if ($customerId > 0) {
     $cs->execute([$customerId, $clientId]);
     if (!$cs->fetchColumn()) {
         $customerId = 0;
+    } elseif (!cm_can_view_all_customers($user)
+              && $customerId !== (int) ($quote['customer_id'] ?? 0)
+              && !cm_user_can_access_customer($customerId, $user)) {
+        // A restricted user (fitter/surveyor) re-linking the quote to some
+        // other customer would make that customer "theirs" (customer_access
+        // counts customers via quotes they have appointments on). Keep the
+        // existing link unless the customer is already one of theirs.
+        $customerId = (int) ($quote['customer_id'] ?? 0);
     }
 }
 $emptyToNull = static function (string $k): ?string {
