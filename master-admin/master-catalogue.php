@@ -20,6 +20,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/library.php';
+require_once __DIR__ . '/../_partials/price_table_undo.php';
 
 requireSuperAdmin();
 
@@ -93,19 +94,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pct = (float) ($_POST['pct'] ?? 0);
             if ($pid > 0 && $pct !== 0.0 && $pct > -100) {
                 $factor = 1 + ($pct / 100);
-                $st = db()->prepare(
-                    'UPDATE price_table_rows r
-                       JOIN price_tables t ON t.id = r.price_table_id
-                        SET r.price = ROUND(r.price * ?, 2)
-                      WHERE t.product_id = ? AND t.client_id = ?'
-                );
-                $st->execute([$factor, $pid, $masterId]);
-                $cells = $st->rowCount();
+                $shown  = ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%';
                 $pn = db()->prepare('SELECT name FROM products WHERE id = ? AND client_id = ? LIMIT 1');
                 $pn->execute([$pid, $masterId]);
-                $logPriceChange('product', (string) ($pn->fetchColumn() ?: ('product #' . $pid)), $pct, $cells);
-                $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells)
-                    . ' prices by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
+                $pName = (string) ($pn->fetchColumn() ?: ('product #' . $pid));
+                // Snapshot first — rounding to the penny means only a snapshot can undo it.
+                $tids = db()->prepare('SELECT id FROM price_tables WHERE product_id = ? AND client_id = ?');
+                $tids->execute([$pid, $masterId]);
+                $tableIds = array_map('intval', $tids->fetchAll(PDO::FETCH_COLUMN));
+                $snapId = pbu_before(db(), $masterId, 'product:' . $pid, $tableIds, $pName . ' ' . $shown);
+                try {
+                    $st = db()->prepare(
+                        'UPDATE price_table_rows r
+                           JOIN price_tables t ON t.id = r.price_table_id
+                            SET r.price = ROUND(r.price * ?, 2)
+                          WHERE t.product_id = ? AND t.client_id = ?'
+                    );
+                    $st->execute([$factor, $pid, $masterId]);
+                } catch (Throwable $e) {
+                    pbu_after(db(), $snapId, $tableIds, false);
+                    throw $e;
+                }
+                pbu_after(db(), $snapId, $tableIds, true);
+                $cells = $st->rowCount();
+                $logPriceChange('product', $pName, $pct, $cells);
+                $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells) . ' prices by ' . $shown . '.'
+                    . ($snapId ? ' Wrong number? Press Undo on that product’s row.' : '');
             } else {
                 $_SESSION['flash_error'] = 'Enter a percentage (e.g. 4 or -2).';
             }
@@ -118,21 +132,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($prefix !== '' && $pct !== 0.0 && $pct > -100) {
                 $likePrefix = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $prefix) . '%';
                 $factor = 1 + ($pct / 100);
-                $st = db()->prepare(
-                    'UPDATE price_table_rows r
-                       JOIN price_tables t ON t.id = r.price_table_id
-                       JOIN products     p ON p.id = t.product_id
-                        SET r.price = ROUND(r.price * ?, 2)
+                $shown  = ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%';
+                $supName = (string) ($sup['name'] ?? $key);
+                $tids = db()->prepare(
+                    'SELECT t.id FROM price_tables t JOIN products p ON p.id = t.product_id
                       WHERE p.client_id = ? AND p.name LIKE ?'
                 );
-                $st->execute([$factor, $masterId, $likePrefix]);
+                $tids->execute([$masterId, $likePrefix]);
+                $tableIds = array_map('intval', $tids->fetchAll(PDO::FETCH_COLUMN));
+                $snapId = pbu_before(db(), $masterId, 'supplier:' . $key, $tableIds, $supName . ' ' . $shown);
+                try {
+                    $st = db()->prepare(
+                        'UPDATE price_table_rows r
+                           JOIN price_tables t ON t.id = r.price_table_id
+                           JOIN products     p ON p.id = t.product_id
+                            SET r.price = ROUND(r.price * ?, 2)
+                          WHERE p.client_id = ? AND p.name LIKE ?'
+                    );
+                    $st->execute([$factor, $masterId, $likePrefix]);
+                } catch (Throwable $e) {
+                    pbu_after(db(), $snapId, $tableIds, false);
+                    throw $e;
+                }
+                pbu_after(db(), $snapId, $tableIds, true);
                 $cells = $st->rowCount();
-                $logPriceChange('supplier', (string) ($sup['name'] ?? $key), $pct, $cells);
+                $logPriceChange('supplier', $supName, $pct, $cells);
                 $_SESSION['flash_success'] = 'Adjusted ' . number_format($cells)
-                    . ' prices across ' . ((string) ($sup['name'] ?? $key))
-                    . ' by ' . ($pct > 0 ? '+' : '') . rtrim(rtrim((string) $pct, '0'), '.') . '%.';
+                    . ' prices across ' . $supName . ' by ' . $shown . '.'
+                    . ($snapId ? ' Wrong number? Press Undo beside “Apply to all”.' : '');
             } else {
                 $_SESSION['flash_error'] = 'Pick a supplier and enter a percentage.';
+            }
+        } elseif ($act === 'undo_bump') {
+            // Undo the newest % change for one product or supplier — restores
+            // the exact pre-change prices from the snapshot.
+            $scope = (string) ($_POST['scope'] ?? '');
+            if (!preg_match('/^(product|supplier):.{1,70}$/su', $scope)) {
+                $_SESSION['flash_error'] = 'Nothing to undo.';
+            } else {
+                [$ok, $msg, $cells] = pbu_undo(db(), $masterId, $scope);
+                if ($ok) {
+                    $logPriceChange('undo', $msg, 0.0, $cells);
+                    $_SESSION['flash_success'] = 'Undone: ' . $msg . ' — ' . number_format($cells) . ' prices are back to what they were.';
+                } else {
+                    $_SESSION['flash_error'] = $msg;
+                }
             }
         }
     } catch (Throwable $e) {
@@ -215,7 +259,26 @@ foreach ($products as $p) {
 }
 
 /** Render one product table for a group. */
-$renderRows = function (array $rows) use ($onMaster): void {
+$undoScopes = $onMaster ? pbu_latest_all(db(), $masterId) : [];
+
+/** A small "↶ Undo +4%" button for a product/supplier with an undoable % change. */
+$undoButton = function (string $scope, bool $asBtn = false) use ($undoScopes): void {
+    $u = $undoScopes[$scope] ?? null;
+    if (!$u) return;
+    $when = date('j M H:i', strtotime((string) $u['created_at']));
+    ?>
+    <form method="post" action="/master-admin/master-catalogue.php" style="margin:0;display:inline"
+          data-confirm="Undo “<?= e((string) $u['label']) ?>”? Every price it changed goes back to exactly what it was before (<?= e($when) ?>).">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="undo_bump">
+        <input type="hidden" name="scope" value="<?= e($scope) ?>">
+        <button type="submit" title="Undo “<?= e((string) $u['label']) ?>” (<?= e($when) ?>)"
+                <?= $asBtn ? 'class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem"' : 'style="background:none;border:0;color:#1f3b5b;cursor:pointer;font-size:.8125rem;padding:0;margin-right:.5rem"' ?>>&#8630; Undo <?= e(preg_replace('/^.* (?=[+-]?[\d.]+%$)/u', '', (string) $u['label'])) ?></button>
+    </form>
+    <?php
+};
+
+$renderRows = function (array $rows) use ($onMaster, $undoButton): void {
     foreach ($rows as $p):
         $pid = (int) $p['id'];
         ?>
@@ -237,7 +300,7 @@ $renderRows = function (array $rows) use ($onMaster): void {
             <?php if ($onMaster): ?>
                 <td style="text-align:right;white-space:nowrap">
                     <form method="post" action="/master-admin/master-catalogue.php" style="margin:0 .5rem 0 0;display:inline-flex;gap:.2rem;align-items:center"
-                          data-confirm="Change ALL prices for &quot;<?= e((string) $p['name']) ?>&quot; by the % entered? Rounds to the nearest penny. No undo.">
+                          data-confirm="Change ALL prices for &quot;<?= e((string) $p['name']) ?>&quot; by the % entered? Rounds to the nearest penny. You can undo it straight after.">
                         <?= csrf_field() ?>
                         <input type="hidden" name="_action" value="bump_product">
                         <input type="hidden" name="product_id" value="<?= $pid ?>">
@@ -245,6 +308,7 @@ $renderRows = function (array $rows) use ($onMaster): void {
                                style="width:3.2rem;padding:.1rem .25rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;font-size:.8125rem;background:var(--bg-input)">
                         <button type="submit" style="background:none;border:0;color:#1f3b5b;cursor:pointer;font-size:.8125rem;padding:0">Apply %</button>
                     </form>
+                    <?php $undoButton('product:' . $pid); ?>
                     <form method="post" action="/master-admin/master-catalogue.php" style="margin:0;display:inline"
                           data-confirm="Delete &quot;<?= e((string) $p['name']) ?>&quot; and all its systems, fabrics and price tables? Quotes already raised keep working. No undo.">
                         <?= csrf_field() ?>
@@ -408,7 +472,7 @@ $activeNav = 'master-catalogue';
                                 <?php if ($onMaster): ?>
                                     <div style="display:flex;gap:.9rem;align-items:center;flex-wrap:wrap;margin:0 0 .625rem">
                                         <form method="post" action="/master-admin/master-catalogue.php" style="display:flex;gap:.35rem;align-items:center;margin:0"
-                                              data-confirm="Change ALL prices across &quot;<?= e((string) $sup['name']) ?>&quot; by the % entered? It applies to every product under this supplier, rounded to the nearest penny. No undo.">
+                                              data-confirm="Change ALL prices across &quot;<?= e((string) $sup['name']) ?>&quot; by the % entered? It applies to every product under this supplier, rounded to the nearest penny. You can undo it straight after.">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="_action" value="bump_supplier">
                                             <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
@@ -417,6 +481,7 @@ $activeNav = 'master-catalogue';
                                                    style="width:4rem;padding:.2rem .4rem;border:1px solid var(--border-strong);border-radius:5px;font:inherit;background:var(--bg-input)">
                                             <button type="submit" class="btn btn-secondary" style="font-size:.8125rem;padding:.25rem .75rem">Apply to all</button>
                                         </form>
+                                        <?php $undoButton('supplier:' . $key, true); ?>
                                         <form method="post" action="/master-admin/master-catalogue.php" style="margin:0"
                                               data-confirm="Delete ALL <?= count($rows) ?> product<?= count($rows) === 1 ? '' : 's' ?> under &quot;<?= e((string) $sup['name']) ?>&quot; (prefix &quot;<?= e((string) ($sup['prefix'] ?? '')) ?>&quot;)? This removes their systems, fabrics and price tables. Quotes already raised keep working. No undo.">
                                             <?= csrf_field() ?>
@@ -503,7 +568,11 @@ $activeNav = 'master-catalogue';
                                             <td style="white-space:nowrap;color:var(--text-muted);font-size:.8125rem"><?= e(date('j M Y, g:ia', strtotime((string) $h['created_at']))) ?></td>
                                             <td><?= e((string) ($h['changed_by'] ?? '')) ?></td>
                                             <td><?= e(ucfirst((string) $h['scope'])) ?>: <strong><?= e((string) $h['target']) ?></strong></td>
-                                            <td style="text-align:right;font-weight:600;color:<?= $pc >= 0 ? '#92400e' : '#15803d' ?>"><?= ($pc > 0 ? '+' : '') . rtrim(rtrim(number_format($pc, 2), '0'), '.') ?>%</td>
+                                            <?php if ((string) $h['scope'] === 'undo'): ?>
+                                                <td style="text-align:right;font-weight:600;color:var(--text-muted)">&#8630; Undone</td>
+                                            <?php else: ?>
+                                                <td style="text-align:right;font-weight:600;color:<?= $pc >= 0 ? '#92400e' : '#15803d' ?>"><?= ($pc > 0 ? '+' : '') . rtrim(rtrim(number_format($pc, 2), '0'), '.') ?>%</td>
+                                            <?php endif; ?>
                                             <td style="text-align:right"><?= number_format((int) $h['cells_changed']) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
