@@ -39,6 +39,12 @@ $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 // so date-windowed promotions resolve exactly as they did on the server.
 $today = (string) $d['today'];
 $pdo->sqliteCreateFunction('CURDATE', static fn () => $today, 0);
+// MySQL's *_ci collations match text case-insensitively and ignore trailing
+// spaces ("50mm Tape" = "50mm tape "); SQLite compares bytes. Without this, a band
+// code typed slightly differently on a fabric vs its price table still prices on
+// the server but finds "No price table" offline. Every TEXT column uses it.
+$pdo->sqliteCreateCollation('MYSQL_CI', static fn ($a, $b) =>
+    strcmp(mb_strtolower(rtrim((string) $a, ' ')), mb_strtolower(rtrim((string) $b, ' '))));
 
 $INDEXES = [
     'price_table_rows'        => ['price_table_id, width_mm, drop_mm', 'price_table_id, drop_mm'],
@@ -57,7 +63,8 @@ $pdo->beginTransaction();
 foreach ($d['schema'] as $table => $cols) {
     $defs = [];
     foreach ($cols as $col => $type) {
-        $defs[] = '"' . $col . '" ' . $type . ($col === 'id' ? ' PRIMARY KEY' : '');
+        $defs[] = '"' . $col . '" ' . $type . ($type === 'TEXT' ? ' COLLATE MYSQL_CI' : '')
+                . ($col === 'id' ? ' PRIMARY KEY' : '');
     }
     $pdo->exec('CREATE TABLE "' . $table . '" (' . implode(', ', $defs) . ')');
     foreach ($INDEXES[$table] ?? [] as $i => $idxCols) {
