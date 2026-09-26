@@ -35,11 +35,14 @@ if ($clientId <= 0) {
     header('Content-Type: text/plain; charset=utf-8');
     echo "Offline pricing proof — pick a tenant: ?client_id=N&n=300\n\n";
     $rows = $pdo->query(
-        'SELECT c.id, c.name,
+        'SELECT c.id, c.company_name AS name,
                 (SELECT COUNT(*) FROM products p WHERE p.client_id = c.id AND p.active = 1) AS products,
-                (SELECT COUNT(*) FROM price_table_rows r JOIN price_tables t ON t.id = r.price_table_id
-                  WHERE t.client_id = c.id AND t.active = 1) AS grid_cells
-           FROM clients c ORDER BY products DESC, c.id'
+                COALESCE(g.cells, 0) AS grid_cells
+           FROM clients c
+           LEFT JOIN (SELECT t.client_id, COUNT(*) AS cells
+                        FROM price_table_rows r JOIN price_tables t ON t.id = r.price_table_id
+                       WHERE t.active = 1 GROUP BY t.client_id) g ON g.client_id = c.id
+          ORDER BY products DESC, c.id'
     )->fetchAll();
     foreach ($rows as $r) {
         printf("  #%-5d %-40s %5d products  %8d grid cells\n", $r['id'], mb_substr((string) $r['name'], 0, 40), $r['products'], $r['grid_cells']);
