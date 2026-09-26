@@ -803,12 +803,22 @@ function pe_col_exists(PDO $pdo, string $table, string $col): bool
     $key = $table . '.' . $col;
     if (isset($cache[$key])) return $cache[$key];
     try {
-        $st = $pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
-        );
-        $st->execute([$table, $col]);
-        $exists = $st->fetchColumn() !== false;
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            // Offline (on-device) catalogue snapshot — SQLite has no INFORMATION_SCHEMA.
+            // Without this every probe reads "absent" and the engine silently takes
+            // the pre-migration paths, so offline prices would drift from the server.
+            $exists = false;
+            foreach ($pdo->query('PRAGMA table_info(' . $pdo->quote($table) . ')') as $c) {
+                if (($c['name'] ?? null) === $col) { $exists = true; break; }
+            }
+        } else {
+            $st = $pdo->prepare(
+                'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+            );
+            $st->execute([$table, $col]);
+            $exists = $st->fetchColumn() !== false;
+        }
     } catch (Throwable $e) {
         $exists = false;
     }
