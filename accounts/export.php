@@ -8,6 +8,8 @@ declare(strict_types=1);
  *                     import shape (rows sharing an InvoiceNumber become one
  *                     invoice). UnitAmount is the NET (ex-VAT) line price; the
  *                     accounting package recomputes the tax from TaxType.
+ *   ?type=quickbooks → the same invoices, shaped for QuickBooks Online's
+ *                     Import data → Invoices (see accounts/_qbo_export.php).
  *   ?type=payments  → one row per payment received (the payments ledger).
  *
  *   ?from=YYYY-MM-DD&to=YYYY-MM-DD  → optional date window. Invoices filter on
@@ -39,7 +41,7 @@ acct_require_feature($clientId);
 
 $pdo  = db();
 $type = (string) ($_GET['type'] ?? 'invoices');
-if (!in_array($type, ['invoices', 'payments'], true)) $type = 'invoices';
+if (!in_array($type, ['invoices', 'quickbooks', 'payments'], true)) $type = 'invoices';
 
 // Date window (optional). Bad/garbled dates are ignored rather than erroring.
 $validDate = static fn (string $s): bool => (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $s);
@@ -72,7 +74,7 @@ $gbDate = static fn (?string $sqlDate): string =>
 // =====================================================================
 //  INVOICES — one row per order line item (Xero sales-invoice shape)
 // =====================================================================
-if ($type === 'invoices') {
+if ($type === 'invoices' || $type === 'quickbooks') {
     $where  = ["q.client_id = ?", "q.status IN ('accepted','ordered','fitted','invoiced','paid')"];
     $params = [$clientId];
     $dateExpr = 'COALESCE(q.accepted_at, q.created_at)';
@@ -104,6 +106,10 @@ if ($type === 'invoices') {
         );
         $li->execute($ids);
         foreach ($li->fetchAll(PDO::FETCH_ASSOC) as $r) $linesByQuote[(int) $r['quote_id']][] = $r;
+    }
+
+    if ($type === 'quickbooks') {
+        require __DIR__ . '/_qbo_export.php';   // writes the file(s) and exits
     }
 
     $fh = $openCsv($slug . '-invoices-' . date('Y-m-d') . '.csv');

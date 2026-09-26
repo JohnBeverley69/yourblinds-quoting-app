@@ -20,6 +20,7 @@ declare(strict_types=1);
  * price" line), and the vendors' own help, checked 26 Sep 2026:
  *   Xero  central.xero.com/0/article/Import-customer-invoices-GL (+ Find & Match)
  *   QBO   quickbooks.intuit.com/learn-support/en-uk … import-multiple-invoices
+ *         (the Export for QuickBooks button = accounts/_qbo_export.php)
  *   Sage  gb-kb.sage.com solution 222001000100915 (now PURCHASE invoices only)
  *   FreeAgent support … Import-a-client-s-invoices (Practice Partners only)
  * None of the four imports customer PAYMENTS from a file — payments are matched
@@ -127,13 +128,16 @@ return [
                       <p class="subt">Payments received against your orders.</p></div>
                     <div class="hbtns">
                       <span class="mb expinv">Export invoices (CSV)</span>
+                      <span class="mb">Export for QuickBooks (CSV)</span>
                       <span class="mb">Export payments (CSV)</span>
                       <span class="mb pri">+ Record payment</span>
                     </div>
                   </div>
                   <p class="note">CSV for <b>Xero / QuickBooks / Sage</b>. Respects the date filter below. Invoices export the line items
                      (net of VAT) so the package recomputes tax; they default to account code <b>200 (Sales)</b> and <b>20% VAT</b> &mdash;
-                     remap on import if your chart of accounts differs.</p>
+                     remap on import if your chart of accounts differs.
+                     <b>QuickBooks Online?</b> Use <i>Export for QuickBooks</i> &mdash; no minus lines, QuickBooks&rsquo; VAT codes,
+                     and split into files of 100 invoices if the period is bigger.</p>
                   <div class="filt">
                     <div class="ft">Filter the list</div>
                     <div class="frow">
@@ -207,7 +211,7 @@ return [
                   <div class="card-t">Which route for your package?</div>
                   <div class="picks">
                     <div class="pk"><b>Xero</b>Import the invoices CSV as it is. Match payments from the bank feed.</div>
-                    <div class="pk"><b>QuickBooks Online</b>Import with column matching (no minus lines) &mdash; or, if you only record paid sales, wait for the direct link.</div>
+                    <div class="pk"><b>QuickBooks Online</b>Use <i>Export for QuickBooks</i>, then Import data &rarr; Invoices &mdash; or, if you only record paid sales, wait for the direct link.</div>
                     <div class="pk"><b>Sage Accounting</b>Enter paid sales from the payments file, or hand both files to your bookkeeper.</div>
                     <div class="pk"><b>FreeAgent</b>Only your accountant can import invoices &mdash; send them both files.</div>
                   </div>
@@ -238,13 +242,16 @@ return [
                 one invoice. Prices are <b>before VAT</b> &mdash; your package adds the VAT. Each row already has account code
                 <code>200</code> (Sales) and <code>20% (VAT on Income)</code>, or <code>No VAT</code> if the job had none. The due date is
                 14 days after the order.</li>
+            <li><b>Export for QuickBooks (CSV)</b> is the same invoices, already shaped for <b>QuickBooks Online</b> &mdash; see its
+                section below. Use this one instead of Export invoices if you&rsquo;re on QuickBooks.</li>
             <li><b>Export payments (CSV)</b> downloads the money received: date, quote number, customer, amount, how it was paid, the
                 reference, and whether it was a <b>Deposit</b> or a later <b>Payment</b>.</li>
           </ul>
           <div class="heads"><span class="hi">&#9888;</span><div><b>The minus line.</b> If you agreed a different price from the list
              price (&ldquo;I&rsquo;ll do it for &pound;1,200&rdquo;), the file adds a line called <b>&ldquo;Discount &mdash; agreed
              price&rdquo;</b> with a <b>minus</b> amount, so the invoice total matches what the customer was actually charged. Xero is happy
-             with that. <b>QuickBooks is not</b> &mdash; see its section.</div></div>
+             with that. <b>QuickBooks is not</b> &mdash; which is why QuickBooks has its own export button that folds the discount
+             into the other lines instead.</div></div>
 
           <p><b>Xero &mdash; the easiest.</b> The invoices file is laid out the way Xero expects.</p>
           <ul class="steps">
@@ -266,27 +273,27 @@ return [
              A deposit and a balance are two bank lines against the same invoice &mdash; Xero handles that. On the VAT Cash Accounting
              Scheme, Xero only counts the VAT once the payment is matched, which is exactly what you want.</p>
 
-          <p><b>QuickBooks Online &mdash; works, with two tweaks.</b></p>
+          <p><b>QuickBooks Online &mdash; use the QuickBooks button.</b></p>
           <div class="heads"><span class="hi">&#9888;</span><div><b>If you only put PAID sales into QuickBooks</b> (cash accounting, the way
              many bookkeepers work), <b>don&rsquo;t import invoices</b> &mdash; it would create lots of &ldquo;owed&rdquo; invoices you
              don&rsquo;t want. Instead use the <b>payments file</b> as your list and record each paid sale in QuickBooks, or wait for the
              direct link on <b>Settings &rarr; Accounting</b>, which will send paid sales across by itself.</div></div>
           <ul class="steps">
-            <li><b>Tidy the file first:</b> open it in Excel and <b>delete any &ldquo;Discount &mdash; agreed price&rdquo; rows</b> (QuickBooks
-                refuses minus lines), then change that invoice&rsquo;s other lines so they add up to the agreed price. Save it as
-                <b>CSV</b>.</li>
+            <li><b>Once only:</b> in QuickBooks make a <b>Service</b> item called <code>Blinds</code> in <b>Products and services</b>,
+                pointing at your sales income account. (Or tick <em>add new products/services</em> during the import and QuickBooks makes it
+                for you &mdash; check which income account it chose.)</li>
+            <li>On the <b>Payments</b> page pick the period, then press <b>Export for QuickBooks (CSV)</b>. You get a ready-made file:
+                <b>no minus lines</b> (an agreed-price discount is spread across that invoice&rsquo;s lines, so the total is still exactly
+                what you charged), QuickBooks&rsquo; own VAT codes (<code>20.0% S</code>, <code>5.0% R</code>, <code>No VAT</code>),
+                a line <b>amount</b> and <b>rate</b>, and the item <code>Blinds</code> on every line.</li>
+            <li>If the period has <b>more than 100 invoices</b>, you get a <b>.zip</b> instead &mdash; open it and you&rsquo;ll find
+                <em>part 1 of 3</em>, <em>part 2 of 3</em>&hellip; QuickBooks only takes 100 invoices per file, so import each part in turn.</li>
             <li>In QuickBooks click the <b>&#9881; Settings</b> cog &rarr; <b>Import data</b> &rarr; <b>Invoices</b>. Tick the box to add new
                 customers if some aren&rsquo;t in QuickBooks yet. <b>Browse</b> for the file and press <b>Next</b>.</li>
-            <li><b>Match the columns:</b> ContactName &rarr; Customer, InvoiceNumber &rarr; Invoice no., InvoiceDate &rarr; Invoice date,
-                DueDate &rarr; Due date, Description &rarr; description, Quantity &rarr; quantity, UnitAmount &rarr; the rate/amount, TaxType
-                &rarr; tax code. Set <b>AccountCode</b> and <b>EmailAddress</b> to <b>Not applicable</b>. If QuickBooks insists on a line
-                <em>amount</em> rather than a rate, add a column in Excel that is Quantity &times; UnitAmount and use that.</li>
-            <li>Choose date format <b>D/M/YYYY</b> and VAT <b>Exclusive</b>, then match <code>20% (VAT on Income)</code> to
-                <code>20.0% S</code> and <code>No VAT</code> to <code>No VAT</code>.</li>
-            <li>Check the summary and press <b>Start import</b>. Limits: <b>100 invoices / 1,000 rows</b> per file. If some fail, note the
-                reason shown and fix just those.</li>
-            <li>With no product column, QuickBooks uses its general <b>&ldquo;sales&rdquo;</b> item. Fine for most people; if you want a
-                &ldquo;Blinds&rdquo; item, add a column in Excel filled with <code>Blinds</code> and map it to Product/Service.</li>
+            <li><b>Check the column matching</b> &mdash; the headings are QuickBooks&rsquo; own, so they should line up by themselves:
+                InvoiceNo, Customer, InvoiceDate, DueDate, Product/Service, description, quantity, rate, amount and tax code.</li>
+            <li>Choose date format <b>D/M/YYYY</b> and VAT <b>Exclusive</b> (our prices are before VAT), confirm the tax codes, check the
+                summary and press <b>Start import</b>. If any invoice fails, note the reason shown and fix just that one.</li>
           </ul>
           <p><b>Payments in QuickBooks:</b> match the bank line to the open invoice under <b>Banking</b> (or <b>+ New &rarr; Receive
              payment</b> by hand). There&rsquo;s no payments import.</p>
@@ -323,6 +330,6 @@ return [
             ['0:48', 'Invoices arrive as drafts; Approve.',                             'The invoices arrive as drafts. Check one or two against YourBlinds, then approve them.', 4],
             ['0:56', 'The payments CSV.',                                               'Now the payments file. No accounts package imports payments from a file — this is your checklist for matching the money.', 5],
             ['1:04', 'Bank line matched to the invoice by the quote number.',          'When the money shows in your bank feed, match it to the invoice. The quote number is the customer\'s payment reference, so it\'s easy to spot.', 6],
-            ['1:13', 'Which route: Xero, QuickBooks, Sage, FreeAgent.',                'QuickBooks can import the invoices too, once you take out any minus lines and match the columns — or, if you only record paid sales, wait for the direct link. For Sage and FreeAgent, the simplest route is your bookkeeper, with both files.', 7],
+            ['1:13', 'Which route: Xero, QuickBooks, Sage, FreeAgent.',                'On QuickBooks, use the Export for QuickBooks button instead — it\'s already in QuickBooks\' own layout — then Import data, Invoices. Or, if you only record paid sales, wait for the direct link. For Sage and FreeAgent, the simplest route is your bookkeeper, with both files.', 7],
         ],
 ];

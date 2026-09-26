@@ -763,14 +763,21 @@ return [
       account</strong> is recorded on a different screen altogether, so it can be allocated across their invoices.</p>'],
 
     ['admin', 'Accounts', 'Getting my figures to the bookkeeper (CSV export)', 'accounts csv export xero quickbooks sage invoices payments accounting accountant bookkeeper download spreadsheet vat',
-     '<p>On <strong>Retail → Payments</strong>, admins get two buttons at the top right:
-      <strong>Export invoices (CSV)</strong> and <strong>Export payments (CSV)</strong>. They download a spreadsheet
-      file you hand to your bookkeeper or import into <strong>Xero, QuickBooks or Sage</strong>.</p>
+     '<p>On <strong>Retail → Payments</strong>, admins get three export buttons at the top right:
+      <strong>Export invoices (CSV)</strong>, <strong>Export for QuickBooks (CSV)</strong> and
+      <strong>Export payments (CSV)</strong>. They download spreadsheet files you hand to your bookkeeper or import
+      into <strong>Xero, QuickBooks or Sage</strong>. The Help guide <em>Get your figures into Xero, QuickBooks or
+      Sage</em> walks through each package step by step.</p>
       <ul>
         <li><strong>Export invoices (CSV)</strong> — one row per order line, priced <em>net of VAT</em> so the
         accounting package works the tax out itself. It covers every order from <strong>accepted</strong> onward
         (accepted, ordered, fitted, invoiced and paid) — not just the ones you have invoiced. Each order is dated by
         when it was accepted, falling back to when it was created, with a due date <strong>14 days</strong> later.</li>
+        <li><strong>Export for QuickBooks (CSV)</strong> — the same invoices in QuickBooks Online’s own import
+        layout (Settings ⚙ → Import data → Invoices): no minus lines (an agreed-price discount is spread across that
+        invoice’s lines so the total still matches), QuickBooks’ VAT codes (20.0% S / 5.0% R / No VAT), a line amount
+        and rate, and the item “Blinds” on every line. More than 100 invoices comes as a .zip of numbered parts,
+        because QuickBooks only takes 100 invoices per file.</li>
         <li><strong>Export payments (CSV)</strong> — one row per payment received: date, order number, customer,
         amount, method, reference, and whether it was a Deposit or a Payment.</li>
       </ul>
