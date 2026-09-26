@@ -421,6 +421,8 @@ $activeNav = 'accounts';
                 ?>
                     <a href="/accounts/export.php?type=invoices<?= $expQs ?>" class="btn btn-secondary"
                        title="One row per order line — import as sales invoices">Export invoices (CSV)</a>
+                    <a href="/accounts/export.php?type=quickbooks<?= $expQs ?>" class="btn btn-secondary"
+                       title="The same invoices, ready for QuickBooks Online → Import data → Invoices">Export for QuickBooks (CSV)</a>
                     <a href="/accounts/export.php?type=payments<?= $expQs ?>" class="btn btn-secondary"
                        title="Payments received — for your bookkeeper / accounting software">Export payments (CSV)</a>
                 <?php endif; ?>
@@ -433,6 +435,8 @@ $activeNav = 'accounts';
                 Invoices export the line items (net of VAT) so the package recomputes tax;
                 they default to account code <strong>200 (Sales)</strong> and <strong>20% VAT</strong> —
                 remap on import if your chart of accounts differs.
+                <strong>QuickBooks Online?</strong> Use <em>Export for QuickBooks</em> — no minus lines,
+                QuickBooks' VAT codes, and split into files of 100 invoices if the period is bigger.
             </p>
         <?php endif; ?>
 

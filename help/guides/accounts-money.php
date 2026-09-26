@@ -174,6 +174,7 @@ return [
                     </div>
                     <div class="hbtns">
                       <span class="mbtn gh">Export invoices (CSV)</span>
+                      <span class="mbtn gh">Export for QuickBooks (CSV)</span>
                       <span class="mbtn gh">Export payments (CSV)</span>
                       <span class="mbtn pri">+ Record payment</span>
                     </div>
@@ -184,7 +185,7 @@ return [
                     <div class="scard all"><div class="sl">All-time received</div><div class="sv">&pound;18,930.00</div></div>
                   </div>
                   <div class="disc">+ Record payment</div>
-                  <p class="csvnote">CSV for <b>Xero / QuickBooks / Sage</b>. Respects the date filter below. Invoices export the line items (net of VAT) so the package recomputes tax; they default to account code <b>200 (Sales)</b> and <b>20% VAT</b> &mdash; remap on import if your chart of accounts differs.</p>
+                  <p class="csvnote">CSV for <b>Xero / QuickBooks / Sage</b>. Respects the date filter below. Invoices export the line items (net of VAT) so the package recomputes tax; they default to account code <b>200 (Sales)</b> and <b>20% VAT</b> &mdash; remap on import if your chart of accounts differs. <b>QuickBooks Online?</b> Use <i>Export for QuickBooks</i> &mdash; no minus lines, QuickBooks&rsquo; VAT codes, split into files of 100 invoices if bigger.</p>
                 </div>
 
                 <!-- Scene: payment history, grouped -->
@@ -342,6 +343,7 @@ return [
                   </div>
                   <div class="hbtns" style="margin-top:.55rem">
                     <span class="mbtn gh">Export invoices (CSV)</span>
+                    <span class="mbtn gh">Export for QuickBooks (CSV)</span>
                     <span class="mbtn gh">Export payments (CSV)</span>
                   </div>
                   <div class="csv">
