@@ -52,6 +52,7 @@ $ORDER = [
     'settings-colours',
     'settings-suppliers',
     'trade-terms-page',
+    'settings-accounting',
     'settings-backup',
     // Who can get in.
     'users-add',
@@ -73,6 +74,7 @@ $ORDER = [
     'calendar-booking',
     'quote-payments',
     'accounts-money',
+    'accounts-to-package',
 ];
 
 $GUIDES = [];
