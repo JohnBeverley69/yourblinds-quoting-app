@@ -25,6 +25,12 @@ requireSuperAdmin();
 
 header('Cache-Control: no-store');
 @set_time_limit(120);
+// Super-admin diagnostic page: say what broke instead of a blank 500.
+set_exception_handler(static function (Throwable $e) {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'parity_sample failed: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine();
+});
 
 $pdo = db();
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -188,7 +194,7 @@ for ($i = 0; $i < $n && $products; $i++) {
         $ch  = $pick($okChoices);
         $row = ['extra_id' => $eid, 'choice_id' => (int) $ch['id']];
         if (!empty($ch['length_input_label']) || (float) ($ch['price_per_unit'] ?? 0) != 0.0 || mt_rand(1, 10) === 1) {
-            $row['user_value'] = mt_rand(1, 10) <= 3 ? mt_rand(1, 6) : mt_rand(300, $wmax);
+            $row['user_value'] = mt_rand(1, 10) <= 3 ? mt_rand(1, 6) : mt_rand(300, max(300, $wmax));
         }
         $sel[] = $row;
     }
