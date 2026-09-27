@@ -122,7 +122,9 @@ $ybOfflineUserId = (int) ($user['id'] ?? (current_user()['id'] ?? 0));
         try { html = await r.text(); } catch (e) { return { kind: 'offline' }; }
         if (!r.ok) return { kind: 'rejected', message: 'The server could not save this (error ' + r.status + ').' };
         var doc = new DOMParser().parseFromString(html, 'text/html');
-        var err = doc.querySelector('.alert-error, .alert-danger');
+        // The flash error is the red alert with role="alert" (edit.php). Other red
+        // boxes (e.g. "this quote expired", role="status") are not a refusal.
+        var err = doc.querySelector('.alert-error[role="alert"]');
         if (err) return { kind: 'rejected', message: err.textContent.trim(), url: r.url };
         return { kind: 'saved', url: r.url };
     }
@@ -295,7 +297,14 @@ $ybOfflineUserId = (int) ($user['id'] ?? (current_user()['id'] ?? 0));
     renderBar();
     if (mine().some(function (i) { return i.status === 'waiting'; })) flushSoon();
     setInterval(function () {
-        if (!netDown && mine().some(function (i) { return i.status === 'waiting'; })) flush();
+        if (netDown) {
+            // Still "no signal"? A weak signal often never fires the browser's
+            // 'online' event, so check quietly; a success flips the bar and
+            // sends anything waiting (see the fetch wrapper above).
+            fetch('/api/csrf.php?_=' + Date.now(), { credentials: 'same-origin' }).catch(function () {});
+        } else if (mine().some(function (i) { return i.status === 'waiting'; })) {
+            flush();
+        }
     }, 20000);
 })();
 </script>
