@@ -320,8 +320,10 @@ $_ybEmailPaused = function_exists('app_setting_on') && app_setting_on('email_pau
 // only on a bfcache restore, so this forces a fresh load exactly then, and
 // never on a normal navigation. (Chrome/Firefox already evict these pages;
 // this makes every browser behave the same.)
+// Not with no signal, though: the reload would swap a working page for the
+// browser's offline error (see _partials/offline_guard.php).
 window.addEventListener('pageshow', function (e) {
-    if (e.persisted) window.location.reload();
+    if (e.persisted && navigator.onLine && !(window.ybOffline && !window.ybOffline.online)) window.location.reload();
 });
 </script>
     <input type="checkbox" id="navToggle" class="nav-toggle-input">
@@ -456,6 +458,7 @@ window.addEventListener('pageshow', function (e) {
         </div>
     </aside>
 <?php require __DIR__ . '/support_widget.php'; ?>
+<?php require __DIR__ . '/offline_guard.php'; ?>
 <script>
 (function () {
     // Theme toggle. Writes the cookie (1 year) and flips the

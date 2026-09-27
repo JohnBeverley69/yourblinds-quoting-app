@@ -409,6 +409,19 @@ $activeNav = 'order-history';
 </div>
 
 <script>
+// Never lose a new customer's details: autosaved on this tablet. A new quote
+// needs the server to create it (it hands out the quote number), so with no
+// signal the form waits, with everything kept, rather than queueing.
+(function () {
+    if (!window.ybOffline) return;
+    ybOffline.protectForm(document.querySelector('form[action="/quote-builder/new.php"]'), 'qb.new', {
+        needsSignal: 'No signal right now. A new quote needs signal to be created, but everything you’ve '
+                   + 'typed is kept on this tablet. Tap “Create quote” again when the signal is back.'
+    });
+})();
+</script>
+
+<script>
 (function () {
     // Customer typeahead. When the user picks (or types an exact match for)
     // an option from the datalist:

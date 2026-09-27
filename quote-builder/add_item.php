@@ -24,6 +24,14 @@ $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 qb_require_quote_access($quote, $user, current_user_permissions());
 
+// Offline outbox: a blind saved on the tablet with no signal carries a one-off
+// client_ref. If the signal dropped AFTER we saved it but before the tablet got
+// the reply, the tablet sends it again. Seen that ref already? Don't add it twice.
+$clientRef = substr(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_POST['client_ref'] ?? '')), 0, 64);
+if ($clientRef !== '' && in_array($clientRef, $_SESSION['qb_client_refs'] ?? [], true)) {
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', 'Blind already added.');
+}
+
 if (!qb_is_editable($quote)) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
@@ -314,6 +322,9 @@ try {
     qb_reconcile_fascia_groups($pdo, $quoteId, $clientId, (int) ($quote['account_client_id'] ?? 0));
     qb_recompute_totals($quoteId);
     $pdo->commit();
+    if ($clientRef !== '') {
+        $_SESSION['qb_client_refs'] = array_slice(array_merge($_SESSION['qb_client_refs'] ?? [], [$clientRef]), -200);
+    }
     // The form has two submit buttons:
     //   "Add blind"          → next_action=more  → land back on Add-line
     //   "Add blind & finish" → next_action=stop  → land at top of editor
