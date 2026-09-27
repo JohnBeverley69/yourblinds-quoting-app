@@ -2460,6 +2460,81 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         if (qtyLabel) qtyLabel.textContent = perSlat ? 'Number of slats' : 'Quantity';
     }
 
+    // ---- Kept on the tablet for no-signal use -----------------------------
+    // Each product's pickers (systems, bands, options) and its fabric list are
+    // copied to this device whenever they're fetched, and all products are
+    // pre-fetched quietly while there IS signal. So if the signal drops mid-
+    // visit, the salesperson can still pick any product/fabric and save blinds
+    // (they're priced when the signal returns). Best-effort: storage full or
+    // unavailable just means "online only", exactly as before.
+    var CACHE_TTL = 6 * 3600 * 1000;
+    function cacheGet(k) { try { return JSON.parse(localStorage.getItem('yb.c.' + k) || 'null'); } catch (e) { return null; } }
+    function cachePut(k, v) { try { localStorage.setItem('yb.c.' + k, JSON.stringify({ at: Date.now(), v: v })); } catch (e) {} }
+
+    async function fetchProductData(pid) {
+        try {
+            var r = await fetch('/quote-builder/api/product-data.php?product_id='
+                                + encodeURIComponent(pid)
+                                + '&_=' + Date.now(),   // cache-buster: defeat any edge page-cache
+                                { credentials: 'same-origin' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var pd = await r.json();
+            if (pd.error) throw new Error(pd.error);
+            cachePut('pd.' + pid, pd);
+            return pd;
+        } catch (err) {
+            var hit = cacheGet('pd.' + pid);
+            if (hit && hit.v) return hit.v;   // no signal: use the copy on this tablet
+            throw err;
+        }
+    }
+
+    // Fabric list cache: one merged list per (product, system, band), searched
+    // on-device when there's no signal.
+    function fabricCacheKey() {
+        return 'fab.' + productSel.value + '.' + (systemSel.value || '') + '.' + (bandSel ? bandSel.value : '');
+    }
+    function rememberFabrics(key, items) {
+        var hit = cacheGet(key), byId = {};
+        ((hit && hit.v) || []).concat(items).forEach(function (f) { byId[f.id] = f; });
+        cachePut(key, Object.values(byId).slice(0, 600));
+    }
+    function searchCachedFabrics(query) {
+        var list = (cacheGet(fabricCacheKey()) || {}).v
+                || (cacheGet('fab.' + productSel.value + '..') || {}).v || [];
+        var band = bandSel ? bandSel.value.toLowerCase() : '';
+        var q = (query || '').toLowerCase().trim();
+        return list.filter(function (f) {
+            if (band && String(f.band || '').toLowerCase() !== band) return false;
+            if (!q) return true;
+            return [f.name, f.colour, f.code, f.supplier].join(' ').toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 200);
+    }
+
+    // While there's signal, quietly copy every product's pickers + fabric list
+    // to the tablet (one request at a time, skipping anything fetched in the
+    // last few hours), so a dropped signal later doesn't strand the visit.
+    function prefetchCatalogue() {
+        var ids = Array.prototype.map.call(productSel.options, function (o) { return o.value; })
+                       .filter(function (v) { return v; });
+        var i = 0;
+        (function next() {
+            if (i >= ids.length || !window.ybOffline || !ybOffline.online) return;
+            var pid = ids[i++];
+            var fresh = function (k) { var h = cacheGet(k); return h && (Date.now() - h.at) < CACHE_TTL; };
+            var jobs = [];
+            if (!fresh('pd.' + pid)) jobs.push(fetchProductData(pid).catch(function () {}));
+            if (!fresh('fab.' + pid + '..')) {
+                jobs.push(fetch('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(pid)
+                                + '&q=&limit=200&_=' + Date.now(), { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) { if (d && d.fabrics) rememberFabrics('fab.' + pid + '..', d.fabrics); })
+                    .catch(function () {}));
+            }
+            Promise.all(jobs).then(function () { setTimeout(next, jobs.length ? 400 : 0); });
+        })();
+    }
+
     async function loadProductData() {
         productData = null;
         clearFabric();
@@ -2488,13 +2563,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             extrasBox.innerHTML = '';
             extrasWrap.style.display = 'none';
 
-            var r = await fetch('/quote-builder/api/product-data.php?product_id='
-                                + encodeURIComponent(productSel.value)
-                                + '&_=' + Date.now(),   // cache-buster: defeat any edge page-cache
-                                { credentials: 'same-origin' });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            productData = await r.json();
-            if (productData.error) throw new Error(productData.error);
+            productData = await fetchProductData(productSel.value);
 
             // Systems dropdown.
             if (productData.systems.length === 0) {
@@ -2579,9 +2648,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 { credentials: 'same-origin' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             var data = await r.json();
+            rememberFabrics(fabricCacheKey(), data.fabrics || []);
             renderFabricResults(data.fabrics || []);
         } catch (err) {
-            fabricResults.innerHTML = '<div class="empty">Could not search fabrics.</div>';
+            // No signal: search the copy kept on this tablet instead.
+            var cached = searchCachedFabrics(query);
+            if (cached.length) {
+                renderFabricResults(cached);
+                return;
+            }
+            fabricResults.innerHTML = '<div class="empty">' + (window.ybOffline && !ybOffline.online
+                ? 'No signal, and this list isn’t saved on the tablet yet.'
+                : 'Could not search fabrics.') + '</div>';
             fabricResults.hidden = false;
             console.error(err);
         }
@@ -3361,6 +3439,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     function schedulePreview() {
         clearTimeout(previewTimer);
         previewTimer = setTimeout(runPreview, 250);
+        scheduleDraftSave();   // every change that re-prices is also worth keeping
     }
 
     // Emit one record per (extra, choice). For multi-pick extras with
@@ -3564,11 +3643,24 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             previewBox.innerHTML = bits.join(' &middot; ');
             setSubmitDisabled(false);
         } catch (err) {
+            if (noSignalPreview()) return;
             previewBox.className   = 'error';
             previewBox.textContent = 'Could not fetch live price.';
             setSubmitDisabled(true);
             console.error(err);
         }
+    }
+
+    // No signal: the price can't be worked out right now, but the blind can
+    // still be saved. It's kept on this tablet and priced + added when the
+    // signal is back (the server checks it then, exactly as it does today).
+    function noSignalPreview() {
+        if (!window.ybOffline || ybOffline.online) return false;
+        previewBox.className   = 'idle';
+        previewBox.textContent = 'No signal — the price will show when the signal is back. '
+                               + 'You can still save this blind: it’s kept on this tablet and added then.';
+        setSubmitDisabled(false);
+        return true;
     }
 
     // ---- Roller multi-blind live pricing panel -----------------------------
@@ -3714,6 +3806,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                                  + Number(data.total).toFixed(2) + '</strong> total';
             setSubmitDisabled(data.checked && !fits);
         } catch (err) {
+            if (noSignalPreview()) return;
             previewBox.className = 'error';
             previewBox.textContent = 'Could not fetch group price.';
             setSubmitDisabled(true);
@@ -3721,36 +3814,249 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         }
     }
 
-    // Roller multi-blind fan-out. On submit: the fascia-sizing / count / width
-    // groups are UI only — strip them so they never persist as priced extras.
-    // In Multi mode also hand the per-blind widths to the server (add_item.php
-    // creates one grouped line per width) and drop the placeholder Width.
-    var addItemForm = document.getElementById('add-item-form');
-    if (addItemForm) {
-        addItemForm.addEventListener('submit', function () {
-            var mode = fasciaSizingMode();
-            var widths = (mode === 'multi') ? multiBlindWidths() : [];
-            ['fascia_sizing', 'fascia_blind_count', 'fascia_blind_width'].forEach(function (code) {
-                xNodes('[data-extra-code="' + code + '"]').forEach(function (div) {
-                    div.querySelectorAll('[name]').forEach(function (el) { el.removeAttribute('name'); });
-                });
+    // What the line form sends. Roller multi-blind fan-out: the fascia-sizing /
+    // count / width groups are UI only, so they're left out and never persist as
+    // priced extras. In Multi mode the per-blind widths (and optional per-blind
+    // drops) go to the server instead (add_item.php creates one grouped line per
+    // width) and the placeholder Width is dropped. Built from the form WITHOUT
+    // changing it, so the form is intact if the save has to wait for signal.
+    function buildLinePayload(submitter) {
+        var strip = {};
+        ['fascia_sizing', 'fascia_blind_count', 'fascia_blind_width'].forEach(function (code) {
+            xNodes('[data-extra-code="' + code + '"]').forEach(function (div) {
+                div.querySelectorAll('[name]').forEach(function (el) { strip[el.name] = 1; });
             });
-            if (mode === 'multi') {
-                widths.forEach(function (w, i) {
-                    var h = document.createElement('input');
-                    h.type = 'hidden'; h.name = 'multi_fascia[widths][]'; h.value = w;
-                    addItemForm.appendChild(h);
-                    // Per-blind drop override (blank = use the shared drop), aligned by index.
-                    var d = (multiDropVals[i] !== undefined && String(multiDropVals[i]).trim() !== '') ? multiDropVals[i] : '';
-                    var hd = document.createElement('input');
-                    hd.type = 'hidden'; hd.name = 'multi_fascia[drops][]'; hd.value = d;
-                    addItemForm.appendChild(hd);
-                });
-                var flag = document.createElement('input');
-                flag.type = 'hidden'; flag.name = 'multi_fascia[active]'; flag.value = '1';
-                addItemForm.appendChild(flag);
-                if (widthIn) widthIn.disabled = true;   // "multi blind" placeholder — not a real width
+        });
+        var multi = fasciaSizingMode() === 'multi';
+        var pairs = [];
+        new FormData(form).forEach(function (v, k) {
+            if (typeof v !== 'string' || strip[k]) return;
+            if (multi && k === 'width') return;   // "multi blind" placeholder — not a real width
+            pairs.push([k, v]);
+        });
+        if (submitter && submitter.name) pairs.push([submitter.name, submitter.value]);
+        if (multi) {
+            multiBlindWidths().forEach(function (w, i) {
+                pairs.push(['multi_fascia[widths][]', String(w)]);
+                // Per-blind drop override (blank = use the shared drop), aligned by index.
+                var d = (multiDropVals[i] !== undefined && String(multiDropVals[i]).trim() !== '') ? multiDropVals[i] : '';
+                pairs.push(['multi_fascia[drops][]', String(d)]);
+            });
+            pairs.push(['multi_fascia[active]', '1']);
+        }
+        return pairs;
+    }
+
+    // ---- Never lose a blind -----------------------------------------------
+    // The line form autosaves to this tablet as it's filled in, and saving goes
+    // in the background: with signal it's saved as before; with no signal (or
+    // signed out) it's kept on the tablet in the "waiting to send" list below
+    // and sent automatically when the signal is back (_partials/offline_guard.php).
+    // A blind the server turns down keeps everything typed and shows why.
+    var OFF       = window.ybOffline || null;
+    var quoteId   = (form.querySelector('input[name="quote_id"]') || {}).value || '';
+    var itemIdIn  = form.querySelector('input[name="item_id"]');
+    var draftKey  = 'qb.line.' + quoteId + '.' + (itemIdIn ? itemIdIn.value : 'new');
+    var roomIn    = document.getElementById('item-room');
+    var notesIn   = document.getElementById('item-notes');
+    var draftReady = false, draftBaseline = '', draftTimer = null, submitting = false;
+
+    function lineSnapshot() {
+        return {
+            product_id: productSel.value, system_id: systemSel.value, option_id: fabricId.value,
+            fabric_label: fabricSearch.value, fabric_band: bandSel ? bandSel.value : '',
+            fabric_band_lc: currentFabricBand,
+            room: roomIn ? roomIn.value : '', width: widthIn.value, drop: dropIn.value,
+            qty: qtyIn.value, notes: notesIn ? notesIn.value : '',
+            rate: rateOverrideIn ? rateOverrideIn.value : '', disc: discOverrideIn ? discOverrideIn.value : '',
+            extras: collectExtras(), multiDrops: multiDropVals
+        };
+    }
+    function snapKey(s) { var c = Object.assign({}, s); delete c.savedAt; return JSON.stringify(c); }
+    function describeLine(s) {
+        var opt = productSel.querySelector('option[value="' + CSS.escape(String(s.product_id || '')) + '"]');
+        var bits = [];
+        if (s.room) bits.push(s.room);
+        if (opt) bits.push(opt.textContent.trim());
+        var size = [s.width, s.drop].filter(function (x) { return String(x || '').trim(); }).join(' × ');
+        if (size) bits.push(size + (measureUnit ? ' ' + measureUnit : ''));
+        return bits.join(' — ') || 'Blind';
+    }
+    function scheduleDraftSave() {
+        if (!OFF || !draftReady) return;
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(function () {
+            var s = lineSnapshot();
+            if (snapKey(s) === draftBaseline) OFF.draft.clear(draftKey);
+            else OFF.draft.save(draftKey, s);
+        }, 300);
+    }
+    form.addEventListener('input', scheduleDraftSave);
+    form.addEventListener('change', scheduleDraftSave);
+
+    // Put a saved blind back into the form (a draft, or a "waiting" one).
+    async function restoreLine(d) {
+        productSel.value = String(d.product_id || '');
+        await loadProductData();
+        await applyEditingValues({
+            system_id: d.system_id || null, option_id: d.option_id,
+            fabric_label: d.fabric_label, fabric_band: d.fabric_band, extras: d.extras || []
+        });
+        if (d.fabric_band_lc) currentFabricBand = d.fabric_band_lc;
+        if (roomIn)  roomIn.value  = d.room  || '';
+        widthIn.value = d.width || '';
+        dropIn.value  = d.drop  || '';
+        qtyIn.value   = d.qty   || '1';
+        if (notesIn) notesIn.value = d.notes || '';
+        if (rateOverrideIn) { rateOverrideIn.value = d.rate || ''; syncRateOverride(); }
+        if (discOverrideIn) discOverrideIn.value = d.disc || '';
+        multiDropVals = d.multiDrops || {};
+        schedulePreview();
+    }
+
+    // Ready for the next blind after one was kept on the tablet: same product,
+    // system, fabric and options (a house is usually measured for one range);
+    // the room, sizes and note start fresh.
+    function resetForNextBlind() {
+        if (roomIn)  roomIn.value = '';
+        widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';
+        if (notesIn) notesIn.value = '';
+        multiDropVals = {};
+        draftBaseline = snapKey(lineSnapshot());
+        OFF.draft.clear(draftKey);
+        schedulePreview();
+        if (roomIn) roomIn.focus();
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (submitting) return;
+        var pairs = buildLinePayload(e.submitter);
+        var nextAction = (e.submitter && e.submitter.name === 'next_action') ? e.submitter.value : 'stop';
+        var action = form.getAttribute('action');
+        if (!OFF) {   // shouldn't happen (sidebar always loads it) — fall back to a plain post
+            pairs.forEach(function (p) {
+                var h = document.createElement('input'); h.type = 'hidden'; h.name = p[0]; h.value = p[1];
+                form.appendChild(h);
+            });
+            HTMLFormElement.prototype.submit.call(form);
+            return;
+        }
+        // One-off ref: if the signal drops after the server saved this blind but
+        // before we heard back, the resend is recognised and not added twice.
+        if (!itemIdIn) pairs.push(['client_ref', Date.now().toString(36) + Math.random().toString(36).slice(2, 10)]);
+
+        submitting = true;
+        setSubmitDisabled(true);
+        var res = OFF.online ? await OFF.send(action, pairs) : { kind: 'offline' };
+        submitting = false;
+
+        if (res.kind === 'saved') {
+            OFF.draft.clear(draftKey);
+            location.href = res.url + (nextAction === 'more' && !itemIdIn ? '#add-line' : '');
+            return;
+        }
+        if (res.kind === 'rejected') {
+            previewBox.className   = 'error';
+            previewBox.textContent = res.message;   // what's typed stays put
+            setSubmitDisabled(false);
+            return;
+        }
+        // No signal / signed out: keep it on the tablet.
+        var snap = lineSnapshot();
+        var item = OFF.outbox.add({
+            scope: quoteId, action: action, pairs: pairs, kind: 'line',
+            itemId: itemIdIn ? itemIdIn.value : '', draft: snap, summary: describeLine(snap)
+        });
+        if (!item) {
+            previewBox.className   = 'error';
+            previewBox.textContent = 'This tablet is out of storage space, so the blind could not be kept. '
+                                   + 'Leave it on screen and save again when there’s signal.';
+            setSubmitDisabled(false);
+            return;
+        }
+        previewBox.className   = 'idle';
+        previewBox.textContent = res.kind === 'login'
+            ? '✓ Kept on this tablet. You’ve been signed out — sign in again and it will be sent.'
+            : '✓ Kept on this tablet — it’ll be priced and added when the signal is back.';
+        if (itemIdIn) {
+            OFF.draft.clear(draftKey);
+            draftBaseline = snapKey(lineSnapshot());
+        } else {
+            resetForNextBlind();
+        }
+        setSubmitDisabled(false);
+    });
+
+    // "Waiting to send" list for this quote, above the line form.
+    var outboxPanel = document.createElement('div');
+    outboxPanel.className = 'yb-restore-bar';
+    outboxPanel.style.display = 'none';
+    outboxPanel.style.flexDirection = 'column';
+    outboxPanel.style.alignItems = 'stretch';
+    form.parentNode.insertBefore(outboxPanel, form);
+    function renderOutboxPanel() {
+        if (!OFF) return;
+        var items = OFF.outbox.list(quoteId);
+        outboxPanel.style.display = items.length ? 'flex' : 'none';
+        outboxPanel.innerHTML = '';
+        if (!items.length) return;
+        var head = document.createElement('strong');
+        head.textContent = 'Kept on this tablet, not on the quote yet (' + items.length + ')';
+        outboxPanel.appendChild(head);
+        items.forEach(function (it) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center';
+            var label = document.createElement('span');
+            label.style.flex = '1 1 220px';
+            label.textContent = (it.itemId ? 'Change to line — ' : '') + it.summary + ' · '
+                + (it.status === 'rejected' ? 'not added: ' + (it.error || 'please check') : 'waiting to send');
+            if (it.status === 'rejected') label.style.color = '#9b1c1c';
+            row.appendChild(label);
+            if (it.kind === 'line') {
+            var back = document.createElement('button');
+            back.type = 'button'; back.textContent = 'Put back in the form';
+            back.addEventListener('click', async function () {
+                if (it.itemId && !itemIdIn) {
+                    // A change to an existing line: reopen that line, then offer it.
+                    OFF.draft.save('qb.line.' + quoteId + '.' + it.itemId, it.draft);
+                    OFF.outbox.remove(it.id);
+                    location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(quoteId)
+                                  + '&edit_item=' + encodeURIComponent(it.itemId) + '#add-line';
+                    return;
+                }
+                OFF.outbox.remove(it.id);
+                await restoreLine(it.draft);
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            row.appendChild(back);
             }
+            var del = document.createElement('button');
+            del.type = 'button'; del.textContent = 'Delete';
+            del.addEventListener('click', function () {
+                if (confirm('Delete this from the tablet? It hasn’t been saved to the quote.')) OFF.outbox.remove(it.id);
+            });
+            row.appendChild(del);
+            outboxPanel.appendChild(row);
+        });
+    }
+    if (OFF) {
+        OFF.onChange(renderOutboxPanel);
+        renderOutboxPanel();
+        // Blinds for THIS quote went through: show them. Reload straight away
+        // unless something is half-typed in the form (then offer a button).
+        document.addEventListener('yb:outbox-sent', function (ev) {
+            var ours = (ev.detail.items || []).filter(function (i) { return i.scope === String(quoteId); });
+            if (!ours.length) return;
+            if (snapKey(lineSnapshot()) === draftBaseline) { location.reload(); return; }
+            previewBox.className = 'success';
+            previewBox.innerHTML = '';
+            var msg = document.createElement('span');
+            msg.textContent = ours.length + (ours.length === 1 ? ' saved blind was' : ' saved blinds were') + ' added. ';
+            var btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = 'Refresh the list';
+            btn.addEventListener('click', function () { location.reload(); });
+            previewBox.appendChild(msg); previewBox.appendChild(btn);
         });
     }
 
@@ -3866,19 +4172,41 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     var qs = new URLSearchParams(window.location.search);
     var jumpToForm = qs.has('edit_item');
 
-    if (productSel.value) {
-        (async function () {
+    (async function () {
+        if (productSel.value) {
             await loadProductData();
             if (window.__editingBlind__) {
                 await applyEditingValues(window.__editingBlind__);
             }
             if (jumpToForm) scrollToAddLine();
-        })();
-    } else if (jumpToForm) {
-        // No product picked yet but we're in edit mode anyway — still
-        // worth scrolling so the user lands on the form.
-        scrollToAddLine();
-    }
+        } else if (jumpToForm) {
+            // No product picked yet but we're in edit mode anyway — still
+            // worth scrolling so the user lands on the form.
+            scrollToAddLine();
+        }
+        if (!OFF) return;
+
+        // The form as the page drew it: only changes from this get autosaved.
+        draftBaseline = snapKey(lineSnapshot());
+        draftReady = true;
+
+        // A blind left half-done (page reloaded, tablet slept, battery died…)?
+        var saved = OFF.draft.load(draftKey);
+        if (saved && snapKey(saved) !== draftBaseline) {
+            OFF.restoreBar(form, 'You have an unsaved blind from ' + OFF.when(saved.savedAt)
+                               + ' (' + describeLine(saved) + ').',
+                function () { restoreLine(saved); },
+                function () { OFF.draft.clear(draftKey); });
+        } else if (saved) {
+            OFF.draft.clear(draftKey);
+        }
+        // A new quote we just created has landed — its draft is done with.
+        var nq = OFF.draft.load('qb.new');
+        if (nq && nq.submitted) OFF.draft.clear('qb.new');
+
+        // Quietly copy the catalogue's pickers to the tablet while there's signal.
+        setTimeout(prefetchCatalogue, 3000);
+    })();
 })();
 </script>
 
@@ -3907,6 +4235,19 @@ window.__editingBlind__ = <?= json_encode([
 </script>
 <?php endif; ?>
 <?php endif; ?>
+
+<script>
+// Never lose the customer details either: autosaved on this tablet, and a save
+// with no signal waits in the tablet's outbox (_partials/offline_guard.php).
+(function () {
+    var f = document.querySelector('form[action="/quote-builder/save_details.php"]');
+    if (!f || !window.ybOffline) return;
+    var q = (f.querySelector('input[name="quote_id"]') || {}).value || '';
+    ybOffline.protectForm(f, 'qb.details.' + q, {
+        queue: true, scope: q, summary: function () { return 'Customer details'; }
+    });
+})();
+</script>
 
 <script>
 (function () {
