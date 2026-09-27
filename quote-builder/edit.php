@@ -2308,6 +2308,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 </div>
 
 <?php if ($editable): ?>
+<script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
 <script>
 (function () {
     'use strict';
@@ -3576,10 +3577,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
 
         try {
-            params.append('_', Date.now());   // cache-buster
-            var r = await fetch('/quote-builder/api/preview.php?' + params,
-                                { credentials: 'same-origin' });
-            var data = await r.json();
+            var data = await fetchPreview(params);
             if (data.error) {
                 previewBox.className   = 'error';
                 previewBox.textContent = data.error;
@@ -3635,6 +3633,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // Headline first normally; last on a trade line so it reads
             // base → discount → buying price.
             if (priceLast) { bits.push(headline); } else { bits.unshift(headline); }
+            if (data.offline) bits.push(offlinePriceNote(data));
+            lastTabletPrice = data.offline ? Number(data.line_total) : null;
             // Rounded-up cell size used to be shown here ("rounded up
             // to 1600 × 2000 mm") — trade users found it noisy / not
             // actionable, since the engine always rounds up to the
@@ -3649,6 +3649,32 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             setSubmitDisabled(true);
             console.error(err);
         }
+    }
+
+    // The live price. With signal: the server (api/preview.php). With no signal,
+    // on a tablet set up for offline: the SAME pricing code running on the
+    // tablet (offline/engine.js), answering in the same shape plus offline:true.
+    // The server re-prices the blind when it's sent, as it always does.
+    var lastTabletPrice = null;   // the line total the tablet worked out, if it priced this line offline
+    async function fetchPreview(params) {
+        lastTabletPrice = null;
+        try {
+            var r = await fetch('/quote-builder/api/preview.php?' + params + '&_=' + Date.now(),
+                                { credentials: 'same-origin' });
+            return await r.json();
+        } catch (err) {
+            if (window.ybEngine && ybEngine.enabled() && window.ybOffline && !ybOffline.online) {
+                return await ybEngine.preview(params.toString());
+            }
+            throw err;
+        }
+    }
+    function offlinePriceNote(data) {
+        var d = data.catalogue_date ? new Date(data.catalogue_date + 'T12:00:00') : null;
+        var stale = window.ybEngine && ybEngine.status().stale;
+        return '<em style="color:' + (stale ? '#8a4b00' : 'inherit') + '">tablet price'
+             + (stale && d ? ' from ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' }) : '')
+             + ' — checked when sent</em>';
     }
 
     // No signal: the price can't be worked out right now, but the blind can
@@ -3768,9 +3794,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         });
 
         try {
-            params.append('_', Date.now());
-            var r = await fetch('/quote-builder/api/preview.php?' + params, { credentials: 'same-origin' });
-            var data = await r.json();
+            var data = await fetchPreview(params);
             if (!data || !data.multi) {
                 previewBox.className = 'error';
                 previewBox.textContent = (data && data.error) || 'Could not price the group.';
@@ -3803,7 +3827,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             }
             previewBox.className = 'success';
             previewBox.innerHTML = '<strong>' + data.count + ' blinds</strong> under one fascia — <strong>£'
-                                 + Number(data.total).toFixed(2) + '</strong> total';
+                                 + Number(data.total).toFixed(2) + '</strong> total'
+                                 + (data.offline ? ' &middot; ' + offlinePriceNote(data) : '');
             setSubmitDisabled(data.checked && !fits);
         } catch (err) {
             if (noSignalPreview()) return;
@@ -3966,7 +3991,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         var snap = lineSnapshot();
         var item = OFF.outbox.add({
             scope: quoteId, action: action, pairs: pairs, kind: 'line',
-            itemId: itemIdIn ? itemIdIn.value : '', draft: snap, summary: describeLine(snap)
+            itemId: itemIdIn ? itemIdIn.value : '', draft: snap, tabletPrice: lastTabletPrice,
+            summary: describeLine(snap) + (lastTabletPrice !== null ? ' · £' + lastTabletPrice.toFixed(2) + ' (tablet price)' : '')
         });
         if (!item) {
             previewBox.className   = 'error';
@@ -3978,7 +4004,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         previewBox.className   = 'idle';
         previewBox.textContent = res.kind === 'login'
             ? '✓ Kept on this tablet. You’ve been signed out — sign in again and it will be sent.'
-            : '✓ Kept on this tablet — it’ll be priced and added when the signal is back.';
+            : '✓ Kept on this tablet — it’ll be added when the signal is back'
+              + (lastTabletPrice !== null ? ' (the server checks the price then).' : ' and priced then.');
         if (itemIdIn) {
             OFF.draft.clear(draftKey);
             draftBaseline = snapKey(lineSnapshot());
@@ -3995,6 +4022,15 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     outboxPanel.style.flexDirection = 'column';
     outboxPanel.style.alignItems = 'stretch';
     form.parentNode.insertBefore(outboxPanel, form);
+
+    // "Prices with no signal" switch + status (offline/engine.js). Offline mode
+    // is for tablets, so the set-up offer only shows on touch screens. A device
+    // that's already set up always shows its status.
+    if (window.ybEngine && (ybEngine.enabled() || window.matchMedia('(pointer: coarse)').matches)) {
+        var engineStatus = document.createElement('div');
+        form.parentNode.insertBefore(engineStatus, outboxPanel);
+        ybEngine.mountStatus(engineStatus);
+    }
     function renderOutboxPanel() {
         if (!OFF) return;
         var items = OFF.outbox.list(quoteId);

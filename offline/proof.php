@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/_engine_files.php';
 requireSuperAdmin();
 header('Cache-Control: no-store');
 
@@ -22,11 +23,7 @@ $n        = max(1, min(2000, (int) ($_GET['n'] ?? 300)));
 
 // The PHP the device runs, shipped as text. The repo is public, so this is no
 // more than anyone can already read — and the page is super-admin only anyway.
-$sources = [
-    'pricing_engine.php'  => file_get_contents(__DIR__ . '/../_partials/pricing_engine.php'),
-    'price_source.php'    => file_get_contents(__DIR__ . '/../_partials/price_source.php'),
-    'parity_harness.php'  => file_get_contents(__DIR__ . '/_parity_harness.php'),
-];
+$sources = offline_engine_sources();   // [repo path => source], see _engine_files.php
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -93,10 +90,12 @@ try {
 
   // 3. Run the engine on the device.
   t = performance.now();
-  php.mkdir('/app');
-  for (const [name, code] of Object.entries(SOURCES)) php.writeFile('/app/' + name, code);
+  for (const [path, code] of Object.entries(SOURCES)) {
+    php.mkdir('/app/' + path.split('/').slice(0, -1).join('/'));
+    php.writeFile('/app/' + path, code);
+  }
   php.writeFile('/app/data.json', body);
-  const r = await php.run({ scriptPath: '/app/parity_harness.php' });
+  const r = await php.run({ scriptPath: '/app/offline/_parity_harness.php' });
   step('Build catalogue + price every line', since(t));
   if (r.errors) step('PHP warnings', r.errors.slice(0, 500));
 

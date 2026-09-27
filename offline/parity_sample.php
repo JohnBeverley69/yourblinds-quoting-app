@@ -21,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/pricing_engine.php';
+require_once __DIR__ . '/_catalogue_export.php';
 requireSuperAdmin();
 
 header('Cache-Control: no-store');
@@ -56,86 +57,11 @@ if ($clientId <= 0) {
     exit;
 }
 
-// Only what pe_calculate_item() reads. An explicit list (not SELECT *) so
-// nothing sensitive in a wider row (e.g. client_settings API keys) ever leaves.
-// Columns that don't exist on this database are simply dropped — the engine's
-// own schema probes then take the same fallback path on the device.
-$TABLES = [
-    'products'                => ['id', 'client_id', 'name', 'cost_price', 'requires_option', 'width_only', 'price_per_slat',
-                                  'price_per_sqm', 'min_area_m2', 'line_charge', 'price_source', 'source_client_id',
-                                  'source_product_id', 'active'],
-    'product_systems'         => ['id', 'client_id', 'product_id', 'name', 'active'],
-    'product_options'         => ['id', 'client_id', 'product_id', 'band_code', 'supplier_name', 'name', 'colour', 'code',
-                                  'cost_price', 'active'],
-    'price_tables'            => ['id', 'client_id', 'product_id', 'system_id', 'band_code', 'name', 'active'],
-    'price_table_rows'        => ['id', 'price_table_id', 'width_mm', 'drop_mm', 'price'],
-    'product_extras'          => ['id', 'client_id', 'product_id', 'name', 'parent_choice_id', 'length_input_label',
-                                  'is_width_source', 'source_extra_id', 'active'],
-    'product_extra_choices'   => ['id', 'product_extra_id', 'system_id', 'label', 'price_delta', 'price_percent',
-                                  'price_per_metre', 'cost_price', 'markup_pct_override', 'per_metre_basis',
-                                  'length_input_label', 'price_per_unit', 'face_value', 'source_choice_id', 'active'],
-    'extra_choice_price_rows' => ['id', 'product_extra_choice_id', 'width_mm', 'price'],
-    'client_settings'         => ['client_id', 'default_price_table_markup_pct', 'default_options_markup_pct'],
-    'client_markups'          => ['id', 'client_id', 'product_id', 'system_id', 'markup_percent'],
-    'client_discounts'        => ['id', 'client_id', 'product_id', 'system_id', 'discount_percent'],
-    'trade_discounts'         => ['id', 'client_id', 'product_id', 'system_id', 'band_code', 'extra_id', 'choice_id',
-                                  'discount_percent', 'active'],
-    'trade_promotions'        => ['id', 'client_id', 'product_id', 'system_id', 'band_code', 'extra_id', 'choice_id',
-                                  'discount_percent', 'active', 'starts_on', 'ends_on'],
-];
-
-// Tenant scope for each table.
+// The catalogue: the same export the tablet downloads (offline/_catalogue_export.php),
+// with costs, so every engine field can be compared.
+$out = offline_export_catalogue($pdo, $clientId, true);
+$out['cases'] = [];
 $c = $clientId;
-$WHERE = [
-    'products'                => ['client_id = ?', [$c]],
-    'product_systems'         => ['client_id = ?', [$c]],
-    'product_options'         => ['client_id = ?', [$c]],
-    'price_tables'            => ['client_id = ?', [$c]],
-    'price_table_rows'        => ['price_table_id IN (SELECT id FROM price_tables WHERE client_id = ?)', [$c]],
-    'product_extras'          => ['client_id = ?', [$c]],
-    'product_extra_choices'   => ['product_extra_id IN (SELECT id FROM product_extras WHERE client_id = ?)', [$c]],
-    'extra_choice_price_rows' => ['product_extra_choice_id IN (SELECT pc.id FROM product_extra_choices pc
-                                    JOIN product_extras pe ON pe.id = pc.product_extra_id WHERE pe.client_id = ?)', [$c]],
-    'client_settings'         => ['client_id = ?', [$c]],
-    'client_markups'          => ['client_id = ?', [$c]],
-    'client_discounts'        => ['client_id = ?', [$c]],
-    'trade_discounts'         => ['client_id = ?', [$c]],
-    'trade_promotions'        => ['client_id IS NULL OR client_id = ?', [$c]],
-];
-
-$out = [
-    'client_id'         => $clientId,
-    'factory_client_id' => factory_client_id(),
-    'today'             => (string) $pdo->query('SELECT CURDATE()')->fetchColumn(),
-    'generated_at'      => date('c'),
-    'schema'            => [],
-    'data'              => [],
-    'cases'             => [],
-];
-
-$colInfo = $pdo->prepare(
-    'SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?'
-);
-foreach ($TABLES as $table => $wanted) {
-    $colInfo->execute([$table]);
-    $have = [];
-    foreach ($colInfo->fetchAll() as $ci) $have[$ci['COLUMN_NAME']] = strtolower((string) $ci['DATA_TYPE']);
-    if (!$have) continue;   // table not on this database — engine falls back the same way offline
-
-    $cols = array_values(array_filter($wanted, static fn ($col) => isset($have[$col])));
-    $out['schema'][$table] = [];
-    foreach ($cols as $col) {
-        $t = $have[$col];
-        $out['schema'][$table][$col] = in_array($t, ['tinyint', 'smallint', 'mediumint', 'int', 'bigint'], true) ? 'INTEGER'
-            : (in_array($t, ['decimal', 'float', 'double'], true) ? 'REAL' : 'TEXT');
-    }
-    [$w, $args] = $WHERE[$table];
-    $st = $pdo->prepare('SELECT `' . implode('`, `', $cols) . "` FROM `$table` WHERE $w");
-    $st->execute($args);
-    // Rows as positional lists (column order = schema order) — keeps the file small.
-    $out['data'][$table] = $st->fetchAll(PDO::FETCH_NUM);
-}
 
 // ---------------------------------------------------------------------------
 // Random quote lines, priced by the live engine = the expected answers.

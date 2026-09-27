@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * OFFLINE PRICING PROOF — the on-device half. Not a web page: /offline/proof.php
  * ships this file's SOURCE to the browser, where it runs inside PHP-in-WebAssembly
- * next to an unmodified copy of _partials/pricing_engine.php.
+ * next to an unmodified copy of _partials/pricing_engine.php (files at /app/<repo path>).
  *
  * Reads /app/data.json (parity_sample.php output), builds a SQLite catalogue,
  * prices every case with pe_calculate_item() and compares each result with the
@@ -13,9 +13,8 @@ declare(strict_types=1);
  * Also runs from the CLI for a local check:  php _parity_harness.php data.json
  */
 
-$dataFile   = $argv[1] ?? '/app/data.json';
+$dataFile = $argv[1] ?? '/app/data.json';
 if (!is_file($dataFile)) { http_response_code(404); exit; }   // requested over the web on the server — nothing to do
-$engineFile = is_file('/app/pricing_engine.php') ? '/app/pricing_engine.php' : __DIR__ . '/../_partials/pricing_engine.php';
 
 ini_set('memory_limit', '1024M');   // a whole catalogue decoded at once
 $t0 = microtime(true);
@@ -27,57 +26,15 @@ define('OFFLINE_FACTORY_CLIENT_ID', (int) $d['factory_client_id']);
 if (!function_exists('factory_client_id')) {
     function factory_client_id(): int { return OFFLINE_FACTORY_CLIENT_ID; }
 }
-require $engineFile;
+require __DIR__ . '/../_partials/pricing_engine.php';
+require __DIR__ . '/_device_catalogue.php';
 
 // ---------------------------------------------------------------------------
-// 1. Build the SQLite catalogue.
+// 1. Build the SQLite catalogue, exactly as the tablet does (_device_catalogue.php).
 // ---------------------------------------------------------------------------
-$pdo = new PDO('sqlite::memory:');
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-// MySQL's CURDATE() — pinned to the server's date when the snapshot was taken,
-// so date-windowed promotions resolve exactly as they did on the server.
-$today = (string) $d['today'];
-$pdo->sqliteCreateFunction('CURDATE', static fn () => $today, 0);
-// MySQL's *_ci collations match text case-insensitively and ignore trailing
-// spaces ("50mm Tape" = "50mm tape "); SQLite compares bytes. Without this, a band
-// code typed slightly differently on a fabric vs its price table still prices on
-// the server but finds "No price table" offline. Every TEXT column uses it.
-$pdo->sqliteCreateCollation('MYSQL_CI', static fn ($a, $b) =>
-    strcmp(mb_strtolower(rtrim((string) $a, ' ')), mb_strtolower(rtrim((string) $b, ' '))));
-
-$INDEXES = [
-    'price_table_rows'        => ['price_table_id, width_mm, drop_mm', 'price_table_id, drop_mm'],
-    'price_tables'            => ['client_id, product_id, system_id, band_code'],
-    'extra_choice_price_rows' => ['product_extra_choice_id, width_mm'],
-    'product_extra_choices'   => ['product_extra_id'],
-    'product_extras'          => ['product_id'],
-    'product_options'         => ['product_id'],
-    'client_markups'          => ['client_id, product_id, system_id'],
-    'client_discounts'        => ['client_id, product_id, system_id'],
-    'trade_discounts'         => ['client_id, product_id'],
-];
-
-$rowCount = 0;
-$pdo->beginTransaction();
-foreach ($d['schema'] as $table => $cols) {
-    $defs = [];
-    foreach ($cols as $col => $type) {
-        $defs[] = '"' . $col . '" ' . $type . ($type === 'TEXT' ? ' COLLATE MYSQL_CI' : '')
-                . ($col === 'id' ? ' PRIMARY KEY' : '');
-    }
-    $pdo->exec('CREATE TABLE "' . $table . '" (' . implode(', ', $defs) . ')');
-    foreach ($INDEXES[$table] ?? [] as $i => $idxCols) {
-        $pdo->exec("CREATE INDEX \"ix_{$table}_{$i}\" ON \"{$table}\" ({$idxCols})");
-    }
-    $ins = $pdo->prepare('INSERT INTO "' . $table . '" VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')');
-    foreach ($d['data'][$table] ?? [] as $row) {
-        $ins->execute($row);
-        $rowCount++;
-    }
-}
-$pdo->commit();
-$tBuilt = microtime(true);
+$pdo      = offline_sqlite_open(':memory:', (string) $d['today']);
+$rowCount = offline_sqlite_build($pdo, $d);
+$tBuilt   = microtime(true);
 
 // ---------------------------------------------------------------------------
 // 2. Price every case and compare with the server.

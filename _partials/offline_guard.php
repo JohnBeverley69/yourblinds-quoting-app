@@ -301,6 +301,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     // bfcache "Back": the sidebar guard reloads to avoid stale pages, but with
     // no signal a reload would swap the page for the browser's offline error.
     window.ybOffline = {
+        userId: USER_ID,
         go: go,
         get online() { return !netDown && navigator.onLine; },
         draft: draft, outbox: outbox, send: send, protectForm: protectForm,
