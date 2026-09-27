@@ -18,7 +18,7 @@ declare(strict_types=1);
  * Needs $user (current_user()) in scope, as sidebar.php already does.
  */
 
-$ybOfflineUserId = (int) ($user['id'] ?? (current_user()['id'] ?? 0));
+$ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
 ?>
 <style>
   #yb-net-bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9990;display:none;
@@ -273,7 +273,7 @@ $ybOfflineUserId = (int) ($user['id'] ?? (current_user()['id'] ?? 0));
             btns.forEach(function (b) { b.disabled = true; });
             var res = await send(form.getAttribute('action'), pairs);
             btns.forEach(function (b) { b.disabled = false; });
-            if (res.kind === 'saved') { draft.clear(key); location.href = res.url; return; }
+            if (res.kind === 'saved') { draft.clear(key); go(res.url); return; }
             if (res.kind === 'rejected') { alert(res.message); return; }
             var item = outbox.add({ scope: opts.scope, action: form.getAttribute('action'), pairs: pairs,
                                     summary: opts.summary ? opts.summary() : 'Saved changes' });
@@ -285,9 +285,23 @@ $ybOfflineUserId = (int) ($user['id'] ?? (current_user()['id'] ?? 0));
         });
     }
 
+    // Go to a page the server just sent us to. If it's THIS page with only a
+    // different #anchor, a plain assignment would just scroll, not reload
+    // (so a newly saved blind wouldn't show), so reload explicitly.
+    function go(url, hash) {
+        url = String(url).split('#')[0];
+        if (url === location.href.split('#')[0]) {
+            history.replaceState(null, '', url + (hash || ''));
+            location.reload();
+        } else {
+            location.href = url + (hash || '');
+        }
+    }
+
     // bfcache "Back": the sidebar guard reloads to avoid stale pages, but with
     // no signal a reload would swap the page for the browser's offline error.
     window.ybOffline = {
+        go: go,
         get online() { return !netDown && navigator.onLine; },
         draft: draft, outbox: outbox, send: send, protectForm: protectForm,
         restoreBar: restoreBar, when: when,

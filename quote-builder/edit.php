@@ -3953,7 +3953,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
         if (res.kind === 'saved') {
             OFF.draft.clear(draftKey);
-            location.href = res.url + (nextAction === 'more' && !itemIdIn ? '#add-line' : '');
+            OFF.go(res.url, nextAction === 'more' && !itemIdIn ? '#add-line' : '');
             return;
         }
         if (res.kind === 'rejected') {
