@@ -27,5 +27,5 @@ if (!is_logged_in()) {
 
 echo json_encode([
     'token'   => csrf_token(),
-    'user_id' => (int) (current_user()['id'] ?? 0),
+    'user_id' => (int) (current_user()['user_id'] ?? 0),
 ]);
