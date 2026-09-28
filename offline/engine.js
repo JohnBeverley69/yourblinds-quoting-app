@@ -383,8 +383,14 @@
         + (ready && lastStartMs ? ' Engine ready (started in ' + (lastStartMs / 1000).toFixed(1) + ' s).' : '');
       if (s.stale || !listsOk) el.classList.add('is-stale');
       btns.push(['Update now', async function (b) {
+        // Updating needs signal: say so instead of silently doing nothing.
+        if (!online()) {
+          txt.textContent = 'No signal — Update now needs WiFi or a signal. Turn flight mode off, reload the page, then try again.';
+          return;
+        }
         b.disabled = true; txt.textContent = 'Updating…';
-        await refresh(true, function (m) { txt.textContent = m; }); changed();
+        await refresh(true, function (m) { txt.textContent = m; });
+        changed();
       }]);
       btns.push(['Turn off', function () {
         if (confirm('Stop keeping prices on this tablet? You can set it up again any time with signal.')) turnOff();
