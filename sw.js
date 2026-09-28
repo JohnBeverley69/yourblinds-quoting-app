@@ -18,12 +18,20 @@ const KEEP_MS = 14 * 24 * 3600 * 1000;
 const META = 'yb-sw-meta';
 
 let currentUser = null;   // the user whose pages we save / serve
-// Test aid: {type:'simulate-offline', on:true} makes page loads behave as if
-// there's no signal (a desktop browser can't be put in flight mode from a test).
-// Held in memory only, so it's gone the next time the helper restarts.
-let simulateOffline = false;
-function net(req, init) {
-  return simulateOffline ? Promise.reject(new TypeError('Failed to fetch (simulated no signal)')) : fetch(req, init);
+// Test / demo aid: {type:'simulate-offline', on:true} makes page loads behave as
+// if there's no signal (a desktop browser can't be put in flight mode). Set from
+// the page by ybOffline.simulate(); remembered across helper restarts.
+let simulateOffline = null;
+async function simulating() {
+  if (simulateOffline === null) {
+    const m = await (await caches.open(META)).match('/__yb_sim');
+    simulateOffline = m ? (await m.text()) === '1' : false;
+  }
+  return simulateOffline;
+}
+async function net(req, init) {
+  if (await simulating()) throw new TypeError('Failed to fetch (simulated no signal)');
+  return fetch(req, init);
 }
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -199,7 +207,10 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
   const msg = event.data || {};
   if (msg.type === 'user') event.waitUntil(setUser(msg.uid));
-  if (msg.type === 'simulate-offline') simulateOffline = !!msg.on;
+  if (msg.type === 'simulate-offline') {
+    simulateOffline = !!msg.on;
+    event.waitUntil(caches.open(META).then((c) => c.put('/__yb_sim', new Response(simulateOffline ? '1' : '0'))));
+  }
   if (msg.type === 'save' && msg.urls) {
     // Save pages now (e.g. the blank quote screen for new quotes with no signal).
     event.waitUntil((async () => {
