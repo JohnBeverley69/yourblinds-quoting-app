@@ -26,6 +26,14 @@ $quote    = qb_load_quote_or_404($id, (int) $user['client_id']);
 qb_require_quote_access($quote, $user, current_user_permissions());
 $backUrl  = '/quote-builder/edit.php?id=' . $id;
 
+// An email queued on a tablet with no signal carries a one-off client_ref. If the
+// signal dropped after we sent it but before the tablet heard back, the tablet
+// sends it again: don't email the customer twice.
+$clientRef = substr(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_POST['client_ref'] ?? '')), 0, 64);
+if ($clientRef !== '' && in_array($clientRef, $_SESSION['qb_sent_refs'] ?? [], true)) {
+    qb_flash_redirect($backUrl, 'success', 'Quote PDF already emailed.');
+}
+
 if (!class_exists(\Dompdf\Dompdf::class)) {
     qb_flash_redirect(
         $backUrl,
@@ -91,6 +99,9 @@ $ok = mailer_send(
 
 if ($ok) {
     send_quota_record((int) $user['client_id'], (int) $user['user_id'], 'quote');
+    if ($clientRef !== '') {
+        $_SESSION['qb_sent_refs'] = array_slice(array_merge($_SESSION['qb_sent_refs'] ?? [], [$clientRef]), -100);
+    }
 }
 if (!$ok) {
     qb_flash_redirect(

@@ -236,6 +236,19 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             var item = queue[k];
             // A new quote's blinds wait until the quote itself has been created.
             if (item.scope.indexOf('p:') === 0 && item.kind !== 'create') continue;
+            // An email to the customer (John, 2026-09-28: "option B") goes only
+            // once everything else for that quote has been sent, and not at all
+            // if the server priced any blind differently from the tablet: then
+            // it's HELD for someone to check the quote and press Send now.
+            if (item.kind === 'send') {
+                var others = all().some(function (i) { return i.scope === item.scope && i.kind !== 'send' && i.id !== item.id; });
+                if (others) continue;
+                if (!item.override && flags().some(function (f) { return f.scope === item.scope; })) {
+                    outbox.update(item.id, { status: 'held',
+                        error: 'a price changed when the blinds were sent — check the quote, then Send now' });
+                    continue;
+                }
+            }
             var res = await send(item.action, item.pairs);
             if (res.kind === 'saved' && item.kind === 'create') {
                 if (resolveProv(item, res)) { sent.push(item); again = true; break; }   // its blinds go next
@@ -279,6 +292,12 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
                 + nWait + '.';
         } else if (sending && waiting) {
             txt = 'Signal back — sending ' + nWait + '…';
+        } else if (items.some(function (i) { return i.status === 'held'; })) {
+            cls = 'is-warn';
+            var held = items.filter(function (i) { return i.status === 'held'; });
+            txt = (held.length === 1 ? 'An email to a customer is' : held.length + ' emails to customers are')
+                + ' held because a price changed — <a href="/quote-builder/edit.php?id='
+                + encodeURIComponent(held[0].scope) + '">check the quote</a>.';
         } else if (flags().length) {
             cls = 'is-warn';
             var f0 = flags()[0];
@@ -327,8 +346,41 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             + (d.toDateString() === new Date().toDateString() ? '' : ' on ' + d.toLocaleDateString());
     }
+    // ---- Other buttons with no signal ------------------------------------
+    // Forms the offline layer doesn't look after (change status, delete, PDF,
+    // deposit…) used to drop the tablet onto the browser's "no internet" page.
+    // With no signal they now say so and stay on the page. The quote's email
+    // (data-yb-send) can instead wait and go when the signal is back: after
+    // everything else for that quote, and never if a price changed (see flush).
+    // Runs first (capture), so a confirm pop-up doesn't open for something that can't happen.
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM' || (form.method || '').toLowerCase() !== 'post') return;
+        if (form.hasAttribute('data-yb-offline')) return;          // handled by its own offline code
+        if (!netDown && navigator.onLine) return;                   // signal: carry on as normal
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (form.hasAttribute('data-yb-send')) {
+            var toEl = form.querySelector('[name="to"]');
+            var to = toEl ? toEl.value.trim() : '';
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { alert('Type the customer’s email address first.'); return; }
+            if (!confirm('No signal. Send this quote to ' + to + ' automatically when the signal is back?\n\n'
+                       + 'It goes once all its blinds have been sent. If the server prices any blind differently '
+                       + 'from the tablet, it waits for you to check the quote first.')) return;
+            var pairs = fieldPairs(form).concat([['client_ref', 's' + uid()]]);
+            var idIn = form.querySelector('[name="id"]');
+            var item = outbox.add({ scope: idIn ? idIn.value : '', kind: 'send', action: form.getAttribute('action'),
+                                    pairs: pairs, summary: 'Email the quote to ' + to });
+            alert(item ? '✓ Kept on this tablet — the email goes when the signal is back.'
+                       : 'This tablet is out of storage space, so the email couldn’t be kept. Send it when you have signal.');
+            return;
+        }
+        alert('No signal — this needs signal. Nothing has been changed; try again when you’re back in signal.');
+    }, true);
+
     function protectForm(form, key, opts) {
         if (!form) return;
+        form.setAttribute('data-yb-offline', '1');
         opts = opts || {};
         var skip = { _csrf: 1 };
         function snapshot() { return fieldPairs(form).filter(function (p) { return !skip[p[0]]; }); }
@@ -489,9 +541,29 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     document.addEventListener('DOMContentLoaded', function () {
         var qm = /\/quote-builder\/edit\.php$/.test(location.pathname) && new URLSearchParams(location.search).get('id');
         if (!qm) return;
+        var host = document.querySelector('main') || document.body;
+        // A held email for this quote, on a page without the waiting list (a
+        // quote that's no longer a draft): offer the same Send now / Don't send.
+        if (!document.getElementById('yb-outbox-panel')) {
+            outbox.list(qm).filter(function (i) { return i.kind === 'send' && i.status === 'held'; }).forEach(function (it) {
+                var hb = document.createElement('div');
+                hb.className = 'yb-restore-bar';
+                var sp = document.createElement('span');
+                sp.textContent = it.summary + ' — held: ' + (it.error || 'check the quote first');
+                hb.appendChild(sp);
+                [['Send now', function () { outbox.update(it.id, { status: 'waiting', override: true, error: null }); hb.remove(); flushSoon(); }],
+                 ['Don’t send', function () { if (confirm('Cancel this email? It hasn’t been sent.')) { outbox.remove(it.id); hb.remove(); } }]]
+                .forEach(function (b) {
+                    var btn = document.createElement('button');
+                    btn.type = 'button'; btn.textContent = b[0];
+                    btn.addEventListener('click', b[1]);
+                    hb.appendChild(btn);
+                });
+                host.insertBefore(hb, host.firstChild);
+            });
+        }
         var mineFlags = flags().filter(function (f) { return f.scope === String(qm); });
         if (!mineFlags.length) return;
-        var host = document.querySelector('main') || document.body;
         var box = document.createElement('div');
         box.className = 'yb-restore-bar';
         box.style.flexDirection = 'column';
