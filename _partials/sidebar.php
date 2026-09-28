@@ -532,6 +532,8 @@ window.addEventListener('pageshow', function (e) {
 </script>
 <script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
 <style>
+  /* .theme-toggle sets display, which beats the plain [hidden] attribute. */
+  #ybOfflineToggle[hidden], .yb-offline-panel[hidden] { display: none !important; }
   .yb-offline-panel { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }
   .yb-offline-panel .yb-engine-status { color: inherit; margin: 0; font-size: 12px; }
   .yb-offline-panel .yb-engine-status button { color: #1d2330; }
