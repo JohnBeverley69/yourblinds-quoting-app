@@ -546,6 +546,19 @@ return [
              the product&rsquo;s set margin / discount.&rdquo;</em> Same box, your word for it. Then <b>Save</b>, or <b>Save and add
              another blind</b> to keep the form open and carry on to the next window.</p>
 
+          <div class="heads"><span class="hi">&#9888;</span><div><b>You can&rsquo;t lose a half-typed blind.</b> The blind form saves
+             itself on the device as you fill it in. If the page reloads, the tablet sleeps or the battery dies, the next time you open
+             the quote a yellow bar offers <em>&ldquo;You have an unsaved blind from 10:42 (Lounge &mdash; Bev Roller Blinds &mdash;
+             1200 &times; 1500 mm).&rdquo;</em> with <b>Put it back</b> and <b>Discard</b>. And if the server turns a blind down
+             when you save it (a size past the end of the price list, say), <b>everything you typed stays on screen</b> with the reason
+             in red &mdash; fix it and save again.</div></div>
+
+          <p><b>No signal?</b> The builder keeps working. On a tablet set up for offline the price is worked out on the tablet and
+             marked <em>&ldquo;tablet price &mdash; checked when sent&rdquo;</em>; anywhere else it says the price will show when the
+             signal is back, and the save buttons still work. Either way <b>Save</b> keeps the blind on the device &mdash;
+             <em>&ldquo;Kept on this tablet, not on the quote yet&rdquo;</em> &mdash; and it&rsquo;s added to the quote by itself when
+             the signal returns. The whole story is in the guide <b>&ldquo;Working offline on a tablet&rdquo;</b>.</p>
+
           <p><b>The blinds list.</b> Each saved blind lands in the table on the right &mdash; columns <b>#</b>, <b>Description</b>,
              <b>Size</b>, <b>Qty</b>, <b>Unit</b>, <b>Total</b>. The description stacks up in the order you built it: the <b>Room</b> in
              bold, then <em>Roller Blind &mdash; Standard</em>, then <em>Band A &mdash; Louvolite &mdash; Sunset White / Ivory</em>,
