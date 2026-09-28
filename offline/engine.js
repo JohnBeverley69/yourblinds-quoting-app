@@ -131,7 +131,10 @@
     // save the screens a salesperson starts from.
     if (window.ybOffline && ybOffline.swEnable) {
         progress('Saving the quote screens on this tablet…');
-        await ybOffline.swEnable(SAVE_ON_SETUP.concat([location.pathname + location.search]));
+        // Plus the quote that's open now, if it is one (set-up can start from any page).
+        var here = /^\/quote-builder\/edit\.php$/.test(location.pathname) && /[?&]id=\d+/.test(location.search)
+          ? [location.pathname + location.search] : [];
+        await ybOffline.swEnable(SAVE_ON_SETUP.concat(here));
     }
     return built;
   }
@@ -242,8 +245,11 @@
   }
 
   // ---- Status + switch ------------------------------------------------------
-  var mounts = [];
-  function changed() { mounts.forEach(render); }
+  var mounts = [], watchers = [];
+  function changed() {
+    mounts.forEach(render);
+    watchers.forEach(function (fn) { try { fn(); } catch (e) {} });
+  }
   function fmtDay(iso) {
     if (!iso) return '';
     var d = new Date(iso + 'T12:00:00');
@@ -296,7 +302,9 @@
 
   window.ybEngine = {
     enabled: enabled, status: status, setup: setup, refresh: refresh, preview: preview,
-    turnOff: turnOff, mountStatus: mountStatus, warm: function () { return enabled() ? startWorker() : Promise.resolve(); }
+    turnOff: turnOff, mountStatus: mountStatus,
+    onChange: function (fn) { watchers.push(fn); },
+    warm: function () { return enabled() ? startWorker() : Promise.resolve(); }
   };
 
   // Keep the copy current while there's signal.

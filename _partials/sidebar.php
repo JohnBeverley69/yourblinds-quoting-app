@@ -454,11 +454,53 @@ window.addEventListener('pageshow', function (e) {
                     <span class="theme-icon" id="ybDensityIcon">↕</span>
                     <span id="ybDensityLabel">Compact mode</span>
                 </button>
+                <!-- Work offline on this tablet (offline/engine.js). Shown on touch
+                     screens, or on a device already set up; the script below unhides it. -->
+                <button type="button" class="theme-toggle" id="ybOfflineToggle" aria-expanded="false"
+                        aria-controls="ybOfflinePanel" hidden>
+                    <span class="theme-icon" aria-hidden="true">&#128246;</span>
+                    <span id="ybOfflineLabel">Work offline</span>
+                </button>
+                <div id="ybOfflinePanel" class="yb-offline-panel" hidden></div>
             </div>
         </div>
     </aside>
 <?php require __DIR__ . '/support_widget.php'; ?>
 <?php require __DIR__ . '/offline_guard.php'; ?>
+<script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
+<style>
+  .yb-offline-panel { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }
+  .yb-offline-panel .yb-engine-status { color: inherit; margin: 0; font-size: 12px; }
+  .yb-offline-panel .yb-engine-status button { color: #1d2330; }
+</style>
+<script>
+(function () {
+    // "Work offline" in the sidebar footer: set this tablet up for offline, see
+    // how fresh its prices are, update them or turn it off, from any page.
+    var btn   = document.getElementById('ybOfflineToggle');
+    var label = document.getElementById('ybOfflineLabel');
+    var panel = document.getElementById('ybOfflinePanel');
+    if (!btn || !label || !panel || !window.ybEngine) return;
+    // Offline mode is for tablets (John, 2026-09-26); a device already set up
+    // always shows it so it can be updated or turned off.
+    if (!ybEngine.enabled() && !window.matchMedia('(pointer: coarse)').matches) return;
+    btn.hidden = false;
+    function paint() {
+        var s = ybEngine.status();
+        label.textContent = !s.enabled ? 'Work offline: set up'
+                          : (s.stale ? 'Offline: prices out of date' : 'Offline ready');
+    }
+    paint();
+    ybEngine.onChange(paint);
+    var mounted = false;
+    btn.addEventListener('click', function () {
+        var open = panel.hidden;
+        panel.hidden = !open;
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open && !mounted) { ybEngine.mountStatus(panel); mounted = true; }
+    });
+})();
+</script>
 <script>
 (function () {
     // Theme toggle. Writes the cookie (1 year) and flips the

@@ -2356,7 +2356,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 </div>
 
 <?php if ($editable): ?>
-<script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
+<?php /* window.ybEngine (offline prices) is loaded by _partials/sidebar.php on every page. */ ?>
 <script>
 (function () {
     'use strict';
