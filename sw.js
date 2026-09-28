@@ -57,8 +57,28 @@ function pageKey(url) {
   return u.href;
 }
 
+// The page's own stylesheets and scripts (same site), kept alongside it. Without
+// this a saved page opened with no signal is unstyled and its price engine
+// script is missing, because a page loaded BEFORE the helper started never
+// passed its files through here.
+async function keepAssets(html, base) {
+  const cache = await caches.open(STATIC);
+  const re = /<(?:link[^>]+href|script[^>]+src)="([^"]+)"/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const u = new URL(m[1].replace(/&amp;/g, '&'), base);
+      if (u.origin !== self.location.origin || !/\.(css|js)$/i.test(u.pathname)) continue;
+      if (u.pathname === '/offline/engine_worker.js' || (await cache.match(u.href))) continue;
+      const r = await fetch(u.href, { credentials: 'same-origin' });
+      if (r.ok) await cache.put(u.href, r);
+    } catch (e) { /* no signal: next time */ }
+  }
+}
+
 async function savePage(uid, key, res) {
   const html = await res.text();
+  await keepAssets(html, key);
   const title = (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || key;
   const cache = await caches.open(pagesCache(uid));
   await cache.put(key, new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8',
