@@ -53,6 +53,7 @@ $ORDER = [
     'settings-suppliers',
     'trade-terms-page',
     'settings-accounting',
+    'platform-accounting-apps',
     'settings-backup',
     // Who can get in.
     'users-add',
