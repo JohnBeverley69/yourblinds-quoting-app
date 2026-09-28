@@ -200,7 +200,8 @@ function wl_price(array $plan): string
             <?php if (!$loggedIn): ?>
                 Already with us? <a href="/auth/login.php">Sign in</a> &middot;
             <?php endif; ?>
-            <a href="/instaprice/index.php">Try the price calculator</a>
+            <a href="/instaprice/index.php">Try the price calculator</a><br>
+            <a href="/legal/licence.php">Licence agreement</a> &middot; <a href="/legal/privacy.php">Privacy policy</a>
         </p>
     </div>
 </body>

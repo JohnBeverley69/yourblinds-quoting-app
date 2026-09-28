@@ -310,8 +310,9 @@ connections table       : exists</div>
                   <li><b>Launch URL</b>, where a user starts from: <code>https://www.yourblinds.uk/admin/settings.php#accounting</code>.</li>
                   <li><b>Disconnect URL</b>, where they land after unlinking: the same page.</li>
                   <li><b>End-user licence agreement</b> and <b>privacy policy</b> links. These must be YourBlinds&rsquo; <em>own</em> public
-                      pages, as the software company. Each client&rsquo;s own terms pages won&rsquo;t do. <b>YourBlinds doesn&rsquo;t have
-                      platform-wide EULA and privacy pages yet, so they need writing before you apply.</b></li>
+                      pages, as the software company. Each client&rsquo;s own terms pages won&rsquo;t do. Use
+                      <code>https://www.yourblinds.uk/legal/licence.php</code> and
+                      <code>https://www.yourblinds.uk/legal/privacy.php</code>.</li>
                   <li><b>Category</b>: accounting / invoicing.</li>
                   <li><b>Regulated industries</b>: none.</li>
                 </ul></li>
