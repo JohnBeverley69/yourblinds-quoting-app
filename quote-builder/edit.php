@@ -983,6 +983,29 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         </div>
         <?php endif; /* !$offlineTemplate: sticky bar, actions, header */ ?>
 
+        <?php /* Whether the quote has a real customer: decided here, BEFORE the
+                 "no customer yet" warning below, which used to read it before it was
+                 set (so it showed on every quote). The customer panel uses it too. */ ?>
+        <?php
+            // Build a compact summary of the customer for the collapsed
+            // state. Defaults to expanded when any required bit is
+            // missing (so the user sees the form on a brand-new quote).
+            $csName     = trim((string) ($quote['end_customer_name'] ?? ''));
+            $csTown     = trim((string) ($quote['end_customer_town'] ?? ''));
+            $csPostcode = trim((string) ($quote['end_customer_postcode'] ?? ''));
+            // An InstaPrice conversion lands with a PLACEHOLDER name (see
+            // instaprice/to-quote.php), not a real customer — treat that as "no
+            // customer yet" so the form opens and the name field is blank, ready
+            // to type, rather than looking like the customer is already filled in.
+            $csPlaceholder     = 'Quick price (add customer)';
+            $isCustPlaceholder = ($csName === $csPlaceholder);
+            $hasCustomer = $csName !== '' && !$isCustPlaceholder;
+            // Collapsed once there's a REAL customer (saves ~250px on load); OPEN
+            // when there isn't one yet (brand-new quote or an InstaPrice
+            // conversion) so the form is visible, not a one-line tag stranded at
+            // the bottom of the page — which is invisible on a phone or tablet.
+            $startOpen   = !$hasCustomer;
+        ?>
         <?php if (!$offlineTemplate): ?>
         <?php if ($flashMsg !== null): ?>
             <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
@@ -1029,26 +1052,6 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <div class="quote-cols"<?= $offlineTemplate ? ' style="grid-template-columns:1fr"' : '' ?>>
         <div class="col-left"<?= $offlineTemplate ? ' style="position:static;max-height:none;overflow-y:visible"' : '' ?>>
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
-        <?php
-            // Build a compact summary of the customer for the collapsed
-            // state. Defaults to expanded when any required bit is
-            // missing (so the user sees the form on a brand-new quote).
-            $csName     = trim((string) ($quote['end_customer_name'] ?? ''));
-            $csTown     = trim((string) ($quote['end_customer_town'] ?? ''));
-            $csPostcode = trim((string) ($quote['end_customer_postcode'] ?? ''));
-            // An InstaPrice conversion lands with a PLACEHOLDER name (see
-            // instaprice/to-quote.php), not a real customer — treat that as "no
-            // customer yet" so the form opens and the name field is blank, ready
-            // to type, rather than looking like the customer is already filled in.
-            $csPlaceholder     = 'Quick price (add customer)';
-            $isCustPlaceholder = ($csName === $csPlaceholder);
-            $hasCustomer = $csName !== '' && !$isCustPlaceholder;
-            // Collapsed once there's a REAL customer (saves ~250px on load); OPEN
-            // when there isn't one yet (brand-new quote or an InstaPrice
-            // conversion) so the form is visible, not a one-line tag stranded at
-            // the bottom of the page — which is invisible on a phone or tablet.
-            $startOpen   = !$hasCustomer;
-        ?>
         <section class="section" id="customer-details" style="scroll-margin-top:1rem">
             <form method="post" action="/quote-builder/save_details.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
