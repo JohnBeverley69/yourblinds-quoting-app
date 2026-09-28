@@ -941,8 +941,11 @@ select optgroup {
    sidebar used to stay in the flex flow and eat ~a third of a tablet's screen,
    scrunching every input; now it slides away behind the top-right toggle at
    tablet widths too. Form-stacking stays phone-only (below) so a tablet uses the
-   freed-up width for multi-column forms instead of wasting it. */
-@media (max-width: 1024px) {
+   freed-up width for multi-column forms instead of wasting it.
+   Also any TOUCH screen up to 1440px: a tablet held landscape (e.g. 1280px) is
+   wider than 1024 and was getting the full desktop sidebar, squeezing the quote
+   page into what was left (John, 2026-09-28). */
+@media (max-width: 1024px), (pointer: coarse) and (max-width: 1440px) {
     .app-shell { flex-direction: column; min-height: auto; }
 
     .app-sidebar {

@@ -724,6 +724,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 max-height: none;
                 overflow-y: visible;
             }
+            /* The Add blind form is where a tablet user works: give it the larger
+               share (60/40) instead of ~40/60, which left it scrunched. */
+            .quote-cols { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
         }
 
         @media (max-width: 1000px) {
