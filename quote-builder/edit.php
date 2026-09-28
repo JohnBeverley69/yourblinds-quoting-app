@@ -1005,8 +1005,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             </a>
         <?php endif; ?>
         <?php endif; /* !$offlineTemplate: notices */ ?>
-        <div class="quote-cols">
-        <div class="col-left">
+        <div class="quote-cols"<?= $offlineTemplate ? ' style="grid-template-columns:1fr"' : '' ?>>
+        <div class="col-left"<?= $offlineTemplate ? ' style="position:static;max-height:none;overflow-y:visible"' : '' ?>>
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
         <?php
             // Build a compact summary of the customer for the collapsed
@@ -1617,7 +1617,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <?php endif; ?>
         </div><!-- /col-left -->
 
-        <div class="col-right">
+        <div class="col-right"<?= $offlineTemplate ? ' hidden' : '' ?>>
         <?php if (!$offlineTemplate): ?>
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
@@ -2167,12 +2167,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <?php endif; ?>
         </section>
         <?php endif; ?>
-        <?php else: /* offline new quote: its blinds are listed with the form, on this tablet */ ?>
-        <section class="section">
-            <div class="section-header"><h2 class="section-title">Blinds</h2></div>
-            <p class="ui-hint" style="margin:0">Blinds you save are kept on this tablet (listed above the blind form) with their tablet price. When the signal is back the quote is created, gets its number, and every blind is added and checked by the server.</p>
-        </section>
-        <?php endif; ?>
+        <?php endif; /* offline new quote: no right column — its blinds are listed above the form, and the header explains */ ?>
         </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 
