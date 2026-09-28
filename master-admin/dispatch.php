@@ -301,6 +301,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     </style>
 </head>
 <body>
+<div class="app-shell">
 <?php require __DIR__ . '/../_partials/sidebar.php'; ?>
 <main class="app-main">
   <div class="page-head">
@@ -422,5 +423,6 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     </script>
   <?php endif; ?>
 </main>
+</div>
 </body>
 </html>
