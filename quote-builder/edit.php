@@ -283,7 +283,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
     <title>Quote <?= e((string) $quote['quote_number']) ?> &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
@@ -713,6 +713,18 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
            Flex order, not a DOM move — the markup, the form and every id stay
            exactly where they were. */
         .quote-cols .col-left > #add-line { order: -1; }
+
+        /* Tablets and phones (touch): no inner-scrolling left column. When the
+           on-screen keyboard opens, the browser scrolls the PAGE to show the box
+           being typed in, but not a box inside a separately scrolling column,
+           so the field ended up hidden behind the keyboard (John, £55 tablet). */
+        @media (pointer: coarse) {
+            .quote-cols .col-left {
+                position: static;
+                max-height: none;
+                overflow-y: visible;
+            }
+        }
 
         @media (max-width: 1000px) {
             .quote-cols { grid-template-columns: 1fr; gap: 0; }

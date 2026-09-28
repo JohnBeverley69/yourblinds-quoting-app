@@ -467,6 +467,31 @@ window.addEventListener('pageshow', function (e) {
     </aside>
 <?php require __DIR__ . '/support_widget.php'; ?>
 <?php require __DIR__ . '/offline_guard.php'; ?>
+<script>
+// Touch screens: when the on-screen keyboard opens, make sure the box being
+// typed in is visible above it. Browsers don't always scroll it into view
+// (John, £55 tablet: the keyboard hid the Add blind fields), so once the
+// keyboard has had a moment to open, bring a hidden field to the middle of
+// what's left of the screen. Only when it's actually hidden, so nothing jumps
+// about needlessly.
+(function () {
+    if (!window.matchMedia('(pointer: coarse)').matches) return;
+    var TYPED = /^(text|search|email|tel|number|url|password|date|time)$/;
+    document.addEventListener('focusin', function (e) {
+        var el = e.target;
+        if (!el || !(el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && TYPED.test(el.type || 'text')))) return;
+        setTimeout(function () {
+            if (document.activeElement !== el) return;
+            var vv = window.visualViewport;
+            var visibleBottom = vv ? vv.height : window.innerHeight;
+            var r = el.getBoundingClientRect();
+            if (r.bottom > visibleBottom - 12 || r.top < 0) {
+                el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }, 400);
+    });
+})();
+</script>
 <script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
 <style>
   .yb-offline-panel { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }

@@ -247,7 +247,7 @@ $activeNav = 'order-history';
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
     <title>New quote &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
 </head>
