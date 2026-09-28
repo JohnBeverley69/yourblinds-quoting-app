@@ -114,6 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['appointment_id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
+    // A quote started on a tablet with no signal is created here when the signal
+    // returns, carrying a one-off client_ref. If the reply was lost and the tablet
+    // sends it again, go to the quote it already made rather than making two.
+    $clientRef = substr(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_POST['client_ref'] ?? '')), 0, 64);
+    if ($clientRef !== '' && !empty($_SESSION['qb_created_refs'][$clientRef])) {
+        header('Location: /quote-builder/edit.php?id=' . (int) $_SESSION['qb_created_refs'][$clientRef] . '#add-line');
+        exit;
+    }
+
     $f['customer_id']           = (int) ($_POST['customer_id'] ?? 0);
     $f['end_customer_name']     = trim((string) ($_POST['end_customer_name']     ?? ''));
     $f['end_customer_email']    = trim((string) ($_POST['end_customer_email']    ?? ''));
@@ -172,6 +181,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($error === null) {
         try {
             $res = qb_create_quote_from_fields(db(), $clientId, $f, $appointmentId, (int) $user['user_id']);
+            if ($clientRef !== '') {
+                $refs = $_SESSION['qb_created_refs'] ?? [];
+                $refs[$clientRef] = (int) $res['id'];
+                $_SESSION['qb_created_refs'] = array_slice($refs, -100, null, true);
+            }
             $_SESSION['flash_success'] = 'Quote ' . $res['number'] . ' created.';
             // Land on the Add-line section so the user can start picking
             // products straight away — customer details are already filled
@@ -409,12 +423,15 @@ $activeNav = 'order-history';
 </div>
 
 <script>
-// Never lose a new customer's details: autosaved on this tablet. A new quote
-// needs the server to create it (it hands out the quote number), so with no
-// signal the form waits, with everything kept, rather than queueing.
+// Never lose a new customer's details: autosaved on this tablet. With no signal,
+// a tablet set up for offline starts the quote on the tablet; anywhere else the
+// form waits, with everything kept.
 (function () {
     if (!window.ybOffline) return;
     ybOffline.protectForm(document.querySelector('form[action="/quote-builder/new.php"]'), 'qb.new', {
+        // On a tablet set up for offline, "Create quote" with no signal starts
+        // the quote on the tablet instead (it gets its number when the signal is back).
+        offlineStart: true,
         needsSignal: 'No signal right now. A new quote needs signal to be created, but everything you’ve '
                    + 'typed is kept on this tablet. Tap “Create quote” again when the signal is back.'
     });

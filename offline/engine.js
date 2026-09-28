@@ -26,6 +26,10 @@
   var WORKER   = '/offline/engine_worker.js';
   var CACHE    = 'yb-engine-v1';
   var CHECK_EVERY = 30 * 60 * 1000;
+  // Screens saved on the tablet at set-up (and refreshed each check) so they
+  // open with no signal. Quote pages are also saved as they're opened.
+  var SAVE_ON_SETUP = ['/quote-builder/new.php', '/orders/index.php?scope=quotes&type=retail',
+                       '/quote-builder/edit.php?offline_template=1'];   // the blank "new quote" screen
 
   function uid() { return (window.ybOffline && window.ybOffline.userId) || 0; }
   function k(name) { return 'yb.engine.' + name + '.' + uid(); }
@@ -123,6 +127,12 @@
     progress('Checking it works…');
     stopWorker();
     var built = await startWorker();
+    // Quote pages open with no signal too: switch on the page-saving helper and
+    // save the screens a salesperson starts from.
+    if (window.ybOffline && ybOffline.swEnable) {
+        progress('Saving the quote screens on this tablet…');
+        await ybOffline.swEnable(SAVE_ON_SETUP.concat([location.pathname + location.search]));
+    }
     return built;
   }
 
@@ -148,6 +158,8 @@
       var text = await downloadCatalogue(cache, force);
       if (newVer !== oldVer) stopWorker();
       else if (text && worker) await call('catalogue', { catalogue: text });
+      // Keep the starting screens' saved copies current too.
+      if (window.ybOffline && ybOffline.swEnable) ybOffline.swEnable(SAVE_ON_SETUP);
       changed();
     } catch (e) {
       console.warn('Offline price list not refreshed:', e);
@@ -216,6 +228,9 @@
   }
   async function turnOff() {
     stopWorker();
+    // Saved quote pages go too (agreed: "Turn off wipes the lot"). Blinds still
+    // waiting to send are NOT touched: that's unsent work, not a saved copy.
+    if (window.ybOffline && ybOffline.swWipe) { try { await ybOffline.swWipe(); } catch (e) {} }
     try { localStorage.removeItem(k('enabled')); localStorage.removeItem(k('meta')); } catch (e) {}
     try { var cache = await caches.open(CACHE); await cache.delete(bundleKey()); await cache.delete(catKey()); } catch (e) {}
     changed();
