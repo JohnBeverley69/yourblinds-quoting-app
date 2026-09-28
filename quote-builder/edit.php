@@ -16,8 +16,30 @@ $pricingBasis = pricing_basis_for(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 
-$id    = (int) ($_GET['id'] ?? 0);
-$quote = qb_load_quote_or_404($id, $clientId);
+// ?offline_template=1 — the blank "new quote" screen a tablet set up for offline
+// keeps (sw.js), for starting a quote with no signal. Same page, same blind form,
+// for a quote that doesn't exist yet: an empty draft, nothing loaded or saved
+// here. The tablet keeps what's entered and creates the real quote (new.php)
+// when the signal is back (_partials/offline_guard.php). Quote actions, the
+// blind list, sending and delete need a real quote, so they're left out.
+$offlineTemplate = isset($_GET['offline_template']);
+if ($offlineTemplate) {
+    if (!$isAdmin && empty($_perms['can_create_quotes'])) {
+        http_response_code(404);
+        exit;
+    }
+    $id    = 0;
+    $quote = [];
+    foreach (db()->query('SHOW COLUMNS FROM quotes')->fetchAll(PDO::FETCH_COLUMN) as $col) $quote[$col] = '';
+    $quote = array_merge($quote, [
+        'id' => 0, 'client_id' => $clientId, 'status' => 'draft', 'quote_number' => 'New quote',
+        'customer_id' => 0, 'account_client_id' => 0, 'measurement_unit' => null,
+        'subtotal' => 0, 'vat' => 0, 'total' => 0, 'wt_amount' => 0,
+    ]);
+} else {
+    $id    = (int) ($_GET['id'] ?? 0);
+    $quote = qb_load_quote_or_404($id, $clientId);
+}
 
 // Measurement unit for THIS quote: the quote's own override if set, else
 // the tenant default, else mm. Sizes are stored in mm; this only drives
@@ -248,7 +270,9 @@ $isTradeOrder = $tradeAccount !== null;
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
-unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+// The blank offline screen is fetched in the background by the tablet; it must
+// never eat a message meant for the page the user is actually going to.
+if (!$offlineTemplate) unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 // Sidebar lights up "Order history" — the quote-editing pages live
 // under that menu entry now that the old "New Quote" / "Quote
@@ -778,6 +802,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         <!-- Slim sticky bar — quote #, status, total — always visible
              as the user scrolls through customer details / add-blind /
              items / send. Replaces the "Total only at top" complaint. -->
+        <?php if (!$offlineTemplate): ?>
         <div class="quote-sticky-bar">
             <span class="qsb-left">
                 Quote <?= e((string) $quote['quote_number']) ?>
@@ -924,7 +949,20 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </p>
             </div>
         </div>
+        <?php else: ?>
+        <div class="quote-sticky-bar">
+            <span class="qsb-left">New quote <span class="status-pill status-draft">on this tablet</span></span>
+            <span class="qsb-total" id="yb-prov-ref"></span>
+        </div>
+        <div class="page-header" style="margin-bottom:0.6rem">
+            <div>
+                <h1 class="page-title" style="margin:0">New quote</h1>
+                <p class="page-subtitle" style="margin:0">Started with no signal. It gets its quote number when the signal is back &mdash; everything here is kept on this tablet until then.</p>
+            </div>
+        </div>
+        <?php endif; /* !$offlineTemplate: sticky bar, actions, header */ ?>
 
+        <?php if (!$offlineTemplate): ?>
         <?php if ($flashMsg !== null): ?>
             <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
         <?php endif; ?>
@@ -966,6 +1004,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <span class="nc-go">Add customer &darr;</span>
             </a>
         <?php endif; ?>
+        <?php endif; /* !$offlineTemplate: notices */ ?>
         <div class="quote-cols">
         <div class="col-left">
         <!-- ============== CUSTOMER DETAILS (collapsible) ============== -->
@@ -1579,6 +1618,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         </div><!-- /col-left -->
 
         <div class="col-right">
+        <?php if (!$offlineTemplate): ?>
         <!-- ============== LINE ITEMS ============== -->
         <section class="section">
             <div class="section-header qb-blinds-head">
@@ -2127,9 +2167,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <?php endif; ?>
         </section>
         <?php endif; ?>
+        <?php else: /* offline new quote: its blinds are listed with the form, on this tablet */ ?>
+        <section class="section">
+            <div class="section-header"><h2 class="section-title">Blinds</h2></div>
+            <p class="ui-hint" style="margin:0">Blinds you save are kept on this tablet (listed above the blind form) with their tablet price. When the signal is back the quote is created, gets its number, and every blind is added and checked by the server.</p>
+        </section>
+        <?php endif; ?>
         </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 
+        <?php if (!$offlineTemplate): ?>
         <!-- ============== SEND TO CUSTOMER (full-width below the cols
              so it doesn't get buried under a tall Blinds table when the
              quote has lots of line items) ============== -->
@@ -2304,6 +2351,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </form>
             </div>
         </section>
+        <?php endif; /* !$offlineTemplate: send + danger zone */ ?>
     </main>
 </div>
 
@@ -3879,7 +3927,28 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     // and sent automatically when the signal is back (_partials/offline_guard.php).
     // A blind the server turns down keeps everything typed and shows why.
     var OFF       = window.ybOffline || null;
-    var quoteId   = (form.querySelector('input[name="quote_id"]') || {}).value || '';
+    // The blank "new quote" screen (?offline_template=1): a quote started on the
+    // tablet with no signal, known by a temporary reference (#p=…) until the
+    // signal is back and it's created for real (offline_guard.php → prov).
+    var OFFLINE_TEMPLATE = <?= $offlineTemplate ? 'true' : 'false' ?>;
+    var provId = null;
+    if (OFFLINE_TEMPLATE && OFF) {
+        provId = (/#p=([A-Za-z0-9-]+)/.exec(location.hash) || [])[1] || null;
+        var provRec = provId ? OFF.prov.get(provId) : null;
+        if (provRec && provRec.serverId) {   // already created: go to the real quote
+            location.replace('/quote-builder/edit.php?id=' + encodeURIComponent(provRec.serverId));
+            return;
+        }
+        if (!provRec) {
+            provId = OFF.prov.create([]);
+            history.replaceState(null, '', location.pathname + location.search + '#p=' + provId);
+        }
+        window.__ybProvId = provId;
+        var refEl = document.getElementById('yb-prov-ref');
+        if (refEl) refEl.textContent = 'Ref ' + String(provId).slice(-6).toUpperCase();
+    }
+    var quoteId   = OFFLINE_TEMPLATE ? 'p:' + provId
+                  : ((form.querySelector('input[name="quote_id"]') || {}).value || '');
     var itemIdIn  = form.querySelector('input[name="item_id"]');
     var draftKey  = 'qb.line.' + quoteId + '.' + (itemIdIn ? itemIdIn.value : 'new');
     var roomIn    = document.getElementById('item-room');
@@ -3973,7 +4042,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
         submitting = true;
         setSubmitDisabled(true);
-        var res = OFF.online ? await OFF.send(action, pairs) : { kind: 'offline' };
+        // A quote started on the tablet always waits for its own creation first.
+        var res = (OFF.online && !OFFLINE_TEMPLATE) ? await OFF.send(action, pairs) : { kind: 'offline' };
         submitting = false;
 
         if (res.kind === 'saved') {
@@ -4033,13 +4103,25 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
     }
     function renderOutboxPanel() {
         if (!OFF) return;
-        var items = OFF.outbox.list(quoteId);
-        outboxPanel.style.display = items.length ? 'flex' : 'none';
+        var all = OFF.outbox.list(quoteId);
+        // The new quote's own "create" isn't listed (deleting it would strand its
+        // blinds), but if the server turned it down, say why.
+        var creates = all.filter(function (i) { return i.kind === 'create'; });
+        var items = all.filter(function (i) { return i.kind !== 'create'; });
+        var createErr = creates.find(function (i) { return i.status === 'rejected'; });
+        outboxPanel.style.display = (items.length || createErr) ? 'flex' : 'none';
         outboxPanel.innerHTML = '';
-        if (!items.length) return;
+        if (!items.length && !createErr) return;
         var head = document.createElement('strong');
         head.textContent = 'Kept on this tablet, not on the quote yet (' + items.length + ')';
         outboxPanel.appendChild(head);
+        if (createErr) {
+            var ce = document.createElement('div');
+            ce.style.color = '#9b1c1c';
+            ce.textContent = 'The quote couldn’t be created: ' + (createErr.error || 'please check the customer details')
+                           + ' — fix the details above and press Save.';
+            outboxPanel.appendChild(ce);
+        }
         items.forEach(function (it) {
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center';
@@ -4082,6 +4164,16 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         // Blinds for THIS quote went through: show them. Reload straight away
         // unless something is half-typed in the form (then offer a button).
         document.addEventListener('yb:outbox-sent', function (ev) {
+            if (OFFLINE_TEMPLATE) {
+                // Our quote has been created: once its blinds are through, go to it.
+                var rec = OFF.prov.get(provId);
+                if (!rec || !rec.serverId) return;
+                var left = OFF.outbox.list(rec.serverId).filter(function (i) { return i.status === 'waiting'; }).length;
+                if (!left) { location.href = '/quote-builder/edit.php?id=' + encodeURIComponent(rec.serverId); return; }
+                previewBox.className = 'idle';
+                previewBox.textContent = 'Quote ' + (rec.number || '') + ' created — adding its blinds…';
+                return;
+            }
             var ours = (ev.detail.items || []).filter(function (i) { return i.scope === String(quoteId); });
             if (!ours.length) return;
             if (snapKey(lineSnapshot()) === draftBaseline) { location.reload(); return; }
@@ -4278,6 +4370,39 @@ window.__editingBlind__ = <?= json_encode([
 (function () {
     var f = document.querySelector('form[action="/quote-builder/save_details.php"]');
     if (!f || !window.ybOffline) return;
+
+    // A quote started on the tablet: the details live with it on the tablet and
+    // go up with its creation (new.php) when the signal is back.
+    if (window.__ybProvId) {
+        var pid = window.__ybProvId;
+        var rec = ybOffline.prov.get(pid) || {};
+        (rec.details || []).forEach(function (p) {
+            f.querySelectorAll('[name="' + CSS.escape(p[0]) + '"]').forEach(function (el) {
+                if (el.type === 'checkbox' || el.type === 'radio') el.checked = (el.value === p[1]);
+                else el.value = p[1];
+            });
+        });
+        var pairsOf = function () {
+            var out = [];
+            new FormData(f).forEach(function (v, k) { if (typeof v === 'string' && k !== '_csrf' && k !== 'quote_id') out.push([k, v]); });
+            return out;
+        };
+        var t = null;
+        var keep = function () { clearTimeout(t); t = setTimeout(function () { ybOffline.prov.setDetails(pid, pairsOf()); }, 300); };
+        f.addEventListener('input', keep);
+        f.addEventListener('change', keep);
+        f.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var pairs = pairsOf();
+            var name = (pairs.find(function (p) { return p[0] === 'end_customer_name'; }) || [])[1] || '';
+            if (!name.trim()) { alert('Type the customer’s name — the quote needs it.'); return; }
+            ybOffline.prov.setDetails(pid, pairs);
+            var btn = f.querySelector('button[type=submit]');
+            if (btn) { var old = btn.textContent; btn.textContent = '✓ Kept on this tablet'; setTimeout(function () { btn.textContent = old; }, 2000); }
+        });
+        return;
+    }
+
     var q = (f.querySelector('input[name="quote_id"]') || {}).value || '';
     ybOffline.protectForm(f, 'qb.details.' + q, {
         queue: true, scope: q, summary: function () { return 'Customer details'; }

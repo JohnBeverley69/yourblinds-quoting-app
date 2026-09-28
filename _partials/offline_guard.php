@@ -126,7 +126,90 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         // boxes (e.g. "this quote expired", role="status") are not a refusal.
         var err = doc.querySelector('.alert-error[role="alert"]');
         if (err) return { kind: 'rejected', message: err.textContent.trim(), url: r.url };
-        return { kind: 'saved', url: r.url };
+        // The green "Blind 3 added (£61.00)." tells us what the server charged.
+        var ok = doc.querySelector('.alert-success');
+        return { kind: 'saved', url: r.url, message: ok ? ok.textContent.trim() : '' };
+    }
+
+    // ---- New quotes started with no signal ("provisional") ---------------
+    // Started on the tablet (the blank quote screen, edit.php?offline_template=1)
+    // with a temporary reference. The outbox holds a 'create' item (a new.php
+    // post of the customer details) AHEAD of the quote's blinds. When the signal
+    // is back the quote is created first, and that gives it its real number.
+    // Its blinds are then re-pointed at it and sent as normal.
+    var PROV_KEY = 'yb.prov.' + USER_ID;
+    function provAll() { var a = lsGet(PROV_KEY); return (a && typeof a === 'object') ? a : {}; }
+    function detailsForCreate(pairs, pid) {
+        return pairs.filter(function (p) { return p[0] !== '_csrf' && p[0] !== 'quote_id' && p[0] !== 'client_ref'; })
+                    .concat([['client_ref', pid]]);
+    }
+    function nameIn(pairs) { var n = pairs.find(function (p) { return p[0] === 'end_customer_name'; }); return n ? n[1] : ''; }
+    var prov = {
+        all: provAll,
+        get: function (pid) { return provAll()[pid] || null; },
+        save: function (pid, patch) {
+            var a = provAll();
+            a[pid] = Object.assign(a[pid] || { pid: pid, createdAt: Date.now() }, patch);
+            lsSet(PROV_KEY, a);
+            return a[pid];
+        },
+        // Start one. Returns its reference, or null if the tablet is out of space.
+        create: function (detailsPairs) {
+            var pid = 'p' + uid();
+            detailsPairs = detailsPairs || [];
+            prov.save(pid, { details: detailsPairs });
+            var item = outbox.add({ scope: 'p:' + pid, kind: 'create', action: '/quote-builder/new.php',
+                pairs: detailsForCreate(detailsPairs, pid), summary: 'New quote for ' + (nameIn(detailsPairs) || '(no name yet)') });
+            return item ? pid : null;
+        },
+        // Customer details changed: keep the waiting 'create' in step.
+        setDetails: function (pid, detailsPairs) {
+            prov.save(pid, { details: detailsPairs });
+            write(all().map(function (i) {
+                if (i.scope !== 'p:' + pid || i.kind !== 'create') return i;
+                return Object.assign(i, { pairs: detailsForCreate(detailsPairs, pid), status: 'waiting', error: null,
+                    summary: 'New quote for ' + (nameIn(detailsPairs) || '(no name yet)') });
+            }));
+        }
+    };
+
+    // The 'create' went through: the server's quote id is in the page it sent us to.
+    function resolveProv(createItem, res) {
+        var m = /edit\.php\?id=(\d+)/.exec(res.url || '');
+        if (!m) return false;
+        var pid = createItem.scope.slice(2), newId = m[1];
+        var p = prov.get(pid) || {};
+        var addRef = (p.details || []).find(function (x) { return x[0] === 'additional_reference' && x[1]; });
+        var list = all().filter(function (i) { return i.id !== createItem.id; }).map(function (i) {
+            if (i.scope !== createItem.scope) return i;
+            return Object.assign(i, { scope: newId, pairs: i.pairs.map(function (x) { return x[0] === 'quote_id' ? ['quote_id', newId] : x; }) });
+        });
+        // new.php doesn't take the additional reference; save it straight after.
+        if (addRef) {
+            list.unshift({ id: uid(), userId: USER_ID, createdAt: Date.now(), status: 'waiting', scope: newId, kind: 'details',
+                action: '/quote-builder/save_details.php', summary: 'Customer details',
+                pairs: (p.details || []).filter(function (x) { return x[0] !== 'quote_id'; }).concat([['quote_id', newId]]) });
+        }
+        write(list);
+        var num = /Quote\s+(\S+)\s+created/.exec(res.message || '');
+        prov.save(pid, { serverId: newId, number: num ? num[1] : '' });
+        document.dispatchEvent(new CustomEvent('yb:prov-created', { detail: { pid: pid, id: newId } }));
+        return true;
+    }
+
+    // ---- Price differences (flagged, never silently changed) -------------
+    var FLAGS_KEY = 'yb.priceflags.' + USER_ID;
+    function flags() { var a = lsGet(FLAGS_KEY); return Array.isArray(a) ? a : []; }
+    function checkPrice(item, res) {
+        if (item.tabletPrice == null) return;
+        var m = /£\s?([\d,]+\.\d{2})/.exec(res.message || '');
+        if (!m) return;   // e.g. a multi-blind group: no single price in the reply
+        var server = parseFloat(m[1].replace(/,/g, ''));
+        if (Math.abs(server - item.tabletPrice) < 0.005) return;
+        var a = flags();
+        a.push({ id: uid(), scope: item.scope, summary: item.summary.replace(/ · £[\d.,]+ \(tablet price\)$/, ''),
+                 tablet: item.tabletPrice, server: server, at: Date.now() });
+        lsSet(FLAGS_KEY, a);
     }
 
     var flushTimer = null;
@@ -137,11 +220,17 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         var queue = mine().filter(function (i) { return i.status === 'waiting'; });
         if (!queue.length) return;
         sending = true; changed();
-        var sent = [];
+        var sent = [], again = false;
         for (var k = 0; k < queue.length; k++) {
             var item = queue[k];
+            // A new quote's blinds wait until the quote itself has been created.
+            if (item.scope.indexOf('p:') === 0 && item.kind !== 'create') continue;
             var res = await send(item.action, item.pairs);
-            if (res.kind === 'saved') {
+            if (res.kind === 'saved' && item.kind === 'create') {
+                if (resolveProv(item, res)) { sent.push(item); again = true; break; }   // its blinds go next
+                outbox.update(item.id, { status: 'rejected', error: 'The quote could not be created — please check the customer details.' });
+            } else if (res.kind === 'saved') {
+                checkPrice(item, res);
                 outbox.remove(item.id); sent.push(item);
             } else if (res.kind === 'rejected') {
                 outbox.update(item.id, { status: 'rejected', error: res.message });
@@ -156,6 +245,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         if (sent.length) {
             document.dispatchEvent(new CustomEvent('yb:outbox-sent', { detail: { items: sent } }));
         }
+        if (again) return flush();
     }
 
     // ---- the bar ----------------------------------------------------------
@@ -177,11 +267,20 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
                 + nWait + '.';
         } else if (sending && waiting) {
             txt = 'Signal back — sending ' + nWait + '…';
+        } else if (flags().length) {
+            cls = 'is-warn';
+            var f0 = flags()[0];
+            txt = flags().length + (flags().length === 1 ? ' blind was' : ' blinds were')
+                + ' priced differently by the server than on the tablet — <a href="/quote-builder/edit.php?id='
+                + encodeURIComponent(f0.scope) + '">check the quote</a>.';
         } else if (rejected.length) {
             cls = 'is-warn';
             var q = rejected[0].scope;
+            var qHref = q.indexOf('p:') === 0
+                ? '/quote-builder/edit.php?offline_template=1#p=' + encodeURIComponent(q.slice(2))
+                : '/quote-builder/edit.php?id=' + encodeURIComponent(q) + '#add-line';
             txt = rejected.length + (rejected.length === 1 ? ' saved change needs' : ' saved changes need')
-                + ' checking — <a href="/quote-builder/edit.php?id=' + encodeURIComponent(q) + '#add-line">open the quote</a>.';
+                + ' checking — <a href="' + qHref + '">open the quote</a>.';
         } else if (waiting) {
             txt = nWait + ' waiting to send.';
         }
@@ -257,6 +356,17 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             if (!opts.queue) {
                 if (netDown || !navigator.onLine) {
                     e.preventDefault();
+                    // New quote on a tablet set up for offline: start it on the tablet.
+                    if (opts.offlineStart && tabletSetUp()) {
+                        var details = snapshot();
+                        if (!nameIn(details).trim()) { alert('Type the customer’s name first.'); return; }
+                        var pid = prov.create(details);
+                        if (pid) {
+                            draft.clear(key);
+                            location.href = '/quote-builder/edit.php?offline_template=1#p=' + pid;
+                            return;
+                        }
+                    }
                     alert(opts.needsSignal || 'No signal right now. Everything you typed is kept on this tablet; try again when the signal is back.');
                 }
                 // Online: a normal submit. The draft is kept (flagged) until the
@@ -308,6 +418,84 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         restoreBar: restoreBar, when: when,
         onChange: function (fn) { listeners.push(fn); }
     };
+
+    // ---- Saved pages (the service worker, /sw.js) ---------------------------
+    // Only on a tablet set up for offline (offline/engine.js). It keeps each
+    // quote page opened with signal for 14 days, per user, so it opens with no
+    // signal too. Turning offline off wipes them (agreed with John 2026-09-28).
+    var SW = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+    function tabletSetUp() { return !!lsGet('yb.engine.enabled.' + USER_ID); }
+    function swTell(msg) {
+        if (!SW) return Promise.resolve();
+        return SW.getRegistration('/').then(function (reg) {
+            var w = reg && (reg.active || reg.waiting || reg.installing);
+            if (w) w.postMessage(msg);
+            return reg;
+        }).catch(function () {});
+    }
+    function swEnable(saveUrls) {
+        if (!SW || !USER_ID) return Promise.resolve();
+        return SW.register('/sw.js', { scope: '/' }).then(function () { return SW.ready; }).then(function (reg) {
+            reg.active.postMessage({ type: 'user', uid: USER_ID });
+            if (saveUrls && saveUrls.length) reg.active.postMessage({ type: 'save', urls: saveUrls });
+        }).catch(function (e) { console.warn('Offline pages not set up:', e); });
+    }
+    function swWipe() {
+        if (!SW) return Promise.resolve();
+        return swTell({ type: 'wipe' }).then(function (reg) { if (reg) return reg.unregister(); });
+    }
+    if (SW && USER_ID) {
+        if (tabletSetUp()) swEnable();
+        // Not set up for THIS user (e.g. someone else signs in on a shared tablet):
+        // make sure the helper never shows another person's saved pages.
+        else swTell({ type: 'user', uid: USER_ID });
+    }
+
+    // This page came from the tablet's saved copy (no signal): say so.
+    if (window.__ybSavedCopy && location.search.indexOf('offline_template') === -1) {
+        document.addEventListener('DOMContentLoaded', function () {
+            var host = document.querySelector('main') || document.body;
+            var note = document.createElement('div');
+            note.className = 'yb-restore-bar';
+            note.textContent = 'No signal — this is the copy saved on this tablet at ' + when(window.__ybSavedCopy)
+                + '. Anything you change is kept here and sent when the signal is back.';
+            host.insertBefore(note, host.firstChild);
+        });
+    }
+    window.ybOffline.swEnable = swEnable;
+    window.ybOffline.swWipe = swWipe;
+    window.ybOffline.prov = prov;
+
+    // On a quote whose blinds the server priced differently from the tablet:
+    // list them, with both prices. The server's price is the one on the quote.
+    document.addEventListener('DOMContentLoaded', function () {
+        var qm = /\/quote-builder\/edit\.php$/.test(location.pathname) && new URLSearchParams(location.search).get('id');
+        if (!qm) return;
+        var mineFlags = flags().filter(function (f) { return f.scope === String(qm); });
+        if (!mineFlags.length) return;
+        var host = document.querySelector('main') || document.body;
+        var box = document.createElement('div');
+        box.className = 'yb-restore-bar';
+        box.style.flexDirection = 'column';
+        box.style.alignItems = 'stretch';
+        var h = document.createElement('strong');
+        h.textContent = 'Priced differently when sent from the tablet — the quote uses the server’s price:';
+        box.appendChild(h);
+        mineFlags.forEach(function (f) {
+            var row = document.createElement('div');
+            row.textContent = f.summary + ': £' + f.tablet.toFixed(2) + ' on the tablet → £' + f.server.toFixed(2) + ' now.';
+            box.appendChild(row);
+        });
+        var okBtn = document.createElement('button');
+        okBtn.type = 'button'; okBtn.textContent = 'OK, checked';
+        okBtn.style.alignSelf = 'flex-start';
+        okBtn.addEventListener('click', function () {
+            lsSet(FLAGS_KEY, flags().filter(function (f) { return f.scope !== String(qm); }));
+            box.remove(); changed();
+        });
+        box.appendChild(okBtn);
+        host.insertBefore(box, host.firstChild);
+    });
 
     renderBar();
     if (mine().some(function (i) { return i.status === 'waiting'; })) flushSoon();
