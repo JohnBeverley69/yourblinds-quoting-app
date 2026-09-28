@@ -534,6 +534,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             font-size: 0.9375rem; font-weight: 600;
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }
+        /* When the sidebar is folded away (same breakpoints as app.css), the
+           menu button is fixed in the top-right corner and sat on top of the
+           right-aligned Total. Keep the bar's contents clear of it. */
+        @media (max-width: 1024px), (pointer: coarse) and (max-width: 1440px) {
+            .quote-sticky-bar { padding-right: calc(44px + 1.5rem); }
+        }
         .quote-sticky-bar .qsb-left { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .quote-sticky-bar .qsb-total { font-size: 1.0625rem; }
         .quote-sticky-bar .status-pill { margin: 0; }
