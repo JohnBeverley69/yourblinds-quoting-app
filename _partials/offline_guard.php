@@ -378,6 +378,20 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         alert('No signal — this needs signal. Nothing has been changed; try again when you’re back in signal.');
     }, true);
 
+    // Links that need the server and can't be saved on the tablet (the quote PDF:
+    // View PDF / Download PDF, often opened in a new tab where there's nothing to
+    // fall back on): with no signal, say so instead of the browser's "no internet" page.
+    document.addEventListener('click', function (e) {
+        if (!netDown && navigator.onLine) return;
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a) return;
+        var href = a.getAttribute('href') || '';
+        if (!/^\/(pdf-generator|pdf)\//.test(href) && !/\/pdf-generator\//.test(a.href)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        alert('No signal — the PDF is made by the server, so it needs signal. Try again when you’re back in signal.');
+    }, true);
+
     function protectForm(form, key, opts) {
         if (!form) return;
         form.setAttribute('data-yb-offline', '1');
