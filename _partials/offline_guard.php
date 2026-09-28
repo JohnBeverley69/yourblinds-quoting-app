@@ -51,10 +51,21 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     function uid() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
     function changed() { renderBar(); listeners.forEach(function (fn) { try { fn(); } catch (e) {} }); }
 
+    // Pretend there's no signal (testing / demos on a desktop, which can't go
+    // into flight mode): ybOffline.simulate(true). It survives page changes
+    // (it's kept in localStorage and the page-saving helper is told on every
+    // page), so a whole visit can be walked through. Background sends and page
+    // loads behave exactly as with no signal. Only a plain form post can't be
+    // stopped, so the quote screen's saves (which go through here) are what to test.
+    var SIMULATE = false;
+    try { SIMULATE = localStorage.getItem('yb.simulateOffline') === '1'; } catch (e) {}
+    if (SIMULATE) netDown = true;
+
     // Any failed request means "no signal" in practice (a weak signal often
     // still reports navigator.onLine = true); any success means it's back.
     var realFetch = window.fetch.bind(window);
     window.fetch = function () {
+        if (SIMULATE) return Promise.reject(new TypeError('Failed to fetch (simulated no signal)'));
         return realFetch.apply(null, arguments).then(function (r) {
             if (netDown) { netDown = false; changed(); flushSoon(); }
             return r;
@@ -64,7 +75,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         });
     };
     window.addEventListener('offline', function () { netDown = true; changed(); });
-    window.addEventListener('online',  function () { netDown = false; changed(); flushSoon(); });
+    window.addEventListener('online',  function () { if (SIMULATE) return; netDown = false; changed(); flushSoon(); });
 
     // ---- drafts ------------------------------------------------------------
     var draft = {
@@ -260,7 +271,8 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         if (netDown) {
             cls = 'is-off';
             txt = 'No signal — anything you save is kept on this tablet'
-                + (waiting ? ' (' + nWait + ' waiting)' : '') + '.';
+                + (waiting ? ' (' + nWait + ' waiting)' : '') + '.'
+                + (SIMULATE ? ' <a href="#" onclick="ybOffline.simulate(false);return false;">(Pretend mode — turn off)</a>' : '');
         } else if (loginNeeded && waiting) {
             cls = 'is-warn';
             txt = 'Signed out — <a href="/auth/login.php" target="_blank" rel="noopener">sign in again</a> to send '
@@ -465,6 +477,12 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     window.ybOffline.swEnable = swEnable;
     window.ybOffline.swWipe = swWipe;
     window.ybOffline.prov = prov;
+    // ybOffline.simulate(true|false): pretend there's no signal (see SIMULATE above).
+    window.ybOffline.simulate = function (on) {
+        try { on ? localStorage.setItem('yb.simulateOffline', '1') : localStorage.removeItem('yb.simulateOffline'); } catch (e) {}
+        return swTell({ type: 'simulate-offline', on: !!on }).then(function () { location.reload(); });
+    };
+    if (SIMULATE) swTell({ type: 'simulate-offline', on: true });
 
     // On a quote whose blinds the server priced differently from the tablet:
     // list them, with both prices. The server's price is the one on the quote.
