@@ -2265,19 +2265,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             <div class="section-header">
                 <h2 class="section-title">Send to customer</h2>
             </div>
-            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 1rem">
-                Email the PDF and a link the customer can click to accept the quote online.
-                <?php if ($waEnabled): ?>
-                    Or share the same link via WhatsApp.
-                <?php elseif ($isTradeOrder): ?>
-                    Add a mobile number to the trade account to enable WhatsApp sharing.
-                <?php elseif ($waPhone === ''): ?>
-                    Add a phone number to the customer details above to enable WhatsApp sharing.
-                <?php else: ?>
-                    Tick "Customer has WhatsApp on this number" above to enable WhatsApp sharing.
-                <?php endif; ?>
-            </p>
-
+            <?php /* No intro paragraph: the buttons say what they do ("Email PDF +
+                     accept link", "Send via WhatsApp"), and the space matters on a
+                     tablet (John, 2026-09-28). */ ?>
             <form method="post" action="/pdf-generator/email_pdf.php" class="form" novalidate data-yb-send
                   style="margin-bottom:1rem">
                 <?= csrf_field() ?>
