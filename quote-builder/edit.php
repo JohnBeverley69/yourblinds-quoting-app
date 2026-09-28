@@ -1314,7 +1314,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             <form method="post"
                   action="<?= $editingItemId > 0 ? '/quote-builder/update_item.php' : '/quote-builder/add_item.php' ?>"
-                  class="form" id="add-item-form" novalidate>
+                  class="form" id="add-item-form" novalidate data-yb-offline>
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                 <input type="hidden" name="round_up" value="1">
@@ -2278,7 +2278,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <?php endif; ?>
             </p>
 
-            <form method="post" action="/pdf-generator/email_pdf.php" class="form" novalidate
+            <form method="post" action="/pdf-generator/email_pdf.php" class="form" novalidate data-yb-send
                   style="margin-bottom:1rem">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $quote['id'] ?>">
@@ -4125,6 +4125,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
     // "Waiting to send" list for this quote, above the line form.
     var outboxPanel = document.createElement('div');
+    outboxPanel.id = 'yb-outbox-panel';
     outboxPanel.className = 'yb-restore-bar';
     outboxPanel.style.display = 'none';
     outboxPanel.style.flexDirection = 'column';
@@ -4166,9 +4167,21 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             var label = document.createElement('span');
             label.style.flex = '1 1 220px';
             label.textContent = (it.itemId ? 'Change to line — ' : '') + it.summary + ' · '
-                + (it.status === 'rejected' ? 'not added: ' + (it.error || 'please check') : 'waiting to send');
-            if (it.status === 'rejected') label.style.color = '#9b1c1c';
+                + (it.status === 'rejected' ? (it.kind === 'send' ? 'not sent: ' : 'not added: ') + (it.error || 'please check')
+                   : it.status === 'held' ? 'held: ' + (it.error || 'check the quote first')
+                   : (it.kind === 'send' ? 'goes when the signal is back (after the blinds)' : 'waiting to send'));
+            if (it.status === 'rejected' || it.status === 'held') label.style.color = '#9b1c1c';
             row.appendChild(label);
+            if (it.kind === 'send' && it.status === 'held') {
+                // Checked the prices and happy: send it anyway (it still waits for signal).
+                var sendNow = document.createElement('button');
+                sendNow.type = 'button'; sendNow.textContent = 'Send now';
+                sendNow.addEventListener('click', function () {
+                    OFF.outbox.update(it.id, { status: 'waiting', override: true, error: null });
+                    if (OFF.online && OFF.outbox.flush) OFF.outbox.flush();
+                });
+                row.appendChild(sendNow);
+            }
             if (it.kind === 'line') {
             var back = document.createElement('button');
             back.type = 'button'; back.textContent = 'Put back in the form';
@@ -4188,9 +4201,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             row.appendChild(back);
             }
             var del = document.createElement('button');
-            del.type = 'button'; del.textContent = 'Delete';
+            del.type = 'button'; del.textContent = it.kind === 'send' ? 'Don’t send' : 'Delete';
             del.addEventListener('click', function () {
-                if (confirm('Delete this from the tablet? It hasn’t been saved to the quote.')) OFF.outbox.remove(it.id);
+                if (confirm(it.kind === 'send' ? 'Cancel this email? It hasn’t been sent.'
+                                               : 'Delete this from the tablet? It hasn’t been saved to the quote.')) OFF.outbox.remove(it.id);
             });
             row.appendChild(del);
             outboxPanel.appendChild(row);
@@ -4412,6 +4426,7 @@ window.__editingBlind__ = <?= json_encode([
     // A quote started on the tablet: the details live with it on the tablet and
     // go up with its creation (new.php) when the signal is back.
     if (window.__ybProvId) {
+        f.setAttribute('data-yb-offline', '1');   // looked after here, signal or not
         var pid = window.__ybProvId;
         var rec = ybOffline.prov.get(pid) || {};
         (rec.details || []).forEach(function (p) {
