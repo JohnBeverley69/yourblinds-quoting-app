@@ -474,22 +474,60 @@ window.addEventListener('pageshow', function (e) {
 // keyboard has had a moment to open, bring a hidden field to the middle of
 // what's left of the screen. Only when it's actually hidden, so nothing jumps
 // about needlessly.
+//
+// Search boxes with a drop-down list (fabric search, room name, customer
+// search): the list opens BELOW the box, and on a landscape tablet the keyboard
+// takes over half the screen, so the list vanished behind it (John's photo,
+// 2026-09-28). Those boxes are moved to the TOP of the visible strip (just under
+// the sticky quote bar), and their list is sized to the space left above the
+// keyboard, scrolling inside it.
 (function () {
     if (!window.matchMedia('(pointer: coarse)').matches) return;
     var TYPED = /^(text|search|email|tel|number|url|password|date|time)$/;
+    var POPUPS = '.fabric-results, #item-room-popup';
+    function visibleHeight() { return window.visualViewport ? window.visualViewport.height : window.innerHeight; }
+    function isSearchBox(el) { return !!(el.closest('.fabric-picker, .room-combobox') || el.hasAttribute('list')); }
+    function topOffset() {
+        var bar = document.querySelector('.quote-sticky-bar');
+        return (bar ? bar.getBoundingClientRect().height : 0) + 12;
+    }
+    function fitPopups(el) {
+        var box = el.closest('.fabric-picker, .room-combobox');
+        if (!box) return;
+        var room = Math.max(120, Math.floor(visibleHeight() - el.getBoundingClientRect().bottom - 12));
+        box.querySelectorAll(POPUPS).forEach(function (p) { p.style.maxHeight = room + 'px'; });
+    }
+    function unfitPopups() {
+        document.querySelectorAll(POPUPS).forEach(function (p) { p.style.maxHeight = ''; });
+    }
     document.addEventListener('focusin', function (e) {
         var el = e.target;
         if (!el || !(el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && TYPED.test(el.type || 'text')))) return;
         setTimeout(function () {
             if (document.activeElement !== el) return;
-            var vv = window.visualViewport;
-            var visibleBottom = vv ? vv.height : window.innerHeight;
             var r = el.getBoundingClientRect();
-            if (r.bottom > visibleBottom - 12 || r.top < 0) {
+            if (isSearchBox(el)) {
+                // Room for the list: put the box at the top of what's visible.
+                var shift = r.top - topOffset();
+                if (Math.abs(shift) > 4) window.scrollBy({ top: shift, behavior: 'smooth' });
+                setTimeout(function () { if (document.activeElement === el) fitPopups(el); }, 350);
+            } else if (r.bottom > visibleHeight() - 12 || r.top < 0) {
                 el.scrollIntoView({ block: 'center', behavior: 'smooth' });
             }
         }, 400);
     });
+    // Keyboard opening/closing changes the space: refit, or restore when it's gone.
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+            var el = document.activeElement;
+            if (el && el.tagName === 'INPUT' && isSearchBox(el)) fitPopups(el);
+            else unfitPopups();
+        });
+    }
+    document.addEventListener('focusout', function () { setTimeout(function () {
+        var el = document.activeElement;
+        if (!el || el.tagName !== 'INPUT' || !isSearchBox(el)) unfitPopups();
+    }, 200); });
 })();
 </script>
 <script src="/offline/engine.js?v=<?= (int) @filemtime(__DIR__ . '/../offline/engine.js') ?>"></script>
