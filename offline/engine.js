@@ -232,7 +232,12 @@
     // waiting to send are NOT touched: that's unsent work, not a saved copy.
     if (window.ybOffline && ybOffline.swWipe) { try { await ybOffline.swWipe(); } catch (e) {} }
     try { localStorage.removeItem(k('enabled')); localStorage.removeItem(k('meta')); } catch (e) {}
-    try { var cache = await caches.open(CACHE); await cache.delete(bundleKey()); await cache.delete(catKey()); } catch (e) {}
+    // "Turn off wipes the lot": the price list, the pricing code and the engine
+    // itself. Setting up again downloads them afresh.
+    try { await caches.delete(CACHE); } catch (e) {}
+    try {
+      Object.keys(localStorage).forEach(function (key) { if (key.indexOf('yb.engine.') === 0) localStorage.removeItem(key); });
+    } catch (e) {}
     changed();
   }
 
