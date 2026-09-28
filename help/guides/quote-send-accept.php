@@ -224,8 +224,6 @@ return [
                 <!-- ===== Scenes 1-3: the Send to customer panel ===== -->
                 <div class="osc scSend">
                   <div class="card-t">Send to customer</div>
-                  <p class="ldesc2">Email the PDF and a link the customer can click to accept the quote online.
-                     Or share the same link via WhatsApp.</p>
 
                   <div class="fld"><label>Recipient email</label>
                     <div class="boxv emailfld"><span class="em-v">emma.fletcher@gmail.com</span></div></div>
@@ -442,19 +440,21 @@ return [
              nothing has been sent and the quote hasn&rsquo;t moved.</div>
 
           <p><b>The WhatsApp button, and why it&rsquo;s sometimes missing.</b> WhatsApp uses the customer&rsquo;s
-             <b>mobile</b> number (it falls back to the landline if there&rsquo;s no mobile), and the button only appears once
-             you&rsquo;ve also ticked <b>&ldquo;Mobile is on WhatsApp&rdquo;</b> in the customer details higher up the same
-             page. The grey line at the top of the panel always tells you which bit is missing, in its own words:</p>
+             <b>mobile</b> number (it falls back to the landline if there&rsquo;s no mobile), and the green button only appears
+             once <b>both</b> are true. No green button? Check these, in the customer details higher up the same page:</p>
           <ul class="steps">
-            <li>&ldquo;<em>Or share the same link via WhatsApp.</em>&rdquo; &mdash; all good, the green button is there.</li>
-            <li>&ldquo;<em>Add a phone number to the customer details above to enable WhatsApp sharing.</em>&rdquo; &mdash; you
-                have no number at all for them.</li>
-            <li>&ldquo;<em>Tick &ldquo;Customer has WhatsApp on this number&rdquo; above to enable WhatsApp sharing.</em>&rdquo;
-                &mdash; you have the number, you just haven&rsquo;t confirmed it&rsquo;s a WhatsApp one.</li>
-            <li>&ldquo;<em>Add a mobile number to the trade account to enable WhatsApp sharing.</em>&rdquo; &mdash; this is a
-                <b>trade-account</b> order, so it uses the account&rsquo;s own mobile number. A trade account needs <b>no tick</b>
-                &mdash; the mobile on the account is enough.</li>
+            <li><b>There&rsquo;s a phone number</b> for them &mdash; with no number at all there&rsquo;s nothing to send to.</li>
+            <li><b>&ldquo;Customer has WhatsApp on this number&rdquo; is ticked</b> &mdash; having the number isn&rsquo;t enough;
+                you confirm it&rsquo;s a WhatsApp one.</li>
+            <li><b>A trade-account order</b> works differently: it uses the <b>account&rsquo;s own mobile</b> number and needs
+                <b>no tick</b> &mdash; if the button is missing, add a mobile number to the trade account.</li>
           </ul>
+
+          <div class="heads"><span class="hi">&#9888;</span><div><b>No signal?</b> On a tablet set up for offline, the red button
+             still works: it asks &ldquo;<em>No signal. Send this quote to &hellip; automatically when the signal is back?</em>&rdquo;
+             and the email waits on the tablet. It goes once the quote&rsquo;s blinds have been sent &mdash; and is <b>held</b> for
+             you to check (<b>Send now</b> / <b>Don&rsquo;t send</b>) if the server priced any blind differently from the tablet.
+             See the guide <b>&ldquo;Working offline on a tablet&rdquo;</b>.</div></div>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>A copied link sends the quote all by itself.</b> The very
              first time anybody opens the public link, a quote still sitting in <b>draft</b> is quietly flipped to <b>sent</b>
