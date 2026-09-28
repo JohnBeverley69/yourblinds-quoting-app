@@ -49,6 +49,8 @@ return [
           .gd .stage[data-step="7"] .scSend{ display:block; }
           .gd .stage[data-step="8"] .scBack{ display:block; }
           .gd .stage{ position:relative; min-height:21rem; }
+          /* room under the scenes for the orange "No signal" bar, so it never covers the buttons */
+          .gd .scQuote, .gd .scNew, .gd .scSend{ padding-bottom:2.4rem; }
 
           /* 1-2: the sidebar footer and its panel */
           .gd .foot{ max-width:17rem; background:var(--nav); color:#dfe7ef; border-radius:10px; padding:.6rem .7rem; font-size:.68rem; }
