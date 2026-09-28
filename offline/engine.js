@@ -129,6 +129,7 @@
   }
   async function keepPickers(cache, progress) {
     var ids = await activeProductIds(cache);
+    var saved = 0;
     for (var i = 0; i < ids.length; i++) {
       var pid = ids[i];
       if (progress) progress('Saving the product lists… ' + (i + 1) + ' of ' + ids.length);
@@ -141,9 +142,15 @@
         }
         var fb = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(pid)
                              + '&q=&limit=2000&_=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' });
-        if (fb.ok) await cache.put(pickerKey('fab', pid), new Response(await fb.text(), { headers: { 'Content-Type': 'application/json' } }));
+        if (fb.ok) {
+          await cache.put(pickerKey('fab', pid), new Response(await fb.text(), { headers: { 'Content-Type': 'application/json' } }));
+          if (pdText) saved++;
+        }
       } catch (e) { /* signal dropped: the rest are saved on the next update */ }
     }
+    // Shown in the status line, and "never saved" makes the next page with
+    // signal save them automatically (tablets set up before this existed).
+    lsSet(k('pickers'), { saved: saved, total: ids.length, at: Date.now() });
   }
   var pickers = {
     productData: async function (pid) {
@@ -187,10 +194,12 @@
     return built;
   }
 
-  async function refresh(force) {
+  async function refresh(force, progress) {
     if (!enabled() || !online()) return;
     var meta = lsGet(k('meta')) || {};
-    if (!force && meta.checkedAt && Date.now() - meta.checkedAt < CHECK_EVERY && meta.today === todayIso()) return;
+    var pk = lsGet(k('pickers'));
+    var pickersMissing = !pk || pk.saved < pk.total;
+    if (!force && !pickersMissing && meta.checkedAt && Date.now() - meta.checkedAt < CHECK_EVERY && meta.today === todayIso()) return;
     try {
       var cache = await caches.open(CACHE);
       // Pricing code: small; re-fetch and restart the engine if it changed.
@@ -207,8 +216,9 @@
       for (var u of [LOADER, WASM_URL]) { if (!(await cache.match(u))) await keep(cache, u); }
       if (!(await cache.match(UNIVERSAL))) await keepGraph(cache, UNIVERSAL, {});
       var text = await downloadCatalogue(cache, force);
-      // Prices changed, or "Update now": refresh the product + fabric lists too.
-      if (text || force) await keepPickers(cache);
+      // Prices changed, "Update now", or the lists were never (fully) saved:
+      // save the product + fabric lists too.
+      if (text || force || pickersMissing) await keepPickers(cache, progress);
       if (newVer !== oldVer) stopWorker();
       else if (text && worker) await keepDatabase(cache, await call('catalogue', { catalogue: text }));
       // New prices or new pricing code: build the database NOW, while there's
@@ -363,14 +373,18 @@
         } catch (e) { txt.textContent = 'Not set up: ' + e.message; b.disabled = false; }
       }]);
     } else {
+      var pk = lsGet(k('pickers'));
+      var listsOk = pk && pk.total && pk.saved >= pk.total;
       txt.textContent = (s.stale
         ? '⚠ Offline prices are from ' + fmtDay(s.today) + ' — update them when you have signal.'
         : '✓ Works offline — prices from ' + fmtDay(s.today) + '.')
+        + (listsOk ? ' ' + pk.saved + ' products and their fabrics saved.'
+                   : ' ⚠ Product lists not fully saved yet — tap Update now with signal.')
         + (ready && lastStartMs ? ' Engine ready (started in ' + (lastStartMs / 1000).toFixed(1) + ' s).' : '');
-      if (s.stale) el.classList.add('is-stale');
+      if (s.stale || !listsOk) el.classList.add('is-stale');
       btns.push(['Update now', async function (b) {
         b.disabled = true; txt.textContent = 'Updating…';
-        await refresh(true); changed();
+        await refresh(true, function (m) { txt.textContent = m; }); changed();
       }]);
       btns.push(['Turn off', function () {
         if (confirm('Stop keeping prices on this tablet? You can set it up again any time with signal.')) turnOff();
