@@ -271,6 +271,11 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <button type="submit">Create account</button>
+                <p class="auth-footer" style="margin-top:.75rem;font-size:.85rem">
+                    By creating an account you agree to our
+                    <a href="/legal/licence.php" target="_blank" rel="noopener">licence agreement</a> and
+                    <a href="/legal/privacy.php" target="_blank" rel="noopener">privacy policy</a>.
+                </p>
             </form>
 
             <p class="auth-footer">
@@ -280,6 +285,7 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <p class="auth-meta">
             &copy; <?= date('Y') ?> YourBlinds. All rights reserved.
+            &middot; <a href="/legal/licence.php">Licence</a> &middot; <a href="/legal/privacy.php">Privacy</a>
         </p>
     </main>
 </body>
