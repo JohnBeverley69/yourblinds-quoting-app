@@ -5,10 +5,19 @@
 // server would. Everything it needs is handed over by the page from the
 // tablet's own storage, so it runs with no signal at all.
 //
-// Messages in:  {id, type:'init', universalUrl, loaderSrc, wasmUrl, files, catalogue}
-//               {id, type:'catalogue', catalogue}        (rebuild with a newer copy)
+// Fast start (cheap tablets): building the catalogue database from the JSON
+// download takes ~6–7 s on a £55 tablet, so it's done ONCE per catalogue
+// version. The finished database file (+ its meta.json) is handed back to the
+// page to keep, and on later starts it's simply loaded (no build).
+//
+// Messages in:  {id, type:'init', universalUrl, loaderSrc, wasmUrl, files,
+//                 sqlite?: ArrayBuffer, meta?: string,   ← a kept, ready database
+//                 catalogue?: string}                     ← or build from the JSON
+//               {id, type:'catalogue', catalogue}          (rebuild with a newer copy)
 //               {id, type:'preview', qs, canCosts, forAccountId}
 // Messages out: {id, ok:true, result} | {id, ok:false, error}
+//   init/catalogue results after a BUILD carry {sqlite: ArrayBuffer, meta: string}
+//   for the page to keep.
 
 let php = null;
 
@@ -25,6 +34,13 @@ async function start(msg) {
     php.mkdir('/app/' + path.split('/').slice(0, -1).join('/'));
     php.writeFile('/app/' + path, code);
   }
+  if (msg.sqlite && msg.meta) {
+    // A database this tablet built before: just put it back.
+    php.mkdir('/data');
+    php.writeFile('/data/catalogue.sqlite', new Uint8Array(msg.sqlite));
+    php.writeFile('/data/meta.json', msg.meta);
+    return { ok: true, restored: true };
+  }
   return build(msg.catalogue);
 }
 
@@ -34,6 +50,10 @@ async function build(catalogueText) {
   try { php.unlink('/app/catalogue.json'); } catch (e) { /* already gone */ }
   const out = JSON.parse(r.text || '{}');
   if (out.error) throw new Error(out.error);
+  // Hand the finished database back so it never has to be built again.
+  const bytes = php.readFileAsBuffer('/data/catalogue.sqlite');
+  out.sqlite = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  out.meta = php.readFileAsText('/data/meta.json');
   return out;
 }
 
@@ -58,7 +78,8 @@ self.onmessage = (ev) => {
       else if (msg.type === 'catalogue') result = await build(msg.catalogue);
       else if (msg.type === 'preview') result = await preview(msg);
       else throw new Error('Unknown request ' + msg.type);
-      self.postMessage({ id: msg.id, ok: true, result });
+      // Move (not copy) a database file back to the page.
+      self.postMessage({ id: msg.id, ok: true, result }, result && result.sqlite ? [result.sqlite] : []);
     } catch (e) {
       self.postMessage({ id: msg.id, ok: false, error: String((e && e.message) || e) });
     }

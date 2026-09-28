@@ -3712,6 +3712,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             return await r.json();
         } catch (err) {
             if (window.ybEngine && ybEngine.enabled() && window.ybOffline && !ybOffline.online) {
+                if (!ybEngine.isReady()) {
+                    // First no-signal price on this page: the engine is starting up
+                    // (a second or two, longer on a very cheap tablet).
+                    previewBox.className   = 'idle';
+                    previewBox.textContent = 'Getting prices ready on this tablet…';
+                }
                 return await ybEngine.preview(params.toString());
             }
             throw err;

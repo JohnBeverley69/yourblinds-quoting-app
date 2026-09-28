@@ -160,7 +160,10 @@
       if (!(await cache.match(UNIVERSAL))) await keepGraph(cache, UNIVERSAL, {});
       var text = await downloadCatalogue(cache, force);
       if (newVer !== oldVer) stopWorker();
-      else if (text && worker) await call('catalogue', { catalogue: text });
+      else if (text && worker) await keepDatabase(cache, await call('catalogue', { catalogue: text }));
+      // New prices or new pricing code: build the database NOW, while there's
+      // signal and nobody's waiting, not at the first no-signal price.
+      if ((text && !worker) || newVer !== oldVer) startWorker().catch(function () {});
       // Keep the starting screens' saved copies current too.
       if (window.ybOffline && ybOffline.swEnable) ybOffline.swEnable(SAVE_ON_SETUP);
       changed();
@@ -171,21 +174,43 @@
 
   // ---- The worker ---------------------------------------------------------
   var worker = null, starting = null, seq = 0, pending = {}, bundle = null;
-  function call(type, payload) {
+  var ready = false, lastStartMs = 0;
+  function call(type, payload, transfer) {
     return new Promise(function (resolve, reject) {
       var id = ++seq;
       pending[id] = { resolve: resolve, reject: reject };
-      worker.postMessage(Object.assign({ id: id, type: type }, payload));
+      worker.postMessage(Object.assign({ id: id, type: type }, payload), transfer || []);
     });
   }
   function stopWorker() {
     if (worker) worker.terminate();
-    worker = null; starting = null; bundle = null;
+    worker = null; starting = null; bundle = null; ready = false;
     Object.keys(pending).forEach(function (id) { pending[id].reject(new Error('Offline engine restarted.')); delete pending[id]; });
   }
+
+  // The built catalogue database, kept per user + catalogue version, so a
+  // tablet builds it once (on WiFi, at set-up / when prices change) instead of
+  // every time the engine starts: ~6–7 s saved per start on a £55 tablet.
+  function dbKey(version)   { return '/offline/catalogue.sqlite?u=' + uid() + '&v=' + version; }
+  function metaKey(version) { return '/offline/catalogue.meta?u=' + uid() + '&v=' + version; }
+  async function keepDatabase(cache, built) {
+    var version = (lsGet(k('meta')) || {}).version;
+    if (!built || !built.sqlite || !version) return;
+    await cache.put(dbKey(version), new Response(built.sqlite));
+    await cache.put(metaKey(version), new Response(built.meta));
+    // Older versions of this user's database aren't needed any more.
+    var prefix = location.origin + '/offline/catalogue.';
+    for (var req of await cache.keys()) {
+      var u = new URL(req.url);
+      if (req.url.indexOf(prefix) === 0 && u.searchParams.get('u') === String(uid())
+          && u.searchParams.get('v') !== version) await cache.delete(req);
+    }
+  }
+
   function startWorker() {
     if (starting) return starting;
     starting = (async function () {
+      var t0 = performance.now();
       var cache = await caches.open(CACHE);
       var get = async function (key) {
         var hit = await cache.match(key);
@@ -198,9 +223,20 @@
         universalUrl: await graphUrl(cache, UNIVERSAL, {}),
         loaderSrc:    await (await get(LOADER)).text(),
         wasmUrl:      URL.createObjectURL(await (await get(WASM_URL)).blob()),
-        files:        bundle.files,
-        catalogue:    await (await get(catKey())).text()
+        files:        bundle.files
       };
+      // A database already built for this catalogue version? Load that instead.
+      var version = (lsGet(k('meta')) || {}).version;
+      var keptDb = version ? await cache.match(dbKey(version)) : null;
+      var keptMeta = keptDb ? await cache.match(metaKey(version)) : null;
+      var transfer = [];
+      if (keptDb && keptMeta) {
+        msg.sqlite = await keptDb.arrayBuffer();
+        msg.meta = await keptMeta.text();
+        transfer = [msg.sqlite];
+      } else {
+        msg.catalogue = await (await get(catKey())).text();
+      }
       worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })), { type: 'module' });
       worker.onmessage = function (ev) {
         var p = pending[ev.data.id];
@@ -209,7 +245,12 @@
         ev.data.ok ? p.resolve(ev.data.result) : p.reject(new Error(ev.data.error));
       };
       worker.onerror = function (ev) { console.error('Offline engine:', ev.message); };
-      return call('init', msg);
+      var result = await call('init', msg, transfer);
+      if (result && result.sqlite) await keepDatabase(cache, result);
+      ready = true;
+      lastStartMs = Math.round(performance.now() - t0);
+      changed();
+      return result;
     })();
     starting.catch(function () { starting = null; });
     return starting;
@@ -272,9 +313,10 @@
         } catch (e) { txt.textContent = 'Not set up: ' + e.message; b.disabled = false; }
       }]);
     } else {
-      txt.textContent = s.stale
+      txt.textContent = (s.stale
         ? '⚠ Offline prices are from ' + fmtDay(s.today) + ' — update them when you have signal.'
-        : '✓ Works offline — prices from ' + fmtDay(s.today) + '.';
+        : '✓ Works offline — prices from ' + fmtDay(s.today) + '.')
+        + (ready && lastStartMs ? ' Engine ready (started in ' + (lastStartMs / 1000).toFixed(1) + ' s).' : '');
       if (s.stale) el.classList.add('is-stale');
       btns.push(['Update now', async function (b) {
         b.disabled = true; txt.textContent = 'Updating…';
@@ -304,9 +346,21 @@
     enabled: enabled, status: status, setup: setup, refresh: refresh, preview: preview,
     turnOff: turnOff, mountStatus: mountStatus,
     onChange: function (fn) { watchers.push(fn); },
+    // True once the engine is running on this page (the first offline price is instant).
+    isReady: function () { return ready; },
+    lastStartMs: function () { return lastStartMs; },
     warm: function () { return enabled() ? startWorker() : Promise.resolve(); }
   };
 
   // Keep the copy current while there's signal.
   if (enabled()) setTimeout(function () { refresh(false); }, 4000);
+
+  // Warm up on a quote page as soon as there's no signal (opened with none, or
+  // it drops), so the engine is running before anyone types a size. With
+  // signal it isn't started at all: no point loading a cheap tablet for nothing.
+  if (enabled() && location.pathname === '/quote-builder/edit.php') {
+    var warmIfOffline = function () { if (!online() && !starting) startWorker().catch(function () {}); };
+    setTimeout(warmIfOffline, 300);
+    if (window.ybOffline && ybOffline.onChange) ybOffline.onChange(warmIfOffline);
+  }
 })();
