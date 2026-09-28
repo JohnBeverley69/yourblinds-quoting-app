@@ -109,6 +109,53 @@
     return text;
   }
 
+  // ---- Product + fabric pickers, kept for no-signal use -------------------
+  // The quote form's pickers come from api/product-data.php and
+  // api/fabrics-search.php. Every product's copy is saved here at set-up and on
+  // each price update, so ANY product can be picked with no signal, not just
+  // the ones someone happened to open earlier (John, £55 tablet: "Vertical
+  // blinds — system failed to load"). In Cache Storage, not localStorage: a
+  // big range's fabric list is too large for localStorage.
+  function pickerKey(kind, pid) { return '/offline/pickers/' + kind + '?u=' + uid() + '&p=' + pid; }
+  async function activeProductIds(cache) {
+    var hit = await cache.match(catKey());
+    if (!hit) return [];
+    var cat = JSON.parse(await hit.text());
+    var cols = Object.keys((cat.schema || {}).products || {});
+    var iId = cols.indexOf('id'), iActive = cols.indexOf('active');
+    return ((cat.data || {}).products || [])
+      .filter(function (r) { return iActive < 0 || Number(r[iActive]) === 1; })
+      .map(function (r) { return r[iId]; });
+  }
+  async function keepPickers(cache, progress) {
+    var ids = await activeProductIds(cache);
+    for (var i = 0; i < ids.length; i++) {
+      var pid = ids[i];
+      if (progress) progress('Saving the product lists… ' + (i + 1) + ' of ' + ids.length);
+      try {
+        var pd = await fetch('/quote-builder/api/product-data.php?product_id=' + encodeURIComponent(pid) + '&_=' + Date.now(),
+                             { credentials: 'same-origin', cache: 'no-store' });
+        var pdText = pd.ok ? await pd.text() : '';
+        if (pdText && !JSON.parse(pdText).error) {
+          await cache.put(pickerKey('pd', pid), new Response(pdText, { headers: { 'Content-Type': 'application/json' } }));
+        }
+        var fb = await fetch('/quote-builder/api/fabrics-search.php?product_id=' + encodeURIComponent(pid)
+                             + '&q=&limit=2000&_=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' });
+        if (fb.ok) await cache.put(pickerKey('fab', pid), new Response(await fb.text(), { headers: { 'Content-Type': 'application/json' } }));
+      } catch (e) { /* signal dropped: the rest are saved on the next update */ }
+    }
+  }
+  var pickers = {
+    productData: async function (pid) {
+      try { var h = await (await caches.open(CACHE)).match(pickerKey('pd', pid)); return h ? await h.json() : null; }
+      catch (e) { return null; }
+    },
+    fabrics: async function (pid) {
+      try { var h = await (await caches.open(CACHE)).match(pickerKey('fab', pid)); return h ? ((await h.json()).fabrics || []) : []; }
+      catch (e) { return []; }
+    }
+  };
+
   async function setup(progress) {
     progress = progress || function () {};
     if (!online()) throw new Error('Needs signal (WiFi is best) to set up.');
@@ -123,6 +170,7 @@
     await keep(cache, '/offline/engine_bundle.php', bundleKey());
     progress('Downloading your price list…');
     await downloadCatalogue(cache, true);
+    await keepPickers(cache, progress);
     lsSet(k('enabled'), 1);
     progress('Checking it works…');
     stopWorker();
@@ -159,6 +207,8 @@
       for (var u of [LOADER, WASM_URL]) { if (!(await cache.match(u))) await keep(cache, u); }
       if (!(await cache.match(UNIVERSAL))) await keepGraph(cache, UNIVERSAL, {});
       var text = await downloadCatalogue(cache, force);
+      // Prices changed, or "Update now": refresh the product + fabric lists too.
+      if (text || force) await keepPickers(cache);
       if (newVer !== oldVer) stopWorker();
       else if (text && worker) await keepDatabase(cache, await call('catalogue', { catalogue: text }));
       // New prices or new pricing code: build the database NOW, while there's
@@ -346,6 +396,7 @@
     enabled: enabled, status: status, setup: setup, refresh: refresh, preview: preview,
     turnOff: turnOff, mountStatus: mountStatus,
     onChange: function (fn) { watchers.push(fn); },
+    pickers: pickers,
     // True once the engine is running on this page (the first offline price is instant).
     isReady: function () { return ready; },
     lastStartMs: function () { return lastStartMs; },

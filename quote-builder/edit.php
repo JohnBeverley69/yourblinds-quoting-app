@@ -2529,6 +2529,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         } catch (err) {
             var hit = cacheGet('pd.' + pid);
             if (hit && hit.v) return hit.v;   // no signal: use the copy on this tablet
+            // …or the full set saved when this tablet was set up for offline.
+            if (window.ybEngine && ybEngine.pickers) {
+                var kept = await ybEngine.pickers.productData(pid);
+                if (kept) return kept;
+            }
             throw err;
         }
     }
@@ -2543,8 +2548,9 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
         ((hit && hit.v) || []).concat(items).forEach(function (f) { byId[f.id] = f; });
         cachePut(key, Object.values(byId).slice(0, 600));
     }
-    function searchCachedFabrics(query) {
-        var list = (cacheGet(fabricCacheKey()) || {}).v
+    function searchCachedFabrics(query, fullList) {
+        var list = fullList
+                || (cacheGet(fabricCacheKey()) || {}).v
                 || (cacheGet('fab.' + productSel.value + '..') || {}).v || [];
         var band = bandSel ? bandSel.value.toLowerCase() : '';
         var q = (query || '').toLowerCase().trim();
@@ -2656,8 +2662,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
 
             renderExtras();
         } catch (err) {
-            setIdle(systemSel, 'Failed to load');
-            fabricSearch.placeholder = 'Failed to load';
+            // With no signal, say why and what fixes it.
+            var noSig = window.ybOffline && !ybOffline.online;
+            setIdle(systemSel, noSig ? 'Not saved on this tablet' : 'Failed to load');
+            fabricSearch.placeholder = noSig
+                ? 'Not saved on this tablet — with signal, tap Work offline → Update now'
+                : 'Failed to load';
             console.error(err);
         }
         schedulePreview();
@@ -2695,8 +2705,11 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             rememberFabrics(fabricCacheKey(), data.fabrics || []);
             renderFabricResults(data.fabrics || []);
         } catch (err) {
-            // No signal: search the copy kept on this tablet instead.
-            var cached = searchCachedFabrics(query);
+            // No signal: search the copy kept on this tablet instead. The full
+            // list saved at set-up comes first (it has every fabric); the
+            // lists remembered from earlier searches are the fallback.
+            var full = (window.ybEngine && ybEngine.pickers) ? await ybEngine.pickers.fabrics(productSel.value) : [];
+            var cached = full.length ? searchCachedFabrics(query, full) : searchCachedFabrics(query);
             if (cached.length) {
                 renderFabricResults(cached);
                 return;
