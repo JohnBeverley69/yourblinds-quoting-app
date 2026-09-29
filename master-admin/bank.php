@@ -435,7 +435,14 @@ $activeNav = 'bank';
     var row = saved.row ? document.getElementById(saved.row) : null;
     // Put the row back where it sat on screen (a new flash message above can
     // shift the page); if it's gone (ignored/matched), fall back to the old spot.
-    window.scrollTo(0, row ? row.getBoundingClientRect().top + window.scrollY - (saved.top || 0) : (saved.y || 0));
+    // The browser's own scroll restoration runs after this script and would put
+    // it back to the top, so switch it off and re-apply once the page has loaded.
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    var go = function () {
+        window.scrollTo(0, row ? row.getBoundingClientRect().top + window.scrollY - (saved.top || 0) : (saved.y || 0));
+    };
+    go();
+    window.addEventListener('load', go);
     if (row) {
         row.style.transition = 'background-color 1.2s';
         row.style.backgroundColor = 'rgba(37, 99, 235, 0.12)';
