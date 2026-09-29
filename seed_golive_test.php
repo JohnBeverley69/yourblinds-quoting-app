@@ -244,9 +244,9 @@ for ($n = 1; $n <= QA_ACCOUNTS; $n++) {
     $u['sales']   = $user($cid, "$slug.sales", $pickName($n + 20), 'sales',
         ['can_create_quotes' => 1, 'can_create_orders' => 1, 'can_view_all_customer_jobs' => 1,
          'can_view_costs' => 1, 'dash_view_revenue' => 1, 'dash_view_profit' => 1, 'dash_view_recent' => 1]);
-    $u['salesnm'] = $user($cid, "$slug.salesnm", $pickName($n + 40), 'sales', $none + ['can_create_quotes' => 1]);
+    $u['salesnm'] = $user($cid, "$slug.salesnm", $pickName($n + 40), 'sales', array_merge($none, ['can_create_quotes' => 1]));
     $u['fitter']  = $user($cid, "$slug.fitter", $pickName($n + 60), 'sales',
-        $none + ['can_create_quotes' => 0, 'can_view_fittings_only' => 1], ['fitter']);
+        array_merge($none, ['can_view_fittings_only' => 1]), ['fitter']);
     if ($n % 3 === 0) {
         $u['office'] = $user($cid, "$slug.office", $pickName($n + 80), 'office',
             ['can_create_quotes' => 1, 'can_create_orders' => 1, 'can_view_all_customer_jobs' => 1]);
