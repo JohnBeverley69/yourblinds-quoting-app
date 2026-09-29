@@ -332,7 +332,7 @@ $activeNav = 'bank';
                         $ref = trim((string) ($t['merchant'] ?? ''));
                         $desc = trim((string) ($t['description'] ?? ''));
                     ?>
-                        <tr>
+                        <tr id="bk-t<?= (int) $t['id'] ?>">
                             <td style="white-space:nowrap"><?= $fmtD($t['txn_date']) ?></td>
                             <td class="bk-ref">
                                 <?php if ($ref !== ''): ?><strong><?= e($ref) ?></strong><br><?php endif; ?>
@@ -415,5 +415,33 @@ $activeNav = 'bank';
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
+<script>
+// Working down a long list: every action reloads the page, so remember the
+// scroll position (and which row was touched) and come back to it, rather
+// than jumping to the top each time. Click, not submit — confirm-modal forms
+// submit programmatically without a submit event.
+(function () {
+    var KEY = 'yb-bank-scroll';
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('button[type=submit]');
+        if (!btn) return;
+        var tr = btn.closest('tr');
+        try { sessionStorage.setItem(KEY, JSON.stringify({ y: window.scrollY, row: tr ? tr.id : '', top: tr ? tr.getBoundingClientRect().top : 0, path: location.pathname })); } catch (err) {}
+    }, true);
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); sessionStorage.removeItem(KEY); } catch (err) {}
+    if (!saved || saved.path !== location.pathname) return;
+    if (document.querySelector('.alert-error')) return;   // an error needs seeing — stay at the top
+    var row = saved.row ? document.getElementById(saved.row) : null;
+    // Put the row back where it sat on screen (a new flash message above can
+    // shift the page); if it's gone (ignored/matched), fall back to the old spot.
+    window.scrollTo(0, row ? row.getBoundingClientRect().top + window.scrollY - (saved.top || 0) : (saved.y || 0));
+    if (row) {
+        row.style.transition = 'background-color 1.2s';
+        row.style.backgroundColor = 'rgba(37, 99, 235, 0.12)';
+        setTimeout(function () { row.style.backgroundColor = ''; }, 1500);
+    }
+})();
+</script>
 </body>
 </html>
