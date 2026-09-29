@@ -270,6 +270,154 @@ function pe_stream_dump(PDO $pdo, $handle): void
 }
 
 /**
+ * Tables whose ROWS a test copy carries: the catalogue, pricing, build rules
+ * and factory set-up — the things a realistic test needs and that hold no
+ * one's personal details. Every other table (users, customers, quotes, orders,
+ * invoices, payments, bank lines, support tickets, logs, secrets …) comes
+ * across as schema only. Deny-by-default: a new table stays out of test
+ * copies until someone deliberately adds it here.
+ */
+function pe_test_copy_tables(): array
+{
+    return [
+        'clients', 'client_settings', 'client_markups', 'client_discounts',
+        'client_library_suppliers', 'app_settings', 'factory_kv', 'seq',
+        'plan_pricing', 'help_videos', 'suppliers',
+        'products', 'product_categories', 'product_systems', 'product_options',
+        'product_extras', 'product_extra_choices', 'product_extra_parent_choices',
+        'product_extra_choice_bands', 'product_extra_choice_options',
+        'product_lead_times', 'product_route_steps', 'product_area_map',
+        'price_tables', 'price_table_rows', 'extra_choice_price_rows',
+        'allowance_rows', 'build_variables', 'build_rules',
+        'worksheet_templates', 'worksheet_template_versions',
+        'production_areas', 'workstation_streams', 'trade_promotions',
+        'library_fabrics', 'library_fabric_categories', 'library_suppliers',
+        'fabric_suppliers', 'fabric_supplier_groups',
+    ];
+}
+
+/**
+ * Scrub one row of a test-copy table: contact details, bank details, VAT
+ * numbers and any key/token/secret are blanked or replaced with a harmless
+ * placeholder; tenant names become "Tenant 12". Unique-ish columns (emails)
+ * get a per-row placeholder so UNIQUE indexes still load.
+ */
+function pe_test_copy_scrub(string $table, array $row): array
+{
+    $pii = '/(^|_)(email|phone|tel|telephone|mobile|fax|address|address\d|addr|street|line\d|town|city'
+         . '|county|postcode|post_code|contact|contact_name|first_name|last_name|full_name|owner'
+         . '|director|vat|vat_number|vat_no|company_number|company_reg|bank|sort_code|iban|bic'
+         . '|account_number|account_no|signature|website|password|pass|hash|token|secret|api|key'
+         . '|enc|client_secret|refresh|notes)(_|$)/i';
+    $id = (string) ($row['id'] ?? '');
+
+    // Key/value tables: scrub the VALUE when the KEY looks sensitive.
+    if ($table === 'app_settings' || $table === 'factory_kv') {
+        $k = $table === 'app_settings' ? 'setting_key' : 'k';
+        $v = $table === 'app_settings' ? 'setting_value' : 'v';
+        if (isset($row[$k], $row[$v]) && preg_match($pii, (string) $row[$k])) {
+            $row[$v] = '';
+        }
+        return $row;
+    }
+    if (!in_array($table, ['clients', 'client_settings', 'suppliers', 'library_suppliers',
+                           'fabric_suppliers'], true)) {
+        return $row;
+    }
+    foreach ($row as $col => $val) {
+        // Keep real numbers (VAT rates, flags, amounts) — but a numeric STRING in
+        // a phone / account / number column is still a personal detail.
+        if ($val === null || is_int($val) || is_float($val)) {
+            continue;
+        }
+        if (is_numeric($val) && !preg_match('/(phone|tel|mobile|fax|account|sort|iban|number|_no)$/i', $col)) {
+            continue;
+        }
+        if ($table === 'clients' && $col === 'company_name') {
+            $row[$col] = 'Tenant ' . $id;
+        } elseif (preg_match('/email/i', $col)) {
+            $row[$col] = $val === '' ? '' : $table . $id . '-' . $col . '@example.invalid';
+        } elseif (preg_match($pii, $col)) {
+            $row[$col] = '';
+        }
+    }
+    return $row;
+}
+
+/**
+ * Stream a TEST COPY: every table's schema, plus the rows of the catalogue /
+ * set-up tables only (scrubbed as above). For loading into a staging or
+ * local copy of the app — no customer, user or money data leaves the server.
+ */
+function pe_stream_test_copy_dump(PDO $pdo, $handle): void
+{
+    $write = static function (string $s) use ($handle): void {
+        fwrite($handle, $s);
+    };
+    $keep = array_flip(pe_test_copy_tables());
+
+    $write("-- YourBlinds TEST COPY (no personal data)\n");
+    $write('-- Generated: ' . date('c') . "\n");
+    $write("--\n");
+    $write("-- Every table's schema; rows only for the catalogue / set-up tables,\n");
+    $write("-- with contact, bank and key columns scrubbed. No users, customers,\n");
+    $write("-- quotes, orders, invoices, payments or bank lines. Load into an EMPTY\n");
+    $write("-- database for staging or local testing — never restore it over live.\n");
+    $write("\n");
+    $write("SET FOREIGN_KEY_CHECKS = 0;\n");
+    $write("SET UNIQUE_CHECKS = 0;\n");
+    $write("SET @OLD_SQL_MODE = @@SQL_MODE, SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\n");
+
+    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tables as $table) {
+        $write("\n-- ----------------------------------------\n");
+        $write("-- Table: `$table`" . (isset($keep[$table]) ? '' : ' (schema only)') . "\n");
+        $write("-- ----------------------------------------\n");
+        $write("DROP TABLE IF EXISTS `$table`;\n");
+        $create = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
+        $write(($create['Create Table'] ?? '') . ";\n\n");
+        if (!isset($keep[$table])) {
+            continue;
+        }
+
+        $stmt = $pdo->query("SELECT * FROM `$table`");
+        $stmt->setFetchMode(PDO::FETCH_ASSOC);
+        $batch   = [];
+        $columns = null;
+        while ($row = $stmt->fetch()) {
+            $row = pe_test_copy_scrub($table, $row);
+            if ($columns === null) {
+                $columns = '`' . implode('`, `', array_keys($row)) . '`';
+            }
+            $vals = [];
+            foreach ($row as $v) {
+                if ($v === null) {
+                    $vals[] = 'NULL';
+                } elseif (is_int($v) || is_float($v)) {
+                    $vals[] = (string) $v;
+                } else {
+                    $vals[] = $pdo->quote((string) $v);
+                }
+            }
+            $batch[] = '(' . implode(', ', $vals) . ')';
+            if (count($batch) >= 100) {
+                $write("INSERT INTO `$table` ($columns) VALUES\n  "
+                    . implode(",\n  ", $batch) . ";\n");
+                $batch = [];
+            }
+        }
+        if ($batch) {
+            $write("INSERT INTO `$table` ($columns) VALUES\n  "
+                . implode(",\n  ", $batch) . ";\n");
+        }
+    }
+
+    $write("\nSET SQL_MODE = @OLD_SQL_MODE;\n");
+    $write("SET UNIQUE_CHECKS = 1;\n");
+    $write("SET FOREIGN_KEY_CHECKS = 1;\n");
+}
+
+/**
  * Split a SQL blob into individual statements. State machine handles
  * single/double-quoted strings (with backslash escapes), -- line
  * comments, and /* ... *​/ block comments. Anything outside those
