@@ -79,6 +79,19 @@ if ($action === 'download') {
     exit;
 }
 
+if ($action === 'download-test-copy') {
+    csrf_check();
+    $name = 'yourblinds-test-copy-' . date('Y-m-d-His') . '.sql';
+    header('Content-Type: application/sql; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $name . '"');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    $fh = fopen('php://output', 'wb');
+    pe_stream_test_copy_dump($pdo, $fh);
+    fclose($fh);
+    exit;
+}
+
 if ($action === 'download-tenant') {
     csrf_check();
     $targetClient = (int) ($_POST['client_id'] ?? 0);
@@ -323,6 +336,27 @@ $tenants = $pdo->query(
                     <?php endforeach; ?>
                 </select>
                 <button type="submit" class="btn btn-primary">Download tenant export</button>
+            </form>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Test copy (no personal data)</h2>
+            </div>
+            <p style="color:var(--text-faint);font-size:0.9375rem;margin:0 0 0.75rem">
+                For a <strong>staging or local test copy</strong> of the app: every
+                table's structure, plus the catalogue, prices, build rules and
+                factory set-up. <strong>No</strong> users, customers, quotes,
+                orders, invoices, payments or bank lines; tenant names, contact
+                details, bank details and keys are scrubbed.
+            </p>
+            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0 0 0.75rem">
+                Load into an <strong>empty</strong> database only — never restore it here.
+            </p>
+            <form method="post" action="/master-admin/backup.php">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="download-test-copy">
+                <button type="submit" class="btn btn-secondary">Download test copy</button>
             </form>
         </section>
 
