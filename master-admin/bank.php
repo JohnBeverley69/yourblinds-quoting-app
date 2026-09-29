@@ -1,0 +1,347 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Trade · Bank — the factory's Barclays account, read through Lunch Flow.
+ *
+ * Money-in lines are matched to trade-account invoices: the page suggests the
+ * account + invoices (invoice number in the reference > Acc Ref / company name >
+ * a unique amount), "Confirm" records the payment (factory_ar_payments, method
+ * bank, dated the bank date) and links the line to it. Anything else is matched
+ * by hand on the account's Payments page (prefilled) or ignored. Super-admin /
+ * factory only — never a tenant feature.
+ */
+
+require __DIR__ . '/../bootstrap.php';
+require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/bank_feed.php';
+
+requireSuperAdmin();
+
+$pdo     = db();
+$factory = ar_factory_id();
+$uid     = (int) (current_user()['user_id'] ?? 0);
+$ready   = bf_ready($pdo) && ar_payments_ready($pdo);
+$view    = (string) ($_GET['view'] ?? 'new');
+if (!in_array($view, ['new', 'matched', 'ignored', 'out'], true)) $view = 'new';
+$back    = '/master-admin/bank.php' . ($view !== 'new' ? '?view=' . $view : '');
+
+// A payment voided on the account page frees its bank line to be matched again.
+if ($ready) {
+    $pdo->prepare(
+        "UPDATE factory_bank_transactions t
+           JOIN factory_ar_payments p ON p.id = t.payment_id
+            SET t.status = 'new', t.payment_id = NULL
+          WHERE t.factory_client_id = ? AND t.status = 'matched' AND p.voided_at IS NOT NULL"
+    )->execute([$factory]);
+}
+
+// ── POST ────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    $action = (string) ($_POST['action'] ?? '');
+
+    if ($action === 'save_conn') {
+        try {
+            $key = trim((string) ($_POST['api_key'] ?? ''));
+            if ($key !== '') pc_set('LUNCHFLOW_API_KEY', ac_seal($key));
+            if (array_key_exists('account_id', $_POST)) {
+                pc_set('LUNCHFLOW_ACCOUNT_ID', trim((string) $_POST['account_id']));
+            }
+            $_SESSION['flash_success'] = 'Bank connection saved.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        }
+        header('Location: ' . $back); exit;
+    }
+
+    if (!$ready) { header('Location: ' . $back); exit; }
+
+    if ($action === 'sync') {
+        try {
+            $n = bf_sync($pdo, $factory);
+            $_SESSION['flash_success'] = $n === 1 ? '1 new bank line fetched.' : $n . ' new bank lines fetched.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not fetch from the bank: ' . $e->getMessage();
+        }
+        header('Location: ' . $back); exit;
+    }
+
+    $txnId = (int) ($_POST['txn_id'] ?? 0);
+    $txn   = bf_txn($pdo, $factory, $txnId);
+    if (!$txn) { $_SESSION['flash_error'] = 'Bank line not found.'; header('Location: ' . $back); exit; }
+
+    if ($action === 'confirm') {
+        // Re-work the suggestion here — never trust allocations from the browser.
+        $sug = ($txn['status'] === 'new') ? bf_suggest(bf_open_book($pdo, $factory), $txn) : null;
+        if (!$sug) {
+            $_SESSION['flash_error'] = 'That line has no suggestion any more — match it by hand.';
+            header('Location: ' . $back); exit;
+        }
+        try {
+            $pdo->beginTransaction();
+            $res = ar_create_payment($pdo, $factory, (int) $sug['account_id'], (string) $txn['txn_date'], 'bank',
+                                     (float) $txn['amount'], bf_payment_ref($txn), 'From the Barclays bank feed.',
+                                     $sug['alloc'], $uid);
+            bf_mark_matched($pdo, $factory, $txnId, (int) $res['id'], $uid);
+            $pdo->commit();
+            $msg = 'Recorded ' . $res['number'] . ' for ' . $sug['account_name'] . ' — £' . number_format((float) $txn['amount'], 2);
+            $un  = round((float) $txn['amount'] - $res['allocated'], 2);
+            $msg .= $un > 0.004 ? ' (£' . number_format($un, 2) . ' left as credit on account).' : '.';
+            $_SESSION['flash_success'] = $msg;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();
+        }
+        header('Location: ' . $back); exit;
+    }
+
+    if ($action === 'ignore' || $action === 'unignore') {
+        if ($action === 'ignore' && $txn['status'] === 'new') {
+            $pdo->prepare("UPDATE factory_bank_transactions SET status = 'ignored', actioned_by = ?, actioned_at = NOW() WHERE id = ?")
+                ->execute([$uid ?: null, $txnId]);
+            $_SESSION['flash_success'] = 'Line ignored — it won\'t be asked about again (undo under Ignored).';
+        } elseif ($action === 'unignore' && $txn['status'] === 'ignored') {
+            $pdo->prepare("UPDATE factory_bank_transactions SET status = 'new', actioned_by = NULL, actioned_at = NULL WHERE id = ?")
+                ->execute([$txnId]);
+            $_SESSION['flash_success'] = 'Line is back in To match.';
+        }
+        header('Location: ' . $back); exit;
+    }
+
+    header('Location: ' . $back); exit;
+}
+
+// ── GET ─────────────────────────────────────────────────────────────────────
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error'] ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+$hasKey   = bf_api_key() !== '';
+$savedAcc = (string) (pc_get('LUNCHFLOW_ACCOUNT_ID', '') ?? '');
+$accounts = [];
+$connErr  = null;
+if ($hasKey) {
+    try { $accounts = bf_lf_accounts(); } catch (Throwable $e) { $connErr = $e->getMessage(); }
+}
+
+// Fetch automatically when the page is opened, at most every 30 minutes
+// (Lunch Flow itself refreshes from the bank once a day).
+$lastSync = (int) (pc_get('BANK_LAST_SYNC', '0') ?? 0);
+if ($ready && $hasKey && $connErr === null && time() - $lastSync > 1800) {
+    try { bf_sync($pdo, $factory); $lastSync = time(); }
+    catch (Throwable $e) { $flashErr = $flashErr ?? ('Automatic fetch failed: ' . $e->getMessage()); }
+}
+
+$rows = []; $counts = ['new' => 0, 'matched' => 0, 'ignored' => 0, 'out' => 0];
+$book = []; $accOpts = [];
+if ($ready) {
+    $c = $pdo->prepare(
+        "SELECT CASE WHEN amount <= 0 THEN 'out' ELSE status END AS k, COUNT(*) n
+           FROM factory_bank_transactions WHERE factory_client_id = ? GROUP BY k"
+    );
+    $c->execute([$factory]);
+    foreach ($c->fetchAll(PDO::FETCH_ASSOC) as $r) $counts[$r['k']] = (int) $r['n'];
+
+    $where = $view === 'out' ? 't.amount <= 0' : "t.amount > 0 AND t.status = '" . $view . "'";
+    $st = $pdo->prepare(
+        "SELECT t.*, p.pay_number, p.account_client_id, c.company_name
+           FROM factory_bank_transactions t
+      LEFT JOIN factory_ar_payments p ON p.id = t.payment_id
+      LEFT JOIN clients c ON c.id = p.account_client_id
+          WHERE t.factory_client_id = ? AND $where
+          ORDER BY t.txn_date DESC, t.id DESC
+          LIMIT 300"
+    );
+    $st->execute([$factory]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($view === 'new') {
+        $book = bf_open_book($pdo, $factory);
+        foreach (ar_account_options($pdo, $factory) as $o) $accOpts[(int) $o['id']] = (string) $o['name'];
+        foreach ($book as $aid => $a) $accOpts[$aid] = $a['name'];
+        asort($accOpts, SORT_NATURAL | SORT_FLAG_CASE);
+    }
+}
+
+$money = static fn ($n) => '&pound;' . number_format((float) $n, 2);
+$fmtD  = static function ($d): string { $t = $d ? strtotime((string) $d) : false; return $t ? date('j M Y', $t) : '&mdash;'; };
+$tabs  = ['new' => 'To match', 'matched' => 'Matched', 'ignored' => 'Ignored', 'out' => 'Money out'];
+
+$activeNav = 'bank';
+?><!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bank &middot; YourBlinds</title>
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+    <style>
+        .bk-tabs { display:flex; gap:0.4rem; flex-wrap:wrap; margin:0 0 1rem }
+        .bk-tabs a { padding:0.35rem 0.8rem; border:1px solid var(--border); border-radius:999px; text-decoration:none; color:var(--text-secondary); font-size:0.85rem }
+        .bk-tabs a.on { background:var(--primary,#2563eb); border-color:var(--primary,#2563eb); color:#fff }
+        .bk-num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap }
+        .bk-ref { font-size:0.85rem; color:var(--text-secondary); word-break:break-word }
+        .bk-sug { font-size:0.85rem }
+        .bk-sug .why { color:var(--text-faint); font-size:0.78rem }
+        .bk-sug.weak b { color:#b45309 }
+        .bk-acts { display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end; align-items:center }
+        .bk-acts form { margin:0; display:inline-flex; gap:0.3rem }
+        .bk-acts select { max-width:11rem; padding:0.25rem 0.35rem; border:1px solid var(--border-strong); border-radius:6px; font:inherit; font-size:0.8rem }
+        .bk-conn label { display:flex; flex-direction:column; gap:0.2rem; font-size:0.85rem; margin:0 0 0.75rem; max-width:28rem }
+        .bk-conn input, .bk-conn select { padding:0.4rem 0.5rem; border:1px solid var(--border-strong); border-radius:6px; font:inherit }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <?php require __DIR__ . '/../_partials/sidebar.php'; ?>
+    <main class="app-main">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Bank</h1>
+                <p class="page-subtitle">Money into the Barclays account, matched to trade-account invoices.
+                    <?php if ($lastSync > 0): ?>Last fetched <?= e(date('j M, H:i', $lastSync)) ?>.<?php endif; ?></p>
+            </div>
+            <?php if ($ready && $hasKey): ?>
+                <form method="post" style="margin:0">
+                    <?= csrf_field() ?><input type="hidden" name="action" value="sync">
+                    <button type="submit" class="btn btn-secondary">Fetch now</button>
+                </form>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($flashMsg !== null): ?><div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div><?php endif; ?>
+        <?php if ($flashErr !== null): ?><div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
+
+        <?php if (!$ready): ?>
+            <section class="section"><p style="margin:0">Run <code>migrate_bank_feed.php</code> (and <code>migrate_ar_payments.php</code> if not done) to switch this on.</p></section>
+        <?php endif; ?>
+
+        <details class="section bk-conn"<?= (!$hasKey || $connErr !== null) ? ' open' : '' ?>>
+            <summary style="cursor:pointer;font-weight:600">Connection (Lunch Flow)</summary>
+            <p style="font-size:0.85rem;color:var(--text-secondary)">
+                Lunch Flow reads the Barclays account through Open Banking (read-only — it can't move money).
+                Barclays asks you to re-approve access every 90 days; if fetching stops, reconnect in Lunch Flow.
+            </p>
+            <?php if ($connErr !== null): ?><div class="alert alert-error"><?= e($connErr) ?></div><?php endif; ?>
+            <form method="post">
+                <?= csrf_field() ?><input type="hidden" name="action" value="save_conn">
+                <label>API key
+                    <input type="password" name="api_key" autocomplete="off"
+                           placeholder="<?= $hasKey ? 'Saved — leave blank to keep it' : 'Paste the key from Lunch Flow → API' ?>">
+                </label>
+                <?php if ($accounts): ?>
+                    <label>Bank account to read
+                        <select name="account_id">
+                            <option value="">— choose —</option>
+                            <?php foreach ($accounts as $a): $aid = (string) ($a['id'] ?? ''); ?>
+                                <option value="<?= e($aid) ?>"<?= ($aid === $savedAcc || (count($accounts) === 1 && $savedAcc === '')) ? ' selected' : '' ?>>
+                                    <?= e(trim(($a['institution_name'] ?? '') . ' — ' . ($a['name'] ?? '') . ' (' . ($a['status'] ?? '') . ')')) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                <?php endif; ?>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </details>
+
+        <?php if ($ready): ?>
+        <nav class="bk-tabs">
+            <?php foreach ($tabs as $k => $label): ?>
+                <a href="/master-admin/bank.php<?= $k !== 'new' ? '?view=' . $k : '' ?>" class="<?= $view === $k ? 'on' : '' ?>"><?= e($label) ?> (<?= (int) $counts[$k] ?>)</a>
+            <?php endforeach; ?>
+        </nav>
+
+        <section class="section">
+            <?php if (!$rows): ?>
+                <p style="color:var(--text-faint);margin:0"><?= $view === 'new' ? 'Nothing waiting to be matched.' : 'Nothing here.' ?></p>
+            <?php else: ?>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr>
+                        <th>Date</th><th>From / reference</th><th class="bk-num">Amount</th>
+                        <?php if ($view === 'new'): ?><th>Suggested match</th><th></th>
+                        <?php elseif ($view === 'matched'): ?><th>Recorded as</th>
+                        <?php elseif ($view === 'ignored'): ?><th></th><?php endif; ?>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($rows as $t):
+                        $ref = trim((string) ($t['merchant'] ?? ''));
+                        $desc = trim((string) ($t['description'] ?? ''));
+                    ?>
+                        <tr>
+                            <td style="white-space:nowrap"><?= $fmtD($t['txn_date']) ?></td>
+                            <td class="bk-ref">
+                                <?php if ($ref !== ''): ?><strong><?= e($ref) ?></strong><br><?php endif; ?>
+                                <?= e($desc) ?>
+                            </td>
+                            <td class="bk-num"><?= $money($t['amount']) ?></td>
+
+                            <?php if ($view === 'new'): $sug = bf_suggest($book, $t); ?>
+                                <td class="bk-sug<?= ($sug && !$sug['strong']) ? ' weak' : '' ?>">
+                                    <?php if ($sug): ?>
+                                        <b><?= e($sug['account_name']) ?></b>
+                                        &middot; <?= e(implode(', ', $sug['invoices'])) ?>
+                                        <?php if ($sug['unallocated'] > 0.004): ?> &middot; <?= $money($sug['unallocated']) ?> on account<?php endif; ?>
+                                        <div class="why"><?= e($sug['why']) ?></div>
+                                    <?php else: ?>
+                                        <span style="color:var(--text-faint)">No match found</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="bk-acts">
+                                        <?php if ($sug): ?>
+                                            <form method="post"
+                                                  data-confirm="Record <?= e(number_format((float) $t['amount'], 2)) ?> from <?= e($sug['account_name']) ?> against <?= e(implode(', ', $sug['invoices'])) ?>?">
+                                                <?= csrf_field() ?><input type="hidden" name="action" value="confirm">
+                                                <input type="hidden" name="txn_id" value="<?= (int) $t['id'] ?>">
+                                                <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <form method="get" action="/master-admin/record-payment.php">
+                                            <input type="hidden" name="bank_txn" value="<?= (int) $t['id'] ?>">
+                                            <select name="account_id" required aria-label="Match to account">
+                                                <option value="">Other account…</option>
+                                                <?php foreach ($accOpts as $aid => $nm): ?>
+                                                    <option value="<?= (int) $aid ?>"<?= ($sug && (int) $sug['account_id'] === (int) $aid) ? ' selected' : '' ?>><?= e($nm) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" class="btn btn-secondary btn-sm">Match…</button>
+                                        </form>
+                                        <form method="post">
+                                            <?= csrf_field() ?><input type="hidden" name="action" value="ignore">
+                                            <input type="hidden" name="txn_id" value="<?= (int) $t['id'] ?>">
+                                            <button type="submit" class="btn btn-secondary btn-sm" title="Not a customer payment">Ignore</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            <?php elseif ($view === 'matched'): ?>
+                                <td>
+                                    <?php if (!empty($t['pay_number'])): ?>
+                                        <a href="/master-admin/record-payment.php?account_id=<?= (int) $t['account_client_id'] ?>"><?= e((string) $t['pay_number']) ?></a>
+                                        &middot; <?= e((string) $t['company_name']) ?>
+                                    <?php endif; ?>
+                                </td>
+                            <?php elseif ($view === 'ignored'): ?>
+                                <td style="text-align:right">
+                                    <form method="post" style="margin:0">
+                                        <?= csrf_field() ?><input type="hidden" name="action" value="unignore">
+                                        <input type="hidden" name="txn_id" value="<?= (int) $t['id'] ?>">
+                                        <button type="submit" class="btn btn-secondary btn-sm">Undo</button>
+                                    </form>
+                                </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+    </main>
+</div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
+</body>
+</html>
