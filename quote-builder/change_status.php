@@ -204,7 +204,14 @@ try {
                 $v = $s->fetchColumn();
                 $auto = ($v === false || $v === null) ? 1 : (int) $v;   // column absent/unset → default on
             } catch (Throwable $e) { $auto = 1; }
-            if ($auto === 1 && $factoryId > 0) {
+            // Auto-placing IS placing an order — so it needs the same permission as
+            // the manual Place-order step. A salesperson without can_create_orders
+            // leaves it at 'accepted' for someone who can place it.
+            $mayOrder = $isAdmin || !empty($_perms['can_create_orders']);
+            if (!$mayOrder) {
+                $autoPlaceMsg = ' Not sent to the workshop yet — someone who can place orders needs to place it.';
+            }
+            if ($auto === 1 && $factoryId > 0 && $mayOrder) {
                 // Pure in-house? at least one line, and EVERY line is a factory-owned
                 // product with no external supplier. Mirrors order_suppliers' $isMfg.
                 $chk = $pdo->prepare(
