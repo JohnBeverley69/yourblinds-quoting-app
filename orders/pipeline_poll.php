@@ -32,7 +32,7 @@ try {
         $sw = ['client_id = ?'];
         $sp = [$clientId];
         if (!$canViewAll || $mineOnly) {
-            $sw[] = '(salesperson_id = ? OR EXISTS (
+            $sw[] = '(created_by_user_id = ? OR EXISTS (
                         SELECT 1 FROM appointments a
                          WHERE a.quote_id = quotes.id AND a.client_user_id = ?))';
             $sp[] = $myUserId;
