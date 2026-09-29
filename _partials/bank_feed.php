@@ -44,6 +44,11 @@ function bf_lf_get(string $path, array $query = []): array
         $msg = (string) ($r['data']['message'] ?? $r['data']['error'] ?? substr($r['raw'], 0, 200));
         throw new RuntimeException('Lunch Flow error (HTTP ' . $r['status'] . '): ' . $msg);
     }
+    // What came back, for the Connection panel when a list is unexpectedly
+    // empty — shape only (status, top-level keys, size), never the key.
+    $GLOBALS['bf_last_reply'] = 'HTTP ' . $r['status'] . ', ' . strlen($r['raw']) . ' bytes, '
+        . ($r['data'] ? 'fields: ' . implode(', ', array_slice(array_map('strval', array_keys($r['data'])), 0, 8))
+                      : 'not JSON (starts "' . substr(preg_replace('/\s+/', ' ', $r['raw']) ?? '', 0, 40) . '")');
     return $r['data'];
 }
 
@@ -51,7 +56,9 @@ function bf_lf_get(string $path, array $query = []): array
 function bf_lf_accounts(): array
 {
     $d = bf_lf_get('/accounts');
-    return is_array($d['accounts'] ?? null) ? $d['accounts'] : [];
+    // Documented as {accounts:[…]}; accept a bare list or {data:[…]} too.
+    $list = $d['accounts'] ?? $d['data'] ?? (array_is_list($d) ? $d : []);
+    return is_array($list) ? array_values(array_filter($list, 'is_array')) : [];
 }
 
 /** Settled transactions for one account between two dates (inclusive). */
@@ -59,7 +66,8 @@ function bf_lf_transactions(string $accountId, string $from, string $to): array
 {
     $d = bf_lf_get('/accounts/' . rawurlencode($accountId) . '/transactions',
                    ['from' => $from, 'to' => $to, 'include_pending' => 'false']);
-    return is_array($d['transactions'] ?? null) ? $d['transactions'] : [];
+    $list = $d['transactions'] ?? $d['data'] ?? (array_is_list($d) ? $d : []);
+    return is_array($list) ? array_values(array_filter($list, 'is_array')) : [];
 }
 
 /* ── Sync ───────────────────────────────────────────────────────────────── */
