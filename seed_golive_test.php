@@ -229,10 +229,16 @@ for ($n = 1; $n <= QA_ACCOUNTS; $n++) {
             'account_number' => $ref . '-' . strtoupper(substr($s, 0, 3))]);
     }
 
-    // Trade discounts on even accounts: 10/15/20 % on a few factory products.
+    // Trade discounts on even accounts: 10/15/20 % on a few factory products —
+    // stored against the ACCOUNT's own mirrored copy (as Trade account → Discounts
+    // does); the factory-raised path finds them through source_product_id.
     if ($n % 2 === 0) {
+        $mirror = $pdo->prepare('SELECT id FROM products WHERE client_id = ? AND source_product_id = ? LIMIT 1');
         foreach (array_slice($factoryProducts, 0, 4) as $k => $fp) {
-            qa_insert($pdo, 'trade_discounts', ['client_id' => $cid, 'product_id' => (int) $fp['id'],
+            $mirror->execute([$cid, (int) $fp['id']]);
+            $own = (int) $mirror->fetchColumn();
+            if (!$own) continue;
+            qa_insert($pdo, 'trade_discounts', ['client_id' => $cid, 'product_id' => $own,
                 'discount_percent' => [10, 15, 20, 12.5][$k], 'active' => 1, 'notes' => 'Go-live test']);
         }
     }
