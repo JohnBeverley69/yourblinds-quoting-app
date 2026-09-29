@@ -15,7 +15,7 @@ declare(strict_types=1);
  *   $dashTag    string defaults to 'Admin Console' or 'Trade Portal'
  *   $activeNav  string one of: calendar, dashboard, pipeline, customers,
  *                      accounts, retail-quotes, retail-orders, trade-accounts,
- *                      trade-quotes, trade-orders, wholesale, statement-run,
+ *                      trade-quotes, trade-orders, wholesale, bank, statement-run,
  *                      commissions, products, users, settings, trade-terms,
  *                      billing, and the Platform keys (master-admin, pricing,
  *                      subscriptions, paypal-health, push-updates, backup, …).
@@ -204,6 +204,7 @@ $navSections = [
             'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isSuperAdmin],
             'dispatch'       => ['/master-admin/dispatch.php',                'Dispatch',       $isSuperAdmin],
             'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isSuperAdmin],
+            'bank'           => ['/master-admin/bank.php',                    'Bank',           $isSuperAdmin],
             'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isSuperAdmin],
             'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isSuperAdmin],
         ],

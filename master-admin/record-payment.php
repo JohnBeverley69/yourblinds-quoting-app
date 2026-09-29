@@ -14,6 +14,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
+require_once __DIR__ . '/../_partials/bank_feed.php';
 
 requireSuperAdmin();
 
@@ -31,6 +32,20 @@ if (!$account || $accountId === $factory) {
 }
 
 $back = '/master-admin/record-payment.php?account_id=' . $accountId;
+
+// Arriving from Trade → Bank ("Match…"): the payment IS that bank line — amount,
+// date and reference are fixed to it, and saving links the line to the payment.
+$bankTxn   = null;
+$bankTxnId = (int) ($_GET['bank_txn'] ?? $_POST['bank_txn'] ?? 0);
+if ($bankTxnId > 0 && bf_ready($pdo)) {
+    $bankTxn = bf_txn($pdo, $factory, $bankTxnId);
+    if (!$bankTxn || $bankTxn['status'] !== 'new' || (float) $bankTxn['amount'] <= 0) {
+        $_SESSION['flash_error'] = 'That bank line has already been dealt with.';
+        header('Location: /master-admin/bank.php');
+        exit;
+    }
+    $back .= '&bank_txn=' . $bankTxnId;
+}
 
 if (!ar_payments_ready($pdo)) {
     $_SESSION['flash_error'] = 'Payments are not set up yet — run migrate_ar_payments.php.';
@@ -62,6 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
     $notes  = trim((string) ($_POST['notes'] ?? ''));
     if (!in_array($method, ['bank', 'cash', 'card', 'cheque', 'other'], true)) $method = 'bank';
     if ($date === '' || strtotime($date) === false) $date = date('Y-m-d');
+    if ($bankTxn) {
+        $amount = round((float) $bankTxn['amount'], 2);
+        $date   = (string) $bankTxn['txn_date'];
+        $method = 'bank';
+        if ($ref === '') $ref = bf_payment_ref($bankTxn);
+    }
 
     // Clamp each submitted allocation to that invoice's real open balance.
     $open = [];
@@ -91,16 +112,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
     }
 
     try {
+        $pdo->beginTransaction();
         $res       = ar_create_payment($pdo, $factory, $accountId, $date, $method, $amount, $ref, $notes, $alloc, $uid);
+        if ($bankTxn) bf_mark_matched($pdo, $factory, (int) $bankTxn['id'], (int) $res['id'], $uid);
+        $pdo->commit();
         $unallocated = round($amount - $res['allocated'], 2);
         $msg = 'Recorded ' . $res['number'] . ' — £' . number_format($amount, 2)
              . ', £' . number_format($res['allocated'], 2) . ' allocated';
         $msg .= $unallocated > 0.004 ? ', £' . number_format($unallocated, 2) . ' left as credit on account.' : '.';
         $_SESSION['flash_success'] = $msg;
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();
+        header('Location: ' . $back);
+        exit;
     }
-    header('Location: ' . $back);
+    // A bank-line match goes back to the Bank list for the next one.
+    header('Location: ' . ($bankTxn ? '/master-admin/bank.php' : $back));
     exit;
 }
 
@@ -169,15 +197,21 @@ $activeNav = 'wholesale';
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="record">
                 <input type="hidden" name="account_id" value="<?= (int) $accountId ?>">
+                <?php if ($bankTxn): ?>
+                    <input type="hidden" name="bank_txn" value="<?= (int) $bankTxn['id'] ?>">
+                    <div class="alert alert-info" style="margin:0 0 1rem">From the bank: <?= $money($bankTxn['amount']) ?> on <?= $fmtD($bankTxn['txn_date']) ?>
+                        &mdash; <?= e(bf_payment_ref($bankTxn)) ?>. <a href="/master-admin/bank.php">Back to Bank</a></div>
+                <?php endif; ?>
                 <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;margin:0 0 1rem">
                     <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.85rem">Amount
                         <span style="display:inline-flex;align-items:center;gap:0.25rem">&pound;
                             <input type="number" step="0.01" min="0" name="amount" id="pm-amount" required
+                                   <?= $bankTxn ? 'readonly value="' . e(number_format((float) $bankTxn['amount'], 2, '.', '')) . '"' : '' ?>
                                    style="width:8rem;padding:0.4rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:right">
                         </span>
                     </label>
                     <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.85rem">Date
-                        <input type="date" name="payment_date" value="<?= e(date('Y-m-d')) ?>"
+                        <input type="date" name="payment_date" value="<?= e($bankTxn ? (string) $bankTxn['txn_date'] : date('Y-m-d')) ?>"<?= $bankTxn ? ' readonly' : '' ?>
                                style="padding:0.4rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
                     </label>
                     <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.85rem">Method
@@ -187,6 +221,7 @@ $activeNav = 'wholesale';
                     </label>
                     <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.85rem;flex:1;min-width:10rem">Reference
                         <input type="text" name="reference" maxlength="120" placeholder="e.g. bank ref / cheque no."
+                               value="<?= $bankTxn ? e(bf_payment_ref($bankTxn)) : '' ?>"
                                style="padding:0.4rem 0.5rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
                     </label>
                 </div>
@@ -307,6 +342,7 @@ $activeNav = 'wholesale';
     }
 
     amount.addEventListener('input', autoAllocate);
+    if (amount.value) autoAllocate();   // prefilled from a bank line
     allocs.forEach(function (i) {
         i.addEventListener('input', function () { manual = true; refreshTotals(); });
     });
