@@ -176,4 +176,25 @@ function asset(string $path): string
     return $cache[$path] = $v ? $path . '?v=' . $v : $path;
 }
 
+// ---------------------------------------------------------------------------
+// Strict date / time parsing. DateTimeImmutable::createFromFormat quietly rolls
+// impossible values over ("25:99" → 02:39 next day, "2026-02-30" → 2 March), so
+// a typo got booked or recorded at a different time. These parse and then
+// insist the value reads back exactly as typed.
+// ---------------------------------------------------------------------------
+function parse_strict_date(string $s): ?DateTimeImmutable
+{
+    $d = DateTimeImmutable::createFromFormat('!Y-m-d', $s);
+    return ($d && $d->format('Y-m-d') === $s) ? $d : null;
+}
+
+/** "9:30", "09:30" or "09:30:00" → the time, or null if it isn't a real clock time. */
+function parse_strict_time(string $s): ?DateTimeImmutable
+{
+    if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/', $s)) {
+        return null;
+    }
+    return DateTimeImmutable::createFromFormat('!G:i:s', preg_replace('/^(\d+:\d\d)$/', '$1:00', $s)) ?: null;
+}
+
 require_once APP_ROOT . '/db.php';

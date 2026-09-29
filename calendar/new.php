@@ -113,14 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($f['email'] !== '' && !filter_var($f['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } elseif ($f['appointment_date'] === ''
-              || DateTimeImmutable::createFromFormat('!Y-m-d', $f['appointment_date']) === false) {
+              || parse_strict_date($f['appointment_date']) === null) {
         $error = 'Please choose a valid appointment date.';
     } elseif ($ampmOn && !ampm_window_bookable($f['slot_window'])) {
         $error = 'Please choose a time slot.';
     } elseif (!$ampmOn && ($f['appointment_time'] === ''
-              || (DateTimeImmutable::createFromFormat('H:i', $f['appointment_time']) === false
-                  && DateTimeImmutable::createFromFormat('G:i', $f['appointment_time']) === false
-                  && DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']) === false))) {
+              || parse_strict_time($f['appointment_time']) === null)) {
         $error = 'Please choose a valid appointment time.';
     } elseif (!$ampmOn && ($f['duration_minutes'] < 5 || $f['duration_minutes'] > 1440)) {
         $error = 'Duration must be between 5 and 1440 minutes.';
@@ -164,9 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 // Free-time mode — normalise to HH:MM:SS for storage.
-                $timeObj = DateTimeImmutable::createFromFormat('H:i',   $f['appointment_time'])
-                        ?: DateTimeImmutable::createFromFormat('G:i',   $f['appointment_time'])
-                        ?: DateTimeImmutable::createFromFormat('H:i:s', $f['appointment_time']);
+                $timeObj = parse_strict_time($f['appointment_time']);
                 $timeStored = $timeObj->format('H:i:s');
 
                 // Double-booking guard — a salesperson can't be in two places at

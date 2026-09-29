@@ -355,7 +355,8 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     // Runs first (capture), so a confirm pop-up doesn't open for something that can't happen.
     document.addEventListener('submit', function (e) {
         var form = e.target;
-        if (!form || form.tagName !== 'FORM' || (form.method || '').toLowerCase() !== 'post') return;
+        // getAttribute, not form.method: a payment form's <select name="method"> shadows that property.
+        if (!form || form.tagName !== 'FORM' || (form.getAttribute('method') || '').toLowerCase() !== 'post') return;
         if (form.hasAttribute('data-yb-offline')) return;          // handled by its own offline code
         if (!netDown && navigator.onLine) return;                   // signal: carry on as normal
         e.preventDefault();

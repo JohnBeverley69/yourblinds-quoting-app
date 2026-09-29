@@ -84,10 +84,13 @@ if (!acct_user_can_touch_quote($pdo, $clientId, $user, $checkQuoteId)
 
 // Validation.
 $error = null;
-if (!is_numeric($amountRaw) || (float) $amountRaw == 0) {
-    $error = 'Amount must be a non-zero number.';
+if (!is_numeric($amountRaw) || abs(round((float) $amountRaw, 2)) < 0.01) {
+    $error = 'Amount must be at least 1p.';
+} elseif (abs((float) $amountRaw) > 1000000) {
+    // Was silently clamped to the column maximum, marking the job paid.
+    $error = 'That amount looks wrong — payments over £1,000,000 aren\'t accepted.';
 } elseif ($dateRaw === ''
-    || !DateTimeImmutable::createFromFormat('!Y-m-d', $dateRaw)) {
+    || !parse_strict_date($dateRaw)) {
     $error = 'Received date is required (YYYY-MM-DD).';
 } elseif (!array_key_exists($method, acct_methods())) {
     $error = 'Unknown payment method.';
@@ -108,12 +111,21 @@ $receivedAt = $dateRaw;
 $customerId = null;
 if ($quoteId) {
     $qSt = $pdo->prepare(
-        'SELECT customer_id FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
+        'SELECT customer_id, status FROM quotes WHERE id = ? AND client_id = ? LIMIT 1'
     );
     $qSt->execute([$quoteId, $clientId]);
     $row = $qSt->fetch();
     if (!$row) {
         $_SESSION['flash_error'] = 'Quote not found for this tenant.';
+        header('Location: ' . $returnTo);
+        exit;
+    }
+    // Same rule as the deposit: money is taken on an accepted order, never on a
+    // draft/sent/declined quote (it counted as received but not as owed). Editing
+    // a payment already on that quote stays possible so mistakes can be fixed.
+    $takesMoney = in_array((string) $row['status'], ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'], true);
+    if (!$takesMoney && !($id > 0 && $checkQuoteId === $quoteId)) {
+        $_SESSION['flash_error'] = 'Payments can be recorded once the quote has been accepted.';
         header('Location: ' . $returnTo);
         exit;
     }
