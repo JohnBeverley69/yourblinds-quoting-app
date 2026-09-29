@@ -67,6 +67,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: ' . $back); exit;
     }
 
+    // Clear the backlog: every unmatched money-in line up to a date is ignored
+    // (history already dealt with in Blind Matrix / QuickBooks). Undo per line
+    // under Ignored.
+    if ($action === 'ignore_before') {
+        $upTo = (string) ($_POST['up_to'] ?? '');
+        if (!DateTimeImmutable::createFromFormat('!Y-m-d', $upTo)) {
+            $_SESSION['flash_error'] = 'Pick a date.';
+        } else {
+            $st = $pdo->prepare(
+                "UPDATE factory_bank_transactions
+                    SET status = 'ignored', actioned_by = ?, actioned_at = NOW()
+                  WHERE factory_client_id = ? AND status = 'new' AND amount > 0 AND txn_date <= ?"
+            );
+            $st->execute([$uid ?: null, $factory, $upTo]);
+            $_SESSION['flash_success'] = $st->rowCount() . ' line(s) up to ' . date('j M Y', strtotime($upTo)) . ' moved to Ignored.';
+        }
+        header('Location: ' . $back); exit;
+    }
+
     $txnId = (int) ($_POST['txn_id'] ?? 0);
     $txn   = bf_txn($pdo, $factory, $txnId);
     if (!$txn) { $_SESSION['flash_error'] = 'Bank line not found.'; header('Location: ' . $back); exit; }
@@ -74,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'confirm') {
         // Re-work the suggestion here — never trust allocations from the browser.
         $sug = ($txn['status'] === 'new') ? bf_suggest(bf_open_book($pdo, $factory), $txn) : null;
-        if (!$sug) {
-            $_SESSION['flash_error'] = 'That line has no suggestion any more — match it by hand.';
+        if (!$sug || !$sug['confirmable']) {
+            $_SESSION['flash_error'] = 'That line has no invoice to settle — match it by hand.';
             header('Location: ' . $back); exit;
         }
         try {
@@ -260,6 +279,17 @@ $activeNav = 'bank';
             <?php endforeach; ?>
         </nav>
 
+        <?php if ($view === 'new' && $counts['new'] > 0): ?>
+            <form method="post" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem;font-size:0.85rem"
+                  data-confirm="Move every unmatched payment up to that date into Ignored? (You can undo any of them under Ignored.)">
+                <?= csrf_field() ?><input type="hidden" name="action" value="ignore_before">
+                <span>Clear the backlog &mdash; ignore everything up to</span>
+                <input type="date" name="up_to" value="<?= e(date('Y-m-d')) ?>" required
+                       style="padding:0.3rem 0.4rem;border:1px solid var(--border-strong);border-radius:6px;font:inherit">
+                <button type="submit" class="btn btn-secondary btn-sm">Ignore</button>
+            </form>
+        <?php endif; ?>
+
         <section class="section">
             <?php if (!$rows): ?>
                 <p style="color:var(--text-faint);margin:0"><?= $view === 'new' ? 'Nothing waiting to be matched.' : 'Nothing here.' ?></p>
@@ -289,8 +319,12 @@ $activeNav = 'bank';
                                 <td class="bk-sug<?= ($sug && !$sug['strong']) ? ' weak' : '' ?>">
                                     <?php if ($sug): ?>
                                         <b><?= e($sug['account_name']) ?></b>
-                                        &middot; <?= e(implode(', ', $sug['invoices'])) ?>
-                                        <?php if ($sug['unallocated'] > 0.004): ?> &middot; <?= $money($sug['unallocated']) ?> on account<?php endif; ?>
+                                        <?php if ($sug['confirmable']): ?>
+                                            &middot; <?= e(implode(', ', $sug['invoices'])) ?>
+                                            <?php if ($sug['unallocated'] > 0.004): ?> &middot; <?= $money($sug['unallocated']) ?> on account<?php endif; ?>
+                                        <?php else: ?>
+                                            &middot; <span style="color:var(--text-faint)">no open invoices in YourBlinds</span>
+                                        <?php endif; ?>
                                         <div class="why"><?= e($sug['why']) ?></div>
                                     <?php else: ?>
                                         <span style="color:var(--text-faint)">No match found</span>
@@ -298,7 +332,7 @@ $activeNav = 'bank';
                                 </td>
                                 <td>
                                     <div class="bk-acts">
-                                        <?php if ($sug): ?>
+                                        <?php if ($sug && $sug['confirmable']): ?>
                                             <form method="post"
                                                   data-confirm="Record <?= e(number_format((float) $t['amount'], 2)) ?> from <?= e($sug['account_name']) ?> against <?= e(implode(', ', $sug['invoices'])) ?>?">
                                                 <?= csrf_field() ?><input type="hidden" name="action" value="confirm">

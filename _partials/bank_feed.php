@@ -142,35 +142,41 @@ function bf_name_key(string $name): string
 }
 
 /**
- * Everything the matcher needs, read once per page: every trade account's open
- * invoices (oldest first, balance > 0) plus the account's name + Acc Ref.
+ * Everything the matcher needs, read once per page: every trade account (any
+ * client that isn't the factory) with its name + Acc Ref, and its open invoices
+ * (oldest first, balance > 0) — empty while the account is still invoiced from
+ * Blind Matrix, so the payer can be recognised even with nothing to allocate to.
  * Returns [accountId => ['id','name','ref','invoices'=>[…]]].
  */
 function bf_open_book(PDO $pdo, int $factory): array
 {
-    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return [];
+    $refSql = '';
+    try { $pdo->query('SELECT account_ref FROM clients LIMIT 0'); $refSql = ', account_ref'; } catch (Throwable $e) {}
+    $st = $pdo->prepare("SELECT id, company_name $refSql FROM clients WHERE id <> ? ORDER BY company_name");
+    $st->execute([$factory]);
+    $book = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $book[(int) $r['id']] = ['id' => (int) $r['id'], 'name' => (string) $r['company_name'],
+                                 'ref' => (string) ($r['account_ref'] ?? ''), 'invoices' => []];
+    }
+    if (!ar_table_ready($pdo, 'factory_ar_invoices')) return $book;
+
     $credSql = ar_table_ready($pdo, 'factory_ar_credit_notes')
         ? "COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
                       WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'), 0)"
         : '0';
-    $refSql = '';
-    try { $pdo->query('SELECT account_ref FROM clients LIMIT 0'); $refSql = ', c.account_ref'; } catch (Throwable $e) {}
     $st = $pdo->prepare(
         "SELECT i.id, i.account_client_id, i.inv_number, i.issue_date, i.total, i.amount_paid,
-                $credSql AS credited, c.company_name $refSql
+                $credSql AS credited
            FROM factory_ar_invoices i
-           JOIN clients c ON c.id = i.account_client_id
           WHERE i.factory_client_id = ? AND i.status <> 'void'
           ORDER BY (i.issue_date IS NULL), i.issue_date, i.id"
     );
     $st->execute([$factory]);
-    $book = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $bal = round((float) $r['total'] - (float) $r['amount_paid'] - (float) $r['credited'], 2);
-        if ($bal <= 0.004) continue;
         $aid = (int) $r['account_client_id'];
-        $book[$aid] ??= ['id' => $aid, 'name' => (string) $r['company_name'],
-                         'ref' => (string) ($r['account_ref'] ?? ''), 'invoices' => []];
+        if ($bal <= 0.004 || !isset($book[$aid])) continue;
         $book[$aid]['invoices'][] = ['id' => (int) $r['id'], 'inv_number' => (string) $r['inv_number'],
                                      'issue_date' => $r['issue_date'], 'balance' => $bal];
     }
@@ -211,16 +217,19 @@ function bf_suggest(array $book, array $txn): ?array
         $why = 'invoice number in the bank reference';
     }
 
-    // 2. Acc Ref or company name.
+    // 2. Acc Ref or company name. The longest hit wins, so "RED ROSE BLINDS"
+    // beats a "ROSE BLINDS" account; a tie between accounts = no guess.
     if ($accountId === null) {
-        $found = [];
+        $best = 0; $found = [];
         foreach ($book as $aid => $acc) {
             $ref  = bf_norm($acc['ref']);
             $name = bf_name_key($acc['name']);
-            if ((strlen($ref) >= 4 && str_contains($text, $ref))
-                || (strlen($name) >= 5 && str_contains($text, $name))) {
-                $found[] = $aid;
-            }
+            $len  = 0;
+            if (strlen($ref) >= 4 && str_contains($text, $ref))    $len = max($len, strlen($ref));
+            if (strlen($name) >= 5 && str_contains($text, $name))  $len = max($len, strlen($name));
+            if ($len === 0) continue;
+            if ($len > $best) { $best = $len; $found = [$aid]; }
+            elseif ($len === $best) { $found[] = $aid; }
         }
         if (count($found) === 1) {
             $accountId = (int) $found[0];
@@ -264,6 +273,9 @@ function bf_suggest(array $book, array $txn): ?array
         'why'          => $why,
         'strong'       => $strong,
         'exact'        => $left <= 0.004,
+        // Payer recognised but nothing open in YourBlinds (still billed from
+        // Blind Matrix) — show who it is, but no one-click Confirm.
+        'confirmable'  => (bool) $alloc,
     ];
 }
 
