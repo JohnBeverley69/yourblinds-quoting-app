@@ -258,6 +258,12 @@ try {
         factory_autosend_suppliers($pdo, $quoteId);
     }
 
+    // Money may already cover the total (payments kept while it was reopened as a
+    // draft and reduced) — settle now rather than leaving it stuck at "ordered".
+    if (in_array($target, ['accepted', 'ordered', 'fitted', 'invoiced'], true)) {
+        qb_settle_if_paid($pdo, $quoteId, $clientId);
+    }
+
     // "Save as order" flow: the accept succeeded. If it didn't already
     // auto-place straight to the factory (pure in-house → 'ordered'), send the
     // user on to the Place-order screen where bought-in lines get emailed to

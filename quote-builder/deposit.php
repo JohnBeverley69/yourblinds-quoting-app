@@ -43,7 +43,10 @@ qb_require_quote_access($quote, $user, current_user_permissions());
 // (change_status only seeds a default when deposit_amount is still NULL).
 // Recording an actual PAID deposit (record_paid / mark_paid) stays an
 // accepted-order activity — you can't take money on a draft.
-$isOrderState = in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced'], true);
+// 'paid' counts: amending the deposit on a fully-paid job used to fail with
+// "can be recorded once the quote has been accepted". qb_settle_if_paid below
+// steps it back from paid if the change leaves money owing.
+$isOrderState = in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'], true);
 $hasPaidDeposit = !empty($quote['deposit_paid_at']);
 if ($action === 'save_amount') {
     if (!$isOrderState && !in_array((string) $quote['status'], ['draft', 'sent'], true)) {
