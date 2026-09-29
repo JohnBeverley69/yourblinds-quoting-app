@@ -40,6 +40,10 @@ declare(strict_types=1);
  *                      was menu noise.
  */
 
+// Some pages (the wholesale account / payment / statement / bank screens) include
+// the sidebar without setting $user — fall back to the signed-in user so the
+// name, role and feature checks below work instead of logging warnings.
+$user         = $user         ?? (function_exists('current_user') ? (current_user() ?? []) : []);
 $isAdmin      = $isAdmin      ?? (($user['role'] ?? '') === 'admin');
 $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
