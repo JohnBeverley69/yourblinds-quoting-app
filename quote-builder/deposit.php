@@ -98,6 +98,14 @@ if ($action === 'save_amount') {
         );
     }
     $amt = round((float) $raw, 2);
+    $quoteTotal = round((float) ($quote['total'] ?? 0), 2);
+    if ($quoteTotal > 0 && $amt > $quoteTotal) {
+        qb_flash_redirect(
+            '/quote-builder/edit.php?id=' . $quoteId,
+            'error',
+            'The deposit can\'t be more than the quote total (£' . number_format($quoteTotal, 2) . ').'
+        );
+    }
     db()->prepare(
         'UPDATE quotes SET deposit_amount = ? WHERE id = ? AND client_id = ?'
     )->execute([$amt, $quoteId, $clientId]);

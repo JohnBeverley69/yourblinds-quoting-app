@@ -3672,8 +3672,12 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             if (perSqm && data.width_mm && data.drop_mm) {
                 bits.push(((data.width_mm / 1000) * (data.drop_mm / 1000)).toFixed(2) + ' m²');
             }
+            <?php if ($isAdmin || $_perms['can_view_costs']): ?>
+            // The price-table base is the business's buying price — cost-viewers only
+            // (a salesperson without "View costs" could read the margin off it).
             bits.push('base £' + Number(data.base_price).toFixed(2));
             if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
+            <?php endif; ?>
 
             var priceLast = false;
             <?php if ($isAdmin || $_perms['can_view_costs']): ?>
