@@ -192,7 +192,7 @@ function bf_open_book(PDO $pdo, int $factory): array
  * Returns null, or ['account_id','account_name','alloc'=>[invId=>amt],'invoices'=>[inv_number…],
  *                   'why'=>string,'strong'=>bool,'exact'=>bool].
  */
-function bf_suggest(array $book, array $txn): ?array
+function bf_suggest(array $book, array $txn, array $aliases = []): ?array
 {
     $amount = round((float) $txn['amount'], 2);
     if ($amount <= 0) return null;
@@ -200,6 +200,14 @@ function bf_suggest(array $book, array $txn): ?array
     if ($text === '') $text = '-';
 
     $accountId = null; $hitInv = []; $why = '';
+
+    // 0. A payer we've been told about (matched by hand / Remembered) — the
+    // surest clue there is. Invoice numbers still pick which invoices below.
+    $pk = bf_payer_key($txn);
+    if ($pk !== '' && isset($aliases[$pk]) && isset($book[$aliases[$pk]])) {
+        $accountId = (int) $aliases[$pk];
+        $why = 'remembered payer';
+    }
 
     // 1. Invoice / order number in the reference.
     foreach ($book as $aid => $acc) {
@@ -212,7 +220,7 @@ function bf_suggest(array $book, array $txn): ?array
             }
         }
     }
-    if (count($hitInv) === 1) {
+    if ($accountId === null && count($hitInv) === 1) {
         $accountId = (int) array_key_first($hitInv);
         $why = 'invoice number in the bank reference';
     }
@@ -277,6 +285,51 @@ function bf_suggest(array $book, array $txn): ?array
         // Blind Matrix) — show who it is, but no one-click Confirm.
         'confirmable'  => (bool) $alloc,
     ];
+}
+
+/**
+ * The payer part of a bank line — what a learned alias is keyed on. Barclays
+ * puts the payer's account name in the first 18 characters, then two spaces,
+ * then their reference ("Mercia Blind  84 Croft Cls"), so take the text before
+ * the first double space, capped at 18.
+ */
+function bf_payer_label(array $txn): string
+{
+    $d = (string) (($txn['description'] ?? '') !== '' ? $txn['description'] : ($txn['merchant'] ?? ''));
+    $d = preg_split('/\s{2,}/', trim($d))[0] ?? '';
+    return trim(mb_substr($d, 0, 18));
+}
+
+/** Normalised payer key, '' when too short to trust. */
+function bf_payer_key(array $txn): string
+{
+    $k = bf_norm(bf_payer_label($txn));
+    return strlen($k) >= 4 ? substr($k, 0, 64) : '';
+}
+
+/** Learned payers for the factory: [payer_key => account_client_id]. */
+function bf_aliases(PDO $pdo, int $factory): array
+{
+    if (!ar_table_ready($pdo, 'factory_bank_payer_aliases')) return [];
+    $st = $pdo->prepare('SELECT payer_key, account_client_id FROM factory_bank_payer_aliases WHERE factory_client_id = ?');
+    $st->execute([$factory]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(string) $r['payer_key']] = (int) $r['account_client_id'];
+    return $out;
+}
+
+/** Remember (or re-point) this line's payer → account. False if the payer text is too short. */
+function bf_remember_payer(PDO $pdo, int $factory, array $txn, int $accountId, int $userId): bool
+{
+    $key = bf_payer_key($txn);
+    if ($key === '' || $accountId <= 0 || !ar_table_ready($pdo, 'factory_bank_payer_aliases')) return false;
+    $pdo->prepare(
+        'INSERT INTO factory_bank_payer_aliases (factory_client_id, payer_key, payer_label, account_client_id, created_by)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE account_client_id = VALUES(account_client_id), payer_label = VALUES(payer_label),
+                                 created_by = VALUES(created_by)'
+    )->execute([$factory, $key, mb_substr(bf_payer_label($txn), 0, 64), $accountId, $userId ?: null]);
+    return true;
 }
 
 /** Link a bank line to a recorded payment. */

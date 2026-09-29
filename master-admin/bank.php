@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'confirm') {
         // Re-work the suggestion here — never trust allocations from the browser.
-        $sug = ($txn['status'] === 'new') ? bf_suggest(bf_open_book($pdo, $factory), $txn) : null;
+        $sug = ($txn['status'] === 'new') ? bf_suggest(bf_open_book($pdo, $factory), $txn, bf_aliases($pdo, $factory)) : null;
         if (!$sug || !$sug['confirmable']) {
             $_SESSION['flash_error'] = 'That line has no invoice to settle — match it by hand.';
             header('Location: ' . $back); exit;
@@ -111,6 +111,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();
+        }
+        header('Location: ' . $back); exit;
+    }
+
+    // One row form, two buttons: Match… (record a payment on the account's
+    // Payments page) or Remember (just learn who this payer is — for accounts
+    // still invoiced in Blind Matrix, where recording a payment here would sit
+    // as credit on account).
+    if ($action === 'match' || $action === 'remember') {
+        $acc = (int) ($_POST['account_id'] ?? 0);
+        $ok  = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? AND id <> ? LIMIT 1');
+        $ok->execute([$acc, $factory]);
+        $accName = $ok->fetchColumn();
+        if ($accName === false) {
+            $_SESSION['flash_error'] = 'Choose the trade account first.';
+            header('Location: ' . $back); exit;
+        }
+        if ($action === 'match') {
+            header('Location: /master-admin/record-payment.php?account_id=' . $acc . '&bank_txn=' . $txnId); exit;
+        }
+        if (bf_remember_payer($pdo, $factory, $txn, $acc, $uid)) {
+            $_SESSION['flash_success'] = 'Remembered: "' . bf_payer_label($txn) . '" is ' . $accName . ' — every payment from them will now show it.';
+        } else {
+            $_SESSION['flash_error'] = 'That line has too little payer detail to remember.';
         }
         header('Location: ' . $back); exit;
     }
@@ -153,7 +177,7 @@ if ($ready && $hasKey && $connErr === null && time() - $lastSync > 1800) {
 }
 
 $rows = []; $counts = ['new' => 0, 'matched' => 0, 'ignored' => 0, 'out' => 0];
-$book = []; $accOpts = [];
+$book = []; $accOpts = []; $aliases = [];
 if ($ready) {
     $c = $pdo->prepare(
         "SELECT CASE WHEN amount <= 0 THEN 'out' ELSE status END AS k, COUNT(*) n
@@ -177,6 +201,7 @@ if ($ready) {
 
     if ($view === 'new') {
         $book = bf_open_book($pdo, $factory);
+        $aliases = bf_aliases($pdo, $factory);
         foreach (ar_account_options($pdo, $factory) as $o) $accOpts[(int) $o['id']] = (string) $o['name'];
         foreach ($book as $aid => $a) $accOpts[$aid] = $a['name'];
         asort($accOpts, SORT_NATURAL | SORT_FLAG_CASE);
@@ -315,7 +340,7 @@ $activeNav = 'bank';
                             </td>
                             <td class="bk-num"><?= $money($t['amount']) ?></td>
 
-                            <?php if ($view === 'new'): $sug = bf_suggest($book, $t); ?>
+                            <?php if ($view === 'new'): $sug = bf_suggest($book, $t, $aliases); ?>
                                 <td class="bk-sug<?= ($sug && !$sug['strong']) ? ' weak' : '' ?>">
                                     <?php if ($sug): ?>
                                         <b><?= e($sug['account_name']) ?></b>
@@ -340,15 +365,21 @@ $activeNav = 'bank';
                                                 <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
                                             </form>
                                         <?php endif; ?>
-                                        <form method="get" action="/master-admin/record-payment.php">
-                                            <input type="hidden" name="bank_txn" value="<?= (int) $t['id'] ?>">
+                                        <form method="post">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="txn_id" value="<?= (int) $t['id'] ?>">
                                             <select name="account_id" required aria-label="Match to account">
                                                 <option value="">Other account…</option>
                                                 <?php foreach ($accOpts as $aid => $nm): ?>
                                                     <option value="<?= (int) $aid ?>"<?= ($sug && (int) $sug['account_id'] === (int) $aid) ? ' selected' : '' ?>><?= e($nm) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <button type="submit" class="btn btn-secondary btn-sm">Match…</button>
+                                            <?php if (!$sug || $sug['why'] !== 'remembered payer'): ?>
+                                                <button type="submit" name="action" value="remember" class="btn btn-secondary btn-sm"
+                                                        title="Remember who this payer is (records no payment)">Remember</button>
+                                            <?php endif; ?>
+                                            <button type="submit" name="action" value="match" class="btn btn-secondary btn-sm"
+                                                    title="Record this as a payment on the account">Match…</button>
                                         </form>
                                         <form method="post">
                                             <?= csrf_field() ?><input type="hidden" name="action" value="ignore">
