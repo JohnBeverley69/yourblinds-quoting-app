@@ -51,4 +51,24 @@ if (!$tableExists('factory_bank_transactions')) {
     echo "  Table factory_bank_transactions already exists — skipped.\n";
 }
 
+// Learned payers: the bank's payer name (normalised) → trade account. Written
+// when a line is matched by hand or "Remember"ed on Trade → Bank.
+if (!$tableExists('factory_bank_payer_aliases')) {
+    $pdo->exec(
+        "CREATE TABLE factory_bank_payer_aliases (
+            id                INT AUTO_INCREMENT PRIMARY KEY,
+            factory_client_id INT          NOT NULL,
+            payer_key         VARCHAR(64)  NOT NULL,        -- bf_payer_key()
+            payer_label       VARCHAR(64)  NULL,            -- as the bank shows it
+            account_client_id INT          NOT NULL,
+            created_by        INT          NULL,
+            updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_payer (factory_client_id, payer_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    echo "  Created table factory_bank_payer_aliases.\n";
+} else {
+    echo "  Table factory_bank_payer_aliases already exists — skipped.\n";
+}
+
 echo "\nDone. Open Trade → Bank to connect Lunch Flow and fetch transactions.\n";

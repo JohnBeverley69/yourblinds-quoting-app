@@ -114,7 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
     try {
         $pdo->beginTransaction();
         $res       = ar_create_payment($pdo, $factory, $accountId, $date, $method, $amount, $ref, $notes, $alloc, $uid);
-        if ($bankTxn) bf_mark_matched($pdo, $factory, (int) $bankTxn['id'], (int) $res['id'], $uid);
+        if ($bankTxn) {
+            bf_mark_matched($pdo, $factory, (int) $bankTxn['id'], (int) $res['id'], $uid);
+            bf_remember_payer($pdo, $factory, $bankTxn, $accountId, $uid);   // learn who this payer is
+        }
         $pdo->commit();
         $unallocated = round($amount - $res['allocated'], 2);
         $msg = 'Recorded ' . $res['number'] . ' — £' . number_format($amount, 2)
