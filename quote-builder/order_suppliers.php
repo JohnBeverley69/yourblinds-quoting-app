@@ -364,13 +364,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($ok) {
             $sentTo[] = $name;
+            // A factory's OWN order (raised by the factory for an account) is a
+            // factory send: stamp ordered_by_factory_id, or the factory's
+            // "Received" button and the dispatch gate — which only look at
+            // factory sends — never see it and the order can't go out.
+            $facId = is_factory_client($clientId) ? $clientId : null;
             try {
                 db()->prepare(
                     'INSERT INTO supplier_orders
-                        (client_id, quote_id, supplier_name, email, item_count, sent_by_user_id)
-                     VALUES (?, ?, ?, ?, ?, ?)'
-                )->execute([$clientId, $quoteId, $name, $email, count($items), (int) $user['user_id']]);
-            } catch (Throwable $e) { error_log('supplier_orders log failed: ' . $e->getMessage()); }
+                        (client_id, quote_id, supplier_name, email, item_count, sent_by_user_id, ordered_by_factory_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                )->execute([$clientId, $quoteId, $name, $email, count($items), (int) $user['user_id'], $facId]);
+            } catch (Throwable $e) {
+                try {   // pre-migration schema: no ordered_by_factory_id column
+                    db()->prepare(
+                        'INSERT INTO supplier_orders
+                            (client_id, quote_id, supplier_name, email, item_count, sent_by_user_id)
+                         VALUES (?, ?, ?, ?, ?, ?)'
+                    )->execute([$clientId, $quoteId, $name, $email, count($items), (int) $user['user_id']]);
+                } catch (Throwable $e2) { error_log('supplier_orders log failed: ' . $e2->getMessage()); }
+            }
         } else {
             $failed[] = $name;
         }

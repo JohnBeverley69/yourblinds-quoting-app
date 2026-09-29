@@ -85,8 +85,28 @@ $insertRow = static function (PDO $pdo, string $table, array $row): int {
 
 // ---- Delete whole order ----------------------------------------------------
 if (isset($_POST['del_order'])) {
+    // Never delete an order that has paperwork or money behind it: a dispatched
+    // order was deleted in the go-live test and left a delivery note that could
+    // never be invoiced. Those need a credit note / cancellation, not a delete.
+    foreach ([
+        'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1'
+            => 'it has a delivery note',
+        'SELECT 1 FROM factory_ar_invoice_orders WHERE quote_id = ? LIMIT 1' => 'it has been invoiced',
+        'SELECT 1 FROM payments WHERE quote_id = ? LIMIT 1'                  => 'payments are recorded against it',
+    ] as $sql => $why) {
+        try {
+            $chk = $pdo->prepare($sql);
+            $chk->execute([$qid]);
+            $hit = (bool) $chk->fetchColumn();
+        } catch (Throwable $e) { $hit = false; /* table not migrated on this install */ }
+        if ($hit) { $fail('This order can\'t be deleted — ' . $why . '.'); }
+    }
     try {
         $pdo->beginTransaction();
+        // The factory's own job rows for the order go with it (they were left orphaned).
+        foreach (['factory_blind_jobs', 'factory_jobs'] as $t) {
+            try { $pdo->prepare("DELETE FROM `$t` WHERE quote_id = ?")->execute([$qid]); } catch (Throwable $e) { /* not migrated */ }
+        }
         $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')->execute([$qid]);
         $pdo->prepare('DELETE FROM quote_items WHERE quote_id = ?')->execute([$qid]);
         // Remove the order's calendar appointments (e.g. the pending fitting) so
