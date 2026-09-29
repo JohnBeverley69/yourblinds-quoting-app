@@ -224,6 +224,13 @@ $activeNav = 'bank';
                 Barclays asks you to re-approve access every 90 days; if fetching stops, reconnect in Lunch Flow.
             </p>
             <?php if ($connErr !== null): ?><div class="alert alert-error"><?= e($connErr) ?></div><?php endif; ?>
+            <?php if ($hasKey && $connErr === null && !$accounts): ?>
+                <div class="alert alert-error">
+                    The key works, but Lunch Flow isn't sharing any bank accounts with it. In Lunch Flow, open the
+                    API destination this key belongs to and add the Barclays account to it, then reload this page.
+                    <div style="font-size:0.78rem;opacity:.75;margin-top:.3rem">Lunch Flow replied: <?= e((string) ($GLOBALS['bf_last_reply'] ?? '')) ?></div>
+                </div>
+            <?php endif; ?>
             <form method="post">
                 <?= csrf_field() ?><input type="hidden" name="action" value="save_conn">
                 <label>API key
