@@ -121,11 +121,11 @@ if ($hasQuotes) {
     }
 
     // Permission filter. Restricted users only see quotes where
-    // EITHER they're the recorded salesperson OR they're assigned
+    // EITHER they created the quote OR they're assigned
     // to a fitting on the quote. The EXISTS sub-handles the latter
-    // since salesperson_id isn't always set on older rows.
+    // since the creator isn't always the salesperson on the job.
     if (!$canViewAll || $mineOnly) {
-        $where[] = '(q.salesperson_id = ? OR EXISTS (
+        $where[] = '(q.created_by_user_id = ? OR EXISTS (
                        SELECT 1 FROM appointments a
                         WHERE a.quote_id = q.id AND a.client_user_id = ?
                     ))';
@@ -182,7 +182,7 @@ if ($hasQuotes) {
         $sw = ['client_id = ?'];
         $sp = [$clientId];
         if (!$canViewAll || $mineOnly) {
-            $sw[] = '(salesperson_id = ? OR EXISTS (
+            $sw[] = '(created_by_user_id = ? OR EXISTS (
                         SELECT 1 FROM appointments a
                          WHERE a.quote_id = quotes.id AND a.client_user_id = ?))';
             $sp[] = $myUserId;
