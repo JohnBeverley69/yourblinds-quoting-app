@@ -168,6 +168,9 @@ try {
     // the status was already accepted before this commit landed.
     $appointmentMsg = '';
     if ($target === 'accepted') {
+        // The measure visit that produced this quote clearly happened — close
+        // it off (only if dated today or earlier; never touches fittings).
+        qb_complete_measure_for_accepted_quote($pdo, $quoteId, $clientId);
         $apptId = qb_create_appointment_from_quote($pdo, $quoteId);
         if ($apptId !== null) {
             $appointmentMsg = ' Installation appointment is in the calendar\'s'

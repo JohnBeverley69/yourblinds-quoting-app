@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/appointment_conflict.php';
 require __DIR__ . '/../_partials/bookable_users.php';
 require __DIR__ . '/../_partials/slot_window.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -63,8 +64,25 @@ if ($qsAssigned > 0) {
     $defaultAssigned = 0;                             // multiple/none → leave unassigned
 }
 
+// Existing-customer lookup. Tenant-scoped, and a restricted user (fitter) only
+// reaches the customers they already work for — the same rule as the customer
+// list (customer_access.php). Returns the customer row or null.
+$loadCustomer = static function (int $cid) use ($clientId, $user): ?array {
+    if ($cid <= 0) return null;
+    $st = db()->prepare(
+        'SELECT id, name, email, phone, mobile, has_whatsapp,
+                address1, address2, town, county, postcode
+           FROM customers WHERE id = ? AND client_id = ? LIMIT 1'
+    );
+    $st->execute([$cid, $clientId]);
+    $row = $st->fetch();
+    if (!$row || !cm_user_can_access_customer($cid, $user)) return null;
+    return $row;
+};
+
 // Form defaults — refilled from $_POST after a validation error.
 $f = [
+    'customer_id'               => 0,     // >0 = booking for an existing customer
     'customer_name'             => '',
     'email'                     => '',
     'phone'                     => '',
@@ -93,6 +111,28 @@ $error        = null;
 $conflictWarn = null;   // soft double-booking warning (overridable)
 $slotWindow   = null;   // 'am' | 'pm' when booked into a window, else null
 
+// ?customer_id=N (from the customer screens' "Book appointment") pre-selects
+// that customer and fills the form from their record. Silently ignored if it
+// isn't this tenant's / this user's customer.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && (int) ($_GET['customer_id'] ?? 0) > 0) {
+    $pre = $loadCustomer((int) $_GET['customer_id']);
+    if ($pre !== null) {
+        $f['customer_id']           = (int) $pre['id'];
+        $f['customer_name']         = (string) $pre['name'];
+        $f['email']                 = (string) ($pre['email']    ?? '');
+        $f['phone']                 = (string) ($pre['phone']    ?? '');
+        $f['mobile']                = (string) ($pre['mobile']   ?? '');
+        $f['has_whatsapp']          = !empty($pre['has_whatsapp']) ? 1 : 0;
+        $f['installation_address1'] = (string) ($pre['address1'] ?? '');
+        $f['installation_address2'] = (string) ($pre['address2'] ?? '');
+        $f['installation_town']     = (string) ($pre['town']     ?? '');
+        $f['installation_county']   = (string) ($pre['county']   ?? '');
+        $f['installation_postcode'] = (string) ($pre['postcode'] ?? '');
+    }
+}
+
+$existingCust = null;   // the picked customer's current record (POST only)
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
@@ -100,15 +140,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (array_keys($f) as $k) {
         if ($k === 'different_billing_address' || $k === 'has_whatsapp') {
             $f[$k] = !empty($_POST[$k]) ? 1 : 0;
-        } elseif ($k === 'duration_minutes' || $k === 'assigned_to') {
+        } elseif ($k === 'duration_minutes' || $k === 'assigned_to' || $k === 'customer_id') {
             $f[$k] = (int) ($_POST[$k] ?? 0);
         } else {
             $f[$k] = trim((string) ($_POST[$k] ?? ''));
         }
     }
 
+    // Picked an existing customer? Re-check it server-side (tenant + access) —
+    // never trust the hidden id alone.
+    if ($f['customer_id'] > 0) {
+        $existingCust = $loadCustomer($f['customer_id']);
+        if ($existingCust === null) {
+            $error = 'Selected customer not found — search again or enter them as a new customer.';
+            $f['customer_id'] = 0;
+        }
+    }
+
     // ---- Validation ------------------------------------------------------
-    if ($f['customer_name'] === '') {
+    if ($error !== null) {
+        // already set (bad customer pick)
+    } elseif ($f['customer_name'] === '') {
         $error = 'Customer name is required.';
     } elseif ($f['email'] !== '' && !filter_var($f['email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
@@ -188,26 +240,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
 
                 // 1) Customer record. Customer's address = installation address.
-                $cstmt = $pdo->prepare(
-                    'INSERT INTO customers
-                       (client_id, name, email, phone, mobile, has_whatsapp,
-                        address1, address2, town, county, postcode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $cstmt->execute([
-                    $clientId,
-                    $f['customer_name'],
-                    $f['email'] !== '' ? $f['email'] : null,
-                    $f['phone'] !== '' ? $f['phone'] : null,
-                    $f['mobile'] !== '' ? $f['mobile'] : null,
-                    $f['has_whatsapp'],
-                    $f['installation_address1'] !== '' ? $f['installation_address1'] : null,
-                    $f['installation_address2'] !== '' ? $f['installation_address2'] : null,
-                    $f['installation_town']     !== '' ? $f['installation_town']     : null,
-                    $f['installation_county']   !== '' ? $f['installation_county']   : null,
-                    $f['installation_postcode'] !== '' ? $f['installation_postcode'] : null,
-                ]);
-                $newCustomerId = (int) $pdo->lastInsertId();
+                //    Form field => customers column, nullable text values.
+                $custVals = [
+                    'name'         => $f['customer_name'],
+                    'email'        => $f['email']                 !== '' ? $f['email']                 : null,
+                    'phone'        => $f['phone']                 !== '' ? $f['phone']                 : null,
+                    'mobile'       => $f['mobile']                !== '' ? $f['mobile']                : null,
+                    'has_whatsapp' => $f['has_whatsapp'],
+                    'address1'     => $f['installation_address1'] !== '' ? $f['installation_address1'] : null,
+                    'address2'     => $f['installation_address2'] !== '' ? $f['installation_address2'] : null,
+                    'town'         => $f['installation_town']     !== '' ? $f['installation_town']     : null,
+                    'county'       => $f['installation_county']   !== '' ? $f['installation_county']   : null,
+                    'postcode'     => $f['installation_postcode'] !== '' ? $f['installation_postcode'] : null,
+                ];
+
+                if ($existingCust !== null) {
+                    // Repeat customer — book against their existing record.
+                    // Only write back the fields the user actually changed on
+                    // this form; an untouched record is left exactly as it was.
+                    $newCustomerId = (int) $existingCust['id'];
+                    $changed = [];
+                    foreach ($custVals as $col => $val) {
+                        $old = $existingCust[$col] ?? null;
+                        if ($col === 'has_whatsapp') {
+                            if ((int) $val !== (int) !empty($old)) $changed[$col] = (int) $val;
+                        } elseif (trim((string) ($old ?? '')) !== (string) ($val ?? '')) {
+                            $changed[$col] = $val;
+                        }
+                    }
+                    if ($changed) {
+                        $set = implode(', ', array_map(static fn ($c) => $c . ' = ?', array_keys($changed)));
+                        $pdo->prepare('UPDATE customers SET ' . $set . ' WHERE id = ? AND client_id = ?')
+                            ->execute(array_merge(array_values($changed), [$newCustomerId, $clientId]));
+                    }
+                } else {
+                    $cstmt = $pdo->prepare(
+                        'INSERT INTO customers
+                           (client_id, name, email, phone, mobile, has_whatsapp,
+                            address1, address2, town, county, postcode)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    );
+                    $cstmt->execute(array_merge([$clientId], array_values($custVals)));
+                    $newCustomerId = (int) $pdo->lastInsertId();
+                }
 
                 // 2) Appointment record. Title defaults to customer name so it
                 //    reads cleanly in the calendar cards.
@@ -307,6 +382,48 @@ $activeNav = 'calendar';
 $ampmAvail = $ampmOn
     ? ampm_availability(db(), (int) $clientId, (string) $f['appointment_date'])
     : null;
+
+// Existing-customer typeahead — same datalist pattern as quote-builder/new.php.
+// The label carries name, town/postcode, phone and email so typing any of
+// them finds the customer. Restricted users only see their own customers.
+$custSql    = 'SELECT c.id, c.name, c.email, c.phone, c.mobile, c.has_whatsapp,
+                      c.address1, c.address2, c.town, c.county, c.postcode
+                 FROM customers c
+                WHERE c.client_id = ?';
+$custParams = [$clientId];
+if (!cm_can_view_all_customers($user)) {
+    $custSql     .= ' AND ' . cm_mine_sql();
+    $custParams[] = (int) $user['user_id'];
+    $custParams[] = (int) $user['user_id'];
+}
+$custSql .= ' ORDER BY c.name LIMIT 500';
+$customerOptions = [];
+try {
+    $custStmt = db()->prepare($custSql);
+    $custStmt->execute($custParams);
+    foreach ($custStmt->fetchAll() as $c) {
+        $bits = array_filter([
+            (string) $c['name'],
+            trim((string) ($c['town'] ?? '') . ' ' . (string) ($c['postcode'] ?? '')),
+            (string) ($c['mobile'] ?? '') !== '' ? (string) $c['mobile'] : (string) ($c['phone'] ?? ''),
+            (string) ($c['email'] ?? ''),
+        ], static fn ($s) => trim($s) !== '');
+        $customerOptions[(int) $c['id']] = ['label' => implode(' — ', $bits), 'row' => $c];
+    }
+} catch (Throwable $e) {
+    error_log('calendar/new.php customer list: ' . $e->getMessage());
+}
+// A pre-selected customer beyond the 500 cap still needs its own option.
+if ((int) $f['customer_id'] > 0 && !isset($customerOptions[(int) $f['customer_id']])) {
+    $sel = $existingCust ?? $loadCustomer((int) $f['customer_id']);
+    if ($sel !== null) {
+        $customerOptions[(int) $sel['id']] = [
+            'label' => (string) $sel['name'] . ((string) ($sel['postcode'] ?? '') !== '' ? ' — ' . $sel['postcode'] : ''),
+            'row'   => $sel,
+        ];
+    }
+}
+$selectedCustomerLabel = $customerOptions[(int) $f['customer_id']]['label'] ?? '';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -426,9 +543,45 @@ $ampmAvail = $ampmOn
 
                     <div class="form-row full">
                         <div class="form-group">
+                            <label for="customer_search">Existing customer</label>
+                            <input type="text" id="customer_search" list="customer-options"
+                                   autocomplete="off"
+                                   <?= (int) $f['customer_id'] === 0 ? 'autofocus' : '' ?>
+                                   value="<?= e($selectedCustomerLabel) ?>"
+                                   placeholder="Search by name, postcode, phone or email…">
+                            <input type="hidden" id="customer_id" name="customer_id"
+                                   value="<?= (int) $f['customer_id'] ?>">
+                            <datalist id="customer-options">
+                                <?php foreach ($customerOptions as $cid => $opt): $c = $opt['row']; ?>
+                                    <option value="<?= e($opt['label']) ?>"
+                                            data-id="<?= (int) $cid ?>"
+                                            data-name="<?= e((string) $c['name']) ?>"
+                                            data-email="<?= e((string) ($c['email'] ?? '')) ?>"
+                                            data-phone="<?= e((string) ($c['phone'] ?? '')) ?>"
+                                            data-mobile="<?= e((string) ($c['mobile'] ?? '')) ?>"
+                                            data-has_whatsapp="<?= !empty($c['has_whatsapp']) ? '1' : '' ?>"
+                                            data-address1="<?= e((string) ($c['address1'] ?? '')) ?>"
+                                            data-address2="<?= e((string) ($c['address2'] ?? '')) ?>"
+                                            data-town="<?= e((string) ($c['town'] ?? '')) ?>"
+                                            data-county="<?= e((string) ($c['county'] ?? '')) ?>"
+                                            data-postcode="<?= e((string) ($c['postcode'] ?? '')) ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
+                            <small id="customer-pick-hint" style="color:var(--text-muted);font-size:0.8125rem">
+                                <?php if ((int) $f['customer_id'] > 0): ?>
+                                    Booking for this existing customer — any changes below also update their record.
+                                <?php else: ?>
+                                    Leave blank to add a new customer.
+                                <?php endif; ?>
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-row full">
+                        <div class="form-group">
                             <label for="customer_name">Name <span class="required">*</span></label>
                             <input id="customer_name" name="customer_name" type="text"
-                                   required maxlength="150" autofocus
+                                   required maxlength="150"
                                    value="<?= e((string) $f['customer_name']) ?>">
                         </div>
                     </div>
@@ -663,6 +816,58 @@ $ampmAvail = $ampmOn
 </div>
 
 <script>
+    // Existing-customer typeahead (same approach as quote-builder/new.php).
+    // Picking an option copies its id into the hidden customer_id and fills the
+    // customer + installation-address fields from its data-* attrs. Typing
+    // something that matches no option (or clearing the box) resets the id to
+    // 0 = new customer; the fields are left as typed.
+    (function () {
+        var search   = document.getElementById('customer_search');
+        var hidden   = document.getElementById('customer_id');
+        var dataList = document.getElementById('customer-options');
+        var hint     = document.getElementById('customer-pick-hint');
+        if (!search || !hidden || !dataList) return;
+
+        var MAP = {
+            name: 'customer_name', email: 'email', phone: 'phone', mobile: 'mobile',
+            address1: 'installation_address1', address2: 'installation_address2',
+            town: 'installation_town', county: 'installation_county',
+            postcode: 'installation_postcode'
+        };
+
+        function setHint(picked) {
+            if (!hint) return;
+            hint.textContent = picked
+                ? 'Booking for this existing customer — any changes below also update their record.'
+                : 'Leave blank to add a new customer.';
+        }
+
+        function syncFromMatch() {
+            var typed = search.value.trim();
+            var matched = null;
+            for (var i = 0; i < dataList.options.length; i++) {
+                if (dataList.options[i].value === typed) { matched = dataList.options[i]; break; }
+            }
+            if (matched) {
+                if (hidden.value === (matched.dataset.id || '0')) return;   // already applied
+                hidden.value = matched.dataset.id || '0';
+                Object.keys(MAP).forEach(function (k) {
+                    var el = document.getElementById(MAP[k]);
+                    if (el) el.value = matched.dataset[k] || '';
+                });
+                var wa = document.getElementById('has_whatsapp');
+                if (wa) wa.checked = matched.dataset.has_whatsapp === '1';
+                setHint(true);
+            } else {
+                hidden.value = '0';
+                setHint(false);
+            }
+        }
+
+        search.addEventListener('input',  syncFromMatch);
+        search.addEventListener('change', syncFromMatch);
+    })();
+
     // Toggle billing block visibility from the checkbox.
     (function () {
         var cb    = document.getElementById('different_billing_address');

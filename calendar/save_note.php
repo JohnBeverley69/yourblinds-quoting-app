@@ -96,6 +96,8 @@ try {
     }
     echo json_encode(['ok' => true, 'note' => (string) $note]);
 } catch (Throwable $e) {
+    // Log the detail server-side; never echo a raw DB/exception message.
+    error_log('calendar/save_note.php: appt ' . $apptId . ': ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Could not save note: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => 'Could not save the note. Please try again.']);
 }

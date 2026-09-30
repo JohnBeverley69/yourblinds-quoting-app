@@ -33,6 +33,12 @@ require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
+// One-shot flash (e.g. after booking / deleting). Read + cleared up front so
+// it shows here rather than on the next unrelated page.
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 $user     = current_user();
 $clientId = (int) $user['client_id'];
 $myUserId = (int) $user['user_id'];
@@ -390,6 +396,31 @@ $activeNav = 'calendar';
         }
         .wk-day-name .wk-count { color: var(--text-faint); font-size: 0.6875rem; }
 
+        /* Phones: seven squeezed columns made the day headers overlap and the
+           cards unreadable. Give each day a readable minimum width and let the
+           BOARD scroll sideways (head + body together, inside the rounded box)
+           — the page itself never scrolls horizontally. The hour axis stays
+           pinned on the left while you swipe through the days. */
+        @media (max-width: 760px) {
+            .wk-board {
+                overflow-x: auto;
+                overscroll-behavior-x: contain;
+                -webkit-overflow-scrolling: touch;
+                max-width: 100%;
+            }
+            .wk-board-head, .wk-board-body {
+                grid-template-columns: 2.75rem repeat(7, minmax(7.5rem, 1fr));
+                min-width: calc(2.75rem + 7 * 7.5rem);
+            }
+            .wk-board-body { overflow-x: visible; }
+            .wk-board-head > :first-child,
+            .time-axis {
+                position: sticky; left: 0; z-index: 3;
+            }
+            .wk-board-head > :first-child { background: var(--bg-subtle); }
+            .wk-day-name { padding: 0.375rem 0.25rem; }
+        }
+
         .time-axis {
             position: relative; background: var(--bg-card);
             border-right: 1px solid var(--border);
@@ -524,6 +555,13 @@ $activeNav = 'calendar';
                 </div>
             </div>
         </div>
+
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
 
         <div class="wk-head">
             <div class="wk-nav">

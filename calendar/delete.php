@@ -20,17 +20,18 @@ csrf_check();
 $user = current_user();
 $id   = (int) ($_POST['id'] ?? 0);
 
+// Hard delete is office-only: admins and users with can_view_all_customer_jobs.
+// A restricted user (fitter) can't erase a booking — they record that it didn't
+// happen by setting the status to Cancelled / No-show on the appointment page.
+if (!cm_can_view_all_customers($user)) {
+    $_SESSION['flash_error'] = 'Only the office can delete appointments — set the status to Cancelled or No-show instead.';
+    header('Location: ' . ($id > 0 ? '/calendar/view.php?id=' . $id : '/calendar/index.php'));
+    exit;
+}
+
 if ($id > 0) {
-    // A restricted user (fitter) may only delete their own appointments —
-    // same rule as reschedule.php / edit.php.
-    $sql    = 'DELETE FROM appointments WHERE id = ? AND client_id = ?';
-    $params = [$id, $user['client_id']];
-    if (!cm_can_view_all_customers($user)) {
-        $sql     .= ' AND client_user_id = ?';
-        $params[] = (int) $user['user_id'];
-    }
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
+    $stmt = db()->prepare('DELETE FROM appointments WHERE id = ? AND client_id = ?');
+    $stmt->execute([$id, $user['client_id']]);
 
     if ($stmt->rowCount() > 0) {
         $_SESSION['flash_success'] = 'Appointment deleted.';

@@ -327,22 +327,53 @@ if (!function_exists('slot_window_short_label')) {
 if (!function_exists('ampm_window_count')) {
     /**
      * How many bookings a window already holds on a given date, for this tenant.
-     * Counts only slot-booked visits (slot_window set) and ignores cancelled /
+     * Counts slot-booked visits (slot_window = this window) PLUS timed measure
+     * visits with no slot_window (booked before AM/PM was switched on, or with
+     * a clock time) whose appointment_time falls inside this window's
+     * From–To range — otherwise those old bookings are invisible and the
+     * window over-books. Fittings are never counted. Ignores cancelled /
      * no-show. Pass $excludeId when editing so an appointment doesn't count
      * against its own window.
      */
     function ampm_window_count(PDO $pdo, int $clientId, string $date, string $window, int $excludeId = 0): int
     {
-        $sql = "SELECT COUNT(*) FROM appointments
-                 WHERE client_id = ? AND appointment_date = ? AND slot_window = ?
-                   AND (status IS NULL OR status NOT IN ('cancelled', 'no_show'))";
-        $params = [$clientId, $date, $window];
-        if ($excludeId > 0) {
-            $sql .= ' AND id <> ?';
-            $params[] = $excludeId;
+        $cfg   = ampm_settings($pdo, $clientId)['config'][$window] ?? null;
+        $start = $cfg !== null ? (string) $cfg['start'] : null;
+        $end   = $cfg !== null ? (string) $cfg['end']   : null;
+
+        $build = static function (bool $withKind) use ($clientId, $date, $window, $excludeId, $start, $end): array {
+            $params = [$clientId, $date, $window];
+            $untimed = '';
+            if ($start !== null && $end !== null) {
+                $untimed = " OR ((slot_window IS NULL OR slot_window = '')
+                                 AND appointment_time IS NOT NULL
+                                 AND appointment_time >= ? AND appointment_time < ?"
+                         . ($withKind ? " AND COALESCE(appt_kind, 'measure') <> 'fitting'" : '')
+                         . ')';
+                $params[] = $start;
+                $params[] = $end;
+            }
+            $sql = "SELECT COUNT(*) FROM appointments
+                     WHERE client_id = ? AND appointment_date = ?
+                       AND (slot_window = ?{$untimed})
+                       AND (status IS NULL OR status NOT IN ('cancelled', 'no_show'))";
+            if ($excludeId > 0) {
+                $sql .= ' AND id <> ?';
+                $params[] = $excludeId;
+            }
+            return [$sql, $params];
+        };
+
+        try {
+            [$sql, $params] = $build(true);
+            $st = $pdo->prepare($sql);
+            $st->execute($params);
+        } catch (Throwable $e) {
+            // appt_kind column not migrated on this tenant — count without it.
+            [$sql, $params] = $build(false);
+            $st = $pdo->prepare($sql);
+            $st->execute($params);
         }
-        $st = $pdo->prepare($sql);
-        $st->execute($params);
         return (int) $st->fetchColumn();
     }
 }

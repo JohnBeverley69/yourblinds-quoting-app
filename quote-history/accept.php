@@ -121,6 +121,9 @@ if ($action === 'accept') {
     // Auto-create the installation appointment so the trade business
     // sees the job land on their calendar the moment the customer
     // accepts. Idempotent — repeat accepts don't multiply appointments.
+    // Close off the measure visit that produced this quote (only if dated
+    // today or earlier; never touches fittings). Best-effort.
+    qb_complete_measure_for_accepted_quote($pdo, (int) $quote['id'], (int) $quote['client_id']);
     qb_create_appointment_from_quote($pdo, (int) $quote['id']);
 
     // Auto-place in-house orders on accept — same rule as the staff-side accept

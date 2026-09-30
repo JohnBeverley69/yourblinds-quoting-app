@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../_partials/appointment_conflict.php';
+require __DIR__ . '/../_partials/bookable_users.php';
+require __DIR__ . '/../_partials/slot_window.php';
+require_once __DIR__ . '/../_partials/customer_access.php';
 
 requireLogin();
 
@@ -93,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $_SESSION['flash_success'] = 'Status updated to ' . $newStatus . '.'
+        $_SESSION['flash_success'] = 'Status updated to ' . ucfirst(str_replace('_', '-', $newStatus)) . '.'
                                    . $autoAdvanceNote;
         header('Location: /calendar/view.php?id=' . $id);
         exit;
@@ -152,20 +156,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        // Empty value = unassign. Otherwise must be a real active user
-        // in THIS tenant — otherwise we silently ignore (the SQL has
-        // a tenant-scoped EXISTS subquery via the FK + WHERE).
-        $newAssigneeRaw = (string) ($_POST['assignee_id'] ?? '');
-        $newAssignee   = $newAssigneeRaw === '' ? null : (int) $newAssigneeRaw;
+        // Load what we need about this appointment: its kind (which role is
+        // bookable), its current assignee (always kept in the list), and its
+        // slot for the double-booking check.
+        $raSt = db()->prepare('SELECT * FROM appointments WHERE id = ? AND client_id = ? LIMIT 1');
+        $raSt->execute([$id, $clientId]);
+        $raAppt = $raSt->fetch();
+        if (!$raAppt) {
+            http_response_code(404);
+            exit('Appointment not found.');
+        }
+        $raKind = (string) ($raAppt['appt_kind'] ?? 'measure');
 
+        // Empty value = unassign. Otherwise it must be one of the users
+        // bookable for this KIND (measure → sales, fitting → fitter) — the same
+        // list new.php / edit.php offer — scoped to this tenant.
+        $newAssigneeRaw = (string) ($_POST['assignee_id'] ?? '');
+        $newAssignee   = ($newAssigneeRaw === '' || (int) $newAssigneeRaw <= 0) ? null : (int) $newAssigneeRaw;
+
+        $assigneeName = '';
         if ($newAssignee !== null) {
-            $chk = db()->prepare(
-                'SELECT 1 FROM client_users
-                  WHERE id = ? AND client_id = ? AND active = 1 LIMIT 1'
-            );
-            $chk->execute([$newAssignee, $clientId]);
-            if (!$chk->fetchColumn()) {
+            $ok = false;
+            foreach (bookable_users_for_kind((int) $clientId, $raKind, (int) ($raAppt['client_user_id'] ?? 0)) as $bu) {
+                if ((int) $bu['id'] === $newAssignee) {
+                    $ok           = true;
+                    $assigneeName = (string) $bu['full_name'];
+                    break;
+                }
+            }
+            if (!$ok) {
                 $_SESSION['flash_error'] = 'That user isn\'t available to assign.';
+                header('Location: /calendar/view.php?id=' . $id);
+                exit;
+            }
+        }
+
+        // Double-booking guard — same rule as new.php / edit.php / drag:
+        // free-time bookings only (AM/PM measure windows overlap by design),
+        // only when the appointment is actually on the calendar, and only
+        // when the assignee is changing. Soft: "Assign anyway" overrides.
+        $raAmpmMeasure = $raKind !== 'fitting'
+            && ampm_settings(db(), (int) $clientId)['on']
+            && ampm_window_bookable((string) ($raAppt['slot_window'] ?? ''));
+        if ($newAssignee !== null
+            && $newAssignee !== (int) ($raAppt['client_user_id'] ?? 0)
+            && !empty($raAppt['appointment_date'])
+            && !empty($raAppt['appointment_time'])
+            && !$raAmpmMeasure
+            && empty($_POST['override_conflict'])) {
+            $clash = appointment_find_conflict(
+                db(), (int) $clientId, $newAssignee,
+                (string) $raAppt['appointment_date'], (string) $raAppt['appointment_time'],
+                (int) ($raAppt['duration_minutes'] ?? 60), $id
+            );
+            if ($clash !== null) {
+                $_SESSION['assign_clash'] = [
+                    'appt_id'     => $id,
+                    'assignee_id' => $newAssignee,
+                    'message'     => appointment_conflict_message($clash, $assigneeName),
+                ];
                 header('Location: /calendar/view.php?id=' . $id);
                 exit;
             }
@@ -176,6 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               WHERE id = ? AND client_id = ?'
         );
         $u->execute([$newAssignee, $id, $clientId]);
+        unset($_SESSION['assign_clash']);
         $_SESSION['flash_success'] = $newAssignee === null
             ? 'Appointment unassigned.'
             : 'Appointment reassigned.';
@@ -294,19 +344,40 @@ if (!$canReassign) {
     $canReassign = ((int) $permSt->fetchColumn()) === 1;
 }
 
-// List of active users in this tenant for the assignee dropdown,
-// only loaded if the user can actually reassign.
+// Users offered in the assignee dropdown — the same role-scoped list as
+// new.php / edit.php (measure → sales, fitting → fitter; the current assignee
+// is always kept). Only loaded if the user can actually reassign.
 $tenantUsers = [];
 if ($canReassign) {
-    $usSt = db()->prepare(
-        'SELECT id, full_name, role
-           FROM client_users
-          WHERE client_id = ? AND active = 1
-       ORDER BY full_name'
+    $tenantUsers = bookable_users_for_kind(
+        (int) $clientId,
+        (string) ($appt['appt_kind'] ?? 'measure'),
+        (int) ($appt['client_user_id'] ?? 0)
     );
-    $usSt->execute([$clientId]);
-    $tenantUsers = $usSt->fetchAll();
 }
+
+// Pending double-booking warning from a reassign attempt (PRG) — only for
+// THIS appointment; shown once with an "Assign anyway" button.
+$assignClash = null;
+if (isset($_SESSION['assign_clash'])) {
+    if ((int) ($_SESSION['assign_clash']['appt_id'] ?? 0) === (int) $id) {
+        $assignClash = $_SESSION['assign_clash'];
+    }
+    unset($_SESSION['assign_clash']);
+}
+
+// Hard delete is office-only (admin / can_view_all_customer_jobs) — mirrors
+// delete.php. Fitters record a booking that didn't happen via the status.
+$canDelete = cm_can_view_all_customers($user);
+
+// "Start quote" leads to quote-builder/new.php, which 403s without
+// can_create_quotes — so only offer it to people who can use it.
+$viewPerms       = function_exists('current_user_permissions') ? current_user_permissions() : [];
+$canCreateQuotes = $isAdmin || !empty($viewPerms['can_create_quotes']);
+
+$accessNote = trim((string) ($appt['access_note'] ?? ''));
+$issueNote  = trim((string) ($appt['issue_note']  ?? ''));
+$hasIssue   = !empty($appt['has_issue']);
 
 // Build the joined installation address as a single human-readable line.
 $instParts = array_values(array_filter([
@@ -453,7 +524,7 @@ $activeNav = 'calendar';
                          the appointment to verify blinds + take payment. -->
                     <a href="/quote-builder/edit.php?id=<?= (int) $appt['quote_id'] ?>"
                        class="btn btn-primary">Open order &rarr;</a>
-                <?php else: ?>
+                <?php elseif ($canCreateQuotes): ?>
                     <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
                        class="btn btn-primary">Start quote</a>
                 <?php endif; ?>
@@ -467,6 +538,26 @@ $activeNav = 'calendar';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
+        <?php if ($assignClash !== null): ?>
+            <div role="alert" style="background:#fffbeb;border:1px solid #fde68a;
+                 color:#92400e;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;
+                 font-size:0.9375rem">
+                &#9888;&#65039; <?= e((string) $assignClash['message']) ?>
+                <form method="post" action="/calendar/view.php?id=<?= (int) $appt['id'] ?>"
+                      style="margin:0.625rem 0 0;display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="update_assignee">
+                    <input type="hidden" name="assignee_id" value="<?= (int) $assignClash['assignee_id'] ?>">
+                    <button type="submit" name="override_conflict" value="1"
+                            class="btn btn-primary"
+                            style="background:#d97706;border-color:#d97706">
+                        Assign anyway
+                    </button>
+                    <a href="/calendar/view.php?id=<?= (int) $appt['id'] ?>" class="btn btn-secondary">Keep as is</a>
+                </form>
+            </div>
         <?php endif; ?>
 
         <?php
@@ -493,7 +584,7 @@ $activeNav = 'calendar';
                         flex-wrap:wrap;line-height:1.5;font-size:0.9375rem">
                 <div style="flex:1;min-width:18rem">
                     <strong>Status mismatch:</strong>
-                    this appointment is <em><?= e($apptStatus) ?></em>
+                    this appointment is <em><?= e($statusLabel) ?></em>
                     but its linked quote
                     <strong><?= e($quoteRef) ?></strong>
                     is still marked as <em>fitted</em>.
@@ -653,6 +744,24 @@ $activeNav = 'calendar';
             </div>
         </section>
 
+        <?php if ($hasIssue || $issueNote !== ''): ?>
+            <section class="section">
+                <div class="section-header">
+                    <h2 class="section-title">&#9888;&#65039; Issue</h2>
+                </div>
+                <div class="notes-block" style="border-color:#fecaca;background:#fef2f2;color:#991b1b"><?= e($issueNote !== '' ? $issueNote : 'Flagged as an issue (no details given).') ?></div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($accessNote !== ''): ?>
+            <section class="section">
+                <div class="section-header">
+                    <h2 class="section-title">📝 Appointment note</h2>
+                </div>
+                <div class="notes-block"><?= e($accessNote) ?></div>
+            </section>
+        <?php endif; ?>
+
         <?php if (!empty($appt['notes'])): ?>
             <section class="section">
                 <div class="section-header">
@@ -662,6 +771,7 @@ $activeNav = 'calendar';
             </section>
         <?php endif; ?>
 
+        <?php if ($canDelete): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Danger zone</h2>
@@ -679,6 +789,7 @@ $activeNav = 'calendar';
                 <button type="submit" class="btn btn-danger">Delete appointment</button>
             </form>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 <?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>

@@ -69,7 +69,7 @@ if (!cm_can_view_all_customers($user)) {
 }
 $stmt = db()->prepare(
     'SELECT a.id, a.title, a.appointment_time, a.duration_minutes, a.status, a.appt_kind,
-            a.has_issue, a.issue_note,
+            a.has_issue, a.issue_note, a.access_note,
             a.installation_address1, a.installation_address2,
             a.installation_town, a.installation_county, a.installation_postcode,
             c.name AS customer_name,
@@ -286,6 +286,19 @@ $activeNav = 'calendar';
             color: var(--text-muted);
             font-size: 0.9375rem;
         }
+        .run-stops .stop-note {
+            margin-top: 0.3125rem;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            color: var(--text-body);
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.3125rem 0.5rem;
+        }
+        .run-stops .stop-note.is-issue { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
         .run-stops .stop-status {
             font-size: 0.6875rem;
             font-weight: 700;
@@ -362,9 +375,14 @@ $activeNav = 'calendar';
                 <?php if (!$usingHome): ?>
                     <div class="run-noaddr">
                         No home address set on your user profile, so the route starts at the first
-                        appointment instead of from home. Set it under
-                        <a href="/admin/users_edit.php?id=<?= (int) $user['user_id'] ?>">Edit user</a>
-                        &rarr; Home address.
+                        appointment instead of from home.
+                        <?php if (($user['role'] ?? '') === 'admin'): ?>
+                            Set it under
+                            <a href="/admin/users_edit.php?id=<?= (int) $user['user_id'] ?>">Edit user</a>
+                            &rarr; Home address.
+                        <?php else: ?>
+                            Ask your admin to add your home address to your user profile.
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
                 <?php if (!$plottable): ?>
@@ -487,6 +505,16 @@ $activeNav = 'calendar';
                                     <div class="stop-addr"><?= e($addrLine) ?></div>
                                 <?php else: ?>
                                     <div class="stop-addr" style="color:#b45309">No address recorded — not on the map.</div>
+                                <?php endif; ?>
+                                <?php
+                                    $runIssueT = trim((string) ($a['issue_note']  ?? ''));
+                                    $runNote   = trim((string) ($a['access_note'] ?? ''));
+                                ?>
+                                <?php if (!empty($a['has_issue']) || $runIssueT !== ''): ?>
+                                    <div class="stop-note is-issue">&#9888;&#65039; <?= e($runIssueT !== '' ? $runIssueT : 'Flagged as an issue') ?></div>
+                                <?php endif; ?>
+                                <?php if ($runNote !== ''): ?>
+                                    <div class="stop-note">📝 <?= e($runNote) ?></div>
                                 <?php endif; ?>
                             </div>
                             <?php

@@ -9,6 +9,13 @@ require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
+// One-shot flash from new.php / delete.php (they redirect here). Read and
+// cleared up front so it shows on THIS page, not on the next unrelated
+// appointment someone happens to open.
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 $user     = current_user();
 $clientId = $user['client_id'];
 $isAdmin  = $user['role'] === 'admin';
@@ -811,6 +818,13 @@ $activeNav = 'calendar';
                 <a href="/calendar/new.php" class="btn btn-primary">+ Book Appointment</a>
             </div>
         </div>
+
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
 
         <?php
             // Preserve mine=1 across week navigation so the diary view

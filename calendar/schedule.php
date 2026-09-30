@@ -32,6 +32,19 @@ $userId   = (int) $user['user_id'];
 $ampmOn     = ampm_settings(db(), $clientId)['on'];
 $slotColSql = $ampmOn ? 'a.slot_window, ' : '';
 
+// Optional note columns (later migrations) — probed so an unmigrated tenant
+// still loads; the card null-coalesces each one.
+try {
+    $cSt = db()->query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments'
+            AND COLUMN_NAME IN ('access_note','has_issue','issue_note')"
+    );
+    foreach ($cSt->fetchAll(PDO::FETCH_COLUMN) as $col) {
+        if (preg_match('/^[a-z_]+$/', (string) $col)) $slotColSql .= 'a.' . $col . ', ';
+    }
+} catch (Throwable $e) { /* omit the optional columns */ }
+
 $today    = new DateTimeImmutable('today');
 $tomorrow = $today->modify('+1 day');
 
@@ -201,6 +214,13 @@ $activeNav = 'my-schedule';
         }
         .sched-card .address::before { content: '📍 '; }
         .sched-card .phone::before   { content: '📞 '; }
+        .sched-note {
+            margin-top: 0.3125rem; font-size: 0.875rem; line-height: 1.4;
+            color: var(--text-body); white-space: pre-wrap; word-break: break-word;
+            background: var(--bg-subtle); border: 1px solid var(--border);
+            border-radius: 6px; padding: 0.3125rem 0.5rem;
+        }
+        .sched-note.is-issue { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
         .sched-card .actions {
             grid-column: 1 / -1; margin-top: 0.5rem;
             display: flex; gap: 0.5rem; flex-wrap: wrap;
@@ -289,8 +309,19 @@ $activeNav = 'my-schedule';
                 <div class="body">
                     <div class="title">
                         <span><?= e((string) ($r['title'] ?? 'Appointment')) ?></span>
-                        <span class="status <?= e($status) ?>"><?= e($status) ?></span>
+                        <span class="status <?= e($status) ?>"><?= e(ucfirst(str_replace('_', '-', $status))) ?></span>
                     </div>
+                    <?php
+                        $schIssue  = !empty($r['has_issue']);
+                        $schIssueT = trim((string) ($r['issue_note']  ?? ''));
+                        $schNote   = trim((string) ($r['access_note'] ?? ''));
+                    ?>
+                    <?php if ($schIssue || $schIssueT !== ''): ?>
+                        <div class="sched-note is-issue">&#9888;&#65039; <?= e($schIssueT !== '' ? $schIssueT : 'Flagged as an issue') ?></div>
+                    <?php endif; ?>
+                    <?php if ($schNote !== ''): ?>
+                        <div class="sched-note">📝 <?= e($schNote) ?></div>
+                    <?php endif; ?>
                     <?php if (!empty($r['customer_name'])): ?>
                         <div class="customer"><?= e((string) $r['customer_name']) ?></div>
                     <?php endif; ?>
