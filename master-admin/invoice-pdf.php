@@ -14,7 +14,7 @@ require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
 require_once __DIR__ . '/../pdf-generator/ar_pdf.php';
 
-requireSuperAdmin();
+requireFactoryOffice();
 
 $pdo     = db();
 $factory = ar_factory_id();

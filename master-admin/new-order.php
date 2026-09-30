@@ -20,7 +20,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers_new_order.php';
 
-requireSuperAdmin();
+requireFactoryOffice();
 
 $user       = current_user();
 $factoryCid = (int) $user['client_id'];   // the quote is owned by the factory (Beverley)
@@ -161,7 +161,7 @@ $activeNav = '';
             <div>
                 <h1 class="page-title">New</h1>
                 <p class="page-subtitle">
-                    <a href="/master-admin/index.php">&larr; Master Admin</a>
+                    <?php if (is_super_admin()): ?><a href="/master-admin/index.php">&larr; Master Admin</a><?php endif; ?>
                     &middot; start a trade sale (for an account, or one-off) or a retail sale.
                 </p>
             </div>

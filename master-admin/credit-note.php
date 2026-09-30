@@ -17,7 +17,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
 
-requireSuperAdmin();
+requireFactoryOffice();
 
 $pdo     = db();
 $factory = ar_factory_id();

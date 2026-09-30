@@ -14,7 +14,7 @@ require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
 require_once __DIR__ . '/../_partials/app_settings.php';
 
-requireSuperAdmin();
+requireFactoryOffice();
 
 $user    = current_user();
 $pdo     = db();
@@ -558,7 +558,7 @@ $activeNav = 'wholesale';
             <div>
                 <h1 class="page-title">Wholesale</h1>
                 <p class="page-subtitle">
-                    <a href="/master-admin/index.php">&larr; Master Admin</a>
+                    <?php if (is_super_admin()): ?><a href="/master-admin/index.php">&larr; Master Admin</a><?php endif; ?>
                     &middot; billing your trade accounts for the orders they place &mdash; delivery notes, invoices and statements.
                 </p>
             </div>
