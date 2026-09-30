@@ -15,7 +15,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $backTo = '/factory/incoming-orders.php';
 

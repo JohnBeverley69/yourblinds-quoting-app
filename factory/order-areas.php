@@ -17,7 +17,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/due_dates.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $pdo    = db();
 $MASTER = current_factory_id();

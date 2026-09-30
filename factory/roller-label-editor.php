@@ -15,7 +15,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/roller_box.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $pdo    = db();
 $MASTER = function_exists('current_factory_id') ? current_factory_id()
