@@ -174,6 +174,9 @@ $activeNav = 'customers';
                                     <?php endif; ?>
                                     <td>
                                         <a href="/customer-manager/edit.php?id=<?= (int) $c['id'] ?>">Edit</a>
+                                        &middot;
+                                        <a href="/calendar/new.php?customer_id=<?= (int) $c['id'] ?>"
+                                           style="white-space:nowrap">Book appointment</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

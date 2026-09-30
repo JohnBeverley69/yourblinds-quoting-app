@@ -772,23 +772,60 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
     $title = 'Install: ' . (string) $quote['quote_number']
            . ' — ' . (string) $quote['end_customer_name'];
 
+    // Carry forward what the salesperson learned at the MEASURE visit for this
+    // quote (if there was one): its access note ("key under the mat", "ring
+    // bell twice"), its free-text notes, and its billing address — so the
+    // fitter sees them on the fitting without digging back through the measure.
+    // Needs appt_kind to tell the measure apart; access_note is optional.
+    $measure = null;
+    if ($hasKind) {
+        foreach ([true, false] as $withAccess) {
+            try {
+                $mq = $pdo->prepare(
+                    'SELECT notes, different_billing_address,
+                            billing_address1, billing_address2,
+                            billing_town, billing_county, billing_postcode'
+                    . ($withAccess ? ', access_note' : '') . "
+                       FROM appointments
+                      WHERE quote_id = ? AND client_id = ?
+                        AND COALESCE(appt_kind, 'measure') <> 'fitting'
+                   ORDER BY appointment_date DESC, id DESC
+                      LIMIT 1"
+                );
+                $mq->execute([$quoteId, $fClientId]);
+                $measure = $mq->fetch() ?: null;
+                break;
+            } catch (Throwable $e) {
+                // access_note not migrated — retry without it; give up quietly
+                // after that (the fitting is still created, just without these).
+                $measure = null;
+            }
+        }
+    }
+
     $notes = "Auto-created from accepted quote " . $quote['quote_number'] . ".\n"
            . "Drag onto the right date (or open to edit) when the install is scheduled."
-           . (!empty($quote['notes']) ? "\n\nQuote notes:\n" . $quote['notes'] : '');
+           . (!empty($quote['notes']) ? "\n\nQuote notes:\n" . $quote['notes'] : '')
+           . ($measure && trim((string) ($measure['notes'] ?? '')) !== ''
+                ? "\n\nMeasure visit notes:\n" . trim((string) $measure['notes'])
+                : '');
 
-    $ins = $pdo->prepare(
-        'INSERT INTO appointments
-           (client_id, client_user_id, customer_id, quote_id,
+    $billDiff = $measure && (int) ($measure['different_billing_address'] ?? 0) === 1;
+    $cols = 'client_id, client_user_id, customer_id, quote_id,
             title, appointment_date, appointment_time, duration_minutes,
             installation_address1, installation_address2,
             installation_town, installation_county, installation_postcode,
-            notes, status' . ($hasKind ? ', appt_kind' : '') . ')
-         VALUES (?, ?, ?, ?,
+            different_billing_address,
+            billing_address1, billing_address2,
+            billing_town, billing_county, billing_postcode,
+            notes, status';
+    $vals = '?, ?, ?, ?,
                  ?, NULL, ?, 60,
                  ?, ?, ?, ?, ?,
-                 ?, ?' . ($hasKind ? ", 'fitting'" : '') . ')'
-    );
-    $ins->execute([
+                 ?,
+                 ?, ?, ?, ?, ?,
+                 ?, ?';
+    $params = [
         (int) $quote['client_id'],
         $fitterId,
         $quote['customer_id'] !== null ? (int) $quote['customer_id'] : null,
@@ -800,11 +837,64 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         $quote['end_customer_town']     ?: null,
         $quote['end_customer_county']   ?: null,
         $quote['end_customer_postcode'] ?: null,
+        $billDiff ? 1 : 0,
+        $billDiff ? (($measure['billing_address1'] ?? '') ?: null) : null,
+        $billDiff ? (($measure['billing_address2'] ?? '') ?: null) : null,
+        $billDiff ? (($measure['billing_town']     ?? '') ?: null) : null,
+        $billDiff ? (($measure['billing_county']   ?? '') ?: null) : null,
+        $billDiff ? (($measure['billing_postcode'] ?? '') ?: null) : null,
         $notes,
         'booked',
-    ]);
+    ];
+    if ($hasKind) {
+        $cols .= ', appt_kind';
+        $vals .= ", 'fitting'";
+    }
+    $accessNote = $measure !== null ? trim((string) ($measure['access_note'] ?? '')) : '';
+    if ($accessNote !== '') {
+        // Only present when the access_note column exists (fetched above).
+        $cols    .= ', access_note';
+        $vals    .= ', ?';
+        $params[] = $accessNote;
+    }
+
+    $ins = $pdo->prepare('INSERT INTO appointments (' . $cols . ') VALUES (' . $vals . ')');
+    $ins->execute($params);
 
     return (int) $pdo->lastInsertId();
+}
+
+/**
+ * Close off the MEASURE visit for a quote that's just been accepted.
+ *
+ * The sales visit clearly happened (it produced an accepted quote), so a
+ * linked measure appointment still sitting at 'booked' is marked 'completed'
+ * — but only if it's dated today or earlier (a future-dated measure is left
+ * alone; something odd is going on and a human should look). Never touches
+ * fittings, cancelled / no-show visits, or undated ones. Needs appt_kind to
+ * tell a measure from a fitting; a no-op pre-migration. Best-effort: failures
+ * are logged and swallowed so they can't break the acceptance. Returns how
+ * many appointments were closed.
+ */
+function qb_complete_measure_for_accepted_quote(PDO $pdo, int $quoteId, int $clientId): int
+{
+    if ($quoteId <= 0 || $clientId <= 0) return 0;
+    try {
+        $st = $pdo->prepare(
+            "UPDATE appointments
+                SET status = 'completed'
+              WHERE quote_id = ? AND client_id = ?
+                AND status = 'booked'
+                AND COALESCE(appt_kind, 'measure') <> 'fitting'
+                AND appointment_date IS NOT NULL
+                AND appointment_date <= CURDATE()"
+        );
+        $st->execute([$quoteId, $clientId]);
+        return $st->rowCount();
+    } catch (Throwable $e) {
+        error_log('qb_complete_measure_for_accepted_quote(' . $quoteId . '): ' . $e->getMessage());
+        return 0;
+    }
 }
 
 /**

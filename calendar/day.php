@@ -43,6 +43,12 @@ require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
 
+// One-shot flash (e.g. after booking / deleting). Read + cleared up front so
+// it shows here rather than on the next unrelated page.
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 $user        = current_user();
 $clientId    = (int) $user['client_id'];
 $myUserId    = (int) $user['user_id'];
@@ -664,6 +670,13 @@ $activeNav = 'calendar';
             </div>
         </div>
 
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
         <div class="day-head">
             <div class="day-nav">
                 <a href="/calendar/day.php?date=<?= e($prevYmd) ?>" aria-label="Previous day">&laquo;</a>
@@ -921,15 +934,26 @@ $activeNav = 'calendar';
                         ⚠️ Unassigned (<?= count($unassigned) ?>)
                     </strong>
                     <div style="margin-top:0.375rem;font-size:0.8125rem;color:#78350f;line-height:1.5">
-                        <?php foreach ($unassigned as $u): ?>
+                        <?php foreach ($unassigned as $u):
+                            // Window label if slot-booked, else HH:MM (never the raw HH:MM:SS).
+                            $uaWhen = slot_window_short_label((string) ($u['slot_window'] ?? ''));
+                            if ($uaWhen === '') {
+                                $uaWhen = substr((string) ($u['appointment_time'] ?? ''), 0, 5);
+                            }
+                            $uaNeeds = (string) ($u['appt_kind'] ?? 'measure') === 'fitting'
+                                ? 'needs a fitter assigned'
+                                : 'needs someone assigned';
+                        ?>
                             <div>
                                 <a href="/calendar/edit.php?id=<?= (int) $u['id'] ?>"
                                    style="color:#78350f;font-weight:600">
-                                    <?= e((string) ($u['appointment_time'] ?? '')) ?>
-                                    &middot;
+                                    <?php if ($uaWhen !== ''): ?>
+                                        <?= e($uaWhen) ?>
+                                        &middot;
+                                    <?php endif; ?>
                                     <?= e((string) ($u['customer_name'] ?? $u['title'] ?? 'Appointment')) ?>
                                 </a>
-                                — needs a fitter assigned
+                                — <?= e($uaNeeds) ?>
                             </div>
                         <?php endforeach; ?>
                     </div>

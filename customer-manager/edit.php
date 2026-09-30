@@ -124,6 +124,12 @@ $activeNav = 'customers';
                     <a href="/customer-manager/index.php">&larr; Back to customers</a>
                 </p>
             </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <!-- Book a repeat visit against THIS customer record rather than
+                     re-typing them on the calendar (which used to duplicate them). -->
+                <a href="/calendar/new.php?customer_id=<?= (int) $customer['id'] ?>"
+                   class="btn btn-primary">Book appointment</a>
+            </div>
         </div>
 
         <?php if ($flashMsg !== null): ?>

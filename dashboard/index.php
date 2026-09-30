@@ -401,42 +401,62 @@ if ($canSeeProfit) {
 //
 // Schema safety: appointments table may be absent on pre-Phase-2
 // builds; the try/catch lets the page still render.
+//
+// Today's jobs whose start time has already passed but are still 'booked'
+// (not completed / cancelled / no-show) are NOT dropped: they're listed in a
+// separate "Earlier today, not closed" group so they can't silently vanish
+// before anyone closes them off.
 $upcomingJobs   = [];
+$earlierToday   = [];
 $upcomingLimit  = 8;
 $canViewAllJobs = $isAdmin || !empty($perms['can_view_all_customer_jobs']);
 
 try {
-    $upWhere  = [
-        'a.client_id = ?',
-        "a.status = 'booked'",
+    $upFetch = static function (string $whenSql, int $limit) use ($pdo, $clientId, $canViewAllJobs, $myUserId): array {
+        $upWhere  = [
+            'a.client_id = ?',
+            "a.status = 'booked'",
+            $whenSql,
+        ];
+        $upParams = [$clientId];
+        if (!$canViewAllJobs) {
+            $upWhere[]  = 'a.client_user_id = ?';
+            $upParams[] = $myUserId;
+        }
+        $st = $pdo->prepare(
+            "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
+                    a.duration_minutes, a.client_user_id,
+                    a.installation_town, a.installation_postcode,
+                    c.name      AS customer_name,
+                    c.postcode  AS customer_postcode,
+                    u.full_name AS fitter_name,
+                    q.id        AS quote_id,
+                    q.quote_number,
+                    q.status    AS quote_status
+               FROM appointments a
+          LEFT JOIN customers    c ON c.id = a.customer_id
+          LEFT JOIN client_users u ON u.id = a.client_user_id
+          LEFT JOIN quotes       q ON q.id = a.quote_id
+              WHERE " . implode(' AND ', $upWhere) . "
+           ORDER BY a.appointment_date ASC, a.appointment_time ASC
+              LIMIT " . (int) $limit
+        );
+        $st->execute($upParams);
+        return $st->fetchAll();
+    };
+
+    // Still to come: later today, or any future day.
+    $upcomingJobs = $upFetch(
         "(a.appointment_date > CURDATE()
-          OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))",
-    ];
-    $upParams = [$clientId];
-    if (!$canViewAllJobs) {
-        $upWhere[]  = 'a.client_user_id = ?';
-        $upParams[] = $myUserId;
-    }
-    $st = $pdo->prepare(
-        "SELECT a.id, a.title, a.appointment_date, a.appointment_time,
-                a.duration_minutes, a.client_user_id,
-                a.installation_town, a.installation_postcode,
-                c.name      AS customer_name,
-                c.postcode  AS customer_postcode,
-                u.full_name AS fitter_name,
-                q.id        AS quote_id,
-                q.quote_number,
-                q.status    AS quote_status
-           FROM appointments a
-      LEFT JOIN customers    c ON c.id = a.customer_id
-      LEFT JOIN client_users u ON u.id = a.client_user_id
-      LEFT JOIN quotes       q ON q.id = a.quote_id
-          WHERE " . implode(' AND ', $upWhere) . "
-       ORDER BY a.appointment_date ASC, a.appointment_time ASC
-          LIMIT " . (int) $upcomingLimit
+          OR (a.appointment_date = CURDATE()
+              AND (a.appointment_time IS NULL OR a.appointment_time >= CURTIME())))",
+        $upcomingLimit
     );
-    $st->execute($upParams);
-    $upcomingJobs = $st->fetchAll();
+    // Earlier today and still open.
+    $earlierToday = $upFetch(
+        'a.appointment_date = CURDATE() AND a.appointment_time < CURTIME()',
+        20
+    );
 } catch (Throwable $e) {
     // appointments table absent or schema mismatch — silent degrade.
     error_log('dashboard upcoming jobs query failed: ' . $e->getMessage());
@@ -727,6 +747,11 @@ $activeNav = 'dashboard';
             color: var(--text-faint);
             font-family: ui-monospace, Menlo, Consolas, monospace;
         }
+        .up-group-head {
+            margin: 0.5rem 0 0.125rem; padding: 0 0.5rem;
+            font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.05em;
+            text-transform: uppercase; color: var(--text-faint);
+        }
         .upcoming-more {
             display: inline-block; margin-top: 0.625rem;
             color: var(--link); font-size: 0.8125rem; font-weight: 600;
@@ -942,7 +967,9 @@ $activeNav = 'dashboard';
         <div class="panel">
             <h2>Upcoming jobs</h2>
             <p class="panel-sub">
-                <?php if (!$upcomingJobs): ?>
+                <?php if (!$upcomingJobs && $earlierToday): ?>
+                    Nothing else booked — earlier jobs today still need closing off.
+                <?php elseif (!$upcomingJobs): ?>
                     Nothing booked yet — head to the calendar to add one.
                 <?php else: ?>
                     Next <?= count($upcomingJobs) ?>
@@ -950,12 +977,10 @@ $activeNav = 'dashboard';
                     on the calendar — soonest first.
                 <?php endif; ?>
             </p>
-            <?php if (!$upcomingJobs): ?>
-                <div class="empty">No upcoming jobs booked.</div>
-            <?php else:
+            <?php
                 $tomorrowYmd = date('Y-m-d', strtotime('tomorrow'));
                 $todayYmd    = date('Y-m-d');
-                foreach ($upcomingJobs as $j):
+                $renderUpRow = static function (array $j) use ($todayYmd, $tomorrowYmd, $canViewAllJobs): void {
                     $apptDate = (string) ($j['appointment_date'] ?? '');
                     $apptTime = (string) ($j['appointment_time'] ?? '');
                     $whenTs   = $apptDate !== '' ? strtotime($apptDate . ' ' . $apptTime) : 0;
@@ -1007,7 +1032,21 @@ $activeNav = 'dashboard';
                         <?php endif; ?>
                     </div>
                 </a>
-            <?php endforeach; endif; ?>
+            <?php
+                };
+            ?>
+            <?php if ($earlierToday): ?>
+                <div class="up-group-head">Earlier today, not closed (<?= count($earlierToday) ?>)</div>
+                <?php foreach ($earlierToday as $j) { $renderUpRow($j); } ?>
+                <?php if ($upcomingJobs): ?>
+                    <div class="up-group-head">Still to come</div>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if (!$upcomingJobs && !$earlierToday): ?>
+                <div class="empty">No upcoming jobs booked.</div>
+            <?php elseif ($upcomingJobs): ?>
+                <?php foreach ($upcomingJobs as $j) { $renderUpRow($j); } ?>
+            <?php endif; ?>
             <a href="/calendar/index.php" class="upcoming-more">Open calendar &rarr;</a>
         </div>
 
