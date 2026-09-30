@@ -81,12 +81,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // so the user knows it happened.
         $autoAdvanceNote = '';
         if ($newStatus === 'completed') {
-            $qLink = db()->prepare(
-                'SELECT quote_id FROM appointments
-                  WHERE id = ? AND client_id = ? LIMIT 1'
-            );
-            $qLink->execute([$id, $clientId]);
-            $quoteId = (int) ($qLink->fetchColumn() ?: 0);
+            // Only a FITTING means the blinds are up. Completing the measure visit
+            // used to push its quote to "fitted" too (found in the go-live test).
+            try {
+                $qLink = db()->prepare(
+                    "SELECT quote_id, COALESCE(NULLIF(appt_kind, ''), 'measure') AS kind FROM appointments
+                      WHERE id = ? AND client_id = ? LIMIT 1"
+                );
+                $qLink->execute([$id, $clientId]);
+                $lk = $qLink->fetch() ?: [];
+            } catch (Throwable $e) {   // appt_kind not migrated — old behaviour
+                $qLink = db()->prepare('SELECT quote_id FROM appointments WHERE id = ? AND client_id = ? LIMIT 1');
+                $qLink->execute([$id, $clientId]);
+                $lk = ($qLink->fetch() ?: []) + ['kind' => 'fitting'];
+            }
+            $quoteId = ($lk['kind'] ?? '') === 'fitting' ? (int) ($lk['quote_id'] ?? 0) : 0;
             if ($quoteId > 0) {
                 require_once __DIR__ . '/../quote-builder/_helpers.php';
                 $advancedRef = qb_advance_quote_to_fitted(db(), $quoteId, $clientId);
@@ -315,12 +324,17 @@ if (!$canViewThis) {
     exit;
 }
 
-$dateObj = DateTimeImmutable::createFromFormat('Y-m-d', (string) $appt['appointment_date'])
-        ?: new DateTimeImmutable($appt['appointment_date']);
+// A pending fitting (auto-created on acceptance) has no date or time yet — this
+// page used to 500 on it ("new DateTimeImmutable(null)").
+$isUnscheduled = empty($appt['appointment_date']);
+$dateObj = $isUnscheduled
+    ? new DateTimeImmutable('today')
+    : (DateTimeImmutable::createFromFormat('Y-m-d', (string) $appt['appointment_date'])
+        ?: new DateTimeImmutable((string) $appt['appointment_date']));
 $timeObj = DateTimeImmutable::createFromFormat('H:i:s', (string) $appt['appointment_time'])
         ?: DateTimeImmutable::createFromFormat('H:i', (string) $appt['appointment_time']);
 
-$dateLabel = $dateObj->format('l, j F Y');
+$dateLabel = $isUnscheduled ? 'Not scheduled yet — in the Pending Fitting tray' : $dateObj->format('l, j F Y');
 $timeLabel = $timeObj === false ? (string) $appt['appointment_time'] : strtolower($timeObj->format('g:ia'));
 $monthParam = $dateObj->format('Y-m');
 
