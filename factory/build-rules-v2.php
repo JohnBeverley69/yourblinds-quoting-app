@@ -949,7 +949,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   }
   </script>
 
-  <?php if (!$vars): ?>
+  <?php if (!$vars && $productId > 0 && build_rules_source($pdo, $productId) !== $productId): ?>
+    <?php /* Shares another product's rules — the notice above says where to edit them. */ ?>
+  <?php elseif (!$vars): ?>
     <div class="empty"><b><?= $e2($productName ?: 'This product') ?></b> has no rules yet. Add your first one below — a <b>Cut</b> (a measurement minus an allowance) or a <b>Calc</b> (a formula). As soon as you add one, it appears here to edit.</div>
   <?php else: ?>
   <div class="layout">
