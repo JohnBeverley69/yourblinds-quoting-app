@@ -19,7 +19,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/band_sort.php';
 
-requireSuperAdmin();
+requireFactoryOffice();
 
 $user     = current_user();
 $pdo      = db();
@@ -317,7 +317,7 @@ $statusOf = static function (array $p) use ($today): array {
             <div>
                 <h1 class="page-title">Promotions</h1>
                 <p class="page-subtitle">
-                    <a href="/master-admin/index.php">&larr; Master Admin</a>
+                    <?php if (is_super_admin()): ?><a href="/master-admin/index.php">&larr; Master Admin</a><?php endif; ?>
                     &middot; time-boxed buying discounts across accounts, on top of standing account discounts (best-wins).
                 </p>
             </div>

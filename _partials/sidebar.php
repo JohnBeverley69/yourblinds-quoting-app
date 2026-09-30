@@ -46,6 +46,9 @@ declare(strict_types=1);
 $user         = $user         ?? (function_exists('current_user') ? (current_user() ?? []) : []);
 $isAdmin      = $isAdmin      ?? (($user['role'] ?? '') === 'admin');
 $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
+// Factory office staff (factory admin, or a factory login with "Can create orders")
+// run the wholesale side: trade orders, dispatch, invoices, bank, statements.
+$isFactoryOffice = $isSuperAdmin || (function_exists('factory_user_is_office') && factory_user_is_office());
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
@@ -205,13 +208,13 @@ $navSections = [
         'name'  => 'Trade',
         'items' => [
             'trade-accounts' => ['/master-admin/trade-accounts.php',          'Trade accounts', $isSuperAdmin],
-            'trade-quotes'   => ['/orders/index.php?scope=quotes&type=trade',  'Quotes',        $isSuperAdmin],
-            'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isSuperAdmin],
-            'dispatch'       => ['/master-admin/dispatch.php',                'Dispatch',       $isSuperAdmin],
-            'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isSuperAdmin],
-            'bank'           => ['/master-admin/bank.php',                    'Bank',           $isSuperAdmin],
-            'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isSuperAdmin],
-            'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isSuperAdmin],
+            'trade-quotes'   => ['/orders/index.php?scope=quotes&type=trade',  'Quotes',        $isFactoryOffice],
+            'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isFactoryOffice],
+            'dispatch'       => ['/master-admin/dispatch.php',                'Dispatch',       $isFactoryOffice],
+            'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isFactoryOffice],
+            'bank'           => ['/master-admin/bank.php',                    'Bank',           $isFactoryOffice],
+            'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isFactoryOffice],
+            'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isFactoryOffice],
         ],
     ],
     [
@@ -368,7 +371,7 @@ window.addEventListener('pageshow', function (e) {
                  opens the trade/retail launcher (pick an account, enter a one-off,
                  or a retail sale); for everyone else it's the retail quick-quote. -->
             <div class="sidebar-cta">
-                <a href="<?= $isSuperAdmin ? '/master-admin/new-order.php' : '/quote-builder/new.php' ?>" class="sidebar-cta-btn">
+                <a href="<?= $isFactoryOffice ? '/master-admin/new-order.php' : '/quote-builder/new.php' ?>" class="sidebar-cta-btn">
                     <span aria-hidden="true">+</span>
                     New
                 </a>
