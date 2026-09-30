@@ -521,6 +521,38 @@ function requireFactory(): void
     exit;
 }
 
+/**
+ * Factory OFFICE powers vs the FLOOR. Every factory login passes requireFactory();
+ * only office staff may change orders, send supplier orders, touch settings /
+ * routes / build rules, or run the wholesale accounts (dispatch, invoices,
+ * payments, statements, bank). A floor login — factory role WITHOUT "Can create
+ * orders" — keeps the floor, scanning and worksheets. Uses existing ticks, so no
+ * new role is needed: super-admin, a factory-account admin, or a factory user
+ * with can_create_orders.
+ */
+function factory_user_is_office(): bool
+{
+    if (is_super_admin()) return true;
+    $cid = (int) ($_SESSION['client_id'] ?? 0);
+    if (!is_factory_client($cid) || !current_user_has_role('factory')) return false;
+    if (current_user_has_role('admin')) return true;
+    return !empty(current_user_permissions()['can_create_orders']);
+}
+
+function requireFactoryOffice(): void
+{
+    requireFactory();
+    if (factory_user_is_office()) return;
+
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>Factory office only</h1><p>This is an office screen. Floor logins can use the '
+       . '<a href="/factory/floor.php">production floor</a>, scanning and worksheets. '
+       . 'Ask an admin to tick <strong>Can create orders</strong> on your login if you need it.</p>';
+    exit;
+}
+
 // ---------------------------------------------------------------------------
 // CSRF
 // ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/formula_engine.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $pdo    = db();
 $MASTER = current_factory_id();

@@ -12,7 +12,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../_partials/factory_boughtin.php';
 
-requireFactory();
+requireFactoryOffice();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); header('Allow: POST'); exit; }
 csrf_check();

@@ -16,7 +16,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a product's routes
-requireFactory();
+requireFactoryOffice();
 
 $pdo    = db();
 $MASTER = current_factory_id();

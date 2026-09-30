@@ -16,7 +16,7 @@ require_once __DIR__ . '/../quote-builder/_helpers.php';      // qb_reprice_stor
 require_once __DIR__ . '/../_partials/pricing_engine.php';    // pe_calculate_item (same engine as the quote builder)
 require_once __DIR__ . '/../_partials/order_stage.php';       // os_line_edit_lock / recompute_order_stage (+ blind_jobs)
 
-requireFactory();
+requireFactoryOffice();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: /factory/incoming-orders.php'); exit; }
 csrf_check();

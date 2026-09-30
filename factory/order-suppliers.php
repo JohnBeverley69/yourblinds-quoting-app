@@ -24,7 +24,7 @@ require __DIR__ . '/../_partials/bought_in.php';
 require __DIR__ . '/../_partials/supplier_send.php';
 require __DIR__ . '/../_partials/factory_boughtin.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $user      = current_user();
 $factoryId = current_factory_id();

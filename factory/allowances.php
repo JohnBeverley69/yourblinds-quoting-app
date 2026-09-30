@@ -14,7 +14,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 
-requireFactory();
+requireFactoryOffice();
 
 $pdo = db();
 // White-label: allowance tables are per-factory. Scope every read/write to the
