@@ -87,10 +87,13 @@ try { $pdo->query('SELECT 1 FROM worksheet_templates LIMIT 0'); $hasTable = true
 catch (Throwable $e) { /* not migrated */ }
 
 // This product's build variables → the "Build variable" field sources.
+// A product sharing another's cut rules (Build rules → "Same as …") offers that
+// product's variables, since those are what its worksheet will compute.
+require_once __DIR__ . '/../_partials/build_eval.php';
 $buildVars = [];
 try {
     $bv = $pdo->prepare('SELECT name FROM build_variables WHERE product_id = ? ORDER BY seq, id');
-    $bv->execute([$productId]);
+    $bv->execute([build_rules_source($pdo, $productId)]);
     $buildVars = $bv->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { /* build_variables not migrated */ }
 

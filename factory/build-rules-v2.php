@@ -311,6 +311,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['action'] ?? '');
 
+    // ---- Share another product's cut rules ------------------------------------
+    // A product made exactly like another (Head Rail Only = the vertical's
+    // headrail) uses that product's rules instead of keeping a copy that drifts.
+    if ($action === 'set_rules_source') {
+        $src = (int) ($_POST['rules_from'] ?? 0);
+        if ($src > 0 && ($src === $productId || !factory_owns_product($pdo, $src, $MASTER))) $src = 0;
+        try {
+            $pdo->prepare('INSERT INTO factory_kv (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)')
+                ->execute(['build_rules_from:' . $productId, $src > 0 ? (string) $src : '']);
+            $_SESSION['flash_success'] = $src > 0
+                ? 'Saved — this product now uses that product\'s cut rules on its worksheets.'
+                : 'Saved — this product uses its own cut rules.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
+        exit;
+    }
+
     // ---- Save the "multiple blinds in one fascia" allowances -------------------
     // A dedicated, clearly-labelled section for the shared-fascia cut allowances:
     // each grouped blind's tube/fabric take-off (off its own width) + the join gap.
@@ -900,6 +919,27 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     </form>
     <?php if ($productId > 0): ?><a class="advlink" href="/factory/build-rules.php?product_id=<?= (int) $productId ?>">Advanced: raw editor →</a><?php endif; ?>
   </div>
+  <?php if ($productId > 0):
+    $rulesFrom = build_rules_source($pdo, $productId);
+    $rulesFromName = '';
+    foreach ($products as $p) { if ((int) $p['id'] === $rulesFrom) $rulesFromName = (string) $p['name']; } ?>
+  <form method="post" action="/factory/build-rules-v2.php?product_id=<?= (int) $productId ?>" class="topline" style="margin-top:.4rem">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="set_rules_source">
+    <label style="font-size:.8rem;color:var(--soft);font-weight:600" for="rules-from">Cut rules</label>
+    <select name="rules_from" id="rules-from">
+      <option value="0">Its own rules</option>
+      <?php foreach ($products as $p): if ((int) $p['id'] === $productId) continue; ?>
+        <option value="<?= (int) $p['id'] ?>" <?= (int) $p['id'] === $rulesFrom ? 'selected' : '' ?>>Same as <?= $e2($p['name']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button type="submit" class="btn">Save</button>
+  </form>
+  <?php if ($rulesFrom !== $productId): ?>
+    <div class="empty"><b><?= $e2($productName ?: 'This product') ?></b> uses the cut rules of
+      <a href="/factory/build-rules-v2.php?product_id=<?= (int) $rulesFrom ?>"><?= $e2($rulesFromName) ?></a> —
+      edit them there and both follow. Systems are matched by name (e.g. “SlimLine” uses “SlimLine Vert”).</div>
+  <?php endif; endif; ?>
   <script>
   function rmVar(btn, name){
     if(!confirm('Remove "'+name+'"? This deletes the rule from this product.')) return;
