@@ -57,6 +57,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
     $action = (string) ($_POST['action'] ?? 'record');
     $uid    = (int) (current_user()['user_id'] ?? 0);
 
+    if ($action === 'apply_credit') {
+        // Put unallocated money already received against open invoices (oldest
+        // first, or one invoice). Creates allocations from the existing payments.
+        try {
+            $r = ar_apply_account_credit($pdo, $factory, $accountId, (int) ($_POST['invoice_id'] ?? 0));
+            $_SESSION[$r['applied'] > 0.004 ? 'flash_success' : 'flash_error'] = $r['applied'] > 0.004
+                ? 'Applied £' . number_format($r['applied'], 2) . ' of credit on account to ' . implode(', ', $r['invoices']) . '.'
+                : 'Nothing to apply — there is no unallocated payment on account, or no open invoice to put it against.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not apply credit: ' . $e->getMessage();
+        }
+        $to = (string) ($_POST['return'] ?? '') === 'account' ? '/master-admin/account.php?id=' . $accountId : $back;
+        header('Location: ' . $to);
+        exit;
+    }
+
     if ($action === 'void') {
         $payId = (int) ($_POST['payment_id'] ?? 0);
         try {
@@ -142,6 +158,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 $bal      = ar_account_balance($pdo, $factory, $accountId);
 $openInv  = ar_payments_ready($pdo) ? ar_open_invoices($pdo, $factory, $accountId) : [];
 $payments = ar_payments_ready($pdo) ? ar_account_payments($pdo, $factory, $accountId) : [];
+$unalloc  = ar_payments_ready($pdo) ? ar_unallocated_total($pdo, $factory, $accountId) : 0.0;
 
 $money  = static fn ($n) => '&pound;' . number_format((float) $n, 2);
 $fmtD   = static function ($d): string { $t = $d ? strtotime((string) $d) : false; return $t ? date('j M Y', $t) : '&mdash;'; };
@@ -188,8 +205,29 @@ $activeNav = 'wholesale';
             <div class="pm-card"><div class="lbl">Invoiced</div><div class="val"><?= $money($bal['invoiced']) ?></div></div>
             <div class="pm-card"><div class="lbl">Credited</div><div class="val"><?= $money($bal['credited']) ?></div></div>
             <div class="pm-card"><div class="lbl">Paid</div><div class="val"><?= $money($bal['paid']) ?></div></div>
-            <div class="pm-card out"><div class="lbl">Outstanding</div><div class="val"><?= $money($bal['outstanding']) ?></div></div>
+            <?php if ($bal['outstanding'] < -0.004): ?>
+                <div class="pm-card"><div class="lbl">Balance</div><div class="val" style="color:#166534"><?= e(ar_balance_label($bal['outstanding'])) ?></div></div>
+            <?php else: ?>
+                <div class="pm-card out"><div class="lbl">Outstanding</div><div class="val"><?= e(ar_balance_label($bal['outstanding'])) ?></div></div>
+            <?php endif; ?>
         </div>
+
+        <?php if ($unalloc > 0.004): ?>
+            <div class="alert alert-info" style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin:0 0 1.25rem">
+                <span><strong><?= $money($unalloc) ?></strong> received is not allocated to any invoice (credit on account).</span>
+                <?php if ($openInv): ?>
+                    <form method="post" action="/master-admin/record-payment.php" style="margin:0" data-confirm="Apply <?= e(number_format($unalloc, 2)) ?> of credit on account to the open invoices, oldest first?">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="apply_credit">
+                        <input type="hidden" name="account_id" value="<?= (int) $accountId ?>">
+                        <?php if ($bankTxn): ?><input type="hidden" name="bank_txn" value="<?= (int) $bankTxn['id'] ?>"><?php endif; ?>
+                        <button type="submit" class="btn btn-secondary btn-sm">Apply credit to open invoices</button>
+                    </form>
+                <?php else: ?>
+                    <span class="ui-hint">It will be available to apply when the next invoice is raised.</span>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
         <?php if (!ar_payments_ready($pdo)): ?>
             <section class="section"><p style="color:var(--text-faint);margin:0">Run <code>migrate_ar_payments.php</code> to enable payments.</p></section>

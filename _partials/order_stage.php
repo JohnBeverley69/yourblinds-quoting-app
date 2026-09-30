@@ -258,7 +258,12 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
         $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
         $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
 
-        ar_create_invoice($pdo, $factory, $quoteId, $acc, (int) $userId, true);   // true = send
+        // true = email it to the account once created; it is only marked 'sent'
+        // if the email actually went (else it stays 'raised' to send from Wholesale).
+        $inv = ar_create_invoice($pdo, $factory, $quoteId, $acc, (int) $userId, true);
+        if (empty($inv['sent']) && ($inv['send_message'] ?? '') !== '') {
+            error_log('os_auto_invoice_on_dispatch: ' . $inv['number'] . ' raised but not emailed — ' . $inv['send_message']);
+        }
     } catch (Throwable $e) {
         error_log('os_auto_invoice_on_dispatch failed for quote ' . $quoteId . ': ' . $e->getMessage());
     }

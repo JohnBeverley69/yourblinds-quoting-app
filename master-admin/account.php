@@ -39,6 +39,8 @@ $orders = ar_placed_orders($pdo, $factory, $accountId);
 $invRes = ar_statement_invoices($pdo, $factory, $accountId);
 $openInvoices = $invRes['rows'];
 $payments = ar_payments_ready($pdo) ? ar_account_payments($pdo, $factory, $accountId) : [];
+$unalloc  = ar_payments_ready($pdo) ? ar_unallocated_total($pdo, $factory, $accountId) : 0.0;
+$inCredit = $bal['outstanding'] < -0.004;
 
 // Fulfilment stage + "billed?" flag per order (Phase 0/2 — derived stage).
 $oids = array_map(static fn ($o) => (int) $o['id'], $orders);
@@ -122,7 +124,11 @@ $activeNav = 'wholesale';
         <?php if ($flashErr !== null): ?><div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
 
         <div class="ac-cards">
-            <div class="ac-card out"><div class="lbl">Outstanding</div><div class="val"><?= $money($bal['outstanding']) ?></div></div>
+            <?php if ($inCredit): ?>
+                <div class="ac-card"><div class="lbl">Balance</div><div class="val" style="color:#166534"><?= e(ar_balance_label($bal['outstanding'])) ?></div></div>
+            <?php else: ?>
+                <div class="ac-card out"><div class="lbl">Outstanding</div><div class="val"><?= e(ar_balance_label($bal['outstanding'])) ?></div></div>
+            <?php endif; ?>
             <div class="ac-card"><div class="lbl">Invoiced</div><div class="val"><?= $money($bal['invoiced']) ?></div></div>
             <div class="ac-card"><div class="lbl">Paid</div><div class="val"><?= $money($bal['paid']) ?></div></div>
             <div class="ac-card"><div class="lbl">Credited</div><div class="val"><?= $money($bal['credited']) ?></div></div>
@@ -134,7 +140,26 @@ $activeNav = 'wholesale';
             <div class="ac-age <?= $aging['d60']>0?'late':'' ?>"><div class="lbl">31&ndash;60</div><div class="val"><?= $money($aging['d60']) ?></div></div>
             <div class="ac-age <?= $aging['d90']>0?'late':'' ?>"><div class="lbl">61&ndash;90</div><div class="val"><?= $money($aging['d90']) ?></div></div>
             <div class="ac-age <?= $aging['d90plus']>0?'late':'' ?>"><div class="lbl">90+ days</div><div class="val"><?= $money($aging['d90plus']) ?></div></div>
+            <?php if (abs((float) $aging['on_account']) > 0.004): ?>
+                <div class="ac-age"><div class="lbl"><?= $aging['on_account'] > 0 ? 'Less on account' : 'Refunds paid out' ?></div><div class="val"><?= $aging['on_account'] > 0 ? '&minus;' : '+' ?><?= $money(abs((float) $aging['on_account'])) ?></div></div>
+            <?php endif; ?>
+            <div class="ac-age"><div class="lbl">Net balance</div><div class="val"><?= e(ar_balance_label((float) $aging['total'])) ?></div></div>
         </div>
+
+        <?php if ($unalloc > 0.004): ?>
+            <div class="alert alert-info" style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin:0 0 1.25rem">
+                <span><strong><?= $money($unalloc) ?></strong> received is not allocated to any invoice (credit on account).</span>
+                <?php if ($openInvoices): ?>
+                    <form method="post" action="/master-admin/record-payment.php" style="margin:0" data-confirm="Apply <?= e(number_format($unalloc, 2)) ?> of credit on account to the open invoices, oldest first?">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="apply_credit">
+                        <input type="hidden" name="account_id" value="<?= (int) $accountId ?>">
+                        <input type="hidden" name="return" value="account">
+                        <button type="submit" class="btn btn-secondary btn-sm">Apply credit to open invoices</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
         <section class="section">
             <h2 class="section-title">Orders <span style="font-weight:400;color:var(--text-faint);font-size:0.85rem">(<?= count($orders) ?>)</span></h2>
@@ -162,9 +187,17 @@ $activeNav = 'wholesale';
         </section>
 
         <section class="section">
-            <h2 class="section-title">Open invoices <span style="font-weight:400;color:var(--text-faint);font-size:0.85rem">(<?= $money($invRes['total_outstanding']) ?> outstanding)</span></h2>
+            <h2 class="section-title">Open invoices <span style="font-weight:400;color:var(--text-faint);font-size:0.85rem">(<?= e(ar_balance_label((float) $invRes['total_outstanding'])) ?><?= (float) $invRes['total_outstanding'] < -0.004 ? '' : ' outstanding' ?>)</span></h2>
             <?php if (!$openInvoices): ?>
-                <p style="color:var(--text-faint);margin:0">Nothing outstanding &mdash; the account is square.</p>
+                <p style="color:var(--text-faint);margin:0">
+                    <?php if ((float) $invRes['total_outstanding'] < -0.004): ?>
+                        No open invoices &mdash; the account is <?= e(ar_balance_label((float) $invRes['total_outstanding'])) ?>.
+                    <?php elseif ((float) $invRes['total_outstanding'] > 0.004): ?>
+                        No open invoices, but <?= e(ar_balance_label((float) $invRes['total_outstanding'])) ?> is owed (refunds paid out exceed the credit held).
+                    <?php else: ?>
+                        Nothing outstanding &mdash; the account is square.
+                    <?php endif; ?>
+                </p>
             <?php else: ?>
                 <div class="table-wrap">
                     <table class="table">
@@ -214,5 +247,6 @@ $activeNav = 'wholesale';
         </section>
     </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
