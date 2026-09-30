@@ -29,6 +29,7 @@ require_once __DIR__ . '/../_partials/csv_safe.php';
 require __DIR__ . '/_helpers.php';
 
 requireAdmin();
+requireMoneyPermission();   // admins always pass — belt-and-braces with the rest of the module
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];

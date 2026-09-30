@@ -101,7 +101,9 @@ $isStaff = $canCreateQuotes || $canCreateOrders || $canSeeAllJobs;
 $canSeeQuoteHistory = $canCreateQuotes || $canSeeAllJobs;
 $canSeeOrders       = $isStaff;
 $canSeeCustomers    = $isStaff;
-$canSeeAccountsLink = $isStaff;   // separately AND-ed with the feature flag below
+// Payments (accounts) is money-only — needs the per-user "Can see money" flag.
+$canSeeAccountsLink = $isStaff
+    && (!function_exists('user_can_see_money') || user_can_see_money());   // separately AND-ed with the feature flag below
 
 // Phase 2 dropped the `quotes` table; Phase 3 brings it back. While it's
 // missing, hide the entries that would 500 on click.
@@ -138,12 +140,11 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
 // Dashboard visibility: admins always; non-admins only if they have
 // at least one dash_view_* permission ticked. Tenant admins see the
 // full Dashboard regardless of these flags.
+// Every Dashboard panel shows money, so each also needs "Can see money"
+// (= dash_view_revenue) — which on its own already shows the Revenue panel.
+// So: dashboard visible ⇔ the user can see money.
 $canSeeAnyDashPanel = $isAdmin
-    || !empty($_perms['dash_view_revenue'])
-    || !empty($_perms['dash_view_team'])
-    || !empty($_perms['dash_view_products'])
-    || !empty($_perms['dash_view_profit'])
-    || !empty($_perms['dash_view_recent']);
+    || (function_exists('user_can_see_money') && user_can_see_money());
 
 // Support inbox label carries the count of untouched reports (super-admin
 // only — one indexed COUNT). Plain text: nav labels are escaped.

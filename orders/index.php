@@ -291,6 +291,10 @@ $fmtDate = static function (?string $dt): string {
 // so they're shown in the orders scope and hidden in the quotes scope.
 $isOrderView = $scope === 'orders';
 
+// "Can see money" (per-user flag): without it the Total / Deposit /
+// Outstanding columns are left out entirely — no order values, no paid/due.
+$canSeeMoney = user_can_see_money();
+
 $typeLabel = $type === 'retail' ? 'Retail ' : ($type === 'trade' ? 'Trade ' : '');
 $pageTitle = $typeLabel . ($scope === 'quotes' ? 'Quotes' : 'Orders');
 $pageSub   = $scope === 'quotes'
@@ -481,11 +485,13 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                     <th>Postcode</th>
                                     <th>Status</th>
                                     <th>Created</th>
-                                    <th class="num">Total</th>
-                                    <?php if ($isOrderView): ?>
+                                    <?php if ($canSeeMoney): ?>
+                                        <th class="num">Total</th>
+                                    <?php endif; ?>
+                                    <?php if ($isOrderView && $canSeeMoney): ?>
                                         <th>Deposit</th>
                                     <?php endif; ?>
-                                    <?php if ($isOrderView && $accountsEnabled): ?>
+                                    <?php if ($isOrderView && $accountsEnabled && $canSeeMoney): ?>
                                         <th class="num">Outstanding</th>
                                     <?php endif; ?>
                                 </tr>
@@ -568,8 +574,10 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                         <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">
                                             <?= e(date('j M Y', strtotime((string) $r['created_at']))) ?>
                                         </td>
-                                        <td class="num"><?= e($money($r['total'])) ?></td>
-                                        <?php if ($isOrderView): ?>
+                                        <?php if ($canSeeMoney): ?>
+                                            <td class="num"><?= e($money($r['total'])) ?></td>
+                                        <?php endif; ?>
+                                        <?php if ($isOrderView && $canSeeMoney): ?>
                                         <td>
                                             <?php if (!$isOrderRow || $dep === null): ?>
                                                 <span style="color:var(--text-faint);font-size:0.8125rem">—</span>
@@ -584,7 +592,7 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                             <?php endif; ?>
                                         </td>
                                         <?php endif; ?>
-                                        <?php if ($isOrderView && $accountsEnabled): ?>
+                                        <?php if ($isOrderView && $accountsEnabled && $canSeeMoney): ?>
                                             <td class="num">
                                                 <?php if (!$isOrderRow): ?>
                                                     <span style="color:var(--text-faint);font-size:0.8125rem">—</span>

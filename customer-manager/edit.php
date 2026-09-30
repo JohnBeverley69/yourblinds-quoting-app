@@ -99,6 +99,8 @@ if (db()->query("SHOW TABLES LIKE 'quotes'")->fetchColumn()) {
 }
 
 $money = static fn ($n) => '£' . number_format((float) $n, 2);
+// Recent-quotes Total column only for users with the "Can see money" flag.
+$canSeeMoney = user_can_see_money();
 
 $dashTag = $isAdmin ? 'Admin Console' : 'Trade Portal';
 $activeNav = 'customers';
@@ -226,7 +228,7 @@ $activeNav = 'customers';
                             <tr>
                                 <th>Quote #</th>
                                 <th>Status</th>
-                                <th class="num">Total</th>
+                                <?php if ($canSeeMoney): ?><th class="num">Total</th><?php endif; ?>
                                 <th>Created</th>
                                 <th></th>
                             </tr>
@@ -236,7 +238,7 @@ $activeNav = 'customers';
                                 <tr>
                                     <td><strong><?= e((string) $q['quote_number']) ?></strong></td>
                                     <td><span class="badge badge-<?= e((string) $q['status']) ?>"><?= e((string) $q['status']) ?></span></td>
-                                    <td class="num"><?= e($money($q['total'])) ?></td>
+                                    <?php if ($canSeeMoney): ?><td class="num"><?= e($money($q['total'])) ?></td><?php endif; ?>
                                     <td><?= e(date('j M Y', strtotime((string) $q['created_at']))) ?></td>
                                     <td><a href="/quote-builder/edit.php?id=<?= (int) $q['id'] ?>">Open</a></td>
                                 </tr>

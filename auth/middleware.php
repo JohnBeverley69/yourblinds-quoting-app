@@ -248,6 +248,43 @@ function current_user_permissions(): array
 }
 
 /**
+ * "Can see money" — may this user see sell-side money (order values,
+ * payments, deposits paid, balances, outstanding, revenue)?
+ *
+ * Reuses the per-user client_users.dash_view_revenue flag (labelled
+ * "Can see money" on /admin/users_edit.php). Admins and super-admins
+ * always pass. This does NOT hide a quote's own line prices / total in
+ * the quote builder — a salesperson quotes face-to-face and needs those.
+ */
+function user_can_see_money(): bool
+{
+    if (!current_user()) return false;
+    if (is_super_admin()) return true;
+    if ((string) ($_SESSION['role'] ?? '') === 'admin' || current_user_has_role('admin')) return true;
+    $perms = current_user_permissions();
+    return !empty($perms['dash_view_revenue']);
+}
+
+/**
+ * Route guard: 403 (friendly page) unless user_can_see_money(). Use at
+ * the top of money-only pages and POST handlers (accounts, payments,
+ * deposit-paid) so a URL-poke is refused server-side, not just hidden.
+ */
+function requireMoneyPermission(): void
+{
+    requireLogin();
+    if (user_can_see_money()) return;
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>Not available</h1>'
+       . '<p>Your login doesn\'t have permission to see money (order values, payments or balances). '
+       . 'Ask an admin to tick <strong>Can see money</strong> on your user if you need it.</p>'
+       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+    exit;
+}
+
+/**
  * Sanitise a return-to URL coming from POST. Accepts ONLY same-origin
  * absolute paths — anything starting with a protocol or "//" (which
  * the browser treats as protocol-relative, so navigating to it leaves
@@ -658,16 +695,10 @@ function redirect_after_login(): void
         exit;
     }
 
-    $perms = function_exists('current_user_permissions')
-        ? current_user_permissions()
-        : [];
     $isAdmin = ($user['role'] ?? '') === 'admin';
-    $hasDashAccess = $isAdmin
-        || !empty($perms['dash_view_revenue'])
-        || !empty($perms['dash_view_team'])
-        || !empty($perms['dash_view_products'])
-        || !empty($perms['dash_view_profit'])
-        || !empty($perms['dash_view_recent']);
+    // Every dashboard panel shows money, so dashboard access = "Can see money"
+    // (dash_view_revenue) — the other dash_view_* flags only pick panels.
+    $hasDashAccess = $isAdmin || user_can_see_money();
 
     header('Location: ' . ($hasDashAccess ? '/dashboard/index.php' : '/calendar/index.php'));
     exit;

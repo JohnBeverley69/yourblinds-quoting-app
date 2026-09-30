@@ -1545,6 +1545,11 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         'markup_percent'     => round($markup, 2),
         'discount_percent'   => round($discount, 2),
         'sell_price'         => $sellPrice,
+        // The options part of sell_price AS SOLD (supplier marked-up options
+        // already through discount+markup; face-value / own options as set).
+        // Informational only — lets the live preview show a sell-basis
+        // breakdown to users who can't see costs (quote-builder/_preview_core.php).
+        'options_sell_total' => round($optionsPart, 2),
         'quantity'           => $quantity,
         'line_charge'        => round($lineCharge, 2),
         'line_total'         => $lineTotal,

@@ -26,6 +26,8 @@ require __DIR__ . '/_helpers.php';
 require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_settle_if_paid
 
 requireLogin();
+// Recording money needs the "Can see money" permission — refused server-side.
+requireMoneyPermission();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);

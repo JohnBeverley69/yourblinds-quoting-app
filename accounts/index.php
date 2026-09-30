@@ -18,6 +18,8 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
 
 requireLogin();
+// Money-only module: no "Can see money" permission → 403 (fitters etc).
+requireMoneyPermission();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];

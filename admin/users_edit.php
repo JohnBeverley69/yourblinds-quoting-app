@@ -488,6 +488,12 @@ $activeNav = 'users';
                                 <input type="checkbox" name="can_view_costs" value="1" <?= !empty($target['can_view_costs']) ? 'checked' : '' ?>>
                                 View costs
                             </label>
+                            <?php // Stored in dash_view_revenue (historic name) — it now gates all sell-side money. ?>
+                            <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;"
+                                   title="Order values, deposits, payments, balances and revenue — the Payments page, taking payments, money on the calendar and the Dashboard's Revenue panel.">
+                                <input type="checkbox" name="dash_view_revenue" value="1" <?= !empty($target['dash_view_revenue']) ? 'checked' : '' ?>>
+                                Can see money
+                            </label>
                             <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;"
                                    title="The calendar shows this user only fitting jobs — measure/sales visits are hidden. Ideal for fitters.">
                                 <input type="checkbox" name="can_view_fittings_only" value="1" <?= !empty($target['can_view_fittings_only']) ? 'checked' : '' ?>>
@@ -497,6 +503,12 @@ $activeNav = 'users';
                         <p style="margin:0.5rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
                             <strong>Fittings only</strong> limits a user's calendar to fitting jobs (hides measures /
                             sales visits) — handy for fitters.
+                        </p>
+                        <p style="margin:0.35rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
+                            <strong>Can see money</strong> — order values, payments, balances and revenue: the Payments
+                            page, taking payments / deposits, values on Orders, Pipeline and the calendar, and the
+                            Dashboard's Revenue panel. Untick for fitters. Quote prices stay visible to anyone building a quote.
+                            Admins can always see money.
                         </p>
                     </div>
                 </div>
@@ -518,14 +530,10 @@ $activeNav = 'users';
                         everything; these checkboxes only apply to non-admin users.
                         Tick none to hide the Dashboard menu entry entirely for this user.
                         <strong>Gross profit</strong> also requires the
-                        <em>View costs</em> permission above.
+                        <em>View costs</em> permission above. The <strong>Revenue &amp; KPIs</strong>
+                        panel follows <em>Can see money</em> above.
                     </p>
                     <div style="display:flex; flex-wrap:wrap; gap:1rem; font-size:0.9375rem;">
-                        <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
-                            <input type="checkbox" name="dash_view_revenue" value="1"
-                                <?= !empty($target['dash_view_revenue']) ? 'checked' : '' ?>>
-                            Revenue &amp; KPIs
-                        </label>
                         <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
                             <input type="checkbox" name="dash_view_team" value="1"
                                 <?= !empty($target['dash_view_team']) ? 'checked' : '' ?>>

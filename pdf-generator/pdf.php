@@ -17,8 +17,11 @@ require_once __DIR__ . '/../_partials/legal_text.php';
  * Loads a quote (scoped by client_id), builds an HTML document, and uses
  * Dompdf to produce A4 PDF bytes. Returns null if the quote does not
  * exist or Dompdf is not installed (logged).
+ *
+ * $showPayments = false leaves out the Paid / Balance-due rows — used when a
+ * user without the "Can see money" permission opens the PDF in the app.
  */
-function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote'): ?string
+function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote', bool $showPayments = true): ?string
 {
     if (!class_exists(Dompdf::class)) {
         error_log('[YourBlinds] Dompdf not installed — run "composer install" to enable PDF rendering.');
@@ -76,6 +79,10 @@ function pdf_render_quote(int $quoteId, int $clientId, string $docLabel = 'Quote
         ? calendar_money_for_quotes($pdo, $clientId, [$quoteId]) : [];
     $received   = isset($pdfMoney[$quoteId]) ? (float) $pdfMoney[$quoteId]['received'] : 0.0;
     $balanceDue = isset($pdfMoney[$quoteId]) ? (float) $pdfMoney[$quoteId]['balance']  : (float) $quote['total'];
+    if (!$showPayments) {   // no "Can see money" → the Paid / Balance-due rows don't render
+        $received   = 0.0;
+        $balanceDue = (float) $quote['total'];
+    }
 
     // Terms & Conditions + Privacy Policy (optional columns). Loaded with a
     // separate guarded query — kept out of the main SELECT so the PDF still

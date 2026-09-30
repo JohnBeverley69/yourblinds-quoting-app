@@ -15,6 +15,10 @@ $clientId = (int) $user['client_id'];
 $pricingBasis = pricing_basis_for(db(), $clientId);
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
+// "Can see money": gates the payments / deposit-paid / balance parts of this
+// page only. The quote's own line prices + total stay visible to everyone who
+// can open it (salespeople quote face-to-face).
+$canSeeMoney = user_can_see_money();
 
 // ?offline_template=1 — the blank "new quote" screen a tablet set up for offline
 // keeps (sw.js), for starting a quote with no signal. Same page, same blind form,
@@ -867,7 +871,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                     <?php endforeach; ?>
                 </span>
             <?php endif; ?>
-            <?php if ($quoteIsOrder && $accountsEnabled): ?>
+            <?php if ($quoteIsOrder && $accountsEnabled && $canSeeMoney): ?>
                 <!-- One-tap shortcut to the Payments panel — the typical
                      fitter-at-the-door action. Scrolls to the panel and
                      focuses the Amount field via the anchor + JS hook. -->
@@ -1933,7 +1937,8 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             // un-pay it, and the paid deposit blocks deleting the quote.
             $hasPaidDeposit = $depositPaidAt !== null && (float) $depositAmount > 0.004;
         ?>
-        <?php if ($quoteIsOrder || $hasPaidDeposit): ?>
+        <?php // Paid-deposit panel is money handling — "Can see money" only. ?>
+        <?php if (($quoteIsOrder || $hasPaidDeposit) && $canSeeMoney): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
@@ -1993,7 +1998,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 </form>
             <?php endif; ?>
         </section>
-        <?php elseif ($editable): ?>
+        <?php elseif ($editable && !$quoteIsOrder && !$hasPaidDeposit): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
@@ -2034,7 +2039,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
             $paymentsList    = [];
             $paymentsTotal   = 0.0;
             $paymentsLoaded  = false;
-            if ($accountsEnabled) {
+            if ($accountsEnabled && $canSeeMoney) {   // no "Can see money" → no Payments panel
                 try {
                     // Exclude the deposit's own payment row — the deposit has its
                     // dedicated panel/section here, so it'd otherwise show twice.

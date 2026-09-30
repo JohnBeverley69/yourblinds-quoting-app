@@ -47,7 +47,10 @@ $perms = function_exists('current_user_permissions')
     ? current_user_permissions()
     : ['can_view_all_customer_jobs' => false, 'can_view_costs' => false];
 $canViewAll = $isAdmin || !empty($perms['can_view_all_customer_jobs']);
-$canViewCosts = $isAdmin || !empty($perms['can_view_costs']);
+// Money on the board (column / card values, paid + outstanding) follows the
+// per-user "Can see money" flag — it used to piggy-back on can_view_costs,
+// which is about BUYING costs, not sell-side money.
+$canSeeMoney = user_can_see_money();
 
 $pdo = db();
 
@@ -428,7 +431,7 @@ $ageOf = static function (?string $ts): string {
                 <span class="pl-summary">
                     <strong><?= (int) $grandCount ?></strong>
                     job<?= $grandCount === 1 ? '' : 's' ?>
-                    <?php if ($canViewCosts): ?>
+                    <?php if ($canSeeMoney): ?>
                         &middot;
                         <strong>&pound;<?= number_format($grandValue, 0) ?></strong>
                         in pipeline
@@ -450,7 +453,7 @@ $ageOf = static function (?string $ts): string {
                             </span>
                             <div class="pl-col-meta">
                                 <span class="pl-col-count"><?= (int) $counts[$statusKey] ?></span>
-                                <?php if ($canViewCosts): ?>
+                                <?php if ($canSeeMoney): ?>
                                     <span class="pl-col-value">
                                         &pound;<?= number_format($totals[$statusKey], 0) ?>
                                     </span>
@@ -472,7 +475,7 @@ $ageOf = static function (?string $ts): string {
                                     // obvious as one in 'paid'. £0.005 fudge for
                                     // floating-point round-off on penny totals.
                                     $paidChip = '';
-                                    if ($total > 0 && $paid > 0) {
+                                    if ($canSeeMoney && $total > 0 && $paid > 0) {
                                         if ($paid >= $total - 0.005) {
                                             $paidChip = 'full';
                                         } else {
@@ -482,10 +485,10 @@ $ageOf = static function (?string $ts): string {
                                 ?>
                                     <a class="pl-card<?= $paidChip ? ' has-paid-chip' : '' ?>"
                                        href="/quote-builder/edit.php?id=<?= (int) $c['id'] ?>">
-                                        <?php if ($paidChip === 'full'): ?>
+                                        <?php if ($paidChip === 'full' && $canSeeMoney): ?>
                                             <span class="pl-card-paid-chip is-full"
                                                   title="Paid in full">Paid</span>
-                                        <?php elseif ($paidChip === 'part' && $canViewCosts): ?>
+                                        <?php elseif ($paidChip === 'part' && $canSeeMoney): ?>
                                             <span class="pl-card-paid-chip is-part"
                                                   title="&pound;<?= number_format($paid, 2) ?> received of &pound;<?= number_format($total, 2) ?>">
                                                 Part paid
@@ -507,7 +510,7 @@ $ageOf = static function (?string $ts): string {
                                                   title="This quote hasn't been sent to the customer yet">Not sent</span></div>
                                         <?php endif; ?>
                                         <div class="pl-card-row">
-                                            <?php if ($canViewCosts): ?>
+                                            <?php if ($canSeeMoney): ?>
                                                 <span class="pl-card-total">
                                                     &pound;<?= number_format($total, 2) ?>
                                                 </span>
@@ -524,7 +527,7 @@ $ageOf = static function (?string $ts): string {
                                             // Catches "we sent the invoice but never got paid" jobs.
                                             // Hidden when the paid chip is already there — no
                                             // need to say both "Paid" and "£0 outstanding".
-                                            if ($statusKey === 'invoiced' && $outstanding > 0.005 && $canViewCosts):
+                                            if ($statusKey === 'invoiced' && $outstanding > 0.005 && $canSeeMoney):
                                         ?>
                                             <div class="pl-card-outstanding">
                                                 &pound;<?= number_format($outstanding, 2) ?> outstanding
