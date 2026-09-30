@@ -33,6 +33,15 @@ try {
     $order = $s->fetch(PDO::FETCH_ASSOC) ?: null;
 } catch (Throwable $e) { /* handled below */ }
 
+// Only a PLACED order is the factory's to edit — a tenant's unplaced draft /
+// sent / accepted quote carries factory lines too, but it's still theirs.
+require_once __DIR__ . '/../_partials/order_stage.php';
+$notPlaced = $order && !in_array((string) ($order['status'] ?? ''), os_placed_statuses(), true);
+if ($notPlaced) $order = null;
+
+// Dispatched / invoiced: the blinds are locked (references stay editable).
+$lineLock = $order ? os_line_edit_lock($pdo, (int) $order['id']) : '';
+
 $clientId = (int) ($order['client_id'] ?? 0);
 
 // Beverley lines only — the factory edits what it makes.
@@ -145,7 +154,9 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashOk !== ''): ?><div class="fe-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="fe-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
-<?php if (!$order): ?>
+<?php if ($notPlaced): ?>
+    <div class="fe-empty">That order hasn't been placed yet, so it can't be edited from the factory.</div>
+<?php elseif (!$order): ?>
     <div class="fe-empty">Order not found.</div>
 <?php elseif (!$items): ?>
     <div class="fe-empty">This order has no Beverley lines to edit.</div>
@@ -155,6 +166,9 @@ require __DIR__ . '/../_partials/factory_head.php';
         &middot; <?= e((string) ($order['company_name'] ?? '')) ?>
         &middot; <?= count($items) ?> blind<?= count($items) === 1 ? '' : 's' ?>
     </p>
+    <?php if ($lineLock !== ''): ?>
+        <div class="fe-flash err">The blinds on this order can't be changed — <?= e($lineLock) ?>. Raise a credit note or a new order instead. The references can still be corrected.</div>
+    <?php endif; ?>
 
     <form method="post" action="/factory/save-order.php" id="fe-form">
         <?= csrf_field() ?>
@@ -188,8 +202,8 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <div class="fe-blind-head">
                     <h3>Blind <?= (int) $it['line_no'] ?></h3>
                     <span class="prod"><?= e((string) ($it['product_name_snapshot'] ?? '')) ?></span>
-                    <button type="submit" name="del_item" value="<?= $iid ?>" class="fe-btn del" formnovalidate
-                            data-confirm="Delete blind <?= (int) $it['line_no'] ?> from this order?">&times; Delete blind</button>
+                    <?php if ($lineLock === ''): ?><button type="submit" name="del_item" value="<?= $iid ?>" class="fe-btn del" formnovalidate
+                            data-confirm="Delete blind <?= (int) $it['line_no'] ?> from this order?">&times; Delete blind</button><?php endif; ?>
                 </div>
 
                 <div class="fe-grid">
@@ -281,7 +295,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 
         <div class="fe-actions">
             <button type="submit" name="save" value="1" class="fe-btn primary">Save changes</button>
-            <button type="submit" name="add_item" value="1" class="fe-btn ghost" formnovalidate>+ Add blind (copy of last)</button>
+            <?php if ($lineLock === ''): ?><button type="submit" name="add_item" value="1" class="fe-btn ghost" formnovalidate>+ Add blind (copy of last)</button><?php endif; ?>
             <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener" class="fe-btn ghost" style="text-decoration:none">Worksheet &#8599;</a>
         </div>
 

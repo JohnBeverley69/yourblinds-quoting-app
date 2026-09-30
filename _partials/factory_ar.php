@@ -215,25 +215,37 @@ function ar_order_lines_for_doc(PDO $pdo, int $factoryId, int $quoteId): array
     $ids = array_map(static fn ($l) => (int) $l['id'], $lines);
     $ph  = implode(',', array_fill(0, count($ids), '?'));
     $exBy = [];
-    try {
-        $ex = $pdo->prepare(
-            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
-                    amount_applied, trade_amount
-               FROM quote_item_extras
-              WHERE quote_item_id IN ($ph)
-           ORDER BY id"
-        );
-        $ex->execute($ids);
-        foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $e) {
-            $exBy[(int) $e['quote_item_id']][] = $e;
-        }
-    } catch (Throwable $e) { /* extras absent — leave empty */ }
+    // user_value = the typed number on a measurement option (Fit Height, a wand
+    // length) — without it the note printed "+ Fit Height" with no height. Widen
+    // the SELECT progressively so a pre-migration schema still gets its options.
+    foreach ([
+        'quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value, amount_applied, trade_amount',
+        'quote_item_id, extra_name_snapshot, choice_label_snapshot, amount_applied, trade_amount',
+    ] as $exCols) {
+        try {
+            $ex = $pdo->prepare(
+                "SELECT $exCols
+                   FROM quote_item_extras
+                  WHERE quote_item_id IN ($ph)
+               ORDER BY id"
+            );
+            $ex->execute($ids);
+            foreach ($ex->fetchAll(PDO::FETCH_ASSOC) as $e) {
+                $exBy[(int) $e['quote_item_id']][] = $e;
+            }
+            break;
+        } catch (Throwable $e) { $exBy = []; /* column / table absent — try narrower, else leave empty */ }
+    }
 
     foreach ($lines as &$ln) {
         $opts = [];
         foreach ($exBy[(int) $ln['id']] ?? [] as $e) {
             $name  = trim((string) $e['extra_name_snapshot']);
             $label = trim((string) $e['choice_label_snapshot']);
+            $uv    = $e['user_value'] ?? null;
+            $val   = (is_numeric($uv) && (float) $uv > 0)
+                ? rtrim(rtrim(number_format((float) $uv, 2, '.', ''), '0'), '.') : '';
+            if ($val !== '') $label = $label !== '' ? ($label . ' (' . $val . ')') : $val;
             if ($name === '' && $label === '') continue;
             $opts[] = $label !== '' ? ($name . ': ' . $label) : $name;
         }

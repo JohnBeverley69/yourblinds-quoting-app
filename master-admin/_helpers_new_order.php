@@ -16,7 +16,7 @@ require_once __DIR__ . '/../quote-builder/_helpers.php';
  * Create a factory quote for a trade account. Returns ['id','number'].
  * Throws if the account isn't a real, active client other than the factory.
  */
-function no_create_account_quote(PDO $pdo, int $factoryClientId, int $accountId, int $userId): array
+function no_create_account_quote(PDO $pdo, int $factoryClientId, int $accountId, int $userId, string $customerReference = ''): array
 {
     if ($accountId <= 0 || $accountId === $factoryClientId) {
         throw new RuntimeException('Pick a valid credit account.');
@@ -58,6 +58,9 @@ function no_create_account_quote(PDO $pdo, int $factoryClientId, int $accountId,
         'end_customer_county'   => (string) ($acc['county'] ?? ''),
         'end_customer_postcode' => (string) ($acc['postcode'] ?? ''),
         'has_whatsapp'          => 0,
+        // Their PO, when the launcher asked for it (the "save as a new trade
+        // account" path) — it used to be dropped here and had to be re-typed.
+        'customer_reference'    => trim($customerReference),
         'notes'                 => '',
     ];
 

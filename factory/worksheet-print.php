@@ -23,6 +23,7 @@ require __DIR__ . '/../_partials/build_eval.php';
 require __DIR__ . '/../_partials/qr.php';
 require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a label's part-specific QR
 require __DIR__ . '/../_partials/roller_box.php';   // roller_box_default() — the editable boxed-label grid
+require_once __DIR__ . '/../_partials/bought_in.php'; // bought_in_supplier_for_product — "bought in, no worksheet"
 
 requireFactory();
 
@@ -91,6 +92,20 @@ try {
         $q->execute([$qid]);
         $order = $q->fetch(PDO::FETCH_ASSOC) ?: null;
     } catch (Throwable $e2) { /* handled below */ }
+}
+
+// Only a PLACED order is the factory's to make. A tenant's unplaced draft / sent
+// / accepted quote carries factory lines too, but mustn't be printable here by id.
+$notPlaced = false;
+if ($order) {
+    try {
+        $ps = $pdo->prepare('SELECT status FROM quotes WHERE id = ? LIMIT 1');
+        $ps->execute([$qid]);
+        if (!in_array((string) ($ps->fetchColumn() ?: ''), ['ordered', 'fitted', 'invoiced', 'paid'], true)) {
+            $notPlaced = true;
+            $order = null;
+        }
+    } catch (Throwable $e) { $order = null; }
 }
 
 // The "customer" on the ticket is WHO THE FACTORY IS MAKING FOR — the business
@@ -356,6 +371,7 @@ foreach ($lines as $ln) {
     $onePerLine = is_array($tpl) && !empty($tpl['one_per_line']);
     $labelCount = $onePerLine ? 1 : $qty;
     $streams = function_exists('bj_streams_ordered') ? bj_streams_ordered($pdo, $masterPid) : [];
+    $lineBoughtIn = bought_in_supplier_for_product($pdo, (int) $ln['product_id']) !== '';
     for ($u = 1; $u <= $labelCount; $u++) {
         $unitVals = [
             'unit'     => $onePerLine ? '' : ($qty > 1 ? $u . '/' . $qty : ''),
@@ -370,6 +386,7 @@ foreach ($lines as $ln) {
             'computed' => $eval['vars'],
             'template' => $tpl,
             'product'  => (string) ($ln['product_name_snapshot'] ?? ''),
+            'bought_in' => $lineBoughtIn,   // ordered from a supplier, not made here
             'item_id'  => (int) $ln['id'],
             'unit_no'  => $u,
             'streams'  => $streams,   // ordered stream names for this product
@@ -862,7 +879,9 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     // Die-cut sheet holds the die-cut blinds only (verticals); rollers print on
     // the thermal roll. One row per blind, up to 10 to a sheet.
     $dieCount = count($diecutBlinds);
-    $rowCap = min($dieCount, 10);
+    // Never 0: an order with no die-cut blinds (roller-only) used to hit
+    // array_chunk(…, 0) below — a fatal. It now just prints no sheets.
+    $rowCap = max(1, min($dieCount, 10));
     $mm = static fn (float $v): string => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     $ol = $linesOn ? ' dc-outline' : '';
 
@@ -1071,7 +1090,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php endif; ?>
 </div>
 
-<?php if (!$order): ?>
+<?php if ($notPlaced): ?>
+    <div class="wp-sheet"><p class="wp-flag">That order hasn't been placed yet, so there's no worksheet for it.</p></div>
+<?php elseif (!$order): ?>
     <div class="wp-sheet"><p class="wp-flag">Order not found.</p></div>
 <?php elseif (!$lines): ?>
     <div class="wp-sheet"><p class="wp-note">This order has no Beverley lines to work.</p></div>
@@ -1100,7 +1121,11 @@ require __DIR__ . '/../_partials/factory_head.php';
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
+                <?php if (!empty($r['bought_in'])): ?>
+                <div class="wp-label" style="grid-column:1/-1"><span class="wp-note"><?= e($r['product']) ?>: bought in — no worksheet.</span></div>
+                <?php else: ?>
                 <div class="wp-label" style="grid-column:1/-1"><span class="wp-note">No worksheet template for <?= e($r['product']) ?>.</span></div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     <?php endforeach; ?>

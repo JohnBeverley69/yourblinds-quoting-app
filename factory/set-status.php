@@ -66,6 +66,43 @@ if ($quoteId <= 0 || !$isBev) {
     exit;
 }
 
+// Guard: only a PLACED order is the factory's to action. A tenant's draft /
+// sent / accepted quote carries factory lines too, but it hasn't been ordered —
+// the factory must not start (or dispatch) work on it by typing its id.
+$stq = $pdo->prepare('SELECT status FROM quotes WHERE id = ? LIMIT 1');
+$stq->execute([$quoteId]);
+if (!in_array((string) ($stq->fetchColumn() ?: ''), ['ordered', 'fitted', 'invoiced', 'paid'], true)) {
+    $_SESSION['flash_error'] = "That order hasn't been placed yet, so it can't be actioned.";
+    header('Location: ' . $backTo);
+    exit;
+}
+
+// "Mark made" is normally the floor's job (the last blind finishing nudges the
+// order to made). When the office marks it made while blinds are still open on
+// the floor, it must be a deliberate override (force_made, confirmed on the
+// button) — and then the remaining blinds are completed explicitly so the floor
+// count and the order status agree, rather than silently disagreeing.
+$forcedBlinds = 0;
+if ($target === 'made' && bj_tables_ready($pdo)) {
+    $prog = bj_order_progress($pdo, [$quoteId])[$quoteId] ?? ['total' => 0, 'done' => 0];
+    if ((int) $prog['total'] > 0 && (int) $prog['done'] < (int) $prog['total']) {
+        if (empty($_POST['force_made'])) {
+            $_SESSION['flash_error'] = 'The floor still has ' . ((int) $prog['total'] - (int) $prog['done']) . ' of '
+                . (int) $prog['total'] . ' blinds to finish, so the order was not marked made. '
+                . 'Finish them on the floor, or confirm "Mark made" to complete them.';
+            header('Location: ' . $backTo);
+            exit;
+        }
+        try {
+            $forcedBlinds = bj_force_complete_order($pdo, $quoteId, $userId ?: null);
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not complete the blinds on the floor: ' . $e->getMessage();
+            header('Location: ' . $backTo);
+            exit;
+        }
+    }
+}
+
 // Gate dispatch on Ready: every in-house blind made AND every bought-in line
 // received (Phase 1 — previously only the bought-in half was enforced, so an
 // order could ship with blinds still unfinished on the floor).
@@ -104,6 +141,9 @@ try {
         if ($target === 'in_production' && bj_tables_ready($pdo)) {
             $n = bj_release_order($pdo, $quoteId, $MASTER);
             if ($n > 0) $released = " {$n} blind" . ($n === 1 ? '' : 's') . ' released to the floor.';
+        }
+        if ($forcedBlinds > 0) {
+            $released .= " {$forcedBlinds} unfinished blind" . ($forcedBlinds === 1 ? ' was' : 's were') . ' marked complete on the floor.';
         }
         $_SESSION['flash_success'] = 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.' . $released;
     }

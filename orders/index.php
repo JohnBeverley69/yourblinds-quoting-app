@@ -28,6 +28,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 require_once __DIR__ . '/../_partials/payments_ledger.php';
+require_once __DIR__ . '/../_partials/order_stage.php';   // os_factory_progress_pill
 
 requireLogin();
 
@@ -190,6 +191,8 @@ try {
 // supplier ("In House" counts as none).
 $supplierSent = [];   // quote_id => ['n' => int, 'last' => string]
 $mfgOrders    = [];   // quote_id => true
+$supplierLines = [];  // quote_id => true when it has a line that isn't ours to make
+$factoryStage = [];   // quote_id => fulfilment stage (orders placed with the factory)
 $rowIds       = array_values(array_filter(array_map(static fn ($r) => (int) $r['id'], $rows)));
 if ($rowIds) {
     $ph = implode(',', array_fill(0, count($rowIds), '?'));
@@ -226,7 +229,33 @@ if ($rowIds) {
             );
             $s->execute(array_merge($rowIds, [$factoryId]));
             foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $qid) $mfgOrders[(int) $qid] = true;
+
+            // Orders that ALSO carry a line that isn't ours to make (a supplier's
+            // product) — those still need the supplier send; a purely in-house
+            // order doesn't, so it no longer claims "Sent to suppliers".
+            $s = db()->prepare(
+                "SELECT DISTINCT qi.quote_id
+                   FROM quote_items qi
+                   JOIN products p ON p.id = qi.product_id
+                  WHERE qi.quote_id IN ($ph)
+                    AND NOT ($owner = ?
+                         AND (p.supplier_name IS NULL
+                              OR REPLACE(REPLACE(LOWER(TRIM(p.supplier_name)), ' ', ''), '-', '') IN ('', 'inhouse')))"
+            );
+            $s->execute(array_merge($rowIds, [$factoryId]));
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $qid) $supplierLines[(int) $qid] = true;
         } catch (Throwable $e) { /* products.supplier_name absent — fall back to unsent */ }
+    }
+
+    // Factory progress for orders placed with the factory — the account sees
+    // where its order is (Confirmed / In production / Ready / Dispatched).
+    // Not for a factory's own list: it has the factory pages for that.
+    if (!(function_exists('is_factory_client') && is_factory_client($clientId))) {
+        try {
+            $s = db()->prepare("SELECT id, fulfilment_stage FROM quotes WHERE id IN ($ph) AND fulfilment_stage IS NOT NULL");
+            $s->execute($rowIds);
+            foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $x) $factoryStage[(int) $x['id']] = (string) $x['fulfilment_stage'];
+        } catch (Throwable $e) { /* fulfilment_stage absent pre-migration */ }
     }
 }
 
@@ -525,18 +554,20 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                                 $qidRow = (int) $r['id'];
                                                 $sent   = $supplierSent[$qidRow] ?? null;
                                                 $isMfg  = !empty($mfgOrders[$qidRow]);
-                                                // An order we make ourselves is placed by reaching
-                                                // "ordered" — the factory pulls it off that status,
-                                                // nothing is emailed — so status IS the evidence.
-                                                $gone   = $sent !== null || $isMfg;
+                                                // An order we make ourselves went to the factory
+                                                // in-house — nothing is emailed, so it is NOT "sent
+                                                // to suppliers"; its factory progress pill (in the
+                                                // status column) says where it is instead. Only an
+                                                // order with a supplier's line needs the send link.
+                                                $inHouseOnly = $isMfg && empty($supplierLines[$qidRow]);
+                                                $gone   = $sent !== null;
                                                 if ($gone) {
-                                                    $when  = $sent !== null ? $fmtDate($sent['last']) : '';
-                                                    $tip   = $sent !== null
-                                                        ? ('Sent to ' . $sent['n'] . ' supplier' . ($sent['n'] === 1 ? '' : 's')
-                                                           . ($when !== '' ? ' on ' . $when : '') . ' — open to send again')
-                                                        : 'Handed to production — open to send again or add a supplier';
+                                                    $when  = $fmtDate($sent['last']);
+                                                    $tip   = 'Sent to ' . $sent['n'] . ' supplier' . ($sent['n'] === 1 ? '' : 's')
+                                                           . ($when !== '' ? ' on ' . $when : '') . ' — open to send again';
                                                 }
                                             ?>
+                                                <?php if ($gone || !$inHouseOnly): ?>
                                                 <div style="margin-top:0.1875rem">
                                                     <a href="/quote-builder/order_suppliers.php?id=<?= $qidRow ?>"
                                                        title="<?= e($gone ? $tip : 'Send this order to its suppliers') ?>"
@@ -549,6 +580,7 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                                         <?php endif; ?>
                                                     </a>
                                                 </div>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </td>
                                         <td><?= e((string) ($r['end_customer_name'] ?? '')) ?></td>
@@ -569,6 +601,9 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                             <?php if ($rawStatus === 'draft'): ?>
                                                 <span title="This quote hasn't been sent to the customer yet"
                                                       style="display:inline-block;margin-left:0.25rem;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:0.0625rem 0.4375rem">Not sent</span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($factoryStage[(int) $r['id']])): ?>
+                                                <div style="margin-top:0.1875rem"><?= os_factory_progress_pill($factoryStage[(int) $r['id']]) ?></div>
                                             <?php endif; ?>
                                         </td>
                                         <td style="font-size:0.8125rem;color:var(--text-faint);white-space:nowrap">

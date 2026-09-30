@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo = db();
                     $pdo->beginTransaction();
                     $newAccId = no_create_trade_account($pdo, $m);
-                    $res      = no_create_account_quote($pdo, $factoryCid, $newAccId, (int) $user['user_id']);
+                    $res      = no_create_account_quote($pdo, $factoryCid, $newAccId, (int) $user['user_id'], $m['customer_reference']);
                     $pdo->commit();
                     header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
                     exit;

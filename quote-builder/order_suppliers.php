@@ -419,6 +419,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 factory_notify_new_order(db(), $quoteId);
                 require_once __DIR__ . '/../_partials/factory_boughtin.php';
                 factory_autosend_suppliers(db(), $quoteId);
+                // (Re)placed: an order already on the floor gets its blind jobs
+                // brought in line with the current lines/units.
+                require_once __DIR__ . '/../_partials/order_stage.php';
+                bj_resync_order(db(), $quoteId, (int) factory_client_id());
             }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());

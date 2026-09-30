@@ -460,10 +460,18 @@ require __DIR__ . '/../_partials/factory_head.php';
                                     <button type="submit" name="status" value="dispatched" class="io-btn advance">Dispatch</button>
                                 </form>
                             <?php endif; ?>
-                        <?php elseif ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)): ?>
-                            <form method="post" action="/factory/set-status.php" style="margin:0">
+                        <?php elseif ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)):
+                            // "Mark made" while the floor still has blinds to finish: the
+                            // office is overriding the floor, so say so and finish them
+                            // explicitly (force_made) rather than letting the order read
+                            // made while the floor says 0 of 2.
+                            $floorOpen = ($next[0] === 'made' && $prog !== null && $prog['total'] > 0 && $prog['done'] < $prog['total'])
+                                ? (int) $prog['total'] - (int) $prog['done'] : 0;
+                        ?>
+                            <form method="post" action="/factory/set-status.php" style="margin:0"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                <?php if ($floorOpen > 0): ?><input type="hidden" name="force_made" value="1"><?php endif; ?>
                                 <button type="submit" name="status" value="<?= e($next[0]) ?>" class="io-btn advance"><?= e($next[1]) ?></button>
                             </form>
                         <?php elseif ($next !== null && $next[0] === 'dispatched'): ?>

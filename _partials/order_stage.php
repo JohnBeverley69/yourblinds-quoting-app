@@ -46,6 +46,29 @@ function os_stage_label(?string $s): string
     }
 }
 
+/**
+ * The ordering account's view of factory progress: a small pill such as
+ * "With the factory: In Production" for an order placed with the factory.
+ * '' for no stage (not placed / not a factory order). Colours match the
+ * factory's own Incoming Orders stage pills.
+ */
+function os_factory_progress_pill(?string $stage): string
+{
+    if ($stage === null || $stage === '' || !in_array($stage, os_stages(), true)) return '';
+    $cols = [
+        'confirmed'     => ['#5b6b7f', '#e6ebf1'],
+        'in_production' => ['#b5730f', '#f7ecd6'],
+        'ready'         => ['#245ea3', '#dde8f6'],
+        'dispatched'    => ['#0d7a67', '#d6ece6'],
+    ];
+    [$fg, $bg] = $cols[$stage];
+    $label = $stage === 'ready' ? 'Ready to dispatch' : os_stage_label($stage);
+    return '<span class="factory-progress-pill" title="Progress at the factory making this order"'
+         . ' style="display:inline-block;font-size:0.6875rem;font-weight:700;border-radius:999px;padding:0.0625rem 0.5rem;'
+         . 'white-space:nowrap;color:' . $fg . ';background:' . $bg . '">'
+         . 'With the factory: ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
 /** Ordered list of the stages (for UI / legends). */
 function os_stages(): array { return ['confirmed', 'in_production', 'ready', 'dispatched']; }
 
@@ -146,7 +169,12 @@ function os_is_ready(PDO $pdo, int $quoteId, ?int $factory = null): bool
         $biComplete = !$hasBI || !factory_boughtin_awaiting($pdo, $quoteId, $factory);
 
         // In-house complete: no in-house lines to make, or the floor says all made.
-        $inhouseComplete = ($inhouseLines === 0) || ($fj === 'made') || ($floorTotal > 0 && $floorDone === $floorTotal);
+        // Once blinds have been released to the floor, the FLOOR is the authority:
+        // factory_jobs 'made' alone no longer counts (the office's "Mark made"
+        // used to read Ready with 0 of 2 blinds made). Only an order that never
+        // went onto the floor falls back to the order-level 'made' status.
+        $inhouseComplete = ($inhouseLines === 0)
+            || ($floorTotal > 0 ? $floorDone === $floorTotal : $fj === 'made');
         // Real work started, so a fresh Confirmed order can't read as Ready.
         $workStarted = ($floorTotal > 0) || in_array($fj, ['received', 'in_production', 'made', 'dispatched'], true) || $biOrdered;
 
@@ -234,6 +262,47 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
     } catch (Throwable $e) {
         error_log('os_auto_invoice_on_dispatch failed for quote ' . $quoteId . ': ' . $e->getMessage());
     }
+}
+
+/**
+ * Why an order's LINES can no longer be edited from the factory side, or '' when
+ * they still can. Once an order has been dispatched or invoiced, its lines are
+ * what was delivered / billed — changing them would make the delivery note and
+ * the invoice disagree with the order. Such a change needs a credit note or a
+ * new order instead. Every check is guarded (tables may be pre-migration).
+ */
+function os_line_edit_lock(PDO $pdo, int $quoteId): string
+{
+    try {
+        $q = $pdo->prepare('SELECT status FROM quotes WHERE id = ? LIMIT 1');
+        $q->execute([$quoteId]);
+        $status = (string) ($q->fetchColumn() ?: '');
+        if (in_array($status, ['invoiced', 'paid'], true)) return 'it has been invoiced';
+    } catch (Throwable $e) { /* fall through */ }
+
+    try {
+        $st = $pdo->prepare(
+            "SELECT 1 FROM factory_ar_invoice_orders io
+               JOIN factory_ar_invoices i ON i.id = io.invoice_id
+              WHERE io.quote_id = ? AND i.status <> 'void' LIMIT 1"
+        );
+        $st->execute([$quoteId]);
+        if ($st->fetchColumn()) return 'it has been invoiced';
+    } catch (Throwable $e) { /* not migrated */ }
+
+    try {
+        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        $s->execute([$quoteId]);
+        if ((string) ($s->fetchColumn() ?: '') === 'dispatched') return 'it has been dispatched';
+    } catch (Throwable $e) { /* not migrated */ }
+
+    try {
+        $d = $pdo->prepare("SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status = 'dispatched' LIMIT 1");
+        $d->execute([$quoteId]);
+        if ($d->fetchColumn()) return 'it has been dispatched';
+    } catch (Throwable $e) { /* not migrated */ }
+
+    return '';
 }
 
 /** Count of the order's in-house (made-here) factory-owned lines. */

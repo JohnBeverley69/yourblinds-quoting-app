@@ -154,6 +154,84 @@ function qb_recompute_totals(int $quoteId): void
         ->execute([$subtotal, $vat, $total, $quoteId]);
 }
 
+/**
+ * Re-price ONE stored line in place from what is saved on it now (size, qty,
+ * system, fabric, its option rows) through the same engine the quote builder
+ * uses — pe_calculate_item, with the order's trade account ($accountClientId)
+ * so a factory-raised account order keeps the account's discount. For callers
+ * that edit a line's inputs WITHOUT going through the builder (the factory's
+ * Edit order screen), so line_total / sell_price never go stale.
+ *
+ * The line's stored markup / discount are passed as overrides (and round-up is
+ * on, as in the builder), so only the changed inputs move the price — same
+ * approach as qb_reconcile_fascia_groups. Option rows keep their labels; only
+ * their priced amounts are refreshed. Caller must have required
+ * _partials/pricing_engine.php and must call qb_recompute_totals afterwards.
+ *
+ * Returns null on success, or the engine's error message (line left untouched).
+ */
+function qb_reprice_stored_line(PDO $pdo, int $itemId, int $clientId, int $accountClientId): ?string
+{
+    $ls = $pdo->prepare(
+        'SELECT id, product_id, system_id, option_id, width_mm, drop_mm, quantity, markup_percent, discount_percent
+           FROM quote_items WHERE id = ? LIMIT 1'
+    );
+    $ls->execute([$itemId]);
+    $ln = $ls->fetch(PDO::FETCH_ASSOC);
+    if (!$ln) return 'Line not found.';
+
+    $es = $pdo->prepare('SELECT id, product_extra_id, product_extra_choice_id, user_value FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id');
+    $es->execute([$itemId]);
+    $rows   = $es->fetchAll(PDO::FETCH_ASSOC);
+    $extras = [];
+    foreach ($rows as $r) {
+        $sel = ['extra_id' => (int) $r['product_extra_id'], 'choice_id' => (int) $r['product_extra_choice_id']];
+        if ($r['user_value'] !== null && is_numeric($r['user_value']) && (float) $r['user_value'] > 0) {
+            $sel['user_value'] = (float) $r['user_value'];
+        }
+        $extras[] = $sel;
+    }
+
+    $input = [
+        'product_id' => (int) $ln['product_id'], 'system_id' => (int) $ln['system_id'], 'option_id' => (int) $ln['option_id'],
+        'width_mm' => (int) $ln['width_mm'], 'drop_mm' => (int) $ln['drop_mm'], 'quantity' => max(1, (int) $ln['quantity']),
+        'extras' => $extras, 'round_up' => true,
+        'markup_override' => (float) $ln['markup_percent'], 'discount_override' => (float) $ln['discount_percent'],
+    ];
+    $priced = pe_calculate_item($pdo, $clientId, $input, $accountClientId);
+    if (isset($priced['error'])) return (string) $priced['error'];
+
+    $pdo->prepare(
+        'UPDATE quote_items
+            SET width_matrix_mm = ?, drop_matrix_mm = ?, price_table_id = ?, price_table_row_id = ?,
+                base_price = ?, cost_price_snapshot = ?, extras_cost_snapshot = ?, extras_total = ?,
+                subtotal_per_blind = ?, markup_percent = ?, discount_percent = ?, sell_price = ?, line_total = ?
+          WHERE id = ?'
+    )->execute([
+        $priced['matrix_width_mm'], $priced['matrix_drop_mm'], $priced['price_table_id'], $priced['price_table_row_id'],
+        $priced['base_price'], $priced['cost_price_per_blind'] ?? 0, $priced['extras_cost_total'] ?? 0, $priced['extras_total'],
+        $priced['subtotal_per_blind'], $priced['markup_percent'], $priced['discount_percent'], $priced['sell_price'], $priced['line_total'],
+        $itemId,
+    ]);
+    if (function_exists('qb_capture_line_wholesale')) qb_capture_line_wholesale($pdo, $itemId, $priced);
+
+    // Refresh each stored option row's priced amount from the engine's result,
+    // matched on (option, choice) in order. Labels / values are left as saved.
+    $pool = [];
+    foreach ((array) ($priced['extras_applied'] ?? []) as $ex) {
+        $pool[(int) $ex['extra_id'] . ':' . (int) ($ex['choice_id'] ?? 0)][] = $ex;
+    }
+    $updEx = $pdo->prepare('UPDATE quote_item_extras SET amount_applied = ?, cost_snapshot = ? WHERE id = ?');
+    foreach ($rows as $r) {
+        $k = (int) $r['product_extra_id'] . ':' . (int) $r['product_extra_choice_id'];
+        if (empty($pool[$k])) continue;
+        $ex = array_shift($pool[$k]);
+        $updEx->execute([$ex['amount_applied'] ?? 0, $ex['cost_snapshot'] ?? 0, (int) $r['id']]);
+        if (function_exists('qb_capture_extra_wholesale')) qb_capture_extra_wholesale($pdo, (int) $r['id'], $ex);
+    }
+    return null;
+}
+
 require_once __DIR__ . '/../_partials/multi_fascia_pricer.php';   // qb_fascia_join_gap / qb_resolve_fascia_meta / qb_price_multi_fascia
 
 /**
@@ -606,6 +684,31 @@ function qb_rewind_quote_from_fitted(PDO $pdo, int $quoteId, int $clientId): ?st
     }
 }
 
+/**
+ * Has the factory already TAKEN this order in? True once it has a factory_jobs
+ * row past "new" (received / in production / made / dispatched) or any blinds
+ * released to the floor. From then on the order can't be pulled back to draft
+ * by the account: it would vanish from the factory's queue while its blinds
+ * stayed on the floor, and lines added on re-accept would never reach the floor.
+ * Guarded: tables absent pre-migration ⇒ false (old behaviour).
+ */
+function qb_factory_has_received(PDO $pdo, int $quoteId): bool
+{
+    if ($quoteId <= 0) return false;
+    try {
+        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        $s->execute([$quoteId]);
+        $st = (string) ($s->fetchColumn() ?: '');
+        if (in_array($st, ['received', 'in_production', 'made', 'dispatched'], true)) return true;
+    } catch (Throwable $e) { /* factory_jobs absent */ }
+    try {
+        $b = $pdo->prepare('SELECT 1 FROM factory_blind_jobs WHERE quote_id = ? LIMIT 1');
+        $b->execute([$quoteId]);
+        if ($b->fetchColumn()) return true;
+    } catch (Throwable $e) { /* factory_blind_jobs absent */ }
+    return false;
+}
+
 function qb_allowed_transitions(string $current): array
 {
     switch ($current) {
@@ -711,6 +814,19 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
     if (!$quote || empty($quote['client_id'])) {
         return null;
     }
+
+    // No fitting for trade work: a factory is trade-only and never fits, and a
+    // trade sale (sale_type = 'trade', e.g. a factory-raised account order) is
+    // supplied, not installed. Accepting one used to drop a phantom "Pending
+    // Fitting" into the calendar. sale_type is guarded (may be pre-migration).
+    if (function_exists('is_factory_client') && is_factory_client((int) $quote['client_id'])) {
+        return null;
+    }
+    try {
+        $stt = $pdo->prepare('SELECT sale_type FROM quotes WHERE id = ? LIMIT 1');
+        $stt->execute([$quoteId]);
+        if ((string) ($stt->fetchColumn() ?: '') === 'trade') return null;
+    } catch (Throwable $e) { /* column absent pre-migration — treat as retail */ }
 
     // appt_kind distinguishes the measure visit from the fitting. Probe once;
     // pre-migration installs just have the single linked appointment.
