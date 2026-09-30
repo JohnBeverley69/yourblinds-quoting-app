@@ -279,6 +279,20 @@ if (!$offlineTemplate) unset($_SESSION['flash_success'], $_SESSION['flash_error'
 // History" / "Orders" trio has been merged (Tyler review #3).
 $activeNav = 'order-history';
 $transitions = qb_allowed_transitions((string) $quote['status']);
+
+// Once the factory has taken the order in, it can't be reopened as a draft from
+// here (change_status.php refuses it too) — hide the button and say why.
+$factoryHasIt = false;
+if (in_array('draft', $transitions, true) && (string) $quote['status'] !== 'draft'
+    && qb_factory_has_received(db(), (int) $quote['id'])) {
+    $factoryHasIt = true;
+    $transitions  = array_values(array_diff($transitions, ['draft']));
+}
+
+// Factory progress for an order placed with the factory ("With the factory:
+// In Production"). Not on the factory's own quotes — it has its own pages.
+require_once __DIR__ . '/../_partials/order_stage.php';
+$factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quote['fulfilment_stage'] ?? null);
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -830,6 +844,7 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 <span class="status-pill status-<?= e((string) $quote['status']) ?>">
                     <?= e((string) $quote['status']) ?>
                 </span>
+                <?php if ($factoryPill !== ''): ?><?= $factoryPill ?><?php endif; ?>
             </span>
             <?php
                 // The two transitions that almost always want one-click
@@ -1037,6 +1052,10 @@ $transitions = qb_allowed_transitions((string) $quote['status']);
                 This quote is in <strong><?= e((string) $quote['status']) ?></strong> state and is read-only.
                 <?php if (in_array('draft', $transitions, true)): ?>
                     Use <strong>Reopen as draft</strong> above to edit it.
+                <?php elseif ($factoryHasIt): ?>
+                    <?= is_factory_client($clientId)
+                        ? 'It is already on the factory floor — change it from Edit order in Incoming orders, or step it back to New there first.'
+                        : 'This order is already being made — contact the factory to change it.' ?>
                 <?php endif; ?>
             </div>
         <?php endif; ?>

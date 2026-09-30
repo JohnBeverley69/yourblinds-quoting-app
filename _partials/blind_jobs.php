@@ -467,6 +467,117 @@ function bj_clear_order(PDO $pdo, int $quoteId): void
     $pdo->prepare('DELETE FROM factory_blind_jobs WHERE quote_id = ?')->execute([$quoteId]);
 }
 
+/**
+ * Bring an order's floor jobs back in line with its CURRENT lines after the order
+ * changed (a line edited / added / removed, a quantity changed, or the order
+ * re-placed). Only acts on an order that is already on the floor (it has blind
+ * jobs, or the factory has it in production / made) — an order the factory
+ * hasn't started is released the normal way when it moves into production.
+ *
+ *   - jobs whose line is gone (or is now bought-in), or whose unit is beyond the
+ *     line's quantity, are removed;
+ *   - every current in-house line/unit that has no job yet is released
+ *     (bj_release_order is idempotent, so existing jobs are untouched);
+ *   - if new blinds were released to an order already marked "made", it drops
+ *     back to "in production" so it can't read Ready with blinds still to make.
+ *
+ * Returns ['created' => n, 'removed' => n]. Best-effort: never throws.
+ */
+function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
+{
+    $out = ['created' => 0, 'removed' => 0];
+    try {
+        if ($quoteId <= 0 || !bj_tables_ready($pdo)) return $out;
+
+        $cnt = $pdo->prepare('SELECT COUNT(*) FROM factory_blind_jobs WHERE quote_id = ?');
+        $cnt->execute([$quoteId]);
+        $hasJobs = ((int) $cnt->fetchColumn()) > 0;
+
+        $fj = '';
+        try {
+            $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+            $s->execute([$quoteId]);
+            $fj = (string) ($s->fetchColumn() ?: '');
+        } catch (Throwable $e) { $fj = ''; }
+
+        if (!$hasJobs && !in_array($fj, ['in_production', 'made'], true)) return $out;
+
+        // The in-house lines as they stand now (same selection as bj_release_order).
+        require_once __DIR__ . '/bought_in.php';
+        $li = $pdo->prepare(
+            'SELECT qi.id, qi.quantity
+               FROM quote_items qi
+               JOIN products p ON p.id = qi.product_id
+               ' . bought_in_master_join('p', 'mp') . '
+              WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
+                AND ' . bought_in_inhouse_predicate('mp')
+        );
+        $li->execute([$quoteId, $master]);
+        $qtyOf = [];
+        foreach ($li->fetchAll(PDO::FETCH_ASSOC) as $r) $qtyOf[(int) $r['id']] = max(1, (int) $r['quantity']);
+
+        // Prune jobs that no longer match a line/unit.
+        $js = $pdo->prepare('SELECT id, quote_item_id, unit_no FROM factory_blind_jobs WHERE quote_id = ?');
+        $js->execute([$quoteId]);
+        $drop = [];
+        foreach ($js->fetchAll(PDO::FETCH_ASSOC) as $j) {
+            $iid = (int) $j['quote_item_id'];
+            if (!isset($qtyOf[$iid]) || (int) $j['unit_no'] > $qtyOf[$iid]) $drop[] = (int) $j['id'];
+        }
+        if ($drop) {
+            $ph = implode(',', array_fill(0, count($drop), '?'));
+            $pdo->prepare("DELETE FROM factory_blind_streams WHERE blind_job_id IN ($ph)")->execute($drop);
+            $pdo->prepare("DELETE FROM factory_blind_jobs WHERE id IN ($ph)")->execute($drop);
+            $out['removed'] = count($drop);
+        }
+
+        // Release anything missing.
+        $out['created'] = bj_release_order($pdo, $quoteId, $master);
+
+        if ($out['created'] > 0 && $fj === 'made') {
+            try {
+                $pdo->prepare(
+                    "UPDATE factory_jobs SET status = 'in_production', status_at = NOW()
+                      WHERE quote_id = ? AND status = 'made'"
+                )->execute([$quoteId]);
+            } catch (Throwable $e) { /* factory_jobs optional */ }
+        } elseif ($out['removed'] > 0) {
+            // Removing the last unfinished blinds may have finished the order.
+            bj_maybe_complete_order($pdo, $quoteId);
+        }
+    } catch (Throwable $e) {
+        error_log('bj_resync_order failed for quote ' . $quoteId . ': ' . $e->getMessage());
+    }
+    return $out;
+}
+
+/**
+ * The office forcing an order to "made": finish every outstanding blind on the
+ * floor explicitly, so the floor count and the order status agree (instead of
+ * the order reading made while the floor still says 0 of 2). Returns how many
+ * blinds were completed by this call.
+ */
+function bj_force_complete_order(PDO $pdo, int $quoteId, ?int $userId): int
+{
+    if ($quoteId <= 0 || !bj_tables_ready($pdo)) return 0;
+    $open = $pdo->prepare("SELECT id FROM factory_blind_jobs WHERE quote_id = ? AND status <> 'complete'");
+    $open->execute([$quoteId]);
+    $ids = array_map('intval', $open->fetchAll(PDO::FETCH_COLUMN));
+    if (!$ids) return 0;
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    $pdo->prepare(
+        "UPDATE factory_blind_streams
+            SET route_step_id = NULL, station_id = NULL, status = 'done',
+                completed_at = COALESCE(completed_at, NOW()), started_at = COALESCE(started_at, NOW()), updated_by = ?
+          WHERE blind_job_id IN ($ph) AND (status IS NULL OR status <> 'done')"
+    )->execute(array_merge([$userId], $ids));
+    $pdo->prepare(
+        "UPDATE factory_blind_jobs SET status = 'complete', completed_at = COALESCE(completed_at, NOW())
+          WHERE id IN ($ph)"
+    )->execute($ids);
+    return count($ids);
+}
+
 /** One stream row (a blind's position in one stream), or null. */
 function bj_stream_get(PDO $pdo, int $streamId): ?array
 {

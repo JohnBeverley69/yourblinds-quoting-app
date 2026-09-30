@@ -20,6 +20,88 @@ declare(strict_types=1);
  * placement paths don't re-send. Best-effort — never throws to the caller.
  */
 
+/**
+ * A placed order has been pulled back to draft by the business that placed it
+ * (only possible before the factory has received it). Email the factory so it
+ * doesn't start work on it, and clear quotes.factory_notified_at so re-placing
+ * the order sends a fresh "new order" email with the (possibly changed) order.
+ * Same recipient + tenant→factory rule as factory_notify_new_order. Best-effort.
+ */
+function factory_notify_order_reopened(PDO $pdo, int $quoteId): void
+{
+    if ($quoteId <= 0) return;
+    try {
+        if (!function_exists('mailer_send')) { require_once __DIR__ . '/../mailer.php'; }
+
+        // Re-arm the new-order email first, so re-placing always tells the
+        // factory again even if this email can't be sent.
+        try { $pdo->prepare('UPDATE quotes SET factory_notified_at = NULL WHERE id = ?')->execute([$quoteId]); }
+        catch (Throwable $e) { /* column absent pre-migration */ }
+
+        $st = $pdo->prepare(
+            'SELECT q.id, q.quote_number, q.end_customer_name, q.client_id, c.company_name AS owner_company
+               FROM quotes q JOIN clients c ON c.id = q.client_id
+              WHERE q.id = ? LIMIT 1'
+        );
+        $st->execute([$quoteId]);
+        $q = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$q) return;
+
+        $factoryId = factory_notify_factory_for($pdo, $quoteId);
+        if ($factoryId <= 0 || $factoryId === (int) $q['client_id']) return;   // factory's own order
+        $notifyTo = factory_notify_recipient($pdo, $factoryId);
+        if ($notifyTo === '') return;
+
+        $business = trim((string) ($q['owner_company'] ?? '')) ?: 'a trade account';
+        $qNum     = (string) $q['quote_number'];
+        $subject  = sprintf('Order withdrawn for changes — %s from %s', $qNum, $business);
+        $lines = [
+            'Hello,',
+            '',
+            $business . ' has reopened order ' . $qNum . ' to make changes, so it has left your factory queue.',
+            'Please don\'t start work on it. You\'ll get a new-order email when they place it again.',
+        ];
+        mailer_send($notifyTo, $subject, implode("\n", $lines));
+    } catch (Throwable $e) {
+        error_log('factory_notify_order_reopened skipped for quote ' . $quoteId . ': ' . $e->getMessage());
+    }
+}
+
+/** The factory that MAKES this order = dominant owner of its products (0 if none). */
+function factory_notify_factory_for(PDO $pdo, int $quoteId): int
+{
+    $fs = $pdo->prepare(
+        "SELECT COALESCE(NULLIF(p.source_client_id,0), p.client_id) AS fac, COUNT(*) AS n
+           FROM quote_items qi JOIN products p ON p.id = qi.product_id
+          WHERE qi.quote_id = ?
+       GROUP BY fac ORDER BY n DESC LIMIT 1"
+    );
+    $fs->execute([$quoteId]);
+    return (int) ($fs->fetchColumn() ?: 0);
+}
+
+/**
+ * The factory's notification address — factory_notify_email if set, else the
+ * general order_notify_email. '' when neither is a valid address.
+ */
+function factory_notify_recipient(PDO $pdo, int $factoryId): string
+{
+    $notifyTo = '';
+    try {
+        $ns = $pdo->prepare('SELECT factory_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
+        $ns->execute([$factoryId]);
+        $notifyTo = trim((string) ($ns->fetchColumn() ?: ''));
+    } catch (Throwable $e) { /* column absent — try the general one */ }
+    if ($notifyTo === '') {
+        try {
+            $ns = $pdo->prepare('SELECT order_notify_email FROM client_settings WHERE client_id = ? LIMIT 1');
+            $ns->execute([$factoryId]);
+            $notifyTo = trim((string) ($ns->fetchColumn() ?: ''));
+        } catch (Throwable $e) { return ''; }
+    }
+    return ($notifyTo !== '' && filter_var($notifyTo, FILTER_VALIDATE_EMAIL)) ? $notifyTo : '';
+}
+
 function factory_notify_new_order(PDO $pdo, int $quoteId): void
 {
     if ($quoteId <= 0) return;

@@ -49,8 +49,24 @@ if (!qb_user_can_change_to($isAdmin, $_perms, $target)) {
     );
 }
 
-// Update status, plus the timestamp columns where relevant.
 $pdo = db();
+
+// Pulling a placed order back to draft: refused once the factory has taken it in
+// (received it, or blinds are on the floor). Otherwise it vanished from the
+// factory's queue while its blinds stayed on the floor, and lines added on
+// re-accept were never released — so it could go Ready and ship blinds short.
+$wasPlaced = in_array($current, ['ordered', 'fitted', 'invoiced', 'paid'], true);
+if ($target === 'draft' && $current !== 'draft' && qb_factory_has_received($pdo, $quoteId)) {
+    qb_flash_redirect(
+        '/quote-builder/edit.php?id=' . $quoteId,
+        'error',
+        is_factory_client($clientId)
+            ? 'This order is already on the factory floor — change it from Edit order in Incoming orders, or step it back to New there first.'
+            : 'This order is already being made — contact the factory to change it.'
+    );
+}
+
+// Update status, plus the timestamp columns where relevant.
 $pdo->beginTransaction();
 try {
     $pdo->prepare('UPDATE quotes SET status = ? WHERE id = ? AND client_id = ?')
@@ -242,7 +258,15 @@ try {
                                 $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
                             }
                         } catch (Throwable $e) { /* stamp optional */ }
-                        $autoPlaceMsg = ' Sent straight to the workshop — all in-house, no supplier order needed.';
+                        // "All in-house" is only true when the FACTORY makes every
+                        // line itself. The factory may buy some in (a master product
+                        // with a real supplier, e.g. PF Venetian → Hunter Douglas) —
+                        // the factory orders those, so don't claim nothing's bought in.
+                        require_once __DIR__ . '/../_partials/factory_boughtin.php';
+                        $factoryBuysIn = !empty(factory_boughtin_supplier_names($pdo, $quoteId, $factoryId));
+                        $autoPlaceMsg = $factoryBuysIn
+                            ? ' Sent straight to the factory — no supplier order needed from you (the factory orders any bought-in items itself).'
+                            : ' Sent straight to the workshop — all in-house, no supplier order needed.';
                     }
                 }
             }
@@ -257,12 +281,25 @@ try {
     require_once __DIR__ . '/../_partials/order_stage.php';
     recompute_order_stage($pdo, $quoteId);
 
-    // The order just landed in a factory queue → email the factory (once).
+    // The order just landed in a factory queue → email the factory (once per
+    // placement — reopening re-arms it, so a re-placed order is re-notified).
     if ($target === 'ordered') {
         require_once __DIR__ . '/../_partials/factory_notify.php';
         factory_notify_new_order($pdo, $quoteId);
         require_once __DIR__ . '/../_partials/factory_boughtin.php';
         factory_autosend_suppliers($pdo, $quoteId);
+        // (Re)placed: if the order is already on the floor, bring its blind jobs
+        // in line with the current lines/units so nothing added is left off.
+        bj_resync_order($pdo, $quoteId, (int) factory_client_id());
+        recompute_order_stage($pdo, $quoteId);
+    }
+
+    // A placed order pulled back to draft (allowed only before the factory has
+    // received it): tell the factory it has left their queue, and re-arm the
+    // new-order email for when it is placed again.
+    if ($target === 'draft' && $wasPlaced) {
+        require_once __DIR__ . '/../_partials/factory_notify.php';
+        factory_notify_order_reopened($pdo, $quoteId);
     }
 
     // Money may already cover the total (payments kept while it was reopened as a
