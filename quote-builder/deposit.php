@@ -38,6 +38,17 @@ $action   = (string) ($_POST['_action'] ?? '');
 $quote    = qb_load_quote_or_404($quoteId, $clientId);
 qb_require_quote_access($quote, $user, current_user_permissions());
 
+// "Can see money" gate. Recording / amending / un-marking a PAID deposit is
+// money handling → refused for users without the permission. The one thing
+// they may still do is set the deposit DUE on a quote that's still being
+// quoted (draft/sent, nothing paid) — that's part of building the quote.
+if (!user_can_see_money()) {
+    $quotingOnly = $action === 'save_amount'
+        && in_array((string) $quote['status'], ['draft', 'sent'], true)
+        && empty($quote['deposit_paid_at']);
+    if (!$quotingOnly) requireMoneyPermission();
+}
+
 // Setting the deposit AMOUNT (save_amount) is allowed before acceptance too:
 // a draft/sent quote can carry an override that the accept-seed then keeps
 // (change_status only seeds a default when deposit_amount is still NULL).

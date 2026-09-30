@@ -161,6 +161,42 @@ function qb_preview_response(PDO $pdo, int $clientId, array $q, bool $canCosts, 
             }
             unset($exRow);
         }
+
+        // SELL basis. base_price / extras_total / markup_percent / discount_percent
+        // as the engine returns them are on the BUYING basis (price-table base
+        // after buying discount, supplier list add-ons) — with the markup that's
+        // enough to work out what the business pays. Re-express them so the same
+        // client arithmetic gives the same sell price without revealing it:
+        //   extras_total := the options part as SOLD (options_sell_total)
+        //   base_price   := sell_price − that options part (the marked-up blind)
+        //   markup / discount := 0, subtotal_per_blind := sell_price
+        // InstaPrice's recompute() — round2(base·(1−d)·(1+m) + extras) — then gives
+        // round2(base + extras) = sell_price exactly (d = m = 0), which is also the
+        // figure the quote saves. sell_price / line_total are untouched.
+        $sell    = (float) ($result['sell_price'] ?? 0);
+        $optSell = isset($result['options_sell_total'])
+            ? (float) $result['options_sell_total']
+            : (float) ($result['extras_total'] ?? 0);
+        // Supplier list add-ons (face_value=false) ride through discount+markup on
+        // a supplier-priced product — restate each row's amount as sold too.
+        $factor = (1 - (float) ($result['discount_percent'] ?? 0) / 100)
+                * (1 + (float) ($result['markup_percent']   ?? 0) / 100);
+        $isSupplier = function_exists('ps_for_product') && defined('PRICE_SOURCE_SUPPLIER')
+            && ps_for_product($pdo, (int) ($result['product_id'] ?? 0)) === PRICE_SOURCE_SUPPLIER;
+        if ($isSupplier && !empty($result['extras_applied']) && is_array($result['extras_applied'])) {
+            foreach ($result['extras_applied'] as &$exRow) {
+                if (is_array($exRow) && ($exRow['face_value'] ?? true) === false) {
+                    $exRow['amount_applied'] = round((float) ($exRow['amount_applied'] ?? 0) * $factor, 2);
+                }
+            }
+            unset($exRow);
+        }
+        $result['extras_total']       = round($optSell, 2);
+        $result['base_price']         = round($sell - $optSell, 2);
+        $result['subtotal_per_blind'] = round($sell, 2);
+        $result['markup_percent']     = 0.0;
+        $result['discount_percent']   = 0.0;
+        unset($result['options_sell_total']);
     }
 
     // Anonymous public InstaPrice visitors never get the supplier's name (the

@@ -25,7 +25,8 @@ if (!class_exists(\Dompdf\Dompdf::class)) {
     exit('PDF generator is not installed. Run "composer install" to add dompdf/dompdf.');
 }
 
-$pdfBytes = pdf_render_quote($id, $user['client_id']);
+// Paid / Balance-due rows only for users with the "Can see money" permission.
+$pdfBytes = pdf_render_quote($id, $user['client_id'], 'Quote', user_can_see_money());
 if ($pdfBytes === null) {
     http_response_code(404);
     exit('Quote not found.');

@@ -52,11 +52,14 @@ $isAdmin   = ($user['role'] ?? '') === 'admin';
 $perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
 $canViewCosts    = $isAdmin || !empty($perms['can_view_costs']);
 
+// Every panel shows £ figures, so each one also needs the per-user "Can see
+// money" permission (stored in dash_view_revenue — the Revenue & KPIs flag).
+$canSeeMoney    = user_can_see_money();
 $canSeeRevenue  = $isAdmin || !empty($perms['dash_view_revenue']);
-$canSeeTeam     = $isAdmin || !empty($perms['dash_view_team']);
-$canSeeProducts = $isAdmin || !empty($perms['dash_view_products']);
-$canSeeProfit   = ($isAdmin || !empty($perms['dash_view_profit'])) && $canViewCosts;
-$canSeeRecent   = $isAdmin || !empty($perms['dash_view_recent']);
+$canSeeTeam     = ($isAdmin || !empty($perms['dash_view_team']))     && $canSeeMoney;
+$canSeeProducts = ($isAdmin || !empty($perms['dash_view_products'])) && $canSeeMoney;
+$canSeeProfit   = ($isAdmin || !empty($perms['dash_view_profit'])) && $canViewCosts && $canSeeMoney;
+$canSeeRecent   = ($isAdmin || !empty($perms['dash_view_recent']))   && $canSeeMoney;
 
 $canSeeAnything = $canSeeRevenue || $canSeeTeam || $canSeeProducts
                || $canSeeProfit  || $canSeeRecent;

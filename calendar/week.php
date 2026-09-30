@@ -133,7 +133,8 @@ $showMoney = false;
 try {
     $mqStmt = $pdo->prepare('SELECT COALESCE(calendar_show_money, 0) FROM client_settings WHERE client_id = ?');
     $mqStmt->execute([$clientId]);
-    $showMoney = ((int) $mqStmt->fetchColumn()) === 1;
+    // Company switch AND the viewer's own "Can see money" permission.
+    $showMoney = ((int) $mqStmt->fetchColumn()) === 1 && user_can_see_money();
 } catch (Throwable $e) { /* column not migrated — figures stay off */ }
 
 // Pending fittings (no date yet) only get a drag-drop tray on the Month view.

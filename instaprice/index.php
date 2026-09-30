@@ -40,6 +40,9 @@ if ($publicMode) {
     $_perms   = current_user_permissions();
     $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
 }
+// Same rule as quote-builder/api/preview.php. Non-cost users (and the public)
+// get the preview on a SELL basis (markup 0), so the Mark-up % box is hidden.
+$ipCanCosts = !$publicMode && ($isAdmin || !empty($_perms['can_view_costs']));
 
 // Markup vs margin. The breakdown panel still computes in markup; this only
 // changes how the editable rate is labelled / typed (pricing_basis.php).
@@ -378,6 +381,9 @@ $activeNav = 'instaprice';
     // ?public=1 flag to serve the showcase catalogue anonymously.
     var IP_PUBLIC = <?= $publicMode ? 'true' : 'false' ?>;
     function apiUrl(u) { return IP_PUBLIC ? (u + (u.indexOf('?') > -1 ? '&' : '?') + 'public=1') : u; }
+    // Cost-viewers only see / edit the mark-up (the preview API gives everyone
+    // else sell-basis figures with markup 0, so the box would just read 0).
+    var IP_CAN_COSTS = <?= $ipCanCosts ? 'true' : 'false' ?>;
 
     // Markup vs margin. The breakdown still computes in MARKUP; these only
     // convert the editable rate the tenant sees / types. Mirror of
@@ -1089,7 +1095,7 @@ $activeNav = 'instaprice';
           + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
-          + '<div class="ip-row editable"><span class="lbl">' + rateLabel() + '</span>'
+          + '<div class="ip-row editable"' + (IP_CAN_COSTS ? '' : ' style="display:none"') + '><span class="lbl">' + rateLabel() + '</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupToShown(markupDefault).toFixed(2) + '"></div>'
           + '<div class="ip-row ip-sell"><span class="lbl">Sell price</span><span class="val" id="ip-sell">—</span></div>'
           + '<div class="ip-total" id="ip-total"></div>';

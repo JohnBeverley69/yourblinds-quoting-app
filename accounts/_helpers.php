@@ -45,9 +45,13 @@ function acct_method_label(string $method): string
  * only touch payments on quotes they have an appointment assigned to.
  * Standalone payments (no quote) are back-office only — a restricted user
  * can't see them in the list, so can't write them either.
+ * All of that sits behind user_can_see_money() (the per-user "Can see
+ * money" flag): without it, no payment can be touched, even on an
+ * assigned job.
  */
 function acct_user_can_touch_quote(PDO $pdo, int $clientId, array $user, ?int $quoteId): bool
 {
+    if (function_exists('user_can_see_money') && !user_can_see_money()) return false;
     if (($user['role'] ?? '') === 'admin') return true;
     $perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
     if (!empty($perms['can_view_all_customer_jobs'])) return true;
