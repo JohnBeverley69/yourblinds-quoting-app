@@ -93,6 +93,34 @@ if (!function_exists('bv_php_consumed_allowance_tables')) {
     }
 }
 
+if (!function_exists('build_rules_source')) {
+    /**
+     * The product whose build rules a product uses. Normally itself; a product
+     * set to "use the cut rules of" another (Factory → Build rules) borrows that
+     * product's variables instead — e.g. Head Rail Only is made exactly like the
+     * vertical's headrail, so it shares the vertical's rules rather than keeping
+     * a copy that would drift. Stored in factory_kv as build_rules_from:<id>.
+     */
+    function build_rules_source(PDO $pdo, int $productId): int
+    {
+        try {
+            $s = $pdo->prepare('SELECT v FROM factory_kv WHERE k = ? LIMIT 1');
+            $s->execute(['build_rules_from:' . $productId]);
+            $src = (int) ($s->fetchColumn() ?: 0);
+            if ($src > 0 && $src !== $productId) return $src;
+        } catch (Throwable $e) { /* factory_kv not migrated */ }
+        return $productId;
+    }
+}
+
+if (!function_exists('be_norm_choice')) {
+    /** Compare option labels loosely on slash spacing: "L / L" == "L/L". */
+    function be_norm_choice(string $s): string
+    {
+        return mb_strtolower(trim((string) preg_replace('~\s*/\s*~u', '/', $s)));
+    }
+}
+
 if (!function_exists('build_evaluate')) {
     /**
      * @param array<string,mixed>  $numVars       name => number/string inputs
@@ -101,11 +129,30 @@ if (!function_exists('build_evaluate')) {
      */
     function build_evaluate(PDO $pdo, int $productId, array $numVars, array $optSelections): array
     {
-        // Variables for this product, in evaluation order.
+        // A product sharing another's rules evaluates against THAT product's
+        // variables. Its systems are matched to the source's by name — "SlimLine"
+        // picks the source's "SlimLine Vert" — so the shared rows fire.
+        $rulesPid = build_rules_source($pdo, $productId);
+        if ($rulesPid !== $productId && isset($optSelections['system']) && $optSelections['system'] !== '') {
+            try {
+                $sn = $pdo->prepare('SELECT name FROM product_systems WHERE product_id = ?');
+                $sn->execute([$rulesPid]);
+                $mine = mb_strtolower(trim((string) $optSelections['system']));
+                $best = null;
+                foreach ($sn->fetchAll(PDO::FETCH_COLUMN) as $srcName) {
+                    $l = mb_strtolower(trim((string) $srcName));
+                    if ($l === $mine) { $best = (string) $srcName; break; }
+                    if ($best === null && strpos($l, $mine . ' ') === 0) $best = (string) $srcName;
+                }
+                if ($best !== null) $optSelections['system'] = $best;
+            } catch (Throwable $e) { /* leave the selection as it is */ }
+        }
+
+        // Variables for this product (or the product it shares rules with), in evaluation order.
         $variables = [];
         try {
             $vs = $pdo->prepare('SELECT name, columns_json, rows_json FROM build_variables WHERE product_id = ? ORDER BY seq, id');
-            $vs->execute([$productId]);
+            $vs->execute([$rulesPid]);
             foreach ($vs->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $variables[] = [
                     'name'    => (string) $r['name'],
@@ -167,7 +214,7 @@ if (!function_exists('build_evaluate')) {
                     $ref = (string) ($col['ref'] ?? '');
                     $lbl = strtolower(trim((string) ($col['label'] ?? '')));
                     $sel = $optSelections[$ref] ?? ($lbl !== '' ? ($optSelections[$lbl] ?? '') : '');
-                    if (mb_strtolower($cell) !== mb_strtolower(trim((string) $sel))) { $ok = false; break; }
+                    if (be_norm_choice($cell) !== be_norm_choice((string) $sel)) { $ok = false; break; }
                 }
                 if ($ok) { $match = $row; break; }
             }
