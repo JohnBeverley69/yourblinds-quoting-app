@@ -64,7 +64,7 @@ $activeNav = 'wholesale';
                     <a href="/master-admin/record-payment.php?account_id=<?= (int) $accountId ?>">&larr; Payments &amp; balance</a>
                 </p>
                 <h1 class="page-title">Statement &mdash; <?= e((string) $account['company_name']) ?></h1>
-                <p class="page-subtitle">Outstanding <strong><?= $money($bal['outstanding']) ?></strong> as of today.</p>
+                <p class="page-subtitle"><?= $bal['outstanding'] < -0.004 ? 'Balance' : 'Outstanding' ?> <strong><?= e(ar_balance_label((float) $bal['outstanding'])) ?></strong> as of today.</p>
             </div>
             <div>
                 <a href="/master-admin/statement-pdf.php?<?= e($pdfQs) ?>&amp;download=1" class="btn btn-primary">Download PDF</a>
@@ -108,9 +108,9 @@ $activeNav = 'wholesale';
                             </tr>
                         <?php endforeach; endif; ?>
                         <tr class="st-close">
-                            <td colspan="3" style="text-align:right">Balance due</td>
+                            <td colspan="3" style="text-align:right"><?= $data['closing'] < -0.004 ? 'Balance' : 'Balance due' ?></td>
                             <td class="st-num"></td><td class="st-num"></td>
-                            <td class="st-num"><?= $money($data['closing']) ?></td>
+                            <td class="st-num"><?= e(ar_balance_label((float) $data['closing'])) ?></td>
                         </tr>
                     </tbody>
                 </table>

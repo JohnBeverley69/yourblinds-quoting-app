@@ -113,8 +113,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Order already invoiced on ' . $existingInv . ' (void it first to re-invoice).');
             }
 
+            // Reissue of a voided invoice: must be a void invoice of THIS order.
+            $reissueOf = (int) ($_POST['reissue_of'] ?? 0);
+            $oldNum = '';
+            if ($reissueOf > 0) {
+                $ro = $pdo->prepare(
+                    "SELECT i.inv_number FROM factory_ar_invoices i
+                       JOIN factory_ar_invoice_orders io ON io.invoice_id = i.id
+                      WHERE i.id = ? AND i.factory_client_id = ? AND i.status = 'void' AND io.quote_id = ? LIMIT 1"
+                );
+                $ro->execute([$reissueOf, $factory, $qid]);
+                $oldNum = (string) ($ro->fetchColumn() ?: '');
+                if ($oldNum === '') $reissueOf = 0;
+            }
+
             $inv = ar_create_invoice($pdo, $factory, $qid, (int) $order['account_id'], (int) ($user['user_id'] ?? 0), false);
-            $_SESSION['flash_success'] = 'Invoice ' . $inv['number'] . ' raised (£' . number_format($inv['total'], 2) . '). View/send it below.';
+            $msg = 'Invoice ' . $inv['number'] . ' raised (£' . number_format($inv['total'], 2) . ').';
+            if ($reissueOf > 0) {
+                try {
+                    $pdo->prepare('UPDATE factory_ar_invoices SET replaced_by_id = ? WHERE id = ? AND factory_client_id = ?')
+                        ->execute([(int) $inv['id'], $reissueOf, $factory]);
+                } catch (Throwable $e) { /* chain link is informational */ }
+                $msg = 'Invoice ' . $inv['number'] . ' reissued in place of ' . $oldNum . ' (£' . number_format($inv['total'], 2) . ').';
+                $onAcc = ar_unallocated_total($pdo, $factory, (int) $order['account_id']);
+                if ($onAcc > 0.004) {
+                    $msg .= ' The account has £' . number_format($onAcc, 2) . ' on account — use "Apply credit" on it to put that against the new invoice.';
+                }
+            }
+            $_SESSION['flash_success'] = $msg . ' View/send it below.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not raise invoice: ' . $e->getMessage();
@@ -168,18 +194,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $dnNum = $dn['number'];
             }
 
-            // 2) Create + send the invoice — once. If already invoiced (non-void), skip
+            // 2) Create the invoice — once. If already invoiced (non-void), skip
             //    silently: this is the reprint / duplicate case the user called out.
+            //    It is EMAILED after the commit below (never from inside the
+            //    transaction, or a rollback would leave an emailed invoice that
+            //    doesn't exist).
             $invNum = ar_order_invoice_number($pdo, $qid);
+            $newInvId = 0;
             if ($invNum === '') {
-                $inv    = ar_create_invoice($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), true);
-                $invNum = $inv['number'];
-                $msg    = 'Delivery note ' . $dnNum . ' dispatched · invoice ' . $invNum . ' created & sent (£' . number_format($inv['total'], 2) . ').';
+                $inv      = ar_create_invoice($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), false);
+                $invNum   = $inv['number'];
+                $newInvId = (int) $inv['id'];
+                $msg      = 'Delivery note ' . $dnNum . ' dispatched · invoice ' . $invNum . ' created (£' . number_format($inv['total'], 2) . ')';
             } else {
                 $msg = 'Delivery note ' . $dnNum . ' dispatched. Order was already invoiced on ' . $invNum . ' — no second invoice raised.';
             }
 
             $pdo->commit();
+            if ($newInvId > 0) {
+                $sent = ar_send_invoice($pdo, $factory, $newInvId);
+                if ($sent['ok']) {
+                    $msg .= ' & emailed.';
+                } else {
+                    $msg .= '.';
+                    $_SESSION['flash_error'] = $sent['message'] . ' It stays "Raised" until it is emailed.';
+                }
+            }
             // Phase 1: reflect dispatch on the floor side, then roll the stage up.
             try {
                 require_once __DIR__ . '/../_partials/order_stage.php';
@@ -224,38 +264,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $invId = (int) ($_POST['inv_id'] ?? 0);
         try {
             if ($action === 'inv_send') {
-                $pdo->prepare("UPDATE factory_ar_invoices SET status = 'sent', sent_at = NOW() WHERE id = ? AND factory_client_id = ? AND status IN ('raised')")
-                    ->execute([$invId, $factory]);
-                $_SESSION['flash_success'] = 'Invoice marked sent.';
+                // Actually EMAIL the PDF to the account; only a successful email
+                // marks it sent (no email on file / paused / mail error → stays put).
+                $sent = ar_send_invoice($pdo, $factory, $invId);
+                $_SESSION[$sent['ok'] ? 'flash_success' : 'flash_error'] = $sent['message'];
             } else {
                 $reason = trim((string) ($_POST['void_reason'] ?? '')) ?: 'Voided';
                 // Never mutate a sent invoice's figures — void keeps its number (gap-free).
-                $ownTx = !$pdo->inTransaction();
-                if ($ownTx) $pdo->beginTransaction();
-                $pdo->prepare("UPDATE factory_ar_invoices SET status = 'void', voided_at = NOW(), void_reason = ? WHERE id = ? AND factory_client_id = ? AND status <> 'void'")
-                    ->execute([$reason, $invId, $factory]);
-
-                // Void its credit notes too. A credit note credits a specific
-                // invoice; leaving one live against a voided invoice left the
-                // account holding a credit it never earned — ar_account_ar_summary
-                // counts every non-void credit note, so the phantom showed up as a
-                // real balance on the statement.
-                $cnVoided = 0;
-                if ($cnReady) {
-                    $cnv = $pdo->prepare(
-                        "UPDATE factory_ar_credit_notes SET status = 'void', voided_at = NOW()
-                          WHERE against_invoice_id = ? AND factory_client_id = ? AND status <> 'void'"
-                    );
-                    $cnv->execute([$invId, $factory]);
-                    $cnVoided = $cnv->rowCount();
-                }
-                if ($ownTx) $pdo->commit();
+                // ar_void_invoice also voids its credit notes (a credit against a
+                // void invoice is one the account never earned) and RELEASES its
+                // payment allocations, so money paid against it becomes credit on
+                // account instead of vanishing with the void invoice.
+                $v = ar_void_invoice($pdo, $factory, $invId, $reason);
+                $cnVoided = (int) $v['cn_voided'];
 
                 $_SESSION['flash_success'] = 'Invoice voided (its number is kept).'
                     . ($cnVoided > 0
                         ? ' Its ' . $cnVoided . ' credit note' . ($cnVoided === 1 ? ' was' : 's were') . ' voided with it.'
                         : '')
-                    . ' Raise a fresh one if needed.';
+                    . ($v['released'] > 0.004
+                        ? ' £' . number_format($v['released'], 2) . ' already paid against it is now credit on the account — reissue, then "Apply credit" to put it against the new invoice.'
+                        : ' Reissue it from the order row if needed.');
             }
         } catch (Throwable $e) {
             // The void now spans two tables, so a half-done void must not stand.
@@ -266,94 +295,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'cn_raise') {
+        // FULL credit of whatever is left on the invoice (the whole invoice, or the
+        // remainder after earlier part-credits). Part credits: credit-note.php.
+        // ar_create_credit_note refuses once the invoice is fully credited, so a
+        // double press can't raise a second full-value credit note.
         $invId = (int) ($_POST['inv_id'] ?? 0);
-        $reason = trim((string) ($_POST['reason'] ?? '')) ?: null;
+        $reason = trim((string) ($_POST['reason'] ?? ''));
         try {
             if (!$cnReady) throw new RuntimeException('Run /migrate_ar_credit_notes.php first.');
-
-            $iv = $pdo->prepare('SELECT * FROM factory_ar_invoices WHERE id = ? AND factory_client_id = ? LIMIT 1');
-            $iv->execute([$invId, $factory]);
-            $inv = $iv->fetch(PDO::FETCH_ASSOC);
-            if (!$inv) throw new RuntimeException('Invoice not found.');
-            if ($inv['status'] === 'void') throw new RuntimeException('That invoice is void — nothing to credit.');
-
-            // Refuse a second full-value credit note against the same invoice.
-            // Nothing stopped it before, so pressing the button twice raised two
-            // credit notes for the FULL total and left the account showing a
-            // credit balance it had never earned. Void credit notes do not count.
-            $already = $pdo->prepare(
-                "SELECT COALESCE(SUM(total),0) FROM factory_ar_credit_notes
-                  WHERE against_invoice_id = ? AND factory_client_id = ? AND status <> 'void'"
-            );
-            $already->execute([$invId, $factory]);
-            $credited = round((float) $already->fetchColumn(), 2);
-            $invTotal = round((float) $inv['total'], 2);
-            if ($credited >= $invTotal - 0.005) {
-                throw new RuntimeException(
-                    $credited > 0.005
-                        ? 'That invoice is already credited in full (' . number_format($credited, 2)
-                          . ') — void the existing credit note first if it needs redoing.'
-                        : 'That invoice has nothing left to credit.'
-                );
-            }
-
-            $il = $pdo->prepare('SELECT * FROM factory_ar_invoice_lines WHERE invoice_id = ? ORDER BY sort_order, id');
-            $il->execute([$invId]);
-            $invLines = $il->fetchAll(PDO::FETCH_ASSOC);
-            if (!$invLines) throw new RuntimeException('That invoice has no lines to credit.');
-
-            // The credit note carries the ORDER's number (CN-<order>) so it lines up
-            // with its invoice/DN for the account. Fall back to the CN sequence if the
-            // invoice has no order link.
-            $cnQuoteId = 0;
-            try {
-                $qo = $pdo->prepare('SELECT quote_id FROM factory_ar_invoice_orders WHERE invoice_id = ? LIMIT 1');
-                $qo->execute([$invId]);
-                $cnQuoteId = (int) $qo->fetchColumn();
-            } catch (Throwable $e) { $cnQuoteId = 0; }
-
-            $pdo->beginTransaction();
-
-            $cnId = 0; $num = '';
-            for ($try = 1; $try <= 3; $try++) {
-                $num = $cnQuoteId > 0
-                    ? ar_order_doc_number($pdo, $factory, $cnQuoteId, 'CN', 'factory_ar_credit_notes', 'cn_number')
-                    : ar_next_number($pdo, $factory, 'CN', 'factory_ar_credit_notes', 'cn_number');
-                try {
-                    $ins = $pdo->prepare(
-                        "INSERT INTO factory_ar_credit_notes
-                           (factory_client_id, account_client_id, cn_number, against_invoice_id, status, issue_date,
-                            reason, vat_percent, subtotal, vat, total, settle_mode, bill_to_snapshot, created_by)
-                         VALUES (?, ?, ?, ?, 'issued', CURDATE(), ?, ?, ?, ?, ?, 'credit', ?, ?)"
-                    );
-                    $ins->execute([
-                        $factory, (int) $inv['account_client_id'], $num, $invId, $reason,
-                        (float) $inv['vat_percent'], (float) $inv['subtotal'], (float) $inv['vat'], (float) $inv['total'],
-                        $inv['bill_to_snapshot'], (int) ($user['user_id'] ?? 0) ?: null,
-                    ]);
-                    $cnId = (int) $pdo->lastInsertId();
-                    break;
-                } catch (PDOException $e) {
-                    if ($e->getCode() === '23000' && $try < 3) continue;
-                    throw $e;
-                }
-            }
-
-            $insL = $pdo->prepare(
-                "INSERT INTO factory_ar_credit_note_lines
-                   (credit_note_id, source_invoice_line_id, description, width_mm, drop_mm, quantity, unit_net, line_net, sort_order)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            $so = 0;
-            foreach ($invLines as $l) {
-                $insL->execute([
-                    $cnId, (int) $l['id'], $l['description'], $l['width_mm'], $l['drop_mm'],
-                    (int) $l['quantity'], (float) $l['unit_net'], (float) $l['line_net'], $so++,
-                ]);
-            }
-
-            $pdo->commit();
-            $_SESSION['flash_success'] = 'Credit note ' . $num . ' raised against ' . $inv['inv_number'] . ' (£' . number_format((float) $inv['total'], 2) . ').';
+            $cn = ar_create_credit_note($pdo, $factory, $invId, [], $reason, 'credit', (int) ($user['user_id'] ?? 0));
+            $_SESSION['flash_success'] = 'Credit note ' . $cn['number'] . ' raised (£' . number_format($cn['total'], 2) . '). Email it from the order row.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not raise credit note: ' . $e->getMessage();
@@ -361,11 +312,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
+    if ($action === 'cn_send') {
+        $cnId = (int) ($_POST['cn_id'] ?? 0);
+        $sent = ar_send_credit_note($pdo, $factory, $cnId);
+        $_SESSION[$sent['ok'] ? 'flash_success' : 'flash_error'] = $sent['message'];
+        header('Location: /master-admin/wholesale.php'); exit;
+    }
+
     if ($action === 'cn_void') {
         $cnId = (int) ($_POST['cn_id'] ?? 0);
         try {
+            $g = $pdo->prepare('SELECT against_invoice_id FROM factory_ar_credit_notes WHERE id = ? AND factory_client_id = ? LIMIT 1');
+            $g->execute([$cnId, $factory]);
+            $againstId = (int) $g->fetchColumn();
             $pdo->prepare("UPDATE factory_ar_credit_notes SET status = 'void', voided_at = NOW() WHERE id = ? AND factory_client_id = ? AND status <> 'void'")
                 ->execute([$cnId, $factory]);
+            // The invoice it credited is open again (was settled by the credit).
+            if ($againstId > 0) ar_recompute_invoice_paid($pdo, $againstId);
             $_SESSION['flash_success'] = 'Credit note voided.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not void credit note: ' . $e->getMessage();
@@ -469,10 +432,30 @@ foreach ($invoices as $inv) {
     if ($oid) $invByOrder[$oid][] = $inv;
 }
 $cnByInvoice = [];
+$creditedBy  = [];   // invoice id → Σ live credit-note totals
 foreach ($creditNotes as $cn) {
     $iid = (int) ($cn['against_invoice_id'] ?? 0);
-    if ($iid) $cnByInvoice[$iid][] = $cn;
+    if ($iid) {
+        $cnByInvoice[$iid][] = $cn;
+        if ($cn['status'] !== 'void') $creditedBy[$iid] = round(($creditedBy[$iid] ?? 0) + (float) $cn['total'], 2);
+    }
 }
+/** Is this invoice fully credited (credit notes ≥ its total)? */
+$fullyCredited = static function (array $iv) use ($creditedBy): bool {
+    return ($creditedBy[(int) $iv['id']] ?? 0) >= round((float) $iv['total'], 2) - 0.005 && (float) $iv['total'] > 0.005;
+};
+/** Pill for an invoice, aware of credit notes (a fully credited invoice reads "Credited"). */
+$invPillFor = static function (array $iv) use ($invPill, $fullyCredited, $creditedBy): array {
+    if ($iv['status'] !== 'void' && $fullyCredited($iv)) return ['Credited', '#6b21a8', '#f3e8ff'];
+    [$l, $f, $b] = $invPill((string) $iv['status']);
+    if ($iv['status'] !== 'void' && ($creditedBy[(int) $iv['id']] ?? 0) > 0.005) $l .= ' · part credited';
+    return [$l, $f, $b];
+};
+/** Lines still editable (draft/raised, never sent, nothing paid, no live credit)? */
+$invEditable = static function (array $iv) use ($creditedBy): bool {
+    return in_array($iv['status'], ['draft', 'raised'], true) && empty($iv['sent_at'])
+        && (float) ($iv['amount_paid'] ?? 0) <= 0.004 && ($creditedBy[(int) $iv['id']] ?? 0) <= 0.005;
+};
 
 // TWO-step (print the note, raise the invoice yourself) is the default. One-step
 // invoices off the back of printing, which does not survive how the office
@@ -497,15 +480,17 @@ $liveInvoiceFor = static function (int $qid) use ($invByOrder) {
  * Derive an order's lifecycle stage from the documents raised against it.
  * Returns [key, label, textColour, bgColour] — drives the status pill + row tint.
  */
-$orderStage = static function (int $qid) use ($dnByOrder, $liveInvoiceFor, $cnByInvoice): array {
+$orderStage = static function (int $qid) use ($dnByOrder, $liveInvoiceFor, $fullyCredited, $invByOrder): array {
     if ($iv = $liveInvoiceFor($qid)) {
-        foreach ($cnByInvoice[(int) $iv['id']] ?? [] as $cn) {
-            if ($cn['status'] !== 'void') return ['credited', 'Credited', '#6b21a8', '#f3e8ff'];
-        }
+        if ($fullyCredited($iv))      return ['credited', 'Credited', '#6b21a8', '#f3e8ff'];
         if ($iv['status'] === 'paid') return ['paid',     'Paid',     '#065f46', '#d1fae5'];
-        if ($iv['status'] === 'sent') return ['invoiced', 'Invoiced', '#1e40af', '#dbeafe'];
+        if (in_array($iv['status'], ['sent', 'part_paid'], true) || !empty($iv['sent_at'])) {
+            return ['invoiced', 'Invoiced', '#1e40af', '#dbeafe'];
+        }
         return ['inv_raised', 'Invoiced (draft)', '#92400e', '#fef3c7'];
     }
+    // Only void invoices → needs reissuing.
+    if (!empty($invByOrder[$qid])) return ['inv_void', 'Invoice void', '#6b7280', '#e5e7eb'];
     $delivered = false; $draft = false;
     foreach ($dnByOrder[$qid] ?? [] as $dn) {
         if ($dn['status'] === 'dispatched') $delivered = true;
@@ -666,6 +651,7 @@ $activeNav = 'wholesale';
                                     <option value="ordered">Ordered</option>
                                     <option value="dn_draft">DN draft</option>
                                     <option value="delivered">Delivered</option>
+                                    <option value="inv_void">Invoice void</option>
                                     <option value="inv_raised">Invoiced (draft)</option>
                                     <option value="invoiced">Invoiced</option>
                                     <option value="paid">Paid</option>
@@ -695,6 +681,10 @@ $activeNav = 'wholesale';
                             foreach ($dns as $d) { if ($d['status'] === 'dispatched') { $dnDispatched = true; break; } }
                             $dnDraftLive = ($liveDn && $liveDn['status'] === 'draft');
                             $hasDocs = $dns || $ivs;
+                            // Newest void invoice (ivs are newest-first) — offered for reissue
+                            // when the order has no live invoice.
+                            $voidInv = null;
+                            if (!$liveInv) { foreach ($ivs as $x) { if ($x['status'] === 'void') { $voidInv = $x; break; } } }
                         ?>
                             <tr class="wh-row" data-order="<?= e(strtolower($ordNo)) ?>" data-account="<?= e(strtolower((string) $o['account_name'])) ?>" data-status="<?= e($sKey) ?>">
                                 <td style="border-left-color:<?= $sFg ?>">
@@ -707,7 +697,15 @@ $activeNav = 'wholesale';
                                 <td class="wh-money"><?= $money($o['wholesale_total']) ?></td>
                                 <td><span class="wh-pill" style="background:<?= $sBg ?>;color:<?= $sFg ?>"><?= e($sLbl) ?></span></td>
                                 <td style="text-align:right;white-space:nowrap">
-                                    <?php if ($autoInvoice): ?>
+                                    <?php if ($voidInv && $invReady): /* voided, nothing live → reissue */ ?>
+                                        <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="_action" value="inv_raise">
+                                            <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                            <input type="hidden" name="reissue_of" value="<?= (int) $voidInv['id'] ?>">
+                                            <button type="submit" class="btn btn-primary btn-sm">Reissue invoice</button>
+                                        </form>
+                                    <?php elseif ($autoInvoice): ?>
                                         <?php if (!$liveInv): ?>
                                             <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
                                                 <?= csrf_field() ?>
@@ -741,11 +739,11 @@ $activeNav = 'wholesale';
                                                 <button type="submit" class="btn btn-primary btn-sm" <?= $invReady ? '' : 'disabled' ?>>Raise invoice</button>
                                             </form>
                                         <?php elseif ($liveInv && $liveInv['status'] === 'raised'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary" data-confirm="Email invoice <?= e((string) $liveInv['inv_number']) ?> to <?= e((string) $o['account_name']) ?>?">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="_action" value="inv_send">
                                                 <input type="hidden" name="inv_id" value="<?= (int) $liveInv['id'] ?>">
-                                                <button type="submit" class="btn btn-primary btn-sm">Mark sent</button>
+                                                <button type="submit" class="btn btn-primary btn-sm">Send (email)</button>
                                             </form>
                                         <?php elseif ($liveInv): ?>
                                             <a class="wh-link" href="/master-admin/invoice-pdf.php?id=<?= (int) $liveInv['id'] ?>" target="_blank">Invoice PDF</a>
@@ -783,45 +781,77 @@ $activeNav = 'wholesale';
                                             </div>
                                         <?php endforeach; ?>
 
-                                        <?php foreach ($ivs as $iv): [$il, $if, $ib] = $invPill((string) $iv['status']); ?>
+                                        <?php foreach ($ivs as $iv):
+                                            [$il, $if, $ib] = $invPillFor($iv);
+                                            $ivVoid   = $iv['status'] === 'void';
+                                            $ivLeft   = round((float) $iv['total'] - ($creditedBy[(int) $iv['id']] ?? 0), 2);
+                                        ?>
                                             <div class="wh-doc">
                                                 <span class="wh-dnum"><?= e((string) $iv['inv_number']) ?></span>
                                                 <span class="wh-pill" style="background:<?= $ib ?>;color:<?= $if ?>"><?= e($il) ?></span>
                                                 <span class="wh-money" style="min-width:5rem"><?= $money($iv['total']) ?></span>
                                                 <a class="wh-link" href="/master-admin/invoice-pdf.php?id=<?= (int) $iv['id'] ?>" target="_blank">View / print</a>
-                                                <?php if ($iv['status'] === 'raised'): ?>
-                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
+                                                <?php if (!$ivVoid && $invEditable($iv)): ?>
+                                                    <a class="wh-link" href="/master-admin/invoice-edit.php?id=<?= (int) $iv['id'] ?>">Edit lines / carriage</a>
+                                                <?php endif; ?>
+                                                <?php if (in_array($iv['status'], ['draft', 'raised'], true)): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Email invoice <?= e((string) $iv['inv_number']) ?> to <?= e((string) $o['account_name']) ?>?">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="_action" value="inv_send">
                                                         <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
-                                                        <button type="submit" class="wh-act">Mark sent</button>
+                                                        <button type="submit" class="wh-act">Send (email)</button>
+                                                    </form>
+                                                <?php elseif (!$ivVoid): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Email invoice <?= e((string) $iv['inv_number']) ?> to <?= e((string) $o['account_name']) ?> again?">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="inv_send">
+                                                        <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
+                                                        <button type="submit" class="wh-act">Email again</button>
                                                     </form>
                                                 <?php endif; ?>
-                                                <?php if ($iv['status'] !== 'void' && $iv['status'] !== 'paid'): ?>
-                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Void invoice <?= e((string) $iv['inv_number']) ?>? Its number is kept; raise a fresh invoice to replace it.">
+                                                <?php if (!$ivVoid && $iv['status'] !== 'paid'): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Void invoice <?= e((string) $iv['inv_number']) ?>? Its number is kept; any payment on it becomes credit on the account. Reissue a fresh invoice to replace it.">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="_action" value="inv_void">
                                                         <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
                                                         <button type="submit" class="wh-act danger">Void</button>
                                                     </form>
                                                 <?php endif; ?>
-                                                <?php if ($cnReady && $iv['status'] !== 'void'): ?>
-                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Raise a full credit note for <?= e((string) $iv['inv_number']) ?> (£<?= e(number_format((float) $iv['total'], 2)) ?>)?">
+                                                <?php if ($cnReady && !$ivVoid && $ivLeft > 0.005): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Raise a credit note for <?= e((string) $iv['inv_number']) ?> for everything left on it (£<?= e(number_format($ivLeft, 2)) ?>)?">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="_action" value="cn_raise">
                                                         <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
-                                                        <button type="submit" class="wh-act">Credit note</button>
+                                                        <button type="submit" class="wh-act">Full credit</button>
+                                                    </form>
+                                                    <a class="wh-link" href="/master-admin/credit-note.php?inv_id=<?= (int) $iv['id'] ?>">Part credit&hellip;</a>
+                                                <?php endif; ?>
+                                                <?php if ($ivVoid && $voidInv && (int) $voidInv['id'] === (int) $iv['id']): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="inv_raise">
+                                                        <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                        <input type="hidden" name="reissue_of" value="<?= (int) $iv['id'] ?>">
+                                                        <button type="submit" class="wh-act">Reissue</button>
                                                     </form>
                                                 <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
 
-                                        <?php foreach ($cns as $c): $cvoid = $c['status'] === 'void'; ?>
+                                        <?php foreach ($cns as $c): $cvoid = $c['status'] === 'void'; $cRefund = ($c['settle_mode'] ?? 'credit') === 'refund'; ?>
                                             <div class="wh-doc">
                                                 <span class="wh-dnum"><?= e((string) $c['cn_number']) ?></span>
-                                                <span class="wh-pill" style="background:<?= $cvoid ? '#e5e7eb' : '#f3e8ff' ?>;color:<?= $cvoid ? '#6b7280' : '#6b21a8' ?>"><?= $cvoid ? 'Void' : 'Credit' ?></span>
+                                                <span class="wh-pill" style="background:<?= $cvoid ? '#e5e7eb' : '#f3e8ff' ?>;color:<?= $cvoid ? '#6b7280' : '#6b21a8' ?>"><?= $cvoid ? 'Void' : ($cRefund ? 'Refund' : 'Credit') ?></span>
                                                 <span class="wh-money" style="min-width:5rem">&minus;<?= $money($c['total']) ?></span>
                                                 <a class="wh-link" href="/master-admin/credit-note-pdf.php?id=<?= (int) $c['id'] ?>" target="_blank">View / print</a>
+                                                <?php if (!$cvoid): ?>
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Email credit note <?= e((string) $c['cn_number']) ?> to <?= e((string) $o['account_name']) ?>?">
+                                                        <?= csrf_field() ?>
+                                                        <input type="hidden" name="_action" value="cn_send">
+                                                        <input type="hidden" name="cn_id" value="<?= (int) $c['id'] ?>">
+                                                        <button type="submit" class="wh-act">Email</button>
+                                                    </form>
+                                                <?php endif; ?>
                                                 <?php if (!$cvoid): ?>
                                                     <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Void credit note <?= e((string) $c['cn_number']) ?>?">
                                                         <?= csrf_field() ?>

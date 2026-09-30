@@ -346,7 +346,7 @@ function ar_render_statement(array $ctx, array $data): ?string
         . '<table class="items"><thead><tr>'
         . '<th>Date</th><th>Reference</th><th>Type</th><th class="rt">Charges</th><th class="rt">Payments / credits</th><th class="rt">Balance</th>'
         . '</tr></thead><tbody>' . $rows . '</tbody></table>'
-        . '<table class="due"><tr><td>Balance due</td><td class="rt">' . $money($closing) . '</td></tr></table>'
+        . '<table class="due"><tr><td>' . ($closing < -0.004 ? 'Balance &mdash; in credit' : 'Balance due') . '</td><td class="rt">' . $money(abs($closing)) . ($closing < -0.004 ? ' CR' : '') . '</td></tr></table>'
         . '<div class="foot">'
         . ((string) ($ctx['notes'] ?? '') !== '' ? $e($ctx['notes']) . '<br>' : '')
         . ($bank !== '' ? '<strong>Payment</strong><br>' . $nl2($bank) : '')
@@ -417,13 +417,18 @@ function ar_statement_bm_body(array $ctx, array $data, bool $break = false): str
     // Money paid or credited that is not attached to any invoice above. Shown as
     // its own line so the open items still visibly add up to the total — without
     // it the statement asked for money the account had already sent.
+    // on_account is signed: negative only when refunds paid out exceed the credit.
     $onAcc = round((float) ($data['on_account'] ?? 0), 2);
     if ($onAcc > 0.004) {
         $rows .= '<tr><td colspan="6" class="rt">Less: payments / credits on account</td>'
                . '<td class="rt">-' . $money($onAcc) . '</td></tr>';
+    } elseif ($onAcc < -0.004) {
+        $rows .= '<tr><td colspan="6" class="rt">Add: refunds paid to you</td>'
+               . '<td class="rt">' . $money(-$onAcc) . '</td></tr>';
     }
-    $rows .= '<tr class="tot"><td colspan="6" class="rt">Total outstanding</td>'
-           . '<td class="rt">' . $money($data['total_outstanding'] ?? 0) . '</td></tr>';
+    $totOut = round((float) ($data['total_outstanding'] ?? 0), 2);
+    $rows .= '<tr class="tot"><td colspan="6" class="rt">' . ($totOut < -0.004 ? 'Balance &mdash; in credit' : 'Total outstanding') . '</td>'
+           . '<td class="rt">' . $money(abs($totOut)) . ($totOut < -0.004 ? ' CR' : '') . '</td></tr>';
 
     $a = $data['aging'] ?? [];
     $ageCell = static function ($v) use ($money) {
@@ -450,7 +455,7 @@ function ar_statement_bm_body(array $ctx, array $data, bool $break = false): str
         . '<th class="rt">Amount</th><th class="rt">Paid</th><th class="rt">Outstanding</th>'
         . '</tr></thead><tbody>' . $rows . '</tbody></table>'
         . '<table class="age"><thead><tr>'
-        . '<th class="first">Aged (days overdue)</th><th>Current</th><th>1&ndash;30</th><th>31&ndash;60</th><th>61&ndash;90</th><th>90+</th><th>Total</th>'
+        . '<th class="first">Aged (days overdue)</th><th>Current</th><th>1&ndash;30</th><th>31&ndash;60</th><th>61&ndash;90</th><th>90+</th><th>On account</th><th>Total</th>'
         . '</tr></thead><tbody><tr>'
         . '<td class="first">Outstanding</td>'
         . $ageCell($a['current'] ?? 0)
@@ -458,7 +463,10 @@ function ar_statement_bm_body(array $ctx, array $data, bool $break = false): str
         . $ageCell($a['d60'] ?? 0)
         . $ageCell($a['d90'] ?? 0)
         . $ageCell($a['d90plus'] ?? 0)
-        . '<td>' . $money($a['total'] ?? 0) . '</td>'
+        . '<td>' . (abs((float) ($a['on_account'] ?? 0)) > 0.004
+                ? ((float) $a['on_account'] > 0 ? '-' : '') . $money(abs((float) $a['on_account']))
+                : '&mdash;') . '</td>'
+        . '<td>' . $money(abs((float) ($a['total'] ?? 0))) . ((float) ($a['total'] ?? 0) < -0.004 ? ' CR' : '') . '</td>'
         . '</tr></tbody></table>'
         . '<div class="foot">'
         . ((string) ($ctx['notes'] ?? '') !== '' ? $e($ctx['notes']) . '<br>' : '')

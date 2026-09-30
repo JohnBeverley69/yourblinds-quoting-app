@@ -116,7 +116,7 @@ $emailable  = 0;   // owing accounts with a valid email
 foreach ($accounts as $a) { if (filter_var(trim((string) $a['email']), FILTER_VALIDATE_EMAIL)) $emailable++; }
 
 // Column totals for the footer.
-$tot = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0, 'd90plus' => 0.0, 'total' => 0.0];
+$tot = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0, 'd90plus' => 0.0, 'on_account' => 0.0, 'total' => 0.0];
 foreach ($accounts as $a) {
     foreach ($tot as $k => $_) $tot[$k] = round($tot[$k] + (float) $a['aging'][$k], 2);
 }
@@ -129,6 +129,13 @@ $cell  = static function ($n) use ($money) {
     return (float) $n > 0.004
         ? '<td class="sr-num sr-od">' . $money($n) . '</td>'
         : '<td class="sr-num sr-zero">&mdash;</td>';
+};
+// On-account money (unallocated payments / credits) is shown as a deduction —
+// the Total column is already net of it, so it agrees with the account ledger.
+$onAccCell = static function ($n) use ($money) {
+    $n = (float) $n;
+    if (abs($n) <= 0.004) return '<td class="sr-num sr-zero">&mdash;</td>';
+    return '<td class="sr-num">' . ($n > 0 ? '&minus;' : '+') . $money(abs($n)) . '</td>';
 };
 $fmtD  = static function ($d): string { $t = strtotime((string) $d); return $t ? date('j M Y', $t) : ''; };
 $runQs = 'to=' . urlencode($asAt);
@@ -233,6 +240,7 @@ $activeNav = 'statement-run';
                             <th class="sr-num">31&ndash;60</th>
                             <th class="sr-num">61&ndash;90</th>
                             <th class="sr-num">90+</th>
+                            <th class="sr-num" title="Unallocated payments and credits not tied to an invoice — netted off the total">On account</th>
                             <th class="sr-num">Total</th>
                             <th></th>
                         </tr>
@@ -250,6 +258,7 @@ $activeNav = 'statement-run';
                                 <?= $cell($ag['d60']) ?>
                                 <?= $cell($ag['d90']) ?>
                                 <?= $cell($ag['d90plus']) ?>
+                                <?= $onAccCell($ag['on_account'] ?? 0) ?>
                                 <td class="sr-num" style="font-weight:700"><?= $money($ag['total']) ?></td>
                                 <td class="sr-num"><a href="/master-admin/statement-run-pdf.php?account_id=<?= (int) $a['account_id'] ?>&amp;<?= e($runQs) ?>" target="_blank" rel="noopener">Statement PDF</a></td>
                             </tr>
@@ -261,6 +270,7 @@ $activeNav = 'statement-run';
                             <td class="sr-num"><?= $money($tot['d60']) ?></td>
                             <td class="sr-num"><?= $money($tot['d90']) ?></td>
                             <td class="sr-num"><?= $money($tot['d90plus']) ?></td>
+                            <?= $onAccCell($tot['on_account']) ?>
                             <td class="sr-num"><?= $money($tot['total']) ?></td>
                             <td></td>
                         </tr>
