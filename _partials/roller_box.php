@@ -72,7 +72,7 @@ if (!function_exists('roller_box_sources')) {
             'Multi-blind fascia' => [
                 'order:fascia_grp'        => 'Fascia group (A · 2 of 3)',
                 'order:fascia_total'      => 'Fascia width — whole opening',
-                'order:fascia_cut_shared' => 'Fascia cut (multi-blind: carrier only, others “On label N”)',
+                'order:fascia_cut_shared' => 'Fascia cut (multi-blind: carrier only, others “See #N”)',
             ],
             'Cut sizes (computed)' => [
                 'var:Tube_Cut'     => 'Tube cut',

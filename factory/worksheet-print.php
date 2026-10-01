@@ -591,10 +591,10 @@ $rollBlinds   = $renumberRun($rollBlinds);
 $diecutBlinds = $renumberRun($diecutBlinds);
 
 // Multi-blind fascia (several rollers sharing one fascia). Each label gets:
-//   order:fascia_grp        "Fascia A · 2 of 3" — which blinds go together
+//   order:fascia_grp        "A · 2 of 3" — which blinds go together
 //   order:fascia_total      the whole opening's fascia width (every member)
 //   order:fascia_cut_shared the fascia cut on the CARRIER only; every other
-//                           member says "On label N" so it's cut once.
+//                           member says "See #N" (the carrier label) so it's cut once.
 // Carrier = the member carrying the typed Fascia width (that's where the
 // order save puts it), else the one with a real fascia, else the first.
 // On a blind that isn't in a 2+ group the first two are blank and the cut is
@@ -638,11 +638,11 @@ $applyFasciaGroups = static function (array $group): array {
             if (($g['fascia_group'] ?? '') !== $tag) continue;
             $pos = array_search($byItem[(int) $g['item_id']], $idx, true) + 1;
             $isCarrier = ((int) $g['item_id'] === (int) $group[$carrier]['item_id']);
-            $g['ctx']['fascia_grp']   = 'Fascia ' . $tag . ' · ' . $pos . ' of ' . $n;
+            $g['ctx']['fascia_grp']   = $tag . ' · ' . $pos . ' of ' . $n;
             $g['ctx']['fascia_total'] = $total > 0 ? $tidy($total) : '';
             $g['ctx']['fascia_cut_shared'] = $isCarrier
                 ? $cutTxt
-                : ($carrierLabel !== '' ? 'On label ' . $carrierLabel : 'On blind ' . $carrierPos . ' of ' . $tag);
+                : ($carrierLabel !== '' ? 'See #' . $carrierLabel : 'See ' . $tag . ' ' . $carrierPos);
         }
         unset($g);
     }
