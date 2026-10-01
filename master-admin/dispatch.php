@@ -208,6 +208,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ex->execute([$qid, $factory]);
             $dnId = (int) $ex->fetchColumn();
 
+            if ($dnId > 0) {
+                // A note that hasn't gone out yet picks up the account's CURRENT
+                // ship-to, so a delivery address set after it was first raised
+                // still lands on the reprint. Dispatched notes keep their snapshot.
+                $ac = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
+                $ac->execute([$accountId]);
+                $addr = ar_account_delivery_block($pdo, $ac->fetch(PDO::FETCH_ASSOC) ?: []);
+                $pdo->prepare(
+                    "UPDATE factory_ar_delivery_notes SET delivery_address = ?
+                      WHERE id = ? AND status = 'draft'"
+                )->execute([$addr !== '' ? $addr : null, $dnId]);
+            }
+
             if ($dnId === 0) {
                 $dn   = ar_create_delivery_note($pdo, $factory, $qid, $accountId, (int) ($user['user_id'] ?? 0), false);
                 $dnId = (int) ($dn['id'] ?? 0);
