@@ -99,6 +99,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             county = ?, postcode = ?
                       WHERE id = ?'
                 )->execute($params);
+                // Alternative delivery address — the same client_settings field the
+                // account sees in its own Settings ("where suppliers ship to") and the
+                // one delivery notes already prefer over the main address. Blank =
+                // deliver to the main address.
+                $delivery = trim(str_replace(["\r\n", "\r"], "\n", (string) ($_POST['delivery_address'] ?? '')));
+                $pdo->prepare(
+                    'INSERT INTO client_settings (client_id, supplier_delivery_address)
+                     VALUES (?, ?)
+                     ON DUPLICATE KEY UPDATE supplier_delivery_address = VALUES(supplier_delivery_address)'
+                )->execute([$clientId, $delivery !== '' ? mb_substr($delivery, 0, 1000) : null]);
                 // If we just renamed our OWN client, refresh the session copy.
                 if ($clientId === $myClient) $_SESSION['company_name'] = $company;
                 $_SESSION['flash_success'] = 'Account details saved.';
@@ -543,6 +553,13 @@ $st = $pdo->prepare($sel);
 $st->execute([$clientId]);
 $acc = $st->fetch(PDO::FETCH_ASSOC);
 
+$deliveryAddress = '';
+try {
+    $ds = $pdo->prepare('SELECT supplier_delivery_address FROM client_settings WHERE client_id = ? LIMIT 1');
+    $ds->execute([$clientId]);
+    $deliveryAddress = (string) ($ds->fetchColumn() ?: '');
+} catch (Throwable $e) { $deliveryAddress = ''; }
+
 if (!$acc) {
     http_response_code(404);
     echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
@@ -759,7 +776,7 @@ $activeNav = 'trade-accounts';
         @media (max-width:720px){ .ta-form-grid { grid-template-columns:1fr; } }
         .ta-form-grid .full { grid-column:1 / -1; }
         .ta-form-grid label { display:block; font-size:0.75rem; font-weight:600; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:0.25rem; }
-        .ta-form-grid input { width:100%; box-sizing:border-box; padding:0.5rem 0.7rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); }
+        .ta-form-grid input, .ta-form-grid textarea { width:100%; box-sizing:border-box; padding:0.5rem 0.7rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); }
         .ta-counts { display:flex; gap:1.25rem; flex-wrap:wrap; color:var(--text-muted); font-size:0.9375rem; margin:0 0 0.25rem; }
         .ta-counts b { color:var(--text-primary); }
         .login-card { border:1px solid var(--border); border-radius:10px; background:var(--bg-card); padding:0.75rem 0.9rem; margin:0 0 0.6rem; }
@@ -875,6 +892,14 @@ $activeNav = 'trade-accounts';
                     <div>
                         <label for="postcode">Postcode</label>
                         <input id="postcode" name="postcode" type="text" maxlength="20" value="<?= e((string) ($acc['postcode'] ?? '')) ?>">
+                    </div>
+                    <div class="full">
+                        <label for="delivery_address">Delivery address <span style="font-weight:400;color:var(--text-faint)">(if different &mdash; leave blank to deliver to the address above)</span></label>
+                        <textarea id="delivery_address" name="delivery_address" rows="4" maxlength="1000"
+                                  placeholder="Site / warehouse name&#10;Street&#10;Town&#10;Postcode"><?= e($deliveryAddress) ?></textarea>
+                        <div class="ui-hint" style="font-size:0.8rem;color:var(--text-faint);margin-top:0.25rem">
+                            Printed on this account's delivery notes &mdash; the same address the account sees in its own Settings.
+                        </div>
                     </div>
                 </div>
                 <div class="form-actions" style="margin-top:1rem">
