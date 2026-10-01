@@ -315,6 +315,34 @@ if ($hasTable && $productId > 0) {
     } catch (Throwable $e) { /* ignore */ }
 }
 
+// Every worksheet in this factory, for "Copy layout from…" — start a new
+// product's worksheet (e.g. Head Rail Only) from an existing one instead of
+// rebuilding it field by field. Copying only fills the editor; nothing is
+// written until Save.
+$copySources = [];
+if ($hasTable) {
+    try {
+        $cs = $pdo->prepare(
+            'SELECT t.id, t.name, t.layout_json, p.name AS product_name
+               FROM worksheet_templates t
+               JOIN products p ON p.id = t.product_id
+              WHERE p.client_id = ?
+              ORDER BY p.name, t.is_default DESC, t.name'
+        );
+        $cs->execute([$MASTER]);
+        foreach ($cs->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $lay = json_decode((string) $r['layout_json'], true);
+            if (!is_array($lay)) continue;
+            $copySources[] = [
+                'id'      => (int) $r['id'],
+                'product' => (string) $r['product_name'],
+                'name'    => (string) $r['name'],
+                'layout'  => $lay,
+            ];
+        }
+    } catch (Throwable $e) { /* copy list is optional */ }
+}
+
 $templateId = (int) ($_GET['template_id'] ?? 0);
 $current = null;
 foreach ($templates as $t) { if ((int) $t['id'] === $templateId) $current = $t; }
@@ -378,6 +406,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     .ws-flash { padding:0.7rem 1rem; border-radius:10px; margin:0 0 1.2rem; font-size:0.9375rem; }
     .ws-flash.ok  { background:#dcfce7; color:#166534; border:1px solid #86efac; }
     .ws-flash.err { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+    .ws-flash.warn { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
     .ws-card { background:var(--bg-card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:1.1rem 1.25rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); margin-bottom:1rem; }
     select, input[type=text], textarea { font:inherit; border:1px solid var(--border-strong,#cbd5e1); border-radius:8px; padding:0.4rem 0.55rem; background:var(--bg-input,#fff); color:inherit; }
     .btn { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:0.5rem 1rem; }
@@ -555,7 +584,15 @@ require __DIR__ . '/../_partials/factory_head.php';
         </select>
     </form>
     <?php endif; ?>
-    <button type="button" class="btn ghost" id="new-tpl">+ New template</button>
+    <button type="button" class="btn ghost" id="new-tpl" title="Start another worksheet for THIS product. Your saved templates are untouched — nothing is saved until you click Save worksheet.">+ New template</button>
+    <?php if ($copySources): ?>
+    <select id="copy-from" title="Fill the editor with another worksheet's layout. Nothing is saved until you click Save worksheet." style="font:inherit; padding:0.3rem 0.4rem;">
+        <option value="">Copy layout from…</option>
+        <?php foreach ($copySources as $c): ?>
+            <option value="<?= $c['id'] ?>"><?= e($c['product'] . ' — ' . $c['name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <?php endif; ?>
 </div>
 <p class="ws-sub">Lay out the shop-floor worksheet: an <strong>order header</strong>, then a set of <strong>labels per blind</strong> (e.g. a cutting label and a fabric label). Drop fields onto a label — a build variable (<code>H_Cut</code>), an order detail, free text or a barcode — and set each field's printed caption and whether it shows. This is the flexibility Blind Matrix never gave you.</p>
 
@@ -567,6 +604,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php elseif (!$products): ?>
     <div class="ws-flash err">No products found for this factory.</div>
 <?php else: ?>
+
+<div class="ws-flash warn" id="unsaved-new" style="display:none;"></div>
 
 <div class="ws-layout">
 <div class="ws-card">
@@ -677,6 +716,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     var PRODUCT_OPTIONS = <?= json_encode($jsProductOptions, $jsonFlags) ?>;
     var SAMPLES     = <?= json_encode($jsSamples, $jsonFlags) ?>;
     var LAYOUT      = <?= json_encode($currentLayout, $jsonFlags) ?>;
+    var COPY_SOURCES = <?= json_encode($copySources, $jsonFlags) ?>;
+    var PRODUCT_NAME = <?= json_encode($productName, $jsonFlags) ?>;
+    var HAS_TEMPLATES = <?= $templates ? 'true' : 'false' ?>;
 
     // Available field sources, grouped, for the add-field / source dropdowns.
     var SOURCES = [];
@@ -1084,11 +1126,51 @@ require __DIR__ . '/../_partials/factory_head.php';
     });
 
     document.getElementById('new-tpl').addEventListener('click', function () {
+        if (isDirty() && !confirm('You have unsaved changes on this worksheet. Start a new template and lose them?')) return;
+        var name = prompt('Name for the new worksheet template (for ' + PRODUCT_NAME + '):', 'New worksheet');
+        if (name === null) return;
+        name = name.trim() || 'New worksheet';
         document.getElementById('f-tid').value = '0';
-        document.getElementById('tpl-name').value = 'New worksheet';
+        document.getElementById('tpl-name').value = name;
         STATE = { stock: 'a4-diecut', qr: 12, header: { w: 170, h: 22, fields: [] }, labels: [] };
-        render(); refreshQrInput();
+        var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = false;
+        var st = document.getElementById('tpl-stock'); if (st) st.value = 'a4-diecut';
+        ensureSizes(); render(); refreshQrInput();
+        LOADED_FIELD_COUNT = 0;   // a brand-new template has nothing to clobber
+        showUnsavedBanner();
     });
+
+    // Copy layout from another worksheet (any product). Fills the editor only —
+    // the template you're on (or a new one, if this product has none) gets the
+    // layout when you Save. Fields whose source this product doesn't offer are
+    // listed, since they'd print blank.
+    (function () {
+        var sel = document.getElementById('copy-from');
+        if (!sel) return;
+        sel.addEventListener('change', function () {
+            var id = +sel.value; sel.value = '';
+            var src = null;
+            COPY_SOURCES.forEach(function (c) { if (c.id === id) src = c; });
+            if (!src) return;
+            sync();
+            if (countFields(STATE) > 0 &&
+                !confirm('Replace the layout in the editor with “' + src.product + ' — ' + src.name + '”?\n\nNothing is saved until you click Save worksheet.')) return;
+            STATE = JSON.parse(JSON.stringify(src.layout));
+            var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = !!STATE.one_per_line;
+            var st = document.getElementById('tpl-stock'); if (st) st.value = (STATE.stock === 'roll-102x76') ? 'roll-102x76' : 'a4-diecut';
+            ensureSizes(); render(); refreshQrInput();
+            var missing = [];
+            function check(fs) { (fs || []).forEach(function (f) {
+                var s = f && f.source;
+                if (!s || s === '__break__' || s === 'text' || s === 'qr' || s.indexOf('barcode:') === 0) return;
+                if (!(s in srcLabel) && missing.indexOf(s) < 0) missing.push(s);
+            }); }
+            if (STATE.header) check(STATE.header.fields);
+            (STATE.labels || []).forEach(function (l) { check(l.fields); });
+            showUnsavedBanner('Copied from “' + esc(src.product + ' — ' + src.name) + '”. ' +
+                (missing.length ? missing.length + ' field(s) use a source ' + esc(PRODUCT_NAME) + ' doesn’t have (' + esc(missing.join(', ')) + ') and will print blank — remove or swap them. ' : ''));
+        });
+    })();
 
     // ---- Live preview (sample data) + drag-to-reorder on the label --------
     function valueFor(f) {
@@ -1380,6 +1462,48 @@ require __DIR__ . '/../_partials/factory_head.php';
     }
     var LOADED_FIELD_COUNT = countFields(LAYOUT);
 
+    // Unsaved-changes tracking: a snapshot of everything Save would send, taken
+    // once the page has rendered. Leaving the page (switching product/template,
+    // closing the tab) with a different snapshot gets the browser's "leave
+    // site?" warning — the way a layout was once lost without being saved.
+    function snapshot() {
+        sync();
+        return JSON.stringify([
+            STATE,
+            document.getElementById('tpl-name').value,
+            document.getElementById('tpl-default').checked,
+            !!(document.getElementById('tpl-oneline') || {}).checked,
+            document.getElementById('f-tid').value
+        ]);
+    }
+    var CLEAN = null, LEAVING_OK = false;
+    function isDirty() {
+        if (CLEAN === null) return false;
+        if (document.getElementById('f-tid').value === '0' && countFields(STATE) > 0) return true;
+        return snapshot() !== CLEAN;
+    }
+    window.addEventListener('beforeunload', function (e) {
+        if (LEAVING_OK || !isDirty()) return;
+        e.preventDefault(); e.returnValue = '';
+    });
+
+    // Banner while the editor holds something not saved yet — a new template,
+    // a copied layout, or a product that has no worksheet at all.
+    function showUnsavedBanner(extra) {
+        var b = document.getElementById('unsaved-new');
+        if (!b) return;
+        var msg = extra || '';
+        if (document.getElementById('f-tid').value === '0') {
+            msg += '<strong>Not saved yet</strong> — this is a new template for ' + esc(PRODUCT_NAME) + '. ' +
+                   (HAS_TEMPLATES ? 'Your existing templates are untouched. ' : 'This product has no saved worksheet yet. ') +
+                   'Click <strong>Save worksheet</strong> to keep it.';
+        } else {
+            msg += 'Click <strong>Save worksheet</strong> to keep it — until then the saved template is unchanged.';
+        }
+        b.innerHTML = msg;
+        b.style.display = '';
+    }
+
     document.getElementById('save-form').addEventListener('submit', function (e) {
         sync();
         // Client-side clobber guard: if the layout loaded with fields but is now
@@ -1399,12 +1523,13 @@ require __DIR__ . '/../_partials/factory_head.php';
         document.getElementById('f-default').value = document.getElementById('tpl-default').checked ? '1' : '';
         STATE.one_per_line = !!(document.getElementById('tpl-oneline') || {}).checked;
         document.getElementById('payload').value = JSON.stringify(STATE);
+        LEAVING_OK = true;
     });
 
     <?php if ($templateId > 0): ?>
     var delBtn = document.getElementById('del-btn');
     if (delBtn) delBtn.addEventListener('click', function () {
-        if (confirm('Delete this worksheet template?')) document.getElementById('del-form').submit();
+        if (confirm('Delete this worksheet template?')) { LEAVING_OK = true; document.getElementById('del-form').submit(); }
     });
     <?php endif; ?>
 
@@ -1453,6 +1578,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     render();
     refreshQrInput();
     (function () { var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = !!STATE.one_per_line; })();
+    CLEAN = snapshot();
+    if (!HAS_TEMPLATES) showUnsavedBanner();
 })();
 </script>
 <?php endif; ?>
