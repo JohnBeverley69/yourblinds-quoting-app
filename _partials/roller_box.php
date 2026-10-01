@@ -48,6 +48,7 @@ if (!function_exists('roller_box_sources')) {
                 'order:name_cell'   => 'Customer name',
                 'order:order_cell'  => 'Order no + ref',
                 'order:order_no'    => 'Order number',
+                'order:order_date'  => 'Order date',
                 'order:cust_ref'    => 'Customer ref',
                 'order:fabric'      => 'Fabric',
                 'order:colour'      => 'Colour',
