@@ -390,6 +390,12 @@ foreach ($lines as $ln) {
             'item_id'  => (int) $ln['id'],
             'unit_no'  => $u,
             'streams'  => $streams,   // ordered stream names for this product
+            // Multi-blind fascia: the group tag (only when 2+ blinds share it),
+            // the typed whole-opening width (the carrier carries it) and the
+            // fascia choice — read by $applyFasciaGroups below.
+            'fascia_group'  => ($lnGroup !== '' && ($fasciaGroupCounts[$lnGroup] ?? 0) >= 2) ? $lnGroup : '',
+            'fascia_typed'  => (float) ($userVal['fascia width'] ?? 0),
+            'fascia_choice' => (string) ($byName['fascia options'] ?? ''),
         ];
     }
 }
@@ -583,6 +589,59 @@ $renumberRun = static function (array $group): array {
 };
 $rollBlinds   = $renumberRun($rollBlinds);
 $diecutBlinds = $renumberRun($diecutBlinds);
+
+// Multi-blind fascia (several rollers sharing one fascia). Each label gets:
+//   order:fascia_grp        "Fascia A · 2 of 3" — which blinds go together
+//   order:fascia_total      the whole opening's fascia width (every member)
+//   order:fascia_cut_shared the fascia cut on the CARRIER only; every other
+//                           member says "On label N" so it's cut once.
+// Carrier = the member carrying the typed Fascia width (that's where the
+// order save puts it), else the one with a real fascia, else the first.
+// All blank on a blind that isn't in a 2+ group. Run per print run, after
+// renumbering, so "label N" matches the N-of-M printed on the carrier.
+$applyFasciaGroups = static function (array $group): array {
+    $tidy = static fn ($v) => rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
+    $members = [];   // tag => [item_id => first index in $group]
+    foreach ($group as $i => $g) {
+        $tag = (string) ($g['fascia_group'] ?? '');
+        if ($tag === '') continue;
+        $id = (int) ($g['item_id'] ?? 0);
+        if (!isset($members[$tag][$id])) $members[$tag][$id] = $i;
+    }
+    foreach ($members as $tag => $byItem) {
+        $idx = array_values($byItem);
+        $carrier = null;
+        foreach ($idx as $i) { if (($group[$i]['fascia_typed'] ?? 0) > 0) { $carrier = $i; break; } }
+        if ($carrier === null) {
+            foreach ($idx as $i) {
+                $fc = strtolower(trim((string) ($group[$i]['fascia_choice'] ?? '')));
+                if ($fc !== '' && strpos($fc, 'no fascia') === false) { $carrier = $i; break; }
+            }
+        }
+        if ($carrier === null) $carrier = $idx[0];
+        $total   = (float) ($group[$carrier]['fascia_typed'] ?? 0);
+        $cut     = $group[$carrier]['computed']['Fascia_Cut'] ?? '';
+        $cutTxt  = (is_numeric($cut) && (float) $cut > 0) ? $tidy($cut) : '';
+        $carrierLabel = (string) ($group[$carrier]['ctx']['blind_no'] ?? '');
+        $carrierPos   = array_search($carrier, $idx, true) + 1;
+        $n = count($idx);
+        foreach ($group as $i => &$g) {
+            if (($g['fascia_group'] ?? '') !== $tag) continue;
+            $pos = array_search($byItem[(int) $g['item_id']], $idx, true) + 1;
+            $isCarrier = ((int) $g['item_id'] === (int) $group[$carrier]['item_id']);
+            $g['ctx']['fascia_grp']   = 'Fascia ' . $tag . ' · ' . $pos . ' of ' . $n;
+            $g['ctx']['fascia_total'] = $total > 0 ? $tidy($total) : '';
+            $g['ctx']['fascia_cut_shared'] = $isCarrier
+                ? $cutTxt
+                : ($carrierLabel !== '' ? 'On label ' . $carrierLabel : 'On blind ' . $carrierPos . ' of ' . $tag);
+        }
+        unset($g);
+    }
+    return $group;
+};
+$rollBlinds   = $applyFasciaGroups($rollBlinds);
+$diecutBlinds = $applyFasciaGroups($diecutBlinds);
+$rendered     = $applyFasciaGroups($rendered);
 
 $hasRoll   = $rollBlinds   !== [];
 $hasDiecut = $diecutBlinds !== [];

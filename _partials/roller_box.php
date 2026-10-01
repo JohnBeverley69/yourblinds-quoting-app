@@ -69,6 +69,11 @@ if (!function_exists('roller_box_sources')) {
                 'order:fascia_endcaps' => 'Fascia endcaps',
                 'order:fixings_val'    => 'Fixings',
             ],
+            'Multi-blind fascia (blank on a single blind)' => [
+                'order:fascia_grp'        => 'Fascia group (A · 2 of 3)',
+                'order:fascia_total'      => 'Fascia width — whole opening',
+                'order:fascia_cut_shared' => 'Fascia cut — carrier only, others “On label N”',
+            ],
             'Cut sizes (computed)' => [
                 'var:Tube_Cut'     => 'Tube cut',
                 'var:Fabric_W'     => 'Fabric width',
