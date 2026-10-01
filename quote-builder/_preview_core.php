@@ -133,6 +133,7 @@ function qb_preview_response(PDO $pdo, int $clientId, array $q, bool $canCosts, 
                 'blinds'          => array_map(static fn ($b) => [
                     'width_mm'   => $b['width_mm'], 'drop_mm' => $b['drop_mm'], 'is_carrier' => $b['is_carrier'],
                     'sell_price' => $b['sell_price'], 'line_total' => $b['line_total'], 'error' => $b['error'],
+                    'joined'     => $b['joined'] ?? null,   // e.g. "2 × 2000 mm" (joinable fascia)
                 ], $g['blinds']),
             ];
         }
