@@ -1133,7 +1133,8 @@ require __DIR__ . '/../_partials/factory_head.php';
         document.getElementById('f-tid').value = '0';
         document.getElementById('tpl-name').value = name;
         STATE = { stock: 'a4-diecut', qr: 12, header: { w: 170, h: 22, fields: [] }, labels: [] };
-        var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = false;
+        // "One label per line" is left as it is: it belongs to the product (Fabrics
+        // Only is always one Qty-N ticket), so a fresh layout mustn't untick it.
         var st = document.getElementById('tpl-stock'); if (st) st.value = 'a4-diecut';
         ensureSizes(); render(); refreshQrInput();
         LOADED_FIELD_COUNT = 0;   // a brand-new template has nothing to clobber
@@ -1156,7 +1157,9 @@ require __DIR__ . '/../_partials/factory_head.php';
             if (countFields(STATE) > 0 &&
                 !confirm('Replace the layout in the editor with “' + src.product + ' — ' + src.name + '”?\n\nNothing is saved until you click Save worksheet.')) return;
             STATE = JSON.parse(JSON.stringify(src.layout));
-            var ol = document.getElementById('tpl-oneline'); if (ol) ol.checked = !!STATE.one_per_line;
+            // Keep THIS product's "One label per line" — copying a full vertical's
+            // layout onto Fabrics Only must not untick it (that put 135 labels
+            // back on a qty-135 fabric line). Save writes the tick into the layout.
             var st = document.getElementById('tpl-stock'); if (st) st.value = (STATE.stock === 'roll-102x76') ? 'roll-102x76' : 'a4-diecut';
             ensureSizes(); render(); refreshQrInput();
             var missing = [];
