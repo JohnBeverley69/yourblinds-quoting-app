@@ -432,6 +432,9 @@ return [
                         <span class="chkline"><span class="tick">&check;</span>
                           <span>Show above the size fields <small>renders this option (and anything nested under it) before Width / Drop
                           in the quote builder &mdash; e.g. the roller fascia group, so multi-fascia per-blind widths make sense</small></span></span>
+                        <span class="chkline"><span class="tick">&check;</span>
+                          <span>Splits the blind into equal panels <small>each choice&rsquo;s label is the number of panels (e.g. 2, 3, 4). The Width
+                          is shared equally &mdash; 1200 wide &times; 2 panels prices as 2 &times; the grid price at 600 &times; drop</small></span></span>
                         <span class="chkline"><span class="tick on">&check;</span>
                           <span>Active <small>uncheck to hide from quote builder</small></span></span>
                       </div>
@@ -645,7 +648,13 @@ return [
              a required one carries a red <b>*</b>, the dropdown shows <em>&mdash; Select &mdash;</em> until something is picked unless a choice
              is flagged <b>Default</b>, the chosen choice&rsquo;s <b>thumbnail</b> and any <b>number box</b> appear beside it, sub-options slide
              in when their trigger is chosen, and every surcharge lands on the line. <b>Show above the size fields</b> on the option pushes it
-             (and anything nested under it) above <b>Width</b> and <b>Drop</b> &mdash; that is how the roller fascia group works. When you are
+             (and anything nested under it) above <b>Width</b> and <b>Drop</b> &mdash; that is how the roller fascia group works.
+             <b>Splits the blind into equal panels</b> is for a panel-count option such as the PF Shutter&rsquo;s <em>Number of Panels</em>:
+             each choice&rsquo;s label is the number of panels (<em>2</em>, <em>3</em>, <em>4</em>&hellip;), the salesperson types the
+             <b>full</b> width as normal, and the blind is priced as <b>panels &times; the grid price at width &divide; panels</b> &mdash;
+             1200 wide &times; 2 panels is 2 &times; the 600 price; &times; 3 panels is 3 &times; the 400 price (rounded up to your
+             grid&rsquo;s next width, as always). The live price shows <em>&ldquo;2 panels of 600 mm&rdquo;</em> so they can see how it
+             was worked out. Any charge for going multi-panel goes on the choice, as usual. When you are
              done, use <b>&#128065; Live preview</b> on the product page to walk the whole cascade before a salesperson meets it.</p>',
         'script'  => [
             ['0:00', 'The options list: pills, indent, number.',
@@ -663,6 +672,6 @@ return [
             ['2:52', 'A sub-option that waits its turn.',
              'A sub-option is an option that waits its turn. Motor type only appears once Motorised is picked. There are two routes to the same thing: tick the parents under Appears when on the option itself, or use the plus Sub-option link on the choice row, which fills those ticks in for you. Tick several parents and it shows when any one of them is picked; tick none and it is always visible. Then choose: save and open its choices, or save and stay here to add another. A sub-option is a full option, so it can have its own choices, its own prices, and its own sub-options. But do read the warning when you delete one — it takes its choices with it, and it cannot be undone.', 7],
             ['3:24', 'The settings, and what they see.',
-             'Four settings live on the option itself. Required puts the red star on. Allow multiple choices turns the dropdown into tick-boxes, and every ticked choice adds its price. Show above the size fields pushes the option, and anything nested under it, above width and drop, which is how the roller fascia group works. And Active is how you retire an option without deleting it. And here is the result: pick Motorised, and Motor type, the number of brackets box and the picture all slide in — a hundred and thirty-two pounds fifty, the flat charge plus five brackets. Pick Cord, and none of it shows. Use Live preview on the product page to walk the whole thing through before a salesperson ever meets it.', 8],
+             'Five settings live on the option itself. Required puts the red star on. Allow multiple choices turns the dropdown into tick-boxes, and every ticked choice adds its price. Show above the size fields pushes the option, and anything nested under it, above width and drop, which is how the roller fascia group works. Splits the blind into equal panels is for a panel count, like the shutter\'s Number of Panels: name each choice with its number, and the full width is shared equally — twelve hundred wide in two panels is priced as two blinds at six hundred. And Active is how you retire an option without deleting it. And here is the result: pick Motorised, and Motor type, the number of brackets box and the picture all slide in — a hundred and thirty-two pounds fifty, the flat charge plus five brackets. Pick Cord, and none of it shows. Use Live preview on the product page to walk the whole thing through before a salesperson ever meets it.', 8],
         ],
 ];
