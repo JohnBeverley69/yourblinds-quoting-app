@@ -638,6 +638,35 @@ function pe_apply_extra(
 }
 
 /**
+ * The top of an option's family tree: follow parent_choice_id → that choice's
+ * option → its parent… until an option with no parent. "Fascia width" (under
+ * Fascia Sizing, under Fascia Options) and the fascia colours all lead to
+ * "Fascia Options"; the bottom bar leads to "Bottom Bar Options". Used to keep
+ * a width-source override inside its own family. Cached; a loop or missing row
+ * just stops the walk.
+ */
+function pe_extra_root(PDO $pdo, int $extraId): int
+{
+    static $cache = [];
+    if (isset($cache[$extraId])) return $cache[$extraId];
+    $cur = $extraId; $seen = [];
+    try {
+        $st = $pdo->prepare('SELECT pc.product_extra_id
+                               FROM product_extras pe
+                               JOIN product_extra_choices pc ON pc.id = pe.parent_choice_id
+                              WHERE pe.id = ? LIMIT 1');
+        while (!isset($seen[$cur])) {
+            $seen[$cur] = true;
+            $st->execute([$cur]);
+            $up = (int) $st->fetchColumn();
+            if ($up <= 0) break;
+            $cur = $up;
+        }
+    } catch (Throwable $e) { /* no parent columns — the option is its own root */ }
+    return $cache[$extraId] = $cur;
+}
+
+/**
  * Apply a "number-only" option — one with a measurement input and NO choices
  * to pick (e.g. "Distance From Bottom to Handle Centre"). It's purely a spec
  * captured for the supplier docs, so it never affects the price. Returns an
@@ -1356,10 +1385,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     // (e.g. a manual "Fascia width") whose typed value replaces the blind's
     // ordered width for any width-table (extra_choice_price_rows) lookup on this
     // line — so a fascia can be priced wider than the blind. Computed once here
-    // and passed to every pe_apply_extra call. Generic + additive: no flagged
-    // option (or a blank value) leaves $widthOverride null and every lookup on
-    // the ordered width, exactly as before. Try-fallback for pre-migration.
+    // and passed to the pe_apply_extra calls IN ITS OWN OPTION FAMILY only (same
+    // root, see pe_extra_root): the fascia and its colours price at the typed
+    // fascia width, but a bottom bar, chain or motor stays on the blind's own
+    // width — a 4000mm multi-blind fascia once priced the carrier's Unishade
+    // bottom bar at 4000 and errored. No flagged option (or a blank value)
+    // leaves $widthOverride null and every lookup on the ordered width, exactly
+    // as before. Try-fallback for pre-migration.
     $widthOverride = null;
+    $widthSourceRoot = 0;
     $selValById = [];
     foreach ($extras as $sel) {
         $eid = (int) ($sel['extra_id'] ?? 0);
@@ -1373,7 +1407,11 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
             $wsSt = $pdo->prepare("SELECT id FROM product_extras WHERE id IN ($wph) AND is_width_source = 1");
             $wsSt->execute(array_keys($selValById));
             foreach ($wsSt->fetchAll(PDO::FETCH_COLUMN) as $wid) {
-                if (($selValById[(int) $wid] ?? 0) > 0) { $widthOverride = $selValById[(int) $wid]; break; }
+                if (($selValById[(int) $wid] ?? 0) > 0) {
+                    $widthOverride   = $selValById[(int) $wid];
+                    $widthSourceRoot = pe_extra_root($pdo, (int) $wid);
+                    break;
+                }
             }
         } catch (Throwable $e) { /* column absent (pre-migration) → no override */ }
     }
@@ -1403,7 +1441,8 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
 
         $applied = pe_apply_extra(
             $pdo, $clientId, $productId, $systemId, $eid, $cid,
-            $widthMm, $basePrice, $userValue, $dropMm, $forAccountId, $widthOverride
+            $widthMm, $basePrice, $userValue, $dropMm, $forAccountId,
+            ($widthOverride !== null && pe_extra_root($pdo, $eid) === $widthSourceRoot) ? $widthOverride : null
         );
         if (isset($applied['error'])) {
             return ['error' => $applied['error']];
