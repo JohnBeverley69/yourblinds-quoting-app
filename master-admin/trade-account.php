@@ -16,6 +16,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../mailer.php';
 require_once __DIR__ . '/../_partials/verification.php';
+require_once __DIR__ . '/../_partials/delivery_charges.php';
 
 requireSuperAdmin();
 
@@ -109,6 +110,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      VALUES (?, ?)
                      ON DUPLICATE KEY UPDATE supplier_delivery_address = VALUES(supplier_delivery_address)'
                 )->execute([$clientId, $delivery !== '' ? mb_substr($delivery, 0, 1000) : null]);
+                // How their orders go out (carrier / van / collected) and whether
+                // they are ever charged for it — see _partials/delivery_charges.php.
+                if (dc_ready($pdo) && isset($_POST['delivery_method'])) {
+                    dc_save_account_terms($pdo, $clientId, (string) $_POST['delivery_method'], !empty($_POST['no_delivery_charge']));
+                }
                 // If we just renamed our OWN client, refresh the session copy.
                 if ($clientId === $myClient) $_SESSION['company_name'] = $company;
                 $_SESSION['flash_success'] = 'Account details saved.';
@@ -559,6 +565,7 @@ try {
     $ds->execute([$clientId]);
     $deliveryAddress = (string) ($ds->fetchColumn() ?: '');
 } catch (Throwable $e) { $deliveryAddress = ''; }
+$deliveryTerms = dc_account_terms($pdo, $clientId);
 
 if (!$acc) {
     http_response_code(404);
@@ -776,7 +783,7 @@ $activeNav = 'trade-accounts';
         @media (max-width:720px){ .ta-form-grid { grid-template-columns:1fr; } }
         .ta-form-grid .full { grid-column:1 / -1; }
         .ta-form-grid label { display:block; font-size:0.75rem; font-weight:600; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:0.25rem; }
-        .ta-form-grid input, .ta-form-grid textarea { width:100%; box-sizing:border-box; padding:0.5rem 0.7rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); }
+        .ta-form-grid input, .ta-form-grid textarea, .ta-form-grid select { width:100%; box-sizing:border-box; padding:0.5rem 0.7rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); }
         .ta-counts { display:flex; gap:1.25rem; flex-wrap:wrap; color:var(--text-muted); font-size:0.9375rem; margin:0 0 0.25rem; }
         .ta-counts b { color:var(--text-primary); }
         .login-card { border:1px solid var(--border); border-radius:10px; background:var(--bg-card); padding:0.75rem 0.9rem; margin:0 0 0.6rem; }
@@ -901,6 +908,29 @@ $activeNav = 'trade-accounts';
                             Printed on this account's delivery notes &mdash; the same address the account sees in its own Settings.
                         </div>
                     </div>
+                    <?php if (dc_ready($pdo)): ?>
+                    <div>
+                        <label for="delivery_method">Delivery method</label>
+                        <select id="delivery_method" name="delivery_method">
+                            <?php foreach (dc_methods() as $mk => $ml): ?>
+                                <option value="<?= e($mk) ?>"<?= $deliveryTerms['method'] === $mk ? ' selected' : '' ?>><?= e($ml) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="ui-hint" style="font-size:0.8rem;color:var(--text-faint);margin-top:0.25rem">
+                            The usual way their orders go out &mdash; it can be changed for one delivery in the Dispatch tray.
+                        </div>
+                    </div>
+                    <div>
+                        <label>Delivery charge</label>
+                        <label style="display:flex;align-items:center;gap:0.45rem;text-transform:none;letter-spacing:0;font-size:0.9rem;font-weight:500;color:var(--text-primary);margin-top:0.45rem">
+                            <input type="checkbox" name="no_delivery_charge" value="1" style="width:auto"<?= $deliveryTerms['no_charge'] ? ' checked' : '' ?>>
+                            No delivery charge on this account
+                        </label>
+                        <div class="ui-hint" style="font-size:0.8rem;color:var(--text-faint);margin-top:0.25rem">
+                            Otherwise: <?= e(dc_rule_text($deliveryTerms['method'])) ?>. Rules are set on <a href="/master-admin/wholesale.php#delivery-charges">Wholesale</a>.
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <div class="form-actions" style="margin-top:1rem">
                     <button type="submit" class="btn btn-primary">Save details</button>

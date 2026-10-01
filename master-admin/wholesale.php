@@ -249,6 +249,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Auto-invoice-on-dispatch rule: when ON, dispatching an order (floor OR
     // delivery note) also raises & sends its invoice. Default OFF — dispatch just
     // marks the order ready to invoice.
+    // Delivery-charge rules (net threshold + net charge, per method).
+    if ($action === 'delivery_rules') {
+        $in = (array) ($_POST['rules'] ?? []);
+        $ok = dc_save_rules([
+            'carrier' => ['under' => $in['carrier']['under'] ?? 0, 'charge' => $in['carrier']['charge'] ?? 0],
+            'van'     => ['under' => $in['van']['under'] ?? 0,     'charge' => $in['van']['charge'] ?? 0],
+        ]);
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
+            ? 'Delivery charges saved. They apply to deliveries raised from now on.'
+            : "Couldn't save the delivery charges — run /migrate_app_settings.php (super-admin) and try again.";
+        header('Location: /master-admin/wholesale.php#delivery-charges'); exit;
+    }
+
     if ($action === 'auto_dispatch_mode') {
         $on = (string) ($_POST['on'] ?? '') === '1';
         $ok = app_setting_set('auto_invoice_on_dispatch', $on ? '1' : '0');
@@ -604,6 +617,29 @@ $activeNav = 'wholesale';
                     : 'Dispatching an order marks it ready to invoice — you raise the invoice yourself. Turn on once you\'re happy it prices correctly.' ?>
             </span>
         </form>
+
+        <!-- Delivery charges: one rule per method, tested against a whole delivery -->
+        <?php if (dc_ready($pdo)): $dcRules = dc_rules(); ?>
+        <form method="post" action="/master-admin/wholesale.php" class="wh-mode" id="delivery-charges" style="margin-top:0.6rem;align-items:center">
+            <?= csrf_field() ?>
+            <input type="hidden" name="_action" value="delivery_rules">
+            <strong style="font-weight:700">Delivery charges:</strong>
+            <?php foreach (['carrier' => 'Carrier', 'van' => 'Van'] as $mk => $ml): ?>
+                <span style="display:inline-flex;align-items:center;gap:0.3rem;flex-wrap:wrap">
+                    <?= e($ml) ?> £<input type="number" name="rules[<?= $mk ?>][charge]" min="0" step="0.01" style="width:5.5rem"
+                           value="<?= e(number_format($dcRules[$mk]['charge'], 2, '.', '')) ?>" aria-label="<?= e($ml) ?> charge">
+                    + VAT under £<input type="number" name="rules[<?= $mk ?>][under]" min="0" step="0.01" style="width:6.5rem"
+                           value="<?= e(number_format($dcRules[$mk]['under'], 2, '.', '')) ?>" aria-label="<?= e($ml) ?> threshold">
+                </span>
+            <?php endforeach; ?>
+            <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+            <span class="wh-muted" style="font-size:0.8rem">
+                Net values. Collected is always free. The threshold is the whole delivery &mdash; every order going out to
+                an account on the same day by the same method. A charge of £0 switches it off. Set each account's method
+                (or "No delivery charge") on its <a href="/master-admin/trade-accounts.php">account page</a>.
+            </span>
+        </form>
+        <?php endif; ?>
 
         <!-- One order, one row: its whole lifecycle -->
         <section class="section">

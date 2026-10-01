@@ -184,6 +184,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed = [];
     foreach (dispatch_ready_orders($pdo, $factory) as $o) $allowed[(int) $o['id']] = $o;
 
+    // Per-account delivery choices from the tray: method for this delivery, and
+    // the charge (auto = the rule, waive = £0, custom = the amount typed).
+    $dcOn      = dc_ready($pdo);
+    $methodIn  = (array) ($_POST['method'] ?? []);
+    $modeIn    = (array) ($_POST['charge_mode'] ?? []);
+    $amountIn  = (array) ($_POST['charge_amount'] ?? []);
+    $today     = date('Y-m-d');
+    $methodFor = static function (int $acc) use ($pdo, $methodIn): string {
+        $m = (string) ($methodIn[$acc] ?? '');
+        return isset(dc_methods()[$m]) ? $m : dc_account_terms($pdo, $acc)['method'];
+    };
+    $touched = [];   // "acc|date|method" => [acc, date, method] — deliveries to re-work
+
     $notes = [];
     $fac   = [];
     try {
@@ -219,11 +232,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "UPDATE factory_ar_delivery_notes SET delivery_address = ?
                       WHERE id = ? AND status = 'draft'"
                 )->execute([$addr !== '' ? $addr : null, $dnId]);
+
+                // A reprint today can still switch the note's method; a note from an
+                // earlier day stays on the delivery it went out on.
+                if ($dcOn) {
+                    $d = $pdo->prepare('SELECT delivery_date, delivery_method FROM factory_ar_delivery_notes WHERE id = ?');
+                    $d->execute([$dnId]);
+                    $cur = $d->fetch(PDO::FETCH_ASSOC) ?: [];
+                    $curDate = (string) ($cur['delivery_date'] ?? '');
+                    if ($curDate === '' || $curDate === $today) {
+                        $m = $methodFor($accountId);
+                        if ($curDate !== '' && (string) $cur['delivery_method'] !== '') {
+                            $touched["$accountId|$curDate|{$cur['delivery_method']}"] = [$accountId, $curDate, (string) $cur['delivery_method']];
+                        }
+                        $pdo->prepare('UPDATE factory_ar_delivery_notes SET delivery_date = ?, delivery_method = ? WHERE id = ?')
+                            ->execute([$today, $m, $dnId]);
+                        $touched["$accountId|$today|$m"] = [$accountId, $today, $m];
+                    }
+                }
             }
 
             if ($dnId === 0) {
-                $dn   = ar_create_delivery_note($pdo, $factory, $qid, $accountId, (int) ($user['user_id'] ?? 0), false);
+                $m    = $dcOn ? $methodFor($accountId) : null;
+                $dn   = ar_create_delivery_note($pdo, $factory, $qid, $accountId, (int) ($user['user_id'] ?? 0), false, $m);
                 $dnId = (int) ($dn['id'] ?? 0);
+                if ($dcOn && $dnId > 0) $touched["$accountId|$today|$m"] = [$accountId, $today, $m];
             }
             if ($dnId === 0) continue;
 
@@ -273,6 +306,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /master-admin/dispatch.php'); exit;
     }
 
+    // Fix each delivery's charge now the notes are in: the tray's waive / custom
+    // choice goes on every note in today's delivery, then the charge is re-worked
+    // (ar_create_delivery_note already did it once; this covers overrides, method
+    // switches and reprints).
+    if ($dcOn && $touched) {
+        $warn = []; $accName = [];
+        foreach ($allowed as $o) $accName[(int) $o['account_id']] = (string) $o['account_name'];
+        try {
+            foreach ($touched as [$acc, $date, $m]) {
+                if ($date === $today && $m === $methodFor($acc)) {
+                    $mode = (string) ($modeIn[$acc] ?? 'auto');
+                    $ovr  = $mode === 'waive' ? 0.0
+                          : ($mode === 'custom' && is_numeric($amountIn[$acc] ?? null) ? max(0, round((float) $amountIn[$acc], 2)) : null);
+                    $pdo->prepare(
+                        "UPDATE factory_ar_delivery_notes SET carriage_override = ?
+                          WHERE factory_client_id = ? AND account_client_id = ? AND delivery_date = ?
+                            AND delivery_method = ? AND status <> 'cancelled'"
+                    )->execute([$ovr, $factory, $acc, $date, $m]);
+                }
+                $r = dc_recalc_delivery($pdo, $factory, $acc, $date, $m);
+                if ($r['warning'] !== '') $warn[] = ($accName[$acc] ?? 'Account') . ': ' . $r['warning'];
+            }
+        } catch (Throwable $e) {
+            $warn[] = 'delivery charges could not be worked out (' . $e->getMessage() . ')';
+        }
+        if ($warn) $_SESSION['flash_error'] = 'Delivery charge: ' . implode(' · ', $warn);
+    }
+
     if (!$notes) {
         $_SESSION['flash_error'] = 'Nothing to print — those orders are no longer ready.';
         header('Location: /master-admin/dispatch.php'); exit;
@@ -294,6 +355,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $ready     = $dnReady ? dispatch_ready_orders($pdo, $factory) : [];
 $toInvoice = $dnReady ? dispatch_to_invoice_orders($pdo, $factory) : [];
+
+// ── Delivery charges for the tray (see _partials/delivery_charges.php) ───────
+// Ready orders grouped per account. For each account the page knows its terms,
+// and what is ALREADY going out to it today (notes raised earlier today, per
+// method), so the charge shown counts the whole delivery, not just the ticks.
+$dcOn       = $dnReady && dc_ready($pdo);
+$dcRules    = $dcOn ? dc_rules() : [];
+$byAccount  = [];
+foreach ($ready as $o) $byAccount[(int) $o['account_id']][] = $o;
+$accTerms   = [];   // acc => terms
+$todayBase  = [];   // acc => method => net already noted out today
+$todayOvr   = [];   // acc => method => override already set today
+$dnDateOf   = [];   // quote id => delivery_date of its note ('' = pre-charges note)
+$toInvCarr  = [];   // quote id => delivery charge parked on its note
+if ($dcOn) {
+    $netByQ = [];
+    foreach (ar_placed_orders($pdo, $factory) as $o) $netByQ[(int) $o['id']] = (float) $o['wholesale_total'];
+    $today = date('Y-m-d');
+    $tn = $pdo->prepare(
+        "SELECT account_client_id, delivery_method, delivery_date, source_quote_id, carriage_override, carriage_net
+           FROM factory_ar_delivery_notes
+          WHERE factory_client_id = ? AND status <> 'cancelled'
+            AND (delivery_date = ? OR delivery_date IS NULL OR carriage_net > 0)"
+    );
+    $tn->execute([$factory, $today]);
+    foreach ($tn->fetchAll(PDO::FETCH_ASSOC) as $n) {
+        $q = (int) $n['source_quote_id'];
+        $dnDateOf[$q]  = (string) ($n['delivery_date'] ?? '');
+        $toInvCarr[$q] = (float) $n['carriage_net'];
+        if ((string) $n['delivery_date'] !== $today) continue;
+        $a = (int) $n['account_client_id']; $m = (string) $n['delivery_method'];
+        $todayBase[$a][$m] = ($todayBase[$a][$m] ?? 0) + ($netByQ[$q] ?? 0);
+        if ($n['carriage_override'] !== null) $todayOvr[$a][$m] = (float) $n['carriage_override'];
+    }
+    foreach (array_keys($byAccount) as $a) $accTerms[$a] = dc_account_terms($pdo, $a);
+}
+
 $activeNav = 'dispatch';
 $money     = static fn ($n) => '£' . number_format((float) $n, 2);
 ?><!doctype html>
@@ -311,6 +409,11 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
       .dt-row.is-noted { opacity:.62; }
       .dt-po { color:var(--text-muted,#667); font-size:.85rem; }
       .dt-empty { padding:1.4rem; color:var(--text-muted,#667); }
+      .dt-acc td { background:var(--bg-subtle,#f8fafc); border-top:2px solid var(--border,#e2e8ef); }
+      .dt-acc-bar { display:flex; align-items:center; gap:.4rem 1rem; flex-wrap:wrap; }
+      .dt-acc-bar label { display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; color:var(--text-muted,#667); }
+      .dt-calc { font-size:.875rem; }
+      .dt-calc b { color:var(--text-primary,#111); }
     </style>
 </head>
 <body>
@@ -363,9 +466,49 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
               <th class="num">Blinds</th><th class="num">Value</th><th>Note</th>
             </tr></thead>
             <tbody>
-            <?php foreach ($ready as $o): $qid = (int) $o['id']; ?>
+            <?php foreach ($byAccount as $acc => $accOrders):
+                if ($dcOn):
+                    $t = $accTerms[$acc];
+                    // A waive / custom charge set earlier today stays selected.
+                    $pre = $todayOvr[$acc][$t['method']] ?? null;
+                    $preMode = $pre === null ? 'auto' : ($pre < 0.005 ? 'waive' : 'custom');
+            ?>
+              <tr class="dt-acc" data-acc="<?= (int) $acc ?>"
+                  data-nocharge="<?= $t['no_charge'] ? '1' : '0' ?>"
+                  data-base='<?= e(json_encode($todayBase[$acc] ?? new stdClass())) ?>'>
+                <td colspan="7">
+                  <div class="dt-acc-bar">
+                    <strong><?= e((string) ($accOrders[0]['account_name'] ?? '')) ?></strong>
+                    <label>Delivery
+                      <select name="method[<?= (int) $acc ?>]" class="dt-method">
+                        <?php foreach (dc_methods() as $mk => $ml): ?>
+                          <option value="<?= e($mk) ?>"<?= $t['method'] === $mk ? ' selected' : '' ?>><?= e($ml) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </label>
+                    <label>Charge
+                      <select name="charge_mode[<?= (int) $acc ?>]" class="dt-mode">
+                        <?php foreach (['auto' => 'Auto', 'waive' => 'Waive', 'custom' => 'Custom'] as $cm => $cl): ?>
+                          <option value="<?= $cm ?>"<?= $preMode === $cm ? ' selected' : '' ?>><?= $cl ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </label>
+                    <span class="dt-custom" hidden>£<input type="number" name="charge_amount[<?= (int) $acc ?>]"
+                          min="0" step="0.01" style="width:5.5rem" value="<?= $preMode === 'custom' ? e(number_format((float) $pre, 2, '.', '')) : '' ?>"></span>
+                    <span class="dt-calc"></span>
+                  </div>
+                </td>
+              </tr>
+            <?php endif; ?>
+            <?php foreach ($accOrders as $o): $qid = (int) $o['id'];
+                // Counts towards today's ticked total only if it isn't already on a
+                // dated note (those are in data-base, or out on an earlier day).
+                $counts = !$o['has_dn'] || (($dnDateOf[$qid] ?? null) === '');
+            ?>
               <tr class="dt-row<?= $o['has_dn'] ? ' is-noted' : '' ?>">
                 <td><input type="checkbox" class="dt-tick go" name="quote_ids[]" value="<?= $qid ?>"
+                           data-acc="<?= (int) $acc ?>" data-net="<?= e(number_format((float) ($o['wholesale_total'] ?? 0), 2, '.', '')) ?>"
+                           data-counts="<?= $counts ? '1' : '0' ?>"
                            <?= $o['has_dn'] ? '' : 'checked' ?>></td>
                 <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
                 <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
@@ -374,6 +517,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
                 <td><?= $o['has_dn'] ? '<span class="ui-hint">already noted</span>' : '' ?></td>
               </tr>
+            <?php endforeach; ?>
             <?php endforeach; ?>
             </tbody>
           </table>
@@ -405,7 +549,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
             <thead><tr>
               <th style="width:2.2rem"></th>
               <th>Account</th><th>Order</th><th>Their ref</th>
-              <th class="num">Blinds</th><th class="num">Value</th>
+              <th class="num">Blinds</th><th class="num">Value</th><?php if ($dcOn): ?><th class="num">Delivery</th><?php endif; ?>
             </tr></thead>
             <tbody>
             <?php foreach ($toInvoice as $o): $qid = (int) $o['id']; ?>
@@ -416,6 +560,9 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
                 <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
                 <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
+                <?php if ($dcOn): $c = (float) ($toInvCarr[$qid] ?? 0); ?>
+                  <td class="num"><?= $c > 0.004 ? e($money($c)) . ' <span class="ui-hint">+VAT</span>' : '—' ?></td>
+                <?php endif; ?>
               </tr>
             <?php endforeach; ?>
             </tbody>
@@ -430,8 +577,44 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
           all.addEventListener('change', function () {
             document.querySelectorAll('.dt-tick.' + all.dataset.for)
               .forEach(function (t) { t.checked = all.checked; });
+            refresh();
           });
         });
+
+        // Live delivery charge per account: today's already-noted orders for the
+        // chosen method + the ticked new ones, against that method's rule.
+        // Mirrors dc_charge_for(); the server works it out again on print.
+        var rules = <?= json_encode($dcRules) ?>;
+        var gbp = function (n) { return '£' + n.toFixed(2); };
+        function refresh() {
+          document.querySelectorAll('.dt-acc').forEach(function (row) {
+            var acc = row.dataset.acc;
+            var method = row.querySelector('.dt-method').value;
+            var mode = row.querySelector('.dt-mode').value;
+            var base = JSON.parse(row.dataset.base || '{}');
+            var net = +(base[method] || 0);
+            document.querySelectorAll('.dt-tick.go[data-acc="' + acc + '"]').forEach(function (t) {
+              if (t.checked && t.dataset.counts === '1') net += +t.dataset.net;
+            });
+            row.querySelector('.dt-custom').hidden = mode !== 'custom';
+            var r = rules[method], charge = 0, why = '';
+            if (row.dataset.nocharge === '1') why = 'no delivery charge on this account';
+            else if (method === 'collect') why = 'collected — free';
+            else if (!r || r.charge <= 0) why = 'no charge set for this method';
+            else if (net < r.under) { charge = r.charge; why = 'under ' + gbp(r.under); }
+            else why = gbp(r.under) + ' or more — free';
+            var out = 'Delivery worth <b>' + gbp(net) + '</b> net';
+            if (base[method]) out += ' (incl. ' + gbp(+base[method]) + ' already out today)';
+            if (mode === 'waive') out += ' → <b>£0.00</b> (waived)';
+            else if (mode === 'custom') out += ' → custom charge';
+            else out += ' → <b>' + gbp(charge) + '</b>' + (charge > 0 ? ' + VAT' : '') + ' · ' + why;
+            row.querySelector('.dt-calc').innerHTML = out;
+          });
+        }
+        document.querySelectorAll('.dt-tick.go, .dt-method, .dt-mode').forEach(function (el) {
+          el.addEventListener('change', refresh);
+        });
+        refresh();
       })();
     </script>
   <?php endif; ?>

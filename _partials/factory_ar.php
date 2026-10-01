@@ -11,6 +11,8 @@ declare(strict_types=1);
  * client that ISN'T the factory itself.
  */
 
+require_once __DIR__ . '/delivery_charges.php';
+
 /** The factory (Beverley) client id. */
 function ar_factory_id(): int
 {
@@ -579,8 +581,10 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
  * PDOException. Runs in the caller's transaction if one is open, else its own.
  * The caller owns order validation and user-facing messaging.
  */
-function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $dispatched = false): array
+function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $dispatched = false, ?string $method = null): array
 {
+    // Delivery method for THIS note: the tray's choice, else the account's default.
+    if ($method === null || !isset(dc_methods()[$method])) $method = dc_account_terms($pdo, $accountId)['method'];
     $lines = ar_order_lines_for_doc($pdo, $factory, $quoteId);
     if (!$lines) throw new RuntimeException('This order has no Beverley-owned lines to deliver.');
 
@@ -638,6 +642,14 @@ function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $acco
                 $ln['width_mm'], $ln['drop_mm'], (int) $ln['quantity'],
                 $ln['room_name'] ?: null, $opts !== '' ? $opts : null, $ln['notes'] ?: null, $so++,
             ]);
+        }
+
+        // Join today's delivery for this account + method, and re-work its charge.
+        if (dc_ready($pdo)) {
+            $today = date('Y-m-d');
+            $pdo->prepare('UPDATE factory_ar_delivery_notes SET delivery_method = ?, delivery_date = ? WHERE id = ?')
+                ->execute([$method, $today, $dnId]);
+            dc_recalc_delivery($pdo, $factory, $accountId, $today, $method);
         }
 
         if ($ownTxn) $pdo->commit();
@@ -723,6 +735,20 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
             ]);
         }
         $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id) VALUES (?, ?)')->execute([$invId, $quoteId]);
+
+        // The delivery charge fixed at dispatch rides on this order's invoice
+        // when its note is the one carrying it (see dc_recalc_delivery).
+        $carr = dc_order_carriage($pdo, $factory, $quoteId);
+        if ($carr['amount'] > 0) {
+            $insL->execute([
+                $invId, null, null, 'carriage', $carr['description'],
+                null, null, 1, $carr['amount'], $carr['amount'], null, null, null, count($built['lines']) + 1,
+            ]);
+            ar_invoice_recalc_totals($pdo, $invId);
+            $t = $pdo->prepare('SELECT total FROM factory_ar_invoices WHERE id = ?');
+            $t->execute([$invId]);
+            $total = round((float) $t->fetchColumn(), 2);
+        }
 
         if ($ownTxn) $pdo->commit();
     } catch (Throwable $e) {

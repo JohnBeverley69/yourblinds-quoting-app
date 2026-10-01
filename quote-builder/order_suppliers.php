@@ -543,6 +543,18 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                             These are your products from the <strong><?= e($factoryLabel) ?></strong> catalogue — they go
                             <strong>straight to manufacturing</strong> when you place the order. No supplier email needed.
                         </div>
+                        <?php
+                            // Delivery-charge rule for the account this order is for,
+                            // so a charge on the invoice is never a surprise.
+                            require_once __DIR__ . '/../_partials/delivery_charges.php';
+                            $dcAcc = (int) ($quote['account_client_id'] ?? 0) ?: $clientId;
+                            if ($dcAcc !== $factoryId && dc_ready(db())):
+                                $dcT = dc_account_terms(db(), $dcAcc);
+                        ?>
+                            <div class="mfg-note" style="margin-top:0.4rem">
+                                🚚 <strong>Delivery</strong> &mdash; <?= e(dc_rule_text($dcT['method'], $dcT['no_charge'])) ?>.
+                            </div>
+                        <?php endif; ?>
                         <table class="sup-items">
                             <thead><tr>
                                 <th>Product</th><th>Fabric / colour</th><th>Size</th><th>Qty</th><th>Room</th>
