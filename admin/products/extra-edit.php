@@ -100,7 +100,17 @@ $f = [
     // before_size: 1 = render this option (and its children) ABOVE the Width/Drop
     // size fields in the quote builder / InstaPrice; 0 (default) = below.
     'before_size'        => (int)    ($extra['before_size'] ?? 0),
+    // splits_panels: 1 = the picked choice's number (e.g. "2") splits the blind
+    // into that many equal panels, priced panels × grid(width ÷ panels, drop).
+    // Probed on its own (not in the load SELECT above) so a pre-migration DB
+    // doesn't drop the whole load into the historical-schema fallback.
+    'splits_panels'      => 0,
 ];
+try {
+    $spSt = db()->prepare('SELECT splits_panels FROM product_extras WHERE id = ? AND client_id = ?');
+    $spSt->execute([$id, $clientId]);
+    $f['splits_panels'] = (int) $spSt->fetchColumn();
+} catch (Throwable $e) { /* column not migrated yet */ }
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -112,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['length_input_label'] = trim((string) ($_POST['length_input_label'] ?? ''));
     $f['allow_multi']        = !empty($_POST['allow_multi']) ? 1 : 0;
     $f['before_size']        = !empty($_POST['before_size']) ? 1 : 0;
+    $f['splits_panels']      = !empty($_POST['splits_panels']) ? 1 : 0;
     $f['parent_choice_ids']  = array_values(array_unique(array_filter(array_map(
         'intval',
         is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
@@ -183,6 +194,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE product_extras SET before_size = ? WHERE id = ? AND client_id = ?')
                     ->execute([$f['before_size'], $id, $clientId]);
             } catch (Throwable $e) { /* column not migrated yet — ignore */ }
+            try {
+                $pdo->prepare('UPDATE product_extras SET splits_panels = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$f['splits_panels'], $id, $clientId]);
+            } catch (Throwable $e) { /* migrate_extra_splits_panels.php not run yet — ignore */ }
 
             // Build rules bind a column to this group by its NAME (no FK), so a
             // rename here has to be carried into them or the rule silently stops
@@ -448,6 +463,12 @@ $activeNav = 'products';
                                <?= (int) ($f['before_size'] ?? 0) === 1 ? 'checked' : '' ?>>
                         Show above the size fields
                         <small>renders this option (and anything nested under it) before Width / Drop in the quote builder &mdash; e.g. the roller fascia group, so multi-fascia per-blind widths make sense</small>
+                    </label>
+                    <label for="splits_panels">
+                        <input type="checkbox" id="splits_panels" name="splits_panels" value="1"
+                               <?= (int) ($f['splits_panels'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        Splits the blind into equal panels
+                        <small>each choice's label is the number of panels (e.g. 2, 3, 4). The Width is shared equally &mdash; 1200 wide &times; 2 panels prices as 2 &times; the grid price at 600 &times; drop</small>
                     </label>
                     <label for="active">
                         <input type="checkbox" id="active" name="active" value="1"

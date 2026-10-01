@@ -28,7 +28,7 @@ const OFFLINE_CATALOGUE_TABLES = [
     'price_tables'            => ['id', 'client_id', 'product_id', 'system_id', 'band_code', 'name', 'active'],
     'price_table_rows'        => ['id', 'price_table_id', 'width_mm', 'drop_mm', 'price'],
     'product_extras'          => ['id', 'client_id', 'product_id', 'name', 'parent_choice_id', 'length_input_label',
-                                  'is_width_source', 'source_extra_id', 'active'],
+                                  'is_width_source', 'splits_panels', 'source_extra_id', 'active'],
     'product_extra_choices'   => ['id', 'product_extra_id', 'system_id', 'label', 'price_delta', 'price_percent',
                                   'price_per_metre', 'cost_price', 'markup_pct_override', 'per_metre_basis',
                                   'length_input_label', 'price_per_unit', 'face_value', 'source_choice_id', 'active'],

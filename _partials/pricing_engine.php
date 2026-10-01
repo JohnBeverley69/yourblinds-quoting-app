@@ -1028,6 +1028,48 @@ function pe_extra_trade_discount_for_line(PDO $pdo, int $clientId, int $productI
     return max(0.0, min(100.0, $best));
 }
 
+/**
+ * Number of equal panels this line is split into. Looks for a picked choice on
+ * an option flagged product_extras.splits_panels and reads the first whole
+ * number in the choice's label ("2", "3 panels"). No flagged option picked, an
+ * unparseable label, or a pre-migration DB (column absent) ⇒ 1 (not split).
+ * Plain SQL so it also runs on the offline tablet's SQLite.
+ */
+function pe_panel_count(PDO $pdo, array $extras): int
+{
+    $cids = [];
+    foreach ($extras as $sel) {
+        $cid = (int) ($sel['choice_id'] ?? 0);
+        if ($cid > 0) $cids[$cid] = true;
+    }
+    if (!$cids) return 1;
+    try {
+        $ph = implode(',', array_fill(0, count($cids), '?'));
+        $st = $pdo->prepare(
+            "SELECT c.label
+               FROM product_extra_choices c
+               JOIN product_extras e ON e.id = c.product_extra_id
+              WHERE c.id IN ($ph) AND e.splits_panels = 1"
+        );
+        $st->execute(array_keys($cids));
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $label) {
+            if (preg_match('/\d+/', (string) $label, $m)) {
+                $n = (int) $m[0];
+                if ($n > 1) return min($n, 50);
+            }
+        }
+    } catch (Throwable $e) { /* splits_panels column absent → not split */ }
+    return 1;
+}
+
+/** "1200 mm" or, when split, "1200 mm (2 panels of 600 mm)" — for error text. */
+function pe_panel_width_text(int $widthMm, int $panels, int $panelWidthMm): string
+{
+    return $panels > 1
+        ? "$widthMm mm ($panels panels of $panelWidthMm mm)"
+        : "$widthMm mm";
+}
+
 // ---------------------------------------------------------------------------
 // High-level entry point
 // ---------------------------------------------------------------------------
@@ -1206,6 +1248,14 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         }
     }
 
+    // 4b. Panel split. An option flagged product_extras.splits_panels (e.g. PF
+    //     Shutter "Number of Panels") divides the ordered width into N EQUAL
+    //     panels; each panel is looked up in the grid at width ÷ N and the base
+    //     is N × that price. N comes from the picked choice's label ("2", "3
+    //     panels"). No flagged option picked ⇒ $panels = 1 ⇒ byte-identical.
+    $panels       = $perSlat ? 1 : pe_panel_count($pdo, $extras);
+    $panelWidthMm = $panels > 1 ? (int) ceil($widthMm / $panels) : $widthMm;
+
     // 5. Matrix cell / rate.
     //    - width_only  → match on width alone; base = that price.
     //    - per_slat    → the table is a drop → price-per-slat list; match by
@@ -1214,14 +1264,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
     //    - normal      → full width × drop grid.
     if ($widthOnly) {
         $row = pe_find_matrix_row_width_only(
-            $pdo, (int) $priceTable['id'], $widthMm, $roundUp
+            $pdo, (int) $priceTable['id'], $panelWidthMm, $roundUp
         );
         if ($row === null) {
+            $wTxt = pe_panel_width_text($widthMm, $panels, $panelWidthMm);
             return ['error' => $roundUp
-                ? "Width $widthMm mm exceeds the largest entry in this price list."
-                : "No exact price for width $widthMm mm. Try the next available width."];
+                ? "Width $wTxt exceeds the largest entry in this price list."
+                : "No exact price for width $wTxt. Try the next available width."];
         }
-        $basePrice = (float) $row['price'];
+        $basePrice = $panels * (float) $row['price'];
     } elseif ($perSlat) {
         $row = pe_find_matrix_row_by_drop(
             $pdo, (int) $priceTable['id'], $dropMm, $roundUp
@@ -1241,19 +1292,21 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
                               . $product['name'] . " in this price list."];
         }
         $ratePerM2 = (float) $row['price'];
-        $areaM2    = ($widthMm / 1000.0) * ($dropMm / 1000.0);
+        // Split into panels: the minimum billable area applies per panel.
+        $areaM2    = ($panelWidthMm / 1000.0) * ($dropMm / 1000.0);
         $billableM2 = max($areaM2, $minAreaM2);
-        $basePrice = $ratePerM2 * $billableM2;
+        $basePrice = $panels * $ratePerM2 * $billableM2;
     } else {
         $row = pe_find_matrix_row(
-            $pdo, (int) $priceTable['id'], $widthMm, $dropMm, $roundUp
+            $pdo, (int) $priceTable['id'], $panelWidthMm, $dropMm, $roundUp
         );
         if ($row === null) {
+            $wTxt = pe_panel_width_text($widthMm, $panels, $panelWidthMm);
             return ['error' => $roundUp
-                ? "Size $widthMm × $dropMm mm exceeds the largest cell in this price table."
-                : "No exact price for $widthMm × $dropMm mm. Try the next available size."];
+                ? "Size $wTxt × $dropMm mm exceeds the largest cell in this price table."
+                : "No exact price for $wTxt × $dropMm mm. Try the next available size."];
         }
-        $basePrice = (float) $row['price'];
+        $basePrice = $panels * (float) $row['price'];
     }
 
     // 5b. Trade (buying) discount — our per-account deal off the trade price,
@@ -1486,7 +1539,8 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         ? (float) $product['cost_price'] : 0.0;
     $fabricCost  = isset($fabric['cost_price']) && $fabric['cost_price'] !== null
         ? (float) $fabric['cost_price']  : 0.0;
-    $costPricePerBlind = round($productCost + $fabricCost, 2);
+    // A split blind is N panels, each made like a blind → N × the per-blind cost.
+    $costPricePerBlind = round(($productCost + $fabricCost) * $panels, 2);
 
     $extrasCostTotal = 0.0;
     foreach ($extrasApplied as $ea) {
@@ -1520,12 +1574,15 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         'drop_mm'            => $dropMm,
         'matrix_width_mm'    => $perSlat ? 0 : (int) $row['width_mm'],
         'matrix_drop_mm'     => $widthOnly ? 0 : (int) $row['drop_mm'],
+        // Panel split (step 4b): 1 = not split. panel_width_mm = width ÷ panels.
+        'panels'             => $panels,
+        'panel_width_mm'     => $panels > 1 ? $panelWidthMm : null,
         // Round-up flags a genuine round on whichever axis the mode uses.
         'rounded_up'         => $roundUp && (
                ($perSlat   && (int) $row['drop_mm']  !== $dropMm)
-            || ($widthOnly && (int) $row['width_mm'] !== $widthMm)
+            || ($widthOnly && (int) $row['width_mm'] !== $panelWidthMm)
             || (!$perSlat && !$widthOnly && !$perSqm && (
-                   (int) $row['width_mm'] !== $widthMm
+                   (int) $row['width_mm'] !== $panelWidthMm
                 || (int) $row['drop_mm']  !== $dropMm
                ))
         ),

@@ -733,6 +733,9 @@ function pp_sync_extras_and_choices(
     // never included here, so a tenant's copy kept the group below the size
     // fields however the master was set.
     $hasBeforeSize  = pp_column_exists($pdo, 'product_extras', 'before_size');
+    // splits_panels ("Splits the blind into equal panels") changes the base price
+    // (panels × grid at width ÷ panels), so a mirror must match the master.
+    $hasSplitPanels = pp_column_exists($pdo, 'product_extras', 'splits_panels');
 
     $extraCols = 'id, name, is_required, sort_order, active';
     if ($hasLengthLabel) $extraCols .= ', length_input_label';
@@ -741,6 +744,7 @@ function pp_sync_extras_and_choices(
     if ($hasMatchAll)    $extraCols .= ', parent_match_all';
     if ($hasWidthSrc)    $extraCols .= ', is_width_source';
     if ($hasBeforeSize)  $extraCols .= ', before_size';
+    if ($hasSplitPanels) $extraCols .= ', splits_panels';
 
     $src = $pdo->prepare(
         "SELECT $extraCols FROM product_extras
@@ -802,6 +806,7 @@ function pp_sync_extras_and_choices(
             if ($hasMatchAll) { $cols[] = 'parent_match_all'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
             if ($hasWidthSrc) { $cols[] = 'is_width_source';  $params[] = (int) ($r['is_width_source']  ?? 0); }
             if ($hasBeforeSize) { $cols[] = 'before_size'; $params[] = (int) ($r['before_size'] ?? 0); }
+            if ($hasSplitPanels) { $cols[] = 'splits_panels'; $params[] = (int) ($r['splits_panels'] ?? 0); }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -839,6 +844,7 @@ function pp_sync_extras_and_choices(
             if ($hasMatchAll) { $sets[] = 'parent_match_all = ?'; $params[] = (int) ($r['parent_match_all'] ?? 0); }
             if ($hasWidthSrc) { $sets[] = 'is_width_source = ?';  $params[] = (int) ($r['is_width_source']  ?? 0); }
             if ($hasBeforeSize) { $sets[] = 'before_size = ?'; $params[] = (int) ($r['before_size'] ?? 0); }
+            if ($hasSplitPanels) { $sets[] = 'splits_panels = ?'; $params[] = (int) ($r['splits_panels'] ?? 0); }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'
