@@ -932,7 +932,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         // Label sections.
         STATE.labels.forEach(function (lab, li) {
             html += '<div class="sec' + (collapsed['label-' + li] ? ' is-collapsed' : '') + '" data-sec="label" data-li="' + li + '">';
-            html += '<div class="sec-top">' + caret() + '<span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h, lab.fs, lab.lh) + '<button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
+            html += '<div class="sec-top">' + caret() + '<span class="tag">Label</span><input type="text" class="title" value="' + esc(lab.title || '') + '" placeholder="e.g. Cutting label">' + sizeCtl(lab.w, lab.h, lab.fs, lab.lh) + '<button type="button" class="btn ghost dup-label" title="Add an exact copy of this label straight after it — e.g. the same label on the left and right of the die-cut sheet">Duplicate</button><button type="button" class="btn ghost rm rm-label">Remove label</button></div>';
             html += '<div class="sec-body"><div class="flds">' + fieldsBlock(lab.fields) + '</div>' + addFieldControl() + '</div>';
             html += '</div>';
         });
@@ -1011,6 +1011,13 @@ require __DIR__ . '/../_partials/factory_head.php';
             var row = e.target.closest('.fld'); if (row) removeFieldRow(row);
         } else if (e.target.classList.contains('rm-label')) {
             sync(); STATE.labels.splice(+sec.dataset.li, 1); render();
+        } else if (e.target.classList.contains('dup-label')) {
+            // Deep copy, inserted next to the original. On the die-cut sheet the
+            // label order is the column order, so a label + its copy = left + right.
+            sync();
+            var li = +sec.dataset.li;
+            STATE.labels.splice(li + 1, 0, JSON.parse(JSON.stringify(STATE.labels[li])));
+            render();
         }
     });
 
