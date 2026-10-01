@@ -94,7 +94,7 @@ if ($until !== null) { $dateSql .= ' AND q.created_at <= ?'; $args[] = $until; }
 $hasTableSrc = pe_col_exists($pdo, 'price_tables', 'source_table_id');
 $srcTableSel = $hasTableSrc ? 'tpt.source_table_id AS src_table_id,' : 'NULL AS src_table_id,';
 $sql =
-    "SELECT qi.width_mm, qi.drop_mm, qi.quantity, qi.base_price, qi.extras_total,
+    "SELECT qi.id AS line_id, qi.width_mm, qi.drop_mm, qi.quantity, qi.base_price, qi.extras_total,
             qi.product_name_snapshot,
             COALESCE(p.source_product_id, p.id) AS master_pid,
             $srcTableSel
@@ -337,6 +337,18 @@ $unitCost = function (int $mpid, int $tableId, ?int $sysId, int $w, int $d)
     return $unit;
 };
 
+// Panels a saved line was split into — read from its saved option choices with
+// the same rule the pricing engine used (pe_panel_count). 1 = not split.
+$lineChoices = $pdo->prepare(
+    'SELECT product_extra_choice_id AS choice_id FROM quote_item_extras
+      WHERE quote_item_id = ? AND product_extra_choice_id IS NOT NULL'
+);
+$panelsOf = function (int $lineId) use ($pdo, $lineChoices): int {
+    $lineChoices->execute([$lineId]);
+    $sel = $lineChoices->fetchAll(PDO::FETCH_ASSOC);
+    return $sel ? pe_panel_count($pdo, $sel) : 1;
+};
+
 $tot = [
     'lines' => 0, 'blinds' => 0,
     'rev_costed' => 0.0, 'cost' => 0.0,      // matched to a cost
@@ -360,10 +372,16 @@ foreach ($lines as $ln) {
     $cost = null;
     $tbl  = $findMasterTable($ln);
     if ($tbl !== null) {
+        // A line split into equal panels (an option flagged "Splits the blind
+        // into equal panels") was priced as panels × the cell at width ÷ panels,
+        // so cost it the same way — not as one blind at the full width.
+        $panels = $panelsOf((int) $ln['line_id']);
         $cost = $unitCost(
             (int) $ln['master_pid'], $tbl['id'], $tbl['system_id'],
-            (int) $ln['width_mm'], (int) $ln['drop_mm']
+            $panels > 1 ? (int) ceil((int) $ln['width_mm'] / $panels) : (int) $ln['width_mm'],
+            (int) $ln['drop_mm']
         );
+        if ($cost !== null) $cost *= $panels;
     }
 
     if ($cost !== null) {
