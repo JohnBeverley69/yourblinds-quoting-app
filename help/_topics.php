@@ -505,8 +505,24 @@ return [
       <li><strong>Appears when</strong> — tick one or more choices from other options and this one only shows when one of them is selected. Tick none and it is always visible.</li>
       <li><strong>Also show a number input</strong> — a box beside the choice for a wand or cable length; you name the field yourself and it is recorded on the line for the supplier paperwork.</li>
       </ul>
+      <p>Two more ticks sit on the option’s own <strong>Edit</strong> page: <strong>Show above the size fields</strong> (puts it before Width / Drop) and <strong>Splits the blind into equal panels</strong> (see <em>How do I price a shutter split into panels?</em>).</p>
       <p>Each choice can carry a price: <strong>Flat (£)</strong>, <strong>Percent (%)</strong>, <strong>Per metre (£/m)</strong> or <strong>Price per unit (£)</strong> (typing a quantity multiplies it — brackets, fixings). For per-metre there is <em>Per-metre length is measured along</em>: width usually, or <strong>Perimeter</strong> for a trim that runs all the way round (2 &times; width + 2 &times; drop).</p>
       <p>Setting up a second product that needs the same list? Use <strong>Copy from another product</strong> at the top right rather than retyping it.</p>'],
+
+    ['admin', 'Products & pricing', 'How do I price a shutter split into panels?', 'multi panel panels shutter perfect fit pf split equal number of panels glass width multiply price per panel',
+     '<p>Use an option whose choices are the <strong>number of panels</strong> — on the PF Shutter that is <em>Number of Panels</em> (2, 3, 4, 5, 6), shown when <em>Multi Panel = Yes</em>. Open that option’s <strong>Edit</strong> page and tick <strong>Splits the blind into equal panels</strong>.</p>
+      <p>Then the salesperson types the <strong>full width</strong> and the drop as normal, and picks the number of panels. The price is worked out as:</p>
+      <ul>
+      <li><strong>Panel width</strong> = width ÷ panels (1200 ÷ 2 = 600; 1200 ÷ 3 = 400).</li>
+      <li>Each panel is looked up in the price grid at <strong>panel width × drop</strong>, rounding up to the next grid size as usual (so 400 uses a 450 column if that is your smallest).</li>
+      <li><strong>Base price = panels × that grid price</strong> — 2 × the 600 price, or 3 × the 400 price. Options, markup and discounts then apply as normal.</li>
+      </ul>
+      <p>The live price says <em>“2 panels of 600 mm”</em> so you can see how it was worked out, and the profit report costs the line the same way.</p>
+      <ul>
+      <li><strong>Choice labels must be numbers</strong> — <em>2</em>, <em>3</em> or <em>3 panels</em>. Want 8 panels? Add a choice called <em>8</em>.</li>
+      <li><strong>A charge for going multi-panel</strong> (e.g. a T-post) goes on the choice, as a flat £ or %, like any other option.</li>
+      <li>The panels are always <strong>equal</strong> — that rule is fixed, the tick just switches it on for that option.</li>
+      </ul>'],
 
     ['admin', 'Products & pricing', 'Which “supplier” field is which?', 'order supplier library supplier purchase po catalogue prefix confusion settings suppliers fabric supplier column delivery address',
      '<p>There are two different things called a supplier, and one of them is not yours to worry about.</p>
