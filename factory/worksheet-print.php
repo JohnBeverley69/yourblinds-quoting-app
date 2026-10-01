@@ -597,7 +597,8 @@ $diecutBlinds = $renumberRun($diecutBlinds);
 //                           member says "On label N" so it's cut once.
 // Carrier = the member carrying the typed Fascia width (that's where the
 // order save puts it), else the one with a real fascia, else the first.
-// All blank on a blind that isn't in a 2+ group. Run per print run, after
+// On a blind that isn't in a 2+ group the first two are blank and the cut is
+// its own Fascia_Cut. Run per print run, after
 // renumbering, so "label N" matches the N-of-M printed on the carrier.
 $applyFasciaGroups = static function (array $group): array {
     $tidy = static fn ($v) => rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
@@ -608,6 +609,14 @@ $applyFasciaGroups = static function (array $group): array {
         $id = (int) ($g['item_id'] ?? 0);
         if (!isset($members[$tag][$id])) $members[$tag][$id] = $i;
     }
+    // A blind NOT in a group cuts its own fascia, so the shared-aware box shows
+    // its plain Fascia_Cut — one "Fascia cut" box in the cut row serves both.
+    foreach ($group as &$g) {
+        if (($g['fascia_group'] ?? '') !== '') continue;
+        $own = $g['computed']['Fascia_Cut'] ?? '';
+        $g['ctx']['fascia_cut_shared'] = (is_numeric($own) && (float) $own > 0) ? $tidy($own) : '';
+    }
+    unset($g);
     foreach ($members as $tag => $byItem) {
         $idx = array_values($byItem);
         $carrier = null;
