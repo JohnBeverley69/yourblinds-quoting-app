@@ -132,6 +132,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .rb-actions { display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap; margin-top:0.4rem; }
     .rb-hint { font-size:0.78rem; color:#94a3b8; line-height:1.5; margin-top:0.5rem; }
     a.rb-link { color:#1f3b5b; font-weight:600; }
+    .grip { cursor:grab; touch-action:none; user-select:none; color:#94a3b8; font-size:1.1rem; line-height:1; padding:0.2rem 0.3rem; border-radius:6px; }
+    .grip:hover { color:#1f3b5b; background:#eef2f7; }
+    .is-dragging { opacity:0.85; outline:2px dashed #1f3b5b; outline-offset:2px; background:#eef6ff; }
+    body.rb-dragging, body.rb-dragging * { cursor:grabbing !important; user-select:none; }
 </style>
 
 <div class="rb-head">
@@ -185,7 +189,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     function cellNode(c, isCut) {
         var d = document.createElement('div'); d.className = 'bx-cell';
         var sel = '<select class="src">' + SRC_OPTIONS + '</select>';
-        d.innerHTML = '<span class="lbl">Caption</span><input class="cap" type="text" value="">'
+        d.innerHTML = '<span class="grip" title="Drag to move this box up or down (or into another row)">⠿</span>'
+                    + '<span class="lbl">Caption</span><input class="cap" type="text" value="">'
                     + '<span class="lbl">Value</span>' + sel
                     + '<span class="lbl">Width</span><input class="w" type="number" min="0.5" step="0.5" value="' + ((c && c.w) || 3) + '">'
                     + '<label class="lbl" style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer" title="Only print this box when its value isn\'t blank"><input type="checkbox" class="ifv"> hide if blank</label>'
@@ -204,6 +209,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         var row = document.createElement('div'); row.className = 'bx-row';
         var hide = !!(r && r.hide_if_empty);
         row.innerHTML = '<div class="bx-row-top">'
+            + '<span class="grip" title="Drag to move this whole row up or down">⠿</span>'
             + '<label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer"><input type="checkbox" class="hide"' + (hide ? ' checked' : '') + '> Only show if it has a value</label>'
             + '<button type="button" class="btn ghost addcell" style="margin-left:auto;padding:0.25rem 0.6rem">+ Box</button>'
             + '<button type="button" class="btn rm delrow" title="Remove row">Remove row</button>'
@@ -224,6 +230,62 @@ require __DIR__ . '/../_partials/factory_head.php';
     document.getElementById('add-cut').addEventListener('click', function () {
         cut.appendChild(cellNode({ w: 2 }, true));
     });
+
+    // ---- Drag to reorder (pointer events: mouse AND touch) -----------------
+    // Grab a box's ⠿ to move it up/down within its row or into another grid row
+    // (cut boxes stay in the cut row); grab a row's ⠿ to move the whole row.
+    // The real node moves as you drag, so what you see is what Save writes.
+    (function () {
+        var drag = null;   // { el, kind: 'cell'|'row', fromCells, pid }
+        function placeIn(container, itemSel, y) {
+            var before = null;
+            Array.prototype.some.call(container.querySelectorAll(':scope > ' + itemSel), function (it) {
+                if (it === drag.el) return false;
+                var r = it.getBoundingClientRect();
+                if (y < r.top + r.height / 2) { before = it; return true; }
+                return false;
+            });
+            if (before) { if (drag.el.nextSibling !== before) container.insertBefore(drag.el, before); }
+            else if (container.lastElementChild !== drag.el) container.appendChild(drag.el);
+        }
+        document.addEventListener('pointerdown', function (e) {
+            var g = e.target.closest('.grip'); if (!g || e.button > 0) return;
+            var cell = g.closest('.bx-cell'), row = g.closest('.bx-row');
+            var el = cell || row; if (!el) return;
+            e.preventDefault();
+            drag = { el: el, kind: cell ? 'cell' : 'row', inCut: !!(cell && cut.contains(cell)), fromCells: el.parentNode, pid: e.pointerId };
+            try { g.setPointerCapture(e.pointerId); } catch (x) {}
+            el.classList.add('is-dragging'); document.body.classList.add('rb-dragging');
+        });
+        document.addEventListener('pointermove', function (e) {
+            if (!drag || e.pointerId !== drag.pid) return;
+            e.preventDefault();
+            var y = e.clientY;
+            if (drag.kind === 'row') { placeIn(grid, '.bx-row', y); return; }
+            if (drag.inCut) { placeIn(cut, '.bx-cell', y); return; }
+            // A grid box: whichever row the pointer is over (rows sit stacked, so
+            // match on Y); above/below every row = the first/last row.
+            var rows = Array.prototype.slice.call(grid.querySelectorAll(':scope > .bx-row'));
+            if (!rows.length) return;
+            var target = rows[rows.length - 1];
+            for (var i = 0; i < rows.length; i++) {
+                if (y <= rows[i].getBoundingClientRect().bottom) { target = rows[i]; break; }
+            }
+            placeIn(target.querySelector('.bx-cells'), '.bx-cell', y);
+        });
+        function end(e) {
+            if (!drag || (e && e.pointerId !== drag.pid)) return;
+            drag.el.classList.remove('is-dragging'); document.body.classList.remove('rb-dragging');
+            // A grid row emptied by dragging its last box out goes, as with ✕.
+            var from = drag.fromCells;
+            if (drag.kind === 'cell' && !drag.inCut && from && from.children.length === 0) {
+                var r = from.closest('.bx-row'); if (r) r.remove();
+            }
+            drag = null;
+        }
+        document.addEventListener('pointerup', end);
+        document.addEventListener('pointercancel', end);
+    })();
 
     function readCell(d) {
         var o = { cap: d.querySelector('.cap').value.trim(), src: d.querySelector('.src').value, w: parseFloat(d.querySelector('.w').value) || 1 };
