@@ -587,6 +587,24 @@ $diecutBlinds = $renumberRun($diecutBlinds);
 $hasRoll   = $rollBlinds   !== [];
 $hasDiecut = $diecutBlinds !== [];
 
+// Way back from the full-screen label prints (they have no factory menu). A
+// caller can pass ?from=/factory/<page>.php?... (e.g. the roller label editor)
+// to get a "Back" button to exactly where you were; only local factory paths
+// are accepted. Without one, Back is the browser's own history.
+$fromRaw  = (string) ($_GET['from'] ?? '');
+$fromHref = preg_match('#^/factory/[a-z0-9\-]+\.php(\?[A-Za-z0-9=&_\-]*)?$#', $fromRaw) ? $fromRaw : '';
+$fromQs   = $fromHref !== '' ? '&from=' . rawurlencode($fromHref) : '';
+$printNav = '<span class="tb-nav">'
+    . ($fromHref !== ''
+        ? '<a class="tb-btn" href="' . e($fromHref) . '">&larr; Back</a>'
+        : '<a class="tb-btn" href="/factory/incoming-orders.php" onclick="if (history.length > 1) { history.back(); return false; }">&larr; Back</a>')
+    . '<a class="tb-btn" href="?order=' . (int) $qid . $fromQs . '">Worksheet</a>'
+    . '<a class="tb-btn" href="/factory/incoming-orders.php">Factory orders</a>'
+    . '</span>';
+$printNavCss = '.toolbar .tb-nav { display:flex; gap:8px; flex-wrap:wrap; }'
+    . ' .toolbar a.tb-btn { background:#e5edf5; color:#1f2a37; font-weight:600; padding:7px 14px; border-radius:8px; text-decoration:none; white-space:nowrap; }'
+    . ' .toolbar a.tb-btn:hover { background:#fff; text-decoration:none; }';
+
 // ---- Roll label print (?rolllabel=1) — one self-contained label per blind --
 // For roller blinds: a single label per blind on a thermal roll (default
 // 102x76mm), not the vertical A4 die-cut sheet. Per-computer nudge + font.
@@ -740,6 +758,7 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
     .toolbar { position:fixed; top:0; left:0; right:0; background:#1f2a37; color:#e5edf5; padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:10; font-size:14px; }
     .toolbar b { color:#fff; } .toolbar .note { color:#b9c6d3; flex:1; min-width:220px; }
     .toolbar a { color:#7dd3fc; text-decoration:none; } .toolbar a:hover { text-decoration:underline; }
+    <?= $printNavCss ?>
     .toolbar > button { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:7px 16px; background:#38bdf8; color:#06263a; }
     .nudge { display:flex; align-items:center; gap:4px; color:#b9c6d3; white-space:nowrap; }
     .nudge .lbl { color:#8ba0b3; } .nudge input { width:3.2rem; font:inherit; border:none; border-radius:6px; padding:5px 6px; text-align:right; }
@@ -810,10 +829,9 @@ if ($order && ($_GET['rolllabel'] ?? '0') !== '0') {
 </style></head>
 <body>
 <div class="toolbar">
+    <?= $printNav ?>
     <b>Roll label</b>
     <span class="note">Order <?= $ono ?> · <?= count($rollBlinds) ?> roller label<?= count($rollBlinds) === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b> on <b><?= $mm($LW) ?>×<?= $mm($LH) ?>mm</b> labels, margins <b>None</b>. <b>Nudge</b> saved for this computer. Font &amp; line spacing are set per label in the Worksheets editor.</span>
-    <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
-    <a href="/factory/incoming-orders.php">&larr; Factory orders</a>
     <span class="nudge"><span class="lbl">Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5">&#9654;</button>
         <button type="button" data-ny="-0.5">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5">&#9660;</button>
@@ -908,6 +926,7 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
     .toolbar { position:fixed; top:0; left:0; right:0; background:#1f2a37; color:#e5edf5; padding:10px 16px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:10; font-size:14px; }
     .toolbar b { color:#fff; } .toolbar .note { color:#b9c6d3; flex:1; min-width:200px; }
     .toolbar a { color:#7dd3fc; text-decoration:none; } .toolbar a:hover { text-decoration:underline; }
+    <?= $printNavCss ?>
     .toolbar > button { font:inherit; font-weight:600; cursor:pointer; border:none; border-radius:8px; padding:7px 16px; background:#38bdf8; color:#06263a; }
     .nudge { display:flex; align-items:center; gap:4px; color:#b9c6d3; white-space:nowrap; }
     .nudge input { width:3.4rem; font:inherit; border:none; border-radius:6px; padding:5px 6px; text-align:right; }
@@ -962,10 +981,9 @@ if ($order && ($_GET['diecut'] ?? '0') !== '0') {
 </style></head>
 <body>
 <div class="toolbar">
+    <?= $printNav ?>
     <b>Die-cut label print</b>
     <span class="note">Order <?= $ono ?> · <?= (int) $dieCount ?> die-cut blind<?= $dieCount === 1 ? '' : 's' ?>. Print at <b>100% / Actual size</b>, margins <b>None</b>. Lay the plain print over the label stock to check it lands right.</span>
-    <a href="?order=<?= (int) $qid ?>">&larr; content view</a>
-    <a href="/factory/incoming-orders.php">&larr; Factory orders</a>
     <span class="nudge"><span>Nudge&nbsp;mm</span>
         <button type="button" data-nx="-0.5" title="left">&#9664;</button><input id="ox" type="number" step="0.5" value="0"><button type="button" data-nx="0.5" title="right">&#9654;</button>
         <button type="button" data-ny="-0.5" title="up">&#9650;</button><input id="oy" type="number" step="0.5" value="0"><button type="button" data-ny="0.5" title="down">&#9660;</button>
@@ -1074,6 +1092,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 </style>
 
 <div class="wp-bar">
+    <?php if ($fromHref !== ''): ?><a class="btn" href="<?= e($fromHref) ?>" style="text-decoration:none">&larr; Back</a><?php endif; ?>
     <a class="btn" href="/factory/incoming-orders.php" style="text-decoration:none">&larr; Factory orders</a>
     <h1>Worksheet</h1>
     <?php if ($order): ?>
@@ -1081,10 +1100,10 @@ require __DIR__ . '/../_partials/factory_head.php';
         <span style="flex:1"></span>
         <?php // A mixed order shows BOTH — each prints only its own products, on its own printer. ?>
         <?php if ($hasDiecut): ?>
-        <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1" style="background:#0369a1; text-decoration:none;">Die-cut sheet<?= $hasRoll ? ' (' . count($diecutBlinds) . ')' : '' ?> &#8599;</a>
+        <a class="btn" href="?order=<?= (int) $qid ?>&diecut=1<?= $fromQs ?>" style="background:#0369a1; text-decoration:none;">Die-cut sheet<?= $hasRoll ? ' (' . count($diecutBlinds) . ')' : '' ?> &#8599;</a>
         <?php endif; ?>
         <?php if ($hasRoll): ?>
-        <a class="btn" href="?order=<?= (int) $qid ?>&rolllabel=1" style="background:#0369a1; text-decoration:none;">Roll labels<?= $hasDiecut ? ' (' . count($rollBlinds) . ')' : '' ?> &#8599;</a>
+        <a class="btn" href="?order=<?= (int) $qid ?>&rolllabel=1<?= $fromQs ?>" style="background:#0369a1; text-decoration:none;">Roll labels<?= $hasDiecut ? ' (' . count($rollBlinds) . ')' : '' ?> &#8599;</a>
         <?php endif; ?>
         <button class="btn" onclick="window.print()">Print</button>
     <?php endif; ?>

@@ -171,7 +171,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div class="rb-actions">
         <button type="submit" class="btn primary">Save layout</button>
         <?php if ($previewOrder > 0): ?>
-            <a class="rb-link" href="/factory/worksheet-print.php?order=<?= (int) $previewOrder ?>&rolllabel=1" target="_blank">View printed label →</a>
+            <a class="rb-link" href="/factory/worksheet-print.php?order=<?= (int) $previewOrder ?>&rolllabel=1&from=<?= rawurlencode("/factory/roller-label-editor.php?product_id=" . (int) $productId) ?>">View printed label →</a>
         <?php else: ?>
             <span class="rb-hint">Print a roller order’s roll label to see the result.</span>
         <?php endif; ?>
