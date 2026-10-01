@@ -525,6 +525,8 @@ function pe_apply_extra(
     );
     $st->execute([$choiceId, $lookupWidth]);
     $widthRow = $st->fetch();
+    $joinedPieces = 1;
+    $joinedPieceMm = null;
     if ($widthRow) {
         $amount         += (float) $widthRow['price'];
         $modesApplied[]  = 'width_table';
@@ -532,13 +534,37 @@ function pe_apply_extra(
         // Distinguish "no width table at all" (fine, no contribution) from
         // "width table exists but request exceeds the largest cell" (error).
         $check = $pdo->prepare(
-            'SELECT 1 FROM extra_choice_price_rows
-              WHERE product_extra_choice_id = ? LIMIT 1'
+            'SELECT MAX(width_mm) FROM extra_choice_price_rows
+              WHERE product_extra_choice_id = ?'
         );
         $check->execute([$choiceId]);
-        if ($check->fetchColumn()) {
-            return ['error' => "Width $lookupWidth mm exceeds the largest entry in the "
-                              . "width table for '" . $choice['label'] . "'."];
+        $maxW = (int) $check->fetchColumn();
+        if ($maxW > 0) {
+            // Joinable option (product_extras.joinable — e.g. a fascia, which the
+            // factory joins in the middle when it's longer than the longest
+            // length): split into the fewest EQUAL pieces that each fit the
+            // table, and charge every piece at its own length. 4000 Senses with a
+            // 3500 max = 2 × the 2000 price. Not joinable ⇒ the error, as before.
+            $joinable = false;
+            try {
+                $jSt = $pdo->prepare('SELECT joinable FROM product_extras WHERE id = ?');
+                $jSt->execute([$extraId]);
+                $joinable = (int) $jSt->fetchColumn() === 1;
+            } catch (Throwable $e) { /* column absent (pre-migration) → not joinable */ }
+
+            if ($joinable) {
+                $joinedPieces  = (int) ceil($lookupWidth / $maxW);
+                $joinedPieceMm = (int) ceil($lookupWidth / $joinedPieces);
+                $st->execute([$choiceId, $joinedPieceMm]);
+                $pieceRow = $st->fetch();
+                if ($pieceRow) {
+                    $amount         += $joinedPieces * (float) $pieceRow['price'];
+                    $modesApplied[]  = 'width_table';
+                }
+            } else {
+                return ['error' => "Width $lookupWidth mm exceeds the largest entry in the "
+                                  . "width table for '" . $choice['label'] . "'."];
+            }
         }
     }
 
@@ -634,6 +660,10 @@ function pe_apply_extra(
         'length_input_label'  => $extra['length_input_label']
                                  ?? ($choice['length_input_label'] ?? null),
         'user_value'          => $resolvedUserValue,
+        // Joined in equal pieces because it ran past its width table (joinable
+        // option). 1 / null = not joined.
+        'joined_pieces'       => $joinedPieces,
+        'joined_piece_mm'     => $joinedPieceMm,
     ];
 }
 

@@ -164,10 +164,19 @@ function qb_price_multi_fascia(PDO $pdo, int $clientId, array $baseInput, array 
         $err = $priced['error'] ?? null;
         $lineTotal = $err ? 0.0 : (float) ($priced['line_total'] ?? 0);
         $out['total'] += $lineTotal;
+        // A joinable option (the fascia) made in pieces because it's longer than
+        // its width table — e.g. "2 × 2000 mm" — for the live-price note.
+        $joined = null;
+        foreach ((array) ($priced['extras_applied'] ?? []) as $ex) {
+            if ((int) ($ex['joined_pieces'] ?? 1) > 1) {
+                $joined = (int) $ex['joined_pieces'] . ' × ' . (int) $ex['joined_piece_mm'] . ' mm';
+                break;
+            }
+        }
         $out['blinds'][] = [
             'width_mm' => $input['width_mm'], 'drop_mm' => $input['drop_mm'], 'is_carrier' => $isCarrier,
             'sell_price' => $err ? 0.0 : (float) ($priced['sell_price'] ?? 0),
-            'line_total' => $lineTotal, 'error' => $err,
+            'line_total' => $lineTotal, 'error' => $err, 'joined' => $joined,
         ];
     }
     return $out;

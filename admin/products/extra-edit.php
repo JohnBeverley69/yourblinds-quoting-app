@@ -105,12 +105,17 @@ $f = [
     // Probed on its own (not in the load SELECT above) so a pre-migration DB
     // doesn't drop the whole load into the historical-schema fallback.
     'splits_panels'      => 0,
+    // joinable: 1 = when a choice's width table runs out, split the length into
+    // equal pieces (joined in the middle) and charge each piece at its length.
+    'joinable'           => 0,
 ];
-try {
-    $spSt = db()->prepare('SELECT splits_panels FROM product_extras WHERE id = ? AND client_id = ?');
-    $spSt->execute([$id, $clientId]);
-    $f['splits_panels'] = (int) $spSt->fetchColumn();
-} catch (Throwable $e) { /* column not migrated yet */ }
+foreach (['splits_panels', 'joinable'] as $flagCol) {
+    try {
+        $spSt = db()->prepare("SELECT $flagCol FROM product_extras WHERE id = ? AND client_id = ?");
+        $spSt->execute([$id, $clientId]);
+        $f[$flagCol] = (int) $spSt->fetchColumn();
+    } catch (Throwable $e) { /* column not migrated yet */ }
+}
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['allow_multi']        = !empty($_POST['allow_multi']) ? 1 : 0;
     $f['before_size']        = !empty($_POST['before_size']) ? 1 : 0;
     $f['splits_panels']      = !empty($_POST['splits_panels']) ? 1 : 0;
+    $f['joinable']           = !empty($_POST['joinable']) ? 1 : 0;
     $f['parent_choice_ids']  = array_values(array_unique(array_filter(array_map(
         'intval',
         is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
@@ -198,6 +204,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE product_extras SET splits_panels = ? WHERE id = ? AND client_id = ?')
                     ->execute([$f['splits_panels'], $id, $clientId]);
             } catch (Throwable $e) { /* migrate_extra_splits_panels.php not run yet — ignore */ }
+            try {
+                $pdo->prepare('UPDATE product_extras SET joinable = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$f['joinable'], $id, $clientId]);
+            } catch (Throwable $e) { /* migrate_extra_joinable.php not run yet — ignore */ }
 
             // Build rules bind a column to this group by its NAME (no FK), so a
             // rename here has to be carried into them or the rule silently stops
@@ -469,6 +479,12 @@ $activeNav = 'products';
                                <?= (int) ($f['splits_panels'] ?? 0) === 1 ? 'checked' : '' ?>>
                         Splits the blind into equal panels
                         <small>each choice's label is the number of panels (e.g. 2, 3, 4). The Width is shared equally &mdash; 1200 wide &times; 2 panels prices as 2 &times; the grid price at 600 &times; drop</small>
+                    </label>
+                    <label for="joinable">
+                        <input type="checkbox" id="joinable" name="joinable" value="1"
+                               <?= (int) ($f['joinable'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        Can be joined when longer than its width table
+                        <small>when a width is past the last row of a choice&rsquo;s price-by-width table, it&rsquo;s made in equal pieces joined in the middle and each piece is charged at its length &mdash; e.g. a 4000 fascia with a 3500 longest = 2 &times; the 2000 price</small>
                     </label>
                     <label for="active">
                         <input type="checkbox" id="active" name="active" value="1"
