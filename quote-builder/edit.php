@@ -3693,6 +3693,10 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 : '<strong>£' + unit + '</strong> per ' + noun;
 
             var bits = [];
+            // Split by a "splits into equal panels" option: say how it was priced.
+            if (data.panels > 1 && data.panel_width_mm) {
+                bits.push(data.panels + ' panels of ' + data.panel_width_mm + ' mm');
+            }
             if (perSqm && data.width_mm && data.drop_mm) {
                 bits.push(((data.width_mm / 1000) * (data.drop_mm / 1000)).toFixed(2) + ' m²');
             }

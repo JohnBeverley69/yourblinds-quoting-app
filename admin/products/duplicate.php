@@ -204,8 +204,7 @@ try {
     // pass.
     $extrasMap = [];
     $srcExtras = $pdo->prepare(
-        'SELECT id, parent_choice_id, name, is_required,
-                length_input_label, allow_multi, sort_order, active
+        'SELECT *
            FROM product_extras
           WHERE product_id = ?'
     );
@@ -216,7 +215,11 @@ try {
     // older schemas may be missing them. Build the INSERT dynamically.
     $extrasCols = ['client_id', 'product_id', 'parent_choice_id', 'name',
                    'is_required', 'sort_order', 'active'];
-    $extrasOptionalCols = ['length_input_label', 'allow_multi'];
+    // The 0/1 option flags are copied as-is so the copy behaves (and prices)
+    // like the original — before_size / is_width_source / parent_match_all used
+    // to be dropped here; splits_panels changes the base price.
+    $extrasFlagCols     = ['before_size', 'is_width_source', 'parent_match_all', 'splits_panels'];
+    $extrasOptionalCols = array_merge(['length_input_label', 'allow_multi'], $extrasFlagCols);
     foreach ($extrasOptionalCols as $col) {
         try {
             $pdo->query("SELECT $col FROM product_extras LIMIT 1");
@@ -245,6 +248,9 @@ try {
         }
         if (in_array('allow_multi', $extrasCols, true)) {
             $vals[] = (int) ($e['allow_multi'] ?? 0);
+        }
+        foreach ($extrasFlagCols as $col) {
+            if (in_array($col, $extrasCols, true)) $vals[] = (int) ($e[$col] ?? 0);
         }
         $insExtra->execute($vals);
         $extrasMap[(int) $e['id']] = (int) $pdo->lastInsertId();
