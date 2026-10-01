@@ -218,7 +218,7 @@ try {
     // The 0/1 option flags are copied as-is so the copy behaves (and prices)
     // like the original — before_size / is_width_source / parent_match_all used
     // to be dropped here; splits_panels changes the base price.
-    $extrasFlagCols     = ['before_size', 'is_width_source', 'parent_match_all', 'splits_panels'];
+    $extrasFlagCols     = ['before_size', 'is_width_source', 'parent_match_all', 'splits_panels', 'joinable'];
     $extrasOptionalCols = array_merge(['length_input_label', 'allow_multi'], $extrasFlagCols);
     foreach ($extrasOptionalCols as $col) {
         try {

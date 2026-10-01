@@ -3697,6 +3697,12 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             if (data.panels > 1 && data.panel_width_mm) {
                 bits.push(data.panels + ' panels of ' + data.panel_width_mm + ' mm');
             }
+            // A joinable option (e.g. an over-size fascia) made in equal pieces.
+            (data.extras_applied || []).forEach(function (ex) {
+                if (ex.joined_pieces > 1) {
+                    bits.push(ex.choice_label + ' joined: ' + ex.joined_pieces + ' × ' + ex.joined_piece_mm + ' mm');
+                }
+            });
             if (perSqm && data.width_mm && data.drop_mm) {
                 bits.push(((data.width_mm / 1000) * (data.drop_mm / 1000)).toFixed(2) + ' m²');
             }
@@ -3915,7 +3921,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 var pc = rows[i].querySelector('.mb-price');
                 if (pc) pc.textContent = b.error ? '—' : ('£' + Number(b.line_total).toFixed(2));
                 var wc = rows[i].querySelector('.mb-w');
-                if (wc) wc.textContent = b.width_mm + ' mm' + (b.is_carrier ? ' · fascia' : '');
+                if (wc) wc.textContent = b.width_mm + ' mm' + (b.is_carrier ? ' · fascia' : '')
+                                       + (b.joined ? ' (joined ' + b.joined + ')' : '');
             });
             var totalEl = p.querySelector('.mb-total');
             if (totalEl) totalEl.textContent = '£' + Number(data.total).toFixed(2);
