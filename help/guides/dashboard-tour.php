@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Guide: dashboard-tour — "Reading your dashboard" (v2 player).
+ * Guide: dashboard-tour â€” "Reading your dashboard" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
@@ -13,10 +13,10 @@ declare(strict_types=1);
  * From/To range, the View: salesperson filter, Upcoming jobs (incl. the
  * "Earlier today, not closed" group), the four KPI tiles, Sales team /
  * Their numbers + Revenue share, What's selling, Gross profit and Recent wins
- * — and who sees what (user_can_see_money = "Can see money", the
+ * â€” and who sees what (user_can_see_money = "Can see money", the
  * dash_view_* panel ticks, View costs). The window is measured on
  * quotes.created_at; Revenue (won) = quotes.total (VAT + WT charge
- * included); Gross profit = net sell − price-table cost basis, less any
+ * included); Gross profit = net sell âˆ’ price-table cost basis, less any
  * agreed-price discount. Every label and message is copied from that file.
  *
  * v2: one SCENE per script line (data-scene = the line's step).
@@ -165,7 +165,7 @@ return [
           .gd .rdate{ color:var(--faint); font-size:.6rem; }
           .gd .rrev{ text-align:right; color:#16a34a; font-weight:700; font-variant-numeric:tabular-nums; }
 
-          /* 4 — the timeline */
+          /* 4 â€” the timeline */
           .gd .tl{ position:relative; max-width:32rem; height:5.2rem; margin:.6rem 0 .4rem; }
           .gd .tl .axis{ position:absolute; left:0; right:0; top:2.6rem; height:2px; background:var(--line); }
           .gd .tl .mon{ position:absolute; top:2.95rem; font-size:.62rem; font-weight:700; color:var(--soft); }
@@ -173,17 +173,50 @@ return [
           .gd .tl .pin{ position:absolute; top:.4rem; transform:translateX(-50%); font-size:.6rem; font-weight:700; text-align:center; white-space:nowrap; }
           .gd .tl .pin i{ display:block; width:2px; height:1.4rem; margin:.15rem auto 0; background:currentColor; }
 
-          /* 15 — who sees what */
-          .gd .who3{ display:grid; grid-template-columns:repeat(3,1fr); gap:.5rem; max-width:34rem; }
-          .gd .wcard{ border:1px solid var(--line); border-radius:10px; padding:.5rem .6rem; background:var(--surface); font-size:.64rem; color:var(--soft); line-height:1.45; }
-          .gd .wcard h5{ margin:0 0 .3rem; font-size:.74rem; color:var(--ink); }
+          /* 15 â€” who gets a dashboard: one row per kind of person */
+          .gd .wrow{ display:grid; grid-template-columns:9.5rem 8.5rem 1.2rem 1fr; gap:.6rem; align-items:center; padding:.5rem .6rem;
+                     border:1px solid var(--line); border-radius:10px; background:var(--surface); margin-bottom:.5rem; max-width:36rem; }
+          .gd .wwho{ font-size:.78rem; font-weight:800; color:var(--ink); }
+          .gd .wwho small{ display:block; font-weight:500; font-size:.62rem; color:var(--faint); }
+          .gd .wtick{ font-size:.68rem; color:var(--soft); display:flex; align-items:center; gap:.3rem; }
+          .gd .warr{ color:var(--faint); font-weight:800; }
+          .gd .wres{ display:flex; align-items:center; gap:.55rem; font-size:.7rem; color:var(--soft); }
+          .gd .wres b{ color:var(--ink); }
+          .gd .tk{ display:inline-grid; place-items:center; width:15px; height:15px; border-radius:4px; border:1.5px solid var(--border-strong,#c7ccd4);
+                   background:var(--surface); color:transparent; font-size:.6rem; font-weight:900; flex:0 0 auto; }
+          .gd .tk.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+          /* a little dashboard: 4 headline tiles + 4 panels; .lit = shown */
+          .gd .mdash{ display:grid; grid-template-columns:repeat(4,1fr); gap:3px; width:7.2rem; padding:4px; border:1px solid var(--line); border-radius:7px; background:var(--panel); flex:0 0 auto; }
+          .gd .mdash i{ display:block; height:9px; border-radius:2px; background:var(--line); position:relative; overflow:hidden; }
+          .gd .mdash i.p{ grid-column:span 2; height:20px; }
+          .gd .mdash i.lit{ background:color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+          .gd .mdash i > b{ position:absolute; inset:0; background:color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+          .gd .calbox{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:7px; padding:.3rem .5rem; background:var(--surface); font-weight:700; color:var(--ink); }
+
+          /* 16 â€” choosing their panels */
+          .gd .pick2{ display:grid; grid-template-columns:1fr 13rem; gap:1rem; align-items:start; max-width:38rem; }
+          .gd .ufs{ border:1px solid var(--line); border-radius:10px; padding:.55rem .7rem; background:var(--surface); position:relative; }
+          .gd .ufs h6{ margin:0 0 .35rem; font-size:.6rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--soft); }
+          .gd .ufs label{ display:flex; align-items:center; gap:.4rem; font-size:.74rem; color:var(--ink); padding:.18rem 0; }
+          .gd .ufs + .ufs{ margin-top:.5rem; }
+          .gd .bigdash{ border:1px solid var(--line); border-radius:10px; padding:.5rem; background:var(--surface); }
+          .gd .bigdash .t{ font-size:.66rem; font-weight:800; color:var(--ink); margin-bottom:.35rem; }
+          .gd .bigdash .tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-bottom:4px; }
+          .gd .bigdash .tiles i{ height:16px; border-radius:3px; background:color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+          .gd .bigdash .pans{ display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+          .gd .bigdash .pan{ position:relative; display:grid; place-items:center; height:3.1rem; border-radius:5px; border:1px dashed var(--line);
+                             font-size:.6rem; font-weight:700; color:var(--faint); text-align:center; padding:0 .2rem; overflow:hidden; }
+          .gd .bigdash .pan > b{ position:absolute; inset:0; display:grid; place-items:center; border-radius:5px;
+                                 background:color-mix(in srgb, var(--accent) 16%, var(--surface)); border:1px solid var(--accent); color:var(--ink); }
+          .gd .lockt{ position:absolute; left:.2rem; right:.2rem; bottom:.15rem; font-size:.52rem; color:var(--err); font-weight:800; }
 
           @media (max-width:640px){
             .gd .sc{ min-height:470px; }
             .gd .kgrid, .gd .mgrid{ grid-template-columns:1fr 1fr; }
             .gd .uprow{ grid-template-columns:3.4rem 1fr 4.4rem; } .gd .upq{ display:none; }
             .gd .rrow{ grid-template-columns:1fr 4.2rem; } .gd .rrow .ru, .gd .rrow .rdate{ display:none; }
-            .gd .who3{ grid-template-columns:1fr; }
+            .gd .wrow{ grid-template-columns:1fr 1fr; } .gd .warr{ display:none; } .gd .wres{ grid-column:1 / -1; }
+            .gd .pick2{ grid-template-columns:1fr; }
             .gd table.lbt .hidem{ display:none; }
           }',
         'demo'    => '
@@ -201,7 +234,7 @@ return [
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <!-- 0 — poster -->
+                <!-- 0 â€” poster -->
                 <div class="sc" data-scene="0">
                   ' . $head('Sales at a glance &mdash; this month.') . '
                   <div class="pbar">' . $periods() . $range() . '</div>
@@ -209,10 +242,10 @@ return [
                   ' . $kpis() . '
                   <div class="pnl"><h4>Upcoming jobs</h4><div class="psub">Next 3 appointments on the calendar &mdash; soonest first.</div>
                     ' . $up('Today', '2:30pm', 'Mrs Halliwell', 'TA1 3QS', 'Dave Perry', 'accepted <code>DEM-2026-0042</code>') . '</div>
-                  <p class="scs" style="margin-top:.6rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.6rem">Press <b>&#9654; Play</b> below &mdash; sixteen short chapters, at an easy pace.</p>
                 </div>
 
-                <!-- 1 — a scoreboard; read the line -->
+                <!-- 1 â€” a scoreboard; read the line -->
                 <div class="sc" data-scene="1" data-len="22">
                   <div class="a-fade" style="--d:.2s">' . $head('Sales at a glance &mdash; this month.', 'a-ring', '--d:12s') . '</div>
                   <div class="a-rise" style="--d:3s">' . $kpis() . '</div>
@@ -223,7 +256,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 2 — new quote + joke -->
+                <!-- 2 â€” new quote + joke -->
                 <div class="sc" data-scene="2" data-len="26">
                   ' . $head('Sales at a glance &mdash; this month.') . '
                   <div class="chips" style="margin:-.2rem 0 .6rem;justify-content:flex-end"><span class="chip a-pop" style="--d:8.5s">Admins, or anyone with <b>Create quotes</b></span></div>
@@ -239,7 +272,7 @@ return [
                   <div class="a-move" style="--fx:30%;--fy:80%;--tx:90%;--ty:.8rem;--d:1.5s;--md:1.6s">' . $ptr . '</div>
                 </div>
 
-                <!-- 3 — the period buttons -->
+                <!-- 3 â€” the period buttons -->
                 <div class="sc" data-scene="3" data-len="20">
                   <div class="a-fade" style="--d:.2s">' . $head('Sales at a glance &mdash; ' . $sw('this month', 'this quarter', 13) . '.') . '</div>
                   <div class="pbar a-rise" style="--d:1s"><div class="pgrp"><span class="sw"><span class="pbtn on a-out" style="--d:12.5s">This month</span><span class="pbtn a-fade" style="--d:12.5s">This month</span></span><span class="pbtn">Last 30 days</span><span class="pbtn a-sel" style="--d:12.5s">This quarter</span><span class="pbtn">This year</span><span class="pbtn">All time</span></div></div>
@@ -250,7 +283,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 4 — the catch: quote STARTED -->
+                <!-- 4 â€” the catch: quote STARTED -->
                 <div class="sc" data-scene="4" data-len="26">
                   <div class="sct a-fade" style="--d:.2s">The catch: it counts the day the quote was <u>started</u></div>
                   <div class="tl">
@@ -268,7 +301,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 5 — From / To -->
+                <!-- 5 â€” From / To -->
                 <div class="sc" data-scene="5" data-len="26">
                   <div class="a-fade" style="--d:.2s">' . $head('Sales at a glance &mdash; ' . $sw('this month', 'beginning &rarr; 30 Sep 2026', 21) . '.', 'a-ring', '--d:21.5s') . '</div>
                   <div class="pbar">' . $periods() . '
@@ -282,7 +315,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 6 — View: one salesperson -->
+                <!-- 6 â€” View: one salesperson -->
                 <div class="sc" data-scene="6" data-len="28">
                   <div class="a-fade" style="--d:.2s">' . $head('Sales at a glance &mdash; this month' . '<span class="a-fade" style="--d:15s"> for <b>Jane Weller</b></span>.') . '</div>
                   ' . $viewSel($sw('All sales team', 'Jane Weller', 9.5)) . '
@@ -298,7 +331,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 7 — upcoming jobs -->
+                <!-- 7 â€” upcoming jobs -->
                 <div class="sc" data-scene="7" data-len="30">
                   <div class="pnl a-rise" style="--d:.3s"><h4>Upcoming jobs</h4><div class="psub">Next 3 appointments on the calendar &mdash; soonest first.</div>
                     ' . $up('Today', '2:30pm', 'Mrs Halliwell', 'TA1 3QS', 'Dave Perry', 'accepted <code>DEM-2026-0042</code>', 'a-fly', '--d:7s') . '
@@ -314,7 +347,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 8 — earlier today, not closed -->
+                <!-- 8 â€” earlier today, not closed -->
                 <div class="sc" data-scene="8" data-len="18">
                   <div class="pnl a-rise" style="--d:.3s"><h4>Upcoming jobs</h4><div class="psub">Next 2 appointments on the calendar &mdash; soonest first.</div>
                     <div class="ghead a-fade" style="--d:4s">Earlier today, not closed (1)</div>
@@ -326,7 +359,7 @@ return [
                   <div class="chips"><span class="chip ok a-pop" style="--d:13s">Close it off on the calendar &mdash; then it drops away</span></div>
                 </div>
 
-                <!-- 9 — revenue (won) -->
+                <!-- 9 â€” revenue (won) -->
                 <div class="sc" data-scene="9" data-len="22">
                   <div class="sct a-fade" style="--d:.2s">Revenue (won)</div>
                   ' . $kpis(['a-ring', '', '', '']) . '
@@ -339,7 +372,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 10 — AOV, close rate, jobs -->
+                <!-- 10 â€” AOV, close rate, jobs -->
                 <div class="sc" data-scene="10" data-len="25">
                   <div class="sct a-fade" style="--d:.2s">Average order value, Close rate, Jobs in period</div>
                   ' . $kpis(['', 'a-ring', '', '']) . '
@@ -355,7 +388,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 11 — sales team -->
+                <!-- 11 â€” sales team -->
                 <div class="sc" data-scene="11" data-len="28">
                   <div class="pnl a-rise" style="--d:.3s"><h4>Sales team</h4><div class="psub">Pipeline, close rate, and revenue per salesperson.</div>
                     <div class="lbflex"><div class="lbwrap"><table class="lbt">
@@ -372,7 +405,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 12 — what is selling -->
+                <!-- 12 â€” what is selling -->
                 <div class="sc" data-scene="12" data-len="18">
                   <div class="pnl a-rise" style="--d:.3s"><h4>What&rsquo;s selling</h4><div class="psub">Top products by revenue in this period.</div>
                     <div class="lbflex">' . $donut($mixDonut, 80, 'a-pop', '--d:3s') . '
@@ -387,7 +420,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 13 — gross profit -->
+                <!-- 13 â€” gross profit -->
                 <div class="sc" data-scene="13" data-len="29">
                   <div class="pnl a-rise" style="--d:.3s"><h4>Gross profit</h4>
                     <div class="psub">Sell price minus the price-table cost basis (material + extras). Equivalent to your markup &amp; discount turned into pounds.</div>
@@ -405,7 +438,7 @@ return [
                   </div>
                 </div>
 
-                <!-- 14 — recent wins -->
+                <!-- 14 â€” recent wins -->
                 <div class="sc" data-scene="14" data-len="17">
                   <div class="pnl a-rise" style="--d:.3s"><h4>Recent wins</h4><div class="psub">Latest 10 jobs accepted in this period.</div>
                     <div class="rrow a-fly" style="--d:3s"><div><a class="a-ring" style="--d:13s">DEM-2026-0042</a> &mdash; Mrs Halliwell</div><div class="ru">Jane Weller</div><div class="rdate">6 Oct 2026</div><div class="rrev">&pound;1,284.00</div></div>
@@ -416,18 +449,61 @@ return [
                     <span class="chip ok a-pop" style="--d:13.5s">Click the quote number to open the job</span></div>
                 </div>
 
-                <!-- 15 — who sees what -->
-                <div class="sc" data-scene="15" data-len="29">
-                  <div class="sct a-fade" style="--d:.2s">Who sees what</div>
-                  <div class="who3">
-                    <div class="wcard a-rise" style="--d:2s"><h5>Admin</h5>Every panel, always.</div>
-                    <div class="wcard a-rise" style="--d:5.5s"><h5>Everyone else</h5>Needs <b>Can see money</b> first. Then the panels ticked on their user page: Sales-team leaderboard, Product mix, Gross profit, Recent wins.</div>
-                    <div class="wcard a-rise" style="--d:24s"><h5>No Can see money</h5>No Dashboard in the menu &mdash; they land on the <b>Calendar</b>.</div>
+                <!-- 15 â€” who gets a dashboard -->
+                <div class="sc" data-scene="15" data-len="26">
+                  <div class="sct a-fade" style="--d:.2s">Who gets a Dashboard?</div>
+                  <p class="scs a-fade" style="--d:.5s">It comes down to one tick on each person&rsquo;s user page.</p>
+                  <div class="wrow a-rise" style="--d:3s">
+                    <div class="wwho">&#128081; An admin<small>e.g. you</small></div>
+                    <div class="wtick">no tick needed</div>
+                    <span class="warr">&rarr;</span>
+                    <div class="wres"><span class="mdash"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="p lit"></i><i class="p lit"></i><i class="p lit"></i><i class="p lit"></i></span><span><b>All of it</b>, always</span></div>
                   </div>
-                  <div class="chips">
-                    <span class="chip a-pop" style="--d:20.5s">Gross profit also needs <b>View costs</b></span>
-                    <span class="chip ok a-pop" style="--d:27s">Half the Dashboard missing? Check Setup &rarr; Users &rarr; Edit</span>
+                  <div class="wrow a-rise" style="--d:9s">
+                    <div class="wwho">Sam<small>sales</small></div>
+                    <div class="wtick"><span class="tk a-sel" style="--d:11s">&#10003;</span> Can see money</div>
+                    <span class="warr">&rarr;</span>
+                    <div class="wres a-fade" style="--d:12.5s"><span class="mdash"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="p"></i><i class="p"></i><i class="p"></i><i class="p"></i></span><span>The Dashboard, with its <b>headline figures</b></span></div>
                   </div>
+                  <div class="wrow a-rise" style="--d:17s">
+                    <div class="wwho">Dave<small>fitter</small></div>
+                    <div class="wtick"><span class="tk">&#10003;</span> Can see money</div>
+                    <span class="warr">&rarr;</span>
+                    <div class="wres a-fade" style="--d:19.5s"><span>No Dashboard in his menu &mdash; he lands on</span> <span class="calbox a-pop" style="--d:22.5s">&#128197; Calendar</span></div>
+                  </div>
+                </div>
+
+                <!-- 16 â€” choosing their panels -->
+                <div class="sc" data-scene="16" data-len="29">
+                  <div class="sct a-fade" style="--d:.2s">Choosing their panels</div>
+                  <p class="scs a-fade" style="--d:.5s">Setup &rarr; Users &rarr; <b>Edit</b> on Sam &mdash; then watch Sam&rsquo;s Dashboard.</p>
+                  <div class="pick2">
+                    <div>
+                      <div class="ufs a-rise" style="--d:2s">
+                        <h6>Permissions</h6>
+                        <label><span class="tk on">&#10003;</span> Can see money</label>
+                        <label><span class="tk a-sel" style="--d:20s">&#10003;</span> View costs</label>
+                      </div>
+                      <div class="ufs a-rise" style="--d:5s">
+                        <h6>Dashboard</h6>
+                        <label><span class="tk a-sel" style="--d:10.5s">&#10003;</span> Sales-team leaderboard</label>
+                        <label><span class="tk a-sel" style="--d:12s">&#10003;</span> Product mix</label>
+                        <label><span class="tk a-sel" style="--d:13.2s">&#10003;</span> Gross profit</label>
+                        <label><span class="tk a-sel" style="--d:14.2s">&#10003;</span> Recent wins</label>
+                      </div>
+                    </div>
+                    <div class="bigdash a-rise" style="--d:6.5s">
+                      <div class="t">Sam&rsquo;s Dashboard</div>
+                      <div class="tiles"><i></i><i></i><i></i><i></i></div>
+                      <div class="pans">
+                        <div class="pan">Sales-team leaderboard<b class="a-fade" style="--d:10.8s">Sales-team leaderboard</b></div>
+                        <div class="pan">Product mix<b class="a-fade" style="--d:12.3s">Product mix</b></div>
+                        <div class="pan">Gross profit<span class="lockt a-mid" style="--d:15s;--d2:20.3s">&#128274; needs View costs</span><b class="a-fade" style="--d:20.5s">Gross profit</b></div>
+                        <div class="pan">Recent wins<b class="a-fade" style="--d:14.5s">Recent wins</b></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="chips"><span class="chip ok a-pop" style="--d:24.5s">Half the Dashboard missing? Check their user page first</span></div>
                 </div>
 
               </div>
@@ -532,6 +608,7 @@ return [
             ['12', 'What\'s selling',                 'What\'s selling ranks your top eight products by the money taken, from won jobs only. You get a ring, and a list. A bar shows each product\'s share, with the number of units and the money beside it. This is the panel to look at before you order stock.', 12],
             ['13', 'Gross profit',                    'Gross profit takes each blind\'s sell price, and subtracts what your price tables say the blind and its extras cost you. You get total profit, margin percent, profit per job, and cost of goods. It is worked out net, with no VAT and no Wally tax, so do not subtract it from revenue. If a job was sold at an agreed price, that discount comes off too. You need the view costs permission to see it.', 13],
             ['14', 'Recent wins',                     'Recent wins lists the last ten jobs accepted in the window, newest first. Each row shows the quote number and the customer, who sold it, the day it was accepted, and the money in green. Click the quote number, and the job opens.', 14],
-            ['15', 'Who sees what',                   'Finally, who sees what. An admin sees every panel. Everybody else needs can see money first. Then your admin ticks which panels they get, on their user page: the sales team leaderboard, product mix, gross profit and recent wins. Gross profit also needs view costs. Without can see money, there is no dashboard at all, and they land on the calendar. Half the dashboard missing? Check that page first.', 15],
+            ['15', 'Who gets a Dashboard',            'Finally, who gets to see the dashboard. An admin always sees all of it. For everyone else, it starts with one tick on their user page, called Can see money. With that ticked, they get the dashboard and its headline figures. Without it, there is no dashboard in their menu at all, and when they sign in, they go straight to the calendar.', 15],
+            ['16', 'Choosing their panels',           'Next, you choose which extra panels each person gets. On their user page, in the Dashboard box, tick the ones they should see. The sales team leaderboard, product mix, gross profit, and recent wins. Gross profit has one extra rule: it also needs View costs ticked, because it shows what your blinds cost you. So if someone says half their dashboard is missing, check their user page first.', 16],
         ],
 ];
