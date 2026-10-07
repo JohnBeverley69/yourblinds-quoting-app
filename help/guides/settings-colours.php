@@ -2,400 +2,386 @@
 declare(strict_types=1);
 
 /**
- * Guide: settings-colours
+ * Guide: settings-colours — "Status colours" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
- * lede, open, css, demo, body, script (and optionally js).
+ * lede, open, v, css, demo, body, script.
  *
- * Mirrors Settings -> "Status colours" (admin/settings.php, _action=status_colours).
- * The 3 groups, 13 labels and 13 default hex values below are taken straight
- * from job_status_groups() / job_status_labels() / job_status_defaults() in
- * _partials/job_status_colours.php — keep them in step with that file.
+ * Mirrors Settings → Status colours (admin/settings.php, POST
+ * _action=status_colours): thirteen stages in three groups from
+ * _partials/job_status_colours.php (job_status_groups / job_status_labels /
+ * job_status_defaults), one native colour picker + sample pill per stage,
+ * pill text black-or-white by luma (job_status_text_colour), "Save status
+ * colours" → "Status colours saved." Used by the calendar (cards, key, the
+ * Issue ring + Issues filter), the orders list and the Pipeline board.
+ *
+ * v2: one scene per script line; data-len is worked out from the line's own
+ * length (characters ÷ 13.6), so editing a line keeps its scene in step.
  */
+
+$vo = [
+    1 => ['Your traffic-light colours',
+          'Status colours is a tab in Settings. It sets your traffic-light colours. Every job wears a colour for the stage it has reached. The same colour follows the job everywhere, on the calendar and in your orders list. And it changes by itself as the job moves on, so you never colour a job by hand.'],
+    2 => ['Thirteen stages, three groups',
+          'There are thirteen stages, in three groups. Quote stages is the life of a quote: drafted, sent, accepted, declined and ordered. Appointments and job covers the visits and the work, from appointment booked right through to paid. And Flags has just one, called Issue.'],
+    3 => ['Two visits, two colours',
+          'Two of these are easy to mix up. Appointment booked is the measure visit, before there is a quote. Fitting booked is the install visit, after the quote is accepted. They are different days, for different jobs. So give them clearly different colours, and you can tell them apart at a glance.'],
+    4 => ['Issue is a warning',
+          'Issue is not a stage. It is a warning. Flag a job with an issue, and a ring in your Issue colour is drawn round its card on the calendar, on top of the stage colour it already has. So pick something loud for Issue, that nothing else uses.'],
+    5 => ['Change a colour',
+          'To change a colour, click the little colour square on its card. Your computer\'s own colour picker opens. It looks a little different on every computer, and that is normal. Pick a colour, or type a colour code, and choose OK.'],
+    6 => ['The sample pill',
+          'The sample pill beside it changes straight away, so you can see what you have done. The writing on it stays readable, too. Pale colours get dark writing, and dark colours get white writing. You never have to think about it.'],
+    7 => ['Save status colours',
+          'Nothing is saved until you press the button. Change as many colours as you like, then click Save status colours, at the bottom. A green bar says, Status colours saved. The page reloads, and brings you back to the Status colours tab.'],
+    8 => ['See it on the calendar',
+          'Now look at your calendar. Every job at that stage has changed colour by itself, and so has the little key along the top. Your orders list uses the same colours for its status pills. Your customers never see these colours. They are just for you and your team.'],
+    9 => ['Two tips',
+          'Two tips. Do not give two stages the same colour. Nothing stops you, but it spoils the whole point of the traffic lights. And go easy on very pale colours. On a busy calendar, a pale card can look like an empty space. There is no reset button, so note a colour\'s code before you change it.'],
+];
+$len = static fn (int $n): string => (string) round(mb_strlen($vo[$n][1]) / 13.6);
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+
+// The real stages, labels, groups and default colours (job_status_colours.php).
+$C = [
+    'draft' => ['Quote drafted', '#7c3aed'], 'sent' => ['Quote sent', '#f59e0b'], 'accepted' => ['Accepted', '#16a34a'],
+    'declined' => ['Declined', '#dc2626'], 'ordered' => ['Ordered', '#0891b2'],
+    'appointment_booked' => ['Appointment booked', '#2563eb'], 'booked' => ['Fitting booked', '#6366f1'], 'fitted' => ['Fitted', '#0d9488'],
+    'invoiced' => ['Invoiced', '#ea580c'], 'paid' => ['Paid', '#475569'], 'cancelled' => ['Cancelled', '#b91c1c'], 'no_show' => ['No-show', '#9ca3af'],
+    'issue' => ['Issue', '#e11d48'],
+];
+$G = [
+    'Quote stages'       => ['draft', 'sent', 'accepted', 'declined', 'ordered'],
+    'Appointments & job' => ['appointment_booked', 'booked', 'fitted', 'invoiced', 'paid', 'cancelled', 'no_show'],
+    'Flags'              => ['issue'],
+];
+$txt = static function (string $hex): string {                 // same rule as job_status_text_colour()
+    $h = ltrim($hex, '#');
+    $l = 0.299 * hexdec(substr($h, 0, 2)) + 0.587 * hexdec(substr($h, 2, 2)) + 0.114 * hexdec(substr($h, 4, 2));
+    return $l > 150 ? '#1f2937' : '#ffffff';
+};
+$pill = static fn (string $label, string $hex, string $cls = '', string $style = ''): string =>
+    '<span class="pl ' . $cls . '" style="background:' . $hex . ';color:' . $txt($hex) . ';' . $style . '">' . $label . '</span>';
+$card = static fn (string $key, string $cls = '', string $style = ''): string =>
+    '<span class="cc ' . $cls . '" style="' . $style . '"><i class="sw" style="background:' . $C[$key][1] . '"></i>' . $pill($C[$key][0], $C[$key][1]) . '</span>';
+
+// All three groups. $anim($key, $i, $group) → [class, style] for each card.
+$groups = static function (?callable $anim = null, ?callable $head = null) use ($G, $card): string {
+    $h = '';
+    foreach ($G as $name => $keys) {
+        [$hc, $hs] = $head ? $head($name) : ['', ''];
+        $h .= '<div class="gh ' . $hc . '" style="' . $hs . '">' . htmlspecialchars($name) . '</div><div class="gr">';
+        foreach ($keys as $i => $k) {
+            [$c, $s] = $anim ? $anim($k, $i, $name) : ['', ''];
+            $h .= $card($k, $c, $s);
+        }
+        $h .= '</div>';
+    }
+    return $h;
+};
+
+$tabs = static function (string $on, string $ring = ''): string {
+    $h = '<div class="tabs">';
+    foreach (['Company', 'Quoting', 'Legal', 'Status colours', 'Suppliers', 'Accounting', 'Back up data'] as $t) {
+        $cls = 'tab' . ($t === $on ? ' on' : '');
+        $h  .= $t === $on && $ring !== ''
+            ? '<span class="' . $cls . ' a-ring" style="--d:' . $ring . '">' . $t . '</span>'
+            : '<span class="' . $cls . '">' . $t . '</span>';
+    }
+    return $h . '</div>';
+};
+
+$script = [];
+foreach ($vo as $n => [$cap, $line]) $script[] = [(string) $n, $cap, $line, $n];
 
 return [
         'aud'     => 'admin',
         'section' => 'Settings',
         'title'   => 'Status colours',
         'eyebrow' => 'Settings · Status colours',
+        'v'       => 2,
         'blurb'   => 'Your traffic-light colours — one colour per job stage, shown on the calendar, your orders list and the Pipeline.',
         'lede'    => 'Every job in YourBlinds wears a colour for the stage it has reached, and this is where you choose those
                       colours. Pick them once and the same colour follows the job everywhere &mdash; on the <b>calendar</b>, in your
-                      <b>orders list</b> and across the <b>Pipeline</b> &mdash; changing itself as the job moves along. There are
-                      <b>thirteen stages in three groups</b>, and you never have to recolour a job by hand.',
+                      <b>orders list</b> and across the <b>Pipeline</b> &mdash; changing by itself as the job moves along. There are
+                      <b>thirteen stages in three groups</b>. To get there: <b>Settings</b> &rarr; the <b>Status colours</b> tab.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          /* ---- the real grouped sidebar (Work / Retail / Trade / Setup / Platform) ---- */
-          .gd .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.7rem 0 .15rem; padding:0 .5rem; }
-          .gd .navh .chev{ font-size:.6rem; margin-left:.15rem; }
-          .gd .navfoot{ margin-top:1rem; padding:.35rem .5rem 0; border-top:1px solid rgba(255,255,255,.08); font-size:.6rem; color:#8fa3b3; }
+          .gd .sc{ position:relative; min-height:360px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; max-width:34rem; line-height:1.45; }
+          .gd .tabs{ display:flex; flex-wrap:wrap; gap:.1rem; border-bottom:1px solid var(--line); margin:0 0 .7rem; }
+          .gd .tab{ font-size:.66rem; font-weight:600; color:var(--soft); padding:.28rem .45rem; border-radius:6px 6px 0 0; }
+          .gd .tab.on{ color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+          .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px; padding:.34rem .8rem; font-size:.74rem; font-weight:700; }
+          .gd .btns{ display:inline-flex; align-items:center; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); color:var(--ink); border-radius:6px; padding:.2rem .6rem; font-size:.7rem; font-weight:600; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:.28rem .7rem; font-size:.72rem; font-weight:700; color:var(--ink); }
+          .gd .chip.warn{ border-color:#f59e0b; background:color-mix(in srgb,#f59e0b 12%,transparent); }
+          .gd .chip.bad{ border-color:var(--err); color:var(--err); }
+          .gd .bnr{ background:var(--good-wash); border-left:3px solid var(--good); border-radius:8px; padding:.45rem .65rem; font-size:.74rem; font-weight:700; color:var(--ink); margin:0 0 .6rem; }
+          .gd .row{ display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; } .gd .mt{ margin-top:.7rem; }
+          .gd .stk{ display:inline-grid; } .gd .stk > *{ grid-area:1/1; }
 
-          /* ---- the tab strip across the top of Settings ---- */
-          .gd .tabs{ display:flex; flex-wrap:wrap; gap:.22rem; border-bottom:1px solid var(--line); margin-bottom:.75rem; padding-bottom:.3rem; }
-          .gd .tb{ font-size:.67rem; color:var(--faint); padding:.2rem .42rem; border-radius:6px 6px 0 0; white-space:nowrap; }
-          .gd .tb.on{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent); }
-          /* after saving, the page reloads and reopens on the tab you were on — admin/settings.php
-             redirects without a #hash, and the tab script restores localStorage[\'yb_settings_tab\'],
-             so Status colours stays selected */
+          /* the colour cards */
+          .gd .gh{ font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin:.35rem 0 .3rem; border-radius:4px; display:inline-block; }
+          .gd .gr{ display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.35rem; }
+          .gd .cc{ display:inline-flex; align-items:center; gap:.35rem; border:1px solid var(--line); border-radius:8px; padding:.25rem .35rem; background:var(--surface); position:relative; }
+          .gd .sw{ display:inline-block; width:1.35rem; height:1.35rem; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
+          .gd .pl{ display:inline-block; padding:.05rem .45rem; font-size:.56rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border-radius:999px; white-space:nowrap; }
+          .gd .big .sw{ width:2rem; height:2rem; } .gd .big .pl{ font-size:.66rem; padding:.12rem .6rem; }
 
-          /* ---- the real grey intro paragraph ---- */
-          .gd .scintro{ font-size:.68rem; color:var(--faint); line-height:1.5; margin:0 0 .7rem; max-width:44rem; }
+          /* mini calendar */
+          .gd .cal{ display:grid; grid-template-columns:repeat(5,1fr); gap:3px; max-width:30rem; background:var(--line); border:1px solid var(--line); border-radius:8px; padding:3px; }
+          .gd .cal > div{ background:var(--surface); min-height:3.6rem; padding:.2rem .25rem; font-size:.56rem; color:var(--faint); border-radius:4px; }
+          .gd .ca{ display:block; border-radius:4px; padding:.12rem .25rem; margin-top:.2rem; font-size:.56rem; font-weight:700; white-space:nowrap; overflow:hidden; position:relative; }
+          .gd .ca.fit{ box-shadow:inset 0 0 0 1.5px rgba(15,23,42,.55); }
+          .gd .ca.iss{ outline:2px solid #e11d48; outline-offset:1px; }
+          .gd .key{ display:flex; flex-wrap:wrap; align-items:center; gap:.25rem; margin:0 0 .4rem; }
+          .gd .key .pl{ font-size:.5rem; }
+          .gd .two{ display:grid; grid-template-columns:1fr 1fr; gap:.8rem; max-width:34rem; }
+          .gd .vis{ border:1px solid var(--line); border-radius:10px; padding:.5rem .6rem; background:var(--surface); font-size:.7rem; color:var(--soft); }
+          .gd .vis h4{ margin:.35rem 0 .2rem; font-size:.78rem; color:var(--ink); }
 
-          /* ---- the group / card layout (mirrors the real flex row of bordered cards) ---- */
-          .gd .scgrp{ margin-bottom:.55rem; border:2px solid transparent; border-radius:10px; padding:.15rem .3rem; transition:border-color .25s, background .25s; }
-          .gd .scgrp-h{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin:.3rem 0 .35rem; }
-          .gd .scards{ display:flex; flex-wrap:wrap; gap:.45rem; }
-          .gd .scard{ display:flex; align-items:center; gap:.45rem; border:1px solid var(--line); border-radius:8px; padding:.32rem .42rem; background:var(--surface); transition:box-shadow .2s, border-color .2s; }
-          /* the real control: a native <input type="color">, 2.25rem square, no border, pointer cursor */
-          .gd .swatch{ width:36px; height:36px; border-radius:5px; border:none; flex:none; cursor:pointer; }
-          .gd .pillc{ display:inline-block; padding:.06rem .5rem; border-radius:999px; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#fff; white-space:nowrap; }
-          .gd .pillc.dark{ color:#1f2937; }
+          /* the computer\'s colour box */
+          .gd .osp{ position:absolute; z-index:5; left:12rem; top:5.6rem; width:12.5rem; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px;
+                    box-shadow:0 14px 30px -12px rgba(15,23,42,.45); padding:.45rem; font-size:.62rem; color:#1f2937; }
+          .gd .osp .grad{ height:5rem; border-radius:4px; background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,#9333ea); position:relative; }
+          .gd .osp .dot{ position:absolute; width:10px; height:10px; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px rgba(0,0,0,.4); }
+          .gd .osp .hue{ height:.55rem; border-radius:3px; margin:.35rem 0; background:linear-gradient(to right,red,#ff0,lime,cyan,blue,#f0f,red); }
+          .gd .osp .hx{ display:flex; gap:.3rem; align-items:center; }
+          .gd .osp .hx span.f{ flex:1; border:1px solid #cbd5e1; background:#fff; border-radius:4px; padding:.12rem .3rem; font-family:ui-monospace,Menlo,Consolas,monospace; }
+          .gd .osp .ok{ background:#2563eb; color:#fff; border-radius:4px; padding:.12rem .55rem; font-weight:700; }
 
-          /* group rings, one per narrated step */
-          .gd .stage[data-step="1"] .g-quote,
-          .gd .stage[data-step="2"] .g-appt,
-          .gd .stage[data-step="3"] .g-flag{ border-color:var(--accent); background:var(--accent-wash); }
-          /* the two confusable cards, picked out on step 2 */
-          .gd .stage[data-step="2"] .card-ab, .gd .stage[data-step="2"] .card-fb,
-          .gd .stage[data-step="3"] .card-iss,
-          .gd .stage[data-step="4"] .card-acc{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+          /* orders list */
+          .gd .ol{ border:1px solid var(--line); border-radius:9px; overflow:hidden; max-width:30rem; font-size:.66rem; }
+          .gd .ol div{ display:flex; justify-content:space-between; align-items:center; padding:.28rem .5rem; border-top:1px solid var(--line); color:var(--ink); background:var(--surface); }
+          .gd .ol div:first-child{ border-top:0; }
 
-          /* Accepted turns violet from step 5 on, and stays */
-          .gd .sw-acc, .gd .pc-acc{ background:#16a34a; }
-          .gd .stage[data-step="5"] .sw-acc, .gd .stage[data-step="6"] .sw-acc,
-          .gd .stage[data-step="7"] .sw-acc, .gd .stage[data-step="8"] .sw-acc,
-          .gd .stage[data-step="5"] .pc-acc, .gd .stage[data-step="6"] .pc-acc,
-          .gd .stage[data-step="7"] .pc-acc, .gd .stage[data-step="8"] .pc-acc{ background:#9333ea; }
-
-          /* ---- your computer\'s own colour dialog (NOT part of YourBlinds) ---- */
-          .gd .picker{ display:none; position:absolute; left:7.5rem; top:5.6rem; z-index:8; width:15.5rem;
-                       background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); border-radius:9px;
-                       box-shadow:0 18px 38px -12px rgba(20,30,45,.45); overflow:hidden; }
-          .gd .stage[data-step="4"] .picker{ display:block; }
-          .gd .pk-bar{ display:flex; align-items:center; justify-content:space-between; background:var(--panel); border-bottom:1px solid var(--line); padding:.28rem .5rem; font-size:.66rem; font-weight:700; color:var(--soft); }
-          .gd .pk-bar span{ color:var(--faint); font-weight:400; }
-          .gd .pk-body{ display:flex; gap:.5rem; padding:.5rem; }
-          .gd .pk-sq{ width:6.6rem; height:4.6rem; border-radius:4px; flex:none;
-                      background:linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, #9333ea); }
-          .gd .pk-side{ flex:1; display:flex; flex-direction:column; gap:.3rem; }
-          .gd .pk-hue{ height:.55rem; border-radius:999px; background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); }
-          .gd .pk-eye{ font-size:.6rem; color:var(--faint); }
-          .gd .pk-hexrow{ display:flex; align-items:center; gap:.3rem; }
-          .gd .pk-hexlbl{ font-size:.58rem; color:var(--faint); text-transform:uppercase; letter-spacing:.04em; }
-          .gd .pk-hex{ flex:1; border:1px solid var(--border-strong,#c7ccd4); border-radius:4px; padding:.12rem .3rem; font-size:.64rem;
-                       font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink); background:var(--surface); }
-          .gd .pk-btns{ display:flex; justify-content:flex-end; gap:.35rem; padding:.1rem .5rem .5rem; }
-          .gd .pk-btn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:5px; padding:.14rem .55rem; font-size:.64rem; color:var(--soft); background:var(--panel); }
-          .gd .pk-btn.go{ background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
-
-          /* ---- black-or-white writing, shown on step 5 ---- */
-          .gd .lumen{ display:none; align-items:center; flex-wrap:wrap; gap:.4rem; margin-top:.5rem; font-size:.66rem; color:var(--faint); }
-          .gd .stage[data-step="5"] .lumen{ display:flex; }
-
-          /* ---- scene swap: the form steps aside for the calendar / Pipeline scenes ---- */
-          .gd .stage[data-step="6"] .formscene, .gd .stage[data-step="7"] .formscene{ display:none; }
-          .gd .calscene, .gd .pipescene{ display:none; }
-          .gd .stage[data-step="6"] .calscene, .gd .stage[data-step="7"] .pipescene{ display:block; }
-
-          /* calendar strip */
-          .gd .callegend{ display:flex; flex-wrap:wrap; gap:.3rem .7rem; border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:.4rem .55rem; font-size:.6rem; color:var(--soft); }
-          .gd .callegend span{ display:inline-flex; align-items:center; gap:.25rem; white-space:nowrap; }
-          .gd .callegend i{ width:.6rem; height:.6rem; border-radius:3px; display:inline-block; }
-          .gd .calrow{ display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.6rem; }
-          .gd .calchip{ border-radius:7px; padding:.4rem .55rem; font-size:.7rem; font-weight:600; min-width:9.5rem; }
-          /* the real card (calendar/index.php .cal-appt) is two lines only: a bold time block, then the
-             job title — the stage never appears in writing, it is the colour */
-          .gd .calchip .ctime{ display:block; font-weight:700; font-size:.68rem; opacity:.95; }
-          .gd .calchip .ctitle{ display:block; font-weight:600; font-size:.64rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          .gd .ch-acc{ background:#9333ea; color:#fff; }
-          .gd .ch-fit{ background:#6366f1; color:#fff; outline:2px solid #111827; outline-offset:-2px; }
-          .gd .ch-iss{ background:#0891b2; color:#fff; outline:2px solid #e11d48; outline-offset:-2px; }
-          .gd .issbtn{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid #e11d48; color:#e11d48; border-radius:999px; padding:.1rem .5rem; font-size:.62rem; font-weight:700; margin-top:.55rem; }
-          .gd .stage[data-step="3"] .issalone{ display:block; }
-          .gd .issalone{ display:none; margin-top:.75rem; }
-
-          /* orders rows + Pipeline board */
-          .gd .ordrow{ display:flex; align-items:center; gap:.5rem; border-bottom:1px solid var(--line-2); padding:.3rem .1rem; font-size:.7rem; color:var(--soft); }
-          .gd .ordrow b{ color:var(--ink); font-weight:600; min-width:7rem; }
-          .gd .notsent{ font-size:.55rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:.04rem .38rem; }
-          .gd .pipecols{ display:flex; gap:.3rem; margin-top:.8rem; overflow:hidden; }
-          .gd .pipecol{ flex:1; min-width:0; border:1px solid var(--line); border-radius:7px; background:var(--panel); overflow:hidden; }
-          .gd .pipecol .ph2{ font-size:.55rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#fff; padding:.2rem .25rem; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-          .gd .pipecol .pb{ height:1.5rem; }
-          .gd .pipenote{ font-size:.63rem; color:var(--faint); margin-top:.45rem; }
-
-          /* ---- save + banner ---- */
-          .gd .stage[data-step="8"] .save{ transform:scale(.96); filter:brightness(1.25); }
-          .gd .stage[data-step="8"] .toast{ opacity:1; transform:none; }
-
-          /* ---- the defaults table in the written steps ---- */
-          .gd .deft{ display:grid; grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr)); gap:.25rem .8rem; margin:.5rem 0 0; font-size:.82rem; color:var(--soft); }
-          .gd .deft span{ display:flex; align-items:center; gap:.4rem; }
-          .gd .deft i{ width:.8rem; height:.8rem; border-radius:3px; display:inline-block; flex:none; }
-          .gd .deft code{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-          @media(max-width:620px){ .gd .pipecols{ flex-wrap:wrap; } .gd .pipecol{ flex:0 0 31%; } }',
+          @media (max-width:640px){
+            .gd .app{ grid-template-columns:1fr; } .gd .side{ display:none; }
+            .gd .two{ grid-template-columns:1fr; }
+            .gd .osp{ left:auto; right:0; } .gd .nophone{ display:none; }
+            .gd .sc{ min-height:430px; }
+          }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings / status colours</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Dashboard</a><a>Calendar</a><a>Pipeline</a>
+                <a>Dashboard</a><a>Calendar</a>
                 <div class="navh">Retail</div>
-                <a>Customers</a><a>Quotes</a><a>Orders</a>
+                <a>Customers</a><a>Quotes</a>
                 <div class="navh">Setup <span class="chev">&#9662;</span></div>
-                <a>Products</a><a>Users</a><a class="on">Settings</a>
-                <div class="navfoot">Demo Blinds Ltd &middot; admin</div>
+                <a>Products</a><a>Users</a><a class="on">Settings</a><a>Trade terms</a><a>Billing</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="toast">&check; Status colours saved.</div>
 
-                <div class="tabs">
-                  <span class="tb tb-com">Company</span><span class="tb">Quoting</span><span class="tb">Legal</span>
-                  <span class="tb on tb-col">Status colours</span><span class="tb">Suppliers</span>
-                  <span class="tb">Accounting</span><span class="tb">Back up data</span>
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  ' . $tabs('Status colours') . '
+                  ' . $groups() . '
+                  <p class="scs" style="margin-top:.6rem">Press <b>&#9654; Play</b> below &mdash; nine short chapters.</p>
                 </div>
 
-                <div class="formscene">
-                  <div class="card-t">Status colours</div>
-                  <p class="scintro">Your &ldquo;traffic-light&rdquo; colours. A job shows the same colour everywhere it appears &mdash; on the
-                     <b>calendar</b> and in your <b>orders list</b> &mdash; and the calendar updates itself as the job moves from stage to
-                     stage. Pick a colour for each stage below; the sample pill updates as you go.</p>
-
-                  <div class="scgrp g-quote">
-                    <div class="scgrp-h">Quote stages</div>
-                    <div class="scards">
-                      <div class="scard"><span class="swatch" style="background:#7c3aed"></span><span class="pillc" style="background:#7c3aed">Quote drafted</span></div>
-                      <div class="scard"><span class="swatch" style="background:#f59e0b"></span><span class="pillc dark" style="background:#f59e0b">Quote sent</span></div>
-                      <div class="scard card-acc"><span class="swatch sw-acc"></span><span class="pillc pc-acc">Accepted</span></div>
-                      <div class="scard"><span class="swatch" style="background:#dc2626"></span><span class="pillc" style="background:#dc2626">Declined</span></div>
-                      <div class="scard"><span class="swatch" style="background:#0891b2"></span><span class="pillc" style="background:#0891b2">Ordered</span></div>
-                    </div>
+                <!-- 1 — traffic lights -->
+                <div class="sc" data-scene="1" data-len="' . $len(1) . '">
+                  ' . $tabs('Status colours', '2s') . '
+                  <div class="a-move" style="--fx:70%;--fy:80%;--tx:10.6rem;--ty:.9rem;--d:.5s;--md:1.6s">' . $ptr . '</div>
+                  <p class="scs a-fade" style="--d:3s">Your &ldquo;traffic-light&rdquo; colours. A job shows the same colour everywhere it appears &mdash; on the
+                     <b>calendar</b> and in your <b>orders list</b> &mdash; and the calendar updates itself as the job moves from stage to stage.</p>
+                  <div class="row" style="align-items:flex-start;gap:1rem">
+                    <div class="a-rise" style="--d:7s"><div class="gh">Calendar</div>
+                      <div class="cal" style="grid-template-columns:repeat(2,6.5rem)"><div>Tue 14<span class="ca stk" style="display:grid">
+                          <span class="a-out" style="--d:17s;background:#f59e0b;color:#1f2937;border-radius:4px;padding:0 .2rem">10:00 Hall</span>
+                          <span class="a-fade" style="--d:17s;background:#16a34a;color:#fff;border-radius:4px;padding:0 .2rem">10:00 Hall</span></span></div>
+                        <div>Wed 15<span class="ca" style="background:#0891b2;color:#fff">14:00 Patel</span></div></div></div>
+                    <div class="a-rise" style="--d:11s"><div class="gh">Orders list</div>
+                      <div class="ol" style="width:13rem"><div><span>Mrs Hall</span><span class="stk">
+                          <span class="a-out" style="--d:17s">' . $pill('Quote sent', '#f59e0b') . '</span><span class="a-fade" style="--d:17s">' . $pill('Accepted', '#16a34a') . '</span></span></div>
+                        <div><span>Mr Patel</span>' . $pill('Ordered', '#0891b2') . '</div></div></div>
                   </div>
-
-                  <div class="scgrp g-appt">
-                    <div class="scgrp-h">Appointments &amp; job</div>
-                    <div class="scards">
-                      <div class="scard card-ab"><span class="swatch" style="background:#2563eb"></span><span class="pillc" style="background:#2563eb">Appointment booked</span></div>
-                      <div class="scard card-fb"><span class="swatch" style="background:#6366f1"></span><span class="pillc" style="background:#6366f1">Fitting booked</span></div>
-                      <div class="scard"><span class="swatch" style="background:#0d9488"></span><span class="pillc" style="background:#0d9488">Fitted</span></div>
-                      <div class="scard"><span class="swatch" style="background:#ea580c"></span><span class="pillc" style="background:#ea580c">Invoiced</span></div>
-                      <div class="scard"><span class="swatch" style="background:#475569"></span><span class="pillc" style="background:#475569">Paid</span></div>
-                      <div class="scard"><span class="swatch" style="background:#b91c1c"></span><span class="pillc" style="background:#b91c1c">Cancelled</span></div>
-                      <div class="scard"><span class="swatch" style="background:#9ca3af"></span><span class="pillc dark" style="background:#9ca3af">No-show</span></div>
-                    </div>
+                  <div class="row mt">
+                    <span class="chip a-pop" style="--d:12.5s">Same colour everywhere</span>
+                    <span class="chip a-pop" style="--d:17.5s;border-color:var(--good)">Quote accepted &rarr; the colour changes by itself</span>
                   </div>
-
-                  <div class="scgrp g-flag">
-                    <div class="scgrp-h">Flags</div>
-                    <div class="scards">
-                      <div class="scard card-iss"><span class="swatch" style="background:#e11d48"></span><span class="pillc" style="background:#e11d48">Issue</span></div>
-                    </div>
-                    <div class="issalone">
-                      <div class="calrow" style="margin-top:.25rem">
-                        <div class="calchip ch-iss"><span class="ctime">09:30</span><span class="ctitle">PRE-2026-0041 &mdash; Mr Dodds</span></div>
-                      </div>
-                      <span class="issbtn">&#9888;&#65039; Issues (2)</span>
-                    </div>
-                  </div>
-
-                  <div class="lumen">
-                    Writing picks itself:
-                    <span class="pillc dark" style="background:#fde68a">Pale &rarr; black writing</span>
-                    <span class="pillc" style="background:#1e3a8a">Dark &rarr; white writing</span>
-                  </div>
-
-                  <div class="save">Save status colours</div>
                 </div>
 
-                <div class="picker">
-                  <div class="pk-bar">Colour <span>&times;</span></div>
-                  <div class="pk-body">
-                    <div class="pk-sq"></div>
-                    <div class="pk-side">
-                      <div class="pk-hue"></div>
-                      <div class="pk-eye">&#9673; Eyedropper</div>
-                      <div class="pk-hexrow"><span class="pk-hexlbl">Hex</span><span class="pk-hex">#9333EA</span></div>
-                    </div>
-                  </div>
-                  <div class="pk-btns"><span class="pk-btn">Cancel</span><span class="pk-btn go">OK</span></div>
+                <!-- 2 — the three groups -->
+                <div class="sc" data-scene="2" data-len="' . $len(2) . '">
+                  <div class="sct a-fade" style="--d:.2s">Thirteen stages, three groups</div>
+                  ' . $groups(
+                        static function ($k, $i, $g) {
+                            $start = ['Quote stages' => 4, 'Appointments & job' => 11.5, 'Flags' => 16.5][$g];
+                            return ['a-fly', '--d:' . ($start + $i * .55) . 's'];
+                        },
+                        static fn ($g) => ['a-ring', '--d:' . ['Quote stages' => 3, 'Appointments & job' => 10.5, 'Flags' => 16][$g] . 's']
+                    ) . '
                 </div>
 
-                <div class="calscene">
-                  <div class="card-t">Calendar &mdash; September 2026</div>
-                  <div class="callegend">
-                    <span><i style="background:#7c3aed"></i> Quote drafted</span>
-                    <span><i style="background:#f59e0b"></i> Quote sent</span>
-                    <span><i style="background:#9333ea"></i> Accepted</span>
-                    <span><i style="background:#dc2626"></i> Declined</span>
-                    <span><i style="background:#0891b2"></i> Ordered</span>
-                    <span><i style="background:#2563eb"></i> Appointment booked</span>
-                    <span><i style="background:#6366f1"></i> Fitting booked</span>
-                    <span><i style="background:#0d9488"></i> Fitted</span>
-                    <span><i style="background:#ea580c"></i> Invoiced</span>
-                    <span><i style="background:#475569"></i> Paid</span>
-                    <span><i style="background:#b91c1c"></i> Cancelled</span>
-                    <span><i style="background:#9ca3af"></i> No-show</span>
-                    <span><i style="background:transparent;outline:2px solid #111827;outline-offset:-2px"></i> = Fitting</span>
-                    <span style="color:#e11d48;font-weight:700"><i style="background:transparent;outline:2px solid #e11d48;outline-offset:-2px"></i> &#9888;&#65039; Issues (2)</span>
+                <!-- 3 — two visits -->
+                <div class="sc" data-scene="3" data-len="' . $len(3) . '">
+                  <div class="sct a-fade" style="--d:.2s">Two visits &mdash; two colours</div>
+                  <div class="two" style="margin-top:.5rem">
+                    <div class="vis a-rise" style="--d:3s">' . $card('appointment_booked', 'big') . '<h4>&#128207; The measure visit</h4>Before there is a quote.</div>
+                    <div class="vis a-rise" style="--d:8.5s">' . $card('booked', 'big') . '<h4>&#128295; The install visit</h4>After the quote is accepted.</div>
                   </div>
-                  <div class="calrow">
-                    <div class="calchip ch-acc"><span class="ctime">10:00</span><span class="ctitle">PRE-2026-0042 &mdash; Mrs Patel</span></div>
-                    <div class="calchip ch-acc"><span class="ctime">13:15</span><span class="ctitle">PRE-2026-0045 &mdash; Mr Okafor</span></div>
-                    <div class="calchip ch-fit"><span class="ctime">15:00</span><span class="ctitle">PRE-2026-0044 &mdash; Mrs Hale</span></div>
+                  <div class="cal a-rise mt" style="--d:13s">
+                    <div>Mon 13<span class="ca" style="background:#2563eb;color:#fff">09:00 Measure &middot; Lee</span></div>
+                    <div>Tue 14</div>
+                    <div>Wed 15<span class="ca fit" style="background:#6366f1;color:#fff">10:00 Fit &middot; Hall</span></div>
+                    <div>Thu 16<span class="ca" style="background:#2563eb;color:#fff">13:30 Measure &middot; Ross</span></div>
+                    <div>Fri 17<span class="ca fit" style="background:#6366f1;color:#fff">09:00 Fit &middot; Patel</span></div>
                   </div>
-                  <p class="pipenote">A card shows the time and the job, and nothing else &mdash; the stage is the colour. Fittings
-                     carry a dark outline; measures don&rsquo;t.</p>
+                  <div class="row mt"><span class="chip a-pop" style="--d:17s">Different days, different jobs &mdash; tell them apart at a glance</span></div>
                 </div>
 
-                <div class="pipescene">
-                  <div class="card-t">Orders &amp; Pipeline</div>
-                  <div class="ordrow"><b>PRE-2026-0042 Patel</b><span class="pillc" style="background:#9333ea">Accepted</span></div>
-                  <div class="ordrow"><b>PRE-2026-0043 Nunn</b><span class="pillc dark" style="background:#f59e0b">Quote</span><span class="notsent">Not sent</span></div>
-                  <div class="ordrow"><b>PRE-2026-0044 Hale</b><span class="pillc" style="background:#0891b2">Ordered</span></div>
-                  <div class="pipecols">
-                    <div class="pipecol"><div class="ph2" style="background:#f59e0b;color:#1f2937">Quote</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#dc2626">Declined</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#9333ea">Accepted</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#0891b2">Ordered</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#0d9488">Fitted</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#ea580c">Invoiced</div><div class="pb"></div></div>
-                    <div class="pipecol"><div class="ph2" style="background:#475569">Paid</div><div class="pb"></div></div>
+                <!-- 4 — issue -->
+                <div class="sc" data-scene="4" data-len="' . $len(4) . '">
+                  <div class="sct a-fade" style="--d:.2s">Issue is a warning, not a stage</div>
+                  <div class="row" style="margin:.4rem 0 .7rem">' . $card('issue', 'big a-ring', '--d:14s') . '</div>
+                  <div class="cal a-rise" style="--d:2s;grid-template-columns:repeat(3,1fr);max-width:22rem">
+                    <div>Tue 14<span class="ca" style="background:#16a34a;color:#fff">10:00 Hall</span></div>
+                    <div>Wed 15<span class="ca stk" style="display:grid">
+                        <span class="a-out" style="--d:6s;background:#6366f1;color:#fff;border-radius:4px;padding:0 .2rem">14:00 Fit &middot; Patel</span>
+                        <span class="iss a-pop" style="--d:6s;background:#6366f1;color:#fff;border-radius:4px;padding:0 .2rem;outline:2px solid #e11d48;outline-offset:1px">&#9888; 14:00 Fit &middot; Patel</span></span></div>
+                    <div>Thu 16<span class="ca" style="background:#0d9488;color:#fff">09:00 Ross</span></div>
                   </div>
-                  <p class="pipenote">The <b>Quote</b> column holds drafted <i>and</i> sent quotes, and uses the <b>Quote sent</b> colour.</p>
+                  <div class="row mt">
+                    <span class="chip a-pop" style="--d:8s">A ring in your Issue colour &mdash; on top of the stage colour</span>
+                  </div>
+                  <div class="row mt"><span class="chip warn a-pop" style="--d:15s">Pick something loud that nothing else uses</span></div>
                 </div>
 
-                <div class="caps">
-                  <b class="c1"><span class="n">1</span> Settings &rarr; Status colours &mdash; thirteen stages, three groups.</b>
-                  <b class="c2"><span class="n">2</span> Appointment booked = the measure. Fitting booked = the install.</b>
-                  <b class="c3"><span class="n">3</span> Issue isn&rsquo;t a stage &mdash; it&rsquo;s a warning ring.</b>
-                  <b class="c4"><span class="n">4</span> Click the colour square &mdash; your computer&rsquo;s colour box opens.</b>
-                  <b class="c5"><span class="n">5</span> The pill updates, and picks black or white writing itself.</b>
-                  <b class="c6"><span class="n">6</span> The calendar and its key follow along.</b>
-                  <b class="c7"><span class="n">7</span> So do your orders list and the Pipeline.</b>
-                  <b class="c8 good"><span class="n">8</span> Saved &mdash; and you come back to this same tab.</b>
+                <!-- 5 — change a colour -->
+                <div class="sc" data-scene="5" data-len="' . $len(5) . '">
+                  <div class="sct a-fade" style="--d:.2s">Click the little colour square</div>
+                  <div class="gh">Quote stages</div>
+                  <div class="gr">' . $card('draft') . $card('sent') . $card('accepted', 'a-ring', '--d:2.5s') . '</div>
+                  <div class="a-move nophone" style="--fx:80%;--fy:95%;--tx:16.9rem;--ty:3.7rem;--d:.8s;--md:1.6s">' . $ptr . '</div>
+                  <div class="osp a-pop" style="--d:3.5s">
+                    <div class="grad"><span class="dot" style="right:12%;top:18%"></span></div>
+                    <div class="hue"></div>
+                    <div class="hx"><span class="f"><span class="a-type" style="--d:11s;--ts:7;--tt:.8s">#9333ea</span></span><span class="ok a-press" style="--d:15s">OK</span></div>
+                  </div>
+                  <div class="row" style="margin-top:9.6rem"><span class="chip a-pop" style="--d:6s">Your computer&rsquo;s own colour picker &mdash; it looks different on every computer</span></div>
                 </div>
+
+                <!-- 6 — the sample pill -->
+                <div class="sc" data-scene="6" data-len="' . $len(6) . '">
+                  <div class="sct a-fade" style="--d:.2s">The sample pill changes straight away</div>
+                  <div class="row" style="margin:.5rem 0 .8rem">
+                    <span class="cc big a-ring" style="--d:1.5s"><span class="stk"><i class="sw a-out" style="--d:2s;background:#16a34a"></i><i class="sw a-fade" style="--d:2s;background:#9333ea"></i></span>
+                      <span class="stk"><span class="a-out" style="--d:2.5s">' . $pill('Accepted', '#16a34a') . '</span><span class="a-fade" style="--d:2.5s">' . $pill('Accepted', '#9333ea') . '</span></span></span>
+                  </div>
+                  <div class="row" style="align-items:flex-start;gap:1rem">
+                    <div class="a-rise" style="--d:9s"><div class="gh" style="display:block">Pale colour</div><span class="cc big"><i class="sw" style="background:#fde68a"></i>' . $pill('Accepted', '#fde68a') . '</span>
+                      <div class="scs" style="margin-top:.3rem">&rarr; dark writing</div></div>
+                    <div class="a-rise" style="--d:12s"><div class="gh" style="display:block">Dark colour</div><span class="cc big"><i class="sw" style="background:#1e3a8a"></i>' . $pill('Accepted', '#1e3a8a') . '</span>
+                      <div class="scs" style="margin-top:.3rem">&rarr; white writing</div></div>
+                  </div>
+                  <div class="row"><span class="chip a-pop" style="--d:15s">Always readable &mdash; worked out for you</span></div>
+                </div>
+
+                <!-- 7 — save -->
+                <div class="sc" data-scene="7" data-len="' . $len(7) . '">
+                  <div class="bnr a-drop" style="--d:10.5s">&#10003; Status colours saved.</div>
+                  ' . $tabs('Status colours', '14s') . '
+                  <div class="gh">Quote stages</div>
+                  <div class="gr">' . $card('draft') . $card('sent') . '<span class="cc"><i class="sw" style="background:#9333ea"></i>' . $pill('Accepted', '#9333ea') . '</span>' . $card('declined') . '</div>
+                  <div class="mt"><span class="btnp a-press" style="--d:8.5s">Save status colours</span>
+                    <span class="chip a-pop" style="--d:2s;margin-left:.4rem">Nothing is saved until you press it</span></div>
+                  <div class="a-move" style="--fx:80%;--fy:95%;--tx:6.5rem;--ty:9.6rem;--d:6.5s;--md:1.6s">' . $ptr . '</div>
+                </div>
+
+                <!-- 8 — on the calendar -->
+                <div class="sc" data-scene="8" data-len="' . $len(8) . '">
+                  <div class="sct a-fade" style="--d:.2s">See it on the calendar</div>
+                  <div class="key a-fade" style="--d:7s">' . $pill('Quote sent', '#f59e0b') . '<span class="stk"><span class="a-out" style="--d:8s">' . $pill('Accepted', '#16a34a') . '</span><span class="a-fade" style="--d:8s">' . $pill('Accepted', '#9333ea') . '</span></span>'
+                    . $pill('Ordered', '#0891b2') . $pill('Fitting booked', '#6366f1') . $pill('Paid', '#475569') . '</div>
+                  <div class="cal a-rise" style="--d:1s">
+                    <div>Mon 13<span class="ca stk" style="display:grid"><span class="a-out" style="--d:3.5s;background:#16a34a;color:#fff;border-radius:4px;padding:0 .2rem">09:00 Lee</span><span class="a-fade" style="--d:3.5s;background:#9333ea;color:#fff;border-radius:4px;padding:0 .2rem">09:00 Lee</span></span></div>
+                    <div>Tue 14<span class="ca" style="background:#f59e0b;color:#1f2937">11:00 Ross</span></div>
+                    <div>Wed 15<span class="ca stk" style="display:grid"><span class="a-out" style="--d:4.5s;background:#16a34a;color:#fff;border-radius:4px;padding:0 .2rem">14:00 Hall</span><span class="a-fade" style="--d:4.5s;background:#9333ea;color:#fff;border-radius:4px;padding:0 .2rem">14:00 Hall</span></span></div>
+                    <div>Thu 16<span class="ca fit" style="background:#6366f1;color:#fff">10:00 Patel</span></div>
+                    <div>Fri 17<span class="ca" style="background:#0891b2;color:#fff">13:00 Khan</span></div>
+                  </div>
+                  <div class="ol a-rise mt" style="--d:11s">
+                    <div><span>Mrs Hall &middot; BRI-2026-0042</span>' . $pill('Accepted', '#9333ea') . '</div>
+                    <div><span>Mr Khan &middot; BRI-2026-0039</span>' . $pill('Ordered', '#0891b2') . '</div>
+                  </div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:15s">&#128274; Customers never see these colours</span></div>
+                </div>
+
+                <!-- 9 — tips -->
+                <div class="sc" data-scene="9" data-len="' . $len(9) . '">
+                  <div class="sct a-fade" style="--d:.2s">Two tips</div>
+                  <div class="two" style="margin-top:.5rem">
+                    <div class="vis a-rise" style="--d:1.5s"><h4 style="margin-top:0">&#10007; Two stages, one colour</h4>
+                      <div class="row">' . $pill('Accepted', '#0891b2') . $pill('Ordered', '#0891b2') . '</div>
+                      <div style="margin-top:.35rem">Which is which?</div></div>
+                    <div class="vis a-rise" style="--d:9s"><h4 style="margin-top:0">&#10007; Very pale</h4>
+                      <div class="cal" style="grid-template-columns:repeat(2,1fr)"><div>Tue 14<span class="ca" style="background:#f8fafc;color:#94a3b8">10:00 Hall</span></div><div>Wed 15</div></div>
+                      <div style="margin-top:.35rem">Looks like an empty day.</div></div>
+                  </div>
+                  <div class="row mt">
+                    <span class="chip warn a-pop" style="--d:16s">No reset button &mdash; note the code first</span>
+                    <span class="chip a-pop" style="--d:18s">Accepted <code>#16a34a</code></span>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>Open <b>Settings</b> from the sidebar. The sidebar is grouped, and Settings lives inside the collapsible
-             <b>Setup</b> group, below <b>Work</b> and <b>Retail</b> &mdash; click the little arrow on <b>Setup</b> if it is
-             folded away. Then click the <b>Status colours</b> tab &mdash; it is the <b>fourth</b> one along,
-             after Company, Quoting and Legal. You will know you are in the right place by the grey line at the top:
-             &ldquo;<em>Your &lsquo;traffic-light&rsquo; colours. A job shows the same colour everywhere it appears&hellip;</em>&rdquo;
-             You choose these colours <b>once, for the whole company</b> &mdash; everyone who logs in sees your colours. Your
-             <b>customer never sees them</b>; they are for you and your team.</p>
+          <p><b>Getting here.</b> <b>Settings</b> (in the <b>Setup</b> group of the sidebar) &rarr; the <b>Status colours</b> tab, fourth
+             along. The line at the top reads: <em>&ldquo;Your &lsquo;traffic-light&rsquo; colours. A job shows the same colour everywhere it
+             appears &mdash; on the calendar and in your orders list &mdash; and the calendar updates itself as the job moves from stage to stage.
+             Pick a colour for each stage below; the sample pill updates as you go.&rdquo;</em> The colours are for the whole company, and your
+             <b>customers never see them</b>.</p>
 
-          <p class="prose"><b>The three groups &mdash; all thirteen stages</b></p>
           <ul class="steps">
-            <li><b>Quote stages</b> &mdash; the life of a quote: <b>Quote drafted</b>, <b>Quote sent</b>, <b>Accepted</b>,
-                <b>Declined</b>, <b>Ordered</b>.</li>
-            <li><b>Appointments &amp; job</b> &mdash; the visits and the work that follows: <b>Appointment booked</b>,
-                <b>Fitting booked</b>, <b>Fitted</b>, <b>Invoiced</b>, <b>Paid</b>, <b>Cancelled</b>, <b>No-show</b>.</li>
-            <li><b>Flags</b> &mdash; just one: <b>Issue</b>.</li>
+            <li><b>Quote stages</b> &mdash; <b>Quote drafted</b>, <b>Quote sent</b>, <b>Accepted</b>, <b>Declined</b>, <b>Ordered</b>.</li>
+            <li><b>Appointments &amp; job</b> &mdash; <b>Appointment booked</b>, <b>Fitting booked</b>, <b>Fitted</b>, <b>Invoiced</b>,
+                <b>Paid</b>, <b>Cancelled</b>, <b>No-show</b>.</li>
+            <li><b>Flags</b> &mdash; <b>Issue</b>.</li>
           </ul>
 
-          <p class="prose"><b>The two that catch people out.</b> <b>Appointment booked</b> is the <b>measure</b> visit &mdash; you have
-             been out to measure, or you are about to, and there is no quote yet. <b>Fitting booked</b> is the <b>install</b> visit,
-             once the quote has been accepted or ordered. They are two different days, for two different jobs, so give them two
-             clearly different colours.</p>
-          <p class="prose">You never set either of them by hand. A calendar entry has no colour of its own &mdash; YourBlinds works it
-             out for you: a <b>measure</b> visit borrows the stage of the quote it is attached to (no quote yet = Appointment booked,
-             then drafted, sent, accepted, declined, ordered as the quote moves on); a <b>fitting</b> visit reads an accepted or
-             ordered quote as <b>Fitting booked</b>, then follows the job through <b>Fitted</b>, <b>Invoiced</b> and <b>Paid</b>. And
-             if you mark the appointment <b>Cancelled</b> or a <b>No-show</b>, that always wins, whatever the quote says.</p>
+          <p class="prose"><b>Appointment booked</b> is the <b>measure</b> visit (no quote yet); <b>Fitting booked</b> is the <b>install</b> visit,
+             once the quote is accepted or ordered. A calendar entry takes its colour from the stage of the job it belongs to, so you never set
+             it by hand &mdash; and marking an appointment <b>Cancelled</b> or a <b>No-show</b> always wins.</p>
+          <p class="prose"><b>Issue is a warning, not a stage.</b> Flagging a job draws a <b>ring</b> in your Issue colour round its calendar card,
+             on top of its stage colour, and colours the calendar&rsquo;s <b>Issues</b> filter button. Pick a loud colour nothing else uses.</p>
 
-          <p class="prose"><b>Issue is not a stage &mdash; it is a warning.</b> Flagging a job does not repaint its card. It draws a
-             <b>ring</b> round the card in your Issue colour with a <span class="req">&#9888;</span> mark, <b>on top of</b> whatever
-             stage colour the job already has, and it colours the <b>&ldquo;&#9888;&#65039; Issues&rdquo;</b> button in the calendar&rsquo;s
-             key &mdash; the button that filters the calendar down to flagged jobs only, and counts them for you. Pick something
-             loud that nothing else uses.</p>
-
-          <p class="prose"><b>Changing a colour</b></p>
           <ul class="steps">
-            <li><b>Click the little colour square</b> on the left of the card &mdash; the square one, not the pill. It is a proper
-                control, noticeably bigger than the pill beside it.</li>
-            <li><b>Your computer&rsquo;s own colour box opens.</b> This part is <b>not</b> YourBlinds, so it looks different on
-                Windows, on a Mac and in different browsers. Every version of it lets you drag on a colour square or type a colour
-                code such as <code>#9333ea</code>. Then choose <b>OK</b>.</li>
-            <li><b>The sample pill changes straight away</b> so you can see what you have done. Work through as many stages as you
-                like &mdash; <b>nothing is saved</b> until you press the button.</li>
-            <li><b>Black or white writing sorts itself out.</b> YourBlinds measures how light the colour you picked is; anything
-                bright gets <b>near-black</b> writing, anything dark gets <b>white</b>. That is why a pale yellow pill shows black
-                letters and a navy one shows white. You never have to think about legibility.</li>
-            <li><b>Press &ldquo;Save status colours&rdquo;</b> &mdash; the one button at the bottom of the form, and the only button
-                on the whole tab.</li>
+            <li><b>Click the little colour square</b> on a stage&rsquo;s card (the square, not the pill).</li>
+            <li><b>Your computer&rsquo;s own colour picker opens</b> &mdash; not part of YourBlinds, so it looks different on Windows, Mac and
+                different browsers. Pick a colour or type a code such as <code>#9333ea</code>, then <b>OK</b>.</li>
+            <li><b>The sample pill changes straight away.</b> The writing on it picks itself: light colours get dark writing, dark colours get
+                white.</li>
+            <li><b>Save status colours</b> &mdash; nothing is saved until you press it. You&rsquo;ll see <b>&ldquo;Status colours saved.&rdquo;</b>;
+                the page reloads and reopens on the <b>Status colours</b> tab (the last tab is remembered in this browser).</li>
           </ul>
 
-          <div class="heads"><span class="hi">&#9888;</span><div><b>The whole page reloads &mdash; and remembers your tab.</b> You will
-             see a green <b>&ldquo;Status colours saved.&rdquo;</b> banner at the top of the page. Saving reloads the whole Settings
-             page, and it puts you straight back on <b>Status colours</b>, because the tab you last clicked is remembered
-             <b>in that browser, on that computer</b>. Sign in somewhere else &mdash; a different machine, a different browser, or
-             after you have cleared your browsing data &mdash; and Settings opens on <b>Company</b>, the first tab, instead. Either
-             way nothing has been lost; just click <b>Status colours</b> again.</div></div>
+          <p><b>Where to check.</b> The <b>calendar</b> &mdash; the cards and the little key along the top are built from this list (fittings carry a
+             dark outline so you can tell them from measures). The same colours are the status pills in your <b>orders list</b> and the columns of the
+             <b>Pipeline</b>. On the Pipeline, the <b>Quote</b> column holds drafted and sent quotes together in your <b>Quote sent</b> colour.</p>
 
-          <p class="prose"><b>Where to check your work.</b> Open the <b>calendar</b> &mdash; it is a rolling six-week grid, not a
-             month picker. It opens on the Monday of this week and shows the six weeks that follow, and the <b>&lsaquo;</b> and
-             <b>&rsaquo;</b> arrows step it a week at a time. The little key along the top is built
-             from this very list, so it is the quickest place to see all your colours together. Fittings carry a dark outline there so
-             you can tell a fitting from a measure at a glance. A card itself only ever shows the <b>time</b> and the <b>job</b> &mdash;
-             it never writes the stage out, which is exactly why the colour has to earn its keep. (If you are unsure of one, rest your
-             mouse on the card: the little pop-up names the stage for you.) The same colours turn up as the status pills in your <b>orders list</b>,
-             on the <b>Pipeline</b> board, and on the <b>Today&rsquo;s run</b> sheet.</p>
+          <p class="prose"><b>Putting a colour back.</b> There is no reset button &mdash; type the standard code back in. The standard colours:
+             Quote drafted <code>#7c3aed</code>, Quote sent <code>#f59e0b</code>, Accepted <code>#16a34a</code>, Declined <code>#dc2626</code>,
+             Ordered <code>#0891b2</code>, Appointment booked <code>#2563eb</code>, Fitting booked <code>#6366f1</code>, Fitted <code>#0d9488</code>,
+             Invoiced <code>#ea580c</code>, Paid <code>#475569</code>, Cancelled <code>#b91c1c</code>, No-show <code>#9ca3af</code>,
+             Issue <code>#e11d48</code>.</p>
 
-          <p class="prose"><b>One thing to know about the Pipeline.</b> The board has seven columns &mdash; <b>Quote</b>, <b>Declined</b>,
-             <b>Accepted</b>, <b>Ordered</b>, <b>Fitted</b>, <b>Invoiced</b>, <b>Paid</b>. The <b>Quote</b> column holds drafted
-             <em>and</em> sent quotes together, and it is drawn in your <b>Quote sent</b> colour. So changing <b>Quote drafted</b>
-             will not change that column &mdash; nor the &ldquo;Quote&rdquo; pill in the quotes view of your orders list, which merges
-             them the same way.</p>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Two tips.</b> Don&rsquo;t give two stages the <b>same colour</b> &mdash; nothing
+             stops you, but it spoils the traffic lights. And go easy on <b>very pale</b> shades: on a busy calendar a near-white card reads as an
+             empty day.</div></div>
 
-          <p class="prose"><b>Putting a colour back.</b> There is no reset button, so if you want a standard colour back you type its
-             code in again. YourBlinds only remembers the ones you actually <b>changed</b>, so anything you set back to its code goes
-             back to being a standard colour. Here they all are:</p>
-          <div class="deft">
-            <span><i style="background:#7c3aed"></i> Quote drafted <code>#7c3aed</code></span>
-            <span><i style="background:#f59e0b"></i> Quote sent <code>#f59e0b</code></span>
-            <span><i style="background:#16a34a"></i> Accepted <code>#16a34a</code></span>
-            <span><i style="background:#dc2626"></i> Declined <code>#dc2626</code></span>
-            <span><i style="background:#0891b2"></i> Ordered <code>#0891b2</code></span>
-            <span><i style="background:#2563eb"></i> Appointment booked <code>#2563eb</code></span>
-            <span><i style="background:#6366f1"></i> Fitting booked <code>#6366f1</code></span>
-            <span><i style="background:#0d9488"></i> Fitted <code>#0d9488</code></span>
-            <span><i style="background:#ea580c"></i> Invoiced <code>#ea580c</code></span>
-            <span><i style="background:#475569"></i> Paid <code>#475569</code></span>
-            <span><i style="background:#b91c1c"></i> Cancelled <code>#b91c1c</code></span>
-            <span><i style="background:#9ca3af"></i> No-show <code>#9ca3af</code></span>
-            <span><i style="background:#e11d48"></i> Issue <code>#e11d48</code></span>
-          </div>
-
-          <div class="heads"><span class="hi">&#9888;</span><div><b>Two bits of friendly advice.</b> First, don&rsquo;t give two stages
-             the <b>same colour</b> &mdash; nothing stops you doing it, and it quietly ruins the whole point of the traffic lights.
-             Second, <b>go easy on very pale shades</b>: on a busy calendar the day cells are small, and a near-white card just reads as
-             an empty square.</div></div>
-
-          <p class="prose"><b>Where these colours don&rsquo;t reach.</b> Nothing your customer sees uses them &mdash; not a quote, not an
-             invoice. Neither does the <b>factory floor</b> or your <b>production areas</b>, and nor do the <b>fulfilment</b> or
-             <b>invoicing</b> badges; those all have their own look. Two smaller ones worth knowing: the amber <b>&ldquo;Not sent&rdquo;</b>
-             mark beside a quote that hasn&rsquo;t gone out to the customer yet is fixed and isn&rsquo;t on this list; and
-             <b>Appointment booked</b>, <b>Cancelled</b>, <b>No-show</b> and <b>Issue</b> only ever show on the <b>calendar</b>, never in
-             the orders list &mdash; so don&rsquo;t go hunting for a recoloured No-show among your orders.</p>
-
-          <div class="oops"><b>Nothing here can go wrong.</b> A colour box can only hold a real colour, so there is nothing to type
-             incorrectly and nothing to validate. The only message you could ever see instead of the green one is a database
-             complaint &mdash; <code>Could not save colours: &hellip; &mdash; have you run migrate_job_status_colours.php?</code> &mdash;
-             which means the upgrade step hasn&rsquo;t been run yet. Show that one to whoever looks after your setup.</div>',
-        // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
-        'script'  => [
-            ['0:00', 'The Status colours tab; Quote stages ringed.',        'This is Settings, Status colours — the fourth tab along. Thirteen stages, in three groups. Quote stages is the life of a quote: drafted, sent, accepted, declined, ordered.', 1],
-            ['0:13', 'Appointments & job ringed; the two visits picked out.', 'Appointments and job covers the visits and the work. Watch these two — Appointment booked is the measure visit, before there is a quote. Fitting booked is the install visit. They are different days, so give them different colours.', 2],
-            ['0:28', 'Flags ringed; a flagged card shows the Issue ring.',   'Flags has just one — Issue. That is not a stage, it is a warning ring drawn round a job that has gone wrong, on top of whatever colour it already has. It also colours the Issues button on the calendar.', 3],
-            ['0:42', 'Accepted ringed; the computer\'s colour box opens.',   'To change one, click its little colour square. Your computer\'s own colour box opens — it will look a bit different on every machine. Type a colour code or pick one, and choose OK.', 4],
-            ['0:55', 'The Accepted swatch and pill turn violet.',           'The sample pill changes straight away so you can see what you have done. Notice the writing stays readable — YourBlinds works out whether black or white letters show up better, so pale colours get black writing and dark ones get white. You never have to think about it.', 5],
-            ['1:10', 'Calendar: key plus cards in the new colour.',         'Now look at the calendar. Every job in that stage has turned violet by itself, and the little key along the top has changed with it. Fittings carry a dark outline, so you can tell a fitting from a measure at a glance.', 6],
-            ['1:24', 'Orders list pills and the Pipeline columns.',         'It is the same in your orders list and on the Pipeline board. One thing to know — the Quote column holds drafted and sent quotes together, and it uses the Quote sent colour, so changing Quote drafted will not change that column.', 7],
-            ['1:38', 'Save pressed; green banner, Status colours still selected.', 'Press Save status colours. You will see Status colours saved in green. The whole page reloads, but it remembers the tab you were on, so you come straight back to Status colours. That memory lives in this browser — on another computer, Settings opens on the Company tab instead.', 8],
-        ],
+          <div class="oops"><b>Nothing to type wrong.</b> A colour box can only hold a real colour. The only other message you might see is
+             <code>Could not save colours: &hellip; &mdash; have you run migrate_job_status_colours.php?</code> &mdash; show it to whoever looks after
+             your setup.</div>',
+        'script'  => $script,
 ];

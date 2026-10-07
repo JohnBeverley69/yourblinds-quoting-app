@@ -2,90 +2,166 @@
 declare(strict_types=1);
 
 /**
- * Guide: settings-suppliers
+ * Guide: settings-suppliers — "Suppliers" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
- * lede, open, css, demo, body, script (and optionally js).
+ * lede, open, v, css, demo, body, script.
  *
- * Covers /admin/settings.php tab 5 (Suppliers): the delivery address, the
- * four-column supplier table (Supplier / Order email / Account no. / Remove),
- * and the thing that catches everybody out — the supplier NAME is a plain text
- * match against products.supplier_name, not a link, so renaming here does not
- * follow through to your products.
+ * Mirrors Settings → Suppliers (admin/settings.php, POST _action=suppliers):
+ * Delivery address (where suppliers ship to); the table Supplier / Order
+ * email / Account no. (only once migrate_supplier_account_number has run) /
+ * Remove; the "+ Add a supplier" row; In House sorted to the top; "Save
+ * suppliers" → "Suppliers saved." / the rename-clash and bad-email messages.
+ * What it feeds: quote-builder/order_suppliers.php ("Send order to
+ * suppliers": one email per supplier, matched BY NAME, with a spec PDF from
+ * pdf-generator/pdf.php carrying "Deliver to" and "Account no:"), and the
+ * factory's Order bought-in screen.
+ *
+ * v2: one scene per script line; data-len is worked out from the line's own
+ * length (characters ÷ 13.6), so editing a line keeps its scene in step.
  */
+
+$vo = [
+    1  => ['Who you buy from',
+           'The Suppliers tab is your list of the firms you buy stock from. It is not your fabric list. Each name here can be a product\'s order supplier. When you place an order, each supplier is emailed their own lines, using the details on this tab. So two things matter most. The delivery address, and each supplier\'s order email.'],
+    2  => ['The delivery address',
+           'Start with the delivery address. This is where your suppliers send the goods. It goes on every supplier order, so put in the full address, exactly as a courier would need it. Leave it blank, and the send screen warns you in red. But it does not stop you, and the order goes out with no address on it.'],
+    3  => ['One row per supplier',
+           'Below it is the table, with one row per supplier. Supplier is the name. Order email is where their orders are sent. Account number is your trade account number with them, so they know whose order it is. And Remove is a tick box, for deleting a row.'],
+    4  => ['The order email',
+           'The order email is the important one. Your order is emailed to exactly this address, and nowhere else. So copy it from the supplier\'s own paperwork. With no email, that supplier cannot be sent an order, and the send screen tells you to fix it here.'],
+    5  => ['The list fills itself',
+           'You rarely need to add a supplier by hand. Whenever you save a product with an order supplier on it, that name appears here by itself. Usually, all you need to add is the email. To add one yourself, use the bottom row, the one that says, plus Add a supplier.'],
+    6  => ['In House',
+           'If you have a row called In House, it sits at the top of the list. It means you make the blind yourself. So leave its email blank, and nothing is sent. Put a real address on In House, and the app takes you at your word. It will email an order to that address, just like any other supplier.'],
+    7  => ['Save, and the email check',
+           'Click Save suppliers, and a green bar says, Suppliers saved. If an email address is not valid, nothing is saved at all, not even the delivery address. A red message names the supplier, so you know which one to fix. Correct it, and save again.'],
+    8  => ['Removing a supplier',
+           'To delete a stray supplier, tick Remove on its row, and save. Clearing the name box does not delete it. That row is simply skipped. And if a product still uses that name, the supplier comes back the next time that product is saved.'],
+    9  => ['Careful renaming',
+           'Be careful renaming a supplier. Your products hold the supplier\'s name as plain words, not a link. Rename it here, and the products still use the old name. The send screen can then no longer find an email for them. So change the name on your products first, then tidy this list to match.'],
+    10 => ['What it is all for',
+           'Here is what it all does. Once a quote is accepted, Send to suppliers splits the order by supplier. Each one gets an email with only their own lines, and a spec P D F, sent to their order email. Your delivery address and account number go with it. Every send is logged, so an order already sent is left unticked, and you do not order twice.'],
+];
+$len = static fn (int $n): string => (string) round(mb_strlen($vo[$n][1]) / 13.6);
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+
+$tabs = static function (string $on, string $ring = ''): string {
+    $h = '<div class="tabs">';
+    foreach (['Company', 'Quoting', 'Legal', 'Status colours', 'Suppliers', 'Accounting', 'Back up data'] as $t) {
+        $cls = 'tab' . ($t === $on ? ' on' : '');
+        $h  .= $t === $on && $ring !== ''
+            ? '<span class="' . $cls . ' a-ring" style="--d:' . $ring . '">' . $t . '</span>'
+            : '<span class="' . $cls . '">' . $t . '</span>';
+    }
+    return $h . '</div>';
+};
+
+$addr = 'Bright Blinds Ltd<br>Unit 4, Mill Lane<br>Leeds LS12 3AB';
+
+/**
+ * The suppliers table. $rows: [name, email, account, extraClassForRow, removeTicked, cellOverrides[]].
+ * Cell overrides (keys name/email/acct/rm) replace a cell's inner HTML.
+ */
+$table = static function (array $rows, bool $addRow = true, array $addCells = []): string {
+    $h = '<div class="st"><div class="sth"><span>Supplier</span><span>Order email</span><span>Account no.</span><span class="c">Remove</span></div>';
+    foreach ($rows as $r) {
+        [$name, $email, $acct] = $r;
+        $cls = $r[3] ?? ''; $rm = $r[4] ?? false; $ov = $r[5] ?? [];
+        $h .= '<div class="str ' . $cls . '">'
+            . '<span class="in">' . ($ov['name'] ?? $name) . '</span>'
+            . '<span class="in">' . ($ov['email'] ?? ($email !== '' ? $email : '<span class="ph">orders@supplier.com</span>')) . '</span>'
+            . '<span class="in">' . ($ov['acct'] ?? ($acct !== '' ? $acct : '<span class="ph">Your account no.</span>')) . '</span>'
+            . '<span class="c">' . ($ov['rm'] ?? '<span class="cb">' . ($rm ? '<i>&#10003;</i>' : '') . '</span>') . '</span></div>';
+    }
+    if ($addRow) {
+        $h .= '<div class="str">'
+            . '<span class="in">' . ($addCells['name'] ?? '<span class="ph">+ Add a supplier</span>') . '</span>'
+            . '<span class="in">' . ($addCells['email'] ?? '<span class="ph">orders@supplier.com</span>') . '</span>'
+            . '<span class="in">' . ($addCells['acct'] ?? '<span class="ph">Your account no.</span>') . '</span><span></span></div>';
+    }
+    return $h . '</div>';
+};
+$IH = ['In House', '', ''];
+$BW = ['Brightwell Fabrics', 'orders@brightwell-fabrics.co.uk', 'BB2201'];
+$CS = ['Coastline Supply', 'trade@coastline-supply.co.uk', 'C-4471'];
+
+$script = [];
+foreach ($vo as $n => [$cap, $line]) $script[] = [(string) $n, $cap, $line, $n];
 
 return [
         'aud'     => 'admin',
         'section' => 'Settings',
         'title'   => 'Suppliers',
         'eyebrow' => 'Settings · Suppliers',
+        'v'       => 2,
         'blurb'   => 'Your address book of the firms you buy stock from — the delivery address and each supplier\'s order email, and why the name matters more than it looks.',
         'lede'    => 'This tab is your <b>address book of the firms you buy stock from</b>, plus the one address they all ship to.
-                      It is <em>not</em> the fabric library. Two things have to be right: the <b>delivery address</b>, because it prints
-                      on every purchase order, and each supplier&rsquo;s <b>order email</b>, because that is literally where the order
-                      is emailed. Get those two right and &ldquo;Send to suppliers&rdquo; does the rest for you.',
+                      Two things have to be right: the <b>delivery address</b>, because it goes on every supplier order, and each
+                      supplier&rsquo;s <b>order email</b>, because that is exactly where the order is sent. Get those right and
+                      <b>Send to suppliers</b> does the rest. To get there: <b>Settings</b> &rarr; the <b>Suppliers</b> tab.',
         'open'    => '/admin/settings.php',
         'css'     => '
-          /* ---- tab strip (mirrors the real .settings-tabs row) ---- */
-          .gd .tabstrip{ display:flex; flex-wrap:wrap; gap:.25rem; border-bottom:1px solid var(--line); margin-bottom:.85rem; }
-          .gd .stab{ font-size:.7rem; font-weight:600; color:var(--faint); padding:.3rem .55rem; border-radius:7px 7px 0 0; border:1px solid transparent; border-bottom:none; white-space:nowrap; }
-          .gd .stab.on{ color:var(--accent-ink,var(--accent)); background:var(--accent-wash); border-color:var(--line); }
-          .gd .stage[data-step="1"] .stab.on{ box-shadow:0 0 0 3px var(--accent-wash); }
+          .gd .sc{ position:relative; min-height:360px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; }
+          .gd .tabs{ display:flex; flex-wrap:wrap; gap:.1rem; border-bottom:1px solid var(--line); margin:0 0 .7rem; }
+          .gd .tab{ font-size:.66rem; font-weight:600; color:var(--soft); padding:.28rem .45rem; border-radius:6px 6px 0 0; }
+          .gd .tab.on{ color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+          .gd .sh{ font-size:.86rem; font-weight:800; color:var(--ink); margin:0 0 .3rem; }
+          .gd .hn{ display:block; font-size:.64rem; color:var(--faint); line-height:1.4; margin:0 0 .5rem; max-width:34rem; }
+          .gd .lb{ display:block; font-size:.68rem; font-weight:700; color:var(--soft); margin:0 0 .2rem; }
+          .gd .lb .q{ font-weight:400; color:var(--faint); }
+          .gd .ph{ color:var(--faint); }
+          .gd .ta3{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; background:var(--surface); padding:.35rem .5rem; font-size:.7rem;
+                    color:var(--ink); line-height:1.45; max-width:24rem; min-height:3.4rem; }
+          .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px; padding:.34rem .8rem; font-size:.74rem; font-weight:700; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:.28rem .7rem; font-size:.72rem; font-weight:700; color:var(--ink); }
+          .gd .chip.warn{ border-color:#f59e0b; background:color-mix(in srgb,#f59e0b 12%,transparent); }
+          .gd .chip.bad{ border-color:var(--err); color:var(--err); }
+          .gd .bnr{ background:var(--good-wash); border-left:3px solid var(--good); border-radius:8px; padding:.45rem .65rem; font-size:.74rem; font-weight:700; color:var(--ink); margin:0 0 .6rem; }
+          .gd .ebnr{ background:var(--err-wash); border-left:3px solid var(--err); border-radius:8px; padding:.45rem .65rem; font-size:.72rem; color:var(--ink); margin:0 0 .6rem; max-width:34rem; }
+          .gd .row{ display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; } .gd .mt{ margin-top:.7rem; }
+          .gd .stk{ display:inline-grid; } .gd .stk > *{ grid-area:1/1; }
+          .gd .arrow{ color:var(--faint); font-weight:800; }
 
-          /* ---- labels + the grey page hints ---- */
-          .gd .slbl{ display:block; font-size:.72rem; font-weight:600; color:var(--ink); margin-bottom:.3rem; }
-          .gd .muted{ color:var(--faint); font-weight:400; }
-          .gd .taddr{ min-height:76px; }
-          .gd .pghint{ font-size:.66rem; color:var(--faint); margin:.15rem 0 .7rem; line-height:1.5; }
+          /* the suppliers table */
+          .gd .st{ max-width:36rem; font-size:.68rem; }
+          .gd .sth, .gd .str{ display:grid; grid-template-columns:1.1fr 1.6fr .9fr 3rem; gap:.3rem; align-items:center; }
+          .gd .sth{ font-size:.6rem; font-weight:700; color:var(--soft); padding:0 0 .25rem; border-bottom:1px solid var(--line); }
+          .gd .str{ padding:.22rem 0; border-bottom:1px solid var(--line-2); position:relative; }
+          .gd .st .c{ text-align:center; display:flex; justify-content:center; }
+          .gd .st .in{ display:flex; align-items:center; min-height:24px; border:1px solid var(--border-strong,#c7ccd4); border-radius:5px; background:var(--surface);
+                       padding:0 .35rem; color:var(--ink); white-space:nowrap; overflow:hidden; font-size:.66rem; }
+          .gd .st .in.bad{ border-color:var(--err); box-shadow:0 0 0 2px var(--err-wash); }
+          .gd .cb{ position:relative; display:inline-block; width:15px; height:15px; border-radius:4px; border:1.5px solid var(--border-strong,#c7ccd4); background:var(--surface); box-sizing:border-box; }
+          .gd .cb i{ position:absolute; inset:-1.5px; border-radius:4px; background:var(--accent); color:#fff; font-size:.6rem; font-style:normal; font-weight:800; display:grid; place-items:center; }
+          .gd .str.hl{ background:var(--accent-wash); border-radius:6px; }
+          .gd .str.gone{ opacity:.45; text-decoration:line-through; }
 
-          /* ---- the four-column supplier table ---- */
-          .gd .suptable2{ margin-top:.85rem; border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.78rem; }
-          .gd .sup-head, .gd .sup-row{ display:grid; grid-template-columns:1.05fr 1.7fr .9fr 3.4rem; gap:.5rem; align-items:center; padding:.35rem .55rem; }
-          .gd .sup-head{ background:var(--panel); font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; }
-          .gd .sup-head .rm, .gd .sup-row .rm{ text-align:center; justify-self:center; }
-          .gd .sup-row{ border-top:1px solid var(--line); }
-          .gd .sup-row .box{ height:26px; border:1px solid var(--line); border-radius:6px; background:var(--panel); display:flex; align-items:center; padding:0 .45rem; font-size:.74rem; color:var(--ink); overflow:hidden; }
-          .gd .sup-row .box .val{ font-size:.74rem; padding:0 .45rem; }
-          .gd .sup-row .box .ph{ font-size:.72rem; }
+          /* send screen / spec */
+          .gd .sendc{ border:1px solid var(--line); border-radius:10px; background:var(--surface); padding:.45rem .6rem; font-size:.68rem; color:var(--soft); max-width:36rem; }
+          .gd .sendc b{ color:var(--ink); }
+          .gd .warnrow{ color:#b45309; font-weight:700; font-size:.64rem; margin-top:.2rem; }
+          .gd .mail{ border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:var(--gd-shadow); padding:.45rem .6rem; font-size:.66rem; color:var(--soft); }
+          .gd .mail b{ color:var(--ink); }
+          .gd .mail .att{ display:inline-block; margin-top:.3rem; border:1px solid var(--line); border-radius:5px; padding:.1rem .4rem; background:var(--panel); font-weight:700; color:var(--ink); }
+          .gd .mails{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem; max-width:36rem; }
+          .gd .pdel{ border:1px solid #d1d5db; border-radius:6px; padding:.35rem .5rem; background:#fff; color:#1f2937; font-size:.62rem; }
+          .gd .pdel .bl{ font-size:.54rem; text-transform:uppercase; letter-spacing:.05em; color:#6b7280; font-weight:700; }
 
-          /* values that must STAY on screen past step 5 (the shared f1..f5 rules stop there) */
-          .gd .stage[data-step="6"] .keep .ph, .gd .stage[data-step="7"] .keep .ph, .gd .stage[data-step="8"] .keep .ph{ opacity:0; }
-          .gd .stage[data-step="6"] .keep .val, .gd .stage[data-step="7"] .keep .val, .gd .stage[data-step="8"] .keep .val{ opacity:1; }
-
-          /* Decora order email — typed with a typo, rejected, then corrected */
-          .gd .stage[data-step="4"] .emfix .ph, .gd .stage[data-step="5"] .emfix .ph, .gd .stage[data-step="6"] .emfix .ph,
-          .gd .stage[data-step="7"] .emfix .ph, .gd .stage[data-step="8"] .emfix .ph{ opacity:0; }
-          .gd .stage[data-step="4"] .emfix .v-bad, .gd .stage[data-step="5"] .emfix .v-bad,
-          .gd .stage[data-step="6"] .emfix .v-bad{ opacity:1; }
-          .gd .stage[data-step="4"] .emfix .v-bad{ animation: gdRoll .8s ease-out both; }
-          .gd .stage[data-step="7"] .emfix .v-fix, .gd .stage[data-step="8"] .emfix .v-fix{ opacity:1; }
-          .gd .stage[data-step="7"] .emfix .v-fix{ animation: gdRoll .8s ease-out both; }
-          .gd .stage[data-step="6"] .emfix{ border-color:var(--err) !important; box-shadow:0 0 0 3px var(--err-wash); }
-
-          /* the stray row ticked for removal at step 7 */
-          .gd .stage[data-step="7"] .tkS, .gd .stage[data-step="8"] .tkS{ background:var(--accent); color:#fff; }
-          .gd .stage[data-step="7"] .strayrow, .gd .stage[data-step="8"] .strayrow{ opacity:.55; }
-
-          /* flashes — the real page prints alert alert-error / alert alert-success at the top */
-          .gd .flash{ display:none; margin-top:.8rem; }
-          .gd .stage[data-step="6"] .flash-err{ display:block; }
-          .gd .stage[data-step="7"] .flash-ok, .gd .stage[data-step="8"] .flash-ok{ display:block; }
-
-          /* the purchase order payoff */
-          .gd .popanel{ display:none; margin-top:.9rem; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-          .gd .stage[data-step="8"] .popanel{ display:block; }
-          .gd .pohd{ background:var(--panel); border-bottom:1px solid var(--line); padding:.4rem .65rem; display:flex; align-items:baseline; gap:.6rem; }
-          .gd .pohd .pot{ font-size:.72rem; font-weight:800; letter-spacing:.08em; color:var(--ink); }
-          .gd .pohd .por{ font-size:.66rem; color:var(--faint); }
-          .gd .pogrid{ display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.55rem .65rem; }
-          .gd .pobox{ border:1px solid var(--line); border-radius:7px; padding:.35rem .5rem; font-size:.7rem; color:var(--soft); line-height:1.45; }
-          .gd .pobox .pol{ display:block; font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin-bottom:.15rem; }
-          .gd .pofoot{ border-top:1px solid var(--line); padding:.35rem .65rem; font-size:.66rem; color:var(--faint); }
-          @media(max-width:620px){ .gd .pogrid{ grid-template-columns:1fr; } .gd .sup-head, .gd .sup-row{ grid-template-columns:1fr 1.3fr .8fr 2.6rem; } }',
+          @media (max-width:640px){
+            .gd .app{ grid-template-columns:1fr; } .gd .side{ display:none; }
+            .gd .sth, .gd .str{ grid-template-columns:1fr 1.4fr .8fr 2.2rem; }
+            .gd .mails{ grid-template-columns:1fr; }
+            .gd .nophone{ display:none; }
+            .gd .sc{ min-height:430px; }
+          }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / settings / suppliers</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
@@ -94,185 +170,204 @@ return [
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a>
                 <div class="navh">Setup <span class="chev">&#9662;</span></div>
-                <a>Products</a><a>Users</a><a class="on">Settings</a>
+                <a>Products</a><a>Users</a><a class="on">Settings</a><a>Trade terms</a><a>Billing</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
-                <div class="tabstrip">
-                  <span class="stab">Company</span><span class="stab">Quoting</span><span class="stab">Legal</span>
-                  <span class="stab">Status colours</span><span class="stab on">Suppliers</span>
-                  <span class="stab">Accounting</span><span class="stab">Back up data</span>
+
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  ' . $tabs('Suppliers') . '
+                  <div class="sh">Suppliers</div>
+                  ' . $table([$IH, $BW, $CS]) . '
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; ten short chapters.</p>
                 </div>
 
-                <div class="card-t">Suppliers</div>
-                <p class="pghint">Who you <b>order stock from</b> &mdash; these fill a product&rsquo;s <em>Order supplier</em> field and go on purchase orders. Tick a row&rsquo;s delete box to remove a stray (they get added automatically when you save a product).</p>
-
-                <label class="slbl">Delivery address <span class="muted">(where suppliers ship to)</span></label>
-                <div class="ta taddr f2 keep"><span class="ph">Your business / warehouse address &mdash; this goes on every supplier order</span><span class="val">Demo Blinds Ltd<br>Unit 4, Sample Way<br>Leeds<br>LS1 1AA</span></div>
-
-                <p class="pghint" style="margin-top:.8rem">Add the order email for each supplier. You can rename a supplier, tick <b>Remove</b> to delete it, or add one in the bottom row &mdash; then Save. Suppliers you set on products appear here automatically.</p>
-
-                <div class="suptable2">
-                  <div class="sup-head"><span>Supplier</span><span>Order email</span><span>Account no.</span><span class="rm">Remove</span></div>
-
-                  <!-- Deliberate: the "In House" name and the "Louvolight" stray are the only two
-                       values on screen at step 0. Neither is typed by the user — both arrive on
-                       their own (a product saved with that supplier adds the row), and the stray has
-                       to pre-exist for the Remove demonstration at step 7. Every value the narration
-                       actually fills (f2..f5 and the Decora email fix) is blank at step 0. -->
-                  <div class="sup-row">
-                    <span class="box"><span class="val" style="opacity:1">In House</span></span>
-                    <span class="box"><span class="ph">orders@supplier.com</span></span>
-                    <span class="box"><span class="ph">Your account no.</span></span>
-                    <span class="rm"><span class="tick">&check;</span></span>
+                <!-- 1 — who you buy from -->
+                <div class="sc" data-scene="1" data-len="' . $len(1) . '">
+                  ' . $tabs('Suppliers', '2.5s') . '
+                  <div class="a-move" style="--fx:70%;--fy:80%;--tx:16.1rem;--ty:.9rem;--d:.6s;--md:1.6s">' . $ptr . '</div>
+                  <div class="sh a-fade" style="--d:2.5s">Suppliers</div>
+                  <span class="hn a-fade" style="--d:3s">Who you <b>order stock from</b> &mdash; these fill a product&rsquo;s <em>Order supplier</em> field and go on purchase orders.
+                    Tick a row&rsquo;s delete box to remove a stray (they get added automatically when you save a product).</span>
+                  <div class="row">
+                    <span class="chip bad a-pop" style="--d:5.5s">&#10007; Not your fabric list</span>
+                    <span class="chip a-pop" style="--d:8s">Product &rarr; <b>Order supplier</b></span>
+                    <span class="chip a-pop" style="--d:11s">&#9993; Each supplier gets their own lines</span>
                   </div>
-
-                  <div class="sup-row">
-                    <span class="box f3 keep"><span class="ph">Supplier name</span><span class="val">Louvolite</span></span>
-                    <span class="box f3 keep"><span class="ph">orders@supplier.com</span><span class="val">orders@louvolite.example</span></span>
-                    <span class="box f3 keep"><span class="ph">Your account no.</span><span class="val">LV-4471</span></span>
-                    <span class="rm"><span class="tick">&check;</span></span>
-                  </div>
-
-                  <div class="sup-row">
-                    <span class="box f4 keep"><span class="ph">Supplier name</span><span class="val">Decora</span></span>
-                    <span class="box emfix"><span class="ph">orders@supplier.com</span><span class="val v-bad">trade@decora</span><span class="val v-fix">trade@decora.example</span></span>
-                    <span class="box f4 keep"><span class="ph">Your account no.</span><span class="val">DEC-208</span></span>
-                    <span class="rm"><span class="tick">&check;</span></span>
-                  </div>
-
-                  <div class="sup-row strayrow">
-                    <span class="box"><span class="val" style="opacity:1">Louvolight</span></span>
-                    <span class="box"><span class="ph">orders@supplier.com</span></span>
-                    <span class="box"><span class="ph">Your account no.</span></span>
-                    <span class="rm"><span class="tick tkS">&check;</span></span>
-                  </div>
-
-                  <div class="sup-row">
-                    <span class="box f5 keep"><span class="ph">+ Add a supplier</span><span class="val">Blindspace UK</span></span>
-                    <span class="box f5 keep"><span class="ph">orders@supplier.com</span><span class="val">orders@blindspace.example</span></span>
-                    <span class="box f5 keep"><span class="ph">Your account no.</span><span class="val">BS-9902</span></span>
-                    <span class="rm"></span>
+                  <div class="row mt">
+                    <span class="chip warn a-pop" style="--d:17.5s">1 &middot; Delivery address</span>
+                    <span class="chip warn a-pop" style="--d:19.5s">2 &middot; Each order email</span>
                   </div>
                 </div>
 
-                <div class="save">Save suppliers</div>
-
-                <div class="flash flash-err"><div class="errbanner"><span>&#9888;</span><div>That doesn&rsquo;t look like a valid email for &ldquo;Decora&rdquo;.</div></div></div>
-                <div class="flash flash-ok"><div class="okbanner"><span>&check;</span><div>Suppliers saved.</div></div></div>
-
-                <div class="popanel">
-                  <div class="pohd"><span class="pot">PURCHASE ORDER</span><span class="por">Ref: PRE-2026-0042</span></div>
-                  <div class="pogrid">
-                    <div class="pobox"><span class="pol">Supplier</span>Louvolite<br>Account no: LV-4471</div>
-                    <div class="pobox"><span class="pol">Deliver to</span>Demo Blinds Ltd<br>Unit 4, Sample Way<br>Leeds LS1 1AA</div>
+                <!-- 2 — delivery address -->
+                <div class="sc" data-scene="2" data-len="' . $len(2) . '">
+                  <span class="lb a-fade" style="--d:.3s">Delivery address <span class="q">(where suppliers ship to)</span></span>
+                  <div class="ta3 a-ring" style="--d:2s"><span class="stk"><span class="ph a-out" style="--d:4s">Your business / warehouse address &mdash; this goes on every supplier order</span>
+                    <span class="a-fade" style="--d:4s">' . $addr . '</span></span></div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:8s">&#128666; Exactly as a courier would need it</span></div>
+                  <div class="a-rise mt" style="--d:13s">
+                    <div class="ebnr" style="margin:0">No delivery address set &mdash; suppliers won&rsquo;t know where to ship. Add one under <b>Settings &rsaquo; Suppliers</b> first.</div>
                   </div>
-                  <div class="pofoot">Sizes, fabric, band, room, notes and every option &mdash; and no customer prices.</div>
+                  <div class="row mt">
+                    <span class="chip warn a-pop" style="--d:17s">It warns &mdash; it doesn&rsquo;t stop you</span>
+                    <span class="chip bad a-pop" style="--d:19s">Deliver to: &mdash; no delivery address set &mdash;</span>
+                  </div>
                 </div>
 
-                <div class="caps">
-                  <b class="c1"><span class="n">1</span> Settings &rarr; the <b>Suppliers</b> tab, fifth along.</b>
-                  <b class="c2"><span class="n">2</span> Your delivery address &mdash; it prints on every order.</b>
-                  <b class="c3"><span class="n">3</span> Louvolite: name, order email, account number.</b>
-                  <b class="c4"><span class="n">4</span> Decora next &mdash; and <b>In House</b> sits on top.</b>
-                  <b class="c5"><span class="n">5</span> The bottom row adds a new supplier.</b>
-                  <b class="c6 err"><span class="n">6</span> Bad email &mdash; the whole save is thrown out.</b>
-                  <b class="c7 good"><span class="n">7</span> Fixed, stray ticked for Remove, saved.</b>
-                  <b class="c8 good"><span class="n">8</span> That is what your supplier receives.</b>
+                <!-- 3 — the table -->
+                <div class="sc" data-scene="3" data-len="' . $len(3) . '">
+                  <div class="sct a-fade" style="--d:.2s">One row per supplier</div>
+                  <span class="hn a-fade" style="--d:.8s">Add the order email for each supplier. You can rename a supplier, tick <b>Remove</b> to delete it, or add one in the bottom row &mdash; then Save.
+                    Suppliers you set on products appear here automatically.</span>
+                  <div class="a-rise" style="--d:1.5s">' . $table([$IH, $BW, $CS]) . '</div>
+                  <div class="row mt">
+                    <span class="chip a-pop" style="--d:4.5s">Supplier &mdash; the name</span>
+                    <span class="chip a-pop" style="--d:6.5s">Order email &mdash; where orders go</span>
+                    <span class="chip a-pop" style="--d:9.5s">Account no. &mdash; whose order it is</span>
+                    <span class="chip a-pop" style="--d:15s">Remove &mdash; delete the row</span>
+                  </div>
                 </div>
+
+                <!-- 4 — order email -->
+                <div class="sc" data-scene="4" data-len="' . $len(4) . '">
+                  <div class="sct a-fade" style="--d:.2s">The order email is the important one</div>
+                  <div class="a-rise" style="--d:1s">' . $table([$IH, [$BW[0], '', $BW[2], 'hl', false, ['email' => '<span class="stk"><span class="ph a-out" style="--d:3s">orders@supplier.com</span><span class="a-type" style="--d:3s;--ts:31;--tt:1.8s">orders@brightwell-fabrics.co.uk</span></span>']], [$CS[0], '', $CS[2]]], false) . '</div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:6s">&#9993; Sent to exactly this address &mdash; nowhere else</span>
+                    <span class="chip a-pop" style="--d:9.5s">&#128196; Copy it from their paperwork</span></div>
+                  <div class="sendc a-rise mt" style="--d:12.5s"><b>&#128230; Coastline Supply</b>
+                    <div class="warnrow">No order email for <b>Coastline Supply</b> &mdash; fix it under Settings &rsaquo; Suppliers to send this.</div></div>
+                </div>
+
+                <!-- 5 — fills itself -->
+                <div class="sc" data-scene="5" data-len="' . $len(5) . '">
+                  <div class="sct a-fade" style="--d:.2s">The list fills itself</div>
+                  <div class="row" style="margin:.4rem 0 .6rem">
+                    <span class="chip a-pop" style="--d:3s">Product saved &middot; Order supplier: <b>Harbour Tracks</b></span>
+                    <span class="arrow a-fade" style="--d:5s">&rarr;</span>
+                  </div>
+                  <div>' . $table([$IH, $BW, $CS, ['Harbour Tracks', '', '', 'a-drop', false]], true, ['name' => '<span class="ph a-ring" style="--d:16.5s;border-radius:4px">+ Add a supplier</span>']) . '</div>
+                  <div class="row mt"><span class="chip warn a-pop" style="--d:10s">Usually all you add is the email</span></div>
+                </div>
+
+                <!-- 6 — In House -->
+                <div class="sc" data-scene="6" data-len="' . $len(6) . '">
+                  <div class="sct a-fade" style="--d:.2s">In House &mdash; you make it yourself</div>
+                  <div class="a-rise" style="--d:1s">' . $table([['In House', '', '', 'hl'], $BW], false) . '</div>
+                  <div class="row mt">
+                    <span class="chip a-pop" style="--d:4.5s">&#127981; Made by you</span>
+                    <span class="chip a-pop" style="--d:7s;border-color:var(--good)">Email blank &rarr; nothing is sent</span>
+                  </div>
+                  <div class="row mt"><span class="chip bad a-pop" style="--d:14s">Real address on In House &rarr; it gets emailed an order too</span></div>
+                </div>
+
+                <!-- 7 — save + email check -->
+                <div class="sc" data-scene="7" data-len="' . $len(7) . '">
+                  <div class="stk" style="display:grid">
+                    <div class="bnr a-mid" style="--d:3s;--d2:6s">&#10003; Suppliers saved.</div>
+                    <div class="ebnr a-drop" style="--d:7s">That doesn&rsquo;t look like a valid email for &ldquo;Coastline Supply&rdquo;.</div>
+                  </div>
+                  ' . $table([$BW, [$CS[0], '', $CS[2], '', false, ['email' => '<span class="stk"><span class="a-out" style="--d:6.5s">trade@coastline-supply.co.uk</span><span class="a-fade" style="--d:6.5s;color:var(--err)">trade@coastline</span></span>']]], false) . '
+                  <div class="row mt">
+                    <span class="btnp a-press" style="--d:2.5s">Save suppliers</span>
+                    <span class="chip bad a-pop" style="--d:9.5s">Nothing saved &mdash; not even the address</span>
+                  </div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:13s">The message names the supplier &rarr; fix it &rarr; save again</span></div>
+                </div>
+
+                <!-- 8 — removing -->
+                <div class="sc" data-scene="8" data-len="' . $len(8) . '">
+                  <div class="sct a-fade" style="--d:.2s">Removing a supplier</div>
+                  ' . $table([$BW, ['Old Supplier Ltd', '', '', '', false, ['rm' => '<span class="cb"><i class="a-pop" style="--d:3s">&#10003;</i></span>']], $CS], false) . '
+                  <div class="row mt">
+                    <span class="btnp a-press" style="--d:5s">Save suppliers</span>
+                    <span class="chip a-pop" style="--d:5.5s;border-color:var(--good)">Ticked Remove &rarr; deleted</span>
+                  </div>
+                  <div class="row mt">
+                    <span class="chip warn a-pop" style="--d:8s">Clearing the name box &rarr; the row is just skipped</span>
+                  </div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:12.5s">&#8635; Still on a product? It comes back when that product is saved</span></div>
+                </div>
+
+                <!-- 9 — renaming -->
+                <div class="sc" data-scene="9" data-len="' . $len(9) . '">
+                  <div class="sct a-fade" style="--d:.2s">Careful renaming</div>
+                  ' . $table([[ '', $BW[1], $BW[2], 'hl', false, ['name' => '<span class="stk"><span class="a-out" style="--d:7s">Brightwell Fabrics</span><span class="a-fade" style="--d:7s">Brightwell Fabrics Ltd</span></span>']]], false) . '
+                  <div class="row mt">
+                    <span class="chip a-pop" style="--d:3.5s">Product &middot; Order supplier: <b>Brightwell Fabrics</b></span>
+                    <span class="chip a-pop" style="--d:4.5s">plain words, not a link</span>
+                  </div>
+                  <div class="sendc a-rise mt" style="--d:13s"><b>&#128230; Brightwell Fabrics</b>
+                    <div class="warnrow">No order email for <b>Brightwell Fabrics</b> &mdash; fix it under Settings &rsaquo; Suppliers to send this.</div></div>
+                  <div class="row mt"><span class="chip warn a-pop" style="--d:17s">Rename on the products first &rarr; then tidy this list</span></div>
+                </div>
+
+                <!-- 10 — what it is for -->
+                <div class="sc" data-scene="10" data-len="' . $len(10) . '">
+                  <div class="row"><span class="btnp a-press" style="--d:3.5s">&#128230; Send to suppliers</span>
+                    <span class="arrow a-fade" style="--d:5s">&rarr;</span><span class="chip a-pop" style="--d:5.5s">Split by supplier</span></div>
+                  <div class="mails mt">
+                    <div class="mail a-drop" style="--d:7s">To: <b>orders@brightwell-fabrics.co.uk</b><br>Only their lines: 3 roller blinds<br><span class="att">&#128206; spec PDF</span></div>
+                    <div class="mail a-drop" style="--d:8.5s">To: <b>trade@coastline-supply.co.uk</b><br>Only their lines: 2 vertical blinds<br><span class="att">&#128206; spec PDF</span></div>
+                  </div>
+                  <div class="a-rise mt" style="--d:13.5s"><div class="bl" style="font-size:.6rem;font-weight:800;color:var(--soft);letter-spacing:.06em">PURCHASE ORDER</div>
+                  <div class="row" style="align-items:stretch;margin-top:.25rem">
+                    <div class="pdel a-ring" style="--d:16s"><div class="bl">Supplier</div><b>Brightwell Fabrics</b><br><span style="color:#6b7280">Account no: BB2201</span></div>
+                    <div class="pdel a-ring" style="--d:14.5s"><div class="bl">Deliver to</div>' . $addr . '</div>
+                  </div></div>
+                  <div class="row mt"><span class="chip warn a-pop" style="--d:20s">&#9888; Already sent &rarr; left unticked so you don&rsquo;t double-order</span></div>
+                </div>
+
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>Open <b>Settings</b> from the sidebar and click the <b>Suppliers</b> tab &mdash; it&rsquo;s the fifth of seven
-             (Company, Quoting, Legal, Status colours, <b>Suppliers</b>, Accounting, Back up data). This tab is who you
-             <b>order stock from</b>. It is not your fabric list and it is nothing to do with the old price-list library.
-             What you put here fills each product&rsquo;s <b>Order supplier</b> box and goes out on every purchase order.</p>
+          <p><b>Getting here.</b> <b>Settings</b> &rarr; the <b>Suppliers</b> tab (fifth of seven: Company, Quoting, Legal, Status colours,
+             <b>Suppliers</b>, Accounting, Back up data). The grey line at the top says it all: <em>&ldquo;Who you order stock from &mdash; these
+             fill a product&rsquo;s Order supplier field and go on purchase orders.&rdquo;</em> It is not your fabric list.</p>
+
           <ul class="steps">
-            <li><b>Delivery address</b> &mdash; the one address <em>all</em> your suppliers ship to. It prints on every
-                purchase order in the <b>Deliver to</b> box, so put the full thing in, exactly as a courier would need it.
-                Leave it empty and the send screen puts a red warning across the top &mdash;
-                &ldquo;<b>No delivery address set &mdash; suppliers won&rsquo;t know where to ship.</b> Add one under
-                Settings &rsaquo; Suppliers first.&rdquo; It is only a warning: nothing is blocked, the send button still
-                works, and the purchase order goes out with &ldquo;<b>&mdash; no delivery address set &mdash;</b>&rdquo;
-                printed in the <b>Deliver to</b> box. So treat that red bar as a stop sign even though the app doesn&rsquo;t.</li>
-            <li><b>One row per supplier</b>, four columns, and <em>every</em> cell is a live box you can type in:
-                <b>Supplier</b> (the name, up to 150 characters &mdash; typing over it <em>is</em> how you rename one),
-                <b>Order email</b> (where the purchase order is sent, shown as <code>orders@supplier.com</code> until you fill it),
-                <b>Account no.</b> (optional &mdash; your trade account number with them) and <b>Remove</b> (one tick box per row).
-                The <b>Account no.</b> column only appears once that upgrade has been run on your site; if you can&rsquo;t see it,
-                nothing is broken.</li>
-            <li><b>The bottom row adds one.</b> It&rsquo;s the row showing <code>+ Add a supplier</code>. Type a name, an email,
-                an account number if you have one, then <b>Save suppliers</b>.</li>
+            <li><b>Delivery address <span class="muted">(where suppliers ship to)</span></b> &mdash; the one address all your suppliers send to
+                (placeholder <em>&ldquo;Your business / warehouse address &mdash; this goes on every supplier order&rdquo;</em>). It prints in the
+                <b>Deliver to</b> box of every supplier order. Leave it empty and the send screen shows <em>&ldquo;No delivery address set &mdash;
+                suppliers won&rsquo;t know where to ship. Add one under Settings &rsaquo; Suppliers first.&rdquo;</em> &mdash; a warning only: the
+                order still goes, with <em>&ldquo;&mdash; no delivery address set &mdash;&rdquo;</em> in the box.</li>
+            <li><b>The table</b> &mdash; one row per supplier, every cell editable: <b>Supplier</b> (the name; typing over it renames it),
+                <b>Order email</b> (where the order is sent; placeholder <code>orders@supplier.com</code>), <b>Account no.</b> (your account number
+                with them, printed on the order; this column only appears once that upgrade has been run on your site) and <b>Remove</b> (a tick
+                box).</li>
+            <li><b>Adding one</b> &mdash; the bottom row, showing <code>+ Add a supplier</code>. Most of the time you won&rsquo;t need it: saving a
+                product with an <em>Order supplier</em> on it adds that name here automatically, so usually you only add the email.</li>
+            <li><b>Save suppliers</b> &mdash; <b>&ldquo;Suppliers saved.&rdquo;</b> If any email isn&rsquo;t valid you get
+                <code>That doesn&rsquo;t look like a valid email for &ldquo;Coastline Supply&rdquo;.</code> and <b>nothing</b> is saved, not even the
+                delivery address &mdash; fix it and save again.</li>
           </ul>
-          <p><b>The list mostly fills itself.</b> Every time you save a product with an <em>Order supplier</em> typed on it,
-             that name is added here automatically &mdash; so usually your only job on this tab is adding the email. It works the
-             other way round too: the drop-down list on a product&rsquo;s <b>Order supplier</b> box is fed from <b>this table and
-             nowhere else</b>, plus <em>In House</em>, which is always offered.</p>
-          <p><b>&ldquo;In House&rdquo;</b> is pinned to the top of the list on purpose. It means <em>you make it yourself</em>, so
-             normally there is nothing to send and you should <b>leave its Order email blank</b>. What happens when you place the
-             order then depends on <em>whose</em> product it is. A product from a <b>master catalogue</b> (one the factory makes for
-             you) is lifted out into its own green group headed
-             &ldquo;<b>&#127981; &lt;factory&gt; &mdash; manufacturing</b>&rdquo; and marked <em>auto-routed</em>, with the note
-             &ldquo;These are your products from the &lt;factory&gt; catalogue &mdash; they go <b>straight to manufacturing</b>
-             when you place the order. No supplier email needed.&rdquo; It needs no email and no address. On the product
-             itself there is no <b>Order supplier</b> box at all; it reads
-             &ldquo;<b>Made by &lt;factory&gt; &mdash; orders go straight to their manufacturing</b>&rdquo; instead.</p>
-          <p>One of <em>your own</em> products marked In House is different: it simply becomes a group called <b>In House</b>,
-             first in the list, exactly like any other supplier. With the email blank it shows
-             &ldquo;<b>No order email for In House</b> &mdash; fix it under Settings &rsaquo; Suppliers to send this&rdquo; and there
-             is nothing to tick, which is the harmless, normal state. But <b>put a real email on In House and the app will take you
-             at your word</b> &mdash; it becomes sendable and will email itself a purchase order like any other firm. So leave that
-             box empty unless you genuinely want an order landing in your own inbox. The one thing to watch: if <em>every</em> line
-             on a job is In House with no email and nothing is going to manufacturing, the send screen has nothing it can do and the
-             button is greyed out with &ldquo;<b>Nothing&rsquo;s ready to send yet &mdash; set suppliers on your products and their
-             emails in Settings.</b>&rdquo;</p>
-          <div class="heads"><span class="hi">&#9888;</span><div><b>The supplier name here is just text &mdash; your products don&rsquo;t follow it.</b>
-             There is no link between the two: your products hold the supplier&rsquo;s name as plain words. Rename <b>Louvolite</b> to
-             <b>Louvolite Ltd</b> on this tab and every product still says <em>Louvolite</em>, so the send screen can no longer find an
-             email and tells you &ldquo;<b>No order email for Louvolite</b> &mdash; fix it under Settings &rsaquo; Suppliers to send this.&rdquo;
-             If a name really must change, <b>change it on the products first</b>, then tidy this list to match. Deleting behaves the same
-             way: the name simply comes back the next time you save a product that uses it. And renaming one row onto a name that&rsquo;s
-             already in the list is quietly skipped &mdash; you&rsquo;ll get &ldquo;<b>Suppliers saved &mdash; a rename was skipped because
-             that name is already in your list.</b>&rdquo; One more catch: <b>clearing a name out of the box does not delete the row</b>.
-             That row is just skipped. Only the <b>Remove</b> tick deletes.</div></div>
-          <div class="oops"><b>If you mistype an email.</b> The page won&rsquo;t stop you typing it &mdash; the <em>save</em> does. Press
-             <b>Save suppliers</b> with <code>trade@decora</code> in a row and it comes straight back with
-             &ldquo;<b>That doesn&rsquo;t look like a valid email for &ldquo;Decora&rdquo;.</b>&rdquo; and <b>nothing at all is saved</b> &mdash;
-             not even the delivery address you typed in the same go. Correct the address and press <b>Save suppliers</b> again for
-             &ldquo;<b>Suppliers saved.</b>&rdquo; (If instead you see &ldquo;Could not save suppliers: &hellip; &mdash; have you run
-             migrate_suppliers.php?&rdquo;, that&rsquo;s a setup job &mdash; ask whoever looks after the site.)</div>
-          <p><b>What it&rsquo;s all for.</b> Once a quote is accepted, <b>&#128230; Send to suppliers</b> splits the job up by each
-             product&rsquo;s <em>Order supplier</em> and emails each firm <b>only their own lines</b> with a spec PDF attached. A
-             supplier with no email shows &ldquo;No order email &hellip; fix it under Settings &rsaquo; Suppliers to send this&rdquo;;
-             a product with nothing set at all shows &ldquo;<b>&#9888; No supplier set</b>&rdquo; and tells you to assign one on the
-             product. Every send is logged, so coming back later you&rsquo;ll see &ldquo;<b>&#9888; Already sent</b>&rdquo; and that
-             row is left <em>unticked</em> on purpose &mdash; &ldquo;left unticked so you don&rsquo;t double-order.&rdquo; Sending also
-             moves the job on from <b>Accepted</b> to <b>Ordered</b>. Factory accounts use this very same list and the very same
-             delivery address from <b>&#128230; Order bought-in</b> on their incoming orders.</p>
-          <p><b>Before you switch on auto-ordering.</b> Over on <b>Settings &rsaquo; Quoting</b>, <em>if your login has it</em>, there&rsquo;s
-             a box headed <b>Auto-order bought-in items</b>:
-             &ldquo;Automatically order bought-in blinds from their supplier when an order is placed&rdquo;. Don&rsquo;t go hunting for
-             it &mdash; that whole panel is <b>only shown to a super-admin login</b>, so on an ordinary account it simply isn&rsquo;t on
-             the page, and nothing is wrong if you can&rsquo;t find it. Where it does appear, it is <b>off by default</b>
-             and it sends <em>real</em> purchase orders with nobody checking first, so only turn it on once every email on this tab has
-             been confirmed. A supplier with no email is simply left for you to order by hand &mdash; it won&rsquo;t fail silently.</p>
-          <p><b>Three different things called &ldquo;supplier&rdquo;</b>, so you don&rsquo;t get them muddled:
-             <b>Order supplier</b> is this tab &mdash; who you buy from and where the order is emailed.
-             The <b>Supplier</b> box on a fabric row (set on a product&rsquo;s Fabrics page) is who <em>makes the fabric</em> &mdash;
-             unrelated to this list. And <b>catalogue price updates</b> match products by their <b>name prefix</b>, not by anything on
-             this tab &mdash; so changing a supplier name here will never change what a price update touches. The old tenant
-             Supplier Price-List Library has been retired.</p>
-          <p class="prose"><b>In Compact mode</b>, the two grey explanation lines on this tab disappear &mdash; they&rsquo;re hints.
-             The table, the button and everything they do are exactly the same.</p>',
-        // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
-        'script'  => [
-            ['0:00', 'Settings opens; Suppliers tab highlighted.',      'Settings, then the Suppliers tab — the fifth one along. This is the list of firms you buy your stock from, and it is what your purchase orders are sent to.', 1],
-            ['0:10', 'Delivery address types in.',                      'Start with the delivery address — where your suppliers send the goods. It prints on every single purchase order, so put the full thing in, exactly as a courier would need it. Leave it blank and the send screen warns you in red — no delivery address set, suppliers won\'t know where to ship — but it won\'t actually stop you, and the order goes out with no address on it at all.', 2],
-            ['0:25', 'Louvolite: name, order email, account fill.',     'Now each supplier. The name, then the order email — this is the important one, because the order is emailed to exactly this address and nowhere else. Then your account number with them, so they can see whose order it is.', 3],
-            ['0:38', 'Decora row fills; In House sits on top.',         'The same again for the next one. And notice In House sitting at the top — that\'s the app\'s own marker for anything you make yourself. Leave its email blank: with nothing in that box there is nothing to send. Put a real address in and the app takes you at your word — In House becomes just another supplier and will email itself a purchase order.', 4],
-            ['0:50', 'The bottom row fills — a new supplier.',          'The empty row at the bottom is how you add one. Most of the time you won\'t need it: whenever you save a product and type a supplier on it, that name appears here on its own. All that\'s missing is the email, and that\'s what you\'re here for.', 5],
-            ['1:03', 'Decora\'s email is wrong; the save is rejected.', 'Get an address wrong and the page won\'t quietly take it. It comes back with, that doesn\'t look like a valid email for Decora — and nothing at all is saved, not even the delivery address you just typed. Fix the address and save again.', 6],
-            ['1:17', 'Stray row ticked for Remove; saved.',             'To get rid of a stray, tick Remove on its row and save. Clearing the name out of the box does nothing at all — the row just gets skipped. And be careful renaming one: your products still hold the old name, so the order can\'t find an email for it any more. Safer to leave the name alone and change it on the products first.', 7],
-            ['1:35', 'The purchase order it all produces.',             'When you place the order, each supplier gets an email of their own lines with a purchase order attached — the sizes, the fabric and the options, your account number and your delivery address, and no customer prices at all. Which is why these two boxes are worth five minutes now.', 8],
-        ],
+
+          <p><b>In House</b> (if you have it) is sorted to the top. It means you make the blind yourself, so leave its <b>Order email blank</b>
+             &mdash; then there is nothing to send. Put a real address on it and it is treated like any other supplier and gets emailed an order.
+             Products that come from your <b>factory&rsquo;s catalogue</b> are different again: they need no supplier here at all &mdash; the product
+             says <em>&ldquo;Made by &hellip; &mdash; orders go straight to their manufacturing.&rdquo;</em> and the send screen routes them there
+             with <em>&ldquo;No supplier email needed.&rdquo;</em></p>
+
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Names are plain text &mdash; your products don&rsquo;t follow a rename.</b>
+             Products hold the supplier&rsquo;s <em>name</em>. Rename a supplier here and the products still say the old name, so the send screen
+             can&rsquo;t find an email: <em>&ldquo;No order email for Brightwell Fabrics &mdash; fix it under Settings &rsaquo; Suppliers to send
+             this.&rdquo;</em> Change the name on the products first, then tidy this list. Renaming onto a name already in the list is skipped:
+             <code>Suppliers saved &mdash; a rename was skipped because that name is already in your list.</code></div></div>
+
+          <div class="oops"><b>Removing.</b> Only the <b>Remove</b> tick deletes a row &mdash; clearing the name box just skips that row. A
+             supplier still set on a product comes back the next time that product is saved. If you see <code>Could not save suppliers: &hellip;
+             &mdash; have you run migrate_suppliers.php?</code>, pass it to whoever looks after your site.</div>
+
+          <p><b>What it&rsquo;s all for.</b> Once a quote is accepted, <b>&#128230; Send to suppliers</b> opens <b>Send order to suppliers</b>:
+             <em>&ldquo;Each supplier below gets an email with only their lines and a spec PDF. Tick the ones to send, then Send selected
+             orders.&rdquo;</em> The spec PDF carries your <b>Deliver to</b> address and your <b>Account no:</b> with that supplier. A product with no
+             supplier shows <b>&#9888;&#65039; No supplier set</b>. Every send is logged: one already sent shows <b>&#9888;&#65039; Already sent</b> and is
+             <em>&ldquo;left unticked so you don&rsquo;t double-order&rdquo;</em>. If nothing can be sent you&rsquo;ll see <em>&ldquo;Nothing&rsquo;s
+             ready to send yet &mdash; set suppliers on your products and their emails in Settings.&rdquo;</em></p>
+
+          <p class="prose"><b>Factory accounts</b> use the same list and delivery address from <b>Order bought-in</b> on their incoming orders,
+             and the factory-only <b>Auto-order bought-in items</b> setting (Settings &rarr; Quoting) sends those orders automatically &mdash; only
+             switch that on once every email here is confirmed.</p>',
+        'script'  => $script,
 ];
