@@ -272,7 +272,6 @@ return [
           .gd .addlg b{ display:block; font-size:.82rem; color:var(--ink); margin-bottom:.25rem; }
           .gd .addlg .ta2{ margin:.4rem 0; }
           .gd .addlg .dlgact{ margin-top:.3rem; }
-          .gd .warn6{ border-color:#f59e0b !important; color:#92400e !important; background:rgba(245,158,11,.1) !important; }
           @media (max-width:640px){ .gd .addlg{ left:0; top:6rem; } }
 
           @media (max-width:640px){
@@ -420,7 +419,7 @@ return [
                   </div>
                   <div class="tools">
                     <span class="chip ok a-pop" style="--d:20.5s">Ready for your prices &mdash; type or paste, then <b>Save grid</b></span>
-                    <span class="chip warn6 a-pop" style="--d:25.5s">&#9888; Empty table? Use <b>+ Width</b> / <b>+ Drop</b>, not <b>Edit sizes</b> &mdash; it saves at once, with &pound;0 in the first row and column</span>
+                    <span class="chip a-pop" style="--d:25.5s"><b>Edit sizes</b> works here too &mdash; nothing is saved until <b>Save grid</b>, and an empty square is never quoted</span>
                   </div>
                 </div>
 
@@ -594,9 +593,8 @@ return [
                 <b>Drop \\ Width (mm)</b>, <b>+ Width</b> and <b>+ Drop</b>. Click <b>+ Width</b>, paste or type your widths into
                 <b>Add widths</b> (a row or a column from Excel, or values separated by commas, spaces, tabs or new lines) and click
                 <b>Add</b>; then the same with <b>+ Drop</b>. The grid appears, empty and ready for prices &mdash; nothing is saved until
-                <b>Save grid</b>. <b>On an empty table, use these two buttons rather than Edit sizes:</b> <b>Edit sizes</b> saves straight
-                away and puts a placeholder price of <b>0</b> in the first row and column (<code>Sizes updated: 13 new (placeholder price 0
-                &mdash; edit on the grid).</code>), and a &pound;0 left there would be quoted as &pound;0.</li>
+                <b>Save grid</b>. <b>Edit sizes</b> works here too: on a table with nothing saved yet it just reshapes the grid on screen,
+                and a square you leave empty is never quoted.</li>
             <li><b>Paste the prices.</b> Click the top-left square, paste the block from Excel &mdash; it spreads <b>right and down</b>,
                 stripping <b>&pound;</b>, <b>$</b>, <b>&euro;</b> and commas. Or click a square, type, and <b>Tab</b> on.
                 <b>Anything past the edge is thrown away</b>, so build the grid the right size first; and <b>a blank square means no price
@@ -624,7 +622,7 @@ return [
             <li><b>The &times; removes that column or row</b> (<code>Remove the 1600mm width column? Any prices in it will be lost on next
                 save.</code>). Nothing is lost until you <b>Save grid</b>.</li>
             <li><b>+ Width / + Drop</b> add new ones; <b>Edit sizes</b> changes them all at once (changed = renamed, deleted = removed with
-                prices, added = new empty row or column).</li>
+                prices, added = new blank row or column, kept once you price it and <b>Save grid</b>).</li>
           </ul>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Markup or margin, and figures already filled in.</b> The second box
@@ -659,7 +657,7 @@ return [
             ['3', 'Whose prices are these?',           'Before you type a single number, read the strip across the top. It tells you what kind of prices belong in this table. Supplier price list means these are your supplier\'s own list prices. The system takes your buying discount off, and adds your markup on. Our price list means these are your own selling prices, used exactly as you type them. If it shows the wrong one, click Change before you do anything else.', 3],
             ['4', 'Clone a band that is done',         'A new table starts empty. If another band on this product already has prices, there is no need to build anything. Just clone it. Click Clone, and you get the same widths, the same drops and the same prices, all in one go. Then you only change the squares that are different.', 4],
             ['5', 'Nothing to clone? Start your grid', 'If nothing is priced yet, choose to build from scratch, and the Start your grid box opens. The widths and drops arrive filled in, as a suggestion. Click Clear, and paste in your own sizes from the supplier\'s sheet. Across or down, with commas or on new lines, it does not mind. It even understands metres, so nought point eight becomes eight hundred millimetres. Then click Build grid.', 5],
-            ['6', 'Or start with a blank grid',        'There is another way to start. Choose build from scratch, and you get a completely empty grid, with just two buttons, plus width and plus drop. Click plus width, paste or type your widths, and click Add. Then do the same with plus drop. The grid appears, ready for your prices. One tip: on an empty table, use these two buttons rather than Edit sizes, because Edit sizes saves straight away, and puts a price of nought in the first row and column.', 6],
+            ['6', 'Or start with a blank grid',        'There is another way to start. Choose build from scratch, and you get a completely empty grid, with just two buttons, plus width and plus drop. Click plus width, paste or type your widths, and click Add. Then do the same with plus drop. The grid appears, ready for your prices. Edit sizes works here too. Nothing is saved until you click Save grid, and a square you leave empty is simply never quoted.', 6],
             ['7', 'Paste the prices in',               'Now an empty grid appears, in the shape you asked for. Open your supplier\'s price sheet, select the block of prices, and copy it. Come back here, click the top left square, and paste. The prices pour in, to the right and downwards, from the square you clicked. Pound signs and commas are cleaned off for you.', 7],
             ['8', 'Two things that catch people out',  'Two things catch people out. First, anything that falls past the edge of the grid is thrown away, without a warning. So if the supplier\'s sheet is wider than your grid, add the extra widths first, and then paste. Second, a square left empty means there is no price at that size. If a quote will not accept a size, look for an empty square.', 8],
             ['9', 'Save the grid',                     'When you are happy, click Save grid. Saving replaces every square in this table with what is on the screen. You will see how many prices were saved, and a button that takes you straight on to the next empty band.', 9],
