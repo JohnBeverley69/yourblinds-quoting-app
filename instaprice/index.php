@@ -1097,7 +1097,7 @@ $activeNav = 'instaprice';
         priceBox.className = 'ip-price';
         priceBox.innerHTML =
             '<div class="ip-row" id="ip-trade-row" hidden><span class="lbl" style="color:#065f46">Trade discount</span><span class="val" id="ip-trade" style="color:#065f46"></span></div>'
-          + '<div class="ip-row"><span class="lbl">Price</span><span class="val" id="ip-base">—</span></div>'
+          + '<div class="ip-row"><span class="lbl">' + (IP_PUBLIC ? 'Trade price' : 'Price') + '</span><span class="val" id="ip-base">—</span></div>'
           + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
