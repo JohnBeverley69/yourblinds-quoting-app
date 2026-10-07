@@ -33,7 +33,7 @@ $SCENES = [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and the address fills itself in. Pick a morning or afternoon slot, choose who\'s going, and hit save. The customer record is created as you book, and your customer gets a confirmation email with their slot. The double-booking guard makes sure nobody is ever sent to two places at once.',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, hit save, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
         'tier'  => 'Address finder on Silver',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
@@ -42,7 +42,7 @@ $SCENES = [
     <div class="hw-row"><label>Customer</label><div class="hw-in"><span class="a-type" style="--d:.8s">Mrs Priya Patel</span></div></div>
     <div class="hw-row"><label>Postcode</label><div class="hw-in"><span class="a-type" style="--d:1.6s">LS17 6AB</span><em class="hw-mini a-pop" style="--d:2.3s">Find address</em></div></div>
     <div class="hw-row"><label>Address</label><div class="hw-in"><span class="a-fade" style="--d:2.7s">14 Elm Grove, Leeds</span></div></div>
-    <div class="hw-row"><label>When</label><div class="hw-chips"><span class="hw-chip">Tue 14 Oct</span><span class="hw-chip a-sel" style="--d:3.4s">Morning 8&ndash;12</span><span class="hw-chip">Afternoon 12&ndash;5</span></div></div>
+    <div class="hw-row"><label>When</label><div class="hw-chips"><span class="hw-seg"><i>Exact time</i><i class="on">Windows</i></span><span class="hw-chip a-sel" style="--d:3.4s">Morning</span><span class="hw-chip">Afternoon</span><span class="hw-chip">Evening</span></div></div>
     <div class="hw-row"><label>Who&rsquo;s going</label><div class="hw-in"><span class="a-type" style="--d:4s">Sam &middot; Sales</span></div></div>
     <div class="hw-row"><label></label><div class="hw-tick a-fade" style="--d:4.6s">&#9745; Email the customer their slot</div></div>
     <div class="hw-row"><label></label><div class="hw-btn a-press" style="--d:5.2s">Save appointment</div></div>
@@ -442,6 +442,9 @@ function hw_say(array $s): string
         .hw-row > label { flex: 0 0 82px; color: var(--hw-soft); font-size: .88em; }
         .hw-chips { display: flex; gap: 5px; flex-wrap: wrap; }
         .hw-chip { border: 1px solid var(--hw-line); border-radius: 999px; padding: 2px 8px; font-size: .88em; }
+        .hw-seg { display: inline-flex; border: 1px solid var(--hw-line); border-radius: 999px; overflow: hidden; font-size: .82em; margin-right: 4px; }
+        .hw-seg i { font-style: normal; padding: 2px 8px; color: var(--hw-soft); }
+        .hw-seg i.on { background: var(--hw-sub); color: var(--hw-ink); font-weight: 700; }
         .hw-call { align-self: flex-start; background: color-mix(in srgb, var(--hw-ok) 14%, var(--hw-card)); color: var(--hw-ok);
             border-radius: 999px; padding: 3px 10px; font-weight: 700; }
         .hw-call span { display: inline-block; }
