@@ -46,14 +46,14 @@ function el_call(string $key, string $method, string $path, ?array $json = null)
     return [$code, (string) $body];
 }
 
-/** Speak $text in voice $voiceId and save the MP3 to $file; exits on failure. */
-function el_tts(string $key, string $voiceId, string $model, string $text, string $file): void
+/** Speak $text in voice $voiceId (speed 0.7–1.2, 1 = normal) and save the MP3 to $file; exits on failure. */
+function el_tts(string $key, string $voiceId, string $model, string $text, string $file, float $speed = 1.0): void
 {
     [$code, $body] = el_call($key, 'POST',
         '/v1/text-to-speech/' . rawurlencode($voiceId) . '?output_format=mp3_44100_128', [
             'text'           => $text,
             'model_id'       => $model,
-            'voice_settings' => ['stability' => 0.45, 'similarity_boost' => 0.8, 'style' => 0.3, 'use_speaker_boost' => true],
+            'voice_settings' => ['stability' => 0.45, 'similarity_boost' => 0.8, 'style' => 0.3, 'use_speaker_boost' => true, 'speed' => $speed],
         ]);
     if ($code !== 200) {
         fwrite(STDERR, "  ! HTTP $code: " . substr($body, 0, 300) . "\n");
