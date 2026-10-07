@@ -6,10 +6,14 @@ name: Deploy to Cloudways
 #
 # Credentials live in GitHub repo Secrets (Settings -> Secrets and
 # variables -> Actions), never in this file:
-#   CLOUDWAYS_EMAIL      - the email you log into Cloudways with
-#   CLOUDWAYS_API_KEY    - Cloudways -> Account -> API Keys
-#   CLOUDWAYS_SERVER_ID  - numeric id from the Cloudways app URL
-#   CLOUDWAYS_APP_ID     - numeric id from the Cloudways app URL
+#   CLOUDWAYS_ACCESS_TOKEN - Cloudways -> profile menu -> API Integration ->
+#                            Access Token (Limited scope, Git group). Sent
+#                            straight through as a Bearer token.
+#   CLOUDWAYS_SERVER_ID    - numeric id from the Cloudways app URL
+#   CLOUDWAYS_APP_ID       - numeric id from the Cloudways app URL
+# Legacy (Cloudways switches these off 15 Oct 2026; only used while
+# CLOUDWAYS_ACCESS_TOKEN is not set — delete them once the token works):
+#   CLOUDWAYS_EMAIL, CLOUDWAYS_API_KEY
 
 on:
   push:
@@ -25,6 +29,7 @@ jobs:
     steps:
       - name: Trigger Cloudways git pull
         env:
+          CW_TOKEN:     ${{ secrets.CLOUDWAYS_ACCESS_TOKEN }}
           CW_EMAIL:     ${{ secrets.CLOUDWAYS_EMAIL }}
           CW_API_KEY:   ${{ secrets.CLOUDWAYS_API_KEY }}
           CW_SERVER_ID: ${{ secrets.CLOUDWAYS_SERVER_ID }}
@@ -33,57 +38,77 @@ jobs:
           set -euo pipefail
 
           # Fail early with a clear message if a secret is missing.
-          for v in CW_EMAIL CW_API_KEY CW_SERVER_ID CW_APP_ID; do
+          for v in CW_SERVER_ID CW_APP_ID; do
             if [ -z "${!v:-}" ]; then
               echo "::error::Missing GitHub secret for $v. Add it under Settings -> Secrets and variables -> Actions."
               exit 1
             fi
           done
 
-          # The Cloudways auth endpoint occasionally blips / hangs. Try a few
-          # times with a hard per-attempt timeout so a transient failure
-          # auto-recovers instead of going red and needing a manual re-run.
-          echo "Requesting Cloudways access token..."
-          TOKEN=""
-          AUTH_RESP=""
-          for attempt in 1 2 3; do
-            AUTH_RESP=$(curl -sS --connect-timeout 15 --max-time 30 \
-              -X POST https://api.cloudways.com/api/v1/oauth/access_token \
-              -d "email=${CW_EMAIL}" \
-              -d "api_key=${CW_API_KEY}" || true)
-            TOKEN=$(printf '%s' "$AUTH_RESP" | jq -r '.access_token // empty' 2>/dev/null || true)
-            if [ -n "$TOKEN" ]; then
-              echo "Got access token on attempt $attempt."
-              break
-            fi
-            echo "Auth attempt $attempt got no token. Response: ${AUTH_RESP:-<empty/timeout>}"
-            [ "$attempt" -lt 3 ] && sleep 5 || true
-          done
+          if [ -n "${CW_TOKEN:-}" ]; then
+            # Access Token: used directly as the Bearer token, no exchange.
+            echo "Using CLOUDWAYS_ACCESS_TOKEN."
+            TOKEN="$CW_TOKEN"
+          else
+            # Legacy API-key exchange — Cloudways retires this on 15 Oct 2026.
+            echo "::warning::CLOUDWAYS_ACCESS_TOKEN not set — falling back to the legacy API key, which stops working on 15 Oct 2026."
+            for v in CW_EMAIL CW_API_KEY; do
+              if [ -z "${!v:-}" ]; then
+                echo "::error::Missing GitHub secret CLOUDWAYS_ACCESS_TOKEN (and no legacy $v either)."
+                exit 1
+              fi
+            done
 
-          if [ -z "$TOKEN" ]; then
-            # Safe to print the response here — auth failed, so there's no token
-            # to leak (and the api_key is never echoed back by the endpoint).
-            echo "::error::Could not get a Cloudways access token after 3 tries. If CLOUDWAYS_EMAIL / CLOUDWAYS_API_KEY are correct this is usually a transient Cloudways API blip — Re-run the job. Last response: ${AUTH_RESP:-<empty/timeout>}"
-            exit 1
+            # The Cloudways auth endpoint occasionally blips / hangs. Try a few
+            # times with a hard per-attempt timeout so a transient failure
+            # auto-recovers instead of going red and needing a manual re-run.
+            echo "Requesting Cloudways access token..."
+            TOKEN=""
+            AUTH_RESP=""
+            for attempt in 1 2 3; do
+              AUTH_RESP=$(curl -sS --connect-timeout 15 --max-time 30 \
+                -X POST https://api.cloudways.com/api/v1/oauth/access_token \
+                -d "email=${CW_EMAIL}" \
+                -d "api_key=${CW_API_KEY}" || true)
+              TOKEN=$(printf '%s' "$AUTH_RESP" | jq -r '.access_token // empty' 2>/dev/null || true)
+              if [ -n "$TOKEN" ]; then
+                echo "Got access token on attempt $attempt."
+                break
+              fi
+              echo "Auth attempt $attempt got no token. Response: ${AUTH_RESP:-<empty/timeout>}"
+              [ "$attempt" -lt 3 ] && sleep 5 || true
+            done
+
+            if [ -z "$TOKEN" ]; then
+              # Safe to print the response here — auth failed, so there's no token
+              # to leak (and the api_key is never echoed back by the endpoint).
+              echo "::error::Could not get a Cloudways access token after 3 tries. If CLOUDWAYS_EMAIL / CLOUDWAYS_API_KEY are correct this is usually a transient Cloudways API blip — Re-run the job. Last response: ${AUTH_RESP:-<empty/timeout>}"
+              exit 1
+            fi
           fi
 
-          # Same treatment for the git-pull trigger.
+          # Same treatment for the git-pull trigger. Cloudways is moving the
+          # API to /api/v2, so try that first and fall back to the v1 path —
+          # whichever is live gets the deploy.
           echo "Triggering git pull of 'main' into the live app..."
           HTTP="000"
           for attempt in 1 2 3; do
-            HTTP=$(curl -sS --connect-timeout 15 --max-time 60 -o /tmp/cw_resp.json -w '%{http_code}' \
-              -X POST https://api.cloudways.com/api/v1/git/pull \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -d "server_id=${CW_SERVER_ID}" \
-              -d "app_id=${CW_APP_ID}" \
-              -d "branch_name=main" \
-              -d "deploy_path=" || echo "000")
-            if [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ]; then
-              break
-            fi
-            echo "git/pull attempt $attempt returned HTTP ${HTTP:-000}:"
-            cat /tmp/cw_resp.json 2>/dev/null || true
-            echo ""
+            for ver in v2 v1; do
+              HTTP=$(curl -sS --connect-timeout 15 --max-time 60 -o /tmp/cw_resp.json -w '%{http_code}' \
+                -X POST "https://api.cloudways.com/api/${ver}/git/pull" \
+                -H "Authorization: Bearer ${TOKEN}" \
+                -d "server_id=${CW_SERVER_ID}" \
+                -d "app_id=${CW_APP_ID}" \
+                -d "branch_name=main" \
+                -d "deploy_path=" || echo "000")
+              if [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ]; then
+                echo "git/pull accepted via ${ver}."
+                break 2
+              fi
+              echo "git/pull via ${ver} (attempt $attempt) returned HTTP ${HTTP:-000}:"
+              cat /tmp/cw_resp.json 2>/dev/null || true
+              echo ""
+            done
             [ "$attempt" -lt 3 ] && sleep 5 || true
           done
 
