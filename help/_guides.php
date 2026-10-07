@@ -61,6 +61,7 @@ $ORDER = [
     'products-wizard',
     'products-pricing-modes',
     'products-import-price-tables',
+    'products-price-import',
     'products-import-fabrics',
     'products-options',
     'products-combine',
