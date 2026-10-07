@@ -19,10 +19,11 @@ $root = dirname(__DIR__);
 require __DIR__ . '/_elevenlabs.php';
 require $root . '/_partials/guide_clips.php';
 
-$opts  = getopt('', ['guide:', 'voice:', 'force', 'model:']);
+$opts  = getopt('', ['guide:', 'voice:', 'force', 'model:', 'speed:']);
 $slug  = (string) ($opts['guide'] ?? '');
 $voice = (string) ($opts['voice'] ?? '');
 $model = (string) ($opts['model'] ?? 'eleven_multilingual_v2');
+$speed = (float) ($opts['speed'] ?? 0.92);   // guides: a touch slower than normal, so it sinks in
 
 if (!preg_match('/^[a-z0-9-]+$/', $slug) || !is_file("$root/help/guides/$slug.php") || $voice === '') {
     fwrite(STDERR, "Usage: php tools/guide_voice.php --guide=<slug> --voice=\"Alice\" [--force]\n");
@@ -42,7 +43,7 @@ foreach ($g['script'] as $n => $row) {
     $keep[] = $name;
     echo 'Line ' . ($n + 1) . ': ' . ($row[1] ?? '') . "\n";
     if (is_file("$out/$name") && !isset($opts['force'])) { echo "  (already there)\n"; continue; }
-    el_tts($key, $voiceId, $model, $vo, "$out/$name");
+    el_tts($key, $voiceId, $model, $vo, "$out/$name", $speed);
 }
 
 foreach (glob("$out/*.mp3") ?: [] as $old) {
