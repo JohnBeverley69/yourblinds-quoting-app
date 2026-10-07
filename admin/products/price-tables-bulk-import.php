@@ -42,6 +42,71 @@ if ((($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')) {
     pl_require_unlocked_any([$productId], '/admin/products/price-tables.php?system_id=' . $systemId);
 }
 
+// ── Blank starter sheet (?template=1) ─────────────────────────────────
+// A ready-laid-out workbook in exactly the shape the importer reads: one
+// block per band — "Band X" in column A, the widths across the next row
+// from column B, then each drop down column A with its prices to the
+// right — with a blank row between blocks. The band headers are this
+// system's existing bands (or Band A + Band B if it has none yet); the
+// sizes are the standard 800–4000mm grid. Prices are left empty for the
+// user to fill in or paste. Rows above the first "Band" header are
+// ignored by the importer, so row 1 can carry a one-line instruction
+// (it must never contain the word "band" followed by a space).
+if (($_GET['template'] ?? '') === '1') {
+    $codeSt = db()->prepare(
+        'SELECT band_code FROM price_tables
+          WHERE client_id = ? AND product_id = ? AND system_id = ? AND band_code <> ""
+          ORDER BY band_code'
+    );
+    $codeSt->execute([$clientId, $productId, $systemId]);
+    $codes = array_values(array_unique(array_map('strval', $codeSt->fetchAll(PDO::FETCH_COLUMN))));
+    if (!$codes) $codes = ['A', 'B'];
+
+    $tWidths = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
+    $tDrops  = [800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000];
+    $colOf   = static fn (int $i): string => \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+    $lastCol = $colOf(count($tWidths) + 1);
+
+    $ss    = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    $sheet = $ss->getActiveSheet();
+    $sheet->setTitle('Prices');
+    $sheet->setCellValue('A1', 'Type or paste your prices into the empty squares, change the sizes if yours differ, then upload this file. An empty square means no price at that size.');
+    $sheet->getStyle('A1')->getFont()->setItalic(true)->getColor()->setRGB('6B7280');
+
+    $r = 3;
+    foreach ($codes as $code) {
+        $sheet->setCellValue('A' . $r, 'Band ' . $code);
+        $sheet->getStyle('A' . $r)->getFont()->setBold(true)->setSize(12);
+        $r++;
+        $sheet->setCellValue('A' . $r, 'Drop \ Width (mm)');
+        foreach ($tWidths as $i => $w) $sheet->setCellValue($colOf($i + 2) . $r, $w);
+        $head = "A{$r}:{$lastCol}{$r}";
+        $first = $r + 1;
+        foreach ($tDrops as $d) { $r++; $sheet->setCellValue('A' . $r, $d); }
+        foreach ([$head, "A{$first}:A{$r}"] as $range) {
+            $sheet->getStyle($range)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+            $sheet->getStyle($range)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('1F3B5B');
+        }
+        $sheet->getStyle("B{$first}:{$lastCol}{$r}")->getBorders()->getAllBorders()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setRGB('D1D5DB');
+        $r += 2;                                        // one blank row, then the next band
+    }
+    $sheet->getColumnDimension('A')->setWidth(18);
+    foreach ($tWidths as $i => $w) $sheet->getColumnDimension($colOf($i + 2))->setWidth(11);
+
+    $filename = preg_replace('/[^A-Za-z0-9_\- ]/', '', (string) ($system['product_name'] ?? 'Product'))
+              . ' - ' . preg_replace('/[^A-Za-z0-9_\- ]/', '', (string) $system['system_name'])
+              . ' - price import template.xlsx';
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: max-age=0');
+    (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($ss))->save('php://output');
+    exit;
+}
+
 // Other systems on this product — so the import-success screen can offer
 // "now import the next one" (e.g. Special Frame after Standard Frame)
 // instead of dead-ending.
@@ -313,6 +378,10 @@ $activeNav = 'products';
                 <strong>several worksheets</strong> with bands (e.g. one per slat size), you'll
                 pick which worksheet goes into this system.
                 <strong>Re-importing replaces</strong> any existing rows for each band <em>within this system</em>.
+                <p style="margin:0.75rem 0 0">
+                    Starting from scratch? <a href="/admin/products/price-tables-bulk-import.php?system_id=<?= (int) $systemId ?>&amp;template=1" class="btn btn-secondary btn-sm">&#11015; Download a blank template (.xlsx)</a>
+                    &mdash; already laid out the right way, with a block for each of this system&rsquo;s bands. Fill in the prices, then upload it below.
+                </p>
             </div>
         </section>
 

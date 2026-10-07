@@ -29,19 +29,21 @@ $script = [
     ['4',  'The band header',            "Before you upload, check the file's shape. The system finds each band by a header row. In column A, there must be the word Band, then the band's name, like Band A, or Price Band B. If one grid serves two bands, write both, like Band B slash C, and the same prices go into each. Anything above the first header is ignored, so a title at the top is fine.", 4],
     ['5',  'Widths, then drops',         "Straight after the header comes the row of widths, running across from column B. They can be in millimetres, centimetres or metres, and it works out which. So nought point eight becomes eight hundred millimetres. Label rows, such as Drop, Width or Metric, are skipped. Then each row below starts with a drop, followed by its prices.", 5],
     ['6',  'Prices and gaps',            "Prices can keep their pound signs and commas. They are cleaned off for you. A blank square, or a nought, is left out, and that means there is no price at that size. A quote at that size will not price. You can stack several bands down one sheet, one block under another, with a new header above each.", 6],
-    ['7',  'Upload the file',            "Click Bulk import. The box called What this expects repeats these rules, so read it once. Under Upload, choose your file, then click Upload and import. Excel files work, and so do C S V and O D S files. The file can be up to ten megabytes.", 7],
-    ['8',  'Which worksheet?',           "Some supplier files have several worksheets, one for each slat size, for instance. If more than one sheet has bands in it, the import stops and asks, Which worksheet? Each sheet shows how many bands and cells it found. Pick the one for this system, then click Import selected sheet.", 8],
-    ['9',  'What you get',               "When it works, a green message says how many bands were imported, with a line for each band and its number of cells. Any band that did not exist yet is created for you. The whole file goes in together, or not at all, so you are never left with half an import.", 9],
-    ['10', 'Importing replaces',         "Be clear about one thing. Importing a band replaces it. Every old price in that band, on this system, is wiped, and the file's prices go in their place. Bands that are not in the file are left alone. So to update just one band, you can import a file with only that band in it.", 10],
-    ['11', 'On to the next system',      "Underneath, it helps you carry on. If another system on this product still has bands with no prices, there is a button to import that one next. When every system is priced, it says, That's every system priced for this product, it's ready to quote. Or click View prices, to check the grids.", 11],
-    ['12', 'Single-band import',         "Single-band import is for one band. It reads the first band it finds in the file, and that band's header decides which table it fills. So a file headed Band C fills Band C, and creates it if needed. If the file holds more bands, only the first is used, and it suggests Bulk import instead.", 12],
-    ['13', 'When a file will not read',  "If the file is not the right shape, a red message explains. No band sections detected means there is no Band header in column A. Add one above each block, and try again. Please choose a file means nothing was picked. File too large means it is over ten megabytes.", 13],
-    ['14', 'Undo an import',             "Imported the wrong file? You can undo it. After an import, a strip appears, saying Last change, Band import, with the date and time. Click the Undo button, and say OK. Every price goes back to exactly what it was before, and any band the import created is removed again.", 14],
-    ['15', 'When undo says no',          "Undo has one safety rule. If the prices have been changed again since the import, it will not undo, because that would wipe the newer work. The strip then says it can't be undone, the prices have been edited since. You will find the same strip on the band list, so you can undo without opening each table.", 15],
-    ['16', 'Check the result',           "Last of all, check the result. Open one band, and compare a few prices with the supplier's sheet. Look out for an empty square along an edge, where a price was missing. And remember, an import only copies the numbers in. Whether they are your selling prices, or a supplier list with your discount and markup added, is set on the product.", 16],
+    ['7',  'Start from a blank sheet',   "No spreadsheet from your supplier, or want to make your own? Start with a blank one. On the Bulk import page, click Download a blank template. It is already laid out the right way, with a block for each band on this system. Or make your own in Excel. Type Band A in the very first cell. Put your widths across the next row, starting from column B. Then put your drops down column A.", 7],
+    ['8',  'Fill it in, then the next band', "Now type or paste your prices into the empty squares, each one under its width and next to its drop. Leave a square empty if you do not sell that size. For the next band, leave one blank row, type Band B in column A, and repeat the widths and drops underneath. Save the file, and it is ready to upload.", 8],
+    ['9',  'Upload the file',            "Click Bulk import. The box called What this expects repeats these rules, so read it once. Under Upload, choose your file, then click Upload and import. Excel files work, and so do C S V and O D S files. The file can be up to ten megabytes.", 9],
+    ['10',  'Which worksheet?',           "Some supplier files have several worksheets, one for each slat size, for instance. If more than one sheet has bands in it, the import stops and asks, Which worksheet? Each sheet shows how many bands and cells it found. Pick the one for this system, then click Import selected sheet.", 10],
+    ['11',  'What you get',               "When it works, a green message says how many bands were imported, with a line for each band and its number of cells. Any band that did not exist yet is created for you. The whole file goes in together, or not at all, so you are never left with half an import.", 11],
+    ['12', 'Importing replaces',         "Be clear about one thing. Importing a band replaces it. Every old price in that band, on this system, is wiped, and the file's prices go in their place. Bands that are not in the file are left alone. So to update just one band, you can import a file with only that band in it.", 12],
+    ['13', 'On to the next system',      "Underneath, it helps you carry on. If another system on this product still has bands with no prices, there is a button to import that one next. When every system is priced, it says, That's every system priced for this product, it's ready to quote. Or click View prices, to check the grids.", 13],
+    ['14', 'Single-band import',         "Single-band import is for one band. It reads the first band it finds in the file, and that band's header decides which table it fills. So a file headed Band C fills Band C, and creates it if needed. If the file holds more bands, only the first is used, and it suggests Bulk import instead.", 14],
+    ['15', 'When a file will not read',  "If the file is not the right shape, a red message explains. No band sections detected means there is no Band header in column A. Add one above each block, and try again. Please choose a file means nothing was picked. File too large means it is over ten megabytes.", 15],
+    ['16', 'Undo an import',             "Imported the wrong file? You can undo it. After an import, a strip appears, saying Last change, Band import, with the date and time. Click the Undo button, and say OK. Every price goes back to exactly what it was before, and any band the import created is removed again.", 16],
+    ['17', 'When undo says no',          "Undo has one safety rule. If the prices have been changed again since the import, it will not undo, because that would wipe the newer work. The strip then says it can't be undone, the prices have been edited since. You will find the same strip on the band list, so you can undo without opening each table.", 17],
+    ['18', 'Check the result',           "Last of all, check the result. Open one band, and compare a few prices with the supplier's sheet. Look out for an empty square along an edge, where a price was missing. And remember, an import only copies the numbers in. Whether they are your selling prices, or a supplier list with your discount and markup added, is set on the product.", 18],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($script[$n - 1][2]) / 13.6);
-foreach (range(1, 16) as $n) ${'L' . $n} = $len($n);
+foreach (range(1, 18) as $n) ${'L' . $n} = $len($n);
 
 $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
 
@@ -121,6 +123,28 @@ $xl6 = $xl('Supplier price list 2026.xlsx', [
     [5, [['Band B', 'bh'], '', '', '', ''], 'a-fade', '--d:16.5s'],
     [6, ['', '600mm', '900mm', '1200mm', '1500mm'], 'a-fade', '--d:16.9s'],
     [7, ['1000', '&pound;26.30', '&pound;31.00', '&pound;35.80', '&pound;40.40'], 'a-fade', '--d:17.3s'],
+]);
+
+// Scene 7 — a blank sheet: Band A, widths from B, drops down A.
+$xl7 = $xl('My price list.xlsx', [
+    [1, [['<span class="a-type" style="--d:15.5s;--ts:6;--tt:.6s">Band A</span>', 'bh a-ring', '--d:16.5s'], '', '', '', '']],
+    [2, ['', ['<span class="a-pop" style="--d:19.5s">800</span>', 'wv'], ['<span class="a-pop" style="--d:19.8s">1200</span>', 'wv'], ['<span class="a-pop" style="--d:20.1s">1600</span>', 'wv'], ['<span class="a-pop" style="--d:20.4s">2000</span>', 'wv']]],
+    [3, [['<span class="a-pop" style="--d:24s">800</span>', 'dv'], '', '', '', '']],
+    [4, [['<span class="a-pop" style="--d:24.3s">1200</span>', 'dv'], '', '', '', '']],
+    [5, [['<span class="a-pop" style="--d:24.6s">1600</span>', 'dv'], '', '', '', '']],
+]);
+
+// Scene 8 — prices in, a blank row, then Band B.
+$p8 = static fn (float $v, float $d): array => ['<span class="a-pop" style="--d:' . $d . 's">' . number_format($v, 2) . '</span>', ''];
+$xl8 = $xl('My price list.xlsx', [
+    [1, [['Band A', 'bh'], '', '', '', '']],
+    [2, ['', ['800', 'wv'], ['1200', 'wv'], ['1600', 'wv'], ['2000', 'wv']]],
+    [3, [['800', 'dv'], $p8(22.80, 2), $p8(28.50, 2.3), $p8(34.20, 2.6), $p8(40.60, 2.9)]],
+    [4, [['1200', 'dv'], $p8(26.40, 3.2), $p8(33.20, 3.5), $p8(40.00, 3.8), ['', 'blank a-ring', '--d:8s']]],
+    [5, ['', '', '', '', '']],
+    [6, [['<span class="a-type" style="--d:13.5s;--ts:6;--tt:.6s">Band B</span>', 'bh a-ring', '--d:14.3s'], '', '', '', '']],
+    [7, ['', ['800', 'wv'], ['1200', 'wv'], ['1600', 'wv'], ['2000', 'wv']], 'a-fade', '--d:16.5s'],
+    [8, [['800', 'dv'], '', '', '', ''], 'a-fade', '--d:17s'],
 ]);
 
 // Scene 13 — no header → error → header added.
@@ -316,8 +340,40 @@ $demo = <<<HTML
                   </div>
                 </div>
 
-                <!-- 7 — upload -->
+                <!-- 7 — start from a blank sheet -->
                 <div class="sc" data-scene="7" data-len="{$L7}">
+                  <div class="sct a-fade" style="--d:.2s">Start from a blank sheet</div>
+                  <div class="side2">
+                    <div>
+                      <div class="tip a-rise" style="--d:2s"><b>Bulk import &mdash; What this expects</b> &hellip; Starting from scratch?
+                        <span class="chip a-pop" style="--d:5.5s;border-color:var(--accent);color:var(--accent);margin-top:.35rem">&#11015; Download a blank template (.xlsx)</span></div>
+                      <span class="chip ok a-pop" style="--d:9s;margin-top:.5rem">Already laid out &mdash; a block for each band</span>
+                    </div>
+                    <div class="notes">
+                      <div class="a-rise" style="--d:13s">{$xl7}</div>
+                      <span class="chip a-pop" style="--d:16.5s">A1: <b>Band A</b></span>
+                      <span class="chip a-pop" style="--d:20.5s">Widths across row 2, <b>from column B</b></span>
+                      <span class="chip a-pop" style="--d:25s">Drops down <b>column A</b></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 8 — fill it in, then the next band -->
+                <div class="sc" data-scene="8" data-len="{$L8}">
+                  <div class="sct a-fade" style="--d:.2s">Fill it in, then the next band</div>
+                  <div class="side2">
+                    <div class="a-rise" style="--d:.8s">{$xl8}</div>
+                    <div class="notes">
+                      <span class="chip a-pop" style="--d:4.5s">Each price under its width, next to its drop</span>
+                      <span class="chip a-pop" style="--d:8.5s;border-color:var(--err);color:var(--err)">Empty square = no price at that size</span>
+                      <span class="chip a-pop" style="--d:11.5s">One blank row, then <b>Band B</b></span>
+                      <span class="chip ok a-pop" style="--d:21s">&#128190; Save &mdash; ready to upload</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 7 — upload -->
+                <div class="sc" data-scene="9" data-len="{$L9}">
                   <div class="sct a-fade" style="--d:.2s">Upload the file</div>
                   <div class="ttl a-fade" style="--d:.8s">Bulk import &mdash; Roller Blind / Standard</div>
                   <div class="lnk sm a-fade" style="--d:1s">&larr; Back to Standard price tables</div>
@@ -333,7 +389,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 8 — which worksheet -->
-                <div class="sc" data-scene="8" data-len="{$L8}">
+                <div class="sc" data-scene="10" data-len="{$L10}">
                   <div class="sct a-fade" style="--d:.2s">Which worksheet?</div>
                   <div class="tabs a-fade" style="--d:1s"><span class="tb">25mm</span><span class="tb">50mm</span><span class="tb">Notes</span></div>
                   <div class="h2 a-fade" style="--d:10s">Which worksheet?</div>
@@ -344,7 +400,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 9 — success -->
-                <div class="sc" data-scene="9" data-len="{$L9}">
+                <div class="sc" data-scene="11" data-len="{$L11}">
                   <div class="sct a-fade" style="--d:.2s">What you get</div>
                   <div class="okbanner a-pop" style="--d:2s"><span>&#10003;</span><div>Imported <b>4</b> bands into <b>Standard</b>:</div></div>
                   <ul class="sl">
@@ -357,7 +413,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 10 — replaces -->
-                <div class="sc" data-scene="10" data-len="{$L10}">
+                <div class="sc" data-scene="12" data-len="{$L12}">
                   <div class="sct a-fade" style="--d:.2s">Importing replaces</div>
                   <div class="two">
                     <div class="kind a-rise" style="--d:2s"><h4><span class="bp">Band A</span> in the file</h4>{$g10a}<p class="a-fade" style="--d:9s">Old prices wiped &mdash; the file&rsquo;s go in.</p></div>
@@ -367,7 +423,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 11 — next system -->
-                <div class="sc" data-scene="11" data-len="{$L11}">
+                <div class="sc" data-scene="13" data-len="{$L13}">
                   <div class="sct a-fade" style="--d:.2s">On to the next system</div>
                   <div class="okbanner" style="margin-bottom:.6rem"><span>&#10003;</span><div>Imported <b>4</b> bands into <b>Standard</b>:</div></div>
                   <div class="swapblk">
@@ -379,7 +435,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 12 — single-band -->
-                <div class="sc" data-scene="12" data-len="{$L12}">
+                <div class="sc" data-scene="14" data-len="{$L14}">
                   <div class="sct a-fade" style="--d:.2s">Single-band import</div>
                   <div class="ttl a-fade" style="--d:.8s">Single-band import &mdash; Roller Blind / Standard</div>
                   <div class="side2">
@@ -395,7 +451,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 13 — errors -->
-                <div class="sc" data-scene="13" data-len="{$L13}">
+                <div class="sc" data-scene="15" data-len="{$L15}">
                   <div class="sct a-fade" style="--d:.2s">When a file won&rsquo;t read</div>
                   <div class="bstack"><div class="errbanner a-mid" style="--d:4.5s;--d2:13s"><span>&#9888;</span><div><b>No band sections detected. Each band block should start with a row containing &ldquo;Band X&rdquo; in column A.</b></div></div>
                   <div class="okbanner a-pop" style="--d:13.5s"><span>&#10003;</span><div>Imported <b>1</b> band into <b>Standard</b>:</div></div></div>
@@ -407,7 +463,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 14 — undo -->
-                <div class="sc" data-scene="14" data-len="{$L14}">
+                <div class="sc" data-scene="16" data-len="{$L16}">
                   <div class="sct a-fade" style="--d:.2s">Undo an import</div>
                   <div class="bstack">
                     <div class="undobar a-mid" style="--d:5s;--d2:15s"><span>Last change: <b>Band import (this system)</b> &middot; 7 Oct 10:42</span>
@@ -420,7 +476,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 15 — stale -->
-                <div class="sc" data-scene="15" data-len="{$L15}">
+                <div class="sc" data-scene="17" data-len="{$L17}">
                   <div class="sct a-fade" style="--d:.2s">When undo says no</div>
                   <div class="seq">
                     <span class="chip a-pop" style="--d:2s">Band import &middot; 10:42</span><span class="arrow a-fade" style="--d:3s">&rarr;</span>
@@ -432,7 +488,7 @@ $demo = <<<HTML
                 </div>
 
                 <!-- 16 — check the result -->
-                <div class="sc" data-scene="16" data-len="{$L16}">
+                <div class="sc" data-scene="18" data-len="{$L18}">
                   <div class="sct a-fade" style="--d:.2s">Check the result</div>
                   <div class="ttl a-fade" style="--d:2s">Roller Blind / Standard &mdash; Band A</div>
                   <div class="side2">
@@ -608,7 +664,7 @@ return [
             .gd .slow{ position:static; display:inline-block; margin-bottom:.5rem; }
             .gd .bl > div{ grid-template-columns:3.6rem 0 2.4rem 4.2rem 1fr; }
             .gd .bl .nm{ visibility:hidden; }
-            .gd .sc[data-scene="7"] .a-move{ display:none; }
+            .gd .sc[data-scene="9"] .a-move{ display:none; }
             .gd .confirm{ left:4%; right:4%; }
           }',
         'demo'    => $demo,
@@ -629,6 +685,22 @@ return [
                 (a block headed <code>Band C</code> fills Band C). If the file has more bands you&rsquo;re told
                 <em>&ldquo;The file contained 1 other band; only Band C was used. To bring all of them in at once, use Bulk import
                 instead.&rdquo;</em></li>
+          </ul>
+
+          <p class="prose"><b>Starting from a blank sheet.</b> On the <b>Bulk import</b> page, under <b>What this expects</b>, click
+             <b>&#11015; Download a blank template (.xlsx)</b>. You get a workbook already laid out the right way, with a block for each band
+             on this system (or <b>Band A</b> and <b>Band B</b> if it has none yet) and the standard 800&ndash;4000&nbsp;mm sizes &mdash;
+             change the sizes if yours differ, type or paste your prices into the empty squares, save, and upload it. To make one yourself
+             in Excel instead:</p>
+          <ul class="steps">
+            <li>In a new, blank workbook, type <code>Band A</code> in cell <b>A1</b>.</li>
+            <li>In the next row, leave <b>A2</b> empty and type your widths across from <b>B2</b> (<code>800</code>, <code>1200</code>,
+                <code>1600</code>&hellip;) &mdash; millimetres, centimetres or metres, it works out which.</li>
+            <li>From <b>A3</b> down, type your drops in column A.</li>
+            <li>Fill in each price under its width and beside its drop. Leave a square empty if you don&rsquo;t sell that size.</li>
+            <li>For the next band, leave <b>one blank row</b>, type <code>Band B</code> in column A, and repeat the widths and drops under
+                it. Add as many bands as you need, one block under another.</li>
+            <li>Save it (.xlsx is best) and upload it on the <b>Bulk import</b> page.</li>
           </ul>
 
           <p class="prose"><b>The shape of the file</b> (the page&rsquo;s own <b>What this expects</b> box says the same):</p>
