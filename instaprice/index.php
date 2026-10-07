@@ -41,7 +41,8 @@ if ($publicMode) {
     $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);
 }
 // Same rule as quote-builder/api/preview.php. Non-cost users (and the public)
-// get the preview on a SELL basis (markup 0), so the Mark-up % box is hidden.
+// get the preview on a SELL basis (markup 0), so the Mark-up % box is hidden —
+// except for the public, who see trade prices and add their OWN mark-up on top.
 $ipCanCosts = !$publicMode && ($isAdmin || !empty($_perms['can_view_costs']));
 
 // Markup vs margin. The breakdown panel still computes in markup; this only
@@ -179,6 +180,8 @@ $activeNav = 'instaprice';
         .ip-price.is-idle { color: var(--text-faint); font-style: italic; }
         .ip-price.is-error { border-color: var(--danger-border); color: var(--danger-text); }
         .ip-row { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.375rem 0; }
+        /* display:flex above would otherwise beat the [hidden] attribute. */
+        .ip-row[hidden] { display:none; }
         .ip-row + .ip-row { border-top: 1px solid var(--border-faint); }
         .ip-row .lbl { color: var(--text-secondary); }
         .ip-row .val { font-variant-numeric: tabular-nums; font-weight:600; color: var(--text-primary); }
@@ -384,6 +387,9 @@ $activeNav = 'instaprice';
     // Cost-viewers only see / edit the mark-up (the preview API gives everyone
     // else sell-basis figures with markup 0, so the box would just read 0).
     var IP_CAN_COSTS = <?= $ipCanCosts ? 'true' : 'false' ?>;
+    // The public see the showcase's TRADE price, so they get a mark-up box
+    // (starting at 0) to turn it into their own sell price.
+    var IP_SHOW_MARKUP = IP_CAN_COSTS || IP_PUBLIC;
 
     // Markup vs margin. The breakdown still computes in MARKUP; these only
     // convert the editable rate the tenant sees / types. Mirror of
@@ -1095,7 +1101,7 @@ $activeNav = 'instaprice';
           + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
           + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
-          + '<div class="ip-row editable"' + (IP_CAN_COSTS ? '' : ' style="display:none"') + '><span class="lbl">' + rateLabel() + '</span>'
+          + '<div class="ip-row editable"' + (IP_SHOW_MARKUP ? '' : ' style="display:none"') + '><span class="lbl">' + rateLabel() + '</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupToShown(markupDefault).toFixed(2) + '"></div>'
           + '<div class="ip-row ip-sell"><span class="lbl">Sell price</span><span class="val" id="ip-sell">—</span></div>'
           + '<div class="ip-total" id="ip-total"></div>';
@@ -1124,7 +1130,12 @@ $activeNav = 'instaprice';
         var discountedBase = lastBase * (1 - disc / 100);
         var pricePer = round2(lastBase + lastExtras);
         var discountedPer = round2(discountedBase + lastExtras);
-        var sellPer = round2(discountedBase * (1 + markup / 100) + lastExtras);
+        // Public: the whole trade price (blind + options) is their buying cost,
+        // so their mark-up goes on all of it. Logged-in: options already carry
+        // the tenant's own pricing, so only the blind is marked up.
+        var sellPer = IP_PUBLIC
+            ? round2(discountedPer * (1 + markup / 100))
+            : round2(discountedBase * (1 + markup / 100) + lastExtras);
         var total = round2(sellPer * qty);
 
         document.getElementById('ip-base').textContent = money(pricePer);
