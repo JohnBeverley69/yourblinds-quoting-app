@@ -2,143 +2,185 @@
 declare(strict_types=1);
 
 /**
- * Guide: products-import-fabrics
+ * Guide: products-import-fabrics — "Adding fabrics — paste, Excel or library" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
- * lede, open, css, demo, body, script (and optionally js).
+ * lede, open, v, css, demo, body, script.
  *
- * Covers all four tenant routes into a product's fabrics, which all live on
- * /admin/products/options.php: the paste box, Import from Excel, the Fabric
- * Library pull and Copy from another product.
+ * Mirrors admin/products/options.php (the Fabrics page: header buttons, the
+ * "Bulk add … — paste a list" box with band chips, "Add one at a time", the
+ * filter + bulk bar and the list), options-import.php (Import from Excel:
+ * template, upload, the result messages), options-from-library.php,
+ * options-copy.php and option-set-band.php. The cross-product workbook import
+ * (options-bulk-import.php) is mentioned in the written steps only. Every
+ * label, button and message is copied from those files.
+ *
+ * v2: one SCENE per script line. Beat times are worked out from where the
+ * matching words fall in the voice-over ($at); data-len = line length ÷ 13.6.
  */
+
+$S = [
+    1  => ['1',  'Fabrics and bands',
+        'A fabric is what the customer picks for the blind. The material, the colour, the slat. Every fabric belongs to a band. A band is a group of fabrics that cost the same, so they share one price table, instead of needing one each. The band is just a name you choose, like A, or Blackout. What matters is that it matches a price table.'],
+    2  => ['2',  'The Fabrics page',
+        'Fabrics live on one page. Open the product, and click the Fabrics tile. The page may not say Fabric. That word comes from the product\'s own settings, so a venetian\'s page might say Colours. Same page, same buttons. Across the top are the ways in, and they all add to the same list. Use whichever suits you, or mix them.'],
+    3  => ['3',  'Paste a list: the band',
+        'The quickest way is the paste box, which is already open. Start with the band. If the product has bands already, they show as buttons above the box. Click one to fill it in, so you never mistype it. They come from the bands you already use, so the spelling always matches. Typed Band A by habit? That is fine. It keeps just the A.'],
+    4  => ['4',  'Paste a list: the names',
+        'If the product has systems, there is a System box too. Leave it on all systems, or pick one, so a colour that only comes on one system stays off the others. That way, nobody can quote a colour that cannot be made. Then paste the names into the big box, one per line, or with commas between them. Press Add all.'],
+    5  => ['5',  'What comes back',
+        'A green message says how many went in, and to which band. Any that were already on the product are skipped, and it tells you how many, so nothing is ever doubled up. Your list fills up underneath, each fabric with its band beside it. Pasted the wrong band? Do not worry. There is a quick fix, coming up later.'],
+    6  => ['6',  'One at a time',
+        'Need a supplier, a colour or a code on a single fabric? Open Add one at a time, just below the paste box. It has boxes for the band, the name, the colour, the supplier and the code, and an Active tick. Leave Active ticked, unless you are parking a fabric you do not sell at the moment. It is slower than pasting, so keep it for the odd one.'],
+    7  => ['7',  'Excel: the template',
+        'Got a supplier spreadsheet? Click Import from Excel. Step one is to download the blank template. It has five columns. Band and name must be filled in. Colour, supplier and code are optional. Each row becomes one fabric, and the columns are already labelled for you. Delete the grey note on row three, paste your data in, and save.'],
+    8  => ['8',  'Excel: upload it',
+        'Step three, choose your file, and press Upload and import. Two things to know. It only reads the sheet that was showing when the file was saved, so do one tab at a time. And a file with no heading row still works. Column A is read as the band, B as the name, then colour, supplier and code.'],
+    9  => ['9',  'When rows bounce',
+        'If some rows have a problem, the good ones still go in. A red box lists the others by row number. Row seven, missing name, for example. Fix those rows, and upload the same file again. The rows already in are skipped as duplicates, so nothing doubles up. Then Continue product setup takes you on.'],
+    10 => ['10', 'From the fabric library',
+        'If the range is in the Fabric Library, click Add from fabric library, and choose the manufacturer. Every fabric is ticked, with a suggested band in a small box. Change any band right there, and untick what you do not sell. The manufacturer\'s name is filled in as the supplier. Then press Add ticked fabrics.'],
+    11 => ['11', 'Copy from another product',
+        'Selling the same range on two products? Click Copy from another product. Pick the product, choose which of its bands to bring, and copy. Anything already there is skipped, so it is safe to run twice. Fabrics tied to a system go to the system with the same name. This is how a fabric only product can share a blind\'s whole range in one go.'],
+    12 => ['12', 'Fixing mistakes in bulk',
+        'Something went in wrong? There is no need to start again. Type in the filter box to find the rows. Tick one, then hold Shift and tick another, to take everything in between. Then use Set band on selected, Set supplier on selected, or Delete selected. A whole range in the wrong band takes seconds to put right.'],
+    13 => ['13', 'Bands must match a price table',
+        'One last thing. A fabric only gets a price if its band matches a price table on that product. The band buttons show bands from your fabrics and your price tables together. So if you see one you do not recognise, that is the one to check, and Set band on selected puts it right. When you are done, press Next, price tables.'],
+];
+
+/** "Ns" — when the words $p are spoken in line $n (13.6 characters a second). */
+$at = static function (int $n, string $p, float $plus = 0.0) use ($S): string {
+    $i = mb_strpos($S[$n][2], $p);
+    if ($i === false) { $GLOBALS['gd_at_miss'][] = "$n: $p"; $i = 0; }
+    return round($i / 13.6 + $plus, 1) . 's';
+};
+$len = static fn (int $n): string => (string) max(8, (int) round(mb_strlen($S[$n][2]) / 13.6));
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+$tk  = static fn (bool $on, string $cls = '', string $st = ''): string => '<span class="tick ' . ($on ? 'on ' : '') . $cls . '" style="' . $st . '">&#10003;</span>';
+
+/** The fabrics list. $rows: [band, name, supplier, code, tickHtml|null, rowClass, rowStyle]. */
+$flist = static function (array $rows, string $nameHead = 'Fabric'): string {
+    $h = '<div class="fls fl6"><div class="hd"><span></span><span>Band</span><span>' . $nameHead . '</span><span>Supplier</span><span>Code</span><span></span></div>';
+    foreach ($rows as $r) {
+        $h .= '<div class="' . ($r[5] ?? '') . '" style="' . ($r[6] ?? '') . '"><span>' . ($r[4] ?? '<span class="tick"></span>') . '</span><span><span class="bp">Band ' . $r[0] . '</span></span>'
+            . '<span>' . $r[1] . '</span><span class="mu">' . $r[2] . '</span><span class="mu">' . $r[3] . '</span><span class="ra"><u>Edit</u> <b>Delete</b></span></div>';
+    }
+    return $h . '</div>';
+};
 
 return [
         'aud'     => 'admin',
         'section' => 'Products',
         'title'   => 'Adding fabrics — paste, Excel or library',
         'eyebrow' => 'Products',
+        'v'       => 2,
         // NB: index.php escapes the blurb, so keep it plain text (no entities).
-        'blurb'   => 'Three ways to get a product’s fabrics in — paste a list, import a spreadsheet, or pull a range from the library — and how to fix the rows that bounce.',
-        'lede'    => 'A <b>fabric</b> is what the customer picks for the blind &mdash; the material, the colour, the slat.
-                      There are <b>four ways</b> to get them in, all from one page, and <b>three of them need no spreadsheet at all</b>:
-                      <b>paste a list</b>, <b>import from Excel</b>, <b>pull a range from the fabric library</b>, or
-                      <b>copy from another product</b>. Every fabric belongs to a <b>band</b> &mdash; and the band is just a name
-                      you choose, because that is what the price table is keyed on.',
-        'open'    => '/admin/products/options.php',
+        'blurb'   => 'Get a product’s fabrics in — paste a list, import a spreadsheet, pull a range from the library or copy another product — and fix the rows that go in wrong.',
+        'lede'    => 'A <b>fabric</b> is what the customer picks for the blind &mdash; the material, the colour, the slat. Every fabric
+                      belongs to a <b>band</b>, and the band is what links it to a price table. There are several ways to get fabrics in,
+                      all from one page, and most need no spreadsheet at all. Watch it through once, then use <b>Jump to a chapter</b>
+                      for the route you need. To get there: <b>Products</b> &rarr; the product &rarr; the <b>Fabrics</b> tile.',
+        'open'    => '/admin/products/index.php',
         'css'     => '
-          /* three stacked panels, shown by step range */
-          .gd .pn{ display:none; }
-          .gd .stage[data-step="0"] .pA, .gd .stage[data-step="1"] .pA,
-          .gd .stage[data-step="2"] .pA, .gd .stage[data-step="3"] .pA,
-          .gd .stage[data-step="4"] .pA{ display:block; }
-          .gd .stage[data-step="5"] .pB, .gd .stage[data-step="6"] .pB,
-          .gd .stage[data-step="7"] .pB{ display:block; }
-          .gd .stage[data-step="8"] .pC{ display:block; }
+          .gd .app{ grid-template-columns:132px minmax(0,1fr); }
+          .gd .sc{ position:relative; min-height:395px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; }
+          .gd .ttl{ font-size:.95rem; font-weight:800; color:var(--ink); margin:0 0 .35rem; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px;
+                     padding:.22rem .6rem; font-size:.68rem; font-weight:700; color:var(--ink); }
+          .gd .chips{ display:flex; flex-wrap:wrap; gap:.35rem; margin:.55rem 0; }
+          .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px; padding:.28rem .7rem; font-size:.68rem; font-weight:700; white-space:nowrap; }
+          .gd .btns{ display:inline-flex; align-items:center; gap:.3rem; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); color:var(--ink);
+                     border-radius:7px; padding:.24rem .6rem; font-size:.64rem; font-weight:600; white-space:nowrap; }
+          .gd .btnn{ display:inline-flex; align-items:center; background:#1f3b5b; color:#fff; border-radius:7px; padding:.28rem .7rem; font-size:.68rem; font-weight:700; white-space:nowrap; }
+          .gd .bb{ display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
+          .gd .sw{ display:inline-grid; } .gd .sw > *{ grid-area:1/1; }
+          .gd .swb{ display:grid; align-items:start; } .gd .swb > *{ grid-area:1/1; }
+          .gd .arrow{ color:var(--faint); font-weight:800; margin:0 .15rem; }
+          .gd .alr{ background:var(--good-wash); border-left:3px solid var(--good); border-radius:6px; padding:.32rem .55rem; font-size:.66rem; font-weight:600;
+                    color:var(--ink); margin:0 0 .45rem; max-width:33rem; box-sizing:border-box; line-height:1.45; }
+          .gd .alr.err{ background:var(--err-wash); border-left-color:var(--err); font-weight:500; }
+          .gd .alr ul{ margin:.15rem 0 0; padding-left:1rem; }
+          .gd .fl{ display:block; font-size:.56rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin:.45rem 0 .2rem; }
+          .gd .inp{ display:grid; align-items:center; min-height:26px; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:0 .5rem;
+                    font-size:.74rem; background:var(--surface); color:var(--ink); box-sizing:border-box; position:relative; }
+          .gd .inp > span{ grid-area:1/1; }
+          .gd .ph{ color:var(--faint); }
+          .gd .tx{ display:block; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.3rem .5rem; font-family:ui-monospace,Menlo,Consolas,monospace;
+                   font-size:.68rem; min-height:3.6rem; background:var(--surface); color:var(--ink); line-height:1.5; }
+          .gd .selb{ display:inline-flex; align-items:center; justify-content:space-between; gap:.5rem; min-width:8rem; border:1px solid var(--border-strong,#c7ccd4);
+                     border-radius:6px; padding:.2rem .45rem; font-size:.68rem; background:var(--surface); color:var(--ink); box-sizing:border-box; }
+          .gd .selb::after{ content:"\25BE"; color:var(--faint); font-size:.58rem; }
+          .gd .card{ border:1px solid var(--line); border-radius:12px; padding:.6rem .75rem; background:var(--surface); max-width:33rem; }
+          .gd .card h4{ margin:0 0 .3rem; font-size:.78rem; color:var(--ink); }
+          .gd .sm{ font-size:.62rem; color:var(--soft); margin:0 0 .4rem; line-height:1.45; }
+          .gd .frow{ display:grid; grid-template-columns:7rem 1fr; gap:.6rem; }
+          .gd .tick{ width:15px; height:15px; font-size:.55rem; }
+          .gd .cbr{ display:flex; gap:.4rem; align-items:center; font-size:.68rem; color:var(--ink); }
+          .gd .gd-tag{ font-size:.66rem; }
 
-          /* real header button row */
-          .gd .hdrbtns{ display:flex; flex-wrap:wrap; gap:.28rem; margin:0 0 .55rem; }
-          .gd .hbtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:7px; padding:.16rem .45rem; font-size:.62rem; font-weight:600; color:var(--soft); background:var(--surface); white-space:nowrap; }
-          .gd .hbtn.pri{ background:var(--accent); border-color:var(--accent); color:#fff; }
+          /* band chips (click-to-fill) */
+          .gd .bchips{ display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; margin:0 0 .35rem; }
+          .gd .bchips small{ font-size:.58rem; color:var(--faint); font-weight:700; }
+          .gd .bc{ display:inline-flex; border:1px solid var(--border-strong,#c7ccd4); border-radius:999px; padding:.04rem .5rem; font-size:.62rem; font-weight:700; color:var(--ink); background:var(--surface); }
+          .gd .bp{ display:inline-block; background:#1f3b5b; color:#fff; border-radius:999px; padding:.02rem .45rem; font-size:.56rem; font-weight:700; white-space:nowrap; }
+          .gd .sum{ font-size:.74rem; font-weight:700; color:var(--ink); margin:0 0 .35rem; }
 
-          /* the blue explainer panel that heads the real page */
-          .gd .bluenote{ background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:.4rem .6rem; font-size:.64rem; color:#0c4a6e; line-height:1.5; margin:0 0 .55rem; }
-          .gd .bluenote b{ color:#0c4a6e; }
+          /* the fabrics list */
+          .gd .fls{ border:1px solid var(--line); border-radius:9px; overflow:hidden; max-width:33rem; font-size:.66rem; background:var(--surface); }
+          .gd .fls > div{ display:grid; grid-template-columns:1.2rem 4.4rem minmax(5rem,1fr) 5rem 3.4rem 5.2rem; gap:.3rem; align-items:center; padding:.28rem .5rem;
+                          border-top:1px solid var(--line-2); color:var(--ink); }
+          .gd .fls > div.hd{ border-top:0; background:var(--panel); font-weight:700; color:var(--soft); font-size:.56rem; }
+          .gd .fls .mu{ color:var(--soft); }
+          .gd .fls .ra{ font-size:.58rem; display:flex; gap:.4rem; justify-content:flex-end; }
+          .gd .fls .ra u{ color:var(--accent); } .gd .fls .ra b{ color:var(--err); font-weight:600; text-decoration:underline; }
+          .gd .bulk{ display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; font-size:.6rem; color:var(--faint); margin:.35rem 0; max-width:33rem; }
+          .gd .bulk .bi{ display:inline-flex; width:3rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:5px; padding:.08rem .3rem; font-size:.62rem; color:var(--ink); background:var(--surface); text-transform:uppercase; }
+          .gd .srch{ display:flex; align-items:center; gap:.45rem; max-width:33rem; }
+          .gd .srch .inp{ flex:1; }
 
-          .gd .summ{ font-weight:600; font-size:.78rem; color:var(--ink); margin:0 0 .2rem; }
-          .gd .subtle{ font-size:.64rem; color:var(--faint); margin:0 0 .45rem; line-height:1.45; }
+          /* 1 — band diagram */
+          .gd .bandmap{ display:grid; grid-template-columns:1fr auto 1fr; gap:.5rem .7rem; align-items:center; max-width:32rem; }
+          .gd .bbox{ border:1px solid var(--line); border-radius:10px; padding:.4rem .55rem; background:var(--surface); }
+          .gd .bbox h5{ margin:0 0 .25rem; font-size:.7rem; color:var(--ink); }
+          .gd .f{ display:inline-block; font-size:.6rem; border:1px solid var(--line); border-radius:999px; padding:.06rem .4rem; margin:0 .2rem .2rem 0; color:var(--soft); background:var(--panel); }
+          .gd .ptab{ border:1px solid var(--line); border-radius:8px; padding:.35rem .5rem; background:var(--panel); font-size:.66rem; color:var(--ink); }
+          .gd .mgrid{ display:inline-grid; grid-template-columns:repeat(4,.6rem); gap:2px; margin-left:.3rem; vertical-align:middle; }
+          .gd .mgrid i{ display:block; height:.4rem; background:color-mix(in srgb,var(--accent) 30%,transparent); border-radius:1px; }
 
-          /* dashed band-chips strip — real <button> chips, click to fill */
-          .gd .chips{ display:none; flex-wrap:wrap; align-items:center; gap:.3rem; padding:.3rem .5rem; background:var(--panel); border:1px dashed var(--border-strong,#cbd5e1); border-radius:8px; margin:0 0 .5rem; }
-          .gd .stage[data-step="2"] .chips, .gd .stage[data-step="3"] .chips{ display:flex; }
-          .gd .chips i{ font-style:normal; font-size:.64rem; font-weight:600; color:var(--faint); margin-right:.15rem; }
-          .gd .chip{ font-size:.64rem; font-weight:600; padding:.06rem .5rem; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:999px; }
-          .gd .stage[data-step="2"] .chip.pick{ background:#1f3b5b; border-color:#1f3b5b; color:#fff; }
+          /* 2 — tiles */
+          .gd .tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:.4rem; max-width:33rem; }
+          .gd .tile{ border:1px solid var(--line); border-radius:9px; padding:.4rem .5rem; background:var(--surface); font-size:.64rem; color:var(--soft); }
+          .gd .tile b{ display:block; color:var(--ink); font-size:.72rem; }
+          .gd .tile i{ display:block; font-style:normal; font-size:1rem; font-weight:800; color:var(--accent); }
 
-          .gd .ta.big{ min-height:72px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-          .gd .prim{ display:inline-flex; background:var(--accent); color:#fff; border-radius:8px; padding:.3rem .7rem; font-size:.73rem; font-weight:700; }
-          .gd .sec{ display:inline-flex; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px; padding:.3rem .7rem; font-size:.73rem; font-weight:600; color:var(--soft); }
-          .gd .btnrow{ display:flex; gap:.4rem; align-items:center; margin-top:.55rem; }
-          .gd .stage[data-step="3"] .addall, .gd .stage[data-step="6"] .upbtn{ transform:scale(.96); filter:brightness(1.15); }
+          /* 7–8 — excel */
+          .gd .xl{ border:1px solid #1d6f42; border-radius:8px; overflow:hidden; font-size:.6rem; background:#fff; color:#1f2937; max-width:24rem; }
+          .gd .xl .xh{ background:#1d6f42; color:#fff; font-weight:700; padding:.25rem .5rem; }
+          .gd .xl .xr{ display:grid; grid-template-columns:2.6rem 1.3fr 1fr 1fr .8fr; }
+          .gd .xl .xr span{ border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:.15rem .3rem; white-space:nowrap; overflow:hidden; }
+          .gd .xl .xr.h span{ background:#1f3b5b; color:#fff; font-weight:700; }
+          .gd .xl .note{ padding:.2rem .3rem; color:#6b7280; font-style:italic; border-bottom:1px solid #e5e7eb; font-size:.56rem; }
+          .gd .xl .tabs{ display:flex; gap:2px; background:#f3f4f6; padding:2px 4px; }
+          .gd .xl .tabs span{ padding:.08rem .45rem; background:#e5e7eb; border-radius:0 0 4px 4px; font-size:.56rem; }
+          .gd .xl .tabs span.on{ background:#fff; color:#1d6f42; font-weight:700; }
+          .gd .step{ font-size:.8rem; font-weight:800; color:var(--ink); margin:.45rem 0 .25rem; }
+          .gd .tip{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.35rem .55rem; font-size:.62rem; color:var(--soft); max-width:33rem; line-height:1.45; }
 
-          /* scene swap inside panel A: the add form, then the resulting list */
-          .gd .addblk{ display:none; }
-          .gd .stage[data-step="0"] .addblk, .gd .stage[data-step="1"] .addblk,
-          .gd .stage[data-step="2"] .addblk, .gd .stage[data-step="3"] .addblk{ display:block; }
-          .gd .listblk{ display:none; }
-          .gd .stage[data-step="4"] .listblk{ display:block; }
-
-          /* the fabrics list: filter bar, bulk bar, navy Band pills */
-          .gd .srchbar{ display:flex; align-items:center; gap:.4rem; margin:.45rem 0 .4rem; }
-          .gd .srchin{ flex:1; max-width:13rem; height:24px; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; background:var(--surface); display:flex; align-items:center; padding:0 .4rem; font-size:.66rem; color:var(--faint); }
-          .gd .cnt{ font-size:.64rem; color:var(--faint); }
-          .gd .lnk{ font-size:.64rem; color:var(--accent); }
-          .gd .bulkbar{ display:flex; flex-wrap:wrap; align-items:center; gap:.3rem; padding:.3rem .45rem; background:var(--panel); border:1px solid var(--line); border-radius:8px; font-size:.62rem; color:var(--faint); }
-          .gd .sbtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.1rem .4rem; background:var(--surface); color:var(--soft); font-size:.62rem; font-weight:600; }
-          .gd .sin{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.08rem .35rem; background:var(--surface); color:var(--faint); font-size:.62rem; }
-          .gd .ftbl{ width:100%; border-collapse:collapse; font-size:.66rem; margin-top:.35rem; }
-          .gd .ftbl th{ text-align:left; font-size:.58rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); font-weight:700; border-bottom:1px solid var(--line); padding:.2rem .25rem; }
-          .gd .ftbl td{ padding:.22rem .25rem; border-bottom:1px solid var(--line-2); color:var(--soft); }
-          .gd .ftbl td b{ color:var(--ink); font-weight:600; }
-          .gd .bandpill{ display:inline-block; padding:.05rem .45rem; font-weight:700; font-size:.6rem; color:#fff; background:#1f3b5b; border-radius:6px; white-space:nowrap; }
-          .gd .allsys, .gd .dash{ color:var(--faint); }
-          /* the real trailing actions column: an Edit link + a red Delete button */
-          .gd .ract{ font-size:.62rem; color:var(--accent); }
-          .gd .ract.del{ color:#b91c1c; margin-left:.35rem; }
-
-          /* the second, collapsed <details> under the paste box */
-          .gd .collapsed{ margin-top:.65rem; padding-top:.5rem; border-top:1px solid var(--line); font-size:.74rem; font-weight:600; color:var(--ink); }
-          .gd .collapsed em{ font-style:normal; color:var(--faint); font-size:.9em; }
-          .gd .collapsed i{ font-style:normal; color:var(--faint); margin-right:.2rem; }
-          .gd .okflash{ display:none; margin:0 0 .5rem; }
-          .gd .stage[data-step="4"] .okflash{ display:flex; }
-
-          /* panel B — the three numbered sections with their grey tip-boxes */
-          .gd .secnum{ font-weight:700; font-size:.74rem; color:var(--ink); margin:.55rem 0 .28rem; }
-          .gd .tipbox{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.35rem .55rem; font-size:.63rem; color:var(--soft); line-height:1.5; margin:0 0 .4rem; }
-          .gd .tipbox code{ background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:0 .2rem; font-size:.6rem; }
-          .gd .tipbox b{ color:var(--ink); }
-          .gd .filebox{ display:inline-flex; align-items:center; gap:.45rem; }
-          .gd .choosebtn{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; padding:.16rem .5rem; background:var(--panel); color:var(--ink); font-size:.68rem; white-space:nowrap; }
-          .gd .fnbox{ min-width:11rem; height:26px; font-size:.7rem; }
-
-          /* mock file-picker dialog — a file input is chosen, never typed */
-          .gd .picker{ display:none; position:absolute; left:50%; top:34%; transform:translateX(-50%); width:15rem; border:1px solid var(--line); border-radius:9px; background:var(--surface); box-shadow:0 14px 34px -12px rgba(20,30,45,.45); padding:.4rem .5rem; z-index:4; }
-          .gd .stage[data-step="6"] .picker{ display:block; }
-          .gd .picker .pt{ font-weight:700; font-size:.64rem; color:var(--ink); margin:0 0 .25rem; }
-          .gd .picker .pr{ padding:.12rem .3rem; border-radius:4px; font-size:.64rem; color:var(--soft); }
-          .gd .picker .pr.on{ background:var(--accent-wash); color:var(--accent-ink); font-weight:600; }
-          .gd .picker .pb{ text-align:right; margin-top:.3rem; }
-
-          .gd .banners{ display:none; }
-          .gd .stage[data-step="7"] .banners{ display:block; }
-          .gd .banners .okbanner{ margin-bottom:.4rem; align-items:flex-start; }
-          .gd .banners .errbanner ul{ margin:.25rem 0 0; padding-left:1rem; }
-          .gd .banners .errbanner li{ padding:.04rem 0; }
-          .gd .onward{ display:none; gap:.4rem; margin-top:.5rem; }
-          .gd .stage[data-step="7"] .onward{ display:flex; }
-
-          /* panel C — the Fabric Library, stage 2 */
-          .gd .libbar{ display:flex; align-items:flex-end; gap:.6rem; flex-wrap:wrap; margin:0 0 .45rem; }
-          .gd .libname{ font-weight:700; font-size:.82rem; color:var(--ink); }
-          .gd .libcnt{ font-size:.64rem; color:var(--faint); }
-          .gd .aplbl{ display:block; font-size:.56rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; margin-bottom:.15rem; }
-          .gd .libtbl{ width:100%; border-collapse:collapse; font-size:.66rem; margin-top:.3rem; }
-          .gd .libtbl th{ text-align:left; font-size:.58rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); font-weight:700; border-bottom:1px solid var(--line); padding:.2rem .25rem; }
-          .gd .libtbl td{ padding:.22rem .25rem; border-bottom:1px solid var(--line-2); color:var(--soft); vertical-align:middle; }
-          .gd .libtbl td b{ color:var(--ink); font-weight:600; }
-          .gd .bandin{ height:1.4rem; width:2.8rem; padding:0; justify-content:center; font-size:.66rem; text-transform:uppercase; }
-          .gd .bandin .val{ padding:0; justify-content:center; }
-
-          /* two extra fill steps beyond the shared f1..f5 engine:
-             f6 = the chosen file name (steps 6-7), f8 = the edited band (step 8) */
-          .gd .stage[data-step="6"] .f6 .ph, .gd .stage[data-step="7"] .f6 .ph{ opacity:0; }
-          .gd .stage[data-step="6"] .f6 .val, .gd .stage[data-step="7"] .f6 .val{ opacity:1; }
-          .gd .stage[data-step="8"] .f8 .ph{ opacity:0; }
-          .gd .stage[data-step="8"] .f8 .val{ opacity:1; }
-          .gd .stage[data-step="6"] .f6, .gd .stage[data-step="8"] .f8{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
-          .gd .stage[data-step="6"] .f6 .val, .gd .stage[data-step="8"] .f8 .val{ animation: gdRoll .8s ease-out both; }
-          @media(max-width:620px){ .gd .hbtn{ font-size:.58rem; } }',
+          @media (max-width:640px){
+            .gd .app{ grid-template-columns:1fr; }
+            .gd .side{ display:none; }
+            .gd .sc{ min-height:470px; }
+            .gd .tiles{ grid-template-columns:repeat(2,1fr); }
+            .gd .bandmap{ grid-template-columns:1fr; }
+            .gd .bandmap .arrow{ display:none; }
+            .gd .fls.fl6 > div{ grid-template-columns:1.1rem 3.9rem minmax(4rem,1fr) 3.6rem; }
+            .gd .fls.fl6 > div > span:nth-child(5), .gd .fls.fl6 > div > span:nth-child(6){ display:none; }
+            .gd .frow{ grid-template-columns:1fr; }
+          }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / products / fabrics</span></div>
@@ -154,341 +196,349 @@ return [
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <!-- Panel A: the Fabrics hub (steps 0-4) -->
-                <div class="pn pA">
-                  <div class="card-t">Roller Blind &mdash; Fabrics</div>
-                  <div class="hdrbtns">
-                    <span class="hbtn">&larr; Back to setup wizard</span>
-                    <span class="hbtn">Add from fabric library</span>
-                    <span class="hbtn">Copy from another product</span>
-                    <span class="hbtn">Import from Excel</span>
-                    <span class="hbtn pri">Next: price tables &rarr;</span>
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  <div class="ttl">Roller Blind &mdash; Fabrics</div>
+                  <div class="bb" style="margin-bottom:.6rem"><span class="btns">&larr; Back to setup wizard</span><span class="btns">Add from fabric library</span>
+                    <span class="btns">Copy from another product</span><span class="btns">Import from Excel</span><span class="btnp">Next: price tables &rarr;</span></div>
+                  ' . $flist([['A', 'Cream', 'Louvolite', 'LV101'], ['A', 'Stone', 'Louvolite', 'LV102'], ['B', 'Blackout Ivory', 'Louvolite', 'LV201']]) . '
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; thirteen short chapters, at an easy pace.</p>
+                </div>
+
+                <!-- 1 — fabrics and bands -->
+                <div class="sc" data-scene="1" data-len="' . $len(1) . '">
+                  <div class="sct a-fade" style="--d:.2s">Fabrics belong to bands &mdash; bands have price tables</div>
+                  <div class="chips">
+                    <span class="chip a-pop" style="--d:' . $at(1, 'The material') . '">the material</span><span class="chip a-pop" style="--d:' . $at(1, 'the colour') . '">the colour</span><span class="chip a-pop" style="--d:' . $at(1, 'the slat') . '">the slat</span>
                   </div>
+                  <div class="bandmap">
+                    <div class="bbox a-rise" style="--d:' . $at(1, 'Every fabric belongs') . '"><h5>Band <span class="a-type" style="--d:' . $at(1, 'like A') . ';--ts:1;--tt:.2s">A</span></h5>
+                      <span class="f">Cream</span><span class="f">Stone</span><span class="f">Linen Oyster</span><span class="f">Polaris White</span></div>
+                    <span class="arrow a-fade" style="--d:' . $at(1, 'so they share') . '">&rarr;</span>
+                    <div class="ptab a-pop" style="--d:' . $at(1, 'so they share') . '">Price table &middot; Band A<span class="mgrid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+                    <div class="bbox a-rise" style="--d:' . $at(1, 'cost the same') . '"><h5>Band <span class="a-type" style="--d:' . $at(1, 'or Blackout') . ';--ts:8;--tt:.6s">Blackout</span></h5>
+                      <span class="f">Blackout Ivory</span><span class="f">Blackout Grey</span></div>
+                    <span class="arrow a-fade" style="--d:' . $at(1, 'instead of needing') . '">&rarr;</span>
+                    <div class="ptab a-pop" style="--d:' . $at(1, 'instead of needing') . '">Price table &middot; Band Blackout<span class="mgrid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+                  </div>
+                  <div class="chips"><span class="chip a-pop" style="--d:' . $at(1, 'What matters') . ';border-color:var(--good);color:var(--good)">The band name must match a price table</span></div>
+                </div>
 
-                  <div class="addblk">
-                    <div class="bluenote"><b>Fabrics</b> are what the customer picks for the blind &mdash; the actual
-                      material / colour / slat type they want. Each one belongs to a <b>band</b> &mdash; a letter code
-                      (A, B, C&hellip;) you assign by supplier price tier.<br>
-                      <b>About bands:</b> a band groups fabrics that all cost the same per blind size, so they share
-                      <em>one</em> price table instead of needing one each.</div>
+                <!-- 2 — the page -->
+                <div class="sc" data-scene="2" data-len="' . $len(2) . '">
+                  <div class="tiles a-rise" style="--d:' . $at(2, 'Open the product') . '">
+                    <div class="tile"><b>Systems</b><i>2</i>click to manage</div>
+                    <div class="tile a-ring" style="--d:' . $at(2, 'click the Fabrics') . '"><b>Fabrics</b><i>0</i>click to manage</div>
+                    <div class="tile"><b>Price tables</b><i>0</i>click to manage</div>
+                    <div class="tile"><b>Options</b><i>3</i>click to manage</div>
+                  </div>
+                  <div class="ttl" style="margin-top:.7rem"><span class="sw"><span class="a-mid" style="--d:' . $at(2, 'click the Fabrics', 1) . ';--d2:' . $at(2, 'might say Colours') . '">Roller Blind &mdash; Fabrics</span>
+                    <span class="a-fade" style="--d:' . $at(2, 'might say Colours') . '">Metal Venetian &mdash; <span class="a-ring" style="--d:' . $at(2, 'might say Colours') . ';border-radius:4px">Colours</span></span></span></div>
+                  <div class="bb">
+                    <span class="btns a-pop" style="--d:' . $at(2, 'Across the top') . '">&larr; Back to setup wizard</span>
+                    <span class="btns a-pop" style="--d:' . $at(2, 'are the ways in') . '">Add from fabric library</span>
+                    <span class="btns a-pop" style="--d:' . $at(2, 'are the ways in', .4) . '">Copy from another product</span>
+                    <span class="btns a-pop" style="--d:' . $at(2, 'are the ways in', .8) . '">Import from Excel</span>
+                    <span class="btnp a-pop" style="--d:' . $at(2, 'are the ways in', 1.2) . '">Next: price tables &rarr;</span>
+                  </div>
+                  <div class="chips"><span class="chip a-pop" style="--d:' . $at(2, 'Same page') . '">Same page, same buttons &mdash; just your word</span>
+                    <span class="chip a-pop" style="--d:' . $at(2, 'they all add') . ';border-color:var(--good);color:var(--good)">They all add to the same list</span>
+                    <span class="chip a-pop" style="--d:' . $at(2, 'Use whichever') . '">Use one, or mix them</span></div>
+                  <div class="a-move" style="--fx:60%;--fy:16rem;--tx:33%;--ty:1.6rem;--d:' . $at(2, 'click the Fabrics', -1.4) . ';--md:1.3s"><span class="a-mid" style="display:block;--d:0s;--d2:' . $at(2, 'The page may not') . '">' . $ptr . '</span></div>
+                </div>
 
-                    <p class="summ">Bulk add fabrics &mdash; paste a list</p>
-                    <p class="subtle">One name per line <b>or comma-separated</b> &mdash; paste either way. They all go in
-                      under the same band (and optionally one system). Duplicates are skipped silently.</p>
+                <!-- 3 — paste a list: the band -->
+                <div class="sc" data-scene="3" data-len="' . $len(3) . '">
+                  <div class="card a-rise" style="--d:.3s">
+                    <div class="sum">&#9662; Bulk add fabrics &mdash; paste a list</div>
+                    <p class="sm">One name per line <b>or comma-separated</b> &mdash; paste either way. They all go in under the same band (and optionally one system). Duplicates are skipped silently.</p>
+                    <div class="bchips a-fade" style="--d:' . $at(3, 'they show as buttons') . '"><small>Bands:</small>
+                      <span class="bc a-ring" style="--d:' . $at(3, 'Click one') . '">A</span><span class="bc">B</span><span class="bc">Blackout</span></div>
+                    <div style="max-width:9rem"><span class="fl">Band <span class="req">*</span></span>
+                      <span class="inp a-ring" style="--d:' . $at(3, 'Start with the band') . '"><span class="ph a-out" style="--d:' . $at(3, 'Click one', .8) . '">A</span>
+                        <span class="a-mid" style="--d:' . $at(3, 'Click one', .8) . ';--d2:' . $at(3, 'Typed Band A') . '">A</span>
+                        <span class="a-mid" style="--d:' . $at(3, 'Typed Band A') . ';--d2:' . $at(3, 'It keeps just', .6) . '"><span class="a-type" style="--d:' . $at(3, 'Typed Band A') . ';--ts:6;--tt:.6s">Band A</span></span>
+                        <span class="a-fade" style="--d:' . $at(3, 'It keeps just', .6) . '">A</span></span></div>
+                  </div>
+                  <span class="chip a-pop" style="--d:' . $at(3, 'It keeps just') . ';margin-top:.6rem">&ldquo;Band A&rdquo; <span class="arrow">&rarr;</span> stored as A</span>
+                  <div class="a-move" style="--fx:70%;--fy:15rem;--tx:13%;--ty:6.7rem;--d:' . $at(3, 'Click one', -1.2) . ';--md:1.2s"><span class="a-mid" style="display:block;--d:0s;--d2:' . $at(3, 'Typed Band A', -.3) . '">' . $ptr . '</span></div>
+                </div>
 
-                    <div class="chips"><i>Bands:</i>
-                      <span class="chip">A</span><span class="chip">B</span><span class="chip pick">URBAN</span></div>
-
+                <!-- 4 — paste a list: the names -->
+                <div class="sc" data-scene="4" data-len="' . $len(4) . '">
+                  <div class="card">
+                    <div class="sum">&#9662; Bulk add fabrics &mdash; paste a list</div>
                     <div class="frow">
-                      <div class="fld"><label>Band <span class="req">*</span></label>
-                        <div class="box f2"><span class="ph">A</span><span class="val">URBAN</span></div></div>
-                      <div class="fld"><label>System (optional)</label>
-                        <div class="selectbox">All systems on this product</div></div>
+                      <div><span class="fl" style="margin-top:0">Band <span class="req">*</span></span><span class="inp">A</span></div>
+                      <div class="a-rise" style="--d:' . $at(4, 'there is a System box') . '"><span class="fl" style="margin-top:0">System (optional)</span>
+                        <span class="selb a-ring" style="--d:' . $at(4, 'Leave it on all') . ';width:100%"><span class="sw"><span class="a-out" style="--d:' . $at(4, 'or pick one', .6) . '">All systems on this product</span><span class="a-fade" style="--d:' . $at(4, 'or pick one', .6) . '">Standard</span></span></span></div>
                     </div>
-
-                    <div class="fld" style="margin-top:.55rem">
-                      <label>Fabric names &mdash; one per line or comma-separated <span class="req">*</span></label>
-                      <div class="ta big f3"><span class="ph">Cream<br>Stone<br>Black<br>Polaris White</span><span class="val">Cream, Stone, Black<br>Polaris White</span></div>
-                    </div>
-
-                    <div class="btnrow"><span class="prim addall">Add all</span></div>
-
-                    <div class="collapsed"><i>&#9656;</i>Add one at a time
-                      <em>&mdash; for setting supplier / colour / code on a single fabric</em></div>
+                    <span class="fl">Fabric names &mdash; one per line or comma-separated <span class="req">*</span></span>
+                    <div class="tx a-ring" style="--d:' . $at(4, 'paste the names') . '">
+                      <div><span class="a-type" style="--d:' . $at(4, 'one per line') . ';--ts:5;--tt:.4s">Cream</span></div>
+                      <div><span class="a-type" style="--d:' . $at(4, 'one per line', .6) . ';--ts:5;--tt:.4s">Stone</span></div>
+                      <div><span class="a-type" style="--d:' . $at(4, 'with commas') . ';--ts:27;--tt:1.4s">Linen Oyster, Polaris White</span></div></div>
+                    <div style="margin-top:.45rem"><span class="btnp a-press a-ring" style="--d:' . $at(4, 'Press Add all') . '">Add all</span></div>
                   </div>
+                  <div class="chips"><span class="chip a-pop" style="--d:' . $at(4, 'stays off the others') . '">One system only = stays off the others</span>
+                    <span class="chip a-pop" style="--d:' . $at(4, 'nobody can quote') . '">No quoting a colour that can&rsquo;t be made</span></div>
+                </div>
 
-                  <div class="listblk">
-                    <div class="okbanner okflash"><span>&check;</span> Added 14 to Band URBAN. Skipped 2 (likely duplicates).</div>
-                    <p class="summ">Fabrics (14)</p>
-                    <div class="srchbar">
-                      <span class="srchin">Filter (e.g. polaris cream)&hellip;</span>
-                      <span class="cnt">14 fabrics</span><span class="lnk">Clear</span>
+                <!-- 5 — what comes back -->
+                <div class="sc" data-scene="5" data-len="' . $len(5) . '">
+                  <div class="alr a-pop" style="--d:.4s">Added 4 to Band A (one system only). <span class="a-fade" style="--d:' . $at(5, 'Any that were') . '">Skipped 2 (likely duplicates).</span></div>
+                  <div class="ttl a-fade" style="--d:' . $at(5, 'Your list') . '">Fabrics (6)</div>
+                  <div class="a-rise" style="--d:' . $at(5, 'Your list') . '">' . $flist([
+                        ['A', 'Cream', '', ''], ['A', 'Linen Oyster', '', ''], ['A', 'Polaris White', '', ''], ['A', 'Stone', '', ''],
+                        ['B', 'Blackout Grey', 'Louvolite', 'LV202'], ['B', 'Blackout Ivory', 'Louvolite', 'LV201'],
+                    ]) . '</div>
+                  <div class="chips"><span class="chip a-pop" style="--d:' . $at(5, 'nothing is ever doubled') . ';border-color:var(--good);color:var(--good)">Duplicates skipped &mdash; never doubled</span>
+                    <span class="chip a-pop" style="--d:' . $at(5, 'with its band beside') . '">Each fabric shows its <span class="bp" style="margin-left:.25rem">Band A</span></span>
+                    <span class="chip a-pop" style="--d:' . $at(5, 'quick fix') . '">Wrong band? Quick fix in chapter 12</span></div>
+                </div>
+
+                <!-- 6 — one at a time -->
+                <div class="sc" data-scene="6" data-len="' . $len(6) . '">
+                  <div class="card" style="opacity:.55;margin-bottom:.5rem;padding:.4rem .75rem"><div class="sum" style="margin:0">&#9662; Bulk add fabrics &mdash; paste a list</div></div>
+                  <div class="card a-rise" style="--d:' . $at(6, 'Open Add one') . '">
+                    <div class="sum">&#9662; Add one at a time <span style="font-weight:400;color:var(--faint)">&mdash; for setting supplier / colour / code on a single fabric</span></div>
+                    <p class="sm"><b>Bulk add</b> above is quicker for most cases. Use this only when you need to set a supplier, colour, or code on an individual fabric.</p>
+                    <div style="display:grid;grid-template-columns:3.5rem 1.4fr 1fr 1fr .8fr;gap:.4rem">
+                      <div class="a-fade" style="--d:' . $at(6, 'the band, the name') . '"><span class="fl">Band <span class="req">*</span></span><span class="inp">B</span></div>
+                      <div class="a-fade" style="--d:' . $at(6, 'the name, the colour') . '"><span class="fl">Fabric name <span class="req">*</span></span><span class="inp"><span><span class="a-type" style="--d:' . $at(6, 'the name, the colour') . ';--ts:13;--tt:.8s">Blackout Sand</span></span></span></div>
+                      <div class="a-fade" style="--d:' . $at(6, 'the colour, the') . '"><span class="fl">Colour</span><span class="inp"><span><span class="a-type" style="--d:' . $at(6, 'the colour, the') . ';--ts:4;--tt:.4s">Sand</span></span></span></div>
+                      <div class="a-fade" style="--d:' . $at(6, 'the supplier and') . '"><span class="fl">Supplier</span><span class="inp"><span><span class="a-type" style="--d:' . $at(6, 'the supplier and') . ';--ts:9;--tt:.6s">Louvolite</span></span></span></div>
+                      <div class="a-fade" style="--d:' . $at(6, 'and the code') . '"><span class="fl">Code</span><span class="inp"><span><span class="a-type" style="--d:' . $at(6, 'and the code') . ';--ts:5;--tt:.4s">LV203</span></span></span></div>
                     </div>
-                    <div class="bulkbar">
-                      <span class="sbtn">Delete selected</span>&middot;
-                      <span class="sin">band</span><span class="sbtn">Set band on selected</span>&middot;
-                      <span class="sin">supplier</span><span class="sbtn">Set supplier on selected</span>
-                      <span>No rows selected</span>
-                      <span>&middot; Tip: tick one, then <b>Shift</b>-click another to select everything between.</span>
+                    <div class="cbr a-fade" style="--d:' . $at(6, 'an Active tick') . ';margin:.5rem 0"><span class="a-ring" style="--d:' . $at(6, 'Leave Active') . ';border-radius:5px;display:inline-flex">' . $tk(true) . '</span> Active</div>
+                    <span class="btnp">Add fabric</span>
+                  </div>
+                  <span class="chip a-pop" style="--d:' . $at(6, 'unless you are parking') . ';margin-top:.5rem">Unticked = stays in the list with a grey <b>&nbsp;Inactive&nbsp;</b> pill</span>
+                  <span class="chip a-pop" style="--d:' . $at(6, 'keep it for the odd') . ';margin-top:.5rem">Slower &mdash; keep it for the odd one</span>
+                </div>
+
+                <!-- 7 — excel: the template -->
+                <div class="sc" data-scene="7" data-len="' . $len(7) . '">
+                  <div class="ttl">Import fabrics &mdash; Roller Blind</div>
+                  <div class="step">1. Download the template</div>
+                  <div class="tip a-fade" style="--d:' . $at(7, 'It has five') . '">Columns: <code>Band*</code>, <code>Fabric name*</code>, <code>Colour</code>, <code>Supplier</code>, <code>Code</code>. Asterisks = required. Each row becomes one fabric.</div>
+                  <div style="margin:.4rem 0"><span class="btnn a-press a-ring" style="--d:' . $at(7, 'download the blank') . '">Download blank template (.xlsx)</span></div>
+                  <div class="xl a-rise" style="--d:' . $at(7, 'It has five') . '">
+                    <div class="xh">Roller Blind - Fabric template.xlsx</div>
+                    <div class="xr h"><span class="a-ring" style="--d:' . $at(7, 'Band and name') . '">Band*</span><span class="a-ring" style="--d:' . $at(7, 'Band and name') . '">Fabric name*</span><span>Colour</span><span>Supplier</span><span>Code</span></div>
+                    <div class="swb">
+                      <div class="a-out" style="--d:' . $at(7, 'Delete the grey', 1) . '"><div class="xr"><span>&nbsp;</span><span></span><span></span><span></span><span></span></div>
+                        <div class="note a-ring" style="--d:' . $at(7, 'Delete the grey') . '">* = required. Bands like A, B, C, AA, AAA &mdash; case is normalised. Duplicate (band + name + colour) rows are skipped on import.</div></div>
+                      <div class="a-fade" style="--d:' . $at(7, 'paste your data') . '">
+                        <div class="xr"><span>A</span><span>Cream</span><span>Cream</span><span>Decora</span><span>D101</span></div>
+                        <div class="xr"><span>A</span><span>Stone</span><span>Stone</span><span>Decora</span><span>D102</span></div>
+                        <div class="xr"><span>B</span><span>Blackout Ivory</span><span>Ivory</span><span>Decora</span><span>D201</span></div></div>
                     </div>
-                    <table class="ftbl">
-                      <tr><th style="width:1rem"><span class="tick">&check;</span></th><th>Band</th><th>System</th><th>Fabric</th><th>Colour</th><th>Supplier</th><th>Code</th><th>Group</th><th></th></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Cream</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Stone</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
-                      <tr><td><span class="tick">&check;</span></td><td><span class="bandpill">Band URBAN</span></td><td class="allsys">All systems</td><td><b>Polaris White</b></td><td></td><td></td><td></td><td class="dash">&mdash;</td><td><span class="ract">Edit</span><span class="ract del">Delete</span></td></tr>
-                    </table>
+                  </div>
+                  <div class="step a-fade" style="--d:' . $at(7, 'and save') . '">2. Fill it in &mdash; then save</div>
+                </div>
+
+                <!-- 8 — excel: upload -->
+                <div class="sc" data-scene="8" data-len="' . $len(8) . '">
+                  <div class="step" style="margin-top:0">3. Upload</div>
+                  <span class="fl">Filled template (.xlsx)</span>
+                  <div class="bb"><span class="btns a-press" style="--d:' . $at(8, 'choose your file') . '">Choose File</span><span class="a-type" style="--d:' . $at(8, 'choose your file', .6) . ';--ts:20;--tt:.6s;font-size:.66rem">Decora rollers.xlsx</span></div>
+                  <div class="bb" style="margin-top:.5rem"><span class="btnp a-press a-ring" style="--d:' . $at(8, 'press Upload') . '">Upload &amp; import</span><span class="btns">Cancel</span></div>
+                  <div class="xl a-rise" style="--d:' . $at(8, 'It only reads') . ';margin-top:.7rem">
+                    <div class="xr"><span>A</span><span>Cream</span><span>Cream</span><span>Decora</span><span>D101</span></div>
+                    <div class="xr"><span>A</span><span>Stone</span><span>Stone</span><span>Decora</span><span>D102</span></div>
+                    <div class="tabs"><span class="on a-ring" style="--d:' . $at(8, 'that was showing') . '">Rollers</span><span>Romans</span><span>Verticals</span><span>Venetians</span></div>
+                  </div>
+                  <div class="chips">
+                    <span class="chip a-pop" style="--d:' . $at(8, 'that was showing') . ';border-color:#f59e0b">Only the sheet showing when saved &mdash; one tab at a time</span>
+                    <span class="chip a-pop" style="--d:' . $at(8, 'no heading row') . '">No headings? A = Band &middot; B = Name &middot; C = Colour &middot; D = Supplier &middot; E = Code</span>
                   </div>
                 </div>
 
-                <!-- Panel B: Import from Excel (steps 5-7) -->
-                <div class="pn pB">
-                  <div class="card-t">Import fabrics &mdash; Roller Blind</div>
-
-                  <div class="banners">
-                    <div class="okbanner"><span>&check;</span><div>Imported <b>46</b> fabrics (no headers &mdash; used positional
-                      A=Band B=Name C=Colour D=Supplier E=Code). Skipped 3 duplicates. Ignored 2 blank rows.</div></div>
-                    <div class="errbanner"><span>&#9888;</span><div><b>Some rows had problems:</b>
-                      <ul>
-                        <li>Row 3: missing band</li>
-                        <li>Row 7: missing name</li>
-                        <li>Row 9: band code was just &lsquo;Band&rsquo; with nothing after it</li>
-                        <li>&hellip; and 4 more</li>
-                      </ul></div></div>
-                    <div class="onward"><span class="prim">Continue product setup &rarr;</span><span class="sec">View imported fabrics</span></div>
+                <!-- 9 — when rows bounce -->
+                <div class="sc" data-scene="9" data-len="' . $len(9) . '">
+                  <div class="alr a-pop" style="--d:' . $at(9, 'the good ones') . '">Imported <b>38</b> fabrics (header row detected). <span class="a-fade" style="--d:' . $at(9, 'skipped as duplicates') . '">Skipped 3 duplicates.</span></div>
+                  <div class="alr err a-pop" style="--d:' . $at(9, 'A red box') . '"><b>Some rows had problems:</b><ul>
+                    <li class="a-ring" style="--d:' . $at(9, 'Row seven') . ';border-radius:4px">Row 7: missing name</li>
+                    <li>Row 9: band code was just &lsquo;Band&rsquo; with nothing after it</li></ul></div>
+                  <div class="chips">
+                    <span class="chip a-pop" style="--d:' . $at(9, 'Fix those rows') . '">Fix rows 7 and 9 &rarr; upload the same file again</span>
+                    <span class="chip a-pop" style="--d:' . $at(9, 'skipped as duplicates') . ';border-color:var(--good);color:var(--good)">Rows already in are skipped</span>
                   </div>
+                  <div class="bb"><span class="btnp a-ring" style="--d:' . $at(9, 'Then Continue') . '">Continue product setup &rarr;</span><span class="btns">View imported fabrics</span></div>
+                </div>
 
-                  <p class="secnum">1. Download the template</p>
-                  <div class="tipbox">Columns: <code>Band*</code>, <code>Fabric name*</code>, <code>Colour</code>,
-                    <code>Supplier</code>, <code>Code</code>. Asterisks = required. Each row becomes one fabric.</div>
-                  <div class="btnrow"><span class="prim">Download blank template (.xlsx)</span></div>
+                <!-- 10 — from the fabric library -->
+                <div class="sc" data-scene="10" data-len="' . $len(10) . '">
+                  <div class="swb">
+                    <div class="a-mid" style="--d:0s;--d2:' . $at(10, 'Every fabric is ticked', -.3) . '">
+                      <div class="ttl">Roller Blind &mdash; add fabrics from library</div>
+                      <div class="card"><h4>Pick a fabric manufacturer</h4>
+                        <div class="fls" style="font-size:.66rem"><div class="hd" style="grid-template-columns:1fr 4rem 5rem"><span>Manufacturer</span><span style="text-align:right">Fabrics</span><span></span></div>
+                          <div style="grid-template-columns:1fr 4rem 5rem"><b>Decora</b><span style="text-align:right">212</span><span style="text-align:right"><span class="btns">Choose &rarr;</span></span></div>
+                          <div style="grid-template-columns:1fr 4rem 5rem"><b>Louvolite</b><span style="text-align:right">348</span><span style="text-align:right"><span class="btns a-press a-ring" style="--d:' . $at(10, 'choose the manufacturer') . '">Choose &rarr;</span></span></div></div></div>
+                    </div>
+                    <div class="a-fade" style="--d:' . $at(10, 'Every fabric is ticked', -.3) . '">
+                      <div class="bb" style="justify-content:space-between;max-width:33rem;margin-bottom:.45rem"><span><b style="font-size:.8rem">Louvolite</b><br><span class="sm">348 fabrics in the library</span></span>
+                        <span><span class="fl" style="margin-top:0">Apply to system</span><span class="selb">All systems</span></span>
+                        <span class="btnp a-press a-ring" style="--d:' . $at(10, 'Then press Add') . '">Add ticked fabrics</span></div>
+                      <p class="sm">All ticked by default. The <b>band</b> is pre-filled from the library&rsquo;s suggested band &mdash; edit any to suit your pricing before adding.</p>
+                      <div class="fls"><div class="hd" style="grid-template-columns:1.2rem 1fr 4rem 3.6rem 3rem 4rem"><span>' . $tk(true) . '</span><span>Fabric</span><span>Colour</span><span>Code</span><span>Band</span><span>Type</span></div>
+                        <div style="grid-template-columns:1.2rem 1fr 4rem 3.6rem 3rem 4rem">' . $tk(true) . '<b>Carnival</b><span>White</span><span class="mu">CA01</span><span class="inp" style="min-height:20px;font-size:.6rem;padding:0 .3rem">A</span><span class="mu">Roller</span></div>
+                        <div style="grid-template-columns:1.2rem 1fr 4rem 3.6rem 3rem 4rem">' . $tk(true) . '<b>Carnival</b><span>Ivory</span><span class="mu">CA02</span><span class="inp a-ring" style="--d:' . $at(10, 'Change any band') . ';min-height:20px;font-size:.6rem;padding:0 .3rem"><span class="a-out" style="--d:' . $at(10, 'right there') . '">A</span><span class="a-fade" style="--d:' . $at(10, 'right there') . '">B</span></span><span class="mu">Roller</span></div>
+                        <div style="grid-template-columns:1.2rem 1fr 4rem 3.6rem 3rem 4rem"><span class="sw">' . $tk(true, 'a-out', '--d:' . $at(10, 'untick what')) . $tk(false, 'a-fade', '--d:' . $at(10, 'untick what')) . '</span><b>Carnival</b><span>Lime</span><span class="mu">CA07</span><span class="inp" style="min-height:20px;font-size:.6rem;padding:0 .3rem">A</span><span class="mu">Roller</span></div></div>
+                      <div class="alr a-pop" style="--d:' . $at(10, 'Then press Add', 1) . ';margin-top:.45rem">Added 2 fabrics from &ldquo;Louvolite&rdquo;.</div>
+                    </div>
+                  </div>
+                  <span class="chip a-pop" style="--d:' . $at(10, 'filled in as the supplier') . ';margin-top:.4rem">Supplier = Louvolite, filled in for you</span>
+                </div>
 
-                  <p class="secnum">2. Fill it in</p>
-                  <div class="tipbox">Open the file in Excel, paste your data into the columns, save. You can leave
-                    Supplier / Colour / Code blank if you don&rsquo;t have them. Bands like <code>A</code>, <code>AA</code>,
-                    <code>AAA</code> are normalised to uppercase on import.<br>
-                    <b>Headerless files also work:</b> if row 1 has no recognisable header, the importer falls back to
-                    positional columns &mdash; A&nbsp;=&nbsp;Band, B&nbsp;=&nbsp;Name, C&nbsp;=&nbsp;Colour,
-                    D&nbsp;=&nbsp;Supplier, E&nbsp;=&nbsp;Code.</div>
+                <!-- 11 — copy from another product -->
+                <div class="sc" data-scene="11" data-len="' . $len(11) . '">
+                  <div class="ttl">Copy fabrics into Vertical Fabric Only</div>
+                  <div class="card a-rise" style="--d:' . $at(11, 'Pick the product') . '"><h4>1. Copy from</h4><span class="fl">Source product</span>
+                    <span class="selb" style="min-width:13rem"><span class="sw"><span class="a-out" style="--d:' . $at(11, 'Pick the product', 1) . '">&mdash; Choose a product &mdash;</span><span class="a-fade" style="--d:' . $at(11, 'Pick the product', 1) . '">Vertical Blind (86)</span></span></span></div>
+                  <div class="card a-rise" style="--d:' . $at(11, 'choose which') . ';margin-top:.5rem"><h4>2. Bands in Vertical Blind</h4>
+                    <div class="cbr">' . $tk(true) . '<span style="color:var(--soft)">Select all bands</span></div>
+                    <div class="cbr" style="margin-top:.25rem">' . $tk(true) . '<span><b>Band A</b> <span style="color:var(--faint)">&middot; 40 fabrics</span></span></div>
+                    <div class="cbr" style="margin-top:.25rem">' . $tk(true) . '<span><b>Band B</b> <span style="color:var(--faint)">&middot; 46 fabrics</span></span></div>
+                    <div style="margin-top:.45rem"><span class="btnp a-press" style="--d:' . $at(11, 'and copy') . '">Copy selected into Vertical Fabric Only &rarr;</span></div>
+                    <p class="sm a-fade" style="--d:' . $at(11, 'safe to run twice') . ';margin:.4rem 0 0">Existing fabrics (same band + name + colour) are skipped, so it&rsquo;s safe to run this more than once.</p></div>
+                  <div class="alr a-pop" style="--d:' . $at(11, 'and copy', .8) . ';margin-top:.5rem">Copied 86 fabrics from &ldquo;Vertical Blind&rdquo;.</div>
+                  <span class="chip a-pop" style="--d:' . $at(11, 'Fabrics tied') . '">System-only fabrics &rarr; the same-named system</span>
+                </div>
 
-                  <p class="secnum">3. Upload</p>
-                  <div class="fld"><label>Filled template (.xlsx)</label>
-                    <div class="filebox"><span class="choosebtn">Choose File</span>
-                      <span class="box fnbox f6"><span class="ph">No file chosen</span><span class="val">Decora roller range.xlsx</span></span></div></div>
-                  <div class="btnrow"><span class="prim upbtn">Upload &amp; import</span><span class="sec">Cancel</span></div>
-
-                  <div class="picker">
-                    <p class="pt">Open</p>
-                    <div class="pr">Louvolite 2026 price list.xlsx</div>
-                    <div class="pr on">Decora roller range.xlsx</div>
-                    <div class="pr">Vertical vanes.csv</div>
-                    <div class="pb"><span class="sec" style="font-size:.62rem;padding:.12rem .5rem">Open</span></div>
+                <!-- 12 — fixing mistakes in bulk -->
+                <div class="sc" data-scene="12" data-len="' . $len(12) . '">
+                  <div class="alr a-pop" style="--d:' . $at(12, 'takes seconds', -1) . '">3 fabrics set to band B.</div>
+                  <div class="srch"><span class="inp a-ring" style="--d:' . $at(12, 'Type in the filter') . '"><span class="ph a-out" style="--d:' . $at(12, 'to find the rows', -.5) . '">Filter (e.g. polaris cream)&hellip;</span><span><span class="a-type" style="--d:' . $at(12, 'to find the rows', -.5) . ';--ts:7;--tt:.6s">polaris</span></span></span>
+                    <span class="sm" style="margin:0"><span class="sw"><span class="a-out" style="--d:' . $at(12, 'to find the rows') . '">9 fabrics</span><span class="a-fade" style="--d:' . $at(12, 'to find the rows') . '">Showing 3 of 9</span></span></span><span class="a-fade" style="color:var(--accent);font-size:.62rem;--d:' . $at(12, 'to find the rows') . '">Clear</span></div>
+                  <div class="bulk">
+                    <span class="btns" style="font-size:.58rem">Delete selected</span> &middot;
+                    <span class="bi a-ring" style="--d:' . $at(12, 'Then use Set band') . '"><span class="a-type" style="--d:' . $at(12, 'Then use Set band', .5) . ';--ts:1;--tt:.2s">B</span></span>
+                    <span class="btns a-press" style="--d:' . $at(12, 'Set supplier', -.4) . ';font-size:.58rem">Set band on selected</span> &middot;
+                    <span class="bi" style="width:4rem;text-transform:none;color:var(--faint)">supplier</span><span class="btns" style="font-size:.58rem">Set supplier on selected</span>
+                    <span><span class="sw"><span class="a-out" style="--d:' . $at(12, 'Tick one') . '">No rows selected</span><span class="a-mid" style="--d:' . $at(12, 'Tick one') . ';--d2:' . $at(12, 'and tick another', .2) . '">1 row selected</span><span class="a-fade" style="--d:' . $at(12, 'and tick another', .2) . '">3 rows selected</span></span></span>
+                  </div>
+                  <div class="chips" style="margin:.1rem 0 .4rem"><span class="chip a-pop" style="--d:' . $at(12, 'hold Shift') . '"><b>Shift</b>-click = everything in between</span></div>
+                  <div class="swb">
+                    <div class="a-out" style="--d:' . $at(12, 'to find the rows') . '">' . $flist([
+                        ['A', 'Cream', 'Louvolite', 'LV101'], ['A', 'Polaris Cream', 'Louvolite', 'PO11'], ['A', 'Polaris Grey', 'Louvolite', 'PO12'],
+                        ['A', 'Polaris White', 'Louvolite', 'PO10'], ['A', 'Stone', 'Louvolite', 'LV102'],
+                    ]) . '</div>
+                    <div class="a-fade" style="--d:' . $at(12, 'to find the rows') . '">' . $flist([
+                        ['<span class="sw"><span class="a-out" style="--d:' . $at(12, 'takes seconds', -1) . '">A</span><span class="a-fade" style="--d:' . $at(12, 'takes seconds', -1) . '">B</span></span>', 'Polaris Cream', 'Louvolite', 'PO11', '<span class="tick a-sel" style="--d:' . $at(12, 'Tick one') . '">&#10003;</span>'],
+                        ['<span class="sw"><span class="a-out" style="--d:' . $at(12, 'takes seconds', -1) . '">A</span><span class="a-fade" style="--d:' . $at(12, 'takes seconds', -1) . '">B</span></span>', 'Polaris Grey', 'Louvolite', 'PO12', '<span class="tick a-sel" style="--d:' . $at(12, 'and tick another', .2) . '">&#10003;</span>'],
+                        ['<span class="sw"><span class="a-out" style="--d:' . $at(12, 'takes seconds', -1) . '">A</span><span class="a-fade" style="--d:' . $at(12, 'takes seconds', -1) . '">B</span></span>', 'Polaris White', 'Louvolite', 'PO10', '<span class="tick a-sel" style="--d:' . $at(12, 'and tick another') . '">&#10003;</span>'],
+                    ]) . '</div>
                   </div>
                 </div>
 
-                <!-- Panel C: Fabric Library, stage 2 (step 8) -->
-                <div class="pn pC">
-                  <div class="card-t">Roller Blind &mdash; add fabrics from library</div>
-                  <div class="libbar">
-                    <div><div class="libname">Louvolite</div><div class="libcnt">212 fabrics in the library</div></div>
-                    <div style="margin-left:auto"><span class="aplbl">Apply to system</span>
-                      <span class="selectbox" style="min-width:9rem">All systems</span></div>
-                    <span class="prim">Add ticked fabrics</span>
+                <!-- 13 — bands must match -->
+                <div class="sc" data-scene="13" data-len="' . $len(13) . '">
+                  <div class="sct a-fade" style="--d:.2s">A fabric prices only if its band has a price table</div>
+                  <div class="bandmap" style="grid-template-columns:1fr 1fr">
+                    <div class="bbox a-rise" style="--d:' . $at(13, 'its band matches') . '"><h5>Fabric bands</h5><span class="bp">Band A</span> <span class="bp">Band B</span> <span class="bp a-ring" style="--d:' . $at(13, 'you do not recognise') . '">Band Blackot</span></div>
+                    <div class="bbox a-rise" style="--d:' . $at(13, 'a price table on that') . '"><h5>Price tables</h5><span class="ptab" style="display:inline-block;padding:.1rem .4rem">Band A</span> <span class="ptab" style="display:inline-block;padding:.1rem .4rem">Band B</span> <span class="ptab" style="display:inline-block;padding:.1rem .4rem">Band Blackout</span></div>
                   </div>
-                  <p class="subtle">All ticked by default. The <b>band</b> is pre-filled from the library&rsquo;s suggested
-                    band &mdash; edit any to suit your pricing before adding.</p>
-                  <table class="libtbl">
-                    <tr><th style="width:1rem"><span class="tick on">&check;</span></th><th>Fabric</th><th>Colour</th><th>Code</th><th>Band</th><th>Type</th></tr>
-                    <tr><td><span class="tick on">&check;</span></td><td><b>Bella</b></td><td>Chalk</td><td>BL-101</td><td><span class="box bandin"><span class="ph">A</span><span class="val">A</span></span></td><td>Roller</td></tr>
-                    <tr><td><span class="tick on">&check;</span></td><td><b>Bella</b></td><td>Stone</td><td>BL-104</td><td><span class="box bandin"><span class="ph">A</span><span class="val">A</span></span></td><td>Roller</td></tr>
-                    <tr><td><span class="tick on">&check;</span></td><td><b>Banlight Duo FR</b></td><td>Charcoal</td><td>BD-220</td><td><span class="box bandin f8"><span class="ph">A</span><span class="val">B</span></span></td><td>Roller</td></tr>
-                  </table>
-                  <div class="okbanner" style="margin-top:.5rem"><span>&check;</span><div>Added 12 fabrics from
-                    &ldquo;Louvolite&rdquo;. Skipped 3 already on this product. 2 had no band &mdash; set their band so they
-                    price correctly.</div></div>
+                  <div class="bchips a-fade" style="--d:' . $at(13, 'The band buttons') . ';margin-top:.7rem"><small>Bands:</small><span class="bc">A</span><span class="bc">B</span><span class="bc">Blackout</span>
+                    <span class="bc a-ring" style="--d:' . $at(13, 'you do not recognise') . ';border-color:var(--err);color:var(--err)">Blackot</span></div>
+                  <div class="chips"><span class="chip a-pop" style="--d:' . $at(13, 'that is the one') . ';border-color:var(--err);color:var(--err)">&ldquo;Blackot&rdquo; fabrics have no price table &rarr; no price</span></div>
+                  <span class="btnp a-ring" style="--d:' . $at(13, 'press Next') . '">Next: price tables &rarr;</span>
                 </div>
 
-                <div class="caps">
-                  <b class="c1"><span class="n">1</span> Where the fabrics live &mdash; four ways in.</b>
-                  <b class="c2"><span class="n">2</span> The band comes first &mdash; you name it.</b>
-                  <b class="c3"><span class="n">3</span> Paste the names in, then Add all.</b>
-                  <b class="c4 good"><span class="n">4</span> What comes back &mdash; and how to mend it.</b>
-                  <b class="c5"><span class="n">5</span> The spreadsheet route &mdash; get the template.</b>
-                  <b class="c6"><span class="n">6</span> Choose the file, upload it.</b>
-                  <b class="c7 err"><span class="n">7</span> Good rows in; bad rows named.</b>
-                  <b class="c8 good"><span class="n">8</span> The library &mdash; no file at all.</b>
-                </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p>A product&rsquo;s <b>fabrics</b> are what the customer picks for the blind &mdash; in the page&rsquo;s own words,
-             &ldquo;the actual material / colour / slat type they want&rdquo;. They are <em>not</em> the same as its
-             <b>options</b> (controls, cassettes, bottom bars) &mdash; those are covered in <em>Adding options</em>.
-             They all live on one page: <b>Products &rarr; the product &rarr; Fabrics</b>.</p>
+          <p>A product&rsquo;s <b>fabrics</b> are what the customer picks &mdash; in the page&rsquo;s own words, <em>&ldquo;the actual material /
+             colour / slat type they want&rdquo;</em>. They are not its <b>options</b> (see <em>Adding options</em>). They live on one page:
+             <b>Products &rarr; the product &rarr; the Fabrics tile</b> (or <b>Full manage &raquo;</b> on the edit page&rsquo;s Fabrics section).
+             The header has <b>&larr; Back to setup wizard</b>, <b>Add from fabric library</b>, <b>Copy from another product</b>,
+             <b>Import from Excel</b> and <b>Next: price tables &rarr;</b>.</p>
 
-          <div class="heads"><span class="hi">&#9888;</span><div><b>It may not say &ldquo;Fabric&rdquo; on your screen.</b>
-             That word is the product&rsquo;s own <b>Option label</b>, a free-text box on <b>Edit product</b> (up to 40
-             characters). The screen&rsquo;s own advice there is: <em>Fabric</em> for rollers and romans, <em>Colour</em> for
-             metal venetians, <em>Finish</em> for wood venetians &mdash; but it will take any word you like, so plenty of
-             products read <em>Slat type</em>. Whatever you put, the whole page follows suit: type <em>Slat type</em> and you
-             get <em>Import slat types</em>, <em>Slat type name*</em> in the template, <em>No slat types yet</em> on an empty
-             product. Same page, same buttons, different word. Everything below works exactly the same.</div></div>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>It may not say &ldquo;Fabric&rdquo; on your screen.</b> The word is the
+             product&rsquo;s own label (set when the product was made, and on <b>Edit product</b>) &mdash; e.g. <em>Colour</em> for metal venetians,
+             <em>Finish</em> for wood. Type <em>Colour</em> and the page reads <em>Colours</em>, the paste box <em>Colour names</em>, the template
+             <em>Colour name*</em>. Same page, same buttons.</div></div>
 
-          <p class="prose"><b>Four ways in.</b> They all write to the same list, so mix and match freely.</p>
+          <p class="prose"><b>The band.</b> A band groups fabrics that cost the same per blind size, so they share <em>one</em> price table.
+             It is free text up to 60 characters &mdash; <em>A</em>, <em>AA</em>, <em>Plain</em>, <em>Blackout</em> are all fine. A leading
+             &ldquo;Band &rdquo; is removed when you type one (<em>Band AA</em> &rarr; <em>AA</em>) in the paste box, <b>Add one at a time</b>,
+             the Excel import and <b>Set band on selected</b>; the library pull&rsquo;s per-row box takes exactly what you type, so put just the
+             code there. The Excel import, the library pull and <b>Set band on selected</b> store bands in <b>capitals</b>; band matching
+             ignores case.</p>
+
+          <p class="prose"><b>1) Bulk add fabrics &mdash; paste a list</b> (open by default).</p>
           <ul class="steps">
-            <li><b>&ldquo;Bulk add fabrics &mdash; paste a list&rdquo;</b> &mdash; already open on the Fabrics page, and the
-                fastest route for most jobs. Type a band, paste the names, press <b>Add all</b>. No file, no template.</li>
-            <li><b>Import from Excel</b> &mdash; a header button. Best when a supplier has sent you a spreadsheet, or when you
-                want Colour, Supplier and Code filled in as well as the name.</li>
-            <li><b>Add from fabric library</b> &mdash; a header button. If the range is already in the library, pick the
-                manufacturer, untick what you don&rsquo;t sell, and add. The manufacturer&rsquo;s name is written into
-                <b>Supplier</b> for you.</li>
-            <li><b>Copy from another product</b> &mdash; a header button, and the fastest of all for a sibling product. Choose
-                the source product, tick which <b>bands</b> to bring across (all ticked by default), and go. Anything already
-                there (same band + name + colour) is skipped, so <b>it is safe to run twice</b>, and a fabric tied to a system
-                is re-pointed to the target&rsquo;s same-<em>named</em> system. This is how a &ldquo;vertical blind fabric
-                only&rdquo; line inherits the vertical&rsquo;s whole range in one click.</li>
+            <li><b>Bands:</b> &mdash; a row of buttons, one per band already on this product (from its fabrics <em>and</em> its price tables).
+                Click one to fill the box. The <b>Band *</b> box also suggests them as you type.</li>
+            <li><b>System (optional)</b> &mdash; appears when the product has systems: <em>All systems on this product</em> or one system.</li>
+            <li><b>&hellip; names &mdash; one per line or comma-separated *</b> &mdash; paste, then <b>Add all</b>:
+                <code>Added 14 to Band A.</code> (<code>(one system only)</code> when a system was picked), plus
+                <code>Skipped 2 (likely duplicates).</code> Errors: <code>Band code is required.</code>,
+                <code>No names &mdash; paste at least one name into the box.</code></li>
           </ul>
 
-          <p class="prose"><b>And a fifth, for one row at a time.</b> Directly under the paste box sits a second, <b>folded-up</b>
-             section headed <b>Add one at a time &mdash; for setting supplier / colour / code on a single fabric</b>. Click the
-             heading to open it. It tells you plainly why it is folded away: <em>&ldquo;Bulk add above is quicker for most cases.
-             Use this only when you need to set a supplier, colour, or code on an individual fabric.&rdquo;</em> It has the same
-             band chips and the same autocomplete, and six controls in all: <b>Band&nbsp;*</b>, <b>Fabric name&nbsp;*</b>
-             (placeholder <em>e.g. Cream Slats</em>), <b>Colour</b>, <b>Supplier</b>, <b>Code</b>, an <b>Active</b> tick that is
-             on to start with, and an <b>Add fabric</b> button. Leave Active ticked unless you are parking a fabric you don&rsquo;t
-             sell at the moment &mdash; an unticked one still sits in the list, with a grey <b>Inactive</b> pill beside its name.
-             The refusals are short and say what is wrong: <code>Band code is required (e.g. A, B, C).</code>,
-             <code>Band code is too long (max 60 chars).</code>, <code>Fabric name is required.</code> and
-             <code>Fabric name is too long (max 150 chars).</code> If the Colour box is missing here &mdash; and from the Colour
-             column in the list below &mdash; that is the tick on <b>Edit product</b> called
-             <b>&ldquo;Show separate &lsquo;Colour&rsquo; column on fabric forms.&rdquo;</b>, which you untick on products where
-             the fabric name <em>is</em> the colour.</p>
+          <p class="prose"><b>2) Add one at a time &mdash; for setting supplier / colour / code on a single fabric</b> (folded; click to open).
+             <b>Band *</b>, <b>Fabric name *</b>, <b>Colour</b> (hidden when the product&rsquo;s word already means colour, or the
+             <em>Show separate &ldquo;Colour&rdquo; column</em> tick is off), <b>Supplier</b>, <b>Code</b>, <b>Active</b> (ticked) and
+             <b>Add fabric</b>. An unticked one stays in the list with a grey <b>Inactive</b> pill. Errors:
+             <code>Band code is required (e.g. A, B, C).</code>, <code>Fabric name is required.</code>,
+             <code>A fabric with that name + colour already exists for this product.</code></p>
 
-          <p class="prose"><b>The band is yours to name.</b> A <b>band</b> groups fabrics that all cost the same per blind size,
-             so they share <em>one</em> price table instead of needing one each. The box is <b>free text up to 60 characters</b>
-             &mdash; <em>A</em>, <em>B</em> and <em>AAA</em> are fine, but so are <em>Plain</em>, <em>Blackout</em> and
-             <em>Special effects</em>. Name it for what it is.</p>
+          <p class="prose"><b>3) Import from Excel</b> &mdash; <em>Import fabrics &mdash; &lt;product&gt;</em>, three numbered sections.</p>
           <ul class="steps">
-            <li><b>The chips strip</b> above the box lists every band already used on this product &mdash; <b>click one to fill
-                the box</b>. It is drawn from your <b>fabrics and your price tables together</b>, so a band sitting in one list
-                but not the other is visible at a glance.</li>
-            <li><b>It remembers the last band you used</b>, so adding five bands in a row is five short edits, not five retypes.
-                There is a matching autocomplete list on the Band boxes too.</li>
-            <li><b>Type <code>Band AA</code> and it quietly stores <code>AA</code></b> &mdash; a leading &ldquo;Band&nbsp;&rdquo;
-                is thrown away, so you never end up with &ldquo;Band Band AA&rdquo; in the pill. That tidy-up happens on the
-                four places you <em>type</em> a band: the <b>paste a list</b> box, the <b>Add one at a time</b> form, the
-                <b>Excel import</b>, and <b>Set band on selected</b>. The one place it does <em>not</em> happen is the little
-                per-row <b>Band</b> box on the <b>fabric library</b> screen &mdash; type &ldquo;Band B&rdquo; there and you get
-                a band literally called <em>BAND B</em>, which will not match a price table called <em>B</em>. Put just the
-                code in that box.</li>
-            <li><b>Case:</b> the <b>paste a list</b> box, the <b>Add one at a time</b> form and a row&rsquo;s own <b>Edit</b>
-                keep the case you typed. Everything else shouts: <b>Excel import</b>, the <b>library pull</b> and
-                <b>Set band on selected</b> all store the band in <b>capitals</b> &mdash; the little Set-band box even types
-                in capitals as you go, so you can see it coming. Either way they match, because band matching ignores case
-                &mdash; but don&rsquo;t be surprised to see <em>Urban</em> and <em>URBAN</em> side by side.</li>
-            <li><b>Ordering:</b> all-A bands come first and the <b>longest run of A&rsquo;s counts as the most premium</b>
-                (AAAA, then AAA, then AA, then A), and everything else follows alphabetically.</li>
+            <li><b>1. Download the template</b> &mdash; <b>Download blank template (.xlsx)</b>: columns <b>Band*</b>, <b>Fabric name*</b>,
+                <b>Colour</b>, <b>Supplier</b>, <b>Code</b>. Each row becomes one fabric. Row 3 holds a grey note
+                (<em>* = required. Bands like A, B, C, AA, AAA &mdash; case is normalised&hellip;</em>) &mdash; delete it or paste over it, or it
+                is read as a row with no name.</li>
+            <li><b>2. Fill it in</b> &mdash; leave Supplier / Colour / Code blank if you don&rsquo;t have them. <b>Headerless files also work</b>:
+                with no recognisable header the importer reads A = Band, B = Name, C = Colour, D = Supplier, E = Code.</li>
+            <li><b>3. Upload</b> &mdash; <b>Filled template (.xlsx)</b> takes .xlsx, .xlsm, .xls, .csv or .ods up to 5 MB, then
+                <b>Upload &amp; import</b> (or <b>Cancel</b>).</li>
+            <li><b>It reads only the active sheet</b> &mdash; the tab showing when the file was last saved. Split a multi-tab workbook, or paste
+                each tab into the paste box.</li>
+            <li><b>Results:</b> green <code>Imported 38 fabrics (header row detected).</code> (or <code>(no headers &mdash; used positional
+                A=Band B=Name C=Colour D=Supplier E=Code)</code>), <code>Skipped 3 duplicates.</code>, <code>Ignored 2 blank rows.</code>; red
+                <b>Some rows had problems:</b> <code>Row 7: missing name</code>, <code>Row 3: missing band</code>,
+                <code>Row 9: band code was just &lsquo;Band&rsquo; with nothing after it</code> (first 25, then
+                <code>&hellip; and 4 more</code>). Good rows always go in; fix the listed rows and upload again &mdash; rows already in are
+                skipped. Then <b>Continue product setup &rarr;</b> or <b>View imported fabrics</b>.</li>
+            <li>Other messages: <code>Please choose a file to upload.</code>, <code>File too large (5 MB max).</code>,
+                <code>Could not read the file: &hellip;</code></li>
           </ul>
 
-          <p class="prose"><b>One system, or all of them.</b> Next to the Band box is <b>System (optional)</b>, and it defaults to
-             <b>All systems on this product</b>. Leave it alone and the fabrics show on every system; pick one and they only show
-             on that one. That is how a roller-only colour stays off your verticals. The list below then carries a <b>System</b>
-             column reading either the system&rsquo;s name or a grey <em>All systems</em>. The library pull has the same control,
-             labelled <b>APPLY TO SYSTEM</b>.</p>
-          <p class="prose">The same paste box appears in the <b>setup wizard</b>, where it can do one extra trick: put a
-             <code>[System Name]</code> line above each group of names and one paste feeds several systems at once. Get that
-             wrong and it says: <code>Nothing added. Check the paste &mdash; colours need a [System Name] header above them, or
-             pick a system in the dropdown.</code></p>
+          <p class="prose"><b>4) Add from fabric library</b> &mdash; <b>Pick a fabric manufacturer</b> (with a count each) &rarr;
+             <b>Choose &rarr;</b>. Every fabric is listed <b>ticked</b> with <b>Fabric</b>, <b>Colour</b>, <b>Code</b>, <b>Band</b> (an editable
+             box, pre-filled from the library&rsquo;s suggested band) and <b>Type</b>. Untick what you don&rsquo;t sell, set <b>Apply to system</b>
+             if needed, and press <b>Add ticked fabrics</b>. The manufacturer becomes the <b>Supplier</b>:
+             <code>Added 12 fabrics from &ldquo;Louvolite&rdquo;. Skipped 3 already on this product. 2 had no band &mdash; set their band so they
+             price correctly.</code> If it says <code>The Fabric Library isn&rsquo;t set up yet.</code> or
+             <code>No manufacturers in the library yet.</code>, use another route.</p>
 
-          <p class="prose"><b>The spreadsheet, properly.</b> <b>Import from Excel</b> is three numbered steps on one page.</p>
+          <p class="prose"><b>5) Copy from another product</b> &mdash; <b>1. Copy from</b> &rarr; <b>Source product</b>; <b>2. Bands in &hellip;</b>
+             (all ticked, <b>Select all bands</b>) &rarr; <b>Copy selected into &hellip; &rarr;</b>. Existing fabrics (same band + name + colour)
+             are skipped, so it is safe to run twice; system-scoped fabrics are matched to this product&rsquo;s same-named system:
+             <code>Copied 86 fabrics from &ldquo;Vertical Blind&rdquo;. Skipped 4 already present (same band + name + colour).</code></p>
+
+          <p class="prose"><b>6) Mending the list</b> &mdash; under <b>Fabrics (N)</b>:</p>
           <ul class="steps">
-            <li><b>1. Download the template.</b> The navy <b>Download blank template (.xlsx)</b> button gives you a file named
-                after your product with five columns: <b>Band*</b>, <b>Fabric name*</b>, Colour, Supplier, Code. Only the two
-                starred ones are required. <b>Each row becomes one fabric.</b> Row 3 of the file reminds you:
-                <code>* = required. Bands like A, B, C, AA, AAA &mdash; case is normalised. Duplicate (band + name + colour)
-                rows are skipped on import.</code></li>
-            <li><b>2. Fill it in.</b> Paste your data in and save. Leave Supplier, Colour and Code blank if you haven&rsquo;t
-                got them.</li>
-            <li><b>3. Upload.</b> It accepts <b>.xlsx, .xlsm, .xls, .csv and .ods</b>, up to <b>5 MB</b>. Then
-                <b>Upload &amp; import</b>, or <b>Cancel</b> to go back.</li>
-            <li><b>No headings? Still fine.</b> If row 1 has no recognisable heading the importer reads by position instead
-                &mdash; <b>A = Band, B = Name, C = Colour, D = Supplier, E = Code</b> &mdash; and treats row 1 as data. Plenty of
-                supplier files arrive exactly like that, and they import as they are.</li>
+            <li>The <b>filter box</b> (<em>Filter (e.g. polaris cream)&hellip;</em>) narrows the list as you type; every word must appear. It
+                matches name, colour, band, code, system and group &mdash; <b>not</b> supplier. <b>Clear</b> appears once you type.</li>
+            <li>Tick rows (tick one, then <b>Shift</b>-click another to take everything between), then <b>Delete selected</b>
+                (<em>Delete 3 selected rows? This cannot be undone.</em>), <b>Set band on selected</b> (<code>3 fabrics set to band B.</code>) or
+                <b>Set supplier on selected</b>.</li>
+            <li>Columns: tick, <b>Band</b> (navy pill), <b>System</b> (when the product has systems), the fabric name, <b>Colour</b>,
+                <b>Supplier</b>, <b>Code</b>, <b>Group</b> (filled by the library pull) and <b>Edit</b> / <b>Delete</b> per row.</li>
           </ul>
 
-          <div class="heads"><span class="hi">&#9888;</span><div><b>It only reads one sheet &mdash; the active one.</b> That is
-             whichever tab was showing when the file was last saved. A supplier workbook with twelve tabs will import
-             <b>one tab</b> and look like it worked perfectly. If your file has several tabs, save each one as its own file and
-             import them one at a time &mdash; or open each tab and use the <b>paste a list</b> box instead.</div></div>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>The band must match a price table.</b> A fabric whose band has no price table
+             on that product shows no price in the quote builder. The <b>Bands:</b> buttons come from fabrics and price tables together, so a band
+             you don&rsquo;t recognise there is the one to fix. When you&rsquo;re done: <b>Next: price tables &rarr;</b>.</div></div>
 
-          <div class="oops"><b>&ldquo;Some rows had problems:&rdquo;</b> the good rows <b>still go in</b> &mdash; nothing is
-             rolled back &mdash; and you are told exactly which ones did not, by row number:
-             <ul style="margin:.4rem 0 0;padding-left:1.15rem">
-               <li><code>Row 3: missing band</code></li>
-               <li><code>Row 7: missing name</code></li>
-               <li><code>Row 9: band code was just &lsquo;Band&rsquo; with nothing after it</code></li>
-               <li>and, when there are lots, <code>&hellip; and 4 more</code> under the first twenty-five.</li>
-             </ul>
-             Read the <b>green</b> line as well as the red one: it always says which way it read your file &mdash;
-             <code>(header row detected)</code> or <code>(no headers &mdash; used positional A=Band B=Name C=Colour D=Supplier
-             E=Code)</code> &mdash; plus <code>Skipped 3 duplicates.</code> and <code>Ignored 2 blank rows.</code> Fix the named
-             rows, upload the file again, and the rows that already went in skip themselves. Other things it may say:
-             <code>Please choose a file to upload.</code>, <code>File too large (5 MB max).</code> and
-             <code>Could not read the file:</code> followed by the reason.</div>
-
-          <p class="prose"><b>Pulling a range from the library.</b> <b>Add from fabric library</b> lists the manufacturers with a
-             count of how many fabrics each has and a <b>Choose &rarr;</b> button. Pick one and you get the whole range,
-             <b>all ticked by default</b>, with <b>Fabric, Colour, Code, Band and Type</b>. The <b>Band</b> is a little box on
-             every row, pre-filled from the library&rsquo;s suggested band and <b>fully editable</b> &mdash; change any of them
-             right there before you add, because the band is what decides the price. Untick anything you don&rsquo;t sell, set
-             <b>APPLY TO SYSTEM</b> if needed, and press <b>Add ticked fabrics</b>. You get back, for example:
-             <code>Added 12 fabrics from &ldquo;Louvolite&rdquo;. Skipped 3 already on this product. 2 had no band &mdash; set
-             their band so they price correctly.</code> If the page says <code>The Fabric Library isn&rsquo;t set up yet.</code>
-             or <code>No manufacturers in the library yet.</code>, there is nothing to pull from &mdash; use one of the other
-             three routes.</p>
-
-          <p class="prose"><b>Mending an import without re-doing it.</b> Just above the list, under the
-             <b>Fabrics&nbsp;(14)</b> heading, there is a <b>filter box</b> &mdash; <em>Filter (e.g. polaris cream)&hellip;</em>
-             &mdash; with a live count beside it and a <b>Clear</b> button that only appears once you have typed something. Every
-             word you type has to appear in the row, so &ldquo;polaris cream&rdquo; narrows straight to it. It matches name,
-             colour, band, code, system and group; it deliberately does <b>not</b> match supplier. Tick the rows you want (tick
-             one, then <b>Shift</b>-click another to take everything between) and use <b>Set band on selected</b>, <b>Set
-             supplier on selected</b> or <b>Delete selected</b>. A whole range imported under the wrong band is a
-             thirty-second fix, not a re-import.</p>
-
-          <p class="prose"><b>The list&rsquo;s own columns.</b> Left to right: a <b>tick box</b>, <b>Band</b> (the navy pill),
-             <b>System</b>, the fabric name under whatever your option label is, <b>Colour</b>, <b>Supplier</b>, <b>Code</b>,
-             <b>Group</b>, and a last, unheaded column holding <b>Edit</b> and a red <b>Delete</b> for that single row. Two of
-             those columns come and go: <b>System</b> only appears once the product has systems, and <b>Group</b> only on
-             databases that have the fabric-group column. <b>Group</b> is filled for you by the <b>fabric library</b> pull
-             &mdash; it is the library&rsquo;s own grouping of the range &mdash; and shows a grey <b>&mdash;</b> on fabrics you
-             pasted or imported yourself. Use <b>Edit</b> for a one-row correction (a misspelt name, a missing code) and the
-             bulk bar above for anything that touches more than one.</p>
-
-          <div class="heads"><span class="hi">&#9888;</span><div><b>The band must match a price table.</b> A fabric whose band
-             has no matching price table simply <b>shows no price</b> in the quote builder. The chips strip is drawn from both
-             lists at once, so if you see a band there that you don&rsquo;t recognise, it is a price table with no fabrics or a
-             fabric with no price table &mdash; and that is the one to fix.</div></div>
-
-          <p class="prose"><b>What happens next.</b> On the Products list each product carries a status pill. Before it is
-             finished it reads <b>Needs system + fabric + price table</b>, and it drops each part as you satisfy it until it
-             turns into a green <b>&#10003; Ready</b>. <b>Systems come first</b> in that order, because price tables belong to a
-             system. Clicking the pill jumps you straight to whichever piece is missing. The catalogue health check on the
-             product&rsquo;s own page words it plainly: <code>No fabrics added. Salespeople won&rsquo;t be able to pick a fabric
-             for this product.</code> One exception &mdash; a product ticked <b>&ldquo;No fabric to choose (headrail only,
-             track, spares)&rdquo;</b> never needs fabrics at all and is never asked for them. After an import, the navy
-             <b>Continue product setup &rarr;</b> button takes you on to <b>price tables</b>; <b>View imported fabrics</b> takes
-             you back to the list.</p>
-
-          <p class="prose"><b>One last thing, so you don&rsquo;t go hunting.</b> A single supplier workbook with <em>one sheet
-             per product</em> &mdash; many products in one go &mdash; is handled centrally, under <b>Platform &rarr; Catalogue &rarr; Fabric
-             Library</b> as <b>Bulk import fabrics across products &rarr;</b>. It used to sit on the Products page and it no
-             longer does. If you can&rsquo;t find it, it isn&rsquo;t missing &mdash; it just isn&rsquo;t yours; ask whoever
-             looks after the library. Everything on this page does the same job one product at a time.</p>',
-        'script'  => [
-            ['0:00', 'Fabrics page; five header buttons.',
-             'This is where a product\'s fabrics live. A fabric is simply what the customer picks — the material, the colour, the slat. There are four ways to get them in, and they all land in the same list, so you never have to use a spreadsheet if you would rather not. One thing to know: on some products this page says Slat type, or Colour, instead of Fabric. That is because you choose the word yourself on Edit product. Same page either way.', 1],
-
-            ['0:22', 'Band chips; Band field fills with A.',
-             'The band comes first. Every fabric belongs to a band, and the band is just a name you choose — up to sixty characters, so Plain, Blackout or Special effects is every bit as valid as A. A band is a group of fabrics that all cost the same, so they can share one price table instead of needing one each. Click a chip to reuse a band you have already got, and the box remembers the last band you used. And if you type Band A A, it quietly stores just A A.', 2],
-
-            ['0:45', 'System select; paste names; Add all.',
-             'Now paste the names in. One per line, or separated by commas, or both — it copes with either. Leave System on All systems and the fabrics go on every system for this product. Pick one, and they only show on that one. That is how a roller-only colour stays off your verticals. Then press Add all. And if you only ever want one fabric, with a supplier and a code on it, there is a folded-up section just underneath — Add one at a time. Click its heading to open it.', 3],
-
-            ['1:02', 'Green flash; list with Band URBAN pills.',
-             'And here is what comes back. Added fourteen to Band URBAN, skipped two likely duplicates — duplicates are skipped quietly, never shown as a failure. Underneath is your list, with each fabric in its navy Band URBAN pill. If something went in wrong, don\'t re-do it. Use the filter box to find the rows, tick one and shift-click another to take everything between, then Set band on selected, Set supplier on selected, or Delete selected. A wrong band is a thirty-second fix.', 4],
-
-            ['1:26', 'Import page; three numbered sections.',
-             'Now the spreadsheet route. Import from Excel is three numbered steps. First, download the template. The five columns are Band star, Fabric name star, Colour, Supplier and Code — only the two starred ones are required, and each row becomes one fabric. The file arrives named after your product with the headings already in place.', 5],
-
-            ['1:44', 'Choose File; Decora roller range.xlsx; upload.',
-             'Then choose your file and upload it. It takes X L S X, X L S, X L S M, C S V or O D S, up to five megabytes. Two things worth knowing before you press it. First, it reads only the sheet that was showing when the file was saved — so a supplier workbook with twelve tabs will import one tab and look like it worked. Split it, or paste each tab in instead. Second, a supplier file with no heading row still works perfectly: it assumes A is Band, B is Name, C is Colour, D is Supplier and E is Code.', 6],
-
-            ['2:10', 'Green banner + Some rows had problems.',
-             'When rows bounce, you get both messages. The good rows always go in — nothing is rolled back — and you are told exactly which ones did not, by row number. Row three, missing band. Row seven, missing name. Row nine, band code was just the word Band with nothing after it. Read the green line as well as the red one: it tells you whether your headings were understood, or whether it guessed by column. Fix those rows, upload again, and the ones already in skip themselves. Then Continue product setup takes you on to price tables.', 7],
-
-            ['2:36', 'Library table; band edited A to B; added.',
-             'And the fourth way needs no file at all. If the range is already in the library, pick the maker, untick anything you do not sell, and the supplier name fills itself in for you. Every row carries a suggested band — change any of them right there in the little box before you add, because the band is what decides the price. Put just the code in that box, not the word Band in front of it: unlike the paste box, this one takes exactly what you type, in capitals. Press Add ticked fabrics, and if some came in with no band the message tells you how many, and they will not price until you give them one.', 8],
-        ],
+          <p><b>Many products in one workbook</b> (one sheet per product) is handled centrally: <b>Platform &rarr; Catalogue &rarr; Fabric
+             Library</b> &rarr; <b>Bulk import fabrics across products &rarr;</b>. If you can&rsquo;t see it, ask whoever looks after the
+             library &mdash; everything on this page does the same job one product at a time.</p>',
+        'script'  => array_map(static fn ($k, $l) => [$l[0], $l[1], $l[2], $k], array_keys($S), $S),
 ];
