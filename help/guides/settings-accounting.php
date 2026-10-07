@@ -30,7 +30,7 @@ $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d
 $tabs = '<div class="sttabs"><span class="sttab">Company</span><span class="sttab">Quoting</span><span class="sttab">Legal</span>'
       . '<span class="sttab">Status colours</span><span class="sttab">Suppliers</span><span class="sttab on">Accounting</span><span class="sttab">Back up data</span></div>';
 
-$hint = '<p class="hnt">Link your accounting package so paid sales flow straight through &mdash; no re-keying. You connect on the provider&rsquo;s own site, so YourBlinds never sees your accounting password. <b>Nothing is sent until an invoice is paid</b> (cash accounting): a paid sale is recorded in your accounts as already received.</p>';
+$hint = '<p class="hnt">Connect your accounting package and set up the mapping now, so it&rsquo;s ready. You connect on the provider&rsquo;s own site, so YourBlinds never sees your accounting password. <b>Sending sales across isn&rsquo;t switched on yet</b> &mdash; until it is, use the CSV exports on the Payments page. When it is, nothing will be sent until an invoice is paid (cash accounting).</p>';
 
 // The QuickBooks Online card head: $state is the right-hand status HTML.
 $cardHead = static fn (string $state, string $badge = 'Live'): string =>
@@ -325,7 +325,7 @@ return [
                     <p class="qtxt a-fade" style="--d:2.5s;margin:.2rem 0">Mapping set: <b>Blinds</b> &middot; VAT <b>20.0% S</b> &middot; into <b>Business Current Account</b></p>
                     <div class="qacts"><span class="btnp a-ring" style="--d:6s">Edit mapping</span><span class="btns a-ring" style="--d:9s">Disconnect</span></div>
                   </div>
-                  <div class="confirm a-mid" style="--d:10.5s;--d2:15.5s">Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.
+                  <div class="confirm a-mid" style="--d:10.5s;--d2:15.5s">Disconnect QuickBooks? You can reconnect at any time.
                     <div class="act"><span class="btns">Cancel</span><span class="btnp">OK</span></div></div>
                   <div class="chips">
                     <span class="chip a-pop" style="--d:13s">Nothing already in QuickBooks is touched</span>
@@ -417,7 +417,7 @@ return [
           </ul>
 
           <p><b>Disconnecting.</b> On the Accounting tab press <b>Disconnect</b>. It asks
-             <em>&ldquo;Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.&rdquo;</em> (as sending isn&rsquo;t
+             <em>&ldquo;Disconnect QuickBooks? You can reconnect at any time.&rdquo;</em> (as sending isn&rsquo;t
              switched on yet, nothing is syncing today). Press OK and you&rsquo;ll see <b>&ldquo;Disconnected from QuickBooks
              Online.&rdquo;</b> Nothing already in QuickBooks is touched, and you can connect again any time with the same button.</p>
 
