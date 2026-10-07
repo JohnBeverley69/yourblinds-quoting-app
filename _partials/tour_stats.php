@@ -5,7 +5,7 @@ declare(strict_types=1);
  * "How it works" tour stats — anonymous view/play/progress counting.
  *
  * The tour page (how-it-works.php) beacons small events to
- * api/tour-event.php; Master admin → Tour stats reads them back.
+ * api/tour-progress.php; Master admin → Tour stats reads them back.
  *
  * Privacy: no cookies, no IP address, nothing about the person. A "visit" is
  * one page load (a random id made in the browser and forgotten when the tab

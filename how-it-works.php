@@ -534,8 +534,14 @@ $sceneCount = count($SCENES);
     function track(event, step) {
         try {
             var body = JSON.stringify({ v: visitId, e: event, s: step || 0, r: document.referrer || '', src: srcTag });
-            if (navigator.sendBeacon) navigator.sendBeacon('/api/tour-event.php', new Blob([body], { type: 'application/json' }));
-            else fetch('/api/tour-event.php', { method: 'POST', body: body, keepalive: true, headers: { 'Content-Type': 'application/json' } });
+            // A plain same-site fetch (privacy blockers often drop "beacon"
+            // requests and tracker-ish URLs); sendBeacon only as a fallback.
+            if (window.fetch) {
+                fetch('/api/tour-progress.php', { method: 'POST', body: body, keepalive: true, credentials: 'same-origin',
+                    headers: { 'Content-Type': 'text/plain' } }).catch(function () {});
+            } else if (navigator.sendBeacon) {
+                navigator.sendBeacon('/api/tour-progress.php', body);
+            }
         } catch (e) {}
     }
     track('view');
