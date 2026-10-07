@@ -521,6 +521,32 @@ $sceneCount = count($SCENES);
     if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
     if (!synth && !hasClips) btnVoice.hidden = true;
 
+    // ── Anonymous tour stats (Master admin → Tour stats) ─────────────
+    // A random id per page load — no cookies, nothing stored on the device.
+    var started = false;
+    var visitId = (function () {
+        var b = new Uint8Array(8);
+        try { crypto.getRandomValues(b); } catch (e) { for (var i = 0; i < 8; i++) b[i] = Math.random() * 256; }
+        return Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+    })();
+    var srcTag = '';
+    try { srcTag = new URLSearchParams(location.search).get('src') || ''; } catch (e) {}
+    function track(event, step) {
+        try {
+            var body = JSON.stringify({ v: visitId, e: event, s: step || 0, r: document.referrer || '', src: srcTag });
+            if (navigator.sendBeacon) navigator.sendBeacon('/api/tour-event.php', new Blob([body], { type: 'application/json' }));
+            else fetch('/api/tour-event.php', { method: 'POST', body: body, keepalive: true, headers: { 'Content-Type': 'application/json' } });
+        } catch (e) {}
+    }
+    track('view');
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        var h = a.getAttribute('href');
+        if (h.indexOf('/auth/signup.php') === 0) track('cta_signup');
+        else if (h.indexOf('/instaprice/') === 0) track('cta_price');
+    });
+
     function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
     function clearAll() {
         timers.forEach(clearTimeout); timers = []; cutTalk = null;
@@ -587,6 +613,10 @@ $sceneCount = count($SCENES);
         s.classList.add(animate ? 'play' : 'done');
         counters(s, animate);
         paintUi();
+        if (started) {
+            track('step', cur + 1);
+            if (cur === scenes.length - 1) track('finish');
+        }
     }
 
     // Play scene n, then move on once both the minimum time and the
@@ -632,6 +662,7 @@ $sceneCount = count($SCENES);
 
     function play() {
         start.hidden = true;
+        started = true; track('play');
         playing = true;
         run(finished ? 0 : cur);
     }
@@ -642,6 +673,7 @@ $sceneCount = count($SCENES);
     }
     function go(n) {
         start.hidden = true;
+        started = true;
         if (playing) run(n); else { finished = false; show(n, true); }
     }
 
