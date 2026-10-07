@@ -150,8 +150,8 @@ function wl_price(array $plan): string
 
         <section class="wl-why">
             <div class="wl-why-card">
-                <h3>Works wherever you do</h3>
-                <p>On the phone, tablet or office PC — nothing to install. Measure and price in the customer's home, finish the order back at base.</p>
+                <h3>Your prices, your products</h3>
+                <p>Load your own price lists and product rules, and every quote prices exactly the way you sell.</p>
             </div>
             <div class="wl-why-card">
                 <h3>Quote in seconds</h3>
