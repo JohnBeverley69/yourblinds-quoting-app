@@ -49,7 +49,7 @@ return [
     ],
     'silver' => [
         'name'              => 'Silver',
-        'description'       => 'Everything in Bronze, plus Maps (run optimiser, customer-pin map, "Let\'s go" links) and Postcode lookup.',
+        'description'       => 'Everything in Bronze, plus Maps (day run planner with directions, one-tap Google Maps / Waze navigation) and Postcode lookup.',
         'price_gbp_monthly' => 20,
         'features'          => ['feature_maps', 'feature_postcode_lookup'],
         'tier'              => 1,

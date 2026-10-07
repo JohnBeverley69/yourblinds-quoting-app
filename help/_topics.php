@@ -1048,8 +1048,8 @@ return [
       so you are only ever on one at a time:</p>
       <ul>
       <li><strong>Bronze</strong> — free to start. Quotes, calendar, customers, orders and products.</li>
-      <li><strong>Silver</strong> — everything in Bronze plus <strong>Maps</strong> (run optimiser, customer-pin map,
-      the “Let’s go” links) and <strong>Postcode lookup</strong>.</li>
+      <li><strong>Silver</strong> — everything in Bronze plus <strong>Maps</strong> (the day run planner with directions,
+      and one-tap Google Maps / Waze navigation) and <strong>Postcode lookup</strong>.</li>
       <li><strong>Gold</strong> — everything in Silver plus <strong>Accounts</strong>: payment tracking, outstanding
       balances and the account summary.</li>
       </ul>
