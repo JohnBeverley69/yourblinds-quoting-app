@@ -256,6 +256,25 @@ return [
           .gd .adv{ margin-top:.8rem; border:1px solid var(--line); border-radius:9px; padding:.5rem .65rem; background:var(--panel); font-size:.72rem;
                     font-weight:700; color:var(--soft); display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
 
+          /* 6 — a blank grid, built with + Width / + Drop */
+          .gd .eg6{ position:relative; min-height:13rem; }
+          .gd .eg{ display:inline-grid; grid-template-columns:7.2rem 4.4rem; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+          .gd .eg span{ background:var(--panel); padding:.55rem .6rem; font-size:.66rem; font-weight:700; color:var(--soft); }
+          .gd .eg .dk{ background:#1f3b5b; color:#fff; letter-spacing:.04em; }
+          .gd .eg .ad{ text-align:center; border-radius:0; }
+          .gd .eg2{ display:inline-grid; grid-template-columns:5.4rem repeat(4,3.6rem) 4.2rem; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+          .gd .eg2 > span{ background:var(--surface); padding:.32rem .25rem; font-size:.68rem; text-align:center; min-height:1.55rem; box-shadow:inset 0 0 0 .5px var(--line); }
+          .gd .eg2 .dk{ background:#1f3b5b; color:#fff; font-weight:700; font-size:.56rem; }
+          .gd .eg2 .hd{ background:var(--panel); font-weight:700; color:var(--soft); }
+          .gd .eg2 .ad{ background:var(--panel); color:var(--soft); font-weight:700; font-size:.6rem; }
+          .gd .addlg{ position:absolute; z-index:5; left:13rem; top:0; width:16rem; background:var(--surface); border:1px solid var(--line);
+                      border-radius:12px; box-shadow:var(--gd-shadow); padding:.65rem .75rem; font-size:.66rem; color:var(--soft); }
+          .gd .addlg b{ display:block; font-size:.82rem; color:var(--ink); margin-bottom:.25rem; }
+          .gd .addlg .ta2{ margin:.4rem 0; }
+          .gd .addlg .dlgact{ margin-top:.3rem; }
+          .gd .warn6{ border-color:#f59e0b !important; color:#92400e !important; background:rgba(245,158,11,.1) !important; }
+          @media (max-width:640px){ .gd .addlg{ left:0; top:6rem; } }
+
           @media (max-width:640px){
             .gd .two, .gd .three, .gd .side2{ grid-template-columns:1fr; }
             .gd .sc{ min-height:430px; }
@@ -280,7 +299,7 @@ return [
                   <div class="sct">Building a price table</div>
                   <p class="scs">One band&rsquo;s grid: widths across the top, drops down the side.</p>
                   ' . $grid($plain) . '
-                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; sixteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — what a price table is -->
@@ -369,8 +388,44 @@ return [
                   </div>
                 </div>
 
+                <!-- 6 — a blank grid -->
+                <div class="sc" data-scene="6" data-len="33">
+                  <div class="sct a-fade" style="--d:.2s">Or start with a blank grid</div>
+                  <p class="scs a-fade" style="--d:1s">&ldquo;Build from scratch&rdquo; opens a completely empty grid.</p>
+                  <div class="eg6">
+                    <div class="eg a-out" style="--d:15.3s">
+                      <span class="dk">DROP \ WIDTH (MM)</span><span class="ad a-ring" style="--d:8s">+ Width</span>
+                      <span class="ad a-ring" style="--d:8.5s">+ Drop</span><span></span>
+                    </div>
+                    <div class="a-fade" style="--d:15.3s;position:absolute;left:0;top:0">
+                      <div class="eg2">
+                        <span class="dk">DROP \ WIDTH (MM)</span><span class="hd">800</span><span class="hd">1200</span><span class="hd">1600</span><span class="hd">2000</span><span class="ad">+ Width</span>
+                        <span class="ad a-press" style="--d:16.3s">+ Drop</span><span></span><span></span><span></span><span></span><span></span>
+                        <span class="hd a-fade" style="--d:19.6s">800</span><span class="a-fade" style="--d:19.6s"></span><span class="a-fade" style="--d:19.6s"></span><span class="a-fade" style="--d:19.6s"></span><span class="a-fade" style="--d:19.6s"></span><span class="a-fade" style="--d:19.6s"></span>
+                        <span class="hd a-fade" style="--d:19.8s">1200</span><span class="a-fade" style="--d:19.8s"></span><span class="a-fade" style="--d:19.8s"></span><span class="a-fade" style="--d:19.8s"></span><span class="a-fade" style="--d:19.8s"></span><span class="a-fade" style="--d:19.8s"></span>
+                        <span class="hd a-fade" style="--d:20s">1600</span><span class="a-fade" style="--d:20s"></span><span class="a-fade" style="--d:20s"></span><span class="a-fade" style="--d:20s"></span><span class="a-fade" style="--d:20s"></span><span class="a-fade" style="--d:20s"></span>
+                      </div>
+                    </div>
+                    <div class="addlg a-mid" style="--d:11.6s;--d2:15.2s">
+                      <b>Add widths</b>Paste from Excel (a row OR a column), or type values separated by commas, spaces, tabs or newlines.
+                      <div class="ta2"><span class="a-type" style="--d:12.3s;--ts:18">800, 1200, 1600, 2000</span></div>
+                      <div class="dlgact"><span class="btns">Cancel</span><span class="btnp a-press" style="--d:14.5s">Add</span></div>
+                    </div>
+                    <div class="addlg a-mid" style="--d:16.6s;--d2:19.5s">
+                      <b>Add drops</b>Paste from Excel (a row OR a column), or type values separated by commas, spaces, tabs or newlines.
+                      <div class="ta2"><span class="a-type" style="--d:17.2s;--ts:14">800, 1200, 1600</span></div>
+                      <div class="dlgact"><span class="btns">Cancel</span><span class="btnp a-press" style="--d:19s">Add</span></div>
+                    </div>
+                    <div class="a-move" style="--fx:40%;--fy:90%;--tx:8.4rem;--ty:.9rem;--d:9.5s;--md:1.5s">' . $ptr . '</div>
+                  </div>
+                  <div class="tools">
+                    <span class="chip ok a-pop" style="--d:20.5s">Ready for your prices &mdash; type or paste, then <b>Save grid</b></span>
+                    <span class="chip warn6 a-pop" style="--d:25.5s">&#9888; Empty table? Use <b>+ Width</b> / <b>+ Drop</b>, not <b>Edit sizes</b> &mdash; it saves at once, with &pound;0 in the first row and column</span>
+                  </div>
+                </div>
+
                 <!-- 6 — paste -->
-                <div class="sc" data-scene="6" data-len="26">
+                <div class="sc" data-scene="7" data-len="26">
                   <div class="sct a-fade" style="--d:.2s">Paste the prices in</div>
                   <div class="side2">
                     <div>
@@ -391,7 +446,7 @@ return [
                 </div>
 
                 <!-- 7 — two catches -->
-                <div class="sc" data-scene="7" data-len="27">
+                <div class="sc" data-scene="8" data-len="27">
                   <div class="sct a-fade" style="--d:.2s">Two things that catch people out</div>
                   <div><span class="chip a-pop" style="--d:5s;border-color:var(--err);color:var(--err)">&#10007; Past the edge of the grid &mdash; thrown away</span></div>
                   <div class="edgewrap a-rise" style="--d:1s;margin-top:.8rem">
@@ -403,7 +458,7 @@ return [
                 </div>
 
                 <!-- 8 — save -->
-                <div class="sc" data-scene="8" data-len="18">
+                <div class="sc" data-scene="9" data-len="18">
                   <div class="sct a-fade" style="--d:.2s">Save the grid</div>
                   <div class="bnr a-rise" style="--d:5s">&#10003; Saved 16 price cells.
                     <span class="btnp a-ring" style="--d:12s;margin-left:auto">Next: Standard &mdash; Band B &rarr;</span></div>
@@ -413,7 +468,7 @@ return [
                 </div>
 
                 <!-- 9 — discount + markup -->
-                <div class="sc" data-scene="9" data-len="26">
+                <div class="sc" data-scene="10" data-len="26">
                   <div class="sct a-fade" style="--d:.2s">Your buying discount and your markup</div>
                   <div class="psbar">
                     <b>Supplier price list</b>
@@ -429,7 +484,7 @@ return [
                 </div>
 
                 <!-- 10 — the sum -->
-                <div class="sc" data-scene="10" data-len="27">
+                <div class="sc" data-scene="11" data-len="27">
                   <div class="sct a-fade" style="--d:.2s">Check the sums without leaving the page</div>
                   <div class="chain">
                     <div class="v a-pop" style="--d:3s"><small>List</small><b>&pound;40.00</b></div>
@@ -444,7 +499,7 @@ return [
                 </div>
 
                 <!-- 11 — three things -->
-                <div class="sc" data-scene="11" data-len="29">
+                <div class="sc" data-scene="12" data-len="29">
                   <div class="sct a-fade" style="--d:.2s">Three things you might notice</div>
                   <div class="three">
                     <div class="note a-rise" style="--d:2s"><h4>Markup or margin</h4>
@@ -460,7 +515,7 @@ return [
                 </div>
 
                 <!-- 12 — price rise -->
-                <div class="sc" data-scene="12" data-len="22">
+                <div class="sc" data-scene="13" data-len="22">
                   <div class="sct a-fade" style="--d:.2s">A price rise in one go</div>
                   <div class="upbar a-rise" style="--d:3s">Adjust all prices by
                     <span class="box2 a-ring" style="--d:6s;min-width:3rem"><span class="a-type" style="--d:7s;--ts:1;--tt:.3s">5</span></span> %
@@ -471,7 +526,7 @@ return [
                 </div>
 
                 <!-- 13 — undo -->
-                <div class="sc" data-scene="13" data-len="24">
+                <div class="sc" data-scene="14" data-len="24">
                   <div class="sct a-fade" style="--d:.2s">Made a mistake? Undo it</div>
                   <div class="undobar a-rise" style="--d:3s">Last change: <b>Adjust by +5%</b> &middot; 7 Oct 10:42
                     <span class="btns a-press a-ring" style="--d:9s">&#8630; Undo Adjust by +5%</span></div>
@@ -482,7 +537,7 @@ return [
                 </div>
 
                 <!-- 14 — sizes -->
-                <div class="sc" data-scene="14" data-len="27">
+                <div class="sc" data-scene="15" data-len="27">
                   <div class="sct a-fade" style="--d:.2s">Changing the sizes</div>
                   ' . $g14 . '
                   <div class="renpop a-pop" style="--d:5s">Rename width 1600mm to (new mm value): <span class="box2"><span class="a-type" style="--d:6.5s;--ts:4;--tt:.6s">1800</span></span> <span class="btnp a-press" style="--d:8.5s">OK</span></div>
@@ -495,7 +550,7 @@ return [
                 </div>
 
                 <!-- 15 — other price lists -->
-                <div class="sc" data-scene="15" data-len="30">
+                <div class="sc" data-scene="16" data-len="30">
                   <div class="sct a-fade" style="--d:.2s">Not every product uses a grid</div>
                   <div class="three">
                     <div class="mini a-rise" style="--d:3s"><h4>By width only</h4>
@@ -535,6 +590,13 @@ return [
                 pre-filled as a suggestion &mdash; <b>Clear</b>, then paste your own. A row or a column, commas, tabs or new lines all work,
                 and metres are understood (<b>0.8 becomes 800&nbsp;mm</b>). Then <b>Build grid</b>. Leave a box empty and it says
                 <code>Add at least one width and one drop.</code></li>
+            <li><b>Or start with a blank grid.</b> <b>Or build from scratch &mdash; start blank</b> opens a completely empty grid: just
+                <b>Drop \\ Width (mm)</b>, <b>+ Width</b> and <b>+ Drop</b>. Click <b>+ Width</b>, paste or type your widths into
+                <b>Add widths</b> (a row or a column from Excel, or values separated by commas, spaces, tabs or new lines) and click
+                <b>Add</b>; then the same with <b>+ Drop</b>. The grid appears, empty and ready for prices &mdash; nothing is saved until
+                <b>Save grid</b>. <b>On an empty table, use these two buttons rather than Edit sizes:</b> <b>Edit sizes</b> saves straight
+                away and puts a placeholder price of <b>0</b> in the first row and column (<code>Sizes updated: 13 new (placeholder price 0
+                &mdash; edit on the grid).</code>), and a &pound;0 left there would be quoted as &pound;0.</li>
             <li><b>Paste the prices.</b> Click the top-left square, paste the block from Excel &mdash; it spreads <b>right and down</b>,
                 stripping <b>&pound;</b>, <b>$</b>, <b>&euro;</b> and commas. Or click a square, type, and <b>Tab</b> on.
                 <b>Anything past the edge is thrown away</b>, so build the grid the right size first; and <b>a blank square means no price
@@ -597,15 +659,16 @@ return [
             ['3', 'Whose prices are these?',           'Before you type a single number, read the strip across the top. It tells you what kind of prices belong in this table. Supplier price list means these are your supplier\'s own list prices. The system takes your buying discount off, and adds your markup on. Our price list means these are your own selling prices, used exactly as you type them. If it shows the wrong one, click Change before you do anything else.', 3],
             ['4', 'Clone a band that is done',         'A new table starts empty. If another band on this product already has prices, there is no need to build anything. Just clone it. Click Clone, and you get the same widths, the same drops and the same prices, all in one go. Then you only change the squares that are different.', 4],
             ['5', 'Nothing to clone? Start your grid', 'If nothing is priced yet, choose to build from scratch, and the Start your grid box opens. The widths and drops arrive filled in, as a suggestion. Click Clear, and paste in your own sizes from the supplier\'s sheet. Across or down, with commas or on new lines, it does not mind. It even understands metres, so nought point eight becomes eight hundred millimetres. Then click Build grid.', 5],
-            ['6', 'Paste the prices in',               'Now an empty grid appears, in the shape you asked for. Open your supplier\'s price sheet, select the block of prices, and copy it. Come back here, click the top left square, and paste. The prices pour in, to the right and downwards, from the square you clicked. Pound signs and commas are cleaned off for you.', 6],
-            ['7', 'Two things that catch people out',  'Two things catch people out. First, anything that falls past the edge of the grid is thrown away, without a warning. So if the supplier\'s sheet is wider than your grid, add the extra widths first, and then paste. Second, a square left empty means there is no price at that size. If a quote will not accept a size, look for an empty square.', 7],
-            ['8', 'Save the grid',                     'When you are happy, click Save grid. Saving replaces every square in this table with what is on the screen. You will see how many prices were saved, and a button that takes you straight on to the next empty band.', 8],
-            ['9', 'Buying discount and markup',        'Now the money. On a supplier price list, the strip at the top has two boxes. Buying discount is what your supplier takes off their list for you. Say, twenty five percent. Our markup is what you add on top. Say, a hundred percent. Click Save terms. These two figures cover every band on this system, so you only set them once.', 9],
-            ['10', 'Check the sums',                   'You can check the sums without leaving the page. Take a square with a list price of forty pounds. Take off your twenty five percent, and it costs you thirty pounds. Add your hundred percent markup, and you sell it for sixty pounds. That is a fifty percent margin. A small line under every square shows exactly this. Hover over it to see the whole sum.', 10],
-            ['11', 'Three things you might notice',    'Three things you might notice. If your settings work in margin rather than markup, the second box says Our margin instead. The markup box may already show a figure. That is your default from Settings, and typing here overrides it for this system. And if the discount shows as green text, saying from your supplier, your supplier set it on your account, so it is theirs to change.', 11],
-            ['12', 'A price rise in one go',           'When your supplier puts their prices up, there is no need to retype the grid. In the Adjust all prices box, type the rise. Say, five percent. Then click Apply, and every saved price goes up by five percent. A minus number brings them down. It only changes saved prices, so save first.', 12],
-            ['13', 'Made a mistake? Undo it',          'Made a mistake? Every change to a price table can be undone. A strip shows you the last change, with an Undo button beside it. Click Undo, say OK, and every price it touched goes back exactly as it was. If the prices have been changed again since, it will not undo, so it can never overwrite newer work.', 13],
-            ['14', 'Changing the sizes',               'Sizes can change too. Every width and drop along the edge of the grid is a button. Click one to rename it, and its prices stay where they are. The little cross removes that row or column. Plus width and plus drop add new ones. Or use Edit sizes to change them all at once. Nothing is lost until you click Save grid.', 14],
-            ['15', 'Not every product uses a grid',    'Finally, not every product uses a grid. A product priced by width only has a simple list of widths and prices. One priced per slat has a list of drops, with a price per slat. One priced per square metre has just one box: the rate. And if you would rather work in Excel, the Advanced section at the bottom lets you download the table, change it, and upload it again.', 15],
+            ['6', 'Or start with a blank grid',        'There is another way to start. Choose build from scratch, and you get a completely empty grid, with just two buttons, plus width and plus drop. Click plus width, paste or type your widths, and click Add. Then do the same with plus drop. The grid appears, ready for your prices. One tip: on an empty table, use these two buttons rather than Edit sizes, because Edit sizes saves straight away, and puts a price of nought in the first row and column.', 6],
+            ['7', 'Paste the prices in',               'Now an empty grid appears, in the shape you asked for. Open your supplier\'s price sheet, select the block of prices, and copy it. Come back here, click the top left square, and paste. The prices pour in, to the right and downwards, from the square you clicked. Pound signs and commas are cleaned off for you.', 7],
+            ['8', 'Two things that catch people out',  'Two things catch people out. First, anything that falls past the edge of the grid is thrown away, without a warning. So if the supplier\'s sheet is wider than your grid, add the extra widths first, and then paste. Second, a square left empty means there is no price at that size. If a quote will not accept a size, look for an empty square.', 8],
+            ['9', 'Save the grid',                     'When you are happy, click Save grid. Saving replaces every square in this table with what is on the screen. You will see how many prices were saved, and a button that takes you straight on to the next empty band.', 9],
+            ['10', 'Buying discount and markup',        'Now the money. On a supplier price list, the strip at the top has two boxes. Buying discount is what your supplier takes off their list for you. Say, twenty five percent. Our markup is what you add on top. Say, a hundred percent. Click Save terms. These two figures cover every band on this system, so you only set them once.', 10],
+            ['11', 'Check the sums',                   'You can check the sums without leaving the page. Take a square with a list price of forty pounds. Take off your twenty five percent, and it costs you thirty pounds. Add your hundred percent markup, and you sell it for sixty pounds. That is a fifty percent margin. A small line under every square shows exactly this. Hover over it to see the whole sum.', 11],
+            ['12', 'Three things you might notice',    'Three things you might notice. If your settings work in margin rather than markup, the second box says Our margin instead. The markup box may already show a figure. That is your default from Settings, and typing here overrides it for this system. And if the discount shows as green text, saying from your supplier, your supplier set it on your account, so it is theirs to change.', 12],
+            ['13', 'A price rise in one go',           'When your supplier puts their prices up, there is no need to retype the grid. In the Adjust all prices box, type the rise. Say, five percent. Then click Apply, and every saved price goes up by five percent. A minus number brings them down. It only changes saved prices, so save first.', 13],
+            ['14', 'Made a mistake? Undo it',          'Made a mistake? Every change to a price table can be undone. A strip shows you the last change, with an Undo button beside it. Click Undo, say OK, and every price it touched goes back exactly as it was. If the prices have been changed again since, it will not undo, so it can never overwrite newer work.', 14],
+            ['15', 'Changing the sizes',               'Sizes can change too. Every width and drop along the edge of the grid is a button. Click one to rename it, and its prices stay where they are. The little cross removes that row or column. Plus width and plus drop add new ones. Or use Edit sizes to change them all at once. Nothing is lost until you click Save grid.', 15],
+            ['16', 'Not every product uses a grid',    'Finally, not every product uses a grid. A product priced by width only has a simple list of widths and prices. One priced per slat has a list of drops, with a price per slat. One priced per square metre has just one box: the rate. And if you would rather work in Excel, the Advanced section at the bottom lets you download the table, change it, and upload it again.', 16],
         ],
 ];
