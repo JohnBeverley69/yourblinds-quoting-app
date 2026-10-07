@@ -52,8 +52,8 @@ $SCENES = [
 HTML,
     ],
     [
-        'nav'   => 'Diary', 'icon' => '🗓️', 'secs' => 9,
-        'title' => 'On the right diary. Instantly.',
+        'nav'   => 'Calendar', 'icon' => '🗓️', 'secs' => 9,
+        'title' => 'On the right calendar. Instantly.',
         'body'  => 'Set your team up as users and every job lands on the right person\'s calendar the moment you hit save. Each of them simply signs in to YourBlinds on their own phone or tablet, with nothing to download, and their day is right there, always up to date. No texts, no whiteboard, no "did you get my message?". Fitters can be set to see just their fittings, and the office sees the whole team side by side, a column per person. Plans changed? Just drag the job to a new slot.',
         'tier'  => 'Every user, on their own phone or tablet',
         'mock'  => <<<'HTML'
@@ -324,7 +324,7 @@ function hw_say(array $s): string
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>How it works &middot; YourBlinds</title>
-    <meta name="description" content="See how YourBlinds runs a blinds business from the first phone call to getting paid — booking, diary, route, measuring, quotes customers sign on their phone, supplier orders, fitting and invoices.">
+    <meta name="description" content="See how YourBlinds runs a blinds business from the first phone call to getting paid — booking, calendar, route, measuring, quotes customers sign on their phone, supplier orders, fitting and invoices.">
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .hw-wrap { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
@@ -793,12 +793,19 @@ function hw_say(array $s): string
 
     try { if (localStorage.getItem('yb_tour_voice') === '0') voiceOn = false; } catch (e) {}
 
-    // Same narrator as the help guides: Google UK English Female, else any en-GB.
+    // Most natural British voice the browser offers: Edge's neural
+    // "(Natural)" voices (Sonia, Libby), Apple's enhanced/premium ones, then
+    // Chrome's Google UK English Female, then any en-GB.
     function pickVoice() {
         if (!synth) return;
         var vs = synth.getVoices() || [];
-        voice = vs.find(function (v) { return v.name === 'Google UK English Female'; })
-             || vs.find(function (v) { return v.lang === 'en-GB'; })
+        var gb = vs.filter(function (v) { return /^en[-_]GB/i.test(v.lang); });
+        voice = gb.find(function (v) { return /Sonia.*Natural/i.test(v.name); })
+             || gb.find(function (v) { return /Libby.*Natural/i.test(v.name); })
+             || gb.find(function (v) { return /Natural/i.test(v.name); })
+             || gb.find(function (v) { return /(Premium|Enhanced)/i.test(v.name); })
+             || vs.find(function (v) { return v.name === 'Google UK English Female'; })
+             || gb[0]
              || vs.find(function (v) { return /^en/i.test(v.lang); }) || null;
     }
     if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; } else { btnVoice.hidden = true; }
