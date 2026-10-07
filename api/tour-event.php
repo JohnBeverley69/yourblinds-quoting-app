@@ -5,7 +5,9 @@ declare(strict_types=1);
  * Public beacon for the "How it works" tour stats (see _partials/tour_stats.php).
  *
  * POST JSON {v: visit id (16 hex), e: event, s: step, r: referrer, src: tag}.
- * Always answers 204 — a stats hiccup must never surface on the tour.
+ * Always answers 204 — a stats hiccup must never surface on the tour. The
+ * X-Tour-Event header says what happened (saved / bot / invalid /
+ * error:<type>) so the beacon can be checked from outside; it carries no data.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -18,10 +20,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     exit;
 }
 
-$ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 400);
-$in = json_decode((string) file_get_contents('php://input', false, null, 0, 4096), true);
+$ua     = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 400);
+$in     = json_decode((string) file_get_contents('php://input', false, null, 0, 4096), true);
+$status = 'invalid';
 
-if (!tour_stats_is_bot($ua) && is_array($in)) {
+if (tour_stats_is_bot($ua)) {
+    $status = 'bot';
+} elseif (is_array($in)) {
     $visit = (string) ($in['v'] ?? '');
     $event = (string) ($in['e'] ?? '');
     $step  = (int) ($in['s'] ?? 0);
@@ -36,10 +41,13 @@ if (!tour_stats_is_bot($ua) && is_array($in)) {
                 tour_stats_source((string) ($in['src'] ?? ''), (string) ($in['r'] ?? '')),
                 tour_stats_device($ua),
             ]);
+            $status = 'saved';
         } catch (Throwable $e) {
             error_log('tour-event: ' . $e->getMessage());
+            $status = 'error:' . get_class($e) . ($e instanceof PDOException ? ':' . $e->getCode() : '');
         }
     }
 }
 
+header('X-Tour-Event: ' . $status);
 http_response_code(204);
