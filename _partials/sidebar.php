@@ -250,6 +250,7 @@ $navSections = [
                 'client-emails'   => ['/master-admin/client-emails.php',   'Client emails',     $isSuperAdmin],
                 'go-live'         => ['/master-admin/go-live.php',         'Go-live checklist', $isSuperAdmin],
                 'promotions'      => ['/master-admin/promotions.php',      'Promotions',        $isSuperAdmin],
+                'tour-stats'      => ['/master-admin/tour-stats.php',      'Tour stats',        $isSuperAdmin],
                 'factories'       => ['/master-admin/factories.php',       'Factories',         $isSuperAdmin],
             ]],
             ['heading' => 'Billing & plans', 'items' => [
