@@ -49,12 +49,12 @@ return [
         'title'   => 'Working offline on a tablet',
         'eyebrow' => 'Quotes · No signal',
         'v'       => 2,
-        'blurb'   => 'Set a tablet up once on WiFi, then measure, price and start quotes with no signal. Everything is kept on the tablet and goes up — checked by the server — when the signal is back.',
+        'blurb'   => 'Set a tablet up for offline while you\'re on Wi-Fi, then measure, price and start quotes with no signal. Everything is kept on the tablet and goes up — checked by the server — when the signal is back.',
         'lede'    => 'Out on a job with <b>no signal</b>? A tablet you have <b>set up for offline</b> keeps working: it opens the
                       quotes you have looked at, prices every blind <b>on the tablet itself</b> (using the very same pricing the server
                       uses), starts <b>brand-new quotes</b>, and can even <b>queue the email</b> to the customer. Nothing is lost &mdash; it
                       all waits on the tablet and <b>sends itself</b> when the signal comes back, where the server checks every price
-                      again. You set it up <b>once, on WiFi</b>, from the menu. This guide goes slowly, one idea per chapter.',
+                      again. You set it up <b>first, on Wi-Fi</b>, from the menu. This guide goes slowly, one idea per chapter.',
         'open'    => '/orders/index.php?scope=quotes&type=retail',
         'css'     => '
           .gd .sc{ position:relative; min-height:400px; }
@@ -135,7 +135,7 @@ return [
                   <div class="lay">
                     ' . $tab('<div class="h">Add blind</div>' . $f('Product', 'Roller Blind') . $f('Fabric', 'Sunset / Ivory')
                         . '<div class="prv ok"><b>&pound;77.00</b> per blind &middot; <i>tablet price &mdash; checked when sent</i></div>' . $offBar()) . '
-                    <div class="chips"><span class="chip">&#128246; Set up once, on WiFi</span><span class="chip">&#128208; Measure and price with no signal</span>
+                    <div class="chips"><span class="chip">&#128246; Set up first, on Wi-Fi</span><span class="chip">&#128208; Measure and price with no signal</span>
                       <span class="chip ok">&#9729; It all goes up when the signal is back</span></div>
                   </div>
                   <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; thirteen short chapters, at an easy pace.</p>
@@ -161,7 +161,7 @@ return [
 
                 <!-- 2 — set it up -->
                 <div class="sc" data-scene="2" data-len="22">
-                  <div class="sct a-fade" style="--d:.2s">Set it up once, on WiFi</div>
+                  <div class="sct a-fade" style="--d:.2s">Set it up first, on Wi-Fi</div>
                   <div class="lay">
                     ' . $tab('<span class="gear a-ring" style="--d:2s">&#9881;</span><div class="h">Menu</div>'
                         . '<div class="menu a-rise" style="--d:3s"><span>Help &amp; guide</span><span>&#9790; Dark mode</span><span>&#8597; Compact mode</span>'
@@ -173,7 +173,7 @@ return [
                         . '<div class="bar2 a-fade" style="--d:9.3s"><i class="a-wide" style="--d:9.5s"></i></div>') . '
                     <div class="chips">
                       <span class="chip a-pop" style="--d:3s">&#9881; Menu &rarr; scroll to the bottom</span>
-                      <span class="chip a-pop" style="--d:10.8s">&#11015; About 20 MB, once</span>
+                      <span class="chip a-pop" style="--d:10.8s">&#11015; About 20 MB to set up</span>
                       <span class="chip a-pop" style="--d:14.3s">Prices + every product + all its fabrics</span>
                       <span class="chip ok a-pop" style="--d:20s">Do it on WiFi</span></div>
                   </div>
@@ -286,7 +286,7 @@ return [
                   <div class="lay">
                     ' . $tab('<div class="h">Send to customer</div>' . $f('Recipient email', 'aisha.k@outlook.com')
                         . '<span class="btnp a-press" style="--d:1.8s;background:rgba(220,38,38,.5);color:#000">&#128231; Email PDF + accept link</span>'
-                        . '<div class="dlg a-mid" style="--d:3s;--d2:10.2s">No signal. Send this quote to aisha.k@outlook.com automatically when the signal is back?<br><br>It goes once all its blinds have been sent. If the server prices any blind differently from the tablet, it waits for you to check the quote first.'
+                        . '<div class="dlg a-mid" style="--d:3s;--d2:10.2s">No signal. Send this quote to aisha.k@outlook.com automatically when the signal is back?<br><br>It goes as soon as all its blinds have been sent. If the server prices any blind differently from the tablet, it waits for you to check the quote first.'
                         . '<div class="act"><span class="btns">Cancel</span><span class="btnp a-press" style="--d:9.8s">OK</span></div></div><div class="dlg a-pop" style="--d:10.4s">&#10003; Kept on this tablet &mdash; the email goes when the signal is back.<div class="act"><span class="btnp">OK</span></div></div>' . $offBar()) . '
                     <div class="chips">
                       <span class="chip a-pop" style="--d:9.5s">Say OK &mdash; it waits on the tablet</span>
@@ -368,11 +368,11 @@ return [
              touch screens (or on a device already set up). It runs on very cheap tablets, and it is easiest held <b>upright</b>: the on-screen keyboard
              takes far less of the screen that way.</p>
 
-          <p><b>Set it up once, on WiFi.</b></p>
+          <p><b>Set it up first, on Wi-Fi.</b></p>
           <ul class="steps">
             <li>Open the menu (the <b>&#9881;</b> button on a tablet) and scroll to the bottom. Under <b>Dark mode</b> and <b>Compact mode</b> you&rsquo;ll see
                 <b>&#128246; Work offline: set up</b>. Tap it &mdash; it says <em>&ldquo;Prices with no signal: not set up on this tablet.&rdquo;</em></li>
-            <li>Tap <b>Set up for offline</b>. It downloads about <b>20&nbsp;MB</b> once &mdash; the pricing, your price list, and every product with
+            <li>Tap <b>Set up for offline</b>. It downloads about <b>20&nbsp;MB</b> when you set it up &mdash; the pricing, your price list, and every product with
                 <b>all</b> of its fabrics &mdash; counting <em>&ldquo;Saving the product lists&hellip; 9 of 14&rdquo;</em> as it goes, then
                 <em>&ldquo;&#10003; Ready &mdash; &hellip; prices kept on this tablet.&rdquo;</em></li>
             <li>The button now reads <b>Offline ready</b>. Tap it any time to see the status &mdash; <em>&ldquo;&#10003; Works offline &mdash; prices from Tue
@@ -401,7 +401,7 @@ return [
                 <b>on this tablet</b> with a short reference (e.g. <em>Ref WTTF65</em>) &mdash; <em>&ldquo;Started with no signal. It gets its quote number when
                 the signal is back &mdash; everything here is kept on this tablet until then.&rdquo;</em> Add its blinds exactly as above.</li>
             <li><b>Emailing the quote.</b> Press <b>&#128231; Email PDF + accept link</b> and it asks: <em>&ldquo;No signal. Send this quote to &hellip;
-                automatically when the signal is back? It goes once all its blinds have been sent. If the server prices any blind differently from the
+                automatically when the signal is back? It goes as soon as all its blinds have been sent. If the server prices any blind differently from the
                 tablet, it waits for you to check the quote first.&rdquo;</em> Say <b>OK</b> and the email waits on the tablet &mdash; <em>&ldquo;&#10003; Kept on this tablet &mdash; the email goes when the signal is back.&rdquo;</em></li>
           </ul>
 
@@ -423,7 +423,7 @@ return [
              <b>&ldquo;Not saved on this tablet&rdquo;</b> in the System or Fabric box &mdash; that product&rsquo;s lists aren&rsquo;t on the tablet yet: with signal,
              tap <b>Work offline</b> &rarr; <b>Update now</b> and let it count to the end. <b>&ldquo;No signal &mdash; Update now needs WiFi or a signal. Turn
              flight mode off, reload the page, then try again.&rdquo;</b> &mdash; exactly that. <b>A quote looks out of date</b> &mdash; the tablet is showing the
-             copy it saved last time: open it once <b>with signal</b> to refresh it. <b>Signed out while you were away?</b> The bar says <em>&ldquo;Signed out
+             copy it saved last time: open it again <b>with signal</b> to refresh it. <b>Signed out while you were away?</b> The bar says <em>&ldquo;Signed out
              &mdash; sign in again to send &hellip;&rdquo;</em>; sign in and it carries on.</div>
 
           <p><b>Keeping prices current.</b> Whenever the tablet has signal it checks for new prices and fetches them. If the copy is from an earlier day the
@@ -437,14 +437,14 @@ return [
              work.</p>',
         'script'  => [
             ['1', 'No signal? Keep working',         'Out on a job, with no signal? A tablet set up for offline keeps working. It opens the quotes you have already looked at. It prices every blind, on the tablet itself. It keeps everything you save. And when the signal comes back, it sends it all up for you. This is for tablets, and it is easiest with the tablet held upright.', 1],
-            ['2', 'Set it up once, on WiFi',         'You set it up once, on WiFi. Open the menu, and scroll to the very bottom. Under Dark mode, tap Work offline, set up. Then tap Set up for offline. It downloads about twenty megabytes, just once. That is your prices, and every product with all of its fabrics. It counts as it goes, and then says Ready.', 2],
+            ['2', 'Set it up first, on Wi-Fi',         'First, while you are on Wi-Fi, set it up. Open the menu, and scroll to the very bottom. Under Dark mode, tap Work offline, set up. Then tap Set up for offline. It downloads about twenty megabytes while it sets up. That is your prices, and every product with all of its fabrics. It counts as it goes, and then says Ready.', 2],
             ['3', 'Offline ready',                   'The button now says Offline ready. Tap it, and it tells you the date of your prices, and how many products are saved. Whenever the tablet has signal, it checks for new prices by itself. If your prices are from an earlier day, the line turns amber, to remind you. Best habit: open the app on WiFi before you go out.', 3],
             ['4', 'Open your quotes before you go',  'The tablet saves a copy of every quote you open while you have signal, and keeps it for fourteen days. A quote you have never opened on that tablet cannot be opened with no signal. You get a No signal page, listing the ones it does have. So open tomorrow\'s quotes tonight, on WiFi.', 4],
             ['5', 'In the house, with no signal',    'Now you are in a customer\'s house, with no signal. An orange bar at the bottom tells you. Open the quote, and a yellow note at the top says it is the copy saved on this tablet, and at what time. That is because it is the copy from the last time you opened it.', 5],
             ['6', 'The tablet price',                'Add a blind exactly as normal. The price is worked out on the tablet itself, with the same pricing the server uses. It is marked tablet price, checked when sent. The very first price can take a few seconds, while the tablet gets ready. It says so. After that, every price is instant.', 6],
             ['7', 'Kept on this tablet',             'Press Save, and the blind is kept on the tablet, in a yellow list above the form, with its tablet price. The form keeps the product and the fabric, and clears the room and sizes, ready for the next window. To change a kept blind, press Put back in the form.', 7],
             ['8', 'A brand-new quote',               'You can start a new quote with no signal, too. Press New, type the customer\'s name, and press Create quote. It opens a new quote, on this tablet, with a short reference for now. Its real quote number arrives when the signal comes back. Add the blinds exactly as before.', 8],
-            ['9', 'Even the email can wait',         'Even the email can wait. Press Email PDF plus accept link, and it asks whether to send it automatically when the signal is back. Say OK, and it waits on the tablet. It goes once the blinds have been sent. And if any price changed, it waits for you.', 9],
+            ['9', 'Even the email can wait',         'Even the email can wait. Press Email PDF plus accept link, and it asks whether to send it automatically when the signal is back. Say OK, and it waits on the tablet. It goes as soon as the blinds have been sent. And if any price changed, it waits for you.', 9],
             ['10', 'The signal comes back',          'When the signal comes back, you do not have to do a thing. The bar says it is sending your saved changes. New quotes are created first, and get their number. Then the details, then the blinds, then the email. As each blind goes up, the server prices it again, and the quote uses the server\'s price.', 10],
             ['11', 'If a price comes out different', 'If a price comes out different, you are told. The quote shows both figures, the tablet price and the server price, until you press OK, checked. And any email for that quote is held, not sent. Check the quote, then press Send now. So a customer never gets a price you have not seen.', 11],
             ['12', 'What still needs signal',        'A few things need signal, because the server does them there and then. Making a PDF, changing a quote\'s status, deleting, and deposits. With no signal, those buttons tell you, and nothing changes. And if a box says not saved on this tablet, tap Update now, next time you have signal.', 12],

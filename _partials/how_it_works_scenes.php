@@ -41,7 +41,7 @@ return [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
         'tier'  => 'Postcode finder on Silver & Gold',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
@@ -193,8 +193,8 @@ HTML,
     [
         'nav'   => 'Offline', 'icon' => '📶', 'secs' => 10,
         'title' => 'No signal? Keep on selling.',
-        'body'  => 'Farmhouse in the hills, or a basement flat with no bars? It doesn\'t matter. Set your tablet up for offline once, on WiFi, and it keeps working wherever you are. It prices every blind on the tablet itself, using exactly the same pricing as the server, starts brand-new quotes, and even queues the email to your customer. Nothing is lost. The moment the signal comes back, it all sends itself, and every price is checked again on the way up.',
-        'tier'  => 'Tablets, set up once on WiFi',
+        'body'  => 'Farmhouse in the hills, or a basement flat with no bars? It doesn\'t matter. Set your tablet up for offline while you\'re on Wi-Fi, and from then on it keeps working wherever you are. It prices every blind on the tablet itself, using exactly the same pricing as the server, starts brand-new quotes, and even queues the email to your customer. Nothing is lost. The moment the signal comes back, it all sends itself, and every price is checked again on the way up.',
+        'tier'  => 'Tablets — set up first, on Wi-Fi',
         'mock'  => <<<'HTML'
 <div class="hw-tab">
   <div class="hw-body hw-offline">
