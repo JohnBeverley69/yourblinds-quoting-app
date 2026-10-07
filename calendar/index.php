@@ -942,7 +942,7 @@ $activeNav = 'calendar';
                     <?php else: ?>
                         Switch back to <a href="/calendar/index.php?week=<?= e($anchorMonday->format('Y-m-d')) ?>"
                         style="color:var(--brand);font-weight:600">Everyone</a>
-                        to see the whole team's diary.
+                        to see the whole team's calendar.
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

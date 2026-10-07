@@ -20,7 +20,7 @@ return [
         'eyebrow' => 'Settings · Company',
         'blurb'   => 'Money on jobs, your map app, and morning/afternoon booking windows with your own times and limits.',
         'lede'    => 'The last section on the <b>Company</b> tab. Three separate little settings that change how your
-                      diary behaves &mdash; whether each job shows its <b>money</b>, which <b>map app</b> your address
+                      calendar behaves &mdash; whether each job shows its <b>money</b>, which <b>map app</b> your address
                       links open in, and whether measure visits are booked as a <b>morning or afternoon window</b> with
                       your own hours and your own daily limit. Each one has its <b>own Save button</b>.',
         'open'    => '/admin/settings.php',
@@ -240,7 +240,7 @@ return [
              separated by a faint line and each ending in its <b>own Save button</b>. Change one, save that one. They do not
              depend on each other, and saving one never touches the other two.</p>
 
-          <p><b>&#128183; Show order value + balance on the calendar.</b> One tick box. Leave it unticked and your diary just
+          <p><b>&#128183; Show order value + balance on the calendar.</b> One tick box. Leave it unticked and your calendar just
              shows the appointments. Tick it and every job that is linked to a quote carries a money line on the
              <b>month, week and day</b> calendars. A job still owing money reads
              <code>&pound;540.00 &middot; paid &pound;200.00 &middot; bal &pound;340.00</code>, with the balance in bold. Once it is
@@ -292,7 +292,7 @@ return [
              another day.&rdquo;</b> Neither loses your typing &mdash; fix the one thing and save again.</div>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Worth knowing before you start:</b>
-             <br>&bull; <b>Set your windows before you start booking.</b> Appointments already in the diary keep the time they
+             <br>&bull; <b>Set your windows before you start booking.</b> Appointments already on the calendar keep the time they
              were booked at, but the wording of a window is drawn from <i>today&rsquo;s</i> settings &mdash; so an old
              nine-o&rsquo;clock morning will start describing itself as &ldquo;Morning (8am&ndash;12:30pm)&rdquo;.
              <br>&bull; <b>A slot&rsquo;s times must make sense</b> &mdash; a From at or after its To is refused and nothing is
@@ -314,7 +314,7 @@ return [
             ['0:16', 'Money tick on; cards show figures.',
                 'First one. Tick "Show order value + balance on the calendar" and every job that is linked to a quote shows its money on the month, week and day calendars. This one still owes: five hundred and forty pounds, paid two hundred, balance three hundred and forty. This one is settled, so it reads PAID, balance nothing. "Paid" means the deposit plus any payments you have logged on the quote — you never type it here.', 2],
             ['0:36', 'Amber warning glows; Save pressed.',
-                'Before you tick it, read the amber note underneath. This shows the money to everyone who can open the calendar, fitters included. It ignores each person\'s "Can view costs" setting on the Users page, just for the calendar. If anyone who sees your diary should not see your figures, leave it unticked. Press Save and you get "Calendar will show order value plus balance." Untick and save, and it says the money figures are now hidden.', 3],
+                'Before you tick it, read the amber note underneath. This shows the money to everyone who can open the calendar, fitters included. It ignores each person\'s "Can view costs" setting on the Users page, just for the calendar. If anyone who sees your calendar should not see your figures, leave it unticked. Press Save and you get "Calendar will show order value plus balance." Untick and save, and it says the money figures are now hidden.', 3],
             ['0:57', 'Waze radio takes the dot; Save pressed.',
                 'Second one. Navigation app — two plain radio buttons, Google Maps or Waze. Google Maps is what you start with. Whichever you pick is what opens when somebody taps an address on My Schedule or on the day calendar, so pick Waze if your fitters want live traffic. Save says "Address links will now open in Waze." One honest exception: the little route map drawn inside Today&rsquo;s run always stays Google, because Waze cannot be put inside a page.', 4],
             ['1:16', 'Slots tick on; the two rows light up.',
