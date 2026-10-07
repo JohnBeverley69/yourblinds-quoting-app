@@ -135,7 +135,7 @@ $activeNav = 'tour-stats';
 
         <nav class="ts-ranges" aria-label="Period">
             <?php foreach ($ranges as $k => $label): ?>
-                <a href="?days=<?= e($k) ?>" class="<?= $k === $range ? 'on' : '' ?>"><?= e($label) ?></a>
+                <a href="?days=<?= e((string) $k) ?>" class="<?= (string) $k === $range ? 'on' : '' ?>"><?= e($label) ?></a>
             <?php endforeach; ?>
         </nav>
 
@@ -169,7 +169,7 @@ $activeNav = 'tour-stats';
                     <thead><tr><th>Source</th><th style="text-align:right">Opened</th><th style="text-align:right">Played</th><th style="text-align:right">Finished</th></tr></thead>
                     <tbody>
                     <?php foreach ($bySource as $src => $r): ?>
-                        <tr><td><?= e(ucfirst($src)) ?></td><td style="text-align:right"><?= $r['visits'] ?></td>
+                        <tr><td><?= e(ucfirst((string) $src)) ?></td><td style="text-align:right"><?= $r['visits'] ?></td>
                             <td style="text-align:right"><?= $r['plays'] ?></td><td style="text-align:right"><?= $r['finished'] ?></td></tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -182,7 +182,7 @@ $activeNav = 'tour-stats';
                     <thead><tr><th>Device</th><th style="text-align:right">Opened</th><th style="text-align:right">Played</th></tr></thead>
                     <tbody>
                     <?php foreach ($byDevice as $dev => $r): ?>
-                        <tr><td><?= e(ucfirst($dev)) ?></td><td style="text-align:right"><?= $r['visits'] ?></td><td style="text-align:right"><?= $r['plays'] ?></td></tr>
+                        <tr><td><?= e(ucfirst((string) $dev)) ?></td><td style="text-align:right"><?= $r['visits'] ?></td><td style="text-align:right"><?= $r['plays'] ?></td></tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -195,7 +195,7 @@ $activeNav = 'tour-stats';
                 <thead><tr><th>Day</th><th style="text-align:right">Opened</th><th style="text-align:right">Played</th><th style="text-align:right">Finished</th></tr></thead>
                 <tbody>
                 <?php foreach ($daily as $day => $r): ?>
-                    <tr><td><?= e(date('D j M Y', strtotime($day))) ?></td><td style="text-align:right"><?= $r['visits'] ?></td>
+                    <tr><td><?= e(date('D j M Y', strtotime((string) $day))) ?></td><td style="text-align:right"><?= $r['visits'] ?></td>
                         <td style="text-align:right"><?= $r['plays'] ?></td><td style="text-align:right"><?= $r['finished'] ?></td></tr>
                 <?php endforeach; ?>
                 </tbody>
