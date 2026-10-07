@@ -545,6 +545,7 @@ $activeNav = 'calendar';
             opacity: 0.95;
         }
         .cal-appt-title {
+            display: block;          /* own line: long names end in …, and the ⚠ / 📝 buttons always sit together underneath */
             font-weight: 600;
             white-space: nowrap;
             overflow: hidden;
@@ -583,10 +584,6 @@ $activeNav = 'calendar';
             outline-offset: -2px;
         }
         .cal-appt-issue {
-            flex: 0 0 auto;
-            margin-left: 0.2rem;
-            font-size: 0.72rem;
-            line-height: 1;
             cursor: pointer;
             /* Faded when inactive, but legible on the coloured cards: lift the
                opacity and brighten the greyscale toward white, with a soft dark
@@ -603,10 +600,6 @@ $activeNav = 'calendar';
            note; when a note exists the card gets a bold amber left bar so it's
            obvious at a glance, and the marker goes full-colour. */
         .cal-appt-note {
-            flex: 0 0 auto;
-            margin-left: 0.2rem;
-            font-size: 0.72rem;
-            line-height: 1;
             cursor: pointer;
             /* Faded when inactive, but legible on the coloured cards: lift the
                opacity and brighten the greyscale toward white, with a soft dark
@@ -620,6 +613,39 @@ $activeNav = 'calendar';
         .cal-appt.has-note { box-shadow: inset 4px 0 0 #f59e0b; }
         .cal-appt.has-note .cal-appt-note { opacity: 1; filter: none; }
 
+        /* ⚠ / 📝 as proper buttons. They were bare ~11px glyphs — very hard to
+           hit with a mouse and near-impossible with a finger. Now each is a
+           26px square with a soft backing so you can see what to press, and an
+           invisible margin around it (::after) that also catches the click, so
+           the real target is ~36px. On touch screens (pointer: coarse) they
+           grow to 34px, ~46px with the margin — finger-sized. */
+        .cal-appt-issue, .cal-appt-note {
+            position: relative;
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.625rem; height: 1.625rem;
+            margin: 0.15rem 0 0 0.3rem;
+            vertical-align: middle;
+            font-size: 0.95rem; line-height: 1;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.24);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .cal-appt-issue::after, .cal-appt-note::after {
+            content: ""; position: absolute; inset: -5px; border-radius: 9px;
+        }
+        .cal-appt-issue:hover, .cal-appt-note:hover,
+        .cal-appt-issue:focus-visible, .cal-appt-note:focus-visible {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .cal-appt-issue:focus-visible, .cal-appt-note:focus-visible { box-shadow: 0 0 0 2px #fff; }
+        @media (pointer: coarse) {
+            .cal-appt-issue, .cal-appt-note { width: 2.125rem; height: 2.125rem; font-size: 1.15rem; margin-left: 0.4rem; }
+            .cal-appt-issue::after, .cal-appt-note::after { inset: -6px; }
+            .cal-appt-open-order { min-width: 2rem; min-height: 2rem; font-size: 1rem; }
+            .cal-appt.from-quote { padding-right: 2.5rem; }
+        }
         /* Quick-note popover */
         .note-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45);
                       display: flex; align-items: center; justify-content: center;
