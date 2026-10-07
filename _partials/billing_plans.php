@@ -41,7 +41,7 @@ if (!defined('BILLING_VAT_PERCENT')) define('BILLING_VAT_PERCENT', 20.0);
 return [
     'free' => [
         'name'              => 'Bronze',
-        'description'       => 'Create and send quotes, plus the core platform — calendar, customers, orders and products. Free, forever.',
+        'description'       => 'Create and send quotes, plus the core platform — calendar, customers, orders and products. Free to start.',
         'price_gbp_monthly' => 0,
         'features'          => [],
         'tier'              => 0,

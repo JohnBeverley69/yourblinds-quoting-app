@@ -164,7 +164,7 @@ function wl_price(array $plan): string
         </section>
 
         <h2 class="wl-section-title">Simple, honest pricing</h2>
-        <p class="wl-section-sub">One free tier, forever. Add features as you grow. Cancel any time.</p>
+        <p class="wl-section-sub">Start free. Add features as you grow. Cancel any time.</p>
 
         <div class="wl-tiers">
             <?php foreach ($plans as $code => $plan):
@@ -196,7 +196,7 @@ function wl_price(array $plan): string
         </div>
 
         <p class="wl-foot">
-            Prices shown are per month<?= $vatPct > 0 ? ', excluding VAT' : '' ?>. The core platform is free forever.<br>
+            Prices shown are per month<?= $vatPct > 0 ? ', excluding VAT' : '' ?>. It's free to get started.<br>
             <?php if (!$loggedIn): ?>
                 Already with us? <a href="/auth/login.php">Sign in</a> &middot;
             <?php endif; ?>
