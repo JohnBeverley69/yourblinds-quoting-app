@@ -118,6 +118,7 @@ function wl_price(array $plan): string
         <div class="wl-top">
             <a class="wl-brand" href="/welcome.php">Your<span class="accent">Blinds</span></a>
             <div class="wl-top-links">
+                <a href="/how-it-works.php">How it works</a>
                 <a href="/instaprice/index.php">Try InstaPrice</a>
                 <?php if ($loggedIn): ?>
                     <a class="wl-btn wl-btn-ghost" href="/calendar/index.php">Go to my dashboard</a>
@@ -144,6 +145,7 @@ function wl_price(array $plan): string
                 <?php elseif (!$loggedIn): ?>
                     <a class="wl-btn wl-btn-primary" href="/auth/signup.php">Start free &rarr;</a>
                 <?php endif; ?>
+                <a class="wl-btn wl-btn-ghost" href="/how-it-works.php">&#9654; See how it works</a>
                 <a class="wl-btn wl-btn-ghost" href="/instaprice/index.php">Get a price now</a>
             </div>
         </section>
