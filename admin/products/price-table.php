@@ -150,9 +150,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($puLabels[$action])) {
 // Length mismatch:
 //   - new shorter than old → trailing old positions get DELETEd
 //     (their prices go too)
-//   - new longer than old   → extra new positions are accepted but
-//     have no DB rows yet (they appear as empty columns / rows on
-//     next render until prices are entered)
+//   - new longer than old   → extra new positions are NOT written to
+//     the DB. They're carried to the next render (session) and shown
+//     as blank columns / rows, saved only when the user prices them
+//     and hits Save grid. Never a placeholder price: a £0 row would
+//     quote that size at £0 (the pricing engine reads any row as a
+//     price, and blank = no price everywhere else in the editor).
+//
+// A table with NO saved cells never reaches this handler — the dialog
+// rebuilds the on-screen grid client-side instead (like Start your
+// grid / + Width / + Drop), so nothing is saved until Save grid.
 //
 // Conflict-safe: a "sentinel" intermediate value (9999000 + i) is
 // used so a chain of renames like 800→1000, 1000→1200 doesn't trip
@@ -244,19 +251,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
         $wStats = $applyAxis($pdo, $tableId, 'width_mm', $oldWidths, $newWidths);
         $dStats = $applyAxis($pdo, $tableId, 'drop_mm',  $oldDrops,  $newDrops);
 
-        // After rename + delete passes, insert placeholder rows for
-        // any axis values that are in the NEW lists but not yet in
-        // the DB. Without this, "added" widths/drops wouldn't appear
-        // in the grid at all — the data model only persists widths/
-        // drops that have at least one row in price_table_rows.
-        //
-        // Anchor: new widths get one placeholder row at the first
-        // existing drop; new drops get one placeholder row at the
-        // first existing width. Price = 0 (user edits it to the
-        // real value via the inline editor).
-        //
-        // Re-fetch current state because rename + delete may have
-        // shifted what counts as "existing".
+        // New widths/drops get NO rows (see the header note) — work out
+        // which values are new now that renames + deletes have landed,
+        // and hand them to the next render as blank columns / rows.
         $curWStmt = $pdo->prepare('SELECT DISTINCT width_mm FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm');
         $curWStmt->execute([$tableId]);
         $currentWidths = array_map('intval', $curWStmt->fetchAll(PDO::FETCH_COLUMN));
@@ -267,39 +264,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
 
         $widthsToAdd = array_values(array_diff($newWidths, $currentWidths));
         $dropsToAdd  = array_values(array_diff($newDrops,  $currentDrops));
-
-        $insIgn = $pdo->prepare(
-            'INSERT IGNORE INTO price_table_rows
-               (price_table_id, width_mm, drop_mm, price)
-             VALUES (?, ?, ?, 0)'
-        );
-        $addedW = 0;
-        $addedD = 0;
-
-        // Pick an anchor drop for new widths. Prefer existing drops;
-        // fall back to the smallest new drop if the table has no
-        // drops at all yet.
-        $anchorDrop = $currentDrops[0] ?? ($dropsToAdd ? min($dropsToAdd) : null);
-        if ($anchorDrop !== null) {
-            foreach ($widthsToAdd as $w) {
-                $insIgn->execute([$tableId, $w, $anchorDrop]);
-                $addedW++;
-            }
-        }
-
-        // Anchor for new drops: first existing width, or first new
-        // width if there are none. Need to re-include any widths
-        // we just inserted above as "existing" for this purpose.
-        $anchorWidth = $currentWidths[0] ?? ($widthsToAdd ? min($widthsToAdd) : null);
-        if ($anchorWidth !== null) {
-            foreach ($dropsToAdd as $d) {
-                $insIgn->execute([$tableId, $anchorWidth, $d]);
-                $addedD++;
-            }
-        }
+        $addedW = count($widthsToAdd);
+        $addedD = count($dropsToAdd);
 
         $pdo->prepare('UPDATE price_tables SET updated_at = NOW() WHERE id = ?')->execute([$tableId]);
         $pdo->commit();
+
+        if ($addedW || $addedD) {
+            $_SESSION['pt_pending_axis'][(int) $tableId] = ['w' => $widthsToAdd, 'd' => $dropsToAdd];
+        }
 
         $parts = [];
         $totalRen = $wStats['renamed'] + $dStats['renamed'];
@@ -307,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
         $totalAdd = $addedW + $addedD;
         if ($totalRen > 0) $parts[] = $totalRen . ' renamed';
         if ($totalRem > 0) $parts[] = $totalRem . ' removed (with their prices)';
-        if ($totalAdd > 0) $parts[] = $totalAdd . ' new (placeholder price 0 — edit on the grid)';
+        if ($totalAdd > 0) $parts[] = $totalAdd . ' new (blank — type their prices, then Save grid to keep them)';
         $_SESSION['flash_success'] = $parts
             ? 'Sizes updated: ' . implode(', ', $parts) . '.'
             : 'No changes.';
@@ -1660,6 +1633,14 @@ foreach ($cells as $c) {
     $matrixByPair["$w|$d"] = $c['price'];
     if ($showCost) $matrixByCost["$w|$d"] = $c['cost'];
 }
+// Sizes just added through Edit sizes — shown as blank columns / rows
+// (one render only; they persist once priced and saved with Save grid).
+$pendingAxis = $_SESSION['pt_pending_axis'][(int) $tableId] ?? null;
+unset($_SESSION['pt_pending_axis'][(int) $tableId]);
+if (is_array($pendingAxis)) {
+    foreach ((array) ($pendingAxis['w'] ?? []) as $pw) if ((int) $pw > 0) $matrixWidths[(int) $pw] = true;
+    foreach ((array) ($pendingAxis['d'] ?? []) as $pd) if ((int) $pd > 0) $matrixDrops[(int) $pd]  = true;
+}
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 
@@ -2578,8 +2559,9 @@ $activeNav = 'products';
                         renamed, <em>prices kept</em>.</li>
                     <li><strong>Deleted lines</strong> → that column/row goes
                         (prices too).</li>
-                    <li><strong>Added lines</strong> → new empty column/row
-                        appears.</li>
+                    <li><strong>Added lines</strong> → new blank column/row
+                        appears. Type its prices and <strong>Save grid</strong>
+                        &mdash; a blank square is never quoted.</li>
                 </ul>
 
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0.625rem 0 0.25rem">
@@ -3024,8 +3006,8 @@ $activeNav = 'products';
         dialogCancel.addEventListener('click', function () { closeDialog(); });
     }
 
-    function removeWidth(w) {
-        if (!confirm('Remove the ' + w + 'mm width column? Any prices in it will be lost on next save.')) return;
+    function removeWidth(w, silent) {
+        if (!silent && !confirm('Remove the ' + w + 'mm width column? Any prices in it will be lost on next save.')) return;
         var headerRow = table.querySelector('thead tr');
         var ths = Array.prototype.slice.call(headerRow.children);
         var idx = -1;
@@ -3039,8 +3021,8 @@ $activeNav = 'products';
         });
     }
 
-    function removeDrop(d) {
-        if (!confirm('Remove the ' + d + 'mm drop row? Any prices in it will be lost on next save.')) return;
+    function removeDrop(d, silent) {
+        if (!silent && !confirm('Remove the ' + d + 'mm drop row? Any prices in it will be lost on next save.')) return;
         var row = table.querySelector('tbody tr[data-d="' + d + '"]');
         if (row) row.parentNode.removeChild(row);
     }
@@ -3071,6 +3053,31 @@ $activeNav = 'products';
     }
     if (beCancel && beDialog) {
         beCancel.addEventListener('click', function () {
+            if (beDialog.close) beDialog.close();
+            else beDialog.removeAttribute('open');
+        });
+    }
+    // Nothing saved yet (the grid came from Start your grid / Start
+    // blank): don't post — reshape the on-screen grid to the lists,
+    // exactly like + Width / + Drop, so nothing is saved until Save
+    // grid and any prices already typed into kept sizes stay put.
+    var tableHasSaved = <?= $cells ? 'true' : 'false' ?>;
+    if (beOpen && beDialog && !tableHasSaved) {
+        beOpen.addEventListener('click', function () {
+            var bw = document.getElementById('bulk-widths');
+            var bd = document.getElementById('bulk-drops');
+            if (bw) bw.value = currentWidths().join('\n');
+            if (bd) bd.value = currentDrops().join('\n');
+        });
+        var beForm = beDialog.querySelector('form');
+        if (beForm) beForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var ws = parseAxisValues(document.getElementById('bulk-widths').value);
+            var ds = parseAxisValues(document.getElementById('bulk-drops').value);
+            currentWidths().forEach(function (w) { if (ws.indexOf(w) === -1) removeWidth(w, true); });
+            currentDrops().forEach(function (d)  { if (ds.indexOf(d) === -1) removeDrop(d, true); });
+            ws.forEach(function (w) { addWidth(w); });
+            ds.forEach(function (d) { addDrop(d);  });
             if (beDialog.close) beDialog.close();
             else beDialog.removeAttribute('open');
         });
