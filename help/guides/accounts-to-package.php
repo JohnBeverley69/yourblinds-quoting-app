@@ -2,113 +2,159 @@
 declare(strict_types=1);
 
 /**
- * Guide: accounts-to-package
+ * Guide: accounts-to-package — "Get your figures into Xero, QuickBooks or Sage" (v2 player).
  *
- * "Get your figures into Xero, QuickBooks or Sage" — the CSV route that works
- * today for every package (the live QuickBooks link is settings-accounting).
+ * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
+ * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
+ * lede, open, v, css, demo, body, script.
  *
- * Scenes by data-step:
- *   .scPay  (0, 1)  Payments page header + date quick-picks
- *   .scCsv  (2, 5)  what the invoices / payments CSV look like
- *   .scXero (3, 4)  Xero's import screen, then the drafts
- *   .scBank (6)     matching a bank line to the invoice
- *   .scPick (7)     which route for which package
+ * The CSV route — the only one built today (a live accounting link is on
+ * hold, so it is not described here). Sources:
+ *   accounts/index.php     — the three export buttons, their tooltips, the note
+ *                            under them, the date filter + This/Last month
+ *   accounts/export.php    — ?type=invoices / quickbooks / payments: columns,
+ *                            AccountCode 200, "20% (VAT on Income)" / "No VAT",
+ *                            14-day due date, net unit price, the
+ *                            "Discount — agreed price" / "Adjustment" line,
+ *                            invoices dated by order (accepted) date, payments
+ *                            by date received, filenames <company>-<type>-<date>.csv
+ *   accounts/_qbo_export.php — QuickBooks shape: no minus lines (folded in),
+ *                            VAT codes "20.0% S" / "5.0% R" / "No VAT", item
+ *                            "Blinds", ≤100 invoices / 1,000 rows per file → .zip
+ *                            of "-part-N-of-M.csv" + "READ ME.txt"
+ * The package-side steps (Xero / QuickBooks / Sage / FreeAgent screens) come
+ * from the vendors' own help as checked 26 Sep 2026 — re-check if they change.
  *
- * Sources: accounts/index.php (buttons, note, filter, quick-picks),
- * accounts/export.php (columns, defaults 200 / "20% (VAT on Income)" /
- * "No VAT", 14-day due date, net unit price, negative "Discount — agreed
- * price" line), and the vendors' own help, checked 26 Sep 2026:
- *   Xero  central.xero.com/0/article/Import-customer-invoices-GL (+ Find & Match)
- *   QBO   quickbooks.intuit.com/learn-support/en-uk … import-multiple-invoices
- *         (the Export for QuickBooks button = accounts/_qbo_export.php)
- *   Sage  gb-kb.sage.com solution 222001000100915 (now PURCHASE invoices only)
- *   FreeAgent support … Import-a-client-s-invoices (Practice Partners only)
- * None of the four imports customer PAYMENTS from a file — payments are matched
- * to invoices from the bank feed. Re-check these vendor steps if they change.
+ * v2: one SCENE per script line (data-scene = the line's step), each with
+ * its own animation timeline (a-* classes, start times in --d seconds,
+ * stretched to the recorded line's length via data-len).
  */
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+
+$swap = static fn (string $from, string $to, float $at): string =>
+    '<span class="sw"><span class="a-out" style="--d:' . $at . 's">' . $from . '</span><span class="a-fade" style="--d:' . $at . 's">' . $to . '</span></span>';
+
+// A spreadsheet mock: $cols = headings, $rows = [ [cells], 'cls' => …, 'st' => … ].
+$sheet = static function (string $name, array $cols, array $rows, string $tpl, string $cls = '', string $style = ''): string {
+    $h = '<div class="xl ' . $cls . '" style="' . $style . '"><div class="xh">' . $name . '</div><div class="xg" style="grid-template-columns:' . $tpl . '">';
+    foreach ($cols as $c) $h .= '<span class="hd">' . $c . '</span>';
+    foreach ($rows as $r) {
+        $rc = $r['cls'] ?? ''; $rs = $r['st'] ?? '';
+        foreach ($r[0] as $cell) $h .= '<span class="' . $rc . '" style="' . $rs . '">' . $cell . '</span>';
+    }
+    return $h . '</div></div>';
+};
+
+$file = static fn (string $name, string $cls = '', string $style = '', string $ico = 'CSV'): string =>
+    '<div class="fil ' . $cls . '" style="' . $style . '"><span class="fic">' . $ico . '</span><span class="fnm">' . $name . '</span></div>';
+
+$invCols = ['InvoiceNumber', 'InvoiceDate', 'DueDate', 'Description', 'Quantity', 'UnitAmount', 'AccountCode', 'TaxType'];
+$invTpl  = '1.25fr .95fr .95fr 2.6fr .7fr .9fr .8fr 1.5fr';
+$invRow  = static fn (string $desc, string $amt): array => ['BEV-2026-0042', '07/10/2026', '21/10/2026', $desc, '1', $amt, '200', '20% (VAT on Income)'];
+$d1 = 'Roller Blind &mdash; Standard / Bloc Grey / (Lounge)';
+$d2 = 'Roller Blind &mdash; Standard / Bloc Grey / (Kitchen)';
+
+$qboCols = ['InvoiceNo', 'Customer', 'Item(Product/Service)', 'ItemDescription', 'ItemQuantity', 'ItemRate', 'ItemAmount', 'ItemTaxCode'];
+$qboTpl  = '1.2fr 1.1fr 1.1fr 2fr .8fr 1fr .9fr .9fr';
+
+$payCols = ['Date', 'InvoiceNumber', 'Customer', 'Amount', 'Method', 'Reference', 'Type'];
+$payTpl  = '.95fr 1.25fr 1.15fr .8fr 1fr .95fr .8fr';
 
 return [
         'aud'     => 'admin',
         'section' => 'Quotes',
         'title'   => 'Get your figures into Xero, QuickBooks or Sage',
         'eyebrow' => 'Accounts · Exports',
-        'blurb'   => 'Download your sales as a spreadsheet from the Payments page and bring them into Xero, QuickBooks Online, Sage or FreeAgent — step by step, with the traps for each package.',
-        'lede'    => 'Until the automatic links are finished, this is how your sales get into your accounts package: the <b>Payments</b>
-                      page gives you two spreadsheet files (CSV), your package <b>imports the invoices</b>, and the <b>payments are
-                      matched from your bank feed</b>. It works for <b>Xero</b> best, <b>QuickBooks Online</b> with a couple of
-                      tweaks, and for <b>Sage</b> and <b>FreeAgent</b> through your bookkeeper. Do it once a week or once a month
-                      &mdash; whatever suits your bookkeeping.',
+        'v'       => 2,
+        'blurb'   => 'Download your sales and payments as spreadsheet files from the Payments page and bring them into Xero, QuickBooks Online, Sage or FreeAgent — what is in each file, and the traps for each package.',
+        'lede'    => 'Your accounts package needs your sales. The <b>Payments</b> page gives you <b>three spreadsheet files</b> (CSV) for it:
+                      the <b>invoices</b>, the same invoices <b>shaped for QuickBooks Online</b>, and the <b>payments</b> received. Your
+                      package imports the invoices, and the payments are <b>matched from your bank feed</b>. This guide goes through what is
+                      in each file, slowly, one idea per chapter. Do it once a week or once a month &mdash; whatever suits your bookkeeping.',
         'open'    => '/accounts/index.php',
         'css'     => '
-          .gd .osc{ display:none; }
-          .gd .stage[data-step="0"] .scPay, .gd .stage[data-step="1"] .scPay{ display:block; }
-          .gd .stage[data-step="2"] .scCsv, .gd .stage[data-step="5"] .scCsv{ display:block; }
-          .gd .stage[data-step="3"] .scXero, .gd .stage[data-step="4"] .scXero{ display:block; }
-          .gd .stage[data-step="6"] .scBank{ display:block; }
-          .gd .stage[data-step="7"] .scPick{ display:block; }
+          .gd .sc{ position:relative; min-height:360px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; }
+          .gd .sw{ display:inline-grid; } .gd .sw > span{ grid-area:1/1; }
+          .gd .btnp{ display:inline-flex; align-items:center; background:var(--accent); color:#fff; border-radius:7px; padding:.3rem .7rem; font-size:.7rem; font-weight:700; white-space:nowrap; }
+          .gd .btns{ display:inline-flex; align-items:center; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); color:var(--ink);
+                     border-radius:7px; padding:.26rem .6rem; font-size:.66rem; font-weight:600; white-space:nowrap; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px;
+                     padding:.26rem .65rem; font-size:.7rem; font-weight:700; color:var(--ink); }
+          .gd .chip.warn{ border-color:#f59e0b; } .gd .chip.bad{ border-color:var(--err); color:var(--err); } .gd .chip.ok{ border-color:var(--good); color:var(--good); }
+          .gd .chips{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.7rem; }
+          .gd .ph{ display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap; align-items:flex-start; margin-bottom:.4rem; }
+          .gd .pt{ font-size:1rem; font-weight:800; color:var(--ink); } .gd .ps{ font-size:.66rem; color:var(--faint); }
+          .gd .pb{ display:flex; gap:.3rem; flex-wrap:wrap; }
+          .gd .pnote{ font-size:.62rem; color:var(--faint); line-height:1.45; max-width:36rem; margin-bottom:.5rem; }
 
-          /* ---- Payments header ---- */
-          .gd .hdrow{ display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap; align-items:flex-start; }
-          .gd .subt{ font-size:.7rem; color:var(--soft); margin:0; }
-          .gd .hbtns{ display:flex; gap:.35rem; flex-wrap:wrap; }
-          .gd .mb{ display:inline-flex; border-radius:8px; padding:.32rem .6rem; font-size:.7rem; font-weight:600; border:1px solid var(--line); background:var(--surface); color:var(--ink); transition:box-shadow .2s; }
-          .gd .mb.pri{ background:var(--nav); color:#fff; border-color:var(--nav); }
-          .gd .note{ font-size:.64rem; color:var(--faint); margin:.5rem 0 .7rem; line-height:1.45; max-width:34rem; }
-          .gd .note b{ color:var(--soft); }
-          .gd .filt{ border:1px solid var(--line); border-radius:9px; padding:.45rem .6rem; font-size:.68rem; color:var(--soft); }
-          .gd .filt .ft{ font-weight:700; font-size:.62rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); margin-bottom:.35rem; }
-          .gd .frow{ display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
-          .gd .fd{ border:1px solid var(--line); border-radius:6px; padding:.2rem .4rem; background:var(--panel); }
-          .gd .stage[data-step="1"] .lastm{ background:var(--nav); color:#fff; border-color:var(--nav); }
-          .gd .stage[data-step="1"] .expinv{ box-shadow:0 0 0 3px var(--accent-wash), 0 0 0 5px var(--accent); }
-          .gd .stage[data-step="0"] .fdv, .gd .fdv2{ display:none; }
-          .gd .stage[data-step="1"] .fdv2{ display:inline; } .gd .stage[data-step="1"] .fdv{ display:none; }
+          /* files */
+          .gd .files{ display:flex; flex-direction:column; gap:.35rem; margin-top:.6rem; }
+          .gd .fil{ display:flex; align-items:center; gap:.5rem; border:1px solid var(--line); border-radius:8px; padding:.3rem .55rem; background:var(--surface);
+                    font-size:.68rem; color:var(--ink); max-width:30rem; }
+          .gd .fic{ flex:0 0 auto; font-size:.52rem; font-weight:800; color:#fff; background:#1d6f42; border-radius:4px; padding:.2rem .3rem; }
+          .gd .fil.zip .fic{ background:#7c3aed; } .gd .fil.txt .fic{ background:#64748b; }
+          .gd .fnm{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.64rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .gd .indent{ margin-left:1.4rem; }
 
-          /* ---- CSV preview ---- */
-          .gd .csv{ border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-          .gd .csvh{ background:var(--panel); border-bottom:1px solid var(--line); padding:.3rem .55rem; font-size:.64rem; font-weight:700; color:var(--soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-          .gd .csvb{ padding:.4rem .55rem; font-size:.58rem; line-height:1.75; color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; overflow-x:auto; white-space:nowrap; }
-          .gd .csvb .hd{ color:var(--faint); }
-          .gd .csvb .neg{ background:color-mix(in srgb,#f59e0b 22%,transparent); border-radius:3px; }
-          .gd .cinv, .gd .cpay{ display:none; }
-          .gd .stage[data-step="2"] .cinv{ display:block; }
-          .gd .stage[data-step="5"] .cpay{ display:block; }
-          .gd .ctip{ font-size:.64rem; color:var(--soft); margin:.45rem 0 0; line-height:1.45; }
+          /* spreadsheet */
+          .gd .xl{ border:1px solid #1d6f42; border-radius:8px; overflow:hidden; background:#fff; color:#1f2937; }
+          .gd .xl .xh{ background:#1d6f42; color:#fff; font-weight:700; padding:.28rem .5rem; font-size:.62rem; font-family:ui-monospace,Menlo,Consolas,monospace;
+                       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+          .gd .xg{ display:grid; }
+          .gd .xg > span{ border-right:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; padding:.22rem .3rem; font-size:.58rem; white-space:nowrap;
+                        overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; min-width:0; }
+          .gd .xg > span.hd{ background:#f3f4f6; font-weight:700; color:#374151; }
+          .gd .xg > span.neg{ color:#b91c1c; font-weight:700; background:#fef2f2; }
+          .gd .xg > span.grp{ background:#eef6f1; }
+          /* a row that fades AND folds away (the minus line QuickBooks won’t take) */
+          .gd .xg span.shrink{ max-height:3rem; }
+          .gd .gd-play .xg span.shrink{ animation:apShrink .7s ease calc(var(--d,0s) * var(--k,1)) forwards; }
+          .gd .gd-done .xg span.shrink{ display:none; }
+          @keyframes apShrink{ to{ opacity:0; max-height:0; padding-top:0; padding-bottom:0; border-width:0; } }
 
-          /* ---- third-party screens, drawn plainly ---- */
-          .gd .ext{ border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:.65rem .8rem; max-width:31rem; }
-          .gd .ext .who{ font-size:.6rem; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); font-weight:700; margin-bottom:.35rem; }
-          .gd .ext h4{ margin:0 0 .5rem; font-size:.86rem; color:var(--ink); }
-          .gd .ext .crumb{ font-size:.66rem; color:var(--soft); margin-bottom:.45rem; }
-          .gd .ext .file{ border:1px dashed var(--line); border-radius:7px; padding:.35rem .5rem; font-size:.68rem; color:var(--ink); margin-bottom:.45rem; }
-          .gd .ext .rad{ font-size:.68rem; color:var(--soft); margin:.2rem 0; display:flex; gap:.35rem; align-items:center; }
-          .gd .ext .rad .o{ width:.7rem; height:.7rem; border-radius:50%; border:2px solid var(--line); }
-          .gd .ext .rad.on .o{ border-color:#13b5ea; background:#13b5ea; }
-          .gd .ext .rad.on{ color:var(--ink); font-weight:600; }
-          .gd .ext .xb{ display:inline-flex; border-radius:7px; padding:.3rem .65rem; font-size:.7rem; font-weight:700; background:#13b5ea; color:#fff; margin-top:.35rem; }
-          .gd .ext .row{ display:flex; justify-content:space-between; gap:.5rem; font-size:.66rem; border-bottom:1px solid var(--line); padding:.28rem 0; color:var(--ink); }
-          .gd .ext .row span:last-child{ color:var(--soft); }
-          .gd .x3, .gd .x4{ display:none; }
-          .gd .stage[data-step="3"] .x3{ display:block; }
-          .gd .stage[data-step="4"] .x4{ display:block; }
-          .gd .tag{ font-size:.58rem; border-radius:10px; padding:.05rem .4rem; background:var(--panel); color:var(--soft); }
+          /* filter */
+          .gd .flt{ border:1px dashed var(--border-strong,#c7ccd4); border-radius:10px; padding:.45rem .65rem .6rem; }
+          .gd .flt .ft{ font-size:.58rem; font-weight:700; color:var(--soft); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.35rem; }
+          .gd .fb{ display:flex; gap:.4rem; flex-wrap:wrap; align-items:flex-end; }
+          .gd .inp{ display:inline-flex; align-items:center; min-width:6.5rem; height:26px; box-sizing:border-box; border:1px solid var(--border-strong,#c7ccd4);
+                    border-radius:6px; background:var(--surface); padding:0 .45rem; font-size:.7rem; color:var(--ink); white-space:nowrap; }
+          .gd .phd{ color:var(--faint); }
+          .gd .fd{ display:flex; flex-direction:column; gap:.1rem; font-size:.58rem; color:var(--faint); }
+          .gd .fb .selectbox{ min-width:7rem; height:26px; padding:.15rem .45rem; font-size:.68rem; box-sizing:border-box; }
+          .gd .dim{ opacity:.45; position:relative; }
+          .gd .xmark{ position:absolute; right:-.3rem; top:-.5rem; font-size:.58rem; font-weight:800; color:#fff; background:var(--err); border-radius:999px; padding:.05rem .35rem; }
 
-          /* ---- bank matching ---- */
-          .gd .match{ display:grid; grid-template-columns:1fr auto 1fr; gap:.5rem; align-items:center; }
-          .gd .mcell{ border:1px solid var(--line); border-radius:9px; padding:.45rem .55rem; font-size:.66rem; color:var(--ink); line-height:1.5; background:var(--surface); }
-          .gd .mcell .ml{ font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; }
-          .gd .mcell b{ font-variant-numeric:tabular-nums; }
-          .gd .marrow{ color:var(--good); font-weight:700; font-size:.9rem; }
-          @media(max-width:560px){ .gd .match{ grid-template-columns:1fr; } .gd .marrow{ text-align:center; } }
+          /* package panels */
+          .gd .pkg{ border:1px solid var(--line); border-radius:10px; padding:.55rem .75rem; background:var(--surface); max-width:30rem; }
+          .gd .pkg h4{ margin:0 0 .4rem; font-size:.8rem; color:var(--ink); }
+          .gd .radio{ font-size:.74rem; margin:.15rem 1rem .15rem 0; }
+          .gd .drafts{ display:flex; flex-direction:column; gap:.25rem; margin-top:.5rem; }
+          .gd .drafts div{ display:flex; justify-content:space-between; align-items:center; font-size:.68rem; border:1px solid var(--line); border-radius:6px; padding:.25rem .5rem; }
+          .gd .tag{ font-size:.58rem; font-weight:800; border-radius:999px; padding:.05rem .45rem; background:var(--panel); color:var(--soft); }
+          .gd .tag.ok{ background:var(--good-wash); color:var(--good); }
 
-          /* ---- which package ---- */
-          .gd .picks{ display:grid; grid-template-columns:1fr 1fr; gap:.45rem; }
-          @media(max-width:560px){ .gd .picks{ grid-template-columns:1fr; } }
-          .gd .pk{ border:1px solid var(--line); border-radius:9px; padding:.45rem .55rem; font-size:.66rem; color:var(--soft); line-height:1.45; background:var(--surface); }
-          .gd .pk b{ color:var(--ink); display:block; font-size:.74rem; margin-bottom:.1rem; }',
+          /* bank match */
+          .gd .match{ position:relative; display:grid; grid-template-columns:1fr 3rem 1fr; align-items:center; gap:.3rem; margin-top:.7rem; max-width:34rem; }
+          .gd .bank, .gd .inv{ border:1px solid var(--line); border-radius:8px; padding:.4rem .55rem; font-size:.66rem; background:var(--surface); line-height:1.4; }
+          .gd .bank b, .gd .inv b{ color:var(--ink); }
+          .gd .match svg{ width:100%; height:24px; }
+          .gd .match path{ stroke:var(--good); stroke-width:3; fill:none; }
+          .gd .ticks{ display:flex; flex-direction:column; gap:.45rem; font-size:.76rem; color:var(--ink); }
+          .gd .ticks > div{ display:flex; gap:.5rem; align-items:center; }
+          .gd .tick.on{ background:var(--accent); color:#fff; }
+
+          @media (max-width:640px){
+            .gd .app{ grid-template-columns:minmax(0,1fr); } .gd .side{ display:none; } .gd .stage{ min-width:0; overflow:hidden; }
+            .gd .sc{ min-height:470px; }
+            .gd .xl{ overflow-x:hidden; } .gd .xg > span{ font-size:.5rem; padding:.18rem .2rem; }
+            .gd .xg .m{ display:none; }
+          }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / payments</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / accounts</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
@@ -116,220 +162,229 @@ return [
                 <a>Dashboard</a><a>Calendar</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a><a>Orders</a><a class="on">Payments</a>
-                <div class="navh">Setup</div>
-                <a>Settings</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
+                <a>Products</a><a>Users</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <!-- ============ Payments page ============ -->
-                <div class="osc scPay">
-                  <div class="hdrow">
-                    <div><div class="card-t" style="margin-bottom:.1rem">Payments</div>
-                      <p class="subt">Payments received against your orders.</p></div>
-                    <div class="hbtns">
-                      <span class="mb expinv">Export invoices (CSV)</span>
-                      <span class="mb">Export for QuickBooks (CSV)</span>
-                      <span class="mb">Export payments (CSV)</span>
-                      <span class="mb pri">+ Record payment</span>
-                    </div>
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  <div class="ph"><div><div class="pt">Payments</div><div class="ps">Payments received against your orders.</div></div></div>
+                  <div class="pb"><span class="btns">Export invoices (CSV)</span><span class="btns">Export for QuickBooks (CSV)</span><span class="btns">Export payments (CSV)</span><span class="btnp">+ Record payment</span></div>
+                  <div class="files">
+                    ' . $file('Beverley-Blinds-invoices-2026-10-07.csv') . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07.csv') . $file('Beverley-Blinds-payments-2026-10-07.csv') . '
                   </div>
-                  <p class="note">CSV for <b>Xero / QuickBooks / Sage</b>. Respects the date filter below. Invoices export the line items
-                     (net of VAT) so the package recomputes tax; they default to account code <b>200 (Sales)</b> and <b>20% VAT</b> &mdash;
-                     remap on import if your chart of accounts differs.
-                     <b>QuickBooks Online?</b> Use <i>Export for QuickBooks</i> &mdash; no minus lines, QuickBooks&rsquo; VAT codes,
-                     and split into files of 100 invoices if the period is bigger.</p>
-                  <div class="filt">
-                    <div class="ft">Filter the list</div>
-                    <div class="frow">
-                      <span class="fd">Customer, quote #, reference...</span>
-                      <span>From</span><span class="fd"><span class="fdv">dd/mm/yyyy</span><span class="fdv2">01/08/2026</span></span>
-                      <span>To</span><span class="fd"><span class="fdv">dd/mm/yyyy</span><span class="fdv2">31/08/2026</span></span>
-                      <span class="mb">This month</span><span class="mb lastm">Last month</span>
-                    </div>
-                  </div>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; nine short chapters, at an easy pace.</p>
                 </div>
 
-                <!-- ============ CSV preview ============ -->
-                <div class="osc scCsv">
-                  <div class="csv cinv">
-                    <div class="csvh">beverley-blinds-invoices-2026-09-01.csv</div>
-                    <div class="csvb">
-                      <span class="hd">ContactName,EmailAddress,InvoiceNumber,InvoiceDate,DueDate,Description,Quantity,UnitAmount,AccountCode,TaxType</span><br>
-                      Emma Fletcher,emma@&hellip;,BRI-2026-0042,04/08/2026,18/08/2026,Roller &mdash; Cassette / Ada Blue (Kitchen),1,412.50,200,20% (VAT on Income)<br>
-                      Emma Fletcher,emma@&hellip;,BRI-2026-0042,04/08/2026,18/08/2026,Vertical &mdash; Slimline / Cairo White (Lounge),2,310.42,200,20% (VAT on Income)<br>
-                      <span class="neg">Emma Fletcher,emma@&hellip;,BRI-2026-0042,04/08/2026,18/08/2026,Discount &mdash; agreed price,1,-40.00,200,20% (VAT on Income)</span>
-                    </div>
+                <!-- 1 — three files -->
+                <div class="sc" data-scene="1" data-len="24">
+                  <div class="ph a-fade" style="--d:.3s"><div><div class="pt">Payments</div><div class="ps">Payments received against your orders.</div></div></div>
+                  <div class="pb"><span class="btns a-ring" style="--d:6.5s">Export invoices (CSV)</span><span class="btns a-ring" style="--d:8s">Export for QuickBooks (CSV)</span><span class="btns a-ring" style="--d:10s">Export payments (CSV)</span><span class="btnp">+ Record payment</span></div>
+                  <div class="files">
+                    ' . $file('Beverley-Blinds-invoices-2026-10-07.csv', 'a-drop', '--d:7s')
+                      . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07.csv', 'a-drop', '--d:8.8s')
+                      . $file('Beverley-Blinds-payments-2026-10-07.csv', 'a-drop', '--d:10.8s') . '
                   </div>
-                  <p class="ctip cinv">One row per blind. Rows with the same <b>InvoiceNumber</b> make one invoice. The highlighted line is a
-                     <b>minus</b> line &mdash; only there when you agreed a different price. QuickBooks won&rsquo;t accept minus lines (see below).</p>
-                  <div class="csv cpay">
-                    <div class="csvh">beverley-blinds-payments-2026-09-01.csv</div>
-                    <div class="csvb">
-                      <span class="hd">Date,InvoiceNumber,Customer,Amount,Method,Reference,Type</span><br>
-                      05/08/2026,BRI-2026-0042,Emma Fletcher,372.00,Bank transfer,BRI-2026-0042,Deposit<br>
-                      29/08/2026,BRI-2026-0042,Emma Fletcher,868.00,Bank transfer,BRI-2026-0042,Payment
-                    </div>
-                  </div>
-                  <p class="ctip cpay">The payments file is your <b>checklist</b>: no package imports payments from a file &mdash; you tick each
-                     one off against the money in your bank feed.</p>
+                  <div class="chips"><span class="chip a-pop" style="--d:13.5s">Admins only</span><span class="chip a-pop" style="--d:15s">&#11088; Accounts feature</span>
+                    <span class="chip ok a-pop" style="--d:19s">Readable by your package &mdash; or your bookkeeper</span></div>
                 </div>
 
-                <!-- ============ Xero ============ -->
-                <div class="osc scXero">
-                  <div class="ext x3">
-                    <div class="who">In Xero</div>
-                    <h4>Import invoices</h4>
-                    <div class="crumb">Sales &rsaquo; Invoices &rsaquo; Import</div>
-                    <div class="file">&#128196; beverley-blinds-invoices-2026-09-01.csv</div>
-                    <div class="rad"><span class="o"></span>Update contact addresses from the file? &mdash; No</div>
-                    <div class="rad on"><span class="o"></span>Unit prices are <b>&nbsp;tax exclusive</b></div>
-                    <div class="rad"><span class="o"></span>Unit prices are tax inclusive</div>
-                    <span class="xb">Import</span>
-                  </div>
-                  <div class="ext x4">
-                    <div class="who">In Xero</div>
-                    <h4>Invoices &rsaquo; Draft</h4>
-                    <div class="row"><span>BRI-2026-0042 &middot; Emma Fletcher</span><span>&pound;1,240.00 <span class="tag">Draft</span></span></div>
-                    <div class="row"><span>BRI-2026-0043 &middot; D. Patel</span><span>&pound;596.40 <span class="tag">Draft</span></span></div>
-                    <span class="xb">Approve</span>
-                  </div>
+                <!-- 2 — pick the period -->
+                <div class="sc" data-scene="2" data-len="23">
+                  <div class="sct a-fade" style="--d:.2s">Pick the period first</div>
+                  <div class="flt a-rise" style="--d:1s"><div class="ft">Filter the list</div>
+                    <div class="fb">
+                      <span class="inp dim a-fade" style="--d:10s;min-width:9rem"><span class="phd">Customer, quote #, reference...</span><i class="xmark">ignored</i></span>
+                      <span class="fd">From<span class="inp a-ring" style="--d:6s">' . $swap('<span class="phd">dd/mm/yyyy</span>', '01/09/2026', 4.5) . '</span></span>
+                      <span class="fd">To<span class="inp a-ring" style="--d:6.5s">' . $swap('<span class="phd">dd/mm/yyyy</span>', '30/09/2026', 4.5) . '</span></span>
+                      <span class="btns">This month</span><span class="btns a-sel" style="--d:3.5s">Last month</span>
+                      <span class="selectbox dim a-fade" style="--d:11s">All methods<i class="xmark">ignored</i></span>
+                    </div></div>
+                  <div class="chips"><span class="chip warn a-pop" style="--d:8s">The files follow <b>From</b> and <b>To</b> &mdash; nothing else</span>
+                    <span class="chip ok a-pop" style="--d:17s">&#128197; Same day every month &mdash; nothing missed, nothing twice</span></div>
                 </div>
 
-                <!-- ============ Bank matching ============ -->
-                <div class="osc scBank">
-                  <div class="card-t">In your accounts package &mdash; the bank feed</div>
+                <!-- 3 — the invoices file -->
+                <div class="sc" data-scene="3" data-len="26">
+                  <div class="sct a-fade" style="--d:.2s">The invoices file</div>
+                  ' . $sheet('Beverley-Blinds-invoices-2026-10-07.csv', $invCols, [
+                        ['cls' => 'grp a-fly', 'st' => '--d:2s', $invRow($d1, '300.00')],
+                        ['cls' => 'grp a-fly', 'st' => '--d:3s', $invRow($d2, '250.00')],
+                        ['cls' => 'a-fly', 'st' => '--d:4s', ['BEV-2026-0043', '08/10/2026', '22/10/2026', 'Vertical Blind &mdash; Louvolite / Cream / (Office)', '2', '95.00', '200', '20% (VAT on Income)']],
+                    ], $invTpl, 'a-rise', '--d:.8s') . '
+                  <div class="chips"><span class="chip a-pop" style="--d:5.5s">One row per blind</span><span class="chip a-pop" style="--d:8s">Same quote number = one invoice</span>
+                    <span class="chip warn a-pop" style="--d:11.5s">Prices before VAT</span><span class="chip a-pop" style="--d:16s">200 = Sales &middot; 20% or No VAT</span><span class="chip a-pop" style="--d:22s">Due 14 days after the order</span></div>
+                </div>
+
+                <!-- 4 — the agreed-price line -->
+                <div class="sc" data-scene="4" data-len="23">
+                  <div class="sct a-fade" style="--d:.2s">You agreed a lower price</div>
+                  ' . $sheet('Beverley-Blinds-invoices-2026-10-07.csv', $invCols, [
+                        [$invRow($d1, '300.00')],
+                        [$invRow($d2, '250.00')],
+                        ['cls' => 'neg a-drop', 'st' => '--d:4s', ['BEV-2026-0042', '07/10/2026', '21/10/2026', 'Discount &mdash; agreed price', '1', '-50.00', '200', '20% (VAT on Income)']],
+                    ], $invTpl) . '
+                  <div class="chips"><span class="chip a-pop" style="--d:2s">Lines &pound;550.00 &middot; agreed &pound;500.00</span><span class="chip ok a-pop" style="--d:9s">Invoice total = what the customer was charged</span>
+                    <span class="chip ok a-pop" style="--d:14s">Xero: fine</span><span class="chip bad a-pop" style="--d:16s">QuickBooks: no minus lines</span></div>
+                </div>
+
+                <!-- 5 — into Xero -->
+                <div class="sc" data-scene="5" data-len="21">
+                  <div class="sct a-fade" style="--d:.2s">Into Xero</div>
+                  <div class="pkg a-rise" style="--d:1s"><h4>Xero &mdash; Sales &rarr; Invoices &rarr; Import</h4>
+                    ' . $file('Beverley-Blinds-invoices-2026-10-07.csv', 'a-fly', '--d:2.5s') . '
+                    <div style="margin-top:.5rem"><span class="radio a-ring" style="--d:5s"><span class="dot"></span>Tax inclusive</span><span class="radio on a-ring" style="--d:6s"><span class="dot"></span>Tax exclusive</span></div>
+                    <div class="drafts">
+                      <div class="a-fly" style="--d:9.5s">BEV-2026-0042 &middot; Emma Fletcher &middot; &pound;600.00 ' . $swap('<span class="tag">Draft</span>', '<span class="tag ok">Approved</span>', 14.5) . '</div>
+                      <div class="a-fly" style="--d:10s">BEV-2026-0043 &middot; Raj Patel &middot; &pound;228.00 ' . $swap('<span class="tag">Draft</span>', '<span class="tag ok">Approved</span>', 15) . '</div>
+                    </div></div>
+                  <div class="chips"><span class="chip warn a-pop" style="--d:7s">Prices are before VAT</span><span class="chip a-pop" style="--d:17.5s">Code doesn&rsquo;t match yours? Change it on import</span></div>
+                </div>
+
+                <!-- 6 — the QuickBooks file -->
+                <div class="sc" data-scene="6" data-len="26">
+                  <div class="sct a-fade" style="--d:.2s">The QuickBooks file</div>
+                  ' . $sheet('Beverley-Blinds-quickbooks-invoices-2026-10-07.csv', $qboCols, [
+                        [['BEV-2026-0042', 'Emma Fletcher', '<b class="a-ring" style="--d:16s">Blinds</b>', $d1, '1', $swap('300', '272.7273', 7), $swap('300.00', '272.73', 7), '<b class="a-ring" style="--d:13s">20.0% S</b>']],
+                        [['BEV-2026-0042', 'Emma Fletcher', 'Blinds', $d2, '1', $swap('250', '227.2727', 7.3), $swap('250.00', '227.27', 7.3), '20.0% S']],
+                        ['cls' => 'neg shrink', 'st' => '--d:6s', ['BEV-2026-0042', 'Emma Fletcher', 'Blinds', 'Discount &mdash; agreed price', '1', '-50', '-50.00', '20.0% S']],
+                    ], $qboTpl, 'a-rise', '--d:.8s') . '
+                  <div class="chips"><span class="chip ok a-pop" style="--d:9s">No minus lines &mdash; the discount is spread across the lines</span>
+                    <span class="chip a-pop" style="--d:13.5s">QuickBooks&rsquo; own VAT codes</span><span class="chip warn a-pop" style="--d:19s">Make an item called <b>Blinds</b> first &mdash; or let the import add it</span></div>
+                </div>
+
+                <!-- 7 — big months: a zip -->
+                <div class="sc" data-scene="7" data-len="22">
+                  <div class="sct a-fade" style="--d:.2s">A big period comes as a zip</div>
+                  <div class="chips" style="margin-top:0"><span class="chip a-pop" style="--d:1.5s">QuickBooks: up to 100 invoices &middot; 1,000 rows per file</span></div>
+                  <div class="files">
+                    ' . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07.zip', 'zip a-drop', '--d:6s', 'ZIP')
+                      . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07-part-1-of-3.csv', 'indent a-fly', '--d:9s')
+                      . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07-part-2-of-3.csv', 'indent a-fly', '--d:9.8s')
+                      . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07-part-3-of-3.csv', 'indent a-fly', '--d:10.6s')
+                      . $file('READ ME.txt', 'txt indent a-fly', '--d:12.5s', 'TXT') . '
+                  </div>
+                  <div class="chips"><span class="chip ok a-pop" style="--d:16s">QuickBooks: Settings &#9881; &rarr; Import data &rarr; Invoices &mdash; one part at a time</span></div>
+                </div>
+
+                <!-- 8 — the payments file -->
+                <div class="sc" data-scene="8" data-len="25">
+                  <div class="sct a-fade" style="--d:.2s">The payments file</div>
+                  ' . $sheet('Beverley-Blinds-payments-2026-10-07.csv', $payCols, [
+                        ['cls' => 'a-fly', 'st' => '--d:2s', ['07/10/2026', 'BEV-2026-0042', 'Emma Fletcher', '330.00', 'Deposit', 'Deposit', '<b class="a-ring" style="--d:9s">Deposit</b>']],
+                        ['cls' => 'a-fly', 'st' => '--d:2.8s', ['21/10/2026', 'BEV-2026-0042', 'Emma Fletcher', '270.00', 'Bank transfer', 'FT 1021', 'Payment']],
+                    ], $payTpl, 'a-rise', '--d:.8s') . '
+                  <div class="chips"><span class="chip bad a-pop" style="--d:11.5s">No package imports payments from a file</span></div>
                   <div class="match">
-                    <div class="mcell"><div class="ml">Bank line</div>29 Aug &middot; FLETCHER E<br>Ref <b>BRI-2026-0042</b><br><b>+ &pound;868.00</b></div>
-                    <div class="marrow">&#8644; match</div>
-                    <div class="mcell"><div class="ml">Invoice</div>BRI-2026-0042 &middot; Emma Fletcher<br>Owing <b>&pound;868.00</b></div>
+                    <div class="bank a-fly" style="--d:15s">&#127974; Bank feed<br><b>FASTER PAYMENT E FLETCHER BEV-2026-0042</b> &pound;270.00</div>
+                    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><path class="a-draw" style="--d:18s" pathLength="100" d="M2 12 H98"/></svg>
+                    <div class="inv a-fly" style="--d:16.5s">&#129534; Invoice <b>BEV-2026-0042</b><br>Emma Fletcher</div>
                   </div>
-                  <p class="ctip">The quote number is printed on your bank-details box as the <b>payment reference</b>, so it&rsquo;s right there on the bank line.</p>
+                  <div class="chips"><span class="chip ok a-pop" style="--d:20.5s">The quote number is the clue</span></div>
                 </div>
 
-                <!-- ============ Which package ============ -->
-                <div class="osc scPick">
-                  <div class="card-t">Which route for your package?</div>
-                  <div class="picks">
-                    <div class="pk"><b>Xero</b>Import the invoices CSV as it is. Match payments from the bank feed.</div>
-                    <div class="pk"><b>QuickBooks Online</b>Use <i>Export for QuickBooks</i>, then Import data &rarr; Invoices &mdash; or, if you only record paid sales, wait for the direct link.</div>
-                    <div class="pk"><b>Sage Accounting</b>Enter paid sales from the payments file, or hand both files to your bookkeeper.</div>
-                    <div class="pk"><b>FreeAgent</b>Only your accountant can import invoices &mdash; send them both files.</div>
+                <!-- 9 — good habits -->
+                <div class="sc" data-scene="9" data-len="21">
+                  <div class="sct a-fade" style="--d:.2s">Good habits</div>
+                  <div class="ticks">
+                    <div class="a-fly" style="--d:2.5s"><span class="tick on">&#10003;</span><span>The same period every time &mdash; <b>Last month</b>, on the 1st</span></div>
+                    <div class="a-fly" style="--d:5s"><span class="tick on">&#10003;</span><span>Keep each month&rsquo;s files in a folder</span></div>
+                    <div class="a-fly" style="--d:10s"><span class="tick on">&#10003;</span><span>Check: invoices file + VAT = your own figures for that month</span></div>
+                    <div class="a-fly" style="--d:16s"><span class="tick on">&#10003;</span><span>Code <b>200</b> not right for you? Change it on import</span></div>
                   </div>
                 </div>
 
-                <div class="caps">
-                  <b class="c0"><span class="n">0</span> Payments page &mdash; the two Export buttons, top right.</b>
-                  <b class="c1"><span class="n">1</span> Pick the period first (Last month), then Export invoices.</b>
-                  <b class="c2"><span class="n">2</span> One row per blind; one invoice per quote number.</b>
-                  <b class="c3"><span class="n">3</span> Xero: Sales &rsaquo; Invoices &rsaquo; Import &mdash; &ldquo;tax exclusive&rdquo;.</b>
-                  <b class="c4 good"><span class="n">4</span> They arrive as drafts &mdash; check, then Approve.</b>
-                  <b class="c5"><span class="n">5</span> Export payments &mdash; your matching checklist.</b>
-                  <b class="c6 good"><span class="n">6</span> Match each bank line to its invoice by the quote number.</b>
-                  <b class="c7"><span class="n">7</span> Other packages &mdash; which route to take.</b>
-                </div>
               </div>
             </div>
           </div>',
         'body'    => '
-          <p><b>First, the two files.</b> Open <b>Payments</b> in the left-hand menu (under <b>Retail</b>). If it isn&rsquo;t there, the
-             <b>Accounts</b> add-on isn&rsquo;t on your plan &mdash; ask us through <b>? Help</b>. The export buttons are only shown to
-             admins.</p>
+          <p><b>The three files.</b> Open <b>Payments</b> in the left-hand menu (under <b>Retail</b>). If it isn&rsquo;t there, the
+             <b>Accounts</b> feature (part of the <b>Gold</b> plan) isn&rsquo;t on your account. The three export buttons, top right, are only
+             shown to <b>admins</b>. The note under them says it too: <em>&ldquo;CSV for Xero / QuickBooks / Sage. Respects the date filter
+             below.&rdquo;</em></p>
           <ul class="steps">
-            <li><b>Pick the period.</b> In <b>Filter the list</b>, press <b>Last month</b> (or type your own <b>From</b> and <b>To</b>
-                dates). The exports follow this filter, so you only get that period. Do it the same way each time &mdash; say, on the 1st
-                of every month &mdash; so nothing is missed or sent twice.</li>
-            <li><b>Export invoices (CSV)</b> downloads your sales: <b>one row per blind</b>, and every row with the same quote number is
-                one invoice. Prices are <b>before VAT</b> &mdash; your package adds the VAT. Each row already has account code
-                <code>200</code> (Sales) and <code>20% (VAT on Income)</code>, or <code>No VAT</code> if the job had none. The due date is
-                14 days after the order.</li>
-            <li><b>Export for QuickBooks (CSV)</b> is the same invoices, already shaped for <b>QuickBooks Online</b> &mdash; see its
-                section below. Use this one instead of Export invoices if you&rsquo;re on QuickBooks.</li>
-            <li><b>Export payments (CSV)</b> downloads the money received: date, quote number, customer, amount, how it was paid, the
-                reference, and whether it was a <b>Deposit</b> or a later <b>Payment</b>.</li>
+            <li><b>Pick the period.</b> In <b>Filter the list</b>, press <b>Last month</b> (or type your own <b>From</b> and <b>To</b> dates).
+                The files follow <b>only those two dates</b> &mdash; not the search box and not the method. The invoice files pick orders by
+                their <b>order date</b> (when accepted); the payments file picks payments by the <b>date received</b>. Do it the same way each
+                time &mdash; say, on the 1st of every month &mdash; so nothing is missed or sent twice.</li>
+            <li><b>Export invoices (CSV)</b> (<em>&ldquo;One row per order line &mdash; import as sales invoices&rdquo;</em>) downloads
+                <code>&lt;Your-Company&gt;-invoices-&lt;date&gt;.csv</code> with the columns <b>ContactName, EmailAddress, InvoiceNumber,
+                InvoiceDate, DueDate, Description, Quantity, UnitAmount, AccountCode, TaxType</b>. One row per blind; every row with the same
+                quote number is one invoice. Every order that is accepted or beyond is included. Prices are <b>before VAT</b> &mdash; your
+                package adds it. Each row has account code <code>200</code> (Sales) and <code>20% (VAT on Income)</code>, or
+                <code>No VAT</code> if the order had none. The due date is <b>14 days</b> after the order date.</li>
+            <li><b>The agreed-price line.</b> If you agreed a different total from the lines (<em>&ldquo;I&rsquo;ll do it for
+                &pound;500&rdquo;</em>), the invoices file adds a line <b>&ldquo;Discount &mdash; agreed price&rdquo;</b> with a <b>minus</b>
+                amount (or <b>&ldquo;Adjustment&rdquo;</b> if it was higher), so the invoice totals exactly what the customer was charged. Xero
+                is happy with that; QuickBooks is not &mdash; hence its own button.</li>
+            <li><b>Export for QuickBooks (CSV)</b> (<em>&ldquo;The same invoices, ready for QuickBooks Online &rarr; Import data &rarr;
+                Invoices&rdquo;</em>) downloads <code>&lt;Your-Company&gt;-quickbooks-invoices-&lt;date&gt;.csv</code>: columns
+                <b>InvoiceNo, Customer, InvoiceDate, DueDate, Item(Product/Service), ItemDescription, ItemQuantity, ItemRate, ItemAmount,
+                ItemTaxCode</b>. <b>No minus lines</b> &mdash; an agreed-price difference is spread across that invoice&rsquo;s lines, so the total
+                is still exactly what you charged. QuickBooks&rsquo; own VAT codes (<code>20.0% S</code>, <code>5.0% R</code>,
+                <code>No VAT</code>), and the item <code>Blinds</code> on every line.</li>
+            <li><b>Big periods.</b> QuickBooks takes at most <b>100 invoices / 1,000 rows</b> per file. Over that, you get a <b>.zip</b> of
+                numbered files (<code>&hellip;-part-1-of-3.csv</code>, <code>&hellip;-part-2-of-3.csv</code>&hellip;) and a <b>READ ME.txt</b>.
+                Import them one after another.</li>
+            <li><b>Export payments (CSV)</b> (<em>&ldquo;Payments received &mdash; for your bookkeeper / accounting software&rdquo;</em>)
+                downloads <code>&lt;Your-Company&gt;-payments-&lt;date&gt;.csv</code>: <b>Date, InvoiceNumber, Customer, Amount, Method,
+                Reference, Type</b> &mdash; Type is <b>Deposit</b> or <b>Payment</b>. A standalone payment has no invoice number, and shows
+                &ldquo;Customer&rdquo; as the name. It has no account codes.</li>
           </ul>
-          <div class="heads"><span class="hi">&#9888;</span><div><b>The minus line.</b> If you agreed a different price from the list
-             price (&ldquo;I&rsquo;ll do it for &pound;1,200&rdquo;), the file adds a line called <b>&ldquo;Discount &mdash; agreed
-             price&rdquo;</b> with a <b>minus</b> amount, so the invoice total matches what the customer was actually charged. Xero is happy
-             with that. <b>QuickBooks is not</b> &mdash; which is why QuickBooks has its own export button that folds the discount
-             into the other lines instead.</div></div>
 
           <p><b>Xero &mdash; the easiest.</b> The invoices file is laid out the way Xero expects.</p>
           <ul class="steps">
-            <li>In Xero go to <b>Sales &rarr; Invoices</b> and press <b>Import</b>. The first time, press <b>Download template file</b> and
-                check its column headings match ours &mdash; if Xero&rsquo;s have a star in front (like <code>*ContactName</code>), just
-                copy our rows underneath its headings. <b>Don&rsquo;t delete columns or rename the headings.</b></li>
-            <li>Press <b>Browse</b> and pick the invoices file.</li>
-            <li>When asked whether prices are tax exclusive or inclusive, choose <b>Tax exclusive</b>. Our prices are <b>before VAT</b> &mdash;
-                getting this wrong puts every total out by the VAT.</li>
-            <li>Press <b>Import</b>. If Xero lists problems, press <b>Go Back</b>, fix them and import again; otherwise <b>Complete Import</b>.</li>
-            <li>The invoices arrive as <b>drafts</b>. Check a couple against YourBlinds, then <b>Approve</b> them.</li>
+            <li>In Xero go to <b>Sales &rarr; Invoices</b> and press <b>Import</b>. The first time, download Xero&rsquo;s template and check
+                its column headings match ours (if Xero&rsquo;s have a star in front, like <code>*ContactName</code>, copy our rows under its
+                headings). Don&rsquo;t delete columns or rename headings.</li>
+            <li>Choose the invoices file. When asked, choose <b>Tax exclusive</b> &mdash; our prices are before VAT; getting this wrong puts every
+                total out by the VAT.</li>
+            <li>Import. The invoices arrive as <b>drafts</b>: check a couple against YourBlinds, then <b>Approve</b> them.</li>
           </ul>
-          <p>Things Xero is fussy about: the <b>customer name</b> must match an existing Xero contact <em>exactly</em> or it makes a second
-             one; <code>200</code> and <code>20% (VAT on Income)</code> must exist in <em>your</em> Xero (they do in a standard UK setup);
-             no more than <b>500 rows</b> per file (split a big month in two); and an invoice number already in Xero is simply skipped
-             &mdash; so importing the same month twice is harmless.</p>
-          <p><b>Payments in Xero:</b> don&rsquo;t import them. When the money shows in your bank feed, go to <b>Reconcile</b>, use
-             <b>Find &amp; Match</b> on the bank line, tick the invoice (the quote number is the reference) and press <b>Reconcile</b>.
-             A deposit and a balance are two bank lines against the same invoice &mdash; Xero handles that. On the VAT Cash Accounting
-             Scheme, Xero only counts the VAT once the payment is matched, which is exactly what you want.</p>
+          <p>Xero is fussy about: the <b>customer name</b> (it must match an existing contact exactly, or Xero makes a new one); <code>200</code>
+             and <code>20% (VAT on Income)</code> existing in <em>your</em> Xero (they do in a standard UK setup); and no more than <b>500 rows</b>
+             per file. An invoice number already in Xero is skipped, so importing the same month twice is harmless.</p>
 
-          <p><b>QuickBooks Online &mdash; use the QuickBooks button.</b></p>
-          <div class="heads"><span class="hi">&#9888;</span><div><b>If you only put PAID sales into QuickBooks</b> (cash accounting, the way
-             many bookkeepers work), <b>don&rsquo;t import invoices</b> &mdash; it would create lots of &ldquo;owed&rdquo; invoices you
-             don&rsquo;t want. Instead use the <b>payments file</b> as your list and record each paid sale in QuickBooks, or wait for the
-             direct link on <b>Settings &rarr; Accounting</b>, which will send paid sales across by itself.</div></div>
+          <p><b>QuickBooks Online.</b></p>
           <ul class="steps">
-            <li><b>Once only:</b> in QuickBooks make a <b>Service</b> item called <code>Blinds</code> in <b>Products and services</b>,
-                pointing at your sales income account. (Or tick <em>add new products/services</em> during the import and QuickBooks makes it
-                for you &mdash; check which income account it chose.)</li>
-            <li>On the <b>Payments</b> page pick the period, then press <b>Export for QuickBooks (CSV)</b>. You get a ready-made file:
-                <b>no minus lines</b> (an agreed-price discount is spread across that invoice&rsquo;s lines, so the total is still exactly
-                what you charged), QuickBooks&rsquo; own VAT codes (<code>20.0% S</code>, <code>5.0% R</code>, <code>No VAT</code>),
-                a line <b>amount</b> and <b>rate</b>, and the item <code>Blinds</code> on every line.</li>
-            <li>If the period has <b>more than 100 invoices</b>, you get a <b>.zip</b> instead &mdash; open it and you&rsquo;ll find
-                <em>part 1 of 3</em>, <em>part 2 of 3</em>&hellip; QuickBooks only takes 100 invoices per file, so import each part in turn.</li>
-            <li>In QuickBooks click the <b>&#9881; Settings</b> cog &rarr; <b>Import data</b> &rarr; <b>Invoices</b>. Tick the box to add new
-                customers if some aren&rsquo;t in QuickBooks yet. <b>Browse</b> for the file and press <b>Next</b>.</li>
-            <li><b>Check the column matching</b> &mdash; the headings are QuickBooks&rsquo; own, so they should line up by themselves:
-                InvoiceNo, Customer, InvoiceDate, DueDate, Product/Service, description, quantity, rate, amount and tax code.</li>
-            <li>Choose date format <b>D/M/YYYY</b> and VAT <b>Exclusive</b> (our prices are before VAT), confirm the tax codes, check the
-                summary and press <b>Start import</b>. If any invoice fails, note the reason shown and fix just that one.</li>
+            <li><b>Once only:</b> make a <b>Service</b> item called <code>Blinds</code> in <b>Products and services</b>, pointing at your sales
+                income account &mdash; or tick <em>add new products/services</em> during the import and check which income account it
+                chose.</li>
+            <li>Pick the period on the Payments page and press <b>Export for QuickBooks (CSV)</b>.</li>
+            <li>In QuickBooks: <b>&#9881; Settings &rarr; Import data &rarr; Invoices</b>. Choose the file; the headings are QuickBooks&rsquo;
+                own, so the column matching should line up by itself. Date format <b>D/M/YYYY</b>, VAT <b>Exclusive</b>. Check the summary and
+                start the import; if an invoice fails, fix just that one.</li>
           </ul>
-          <p><b>Payments in QuickBooks:</b> match the bank line to the open invoice under <b>Banking</b> (or <b>+ New &rarr; Receive
-             payment</b> by hand). There&rsquo;s no payments import.</p>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Only put PAID sales into QuickBooks?</b> (cash accounting, as many
+             bookkeepers do.) Then don&rsquo;t import invoices &mdash; it would create invoices that look owed. Use the <b>payments file</b> as
+             your list and record each paid sale in QuickBooks, or ask your bookkeeper.</div></div>
 
-          <p><b>Sage Accounting.</b> Sage&rsquo;s UK help changed in July 2026: its spreadsheet import now covers <b>purchase</b> invoices,
-             and the sales version may no longer be offered. Two easy routes:</p>
-          <ul class="steps">
-            <li><b>Paid sales by hand from the payments file</b> &mdash; in Sage go to <b>Sales &rarr; Quick entries</b>, and for each paid
-                job enter Date, Customer, Reference (the quote number), Ledger account (your sales account), Net, VAT rate
-                <b>Standard</b>, then match it to the money in your bank feed with <b>Match</b>.</li>
-            <li><b>Hand both files to your bookkeeper</b> &mdash; they&rsquo;ll know your Sage setup. If your Sage does still show
-                <b>Sales &rarr; Quick entries &rarr; Import</b>, it wants <b>one row per invoice</b> and the customer&rsquo;s Sage
-                <b>account reference</b>, not their name &mdash; so the file needs reshaping first.</li>
-          </ul>
+          <p><b>Sage Accounting.</b> Sage&rsquo;s spreadsheet import now covers <b>purchase</b> invoices, and a sales import may not be offered.
+             Either enter paid sales by hand from the payments file (<b>Sales &rarr; Quick entries</b>: date, customer, reference = the quote
+             number, your sales ledger account, net, VAT <b>Standard</b>), then <b>Match</b> them to the bank feed &mdash; or hand both files to
+             your bookkeeper. If your Sage does show a sales import, it wants <b>one row per invoice</b> and the customer&rsquo;s Sage
+             <b>account reference</b>, so the file needs reshaping first.</p>
+          <p><b>FreeAgent.</b> Only accountants and bookkeepers (on its Practice Partner scheme) can import invoices &mdash; send them both
+             files. If you do your own FreeAgent, explain each bank receipt as an <b>Invoice Receipt</b>.</p>
 
-          <p><b>FreeAgent.</b> FreeAgent only lets <b>accountants and bookkeepers</b> (on its Practice Partner scheme) import invoices. Send
-             them both files. If you do your own FreeAgent, explain each bank receipt as an <b>Invoice Receipt</b> against the invoice, or
-             ask your accountant about entering your sales from the payments file.</p>
+          <p><b>Payments, in every package:</b> none of them imports customer payments from a file. When the money shows in your <b>bank
+             feed</b>, match it to the invoice (Xero: <b>Reconcile &rarr; Find &amp; Match</b>; QuickBooks: under <b>Banking</b>). The quote
+             number is the invoice number, and usually the customer&rsquo;s payment reference too. A deposit and a balance are two bank lines
+             against the same invoice.</p>
 
-          <p><b>Good habits whichever package you use.</b></p>
-          <ul class="steps">
-            <li><b>Same period every time</b> &mdash; use the <b>Last month</b> button on the 1st and you&rsquo;ll never double up or miss one.</li>
-            <li><b>Keep the files</b> in a folder by month, so your bookkeeper can see what went in.</li>
-            <li><b>Check the totals:</b> the invoices file&rsquo;s total (plus VAT) should match YourBlinds&rsquo; figures for the same month.</li>
-            <li><b>Account code 200 isn&rsquo;t right for you?</b> Change it in Excel (e.g. Sage uses 4000-style codes) or let your package
-                remap it on import.</li>
-          </ul>',
-        // 4th value = the walkthrough step this line drives (keeps voice + visuals in sync).
+          <p><b>Good habits.</b> Same period every time (<b>Last month</b>, on the 1st). Keep the files in a folder by month. Check the
+             totals: the invoices file plus VAT should match YourBlinds&rsquo; figures for the same month. Code <code>200</code> not right
+             (Sage uses 4000-style codes)? Change it in Excel or remap it on import.</p>',
         'script'  => [
-            ['0:00', 'Payments page; Export invoices and Export payments top right.',  'Getting your sales into your accounts package starts on the Payments page. Top right there are two buttons: Export invoices, and Export payments. They download spreadsheet files your package can read.', 0],
-            ['0:13', 'Last month pressed; dates fill; Export invoices highlighted.',    'Pick the period first — press Last month, or type your own dates — because both files follow that filter. Then press Export invoices.', 1],
-            ['0:24', 'The invoices CSV: one row per blind; a minus discount line.',      'The invoices file has one row per blind, and every row with the same quote number makes one invoice. Prices are before VAT. If you agreed a special price, there\'s a minus line called Discount so the total matches what you charged.', 2],
-            ['0:38', 'Xero import screen: tax exclusive selected.',                     'In Xero, go to Sales, Invoices, Import. Choose the file, and when it asks, say the prices are tax exclusive. Then press Import.', 3],
-            ['0:48', 'Invoices arrive as drafts; Approve.',                             'The invoices arrive as drafts. Check one or two against YourBlinds, then approve them.', 4],
-            ['0:56', 'The payments CSV.',                                               'Now the payments file. No accounts package imports payments from a file — this is your checklist for matching the money.', 5],
-            ['1:04', 'Bank line matched to the invoice by the quote number.',          'When the money shows in your bank feed, match it to the invoice. The quote number is the customer\'s payment reference, so it\'s easy to spot.', 6],
-            ['1:13', 'Which route: Xero, QuickBooks, Sage, FreeAgent.',                'On QuickBooks, use the Export for QuickBooks button instead — it\'s already in QuickBooks\' own layout — then Import data, Invoices. Or, if you only record paid sales, wait for the direct link. For Sage and FreeAgent, the simplest route is your bookkeeper, with both files.', 7],
+            ['1', 'Three files from the Payments page', 'Your accounts package needs your sales. The Payments page gives you three spreadsheet files for it, at the top right. Export invoices. Export for QuickBooks. And Export payments. Only admins see these buttons, and they come with the Accounts feature. Each one downloads a file that your package, or your bookkeeper, can read.', 1],
+            ['2', 'Pick the period first',              'First, choose the dates. In Filter the list, press Last month, or type your own From and To dates. The files follow those two dates, and nothing else, so the search box and the method make no difference. Do it the same way every time, say on the first of the month, so nothing is missed, and nothing is sent twice.', 2],
+            ['3', 'The invoices file',                  'Export invoices gives you your sales. There is one row for each blind, and every row with the same quote number makes one invoice. The prices are before VAT, so your package adds the VAT itself. Each row goes to account code two hundred, sales, at twenty percent VAT, or no VAT if the order had none. And the due date is fourteen days after the order.', 3],
+            ['4', 'You agreed a lower price',           'If you agreed a lower price than the blinds add up to, the file adds one more line to that invoice: Discount, agreed price, with a minus amount. That way, the invoice total matches exactly what the customer was charged. Xero is happy with a minus line. QuickBooks is not, which is why it has a button of its own.', 4],
+            ['5', 'Into Xero',                          'In Xero, import the invoices file as sales invoices. When it asks, choose tax exclusive, because the prices are before VAT. The invoices arrive as drafts. Check one or two against YourBlinds, then approve them. If a code does not match your own accounts, change it as you import.', 5],
+            ['6', 'The QuickBooks file',                'Export for QuickBooks gives you the same invoices, in QuickBooks\' own layout. There are no minus lines. An agreed discount is spread across that invoice\'s lines instead, so the total still matches. It uses QuickBooks\' own VAT codes, and puts the item Blinds on every line. So make an item called Blinds in QuickBooks first, or let the import add it.', 6],
+            ['7', 'A big period comes as a zip',        'QuickBooks takes no more than a hundred invoices in one file. If your dates cover more than that, you get a zip file instead. Inside are numbered parts: part one of three, part two of three, and so on, with a short read me note. In QuickBooks, import them one after another, under Import data, Invoices.', 7],
+            ['8', 'The payments file',                  'Export payments lists the money that came in: the date, the quote number, the customer, the amount, the method, the reference, and whether it was a deposit or a payment. No accounts package imports payments from a file. Use it as your checklist, and match each payment to its invoice from your bank feed. The quote number is the clue.', 8],
+            ['9', 'Good habits',                        'A few good habits. Use the same period every time. Keep each month\'s files in a folder, so your bookkeeper can see what went in. Check the totals: the invoices file, plus VAT, should match your own figures for that month. And if code two hundred is not right for you, change it on import.', 9],
         ],
 ];
