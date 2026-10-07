@@ -6,7 +6,9 @@ declare(strict_types=1);
  *
  * A guide is a full page: an animated walkthrough of the real screen, the
  * written steps, and a narration script you can play aloud (free browser
- * text-to-speech, defaulting to the "Google UK English Female" voice).
+ * text-to-speech, defaulting to the "Google UK English Female" voice — or,
+ * where the guide has been recorded with tools/guide_voice.php, a natural
+ * recorded voice (Alice), one clip per script line).
  *
  * Guides live in the $GUIDES registry below, keyed by slug (?g=slug). Add a
  * section by adding an entry — the Help & guide index links to any guide whose
@@ -15,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/guide_clips.php';
 
 requireLogin();
 
@@ -251,7 +254,12 @@ $activeNav = 'help';
                     <button id="gdPlay" class="ttsbtn ghost">&#9654; Replay</button>
                     <label class="vsel"><span>Voice</span><select id="gdVoice"></select></label>
                 </div>
-                <p class="ttsnote">Plays with a voice-over in <b>Google UK English Female</b> where your browser has it (Chrome / Edge) — otherwise the nearest British voice. Turn your volume down for quiet.</p>
+                <?php $gdClips = array_map(static fn($r) => guide_clip_url($slug, (string) ($r[2] ?? '')), $g['script']); ?>
+                <?php if (array_filter($gdClips)): ?>
+                    <p class="ttsnote">Narrated by <b>Alice</b>, a natural recorded voice. Pick another voice from the list to hear your browser&rsquo;s own instead.</p>
+                <?php else: ?>
+                    <p class="ttsnote">Plays with a voice-over in <b>Google UK English Female</b> where your browser has it (Chrome / Edge) — otherwise the nearest British voice. Turn your volume down for quiet.</p>
+                <?php endif; ?>
             </section>
 
             <section>
@@ -264,6 +272,10 @@ $activeNav = 'help';
         (function(){
             var lines = <?= json_encode(array_map(static fn($r) => $r[2], $g['script']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
             var steps = <?= json_encode(array_map(static fn($r) => (int) ($r[3] ?? 0), $g['script'])) ?>;
+            var clips = <?= json_encode($gdClips, JSON_UNESCAPED_SLASHES) ?>;   // recorded voice per line ('' = none)
+            var hasClips = clips.some(function(c){ return !!c; });
+            var REC = '__recorded';
+            var audio = new Audio();
             var btn = document.getElementById('gdPlay');
             var sel = document.getElementById('gdVoice');
             var stage = document.getElementById('gdStage');
@@ -294,7 +306,7 @@ $activeNav = 'help';
             function setStep(n){ if (stage){ stage.setAttribute('data-step', String(n)); scrollStepIntoView(n); } }
             setStep(0); // resting poster — nothing plays until asked (no looping)
 
-            if (!synth){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
+            if (!synth && !hasClips){ btn.disabled = true; btn.textContent = 'Text-to-speech not available here'; if (sel) sel.style.display = 'none'; return; }
 
             var playing = false, i = 0, voices = [], spokeAny = false;
             function setPlaying(on){
@@ -305,17 +317,19 @@ $activeNav = 'help';
             }
 
             function loadVoices(){
-                voices = synth.getVoices() || [];
-                if (!sel || !voices.length) return;
+                voices = synth ? (synth.getVoices() || []) : [];
+                if (!sel || (!voices.length && !hasClips)) return;
                 var en = voices.filter(function(v){ return /^en/i.test(v.lang); });
                 var rest = voices.filter(function(v){ return !/^en/i.test(v.lang); });
                 function score(v){ var s = 0; if (/google uk english female/i.test(v.name)) s += 10; if (/google uk english/i.test(v.name)) s += 4; if (/en[-_]GB/i.test(v.lang)) s += 2; if (/natural|online|neural|premium|enhanced/i.test(v.name)) s += 3; return s; }
                 en.sort(function(a, b){ return score(b) - score(a); });
                 var ordered = en.concat(rest), keep = sel.value;
                 sel.innerHTML = '';
+                if (hasClips){ var r = document.createElement('option'); r.value = REC; r.textContent = 'Alice · natural voice'; sel.appendChild(r); }
                 ordered.forEach(function(v){ var o = document.createElement('option'); o.value = v.name; o.textContent = v.name.replace(/\s*\(.*?\)\s*$/, '') + ' · ' + v.lang; sel.appendChild(o); });
                 var gukf = ordered.filter(function(v){ return /google uk english female/i.test(v.name); })[0];
-                sel.value = keep && ordered.some(function(v){ return v.name === keep; }) ? keep : (gukf ? gukf.name : (ordered[0] ? ordered[0].name : ''));
+                sel.value = keep && (keep === REC || ordered.some(function(v){ return v.name === keep; })) ? keep
+                          : (hasClips ? REC : (gukf ? gukf.name : (ordered[0] ? ordered[0].name : '')));
             }
             function currentVoice(){ if (!sel) return voices[0]; return voices.filter(function(v){ return v.name === sel.value; })[0] || voices[0]; }
 
@@ -340,10 +354,18 @@ $activeNav = 'help';
                 if (buf.trim()) out.push(buf.trim());
                 return out;
             }
+            // The play list: a recorded clip per line when the Alice voice is
+            // chosen and recorded, otherwise sentence-sized browser-voice pieces.
             var queue = [];
-            lines.forEach(function(line, idx){
-                chunk(line).forEach(function(part){ queue.push({ text: part, step: steps[idx] }); });
-            });
+            function ttsItems(line, idx){ return chunk(line).map(function(part){ return { text: part, step: steps[idx] }; }); }
+            function buildQueue(){
+                var rec = hasClips && (!sel || sel.value === REC);
+                queue = [];
+                lines.forEach(function(line, idx){
+                    if (rec && clips[idx]) queue.push({ clip: clips[idx], text: line, step: steps[idx] });
+                    else if (synth) queue = queue.concat(ttsItems(line, idx));
+                });
+            }
 
             var watchdog = null;
             function clearWatch(){ if (watchdog){ clearTimeout(watchdog); watchdog = null; } }
@@ -359,6 +381,26 @@ $activeNav = 'help';
                 if (i >= queue.length){ stop(); return; }
                 var idx = i, item = queue[idx];
                 setStep(item.step);       // visuals lead the audio by milliseconds, never by a whole panel
+                if (item.clip){
+                    // Recorded line; if it can't play, say it with the browser voice instead.
+                    var failed = false;
+                    var fallback = function(){
+                        if (failed || idx !== i || !playing) return; failed = true; clearWatch();
+                        audio.onended = audio.onerror = null;
+                        if (synth){ queue.splice.apply(queue, [idx, 1].concat(ttsItems(item.text, lines.indexOf(item.text)))); speakNext(); }
+                        else advance(idx);
+                    };
+                    audio.onended = function(){ advance(idx); };
+                    audio.onerror = fallback;
+                    audio.onloadedmetadata = function(){
+                        if (idx !== i || !isFinite(audio.duration)) return;
+                        clearWatch(); watchdog = setTimeout(function(){ advance(idx); }, audio.duration * 1000 + 3000);
+                    };
+                    audio.src = item.clip;
+                    var p = audio.play(); if (p && p.catch) p.catch(fallback);
+                    watchdog = setTimeout(function(){ advance(idx); }, Math.max(8000, item.text.length * 110));
+                    return;
+                }
                 var u = new SpeechSynthesisUtterance(item.text);
                 var v = currentVoice(); if (v) u.voice = v;
                 u.rate = 1; u.pitch = 1;
@@ -370,8 +412,8 @@ $activeNav = 'help';
                 watchdog = setTimeout(function(){ advance(idx); }, Math.max(4000, item.text.length * 160));
             }
             // Play once through, in sync — no looping. Ends resting on the final step.
-            function play(){ setPlaying(true); i = 0; setStep(0); synth.cancel(); setTimeout(speakNext, 150); }
-            function stop(){ clearWatch(); setPlaying(false); synth.cancel(); }
+            function play(){ buildQueue(); setPlaying(true); i = 0; setStep(0); if (synth) synth.cancel(); audio.pause(); setTimeout(speakNext, 150); }
+            function stop(){ clearWatch(); setPlaying(false); if (synth) synth.cancel(); audio.onended = audio.onerror = null; audio.pause(); }
             function toggle(){ playing ? stop() : play(); }
 
             btn.addEventListener('click', toggle);
@@ -382,7 +424,7 @@ $activeNav = 'help';
             }
 
             loadVoices();
-            if (typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
+            if (synth && typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
             window.addEventListener('pagehide', stop);
         })();
         </script>
