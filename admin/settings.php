@@ -1923,8 +1923,9 @@ $activeNav = 'settings';
                 <input type="hidden" name="_action" value="legal">
 
                 <p style="color:#6b7280;font-size:0.875rem;margin:0 0 0.75rem">
-                    These print, personalised, at the bottom of your quote PDF and the
-                    customer-facing quote. A suggested template is pre-filled below &mdash;
+                    Your quote PDF prints one line at the bottom linking to these on a
+                    public page, personalised with your details, and the customer-facing
+                    quote links to them too. A suggested template is pre-filled below &mdash;
                     edit it to suit your business, then Save. <strong>Leave a box empty to
                     show nothing.</strong> This is a starting point, not legal advice &mdash;
                     have it reviewed before relying on it.
@@ -2155,10 +2156,11 @@ $activeNav = 'settings';
                 <h2 class="section-title">Accounting integration</h2>
             </div>
             <p class="ui-hint" style="color:var(--text-secondary);margin:0 0 1.25rem;max-width:44rem">
-                Link your accounting package so paid sales flow straight through — no re-keying.
+                Connect your accounting package and set up the mapping now, so it's ready.
                 You connect on the provider's own site, so YourBlinds never sees your accounting
-                password. <strong>Nothing is sent until an invoice is paid</strong> (cash accounting):
-                a paid sale is recorded in your accounts as already received.
+                password. <strong>Sending sales across isn't switched on yet</strong> &mdash; until it
+                is, use the CSV exports on the <a href="/accounts/index.php">Payments</a> page.
+                When it is, nothing will be sent until an invoice is paid (cash accounting).
             </p>
 
             <?php
@@ -2203,7 +2205,7 @@ $activeNav = 'settings';
                     <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem">
                         <a class="btn btn-primary" href="/admin/accounting/quickbooks-mapping.php"><?= $qboMapped ? 'Edit mapping' : 'Set up mapping' ?></a>
                         <form method="post" action="/admin/accounting/disconnect.php" style="display:inline"
-                              onsubmit="return confirm('Disconnect QuickBooks? Paid invoices will stop syncing until you reconnect.');">
+                              onsubmit="return confirm('Disconnect QuickBooks? You can reconnect at any time.');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="provider" value="quickbooks">
                             <button type="submit" class="btn btn-secondary">Disconnect</button>

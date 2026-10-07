@@ -19,10 +19,6 @@ declare(strict_types=1);
  * (retail wording) and shows the "I agree to the Terms & Conditions" tick only
  * while the retail box has text. Defaults: _partials/legal_text.php.
  *
- * NB the screen's own intro still says the documents "print … at the bottom
- * of your quote PDF"; the PDF now prints a link line instead — this guide
- * follows the code.
- *
  * v2: one scene per script line; data-len is worked out from the line's own
  * length (characters ÷ 13.6), so editing a line keeps its scene in step.
  */

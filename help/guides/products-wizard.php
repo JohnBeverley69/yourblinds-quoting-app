@@ -41,7 +41,7 @@ $S = [
     9  => ['9',  'Step three: bands',
         'Step three is your fabrics, and each one needs a band. A band is a price group. Every fabric in a band shares one price grid. So your plain range might be band A, and your blackouts band B. Letters from a supplier\'s price list are fine, and so are words like Standard. Once you have used a band, the box offers it back to you, so you pick it instead of typing it again.'],
     10 => ['10', 'Paste the names in',
-        'Then paste the names into the big box. One per line, or with commas between them, whichever your list is in. Press Add, and they all go into that band together. The list shows each one with its band. If the product has two or more systems, a box called Available on appears as well. Leave it on all systems, unless a colour really only comes on one.'],
+        'Then paste the names into the big box. One per line, or with commas between them, whichever your list is in. Press Add, and they all go into that band together. The list shows each one with its band. If the product has two or more systems, a box called Available on appears as well. Leave it on all systems, unless a colour really only comes on one. To fill several systems in one go, type a system\'s name in square brackets on a line of its own, and the colours under it go on that system.'],
     11 => ['11', 'Ways to save typing',
         'There are quicker ways in, too. If another product already sells the same range, Copy from another product brings the whole lot across, bands and all. Import from Fabric Library pulls in a maker\'s range, and Import from spreadsheet reads an Excel file. Both bring you straight back here. And if this product has no fabric at all, the skip button takes you straight on to price tables.'],
     12 => ['12', 'Step four is a checklist',
@@ -590,7 +590,11 @@ return [
                 <code>Standard</code>/<code>Special</code>. Typing <em>Band A</em> stores just <em>A</em>. The box suggests bands already used
                 on this product (from its fabrics <em>and</em> its price tables), so you pick rather than retype.</li>
             <li><b>Available on</b> appears only when the product has <b>two or more systems</b>: <em>All systems (universal)</em> or
-                <em>&lt;System&gt; only</em>. Leave it universal unless a colour really comes on one system only.</li>
+                <em>&lt;System&gt; only</em>. Leave it universal unless a colour really comes on one system only.
+                With two or more systems you can also fill several in one paste: put a <code>[System Name]</code> header on its own line
+                and the colours below it go on that system, until the next header &mdash; the message then reads
+                <code>Added 8 to Band A across 2 systems.</code> A header that doesn&rsquo;t match a system is listed under
+                <code>Unknown system names</code> and its colours are skipped.</li>
             <li><b>The names box</b> &mdash; <em>Fabrics (one per line or comma-separated &mdash; paste from Excel or type)</em>. Press
                 <b>+ Add</b>: <code>Added 4 to Band A (all systems).</code> (or <code>(one system only).</code>), with
                 <code>Skipped 2 (likely duplicates).</code> when some were already there.</li>

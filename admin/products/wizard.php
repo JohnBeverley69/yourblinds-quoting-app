@@ -480,9 +480,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($hasSections) {
                     // Build a name → id lookup for systems on this
                     // product. Case-insensitive on the assumption
-                    // tenants paste system names sloppily.
+                    // tenants paste system names sloppily. Queried here:
+                    // the page-level $systems list loads after the POST
+                    // handlers, so it isn't available yet.
+                    $sysLookupSt = $pdo->prepare(
+                        'SELECT id, name FROM product_systems
+                          WHERE product_id = ? AND client_id = ? AND active = 1'
+                    );
+                    $sysLookupSt->execute([$productId, $clientId]);
                     $sysLookup = [];
-                    foreach ($systems as $s) {
+                    foreach ($sysLookupSt->fetchAll() as $s) {
                         $sysLookup[strtolower(trim((string) $s['name']))] = (int) $s['id'];
                     }
 
