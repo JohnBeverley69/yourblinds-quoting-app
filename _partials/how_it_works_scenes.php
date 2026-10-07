@@ -41,7 +41,7 @@ return [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, hit save, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
         'tier'  => 'Postcode finder on Silver & Gold',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
@@ -53,7 +53,7 @@ return [
     <div class="hw-row"><label>When</label><div class="hw-chips"><span class="hw-seg"><i>Exact time</i><i class="on">Windows</i></span><span class="hw-chip a-sel" style="--d:3.4s">Morning</span><span class="hw-chip">Afternoon</span><span class="hw-chip">Evening</span></div></div>
     <div class="hw-row"><label>Who&rsquo;s going</label><div class="hw-in"><span class="a-type" style="--d:4s">Sam &middot; Sales</span></div></div>
     <div class="hw-row"><label></label><div class="hw-tick a-fade" style="--d:4.6s">&#9745; Email the customer their slot</div></div>
-    <div class="hw-row"><label></label><div class="hw-btn a-press" style="--d:5.2s">Save appointment</div></div>
+    <div class="hw-row"><label></label><div class="hw-btn a-press" style="--d:5.2s">Book appointment</div></div>
     <div class="hw-toast a-pop" style="--d:5.8s">&#10003; Booked &mdash; confirmation emailed to Mrs Patel</div>
   </div>
 </div>
@@ -62,7 +62,7 @@ HTML,
     [
         'nav'   => 'Calendar', 'icon' => '🗓️', 'secs' => 9,
         'title' => 'On the right calendar. Instantly.',
-        'body'  => 'Set your team up as users and every job lands on the right person\'s calendar the moment you hit save. Each of them simply signs in to YourBlinds on their own phone or tablet, with nothing to download, and their day is right there, always up to date. No texts, no whiteboard, no "did you get my message?". Fitters can be set to see just their fittings, and the office sees the whole team side by side, a column per person. Plans changed? Just drag the job to a new slot.',
+        'body'  => 'Set your team up as users and every job lands on the right person\'s calendar the moment it\'s booked. Each of them simply signs in to YourBlinds on their own phone or tablet, with nothing to download, and their day is right there, always up to date. No texts, no whiteboard, no "did you get my message?". Fitters can be set to see just their fittings, and the office sees the whole team side by side, a column per person. Plans changed? Just drag the job to a new slot.',
         'tier'  => 'Every user, on their own phone or tablet',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>Calendar &middot; Day view &middot; Tue 14 Oct</span></div>
@@ -84,7 +84,7 @@ HTML,
       <div class="hw-ph-title">Sam&rsquo;s day</div>
       <div class="hw-appt hw-new a-drop" style="--d:2.8s;position:relative"><b>Measure</b> Mrs Patel<small>Morning &middot; 14 Elm Grove</small></div>
       <div class="hw-appt" style="position:relative"><b>Measure</b> Mr Jones<small>Afternoon</small></div>
-      <div class="hw-ph-note a-fade" style="--d:3.6s">On Sam&rsquo;s calendar the moment you saved</div>
+      <div class="hw-ph-note a-fade" style="--d:3.6s">On Sam&rsquo;s calendar the moment it was booked</div>
     </div>
   </div>
 </div>
