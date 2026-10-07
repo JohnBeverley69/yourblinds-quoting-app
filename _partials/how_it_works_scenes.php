@@ -61,8 +61,8 @@ HTML,
     ],
     [
         'nav'   => 'Calendar', 'icon' => '🗓️', 'secs' => 9,
-        'title' => 'On the right calendar. Instantly.',
-        'body'  => 'Set your team up as users and every job lands on the right person\'s calendar the moment it\'s booked. Each of them simply signs in to YourBlinds on their own phone or tablet, with nothing to download, and their day is right there, always up to date. No texts, no whiteboard, no "did you get my message?". Fitters can be set to see just their fittings, and the office sees the whole team side by side, a column per person. Plans changed? Just drag the job to a new slot.',
+        'title' => 'Straight onto your team\'s calendars.',
+        'body'  => 'Set your team up as users and every job lands on the calendar of whoever\'s going, the moment it\'s booked. Each of them simply signs in to YourBlinds on their own phone or tablet, with nothing to download, and their day is right there, always up to date. No texts, no whiteboard, no "did you get my message?". Fitters can be set to see just their fittings, and the office sees the whole team side by side, a column per person. Plans changed? Just drag the job to a new slot.',
         'tier'  => 'Every user, on their own phone or tablet',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>Calendar &middot; Day view &middot; Tue 14 Oct</span></div>
