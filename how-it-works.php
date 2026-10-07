@@ -33,8 +33,8 @@ $SCENES = [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, hit save, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
-        'tier'  => 'Address finder on Silver',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, hit save, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at once.',
+        'tier'  => 'Postcode finder on Silver & Gold',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
   <div class="hw-body hw-form">
