@@ -171,6 +171,8 @@
       .gd .vsel span{ font-weight:600; }
       .gd .vsel select{ font:inherit; font-size:.82rem; padding:.35rem .5rem; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); max-width:230px; }
       @media(max-width:620px){ .gd .frow{ grid-template-columns:1fr; } }
+      /* v2 guides on a phone: drop the mock sidebar so the scene gets the width */
+      @media(max-width:640px){ .gd-v2 .app{ grid-template-columns:1fr; } .gd-v2 .side{ display:none; } .gd-v2 .stage{ padding:.8rem .7rem; } }
     </style>
     <style>
       /* ── Guide player v2 (guides with 'v' => 2) ─────────────────────────
