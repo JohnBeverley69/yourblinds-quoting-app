@@ -689,7 +689,7 @@ return [
       <p>One thing that catches people: deleting a whole <em>product</em> on the master does <strong>not</strong> delete
       the client’s copy. Use <strong>Platform → Catalogue → Wipe products</strong> for that.</p>'],
 
-    ['super', 'Master catalogue', 'How do I put catalogue prices up by a percentage?', 'price rise increase percent percentage bump uplift apply all supplier price change history',
+    ['super', 'Master catalogue', 'How do I put catalogue prices up by a percentage?', 'price rise increase percent percentage bump uplift apply all supplier price change history undo revert mistake',
      '<p>On <strong>Platform → Catalogue → Master Catalogue</strong>, logged in <em>as the master account</em>. The tools
       only appear when you are on that account.</p>
       <ul>
@@ -700,9 +700,18 @@ return [
       </ul>
       <p>Type it as a plain number: <code>4</code> for a 4% rise, <code>-2</code> for a 2% cut. Leave it empty and you get
       “Enter a percentage (e.g. 4 or -2).” Every price cell in the affected grids is multiplied and rounded to the nearest
-      penny, and you’ll get a confirmation box first, because <strong>there is no undo</strong> — a 4% rise followed by a
-      4% cut does not land back on the old figures.</p>
-      <p>When it finishes you’ll see something like “Adjusted 12,480 prices by +4%.” Every change is logged under
+      penny, and you’ll get a confirmation box first.</p>
+      <p>When it finishes you’ll see something like “Adjusted 12,480 prices by +4%. Wrong number? Press Undo on that
+      product’s row.” <strong>Wrong figure? Use Undo — don’t apply the opposite percentage.</strong> Because of the
+      rounding, a 4% rise followed by a 4% cut does not land back on the old figures; Undo does. A small
+      <strong>↶ Undo +4%</strong> button appears on the product’s row (or beside <strong>Apply to all</strong> for a whole
+      supplier). It asks first, then puts every price it changed back exactly as it was: “Undone: … — 12,480 prices are
+      back to what they were.” Press it again to step further back. It refuses if those prices have been changed again
+      since (“Can’t undo … — those prices have been changed again since.”), so it never overwrites newer work.</p>
+      <p>The same Undo covers every other price-table change too — <strong>Save grid</strong>, uploads and imports,
+      <strong>Adjust all prices by %</strong>, cloning a band and renaming or editing sizes: look for the
+      <strong>Last change: … ↶ Undo</strong> strip at the top of the price table, the band list or the product page.</p>
+      <p>Every % change (and every undo) is logged under
       <strong>Price change history</strong> at the bottom of the page (last 60), showing when, who, what was changed,
       the percentage and how many prices moved.</p>
       <p>Remember the change stops on the master. Clients keep their old figures until you run
