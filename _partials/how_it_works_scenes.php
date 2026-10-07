@@ -91,6 +91,46 @@ HTML,
 HTML,
     ],
     [
+        'nav'   => 'Notes', 'icon' => '📝', 'secs' => 10,
+        'title' => 'Leave a note. Flag a problem.',
+        'body'  => 'Need to pass a message on? Every job on the calendar has two buttons. The notepad leaves a quick note for the day, like side gate, dog in the garden. The warning sign flags a problem, like wrong colour delivered, and the job gets a red ring so nobody can miss it. Everyone who opens the calendar sees it, and the Issues button shows every problem job in one go.',
+        'tier'  => '',
+        'mock'  => <<<'HTML'
+<div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>Calendar &middot; Tue 14 Oct</span></div>
+  <div class="hw-body hw-pass">
+    <div class="hw-pcards">
+      <div class="hw-pc">
+        <span class="hw-pbar a-fade" style="--d:10.5s"></span>
+        <b>Morning</b> Mrs Patel
+        <div class="hw-picons"><span class="hw-pi">&#9888;&#65039;</span><span class="hw-pi a-press" style="--d:5.5s">&#128221;</span></div>
+        <div class="hw-pmsg a-fade" style="--d:10.5s">&#128221; Side gate &mdash; dog in the garden</div>
+      </div>
+      <div class="hw-pc fit">
+        <span class="hw-pring a-fade" style="--d:17.5s"></span>
+        <b>Fitting</b> Ms Green
+        <div class="hw-picons"><span class="hw-pi a-press" style="--d:12.5s">&#9888;&#65039;</span><span class="hw-pi">&#128221;</span></div>
+        <div class="hw-pmsg bad a-fade" style="--d:17.5s">&#9888;&#65039; Wrong colour delivered</div>
+      </div>
+      <span class="hw-issues a-pop" style="--d:22s">&#9888;&#65039; Issues (1)</span>
+    </div>
+    <div class="hw-pops">
+      <div class="hw-pop a-mid" style="--d:6s;--d2:10.2s">
+        <b>Appointment note</b>
+        <div class="hw-in sm"><span class="a-type" style="--d:7s">Side gate &mdash; dog in the garden</span></div>
+        <span class="hw-btn a-press" style="--d:9.5s">Save</span>
+      </div>
+      <div class="hw-pop a-mid" style="--d:13s;--d2:17.2s">
+        <b>&#9888;&#65039; Flag an issue</b>
+        <div class="hw-in sm"><span class="a-type" style="--d:14s">Wrong colour delivered</span></div>
+        <span class="hw-btn red a-press" style="--d:16.5s">Flag as issue</span>
+      </div>
+      <div class="hw-ph-note a-fade" style="--d:19.5s">Everyone who opens the calendar sees it &mdash; no texts, no whiteboard.</div>
+    </div>
+  </div>
+</div>
+HTML,
+    ],
+    [
         'nav'   => 'Route', 'icon' => '🗺️', 'secs' => 8,
         'title' => 'Hit the road with your day mapped out.',
         'body'  => 'Open your run and the whole day is on one map, with directions from home, through every visit, and back again. One tap hands the address to Google Maps or Waze, so you\'re never fumbling with postcodes at the kerb.',

@@ -168,6 +168,28 @@ $sceneCount = count($SCENES);
         .hw-float .hw-appt { left: 0; right: 0; }
         @media (max-width: 560px) { .hw-float { width: 118px; } .hw-day { grid-template-columns: 30px repeat(3, minmax(0,1fr)); } }
 
+        /* 2b · Notes and issues */
+        .hw-pass { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 14px; align-items: start; }
+        .hw-pcards { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+        .hw-pc { position: relative; width: 100%; border-radius: 8px; padding: 8px 10px; color: #fff; background: #2563eb; font-size: .92em; line-height: 1.3; }
+        .hw-pc.fit { background: #0f9f6e; }
+        .hw-pc b { display: block; font-size: .85em; opacity: .9; }
+        .hw-picons { display: flex; gap: 6px; margin-top: 6px; }
+        .hw-pi { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-size: 1.05em;
+                 background: rgba(255,255,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+        .hw-pmsg { margin-top: 6px; font-size: .85em; font-weight: 700; background: rgba(255,255,255,.92); color: #92400e; border-radius: 6px; padding: 3px 7px; }
+        .hw-pmsg.bad { color: #be123c; }
+        .hw-pbar { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: #f59e0b; border-radius: 8px 0 0 8px; }
+        .hw-pring { position: absolute; inset: 0; border-radius: 8px; box-shadow: inset 0 0 0 3px #e11d48; }
+        .hw-issues { border: 1px solid #e11d48; color: #e11d48; border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: .85em; }
+        .hw-pops { position: relative; display: grid; gap: 10px; }
+        .hw-pops .hw-pop { grid-area: 1 / 1; }
+        .hw-pops .hw-ph-note { grid-area: 2 / 1; }
+        .hw-pop { border: 1px solid var(--hw-line); border-radius: 10px; padding: 10px; background: var(--hw-card); box-shadow: 0 10px 26px rgba(15,23,42,.16);
+                  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+        .hw-btn.red { background: #e11d48; }
+        @media (max-width: 560px) { .hw-pass { grid-template-columns: 1fr; } }
+
         /* 3 · Map */
         .hw-map { padding: 0; overflow: hidden; background: color-mix(in srgb, #86efac 14%, var(--hw-card)); }
         .hw-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
