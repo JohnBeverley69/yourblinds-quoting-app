@@ -107,8 +107,8 @@ $activeNav = 'tour-stats';
         .ts-ranges a.on { background: var(--link); border-color: var(--link); color: #fff; }
         .ts-cols { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
         .ts-bar { display: grid; grid-template-columns: 8.5rem 1fr 4.5rem; gap: .5rem; align-items: center; margin: .3rem 0; font-size: .875rem; }
-        .ts-bar .track { background: var(--bg-subtle); border-radius: 5px; height: 14px; overflow: hidden; }
-        .ts-bar .fill { background: var(--link); height: 100%; border-radius: 5px; }
+        .ts-bar .track { display: block; background: var(--bg-subtle); border-radius: 5px; height: 14px; overflow: hidden; }
+        .ts-bar .fill { display: block; background: var(--link); height: 100%; border-radius: 5px; }
         .ts-bar .n { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
         .ts-note { color: var(--text-faint); font-size: .8125rem; }
     </style>
