@@ -2,529 +2,520 @@
 declare(strict_types=1);
 
 /**
- * Guide: quote-order-invoice
+ * Guide: quote-order-invoice — "Orders, fulfilment & invoicing" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
- * lede, open, css, demo, body, script (and optionally js).
+ * lede, open, v, css, demo, body, script.
  *
- * Covers /orders/index.php — the unified Quotes + Orders LIST (scope=quotes /
- * scope=orders, faceted by type=retail|trade) — and then follows one row
- * through the Quote actions panel, the Place-order screen, the fulfilment
- * stage on the Factory app's Incoming Orders screen, the invoice email, and
- * Paid. The list itself is taught in full by help/guides/orders-list.php;
- * scenes 1-3 here are only enough of it to pick the row we then follow.
+ * Follows one job from accepted to paid. Mirrors quote-builder/edit.php (the
+ * sticky bar, the Quote actions panel, the read-only banner),
+ * quote-builder/change_status.php (transitions, permissions, deposit seed,
+ * pending fitting, auto-place in-house, flashes), quote-builder/
+ * order_suppliers.php (Send order to suppliers), _partials/order_stage.php
+ * ("With the factory: …" pill), calendar/view.php (completing a fitting) and
+ * pdf-generator/send_invoice.php. Every label, button and message is copied
+ * from those files.
  *
- * Every label, flash and refusal below is taken from the live code:
- * orders/index.php, orders/archive.php, quote-history/bulk_delete.php,
- * quote-builder/edit.php, quote-builder/change_status.php,
- * quote-builder/_helpers.php (qb_allowed_transitions),
- * quote-builder/order_suppliers.php, pdf-generator/send_invoice.php,
- * pdf-generator/pdf.php, factory/incoming-orders.php, admin/users.php,
- * admin/settings.php, _partials/feature_flags.php and
- * _partials/order_stage.php.
+ * v2: one SCENE per script line (data-scene = the line's step), each with
+ * its own animation timeline (a-* classes, start times in --d seconds,
+ * stretched to the recorded line's length via data-len).
  */
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+
+// Status pills in the default palette (_partials/job_status_colours.php).
+$PILL = [
+    'draft' => ['#7c3aed', '#fff'], 'sent' => ['#f59e0b', '#111827'], 'accepted' => ['#16a34a', '#fff'],
+    'declined' => ['#dc2626', '#fff'], 'ordered' => ['#0891b2', '#fff'], 'fitted' => ['#0d9488', '#fff'],
+    'invoiced' => ['#ea580c', '#fff'], 'paid' => ['#475569', '#fff'],
+];
+$pill = static fn (string $s, string $x = '', string $st = ''): string =>
+    '<span class="spl ' . $x . '" style="background:' . $PILL[$s][0] . ';color:' . $PILL[$s][1] . ';' . $st . '">' . $s . '</span>';
+/** A pill that swaps from one status to another at $t seconds. */
+$swap = static fn (string $from, string $to, float $t): string =>
+    '<span class="stk">' . $pill($from, 'a-out', '--d:' . $t . 's') . $pill($to, 'a-fade', '--d:' . $t . 's') . '</span>';
+
+// "With the factory: …" pill (os_factory_progress_pill colours).
+$FP = ['Confirmed' => ['#5b6b7f', '#e6ebf1'], 'In Production' => ['#b5730f', '#f7ecd6'],
+       'Ready to dispatch' => ['#245ea3', '#dde8f6'], 'Dispatched' => ['#0d7a67', '#d6ece6']];
+$fpill = static fn (string $lbl, string $x = '', string $st = ''): string =>
+    '<span class="fpl ' . $x . '" style="color:' . $FP[$lbl][0] . ';background:' . $FP[$lbl][1] . ';' . $st . '">With the factory: ' . $lbl . '</span>';
+
+/** The slim sticky bar at the top of a job. */
+$bar = static fn (string $pillHtml, string $mid = ''): string =>
+    '<div class="qsb"><span>Quote <b>ABC-2026-0042</b> ' . $pillHtml . '</span>' . $mid . '<span class="qtot">Total &pound;1,240.00</span></div>';
+
+/** The Quote actions panel, with a list of [label, extraClass, style] buttons. */
+$panel = static function (array $btns, string $x = '', string $st = ''): string {
+    $h = '<div class="qa ' . $x . '" style="' . $st . '"><div class="qah">Quote actions</div><div class="qab">';
+    foreach ($btns as $b) {
+        [$lbl, $cls, $sty] = $b + ['', '', ''];
+        $h .= '<span class="' . ($cls !== '' ? $cls : 'btns') . '" style="' . $sty . '">' . $lbl . '</span>';
+    }
+    return $h . '</div></div>';
+};
+
+/** A line on the place-order screen. */
+$line = static fn (string $prod, string $sys, string $fab, string $size, string $room, string $anim = ''): string =>
+    '<tr class="' . $anim . '"><td><b>' . $prod . '</b><br><span class="mt">' . $sys . '</span></td><td>' . $fab . '</td><td>' . $size . '</td><td>1</td><td>' . $room . '</td></tr>';
+$thead = '<thead><tr><th>Product</th><th>Fabric / colour</th><th>Size</th><th>Qty</th><th>Room</th></tr></thead>';
 
 return [
         'aud'     => 'admin',
         'section' => 'Orders',
         'title'   => 'Orders, fulfilment & invoicing',
         'eyebrow' => 'Orders',
-        'blurb'   => 'One job followed all the way through the order book: accepted, placed with the workshop and the suppliers, made, invoiced — and Paid, which happens on its own.',
-        'lede'    => 'The <b>Orders</b> list is your order book: every job the customer has said <b>yes</b> to, newest first. This guide starts
-                      there &mdash; just enough of the chips, the columns and the tidy-up buttons to pick a row (the list itself gets a guide of
-                      its own, <em>Finding a job: the Orders list</em>) &mdash; and then follows that one row all the way through:
-                      <b>accepted</b>, <b>placed</b> with the workshop and your suppliers, <b>made</b>, <b>invoiced</b>, and finally
-                      <b>Paid</b>, which happens <em>on its own</em>. Nothing here is a guess: every button and every message you see is the real one.',
+        'v'       => 2,
+        'blurb'   => 'One job followed all the way through: accepted, placed with your suppliers and your factory, made, fitted, invoiced — and Paid, which happens on its own.',
+        'lede'    => 'A quote becomes an <b>order</b> the moment the customer says yes. This guide follows one job from there to the end:
+                      <b>accepted</b>, <b>placed</b> with your suppliers and your factory, <b>made</b>, <b>fitted</b>, <b>invoiced</b> and finally
+                      <b>paid</b> &mdash; which happens by itself. Every button you see is the real one, on the job&rsquo;s own page. It goes
+                      <b>slowly</b>, one idea per chapter. To get there: <b>Orders</b> in the menu, then click the job&rsquo;s number.',
         'open'    => '/orders/index.php',
         'css'     => '
-          /* ---------- scene switching ---------- */
-          .gd .osc{ display:none; }
-          .gd .stage[data-step="1"] .scList,
-          .gd .stage[data-step="2"] .scList,
-          .gd .stage[data-step="3"] .scList{ display:block; }
-          .gd .stage[data-step="4"] .scActions{ display:block; }
-          .gd .stage[data-step="5"] .scSup{ display:block; }
-          .gd .stage[data-step="6"] .scStage{ display:block; }
-          .gd .stage[data-step="7"] .scInv{ display:block; }
-          .gd .stage[data-step="8"] .scPaid{ display:block; }
+          .gd .sc{ position:relative; min-height:370px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; }
+          .gd .row{ display:flex; gap:.45rem; flex-wrap:wrap; align-items:center; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px;
+                     padding:.26rem .65rem; font-size:.72rem; font-weight:700; color:var(--ink); }
+          .gd .chip.bad{ border-color:var(--err); color:var(--err); } .gd .chip.ok{ border-color:var(--good); color:var(--good); }
+          .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px; padding:.3rem .7rem; font-size:.7rem; font-weight:700; white-space:nowrap; }
+          .gd .btns{ display:inline-flex; align-items:center; gap:.3rem; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); color:var(--ink); border-radius:7px; padding:.27rem .6rem; font-size:.68rem; font-weight:600; white-space:nowrap; }
+          .gd .stk{ display:inline-grid; justify-items:start; } .gd .stk > *{ grid-area:1/1; }
+          .gd .spl{ display:inline-flex; border-radius:999px; padding:.06rem .5rem; font-size:.6rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+          .gd .fpl{ display:inline-flex; border-radius:999px; padding:.06rem .5rem; font-size:.6rem; font-weight:700; white-space:nowrap; }
+          .gd .qsb{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; border:1px solid var(--line); border-radius:9px; padding:.4rem .6rem; background:var(--panel);
+                    font-size:.74rem; color:var(--ink); margin-bottom:.55rem; }
+          .gd .qsb .qtot{ margin-left:auto; font-weight:800; }
+          .gd .qacc{ display:inline-flex; border-radius:999px; padding:.15rem .55rem; font-size:.64rem; font-weight:700; background:var(--good-wash); color:var(--good); border:1px solid var(--good); }
+          .gd .qdec{ display:inline-flex; border-radius:999px; padding:.15rem .55rem; font-size:.64rem; font-weight:700; background:var(--err-wash); color:var(--err); border:1px solid var(--err); }
+          .gd .qa{ border:1px solid var(--line); border-radius:10px; padding:.5rem .6rem; background:var(--surface); margin-bottom:.55rem; }
+          .gd .qah{ font-size:.78rem; font-weight:800; color:var(--ink); margin-bottom:.4rem; }
+          .gd .qab{ display:flex; gap:.35rem; flex-wrap:wrap; }
+          .gd .okb{ background:var(--good-wash); border-left:3px solid var(--good); border-radius:8px; padding:.4rem .6rem; font-size:.66rem; color:var(--ink); font-weight:600; margin-bottom:.5rem; line-height:1.45; }
+          .gd .errb{ background:var(--err-wash); border-left:3px solid var(--err); border-radius:8px; padding:.4rem .6rem; font-size:.66rem; color:var(--ink); margin-bottom:.45rem; line-height:1.45; }
+          .gd .rob{ background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.5); border-radius:8px; padding:.4rem .6rem; font-size:.68rem; color:var(--ink); margin-bottom:.5rem; }
+          .gd .cdlg{ position:absolute; z-index:5; left:10%; right:10%; top:6.5rem; max-width:23rem; border:1px solid var(--line); border-radius:12px; background:var(--surface);
+                     box-shadow:var(--gd-shadow); padding:.6rem .75rem; font-size:.7rem; color:var(--ink); line-height:1.45; white-space:pre-line; }
+          .gd .cdlg .act{ display:flex; gap:.35rem; justify-content:flex-end; margin-top:.45rem; white-space:normal; }
+          .gd .two{ display:grid; grid-template-columns:1fr 1fr; gap:.8rem; align-items:start; }
 
-          /* ---------- page chrome (the real header) ---------- */
-          .gd .pgh{ font-size:1rem; font-weight:800; color:var(--ink); }
-          .gd .pgs{ font-size:.68rem; color:var(--faint); margin:.1rem 0 .45rem; }
-          .gd .hrow{ display:flex; align-items:center; gap:.5rem; margin-bottom:.55rem; }
-          .gd .seg{ display:inline-flex; background:var(--bg-subtle-2,#f1f4f8); border-radius:8px; padding:2px; }
-          .gd .sg{ font-size:.68rem; font-weight:700; color:var(--faint); padding:.2rem .6rem; border-radius:6px; }
-          .gd .sg.on{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.09); }
-          .gd .newq{ margin-left:auto; background:var(--accent); color:#fff; border-radius:8px; padding:.28rem .7rem; font-size:.7rem; font-weight:700; }
+          /* 1 — the journey */
+          .gd .jr{ display:flex; align-items:stretch; gap:.35rem; flex-wrap:wrap; margin:1rem 0 .9rem; }
+          .gd .st{ display:flex; flex-direction:column; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:10px; padding:.45rem .5rem; background:var(--surface); min-width:4.6rem; }
+          .gd .st small{ font-size:.58rem; color:var(--soft); font-weight:700; text-align:center; line-height:1.25; }
+          .gd .ar{ align-self:center; color:var(--faint); font-weight:800; }
+          .gd .key{ display:flex; gap:.5rem; flex-wrap:wrap; }
 
-          /* ---------- filter chips: pill LINKS with counts ---------- */
-          .gd .chips{ display:flex; flex-wrap:wrap; align-items:center; gap:.3rem; margin-bottom:.5rem; }
-          .gd .fchip{ font-size:.66rem; border-radius:999px; padding:.15rem .55rem; background:var(--bg-subtle-2,#f1f4f8); color:var(--soft); border:1px solid transparent; }
-          .gd .fchip.act{ background:var(--accent); color:#fff; }
-          .gd .fchip.arch{ margin-left:auto; }
+          /* 2 — the orders list row */
+          .gd .lst{ border:1px solid var(--line); border-radius:9px; overflow:hidden; margin-bottom:.6rem; font-size:.7rem; }
+          .gd .lst > div{ display:grid; grid-template-columns:7rem 1fr 4.5rem 9.6rem; gap:.4rem; padding:.35rem .55rem; align-items:center; border-top:1px solid var(--line); color:var(--ink); }
+          .gd .lst > div:first-child{ border-top:0; background:var(--panel); font-size:.6rem; font-weight:700; color:var(--soft); text-transform:uppercase; letter-spacing:.04em; }
+          .gd .qn{ font-weight:800; color:var(--ink); border-radius:4px; }
 
-          /* ---------- search form ---------- */
-          .gd .sform{ display:flex; align-items:center; gap:.35rem; margin-bottom:.5rem; }
-          /* the real control is <input type="search"> — draw it as a text box */
-          .gd .sform .box{ flex:1; height:27px; display:flex; align-items:center; padding:0 .5rem; font-size:.68rem;
-                           border:1px solid var(--border-strong,#c7ccd4); border-radius:8px; background:var(--surface);
-                           color:var(--ink); overflow:hidden; }
-          .gd .gbtn{ display:inline-flex; align-items:center; gap:.28rem; border:1px solid var(--line); border-radius:7px; padding:.22rem .6rem; font-size:.68rem; font-weight:600; color:var(--ink); background:var(--surface); white-space:nowrap; }
-          .gd .gbtn.pri{ background:var(--accent); color:#fff; border-color:var(--accent); }
-          .gd .gbtn.dan{ border-color:var(--err); color:var(--err); }
-          .gd .gbtn.off{ opacity:.42; }
-          .gd .stage[data-step="3"] .gbtn.off{ opacity:1; }
-          .gd .clr{ display:none; }
-          .gd .stage[data-step="3"] .clr{ display:inline-flex; }
+          /* 5–8 — the place-order screen */
+          .gd .ph1{ font-size:.95rem; font-weight:800; color:var(--ink); }
+          .gd .psub{ font-size:.66rem; color:var(--accent); font-weight:700; margin:.1rem 0 .4rem; }
+          .gd .intro{ font-size:.66rem; color:var(--soft); margin:0 0 .5rem; }
+          .gd .grp{ border:1px solid var(--line); border-radius:10px; background:var(--surface); padding:.45rem .55rem; margin-bottom:.5rem; }
+          .gd .grp.mfg{ border-color:rgba(22,163,74,.55); background:color-mix(in srgb, #16a34a 6%, var(--surface)); }
+          .gd .gh{ display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; font-size:.72rem; }
+          .gd .gh .nm{ font-weight:800; color:var(--ink); }
+          .gd .gh .em{ color:var(--soft); font-size:.64rem; }
+          .gd .gh .pick{ margin-left:auto; display:inline-flex; align-items:center; gap:.3rem; font-size:.66rem; font-weight:700; color:var(--ink); }
+          .gd .tk{ width:15px; height:15px; border-radius:4px; border:1px solid var(--border-strong,#c7ccd4); background:var(--surface); display:inline-grid; place-items:center; font-size:.6rem; color:transparent; }
+          .gd .tk.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+          .gd .sent{ font-size:.6rem; font-weight:700; color:#b45309; background:rgba(245,158,11,.14); border-radius:999px; padding:.05rem .45rem; }
+          .gd .note{ font-size:.62rem; color:var(--soft); margin:.3rem 0 0; line-height:1.45; }
+          .gd table.li{ width:100%; border-collapse:collapse; margin-top:.35rem; font-size:.6rem; color:var(--ink); }
+          .gd table.li th{ text-align:left; font-size:.54rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); padding:.15rem .25rem; border-bottom:1px solid var(--line); }
+          .gd table.li td{ padding:.2rem .25rem; border-bottom:1px solid var(--line); vertical-align:top; }
+          .gd table.li .mt{ color:var(--faint); font-size:.56rem; }
+          .gd .gd-play tr.a-fly{ animation:gdFly .7s ease-out calc(var(--d,0s) * var(--k,1)) forwards; }
 
-          /* ---------- bulk bar ---------- */
-          .gd .bbar{ display:flex; align-items:center; gap:.4rem; margin-bottom:.4rem; flex-wrap:wrap; }
-          .gd .cnt{ font-size:.64rem; color:var(--faint); }
-          .gd .cnt .c-two{ display:none; }
-          .gd .stage[data-step="3"] .cnt .c-none{ display:none; }
-          .gd .stage[data-step="3"] .cnt .c-two{ display:inline; }
+          /* 10 — factory progress */
+          .gd .prog{ display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; margin:.4rem 0 .6rem; }
 
-          /* ---------- the table ---------- */
-          .gd .tbl{ display:none; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-          .gd .stage[data-step="2"] .tbl, .gd .stage[data-step="3"] .tbl{ display:block; }
-          .gd .tr{ display:grid; grid-template-columns:1.1rem 5.2rem 4.3rem 3.3rem 3.9rem 3.6rem 3.2rem 4.2rem 3.4rem; gap:.3rem; align-items:center; padding:.3rem .42rem; border-top:1px solid var(--line-2); font-size:.64rem; color:var(--ink); }
-          .gd .tr.hd{ border-top:none; background:var(--panel); color:var(--faint); font-weight:700; text-transform:uppercase; letter-spacing:.03em; font-size:.53rem; }
-          .gd .qn2{ font-weight:700; color:var(--ink); }
-          .gd .sendlink{ display:block; font-size:.53rem; color:var(--accent); margin-top:.1rem; white-space:nowrap; }
-          .gd .faint{ color:var(--faint); }
-          .gd .num{ font-variant-numeric:tabular-nums; }
-          .gd .amb{ color:#92400e; font-weight:700; }
-          .gd .grn{ color:#065f46; font-weight:700; }
-          .gd .amb.lnk{ border-bottom:1px dashed #92400e; }
-          /* status pill drawn NEUTRAL on purpose — the real one is coloured
-             inline from the tenant palette (same colours as the calendar). */
-          .gd .spill{ display:inline-block; font-size:.52rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:999px; padding:.05rem .4rem; background:var(--bg-subtle-2,#eef2f6); color:var(--soft); border:1px dashed var(--line); }
-          .gd .nspill{ display:inline-block; font-size:.52rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; border-radius:999px; padding:.04rem .4rem; color:#92400e; background:#fef3c7; border:1px solid #fde68a; }
-          /* row tick-boxes: empty until the narration ticks them at step 3. Both
-             rows on screen get ticked, and the real JS sets the header box to a
-             full check when checked === total (the dash is only for a part-tick). */
-          .gd .stage[data-step="3"] .rt{ background:var(--accent); color:#fff; }
-          .gd .stage[data-step="3"] .ha{ background:var(--accent); border-color:var(--accent); color:#fff; }
-          .gd .aside{ display:none; font-size:.64rem; color:var(--faint); margin:.5rem 0 0; line-height:1.5; }
-          .gd .stage[data-step="2"] .aside, .gd .stage[data-step="3"] .aside{ display:block; }
-          .gd .aside b{ color:var(--ink); }
+          /* 11 — two ways to Fitted */
+          .gd .card{ border:1px solid var(--line); border-radius:10px; padding:.5rem .6rem; background:var(--surface); }
+          .gd .card h4{ margin:0 0 .35rem; font-size:.76rem; color:var(--ink); }
+          .gd .ib2{ display:inline-flex; align-items:center; min-height:1.55rem; min-width:7rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; background:var(--surface); padding:0 .45rem; font-size:.7rem; color:var(--ink); }
+          .gd .ib2::after{ content:"\25BE"; margin-left:auto; padding-left:.4rem; color:var(--faint); font-size:.6rem; }
 
-          /* ---------- quote actions panel ---------- */
-          .gd .qbar{ display:flex; align-items:center; gap:.45rem; background:var(--nav); color:#fff; border-radius:8px; padding:.4rem .6rem; font-size:.72rem; margin-bottom:.65rem; }
-          .gd .qbar .qn{ font-weight:700; }
-          .gd .qbar .qtot{ margin-left:auto; font-weight:700; }
-          .gd .qbar .spill{ background:rgba(255,255,255,.16); color:#fff; border-color:rgba(255,255,255,.3); }
-          .gd .qah{ font-size:.68rem; font-weight:700; color:var(--faint); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.45rem; }
-          .gd .qacts{ display:flex; gap:.4rem; flex-wrap:wrap; }
-          .gd .stage[data-step="4"] .gbtn.hl{ box-shadow:0 0 0 3px var(--accent-wash); }
+          /* 12 — the email */
+          .gd .mail{ border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:var(--gd-shadow); padding:.5rem .65rem; font-size:.66rem; color:var(--ink); max-width:26rem; }
+          .gd .mail .hd{ color:var(--soft); border-bottom:1px solid var(--line); padding-bottom:.3rem; margin-bottom:.35rem; line-height:1.5; }
+          .gd .att{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:6px; padding:.12rem .45rem; font-size:.62rem; background:var(--panel); margin-top:.3rem; }
+          .gd .tot{ display:grid; grid-template-columns:auto auto; gap:.15rem 1.2rem; justify-content:end; font-size:.7rem; color:var(--ink); border:1px solid var(--line); border-radius:9px; padding:.4rem .6rem; background:var(--surface); }
+          .gd .tot b{ text-align:right; font-variant-numeric:tabular-nums; }
 
-          /* ---------- place-order screen ---------- */
-          .gd .supg{ border:1px solid var(--line); border-radius:9px; padding:.45rem .6rem; margin-bottom:.45rem; }
-          .gd .supg.mfg{ border-color:#86efac; background:rgba(134,239,172,.14); }
-          .gd .suph{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:.7rem; }
-          .gd .supn{ font-weight:700; color:var(--ink); }
-          .gd .supe{ color:var(--accent); font-size:.64rem; }
-          .gd .supm{ color:var(--faint); font-size:.62rem; }
-          .gd .supnote{ font-size:.62rem; color:var(--soft); margin-top:.28rem; line-height:1.5; }
-          .gd .sentbadge{ font-size:.58rem; font-weight:700; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:.05rem .45rem; }
-          .gd .pick{ display:inline-flex; align-items:center; gap:.3rem; margin-left:auto; font-size:.64rem; color:var(--soft); }
-          .gd .supintro{ font-size:.66rem; color:var(--soft); margin:0 0 .5rem; line-height:1.5; }
-          .gd .supwarn{ font-size:.62rem; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; padding:.2rem .45rem; margin-top:.28rem; line-height:1.45; }
-          /* the real per-supplier line-items table: Product / Fabric-colour / Size / Qty / Room */
-          .gd .sit{ margin-top:.35rem; border:1px solid var(--line-2); border-radius:7px; overflow:hidden; }
-          .gd .sitr{ display:grid; grid-template-columns:6.4rem 5rem 5.2rem 1.6rem 3.4rem; gap:.3rem; align-items:start;
-                     padding:.22rem .4rem; border-top:1px solid var(--line-2); font-size:.58rem; color:var(--ink); }
-          .gd .sitr.hd{ border-top:none; background:var(--panel); color:var(--faint); font-weight:700; text-transform:uppercase; letter-spacing:.03em; font-size:.5rem; }
-          .gd .sitr .sub{ color:var(--faint); font-size:.53rem; }
-          .gd .sitr .opt{ color:var(--accent); font-size:.53rem; }
+          /* 14 — the money bar */
+          .gd .mbar{ display:flex; height:1.6rem; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--panel); max-width:28rem; margin:.5rem 0; }
+          .gd .mbar span{ display:grid; place-items:center; font-size:.6rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; }
+          .gd .nob{ display:inline-flex; border:1px dashed var(--err); color:var(--err); border-radius:7px; padding:.27rem .6rem; font-size:.68rem; font-weight:700; text-decoration:line-through; }
 
-          /* ---------- fulfilment stage (factory row) ---------- */
-          .gd .iorow{ border:1px solid var(--line); border-radius:9px; padding:.5rem .6rem; }
-          .gd .ioh{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:.7rem; }
-          .gd .ioref{ font-weight:700; color:var(--ink); }
-          .gd .ioq{ font-size:.62rem; color:var(--faint); }
-          .gd .stagerow{ display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; margin-top:.45rem; }
-          .gd .stg{ font-size:.58rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:999px; padding:.1rem .5rem; border:1px solid var(--line); color:var(--faint); background:var(--surface); }
-          /* exact stage colours from factory/incoming-orders.php ($stCols) */
-          .gd .stg.s1{ color:#5b6b7f; background:#e6ebf1; border-color:#e6ebf1; }
-          .gd .stg.s2{ color:#b5730f; background:#f7ecd6; border-color:#f7ecd6; }
-          .gd .stg.s3{ color:#1e40af; background:#dbeafe; border-color:#dbeafe; }
-          .gd .stg.s4{ color:#0d7a67; background:#d6ece6; border-color:#d6ece6; }
-          .gd .prog{ font-size:.6rem; color:var(--accent); border-bottom:1px dashed var(--accent); }
-
-          /* ---------- invoice ---------- */
-          .gd .confirm{ border:1px solid var(--line); border-radius:9px; padding:.42rem .6rem; background:var(--panel); font-size:.66rem; color:var(--soft); margin:.45rem 0; }
-          .gd .emailcard{ border:1px solid var(--line); border-radius:9px; overflow:hidden; margin-top:.45rem; }
-          .gd .ehead{ background:var(--panel); padding:.4rem .6rem; border-bottom:1px solid var(--line); font-size:.66rem; }
-          .gd .ehead .subj{ font-weight:700; color:var(--ink); }
-          .gd .ehead .frm{ color:var(--faint); font-size:.62rem; }
-          .gd .ebody{ padding:.45rem .6rem; font-size:.64rem; color:var(--soft); line-height:1.55; }
-          .gd .ebal{ color:#1e40af; font-weight:700; }
-          .gd .eatt{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:6px; padding:.15rem .45rem; font-size:.6rem; color:var(--soft); background:var(--surface); margin-top:.25rem; }
-          .gd .note{ font-size:.63rem; color:var(--faint); margin-top:.5rem; line-height:1.5; }
-          .gd .note b{ color:var(--ink); }
-          @media(max-width:620px){
-            .gd .tr{ grid-template-columns:1rem 4.4rem 3.6rem 2.8rem 3.2rem 3rem 2.8rem 3.6rem 3rem; font-size:.58rem; }
-            .gd .sitr{ grid-template-columns:5.2rem 4rem 4.4rem 1.4rem 2.8rem; font-size:.53rem; }
+          @media (max-width:640px){
+            .gd .sc{ min-height:440px; }
+            .gd .two{ grid-template-columns:1fr; }
+            .gd .lst > div{ grid-template-columns:6rem 1fr 8.6rem; } .gd .lst > div > :nth-child(3){ display:none; }
+            .gd table.li th:nth-child(2), .gd table.li td:nth-child(2){ display:none; }
           }',
         'demo'    => '
           <div class="demo-shell">
-            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / orders</span></div>
+            <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / orders / ABC-2026-0042</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Dashboard</a><a>Calendar</a>
+                <a>Dashboard</a><a>Calendar</a><a>Pipeline</a>
                 <div class="navh">Retail</div>
-                <a>Customers</a><a>Quotes</a><a class="on">Orders</a>
-                <div class="navh">Setup</div>
+                <a>Customers</a><a>Quotes</a><a class="on">Orders</a><a>Payments</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
                 <a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <!-- ============ Scene 1-3: the Orders LIST ============ -->
-                <div class="osc scList">
-                  <div class="pgh">Orders</div>
-                  <div class="pgs">Accepted onward &mdash; orders, invoices and paid jobs.</div>
-                  <div class="hrow">
-                    <span class="seg"><span class="sg on">List</span><span class="sg">Pipeline</span></span>
-                    <span class="newq">+ New quote</span>
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  ' . $bar($pill('ordered') . ' ' . $fpill('In Production')) . '
+                  ' . $panel([['View PDF'], ['Download PDF'], ['Mark as fitted'], ['Mark as invoiced'], ['Reopen as draft'], ['&#128230; Send to suppliers'], ['&#129534; Send invoice']]) . '
+                  <div class="jr">
+                    <span class="st">' . $pill('accepted') . '</span><span class="ar">&rarr;</span><span class="st">' . $pill('ordered') . '</span><span class="ar">&rarr;</span>
+                    <span class="st">' . $pill('fitted') . '</span><span class="ar">&rarr;</span><span class="st">' . $pill('invoiced') . '</span><span class="ar">&rarr;</span><span class="st">' . $pill('paid') . '</span>
                   </div>
-
-                  <div class="chips">
-                    <span class="fchip">All (24)</span>
-                    <span class="fchip">Accepted (3)</span>
-                    <span class="fchip act">Ordered (9)</span>
-                    <span class="fchip">Fitted (4)</span>
-                    <span class="fchip">Invoiced (6)</span>
-                    <span class="fchip">Paid (2)</span>
-                    <span class="fchip arch">&#128451; Archived (11)</span>
-                  </div>
-
-                  <div class="sform">
-                    <span class="box f3"><span class="ph">Search by quote #, customer name, or postcode&hellip;</span><span class="val">Fletcher</span></span>
-                    <span class="gbtn">Search</span>
-                    <span class="gbtn clr">Clear</span>
-                  </div>
-
-                  <div class="bbar">
-                    <span class="gbtn off">&#128451; Archive selected</span>
-                    <span class="gbtn dan off">Delete selected</span>
-                    <span class="cnt"><span class="c-none">(none selected)</span><span class="c-two">(2 of 2 selected)</span></span>
-                  </div>
-
-                  <div class="tbl">
-                    <div class="tr hd">
-                      <span class="tick ha">&check;</span><span>Quote #</span><span>Customer</span><span>Postcode</span><span>Status</span><span>Created</span><span class="num">Total</span><span>Deposit</span><span class="num">Outstanding</span>
-                    </div>
-                    <div class="tr">
-                      <span class="tick rt">&check;</span>
-                      <span><span class="qn2">PRE-2026-0042</span><span class="sendlink">&#128230; Send to suppliers</span></span>
-                      <span>Emma Fletcher</span><span>BD23 1AB</span>
-                      <span><span class="spill">Ordered</span></span>
-                      <span class="faint">3 Sep 2026</span>
-                      <span class="num">&pound;660.00</span>
-                      <span class="amb">&pound;330.00 due</span>
-                      <span class="num amb lnk">&pound;660.00</span>
-                    </div>
-                    <div class="tr">
-                      <span class="tick rt">&check;</span>
-                      <span><span class="qn2">PRE-2026-0039</span><span class="sendlink">&#128230; Send to suppliers</span></span>
-                      <span>Raj Patel</span><span>LS29 8QE</span>
-                      <span><span class="spill">Invoiced</span></span>
-                      <span class="faint">28 Aug 2026</span>
-                      <span class="num">&pound;1,240.00</span>
-                      <span class="grn">&check; &pound;250.00 paid</span>
-                      <span class="num amb lnk">&pound;990.00</span>
-                    </div>
-                  </div>
-                  <p class="aside">Same screen, second job: the sidebar&rsquo;s <b>Quotes</b> row opens it as the quote pipeline instead &mdash;
-                     chips read <b>Quote</b> and <b>Declined</b>, a not-yet-sent draft carries a <span class="nspill">Not sent</span> pill, and the
-                     <b>Deposit</b> and <b>Outstanding</b> columns are not there at all.</p>
+                  <p class="scs">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
                 </div>
 
-                <!-- ============ Scene 4: Quote actions ============ -->
-                <div class="osc scActions">
-                  <div class="qbar">
-                    <span class="qn">Quote PRE-2026-0042</span>
-                    <span class="spill">sent</span>
-                    <span class="qtot">Total &pound;660.00</span>
+                <!-- 1 — the journey -->
+                <div class="sc" data-scene="1" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">One job, start to finish</div>
+                  <div class="jr">
+                    <span class="st a-pop" style="--d:3.6s">' . $pill('sent') . '<small>a quote</small></span><span class="ar a-fade" style="--d:4.4s">&rarr;</span>
+                    <span class="st a-pop" style="--d:5.2s">' . $pill('accepted') . '<small>&#128070; customer says yes</small></span><span class="ar a-fade" style="--d:8s">&rarr;</span>
+                    <span class="st a-pop" style="--d:8.4s">' . $pill('ordered') . '<small>&#128070; placed &middot; &#9881; made</small></span><span class="ar a-fade" style="--d:9.6s">&rarr;</span>
+                    <span class="st a-pop" style="--d:10s">' . $pill('fitted') . '<small>&#128070; fitting done</small></span><span class="ar a-fade" style="--d:10.6s">&rarr;</span>
+                    <span class="st a-pop" style="--d:11s">' . $pill('invoiced') . '<small>&#128070; invoice sent</small></span><span class="ar a-fade" style="--d:11.6s">&rarr;</span>
+                    <span class="st a-pop" style="--d:12s">' . $pill('paid') . '<small>&#9881; money in</small></span>
                   </div>
-                  <div class="qah">Quote actions</div>
-                  <div class="qacts">
-                    <span class="gbtn">View PDF</span>
-                    <span class="gbtn">Download PDF</span>
-                    <span class="gbtn pri hl">&#128230; Save as order</span>
-                    <span class="gbtn">Mark as accepted</span>
-                    <span class="gbtn">Mark as declined</span>
-                    <span class="gbtn">Reopen as draft</span>
+                  <div class="key">
+                    <span class="chip a-pop" style="--d:13.6s">&#128070; a button on the job&rsquo;s own page</span>
+                    <span class="chip a-pop" style="--d:16.6s">&#9881; happens by itself</span>
                   </div>
-                  <div class="okbanner" style="margin-top:.55rem"><span>&check;</span> Order accepted &mdash; place it below (suppliers get emailed their lines).</div>
-                  <p class="note">Accepting also seeds the <b>deposit</b> from your default, and drops a placeholder fitting on the calendar:
-                     <em>&ldquo;Installation appointment is in the calendar&rsquo;s &lsquo;Pending Fitting&rsquo; tray &mdash; drag it onto the right
-                     date and assign a fitter when ready.&rdquo;</em></p>
+                  <span class="chip ok a-pop" style="--d:20s;margin-top:.7rem">Know which is which &mdash; no head scratching</span>
                 </div>
 
-                <!-- ============ Scene 5: place the order ============ -->
-                <div class="osc scSup">
-                  <div class="pgh">Send order to suppliers</div>
-                  <div class="pgs">&larr; Back to order PRE-2026-0042</div>
-                  <p class="supintro">Each supplier below gets an email with <b>only their lines</b> and a spec PDF.
-                     Tick the ones to send, then <b>Send selected orders</b>.</p>
-                  <div class="supg mfg">
-                    <div class="suph">
-                      <span class="supn">&#127981; Beverley Blinds &mdash; manufacturing</span>
-                      <span class="supm">2 lines &middot; auto-routed</span>
-                    </div>
-                    <div class="supnote">These are your products from the <b>Beverley Blinds</b> catalogue &mdash; they go
-                      <b>straight to manufacturing</b> when you place the order. No supplier email needed.</div>
-                    <div class="sit">
-                      <div class="sitr hd"><span>Product</span><span>Fabric / colour</span><span>Size</span><span>Qty</span><span>Room</span></div>
-                      <div class="sitr">
-                        <span><b>Bev Roller Blinds</b><br><span class="sub">Standard</span><br><span class="opt">+ Chain: White</span></span>
-                        <span>Carnival / Ivory</span><span>1200 &times; 1600 mm</span><span>1</span><span>Lounge</span>
-                      </div>
-                      <div class="sitr">
-                        <span><b>Bev Roller Blinds</b><br><span class="sub">Standard</span></span>
-                        <span>Carnival / Ivory</span><span>900 &times; 1600 mm</span><span>1</span><span>Lounge</span>
-                      </div>
+                <!-- 2 — the quote actions panel -->
+                <div class="sc" data-scene="2" data-len="24">
+                  <div class="lst a-rise" style="--d:.4s">
+                    <div><span>Quote #</span><span>Customer</span><span>Postcode</span><span>Status</span></div>
+                    <div><span class="qn a-ring" style="--d:2.2s">ABC-2026-0042</span><span>Emma Fletcher</span><span>CV32 5PJ</span><span>' . $pill('sent', '', 'font-size:.54rem') . '</span></div>
+                  </div>
+                  <div class="a-rise" style="--d:4s">
+                    ' . $bar($swap('sent', 'ordered', 12.6)) . '
+                    <div class="stk" style="display:grid;justify-items:stretch">
+                      ' . $panel([['View PDF'], ['Download PDF'], ['&#128230; Save as order', 'btnp'], ['Mark as accepted'], ['Mark as declined'], ['Reopen as draft']], 'a-out', '--d:12.6s') . '
+                      ' . $panel([['View PDF'], ['Download PDF'], ['Mark as fitted'], ['Mark as invoiced'], ['Reopen as draft'], ['&#128230; Send to suppliers'], ['&#129534; Send invoice']], 'a-fade', '--d:12.6s') . '
                     </div>
                   </div>
-                  <div class="supg">
-                    <div class="suph">
-                      <span class="supn">Hunter Douglas</span>
-                      <span class="supe">orders@hunterdouglas.co.uk</span>
-                      <span class="supm">&middot; acct BEV114</span>
-                      <span class="pick"><span class="tick on">&check;</span> Send 2 lines</span>
-                    </div>
-                    <div class="sit">
-                      <div class="sitr hd"><span>Product</span><span>Fabric / colour</span><span>Size</span><span>Qty</span><span>Room</span></div>
-                      <div class="sitr">
-                        <span><b>PF Venetian</b><br><span class="sub">25mm Aluminium</span></span>
-                        <span>Silver Matt</span><span>800 &times; 1100 mm</span><span>1</span><span>Kitchen</span>
-                      </div>
-                      <div class="sitr">
-                        <span><b>PF Venetian</b><br><span class="sub">25mm Aluminium</span></span>
-                        <span>Silver Matt</span><span>800 &times; 1100 mm</span><span>1</span><span>Utility</span>
-                      </div>
-                    </div>
+                  <div class="row">
+                    <span class="chip a-pop" style="--d:8.6s">Buttons follow the stage</span>
+                    <span class="chip a-pop" style="--d:16.4s">Missing a button? Check the stage</span>
                   </div>
-                  <div class="supg">
-                    <div class="suph">
-                      <span class="supn">Louvolite</span>
-                      <span class="supe">trade@louvolite.com</span>
-                      <span class="sentbadge">&#9888; Already sent 12 Sep 2026, 09:41</span>
-                      <span class="pick"><span class="tick"></span> Re-send 1 line</span>
-                    </div>
-                    <div class="supnote">Already ordered from <b>Louvolite</b> for this quote &mdash; left unticked so you don&rsquo;t
-                      double-order. Tick it only if you really mean to re-send.</div>
-                    <div class="sit">
-                      <div class="sitr hd"><span>Product</span><span>Fabric / colour</span><span>Size</span><span>Qty</span><span>Room</span></div>
-                      <div class="sitr">
-                        <span><b>Vogue Vertical</b><br><span class="sub">89mm</span></span>
-                        <span>Banlight / Ecru</span><span>2400 &times; 1800 mm</span><span>1</span><span>Dining room</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="qacts" style="margin-top:.5rem">
-                    <span class="gbtn pri">&#128230; Send &amp; place order</span><span class="gbtn">Cancel</span>
-                  </div>
-                  <p class="note">If <b>every</b> line is something you make yourself you never see this screen &mdash; accepting already placed it:
-                     <em>&ldquo;Sent straight to the workshop &mdash; all in-house, no supplier order needed.&rdquo;</em></p>
+                  <div class="a-move" style="--fx:70%;--fy:16rem;--tx:3.5rem;--ty:2.5rem;--d:1s;--md:1.4s">' . $ptr . '</div>
                 </div>
 
-                <!-- ============ Scene 6: fulfilment stage ============ -->
-                <div class="osc scStage">
-                  <div class="pgh">Incoming Orders</div>
-                  <div class="pgs">Placed orders that contain Beverley Blinds lines. Click an order to open its blinds.</div>
-                  <div class="iorow">
-                    <div class="ioh">
-                      <span class="ioref">PRE-2026-0042</span>
-                      <span class="ioq">Emma Fletcher &middot; 3 Sep 2026 &middot; 4 blinds</span>
-                    </div>
-                    <div class="stagerow">
-                      <span class="stg s2">In Production</span>
-                      <span class="prog">2/4 made</span>
-                      <span class="stg s3">Bought-in: ordered</span>
-                    </div>
+                <!-- 3 — accepted -->
+                <div class="sc" data-scene="3" data-len="26">
+                  <span class="chip a-pop" style="--d:4s;margin-bottom:.55rem">&#127760; or the customer presses Accept on their link</span>
+                  ' . $bar($swap('sent', 'accepted', 9.8), '<span class="stk"><span class="a-out" style="--d:9.8s;display:inline-flex;gap:.3rem"><span class="qacc a-press" style="--d:9.2s">&#10003; Customer accepted</span><span class="qdec">&#10005; Customer declined</span></span></span>') . '
+                  <div class="okb a-pop" style="--d:10.4s">Status: accepted. Installation appointment is in the calendar&rsquo;s &ldquo;Pending Fitting&rdquo; tray &mdash; drag it onto the right date and assign a fitter when ready.</div>
+                  <div class="row">
+                    <span class="chip a-pop" style="--d:13.8s">Two things, quietly:</span>
+                    <span class="chip a-pop" style="--d:15.8s">Deposit <b style="color:#92400e">&pound;620.00 due</b> &mdash; 50% unless you changed it</span>
+                    <span class="chip a-pop" style="--d:22s">&#128197; Pending Fitting <b>1</b></span>
                   </div>
-                  <p class="note">One pill, and it is the stage the job is at <em>now</em> &mdash; it changes to <b>Ready</b>, then
-                     <b>Dispatched</b>, in place. You never set it; it is worked out for you. <b>Ready</b> is the dispatch gate: every blind made
-                     <b>and</b> every bought-in item in. It is <b>not</b> on the Orders list; the list shows Ordered / Fitted / Invoiced / Paid.</p>
+                  <div class="a-move" style="--fx:80%;--fy:16rem;--tx:13rem;--ty:3.6rem;--d:7.6s;--md:1.6s">' . $ptr . '</div>
                 </div>
 
-                <!-- ============ Scene 7: invoice ============ -->
-                <div class="osc scInv">
-                  <div class="qacts"><span class="gbtn">&#129534; Send invoice</span></div>
-                  <div class="confirm">&ldquo;Email this invoice to the customer now? This also marks the job as <b>Invoiced</b>.&rdquo;</div>
-                  <div class="errbanner"><span>&#9888;</span><div>No valid customer email on this order &mdash; <b>add one on the customer</b>, then try again.</div></div>
-                  <div class="emailcard">
-                    <div class="ehead">
-                      <div class="subj">Invoice PRE-2026-0042 from Beverley Blinds</div>
-                      <div class="frm">to emma.fletcher@gmail.com</div>
-                    </div>
-                    <div class="ebody">
-                      Hello Emma Fletcher,<br>
-                      Please find your invoice (PRE-2026-0042) attached as a PDF.<br>
-                      <span class="ebal">Balance due: &pound;330.00.</span> Payment details are on the invoice.<br>
-                      You can also view it online here: yourblinds.uk/&hellip;<br>
-                      <span class="eatt">&#128206; Invoice_PRE-2026-0042.pdf</span>
-                    </div>
+                <!-- 4 — save as order -->
+                <div class="sc" data-scene="4" data-len="21">
+                  ' . $panel([['View PDF'], ['Download PDF'], ['&#128230; Save as order', 'btnp a-ring', '--d:2.4s'], ['Mark as accepted'], ['Mark as declined'], ['Reopen as draft']]) . '
+                  <div class="row" style="margin-bottom:.55rem"><span class="chip a-pop" style="--d:7s">accept + go to placing &mdash; in one go</span></div>
+                  <div class="a-rise" style="--d:9s;border:1px solid var(--line);border-radius:10px;padding:.5rem .6rem">
+                    <div class="ph1">Send order to suppliers</div><div class="psub">&larr; Back to order ABC-2026-0042</div>
+                    <div class="okb a-pop" style="--d:13.4s">Order accepted &mdash; place it below (suppliers get emailed their lines).</div>
                   </div>
-                  <div class="okbanner" style="margin-top:.45rem"><span>&check;</span> Invoice emailed to emma.fletcher@gmail.com. Marked as Invoiced.</div>
+                  <div class="a-move" style="--fx:80%;--fy:15rem;--tx:11.5rem;--ty:2.6rem;--d:4.4s;--md:1.4s">' . $ptr . '</div>
                 </div>
 
-                <!-- ============ Scene 8: paid ============ -->
-                <div class="osc scPaid">
-                  <div class="chips">
-                    <span class="fchip">All (24)</span><span class="fchip">Accepted (3)</span><span class="fchip">Ordered (8)</span>
-                    <span class="fchip">Fitted (4)</span><span class="fchip">Invoiced (6)</span><span class="fchip act">Paid (3)</span>
-                    <span class="fchip arch">&#128451; Archived (11)</span>
+                <!-- 5 — the place order screen -->
+                <div class="sc" data-scene="5" data-len="21">
+                  <div class="ph1">Send order to suppliers</div><div class="psub">&larr; Back to order ABC-2026-0042</div>
+                  <p class="intro a-fade" style="--d:.6s">Each supplier below gets an email with <b>only their lines</b> and a spec PDF. Tick the ones to send, then <b>Send selected orders</b>.</p>
+                  <div class="grp a-rise" style="--d:3.4s">
+                    <div class="gh"><span class="nm">Northfield Trade Supply</span><span class="em a-ring" style="--d:5.4s">orders@northfield.example</span>
+                      <span class="pick a-ring" style="--d:17.8s"><span class="tk on">&check;</span> Send 2 lines</span></div>
+                    <table class="li">' . $thead . '<tbody>
+                      ' . $line('Venetian Blind', '25mm Aluminium', 'Satin / Silver', '900 &times; 1200 mm', 'Bathroom', 'a-fly" style="--d:9.8s') . '
+                      ' . $line('Vertical Blind', '89mm', 'Carnival / Ivory', '1800 &times; 2100 mm', 'Lounge', 'a-fly" style="--d:10.8s') . '
+                    </tbody></table>
                   </div>
-                  <div class="tbl" style="display:block">
-                    <div class="tr hd">
-                      <span class="tick"></span><span>Quote #</span><span>Customer</span><span>Postcode</span><span>Status</span><span>Created</span><span class="num">Total</span><span>Deposit</span><span class="num">Outstanding</span>
-                    </div>
-                    <div class="tr">
-                      <span class="tick"></span>
-                      <span><span class="qn2">PRE-2026-0042</span><span class="sendlink">&#128230; Send to suppliers</span></span>
-                      <span>Emma Fletcher</span><span>BD23 1AB</span>
-                      <span><span class="spill">Paid</span></span>
-                      <span class="faint">3 Sep 2026</span>
-                      <span class="num">&pound;660.00</span>
-                      <span class="grn">&check; &pound;330.00 paid</span>
-                      <span class="num grn">&check; paid</span>
-                    </div>
-                  </div>
-                  <p class="note">There is <b>no</b> &ldquo;Mark as paid&rdquo; button, and never has been. Record the payment and the status follows
-                     &mdash; see <em>Payments &amp; accounts</em>.</p>
+                  <span class="chip a-pop" style="--d:15.4s">Read it through before you send</span>
                 </div>
 
-                <div class="caps">
-                  <b class="c1"><span class="n">1</span> Your order book &mdash; chips are filters, brackets are counts.</b>
-                  <b class="c2"><span class="n">2</span> Column by column &mdash; those status colours are yours, set in Settings.</b>
-                  <b class="c3"><span class="n">3</span> Search one box; tick rows to archive or delete.</b>
-                  <b class="c4"><span class="n">4</span> Save as order &mdash; accept it and go straight on to place it.</b>
-                  <b class="c5"><span class="n">5</span> Yours to the workshop, bought-in to their supplier.</b>
-                  <b class="c6"><span class="n">6</span> The fulfilment stage &mdash; worked out for you, on the Factory screen.</b>
-                  <b class="c7 err"><span class="n">7</span> Send invoice &mdash; it needs the customer&rsquo;s email.</b>
-                  <b class="c8 good"><span class="n">8</span> Paid, on its own, the moment the money covers the total.</b>
+                <!-- 6 — your own products -->
+                <div class="sc" data-scene="6" data-len="21">
+                  <div class="grp mfg a-rise" style="--d:.6s">
+                    <div class="gh"><span class="nm">&#127981; Beverley &mdash; manufacturing</span><span class="em">2 lines &middot; auto-routed</span></div>
+                    <p class="note a-fade" style="--d:4s">These are your products from the <b>Beverley</b> catalogue &mdash; they go <b>straight to manufacturing</b> when you place the order. No supplier email needed.</p>
+                    <p class="note a-fade" style="--d:13.8s">&#128666; <b>Delivery</b> &mdash; Van: &pound;10.00 + VAT on deliveries under &pound;100.00 (orders going out together on the same day are added up).</p>
+                    <table class="li">' . $thead . '<tbody>
+                      ' . $line('Roller Blind', 'Standard', 'Carnival / Blackout Ivory', '1200 &times; 1500 mm', 'Kitchen') . '
+                      ' . $line('Roller Blind', 'Standard', 'Carnival / Blackout Ivory', '600 &times; 1500 mm', 'Kitchen') . '
+                    </tbody></table>
+                  </div>
+                  <div class="row">
+                    <span class="chip ok a-pop" style="--d:7s">No email &mdash; no tick box</span>
+                    <span class="chip a-pop" style="--d:9.2s">&#127981; Straight to the factory on placing</span>
+                  </div>
                 </div>
+
+                <!-- 7 — placing it -->
+                <div class="sc" data-scene="7" data-len="21">
+                  <div class="row" style="margin-bottom:.6rem">
+                    <span class="stk"><span class="btnp a-out" style="--d:5.4s">&#128230; Send &amp; place order</span><span class="btnp a-mid" style="--d:5.4s;--d2:6.8s">&#128230; Send selected orders</span>
+                      <span class="btnp a-mid" style="--d:6.8s;--d2:8.2s">&#128230; Place order</span><span class="btnp a-fade" style="--d:8.2s"><span class="a-press" style="--d:9s">&#128230; Send &amp; place order</span></span></span>
+                    <span class="btns">Cancel</span>
+                  </div>
+                  <div class="row" style="margin-bottom:.6rem">
+                    <span class="chip a-pop" style="--d:1.2s">suppliers + factory</span><span class="chip a-pop" style="--d:5.6s">suppliers only</span><span class="chip a-pop" style="--d:7s">factory only</span>
+                  </div>
+                  <div class="a-rise" style="--d:11s">
+                    ' . $bar($swap('accepted', 'ordered', 12)) . '
+                    <div class="okb a-pop" style="--d:15s">Order sent to Northfield Trade Supply. 2 blinds placed with Beverley manufacturing. Moved on to &ldquo;Ordered&rdquo;.</div>
+                    <span class="chip a-pop" style="--d:13.2s">&#128197; due date set</span>
+                  </div>
+                </div>
+
+                <!-- 8 — no double orders -->
+                <div class="sc" data-scene="8" data-len="22">
+                  <div class="grp a-rise" style="--d:.4s">
+                    <div class="gh"><span class="nm">Northfield Trade Supply</span><span class="em">orders@northfield.example</span>
+                      <span class="sent a-pop" style="--d:4.6s">&#9888;&#65039; Already sent 7 Oct 2026, 10:42</span>
+                      <span class="pick"><span class="tk stk"><span>&nbsp;</span><span class="tk on a-mid" style="--d:13.6s;--d2:21s;border:0">&check;</span></span> Re-send 2 lines</span></div>
+                    <p class="note a-fade" style="--d:2.4s">Already ordered from <b>Northfield Trade Supply</b> for this quote &mdash; left unticked so you don&rsquo;t double-order. Tick it only if you really mean to re-send.</p>
+                  </div>
+                  <span class="chip ok a-pop" style="--d:9.8s">Left unticked &mdash; no double order</span>
+                  <div class="cdlg a-mid" style="--d:15.4s;--d2:21s">This order was already sent to:
+
+  Northfield Trade Supply
+
+Send again? This will place a second order.<div class="act"><span class="btns">Cancel</span><span class="btnp">OK</span></div></div>
+                </div>
+
+                <!-- 9 — all made in-house -->
+                <div class="sc" data-scene="9" data-len="24">
+                  ' . $bar($swap('sent', 'ordered', 8.4), '<span class="stk"><span class="a-out" style="--d:8.4s;display:inline-flex;gap:.3rem"><span class="qacc a-press" style="--d:7.8s">&#10003; Customer accepted</span><span class="qdec">&#10005; Customer declined</span></span></span>') . '
+                  <div class="row" style="margin-bottom:.5rem">
+                    <span class="chip a-pop" style="--d:1.6s">Every line: your factory&rsquo;s product</span>
+                    <span class="chip bad a-pop" style="--d:3.6s"><s>Send order to suppliers</s> &mdash; not needed</span>
+                  </div>
+                  <div class="okb a-pop" style="--d:9.2s">Status: ordered. Due 23 Oct 2026. Installation appointment is in the calendar&rsquo;s &ldquo;Pending Fitting&rdquo; tray &mdash; drag it onto the right date and assign a fitter when ready. <span class="a-ring" style="--d:12.4s;border-radius:4px">Sent straight to the workshop &mdash; all in-house, no supplier order needed.</span></div>
+                  <span class="chip a-pop" style="--d:19.2s">Settings &rarr; Quoting &rarr; <b>Auto-place in-house orders</b></span>
+                  <div class="a-move" style="--fx:80%;--fy:16rem;--tx:12.4rem;--ty:1.4rem;--d:6.2s;--md:1.4s">' . $ptr . '</div>
+                </div>
+
+                <!-- 10 — where is it now -->
+                <div class="sc" data-scene="10" data-len="22">
+                  <div class="sct a-fade" style="--d:.2s">Where is it now?</div>
+                  ' . $bar($pill('ordered') . ' <span class="stk">' . $fpill('Confirmed', 'a-mid', '--d:1.4s;--d2:12.8s') . $fpill('In Production', 'a-mid', '--d:12.8s;--d2:14.4s') . $fpill('Ready to dispatch', 'a-mid', '--d:14.4s;--d2:16s') . $fpill('In Production', 'a-fade', '--d:16s') . '</span>') . '
+                  <div class="lst a-rise" style="--d:5.6s">
+                    <div><span>Quote #</span><span>Customer</span><span>Postcode</span><span>Status</span></div>
+                    <div><span class="qn">ABC-2026-0042</span><span>Emma Fletcher</span><span>CV32 5PJ</span><span>' . $pill('ordered', '', 'font-size:.54rem') . '<br>' . $fpill('In Production', '', 'font-size:.52rem;margin-top:.2rem') . '</span></div>
+                  </div>
+                  <div class="prog">
+                    ' . $fpill('Confirmed', 'a-pop', '--d:10.4s') . '<span class="a-fade" style="--d:12.6s">&rarr;</span>
+                    ' . $fpill('In Production', 'a-pop', '--d:12.8s') . '<span class="a-fade" style="--d:14.2s">&rarr;</span>
+                    ' . $fpill('Ready to dispatch', 'a-pop', '--d:14.4s') . '<span class="a-fade" style="--d:15.8s">&rarr;</span>
+                    ' . $fpill('Dispatched', 'a-pop', '--d:16s') . '
+                  </div>
+                  <span class="chip a-pop" style="--d:18s">&#9881; You never set it &mdash; it moves as the factory works</span>
+                </div>
+
+                <!-- 11 — fitted -->
+                <div class="sc" data-scene="11" data-len="18">
+                  <div class="two">
+                    <div class="card a-rise" style="--d:3.4s">
+                      <h4>&#128197; Calendar &rarr; the fitting</h4>
+                      <div class="row" style="font-size:.66rem">Update status: <span class="ib2"><span class="stk"><span class="a-out" style="--d:6.6s">Booked</span><span class="a-fade" style="--d:6.6s">Completed</span></span></span><span class="btns a-press" style="--d:7.6s">Save status</span></div>
+                      <div class="okb a-pop" style="--d:8.6s;margin:.45rem 0 0">Status updated to Completed. Linked quote ABC-2026-0042 advanced to &ldquo;fitted&rdquo;.</div>
+                    </div>
+                    <div class="card a-rise" style="--d:11.8s">
+                      <h4>&#128221; Or on the job</h4>
+                      <div class="qab"><span class="btns a-ring" style="--d:12.6s">Mark as fitted</span><span class="btns">Mark as invoiced</span><span class="btns">Reopen as draft</span></div>
+                    </div>
+                  </div>
+                  <div style="margin-top:.7rem">' . $bar($swap('ordered', 'fitted', 9.4)) . '</div>
+                  <span class="chip ok a-pop" style="--d:15.4s">Ready to invoice</span>
+                </div>
+
+                <!-- 12 — send the invoice -->
+                <div class="sc" data-scene="12" data-len="22">
+                  ' . $bar($swap('fitted', 'invoiced', 13.8)) . '
+                  <div class="stk" style="display:grid;justify-items:stretch">
+                  ' . $panel([['View PDF'], ['Download PDF'], ['Mark as invoiced'], ['Mark as ordered'], ['Reopen as draft'], ['&#128230; Send to suppliers'], ['&#129534; Send invoice', 'btns a-ring', '--d:1.2s']], 'a-out', '--d:13.8s') . '
+                  ' . $panel([['View PDF'], ['Download PDF'], ['Reopen as draft'], ['&#128230; Send to suppliers'], ['&#129534; Resend invoice']], 'a-fade', '--d:13.8s') . '
+                  </div>
+                  <div class="cdlg a-mid" style="--d:4.4s;--d2:6.8s;top:3rem">Email this invoice to the customer now? This also marks the job as Invoiced.<div class="act"><span class="btns">Cancel</span><span class="btnp a-press" style="--d:6s">OK</span></div></div>
+                  <div class="two">
+                    <div class="mail a-drop" style="--d:7.2s">
+                      <div class="hd">To: emma@example.co.uk<br>Subject: <b style="color:var(--ink)">Invoice ABC-2026-0042 from Hart Interiors</b></div>
+                      Hello Emma Fletcher,<br>Please find your invoice (ABC-2026-0042) attached as a PDF.<br><br><span class="a-ring" style="--d:11.4s;border-radius:4px">Balance due: &pound;620.00.</span> Payment details are on the invoice.
+                      <div><span class="att">&#128206; Invoice_ABC-2026-0042.pdf</span></div>
+                    </div>
+                    <div>
+                      <div class="okb a-pop" style="--d:13.8s">Invoice emailed to emma@example.co.uk. Marked as Invoiced.</div>
+                      <div class="tot a-rise" style="--d:16.8s"><span>Total</span><b>&pound;1,240.00</b><span>Paid</span><b>&pound;620.00</b><span>Balance due</span><b>&pound;620.00</b></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 13 — when it stops you -->
+                <div class="sc" data-scene="13" data-len="23">
+                  <div class="errb a-fly" style="--d:4.4s">No valid customer email on this order &mdash; add one on the customer, then try again.</div>
+                  <div class="errb a-fly" style="--d:8.6s">You can invoice once the job is ordered &mdash; move it to Ordered first.</div>
+                  <div class="row" style="margin:.6rem 0">
+                    <span class="stk"><span class="btns a-out" style="--d:14.4s">&#129534; Send invoice</span><span class="btns a-fade" style="--d:14.4s"><span class="a-ring" style="--d:15s;border-radius:6px">&#129534; Resend invoice</span></span></span>
+                    <span class="chip a-pop" style="--d:14.8s">once it has gone</span>
+                  </div>
+                  <div class="rob a-fade" style="--d:17.4s">This invoice has already been sent. Send it to the customer AGAIN?</div>
+                  <span class="chip ok a-pop" style="--d:20.4s">No accidental second invoice</span>
+                </div>
+
+                <!-- 14 — paid on its own -->
+                <div class="sc" data-scene="14" data-len="20">
+                  <div class="row"><span class="nob a-pop" style="--d:.6s">Mark as paid</span><span class="chip a-pop" style="--d:1.4s">there isn&rsquo;t one</span></div>
+                  <div class="mbar a-fade" style="--d:2.6s">
+                    <span class="a-wide" style="--d:3.4s;width:50%;background:#16a34a">Deposit &pound;620.00 &check;</span>
+                    <span class="a-wide" style="--d:5.6s;width:50%;background:#0891b2">Payment &pound;620.00</span>
+                  </div>
+                  <div class="row" style="font-size:.7rem;color:var(--soft)">Covers the total &pound;1,240.00 &rarr; ' . $swap('invoiced', 'paid', 7.6) . '</div>
+                  <div class="row" style="margin-top:.7rem">
+                    <span class="chip a-pop" style="--d:9.8s">Money taken back off &rarr; it steps back again</span>
+                    <span class="chip ok a-pop" style="--d:13s">Record the payment &mdash; the status follows</span>
+                    <span class="chip a-pop" style="--d:16.8s">Paid = the money really is in</span>
+                  </div>
+                </div>
+
+                <!-- 15 — changing an order -->
+                <div class="sc" data-scene="15" data-len="24">
+                  <div class="rob a-mid" style="--d:.8s;--d2:7.6s">This quote is in <b>ordered</b> state and is read-only. Use <b>Reopen as draft</b> above to edit it.</div>
+                  ' . $bar($swap('ordered', 'draft', 7.6)) . '
+                  <div class="stk" style="display:grid;justify-items:stretch">
+                  ' . $panel([['View PDF'], ['Download PDF'], ['Mark as fitted'], ['Mark as invoiced'], ['Reopen as draft', 'btns a-ring', '--d:5.2s'], ['&#128230; Send to suppliers'], ['&#129534; Send invoice']], 'a-out', '--d:7.6s') . '
+                  ' . $panel([['View PDF'], ['Download PDF'], ['&#128230; Save as order', 'btnp'], ['Mark as sent'], ['Mark as accepted'], ['Mark as declined']], 'a-fade', '--d:7.6s') . '
+                  </div>
+                  <div class="row"><span class="chip a-pop" style="--d:9.2s">Edit it, then accept it again</span><span class="chip a-pop" style="--d:11.2s">Unpaid deposit cleared &mdash; worked out again on the new total</span></div>
+                  <div class="a-rise" style="--d:16.6s;margin-top:.6rem;font-size:.66rem;color:var(--soft)">If the factory has already started on it:</div>
+                  <div class="errb a-fly" style="--d:17.4s;margin-top:.3rem">This order is already being made &mdash; contact the factory to change it.</div>
+                </div>
+
               </div>
             </div>
           </div>',
         'body'    => '
-          <p><b>What this screen is.</b> <b>Orders</b> is the list of every job that has been accepted &mdash; the subtitle says so:
-             <em>&ldquo;Accepted onward &mdash; orders, invoices and paid jobs.&rdquo;</em> The very same screen doubles as your quote
-             pipeline: the sidebar&rsquo;s <b>Quotes</b> row opens it with <em>&ldquo;Quotes still in the pipeline &mdash; drafts, sent, and
-             declined.&rdquo;</em> instead. It also comes in two flavours &mdash; under <b>Retail</b> and (where your login has it) under
-             <b>Trade</b> &mdash; the title changes to <b>Retail Orders</b> or <b>Trade Orders</b> and the chip counts change with it, because
-             each one only counts its own jobs. Top-left there is a two-part <b>List | Pipeline</b> switch (Pipeline is the funnel board, with
-             a count and a &pound; value per column and a <b>Window</b> of the last 30 to 365 days); top-right, <b>+ New quote</b>. The list
-             shows at most <b>200 rows</b>, newest accepted-or-created first &mdash; past that, filter or search.</p>
+          <p><b>Getting there.</b> <b>Orders</b> (under <b>Retail</b>, or <b>Trade</b> where you have it) &rarr; click the job&rsquo;s number.
+             At the top of the job: a slim bar &mdash; <b>Quote ABC-2026-0042</b>, its status, and the <b>Total</b> &mdash; then the
+             <b>Quote actions</b> panel: <b>View PDF</b>, <b>Download PDF</b>, and only the moves that make sense from where the job is now.
+             (Finding the job in the first place has its own guide, <a href="/help/guide.php?g=orders-list"><b>Finding a job: the Orders
+             list</b></a>.)</p>
+
           <ul class="steps">
-            <li><b>Tick box, then Quote #.</b> The number is the link into the job. Underneath it, on order rows, sits a small
-                <b>&#128230; Send to suppliers</b> link straight to the place-order screen.</li>
-            <li><b>Customer and Postcode.</b> Exactly what search looks at, along with the quote number.</li>
-            <li><b>Status.</b> Accepted, Ordered, Fitted, Invoiced or Paid. The colours are <b>yours</b> &mdash; drawn from the same
-                traffic-light palette as the calendar, editable in Settings &mdash; so one job reads the same colour everywhere.</li>
-            <li><b>Created</b> and <b>Total.</b> The date the job was raised, and its full value.</li>
-            <li><b>Deposit.</b> Green <b>&ldquo;&check; &pound;330.00 paid&rdquo;</b> once it is marked paid, amber
-                <b>&ldquo;&pound;330.00 due&rdquo;</b> until then, a dash if there is none. You do not type it: it is seeded the first time the
-                job is accepted, from your default deposit (percent &mdash; 50% unless you changed it &mdash; or a flat figure capped at the total).</li>
-            <li><b>Outstanding.</b> Total, less payments, less any unpaid-deposit adjustment &mdash; live. Amber and
-                <b>underlined</b> means it is a link: click it and Payments opens with that order already chosen
-                (<em>&ldquo;Click to take a payment against this order&rdquo;</em>). Blue <b>+&pound;X</b> means overpaid; green
-                <b>&check; paid</b> means settled. This column only exists if the <b>Accounts</b> add-on is switched on for your account
-                (it is a paid extra, turned on for you by the people who run the system &mdash; there is no switch for it in your own Settings).</li>
+            <li><b>Accepted &mdash; the customer said yes.</b> They accept from the link you sent, or you press <b>&#10003; Customer accepted</b>
+                in the bar (or <b>Mark as accepted</b>). <code>Status: accepted. Installation appointment is in the calendar&rsquo;s &ldquo;Pending
+                Fitting&rdquo; tray &mdash; drag it onto the right date and assign a fitter when ready.</code> Two things happen quietly: the
+                <b>deposit</b> is worked out from your default (a percentage &mdash; 50% unless you changed it &mdash; or a flat amount capped at the
+                total), and a <b>fitting</b> lands in the calendar&rsquo;s Pending Fitting tray (retail jobs only). <b>&#10005; Customer declined</b>
+                asks <em>&ldquo;Mark this quote as declined?&rdquo;</em> and takes a pending fitting back off the calendar.</li>
+            <li><b>&#128230; Save as order</b> &mdash; on a draft or sent quote with lines, for people who may place orders. It accepts the job
+                and takes you straight to the place-order screen: <code>Order accepted &mdash; place it below (suppliers get emailed their
+                lines).</code></li>
+            <li><b>Send order to suppliers</b> (also <b>&#128230; Send to suppliers</b> on any order). <em>&ldquo;Each supplier below gets an email
+                with only their lines and a spec PDF. Tick the ones to send, then Send selected orders.&rdquo;</em> One box per supplier with its
+                order email and a ticked <b>Send N lines</b>, listing <b>Product</b>, <b>Fabric / colour</b>, <b>Size</b>, <b>Qty</b>, <b>Room</b>.
+                Your factory&rsquo;s products sit in a green <b>&#127981; &lt;factory&gt; &mdash; manufacturing</b> box (<em>&ldquo;&hellip; they go
+                straight to manufacturing when you place the order. No supplier email needed.&rdquo;</em>), with the account&rsquo;s
+                <b>&#128666; Delivery</b> rule where one applies.</li>
+            <li><b>Place it.</b> The button reads <b>&#128230; Send &amp; place order</b> (suppliers and factory), <b>&#128230; Send selected
+                orders</b> (suppliers only) or <b>&#128230; Place order</b> (factory only). It emails the ticked suppliers, moves the job to
+                <b>Ordered</b>, stamps its due date and tells the factory: <code>Order sent to Northfield Trade Supply. 2 blinds placed with
+                Beverley manufacturing. Moved on to &ldquo;Ordered&rdquo;.</code></li>
+            <li><b>No double orders.</b> A supplier already sent for this job comes back <b>unticked</b>, marked <b>&#9888;&#65039; Already sent
+                &lt;date&gt;</b> and <b>Re-send N lines</b>. Ticking it and sending asks <em>&ldquo;This order was already sent to: &hellip; Send again?
+                This will place a second order.&rdquo;</em></li>
+            <li><b>All in-house?</b> If every blind is your factory&rsquo;s own product, accepting places it at once &mdash; no place-order
+                screen: <code>Status: ordered. Due &lt;date&gt;. &hellip; Sent straight to the workshop &mdash; all in-house, no supplier order
+                needed.</code> (If the factory buys some items in itself: <em>&ldquo;Sent straight to the factory &mdash; no supplier order
+                needed from you (the factory orders any bought-in items itself).&rdquo;</em>) It&rsquo;s on to start with; switch it off under
+                <b>Settings &rarr; Quoting &rarr; Auto-place in-house orders</b>. Someone without permission to place orders gets <em>&ldquo;Not
+                sent to the workshop yet &mdash; someone who can place orders needs to place it.&rdquo;</em> instead.</li>
+            <li><b>Where is it now?</b> An order placed with your factory carries a pill in the job&rsquo;s bar and on the Orders list:
+                <b>With the factory: Confirmed</b> &rarr; <b>In Production</b> &rarr; <b>Ready to dispatch</b> &rarr; <b>Dispatched</b>. It is
+                worked out for you as the factory makes and receives the blinds; you never set it.</li>
+            <li><b>Fitted.</b> Complete the fitting on the calendar (<b>Update status:</b> <b>Completed</b> &rarr; <b>Save status</b> &rarr;
+                <em>&ldquo;Status updated to Completed. Linked quote ABC-2026-0042 advanced to &ldquo;fitted&rdquo;.&rdquo;</em>), or press
+                <b>Mark as fitted</b> on the job.</li>
+            <li><b>&#129534; Send invoice</b> &mdash; from Ordered onward. <em>&ldquo;Email this invoice to the customer now? This also marks the
+                job as Invoiced.&rdquo;</em> The customer gets <b>Invoice_&lt;number&gt;.pdf</b>, subject <b>&ldquo;Invoice &lt;number&gt; from
+                &lt;your company&gt;&rdquo;</b>, with the balance due in the message (or <em>&ldquo;This invoice is fully paid &mdash; thank
+                you.&rdquo;</em>) and a link to view it online; then <code>Invoice emailed to emma@example.co.uk. Marked as Invoiced.</code> The
+                invoice is the quote document headed <b>Invoice</b>; once money has been taken it shows <b>Paid</b> and <b>Balance due</b> under
+                the total, and the <b>How to pay &mdash; bank transfer</b> block prints if you&rsquo;ve filled in <b>Settings &rarr; Quoting &rarr;
+                Bank details for customer payments</b>. After that the button reads <b>&#129534; Resend invoice</b> and asks <em>&ldquo;This invoice
+                has already been sent. Send it to the customer AGAIN?&rdquo;</em></li>
           </ul>
-          <p><b>Only skimming the list here.</b> Reading a row, the four things that decide which rows you see, and the bulk buttons all get a
-             guide to themselves &mdash; <em>Finding a job: the Orders list</em>. This one is about what happens <b>after</b> you have found
-             the job.</p>
-          <p><b>Finding and tidying.</b> One box searches <b>three</b> things at once &mdash; <em>&ldquo;Search by quote #, customer name, or
-             postcode&hellip;&rdquo;</em> &mdash; and it keeps whichever chip you are on, so you can search inside <b>Ordered</b>. A
-             <b>Clear</b> button appears once you have typed. The chips carry their counts in brackets, and a chip whose count is
-             <b>zero is not drawn at all</b> &mdash; so if you have never had a fitted job, there is simply no Fitted chip; it is not broken.
-             Tick some rows and the two buttons wake up and the counter changes from <em>(none selected)</em> to <em>(2 of 2 selected)</em> &mdash;
-             and mind that second number: it is how many rows are <b>on screen</b> right now, not how many jobs you own, so it follows the chip
-             and the search you are in. Tick every row on screen and the header box fills in completely; tick only some and it shows a dash.
-             <b>&#128451; Archive selected</b> just <b>hides</b> finished jobs &mdash; nothing is lost. They move behind the
-             <b>&#128451; Archived (n)</b> chip at the far right, where the button becomes <b>Restore selected</b> and the chip becomes
-             <b>&larr; Back to active</b>; you get <em>&ldquo;11 jobs archived.&rdquo;</em> or <em>&ldquo;11 jobs restored to active.&rdquo;</em>
-             <b>Delete selected</b> is the other thing entirely: it asks <em>&ldquo;Delete the selected quotes? This is permanent &mdash; all
-             blinds, items and appointments go too.&rdquo;</em> and it refuses any job with money against it &mdash; <em>&ldquo;2 quotes were kept
-             because they have payments recorded against them&hellip; Delete the payments first if you really want to remove these.&rdquo;</em></p>
-          <p><b>Turning a quote into an order.</b> Click the quote number and the <b>Quote actions</b> panel is at the top. <b>Accepting</b>
-             is what makes a quote an order &mdash; either <b>&check; Customer accepted</b> in the sticky bar or <b>Mark as accepted</b>. If you
-             are ready to place it there and then, use the blue <b>&#128230; Save as order</b>: it accepts the job <em>and</em> carries you
-             straight to the place-order screen &mdash; <em>&ldquo;Order accepted &mdash; place it below (suppliers get emailed their
-             lines).&rdquo;</em> Two things happen quietly on accept: the <b>deposit</b> is worked out, and a placeholder fitting lands in the
-             calendar&rsquo;s <b>&ldquo;Pending Fitting&rdquo;</b> tray for you to drag onto the right day. <b>Declining</b> asks
-             <em>&ldquo;Mark this quote as declined?&rdquo;</em> and takes that pending fitting back off the calendar.
-             On the place-order screen your own products sit in a green <b>&#127981; manufacturing</b> group (no email &mdash; they go to the
-             workshop), each bought-in supplier gets its own group with an email and a ticked <b>Send N lines</b> box, and any supplier already
-             emailed for this job comes back <b>unticked</b> with <em>&ldquo;&#9888; Already sent&hellip;&rdquo;</em> so you cannot double-order.
-             The button reads <b>Send &amp; place order</b>, <b>Send selected orders</b> or just <b>Place order</b> depending on what is on the job.
-             Placing it stamps a <b>due date</b>, tells the factory, and auto-sends the bought-in orders. <b>And if every line is something you
-             make yourself, you never see that screen</b> &mdash; accepting placed it for you: <em>&ldquo;Sent straight to the workshop &mdash;
-             all in-house, no supplier order needed.&rdquo;</em> The buttons you see depend on where the job is, and <b>Reopen as draft</b> is offered
-             from nearly everywhere: draft offers sent, accepted or declined; sent offers accepted, declined or back to draft; accepted offers
-             ordered, fitted or back to draft; declined offers back to draft; ordered offers fitted, invoiced or back to draft; fitted offers
-             invoiced, back to ordered or back to draft; invoiced offers only back to draft; and <b>paid offers nothing at all</b>. Sales moves
-             (sent, accepted, declined) need the <b>Create quotes</b> permission and order moves (ordered, fitted, invoiced) need
-             <b>Create orders</b> &mdash; both are tick-boxes under <b>Permissions</b> on a person&rsquo;s record under <b>Setup &rsaquo;
-             Users</b> &mdash; so a fitter may see none of the order buttons at all. <b>Reopen as draft</b> is the exception: either tick is
-             enough.</p>
-          <p><b>Where is it?</b> Once an order is placed it also gets a <b>fulfilment stage</b>, worked out for you and never set by hand:
-             <b>Confirmed</b> (it has landed) &rarr; <b>In Production</b> (on the floor, or the bought-in orders are out) &rarr; <b>Ready</b>
-             &rarr; <b>Dispatched</b>. <b>Ready</b> is the one that matters, because it is the dispatch gate: <b>every</b> in-house blind made
-             <b>and every</b> bought-in line received. You will not find it on the Orders list &mdash; open <b>Factory</b> in the sidebar, which
-             lands on <b>Incoming Orders</b> (<em>&ldquo;Placed orders that contain &lt;your factory&rsquo;s name&gt; lines. Click an order to
-             open its blinds.&rdquo;</em>). Each row there carries <b>one</b> coloured pill &mdash; the stage it is at right now, not the whole
-             chain &mdash; beside an <b>N/M made</b> link through to the production floor and, where there is anything bought in, a
-             <b>Bought-in: N to order</b> / <b>Bought-in: ordered</b> / <b>Bought-in: received</b> pill. Watch the one pill change; there is no
-             four-step strip to read.</p>
-          <p><b>Invoicing.</b> The <b>&#129534; Send invoice</b> button only appears once the job is <b>Ordered</b> or later. It asks
-             <em>&ldquo;Email this invoice to the customer now? This also marks the job as Invoiced.&rdquo;</em>, then emails the customer a PDF
-             named <b>Invoice_&lt;number&gt;.pdf</b> with the subject <b>&ldquo;Invoice &lt;number&gt; from &lt;your company&gt;&rdquo;</b>, the
-             <b>balance due</b> stated in the message (or &ldquo;This invoice is fully paid &mdash; thank you.&rdquo;), a link to view it online,
-             and moves the job to <b>Invoiced</b>. The document is the same one as the quote, headed <b>Invoice</b>, plus your bank block. If
-             any money has been taken already, two more lines appear under the Total &mdash; <b>Paid</b> and <b>Balance due</b>; on a first
-             invoice with nothing paid yet <b>neither line is printed</b>, so the Total is the last figure on the page and that is correct,
-             not a fault. Send it again and the button has changed to
-             <b>&#129534; Resend invoice</b> with a blunter question: <em>&ldquo;This invoice has already been sent. Send it to the customer
-             AGAIN?&rdquo;</em></p>
-          <div class="oops"><b>When it stops you.</b> <em>&ldquo;No valid customer email on this order &mdash; add one on the customer, then try
-             again.&rdquo;</em> &mdash; and you cannot simply type it in where you would expect to: open <b>Customer details</b> on an order and the
-             <b>Email</b> box is there but greyed out, because an order is read-only. The way through is <b>Reopen as draft</b> at the top, fill the
-             email in, <b>Save details</b>, then <b>Mark as accepted</b> and <b>Mark as ordered</b> to put it back &mdash; and read the
-             warning below about the unpaid deposit before you do. <em>&ldquo;You can invoice once the job is
-             ordered &mdash; move it to Ordered first.&rdquo;</em> &mdash; the job is only accepted, so place it. And a second send without using
-             the Resend button is refused outright: <em>&ldquo;Invoice PRE-2026-0042 has already been sent. Use &lsquo;Resend invoice&rsquo; if you
-             really need to send it again.&rdquo;</em> You may also meet <em>&ldquo;You don&rsquo;t have permission to invoice orders.&rdquo;</em>,
-             <em>&ldquo;Can&rsquo;t move from accepted to invoiced.&rdquo;</em> or, on the supplier screen,
-             <em>&ldquo;No delivery address set &mdash; suppliers won&rsquo;t know where to ship. Add one under Settings &rsaquo; Suppliers
-             first.&rdquo;</em></div>
+
+          <div class="oops"><b>When it stops you.</b>
+             <ul style="margin:.4rem 0 0;padding-left:1.15rem">
+               <li><code>No valid customer email on this order &mdash; add one on the customer, then try again.</code></li>
+               <li><code>You can invoice once the job is ordered &mdash; move it to Ordered first.</code></li>
+               <li><code>Invoice ABC-2026-0042 has already been sent. Use &ldquo;Resend invoice&rdquo; if you really need to send it again.</code></li>
+               <li><code>You don&rsquo;t have permission to invoice orders.</code> / <code>You don&rsquo;t have permission to mark this quote as &ldquo;ordered&rdquo;.</code></li>
+               <li><code>Can&rsquo;t move from accepted to invoiced.</code> &mdash; only the moves on the panel are allowed.</li>
+               <li>On the place-order screen: <code>No delivery address set &mdash; suppliers won&rsquo;t know where to ship. Add one under Settings
+                   &rsaquo; Suppliers first.</code>, and a box saying a supplier has no (valid) order email &mdash; fix it under <b>Settings &rsaquo;
+                   Suppliers</b>.</li>
+             </ul></div>
+
           <div class="heads"><span class="hi">&#9888;</span><div><b>Paid looks after itself, and an order is read-only.</b> There is no
-             &ldquo;Mark as paid&rdquo; button anywhere: a job flips to <b>Paid</b> the moment the deposit plus payments cover the total, and it
-             flips back if money is taken out again. So just record the payment. And once a job is an order it cannot be edited &mdash;
-             <em>&ldquo;This quote is in ordered state and is read-only. Use Reopen as draft above to edit it.&rdquo;</em> Reopening clears an
-             <b>unpaid</b> deposit on purpose, so a percentage deposit re-works itself against the new total; a deposit already marked paid is
-             left alone.</div></div>
-          <p><b>Two last things.</b> The <b>How to pay &mdash; bank transfer</b> block only prints on the invoice if you have filled the details
-             in: <b>Settings</b>, the <b>Quoting</b> tab, right at the bottom under the heading <b>Bank details for customer payments</b>. Leave
-             it blank and the block is hidden altogether &mdash; so do that before you invoice anybody. And this is a wide, busy table: if it feels cramped, turn on <b>Compact mode</b> and it tightens
-             right up. From here, <em>Payments &amp; accounts</em> covers taking the deposit and the balance, and the <em>Calendar</em> guide
-             covers getting that Pending Fitting onto a real day with a real fitter.</p>',
+             &ldquo;Mark as paid&rdquo;: a job becomes <b>Paid</b> the moment the deposit plus recorded payments cover the total, and steps back
+             if money is taken off again &mdash; so just record the payment. Once a job is an order it is locked: <em>&ldquo;This quote is in
+             ordered state and is read-only. Use Reopen as draft above to edit it.&rdquo;</em> Reopening clears an <b>unpaid</b> deposit so it
+             re-works from the new total (a paid deposit is kept). Once the factory has the blinds in hand, reopening is refused:
+             <em>&ldquo;This order is already being made &mdash; contact the factory to change it.&rdquo;</em></div></div>
+
+          <p><b>Which moves are offered.</b> Draft &rarr; sent, accepted or declined. Sent &rarr; accepted, declined or back to draft. Accepted
+             &rarr; ordered, fitted or back to draft. Declined &rarr; back to draft. Ordered &rarr; fitted, invoiced or back to draft. Fitted
+             &rarr; invoiced, back to ordered or back to draft. Invoiced &rarr; back to draft. Paid &rarr; none. Sales moves (sent, accepted,
+             declined) need <b>Create quotes</b>; order moves (ordered, fitted, invoiced, and the invoice and supplier buttons) need <b>Create
+             orders</b>; either is enough for <b>Reopen as draft</b>. Admins have them all.</p>',
         'script'  => [
-            ['0:00', 'The order book: chips and counts.',   'This is your order book. Every job the customer has said yes to lives here, newest first. The chips across the top are just filters, and the number in brackets is how many. If a chip is not there, you simply have not got any of those yet. The same page sits in the sidebar twice, under Retail and under Trade, and each one counts only its own jobs.', 1],
-            ['0:18', 'Column by column.',                    'Now the columns. The quote number is the way in. The status colours are your colours, the ones you set in Settings, so a job reads the same colour here, on the calendar and on the pipeline. Deposit is worked out for you the moment you accept, half the total unless you changed it. Outstanding is what is still owed right now, and the amber figure is a link, straight to Payments with that order picked out. Outstanding only shows if the Accounts add-on is switched on for you, and the list stops at two hundred rows. Reading a row in full has a guide of its own, Finding a job: the Orders list.', 2],
-            ['0:40', 'Find one, and tidy up.',               'One box searches three things at once: the quote number, the customer name and the postcode. Below it, tick the rows you want and the two buttons wake up. The counter tells you how many of the rows on screen you have picked, so tick both of these two and it reads two of two. Archiving just hides a finished job out of the way. Nothing is lost, and the Archived chip at the end of the row brings them back with Restore selected. Deleting is the other thing entirely. It asks you first, it warns you that all the blinds, items and appointments go too, and it refuses any job with payments recorded against it.', 3],
-            ['1:00', 'From quote to order.',                 'Click a quote number and the Quote actions panel is at the top. Accepting is what turns a quote into an order. If you are ready to place it there and then, use Save as order. It accepts the job and carries you straight on to the place-order screen. Two things happen quietly: a deposit is worked out from your default, and a placeholder fitting drops into the calendar, in the Pending Fitting tray, for you to drag onto the right date. The buttons change with the state of the job, and a fitter may not see the order-side buttons at all.', 4],
-            ['1:24', 'Placing it: workshop and suppliers.',  'Placing it splits the job in two, and the screen tells you so at the top: each supplier below gets an email with only their lines and a spec PDF. Every group lists those lines underneath it, product by product, with the fabric and colour, the size, the quantity and the room, so you can check before you send. Your own products need no email at all: they go to the workshop. A supplier you have already emailed for this job comes back unticked, so you cannot double-order by accident. And here is the important one: if every line is something you make yourself, you never see this screen. Accepting already placed it, and it tells you so: sent straight to the workshop, all in-house, no supplier order needed.', 5],
-            ['1:48', 'Where is it? The fulfilment stage.',   'Once an order is placed it gets a stage of its own, worked out for you. You never set it. Confirmed means it has landed. In Production means it is on the floor, or the bought-in orders are out. Ready is the one that matters: every blind made, and every bought-in item in. Dispatched is out of the door. Note this stage is not on the orders list. The list shows Ordered, Fitted, Invoiced and Paid. The stage lives in the Factory app, on Incoming Orders, and it is one pill, not four: just the stage the job is at now, sitting next to how many blinds are made and a pill for anything bought in.', 6],
-            ['2:10', 'Invoice them.',                        'Now invoice them. The button only shows once the job is an order. If it is missing, the job is not placed yet, and it will tell you: you can invoice once the job is ordered. It needs the customer email, and it stops you if there is not one. What the invoice is, is the same document as the quote, headed Invoice, plus your bank details. Those bank details only print if you have filled them in, on the Quoting tab in Settings, under Bank details for customer payments. And if any money has been taken already, a Paid line and a Balance due line appear under the total. On a first invoice with nothing paid yet they are simply not there. Send it twice and it stops you and makes you use Resend invoice.', 7],
-            ['2:34', 'Paid, on its own.',                    'And the last one does itself. There is no Mark as paid button and there never was. Paid happens on its own the moment the deposit and the payments cover the total, and it un-happens if money is taken back out. So just record the payment and the status follows. That is the whole arc: accepted, placed, made, invoiced, paid.', 8],
+            ['1', 'One job, start to finish',   'This guide follows one job all the way through. A quote becomes an order the moment the customer says yes. Then it is placed, made, fitted, invoiced, and finally paid. Some of those steps are a button that you press, on the job\'s own page. Others happen all by themselves. Knowing which is which saves a lot of head scratching.', 1],
+            ['2', 'The Quote actions panel',    'Open the job by clicking its number on the Orders list. At the top of the page is the Quote actions panel. Its buttons change with the stage the job has reached, so you only ever see the moves that make sense right now. If a button you expect is missing, look at the stage first. It is usually telling you something.', 2],
+            ['3', 'Accepted: the customer said yes', 'When the customer accepts, the job becomes an order. They can accept online, from the link you sent them. Or, if they say yes in person, press Customer accepted at the top of the page. Two things happen quietly. The deposit is worked out from your settings, half the total unless you changed it. And a fitting appears in the calendar\'s Pending Fitting tray.', 3],
+            ['4', 'Save as order',              'If you are ready to place the order there and then, use the blue Save as order button instead. It accepts the job and carries you straight on to the place order screen, in one go. The green message tells you what to do next: place it below, and your suppliers get emailed their lines.', 4],
+            ['5', 'The place order screen',     'This screen splits the order up by who makes it. Each supplier gets its own box, with its order email, and a list of just their lines: the product, the fabric and colour, the size, the quantity and the room. Read it through before you send. Each supplier\'s box starts ticked, ready to go.', 5],
+            ['6', 'Your own products',          'Products from your factory\'s catalogue sit in a green box of their own, marked manufacturing. They need no email at all. They go straight to the factory the moment you place the order. If your account has a delivery charge, it is shown here too, so it is never a surprise on the invoice.', 6],
+            ['7', 'Placing it',                 'The button at the bottom changes its words to match: Send and place order, Send selected orders, or just Place order. Press it, and the emails go out, the job moves on to Ordered, and a due date is set. You are taken back to the job, with a message saying exactly who it was sent to.', 7],
+            ['8', 'No double orders',           'Come back to this screen later, and any supplier you have already sent to is left unticked, with a warning showing when it went. That stops you ordering the same blinds twice. If you really do mean to send it again, tick it, and the app asks you once more, because this places a second order.', 8],
+            ['9', 'All made in-house',          'If every blind on the job comes from your factory, you never see the place order screen at all. Accepting the job places it for you, straight away. The message says so: sent straight to the workshop, all in-house, no supplier order needed. This is switched on to start with, under Auto-place in-house orders, in Settings.', 9],
+            ['10', 'Where is it now?',          'Once your factory has the order, a small pill tells you how it is getting on. You see it on the job, and on the Orders list. With the factory: Confirmed means it has landed. Then In Production, then Ready to dispatch, and finally Dispatched. You never set this. It moves on its own as the factory works.', 10],
+            ['11', 'Fitted',                    'When the blinds are up, the job moves to Fitted. The easiest way is on the calendar: open the fitting, and mark it Completed. That moves the order to Fitted for you. Or, on the job itself, press Mark as fitted. Either way, it is ready to invoice.', 11],
+            ['12', 'Send the invoice',          'The Send invoice button appears once the job is ordered. Press it, and it asks you to confirm. The invoice goes to the customer by email, as a PDF, with the balance due written in the message, and the job moves to Invoiced. If money has already come in, the invoice shows what is paid, and what is left.', 12],
+            ['13', 'When it stops you',         'Sometimes the invoice will not send, and it tells you why. No valid customer email means you need to add one first. You can invoice once the job is ordered, means it has not been placed yet. And once an invoice has gone, the button changes to Resend invoice, so a stray click can never send a second one by mistake.', 13],
+            ['14', 'Paid, all on its own',      'There is no Mark as paid button. A job becomes Paid by itself, the moment the deposit and the payments you record cover the total. Take money back off, and it steps back again. So just record the payments, and the status follows. Paid always means the money really is in.', 14],
+            ['15', 'Changing an order',         'Once a job is an order, it is locked, so nothing changes by accident. To change it, press Reopen as draft, make your changes, then accept it again. An unpaid deposit is cleared, so it works itself out again from the new total. And once the factory has started making it, reopening is refused. Contact the factory instead.', 15],
         ],
 ];
