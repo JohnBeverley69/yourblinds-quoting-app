@@ -2,583 +2,536 @@
 declare(strict_types=1);
 
 /**
- * Guide: instaprice-quick
+ * Guide: instaprice-quick — "InstaPrice — a price in thirty seconds" (v2 player).
  *
  * One entry of the guided-walkthrough registry. Loaded by help/_guides.php,
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
- * lede, open, css, demo, body, script (and optionally js).
+ * lede, open, v, css, demo, body, script.
  *
- * Covers /instaprice/index.php (the quick-price screen) and
- * /instaprice/to-quote.php (turning that price into a real draft quote).
+ * Mirrors /instaprice/index.php (the signed-in quick-price screen: Product /
+ * System, Band / Fabric search, options, Measurement unit, Dimensions &
+ * quantity, the "Using …" echo, the price panel and its editable rates, the
+ * Trade discount row, Reset and "Turn into full quote →"), /instaprice/to-quote.php
+ * (the conversion and its errors) and where it lands on /quote-builder/edit.php
+ * (the amber "no customer yet" bar and the open customer form). Every label,
+ * button and message is copied from those files.
+ *
+ * v2: one SCENE per script line (data-scene = the line's step), each with its
+ * own animation timeline (a-* classes, start times in --d seconds, stretched
+ * to the recorded line's length via data-len).
  */
+
+$ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
+
+/** A labelled control. $box is the inside of the control; $kind 'sel' adds a dropdown chevron. */
+$f = static fn (string $label, string $box, string $kind = '', string $cls = '', string $style = ''): string =>
+    '<div class="fg ' . $cls . '" style="' . $style . '"><span class="fl">' . $label . '</span><span class="ib ' . $kind . '">' . $box . '</span></div>';
+$ph = static fn (string $t): string => '<span class="gph">' . $t . '</span>';
+
+/** The price panel. $rows overrides individual values; each is inner HTML. */
+$panel = static function (array $v = []): string {
+    $d = $v + [
+        'trade' => '', 'price' => '&pound;45.00', 'disc' => '10.00', 'dprice' => '&pound;41.00',
+        'mark' => '100.00', 'sell' => '&pound;77.00', 'each' => '', 'cls' => '', 'style' => '', 'markrow' => true,
+    ];
+    return '<div class="pp ' . $d['cls'] . '" style="' . $d['style'] . '">'
+        . ($d['trade'] !== '' ? '<div class="pr trade">' . $d['trade'] . '</div>' : '')
+        . '<div class="pr"><span class="l">Price</span><span class="v">' . $d['price'] . '</span></div>'
+        . '<div class="pr ed"><span class="l">Discount %</span><span class="pct">' . $d['disc'] . '</span></div>'
+        . '<div class="pr"><span class="l">Discounted price</span><span class="v">' . $d['dprice'] . '</span></div>'
+        . ($d['markrow'] ? '<div class="pr ed"><span class="l">Mark up %</span><span class="pct">' . $d['mark'] . '</span></div>' : '')
+        . '<div class="pr sell"><span class="l">Sell price</span><span class="v">' . $d['sell'] . '</span></div>'
+        . '<div class="tot">' . $d['each'] . '</div></div>';
+};
+
+// The form's top two rows, picked (used as a still in several scenes).
+$topPicked = '
+  <div class="g2">' . $f('Product', 'Roller Blind', 'sel') . $f('System', 'Bev Roller', 'sel') . '</div>
+  <div class="g2">' . $f('Band', 'All bands', 'sel') . $f('Fabric', 'Sunset / Ivory') . '</div>';
+
+$dims = static fn (string $w = '1200', string $d = '1400', string $q = '', string $echo = 'Using 1200 &times; 1400 mm'): string => '
+  <div class="g2">' . '<div class="fg"><span class="fl">Measurement unit</span><span class="ib sel">Millimetres (mm)</span></div><div></div></div>
+  <div class="fg"><span class="fl">Dimensions (mm) &amp; quantity</span>
+    <div class="dims"><div class="fg"><span class="cap">Width</span><span class="ib">' . $w . '</span></div>
+      <div class="fg"><span class="cap">Drop</span><span class="ib">' . $d . '</span></div>
+      <div class="fg q"><span class="cap">Qty</span><span class="ib">' . ($q === '' ? '<span class="gph">Qty</span>' : $q) . '</span></div></div>
+    <div class="echo">' . $echo . '</div></div>';
+
+$btns = '<div class="fact"><span class="btnp">Turn into full quote &rarr;</span><span class="btns">Reset</span></div>';
 
 return [
         'aud'     => 'all',
         'section' => 'Quotes',
         'title'   => 'InstaPrice — a price in thirty seconds',
         'eyebrow' => 'InstaPrice',
-        'blurb'   => 'The whole quick-price flow: product, fabric, options, size — then the breakdown, the two rates you can override, and turning it into a real quote.',
+        'v'       => 2,
+        'blurb'   => 'The whole quick-price flow: product, fabric, options, size — then the breakdown, the rates you can play with, quantities, when it won\'t price, and turning it into a real quote.',
         'lede'    => 'InstaPrice is the tool for <b>&ldquo;how much is that, roughly?&rdquo;</b> &mdash; on the phone, or standing in
                       somebody&rsquo;s front room. <b>No customer, no saving</b>: pick a product, size it, read the price. It uses the
-                      <b>same pricing engine as the quote builder</b>, so the figure you read out is the real figure. And if they say yes,
-                      <b>one button</b> turns it into a proper quote.',
+                      <b>same pricing as the quote builder</b>, so the figure you read out is the real figure. And if they say yes,
+                      <b>one button</b> turns it into a proper quote. Open it from the <b>&#9889; InstaPrice</b> button near the top of the menu.',
         'open'    => '/instaprice/index.php',
         'css'     => '
-          /* ---------- shell ---------- */
-          .gd .side a.ipcta{ background:#f2a33c; color:#3a2400; font-weight:700; margin-bottom:.4rem; }
-          .gd .mt{ margin-top:.7rem; }
-          .gd .ipnote{ font-size:.62rem; color:var(--faint); margin:.2rem 0 0; }
-          .gd .ipsub{ font-size:.72rem; color:var(--faint); margin:-.72rem 0 .9rem; }
-          .gd .sysnote{ display:none; }
-          .gd .stage[data-step="1"] .sysnote{ display:block; }
-          .gd .stage[data-step="8"] .ipform{ display:none; }
-          .gd .qbscene{ display:none; }
-          .gd .stage[data-step="8"] .qbscene{ display:block; }
-          .gd .fld{ position:relative; }
+          .gd .sc{ position:relative; min-height:380px; }
+          .gd .sct{ font-weight:800; font-size:.92rem; color:var(--ink); margin:0 0 .25rem; }
+          .gd .scs{ font-size:.7rem; color:var(--soft); margin:0 0 .7rem; }
+          .gd .pt{ font-size:1.05rem; font-weight:800; color:var(--ink); }
+          .gd .psub{ font-size:.68rem; color:var(--soft); margin:.1rem 0 .7rem; }
 
-          /* ---------- a real <select>: label + chevron, value still rolls in ---------- */
-          .gd .selb{ border-color:var(--border-strong,#c7ccd4); background:var(--surface); padding-right:1.35rem; }
-          .gd .selb::after{ content:"\25BE"; position:absolute; right:.5rem; top:50%; transform:translateY(-50%);
-                            color:var(--faint); font-size:.7rem; z-index:3; }
-          .gd .selb .val{ padding-right:1.35rem; }
-          .gd .selb.dis{ background:var(--panel); color:var(--faint); }
-          .gd .stage:not([data-step="0"]) .selb.dis{ background:var(--surface); }
-          .gd .valv{ color:var(--ink); }
+          .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px;
+                     padding:.34rem .8rem; font-size:.74rem; font-weight:700; white-space:nowrap; }
+          .gd .btnp.off{ background:var(--panel); color:var(--faint); border:1px solid var(--line); }
+          .gd .btns{ display:inline-flex; align-items:center; gap:.3rem; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4);
+                     color:var(--ink); border-radius:7px; padding:.3rem .7rem; font-size:.72rem; font-weight:600; white-space:nowrap; }
+          .gd .chip{ display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); background:var(--surface); border-radius:999px;
+                     padding:.28rem .7rem; font-size:.72rem; font-weight:700; color:var(--ink); }
+          .gd .chip.bad{ border-color:var(--err); color:var(--err); }
+          .gd .swap{ display:inline-grid; } .gd .swap > span{ grid-area:1/1; }
+          .gd .fact{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
 
-          @keyframes gdRollIn{ from{ opacity:0; clip-path:inset(0 100% 0 0);} to{ opacity:1; clip-path:inset(0 0 0 0);} }
-          @keyframes gdFadeIn{ from{ opacity:0 } to{ opacity:1 } }
-          @keyframes gdShrink{ from{ opacity:1; max-height:2.4rem } to{ opacity:0; max-height:0 } }
-          @keyframes gdPhOut{ from{ opacity:1 } to{ opacity:0 } }
-          @keyframes gdLive{ from{ background:var(--accent); color:#fff } to{ background:var(--accent); color:#fff } }
-          @media (prefers-reduced-motion:reduce){
-            .gd .stage .val, .gd .stage .pbrk, .gd .stage .pstill, .gd .stage .echo{ animation:none !important; }
-          }
+          /* form */
+          .gd .frm{ display:flex; flex-direction:column; gap:.5rem; max-width:30rem; }
+          .gd .g2{ display:grid; grid-template-columns:1fr 1fr; gap:.55rem; }
+          .gd .fg{ display:flex; flex-direction:column; gap:.2rem; min-width:0; position:relative; }
+          .gd .fl{ font-size:.66rem; font-weight:700; color:var(--soft); }
+          .gd .cap{ font-size:.6rem; font-weight:600; color:var(--faint); }
+          .gd .ib{ display:flex; align-items:center; min-height:28px; border:1px solid var(--border-strong,#c7ccd4); border-radius:7px;
+                   background:var(--surface); padding:0 .5rem; font-size:.74rem; color:var(--ink); overflow:hidden; white-space:nowrap; position:relative; }
+          .gd .ib.sel{ padding-right:1.4rem; }
+          .gd .ib.sel::after{ content:"\25BE"; position:absolute; right:.45rem; color:var(--faint); font-size:.7rem; }
+          .gd .ib.dis{ background:var(--panel); }
+          .gd .gph{ color:var(--faint); }
+          .gd .rq{ color:#b91c1c; font-style:normal; }
+          .gd .dims{ display:flex; gap:.5rem; } .gd .dims > .fg{ flex:1 1 0; } .gd .dims > .fg.q{ flex:0 0 4.5rem; }
+          .gd .echo{ font-size:.68rem; color:var(--faint); margin-top:.3rem; }
+          .gd .drop{ position:absolute; left:0; right:0; top:100%; z-index:5; margin-top:3px; background:var(--surface); border:1px solid var(--line);
+                     border-radius:8px; box-shadow:var(--gd-shadow); font-size:.7rem; overflow:hidden; }
+          .gd .drop div{ padding:.3rem .55rem; border-top:1px solid var(--line); color:var(--ink); }
+          .gd .drop div:first-child{ border-top:0; }
+          .gd .drop small{ display:block; color:var(--faint); font-size:.6rem; }
+          .gd .drop .hit{ background:var(--accent-wash); }
+          .gd .drop .og{ background:var(--panel); color:var(--faint); font-weight:800; font-size:.58rem; text-transform:uppercase; letter-spacing:.05em; }
+          .gd .ck{ display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; color:var(--ink); margin-right:.7rem; }
+          .gd .ck > i{ width:14px; height:14px; border:1.5px solid var(--border-strong,#9aa3af); border-radius:3px; display:grid; place-items:center;
+                       font-style:normal; font-size:.7rem; font-weight:900; color:var(--accent); background:var(--surface); }
+          .gd .ind{ margin-left:1rem; padding-left:.6rem; border-left:2px solid var(--line); }
 
-          /* ---------- product dropdown, open (step 1) ---------- */
-          .gd .ddlist{ display:none; position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:40;
-                       background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
-                       box-shadow:0 10px 26px -14px rgba(20,30,45,.45); padding:.25rem 0; }
-          .gd .stage[data-step="1"] .ddlist{ display:block; }
-          .gd .oglbl{ font-size:.62rem; font-weight:700; font-style:italic; color:var(--faint); padding:.2rem .55rem 0; }
-          .gd .ddopt{ font-size:.76rem; color:var(--ink); padding:.16rem .55rem .16rem 1.1rem; }
-          .gd .ddopt.on{ background:var(--accent-wash); color:var(--accent-ink); font-weight:700; }
+          /* price panel */
+          .gd .pp{ border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:.55rem .8rem; font-size:.74rem; max-width:22rem; }
+          .gd .pp.idle{ color:var(--faint); font-style:italic; }
+          .gd .pp.err{ border-color:var(--err); color:var(--err); }
+          .gd .pr{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.25rem 0; border-top:1px solid var(--line); }
+          .gd .pr:first-child{ border-top:0; }
+          .gd .pr .l{ color:var(--soft); } .gd .pr .v{ font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
+          .gd .pr.ed .l{ color:#b45309; font-weight:700; }
+          :root[data-theme="dark"] .gd .pr.ed .l{ color:#fbbf24; }
+          .gd .pct{ display:inline-flex; justify-content:flex-end; min-width:4.6rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:6px;
+                    padding:.15rem .4rem; background:var(--surface); font-variant-numeric:tabular-nums; }
+          .gd .pr.sell{ border-top:2px solid var(--border-strong,#c7ccd4); margin-top:.25rem; padding-top:.4rem; }
+          .gd .pr.sell .l{ font-weight:800; color:var(--ink); font-size:.86rem; }
+          .gd .pr.sell .v{ font-weight:800; font-size:1.15rem; color:var(--accent); }
+          .gd .pr.trade .l, .gd .pr.trade .v{ color:#065f46; }
+          :root[data-theme="dark"] .gd .pr.trade .l, :root[data-theme="dark"] .gd .pr.trade .v{ color:#34d399; }
+          .gd .tot{ font-size:.66rem; color:var(--faint); text-align:right; min-height:.4rem; }
 
-          /* ---------- fabric typeahead results (step 2) ---------- */
-          .gd .fabres{ display:none; position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:40;
-                       background:var(--surface); border:1px solid var(--border-strong,#c7ccd4); border-radius:8px;
-                       box-shadow:0 10px 26px -14px rgba(20,30,45,.45); overflow:hidden; }
-          .gd .stage[data-step="2"] .fabres{ display:block; }
-          .gd .frw{ padding:.3rem .55rem; border-bottom:1px solid var(--line-2); }
-          .gd .frw:last-child{ border-bottom:none; }
-          .gd .frw.on{ background:var(--panel); }
-          .gd .fname2{ font-size:.78rem; color:var(--ink); }
-          .gd .fmeta2{ font-size:.64rem; color:var(--faint); margin-top:.05rem; }
+          .gd .side2{ display:grid; grid-template-columns:1.1fr 1fr; gap:1rem; align-items:start; }
+          .gd .two{ display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+          .gd .card{ border:1px solid var(--line); border-radius:10px; padding:.55rem .65rem; background:var(--surface); font-size:.7rem; color:var(--soft); line-height:1.45; }
+          .gd .card h4{ margin:0 0 .35rem; font-size:.78rem; color:var(--ink); }
+          .gd .mnu{ border:1px solid var(--line); border-radius:9px; padding:.45rem; background:#1f2937; width:10rem; }
+          .gd .mnu .nw{ display:block; text-align:center; background:var(--accent); color:#fff; border-radius:7px; padding:.3rem; font-size:.72rem; font-weight:800; margin-bottom:.35rem; }
+          .gd .mnu .ip{ display:block; text-align:center; background:#f59e0b; color:#1f2937; border-radius:7px; padding:.3rem; font-size:.72rem; font-weight:800; }
+          .gd .mnu small{ display:block; color:#94a3b8; font-size:.55rem; text-transform:uppercase; letter-spacing:.06em; margin:.45rem 0 .1rem .2rem; }
+          .gd .mnu span.it{ display:block; color:#cbd5e1; font-size:.66rem; padding:.12rem .25rem; }
+          .gd .hdrrow{ display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap; }
+          .gd .nope{ display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.6rem; }
+          .gd .nope span{ border:1px dashed var(--line); border-radius:999px; padding:.2rem .6rem; font-size:.68rem; color:var(--faint); text-decoration:line-through; }
 
-          /* ---------- options block ---------- */
-          .gd .optblk{ display:none; margin-top:.7rem; padding:.15rem; }
-          .gd .stage[data-step="3"] .optblk, .gd .stage[data-step="4"] .optblk, .gd .stage[data-step="5"] .optblk,
-          .gd .stage[data-step="6"] .optblk, .gd .stage[data-step="7"] .optblk{ display:block; }
-          .gd .stage[data-step="3"] .optblk{ box-shadow:0 0 0 3px var(--accent-wash); border-radius:9px; }
-          .gd .opt{ margin-bottom:.45rem; max-width:17rem; }
-          .gd .opt > label{ display:block; font-size:.64rem; color:var(--faint); font-weight:600;
-                            text-transform:uppercase; letter-spacing:.04em; margin-bottom:.2rem; }
-          .gd .optchild{ margin-left:.7rem; padding-left:.6rem; border-left:2px solid var(--line); margin-top:.45rem; }
-          .gd .multibox{ display:flex; flex-direction:column; gap:.3rem; border:1px solid var(--border-strong,#c7ccd4);
-                         border-radius:8px; background:var(--surface); padding:.4rem .5rem; }
-          .gd .mrow{ display:inline-flex; align-items:center; gap:.45rem; font-size:.78rem; color:var(--ink); }
-          .gd .numin{ background:var(--surface); border-color:var(--border-strong,#c7ccd4); max-width:12rem; }
+          /* quote-builder landing */
+          .gd .qsb{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; background:#1f2937; color:#fff; border-radius:9px; padding:.45rem .7rem; font-size:.74rem; font-weight:700; margin-bottom:.55rem; }
+          .gd .qsb .pill{ background:#e5e7eb; color:#374151; border-radius:999px; padding:.05rem .5rem; font-size:.6rem; text-transform:lowercase; }
+          .gd .qsb .tt{ margin-left:auto; }
+          .gd .ncb{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; background:#fef3c7; border:1px solid #f59e0b; color:#78350f;
+                    border-radius:9px; padding:.45rem .65rem; font-size:.72rem; margin-bottom:.55rem; }
+          .gd .ncb .go{ margin-left:auto; background:#92600a; color:#fff; border-radius:6px; padding:.15rem .5rem; font-weight:700; font-size:.68rem; }
+          .gd .cust{ border:1px solid var(--line); border-radius:10px; padding:.55rem .65rem; background:var(--surface); }
+          .gd .cust .sm{ font-size:.74rem; font-weight:700; color:var(--ink); margin-bottom:.45rem; }
+          .gd .cust .sm small{ font-weight:400; color:var(--faint); }
+          .gd .ovr{ border:1px solid var(--line); border-radius:8px; padding:.4rem .6rem; font-size:.7rem; color:var(--soft); margin-top:.6rem; max-width:30rem; }
 
-          /* ---------- dimensions + echo ---------- */
-          .gd .dims{ display:grid; grid-template-columns:1fr 1fr 4.2rem; gap:.5rem; }
-          .gd .dcap{ font-size:.62rem; color:var(--faint); font-weight:600; margin-bottom:.15rem; }
-          .gd .dimbox{ background:var(--surface); border-color:var(--border-strong,#c7ccd4); }
-          .gd .echo{ display:none; margin-top:.4rem; font-size:.7rem; color:var(--faint); }
-          .gd .e2{ display:none; }
-          .gd .stage[data-step="5"] .echo, .gd .stage[data-step="6"] .echo, .gd .stage[data-step="7"] .echo{ display:block; }
-          .gd .stage[data-step="4"] .echo{ display:block; animation:gdFadeIn .3s ease 6.4s both; }
-          .gd .stage[data-step="7"] .e1{ display:none; }
-          .gd .stage[data-step="7"] .e2{ display:inline; }
-
-          /* ---------- price panel ---------- */
-          .gd .ipp{ margin-top:.8rem; border:1px solid var(--line); border-radius:11px; background:var(--surface); padding:.6rem .75rem; }
-          .gd .stage[data-step="7"] .ipp{ border-color:var(--err); }
-          .gd .pidle, .gd .pstill{ display:none; font-style:italic; color:var(--faint); font-size:.78rem; overflow:hidden; }
-          .gd .perrbox{ display:none; color:var(--err); font-size:.78rem; font-weight:600; }
-          .gd .pbrk{ display:none; }
-          .gd .stage[data-step="0"] .pidle, .gd .stage[data-step="1"] .pidle,
-          .gd .stage[data-step="2"] .pidle, .gd .stage[data-step="3"] .pidle{ display:block; }
-          .gd .stage[data-step="4"] .pstill{ display:block; animation:gdShrink .35s ease 5.9s forwards; }
-          .gd .stage[data-step="4"] .pbrk{ display:block; animation:gdFadeIn .35s ease 6.4s both; }
-          .gd .stage[data-step="5"] .pbrk, .gd .stage[data-step="6"] .pbrk{ display:block; }
-          .gd .stage[data-step="7"] .perrbox{ display:block; }
-          .gd .iprow{ display:flex; align-items:center; justify-content:space-between; gap:.7rem; padding:.28rem 0; font-size:.78rem; }
-          .gd .iprow + .iprow{ border-top:1px solid var(--line-2); }
-          .gd .iprow .lbl{ color:var(--soft); }
-          .gd .iprow .amt{ font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); }
-          .gd .iprow.edit .lbl{ color:#b45309; font-weight:700; }
-          .gd .traderow .lbl, .gd .traderow .amt{ color:var(--good); }
-          .gd .numbox{ display:inline-flex; justify-content:flex-end; min-width:4.6rem; border:1px solid var(--border-strong,#c7ccd4);
-                       border-radius:6px; background:var(--surface); padding:.16rem .4rem; font-size:.76rem;
-                       font-variant-numeric:tabular-nums; color:var(--ink); }
-          .gd .stage[data-step="6"] .numbox{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
-          .gd .ipsell{ margin-top:.3rem; padding-top:.4rem; border-top:2px solid var(--border-strong,#c7ccd4) !important; }
-          .gd .ipsell .lbl{ font-weight:700; color:var(--ink); font-size:.86rem; }
-          .gd .ipsell .amt{ font-weight:800; font-size:1.05rem; color:var(--accent-ink); }
-          .gd .iptot{ text-align:right; font-size:.68rem; color:var(--faint); margin-top:.15rem; min-height:.8rem; }
-          .gd .s6{ display:none; }
-          .gd .stage[data-step="6"] .s5{ display:none; }
-          .gd .stage[data-step="6"] .s6{ display:inline; }
-
-          /* ---------- buttons ---------- */
-          .gd .btnrow{ display:flex; gap:.5rem; margin-top:.7rem; }
-          .gd .pbtn{ display:inline-flex; background:var(--line); color:var(--faint); border-radius:8px;
-                     padding:.4rem .8rem; font-size:.78rem; font-weight:700; }
-          .gd .sbtn{ display:inline-flex; background:var(--surface); border:1px solid var(--border-strong,#c7ccd4);
-                     color:var(--ink); border-radius:8px; padding:.4rem .8rem; font-size:.78rem; font-weight:600; }
-          .gd .stage[data-step="5"] .pbtn, .gd .stage[data-step="6"] .pbtn{ background:var(--accent); color:#fff; }
-          .gd .stage[data-step="4"] .pbtn{ animation:gdLive .01s linear 6.4s forwards; }
-
-          /* ---------- step 8: the quote builder ---------- */
-          .gd .qline{ margin-top:.6rem; border:1px solid var(--line); border-radius:8px; background:var(--panel);
-                      padding:.4rem .55rem; font-size:.74rem; color:var(--soft); }
-          /* the real lines table: # / Description / Size / Qty / Unit / Total */
-          .gd .qitems{ width:100%; border-collapse:collapse; font-size:.72rem; }
-          .gd .qitems th{ text-align:left; font-weight:700; color:var(--faint); font-size:.62rem;
-                          text-transform:uppercase; letter-spacing:.04em; padding:.15rem .3rem;
-                          border-bottom:1px solid var(--line); }
-          .gd .qitems td{ padding:.28rem .3rem; vertical-align:top; color:var(--soft); }
-          .gd .qitems td b{ color:var(--ink); }
-          .gd .qitems .n{ text-align:right; font-variant-numeric:tabular-nums; }
-          .gd .qbcust{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); background:var(--surface); }
-          /* the real page opens on a slim sticky bar: quote number, status pill, total */
-          .gd .stickybar{ display:flex; align-items:center; gap:.5rem; margin-top:.7rem; font-size:.78rem;
-                          font-weight:700; color:var(--ink); }
-          .gd .stickybar .spill{ font-weight:600; font-size:.6rem; text-transform:uppercase; letter-spacing:.05em;
-                                 border:1px solid var(--line); border-radius:999px; padding:.06rem .45rem; color:var(--soft); }
-          .gd .stickybar .stot{ margin-left:auto; font-weight:600; color:var(--soft); }
-          /* Customer details is a <details> block — it ARRIVES CLOSED, summary only */
-          .gd .cdet{ margin-top:.7rem; border:1px solid var(--line); border-radius:9px; padding:.55rem .7rem; }
-          .gd .csum{ font-size:.8rem; color:var(--ink); font-weight:600; }
-          .gd .csum .tri{ color:var(--faint); margin-right:.3rem; }
-          .gd .csum .cshint{ font-weight:400; color:var(--faint); font-size:.72rem; }
-          .gd .cbody{ margin-top:.6rem; padding-top:.55rem; border-top:1px solid var(--line-2); }
-
-          /* ---------- value reveals (explicit: f1..f5 stop at step 5) ---------- */
-          .gd .stage[data-step="1"] .rP .val, .gd .stage[data-step="2"] .rP .val, .gd .stage[data-step="3"] .rP .val,
-          .gd .stage[data-step="4"] .rP .val, .gd .stage[data-step="5"] .rP .val, .gd .stage[data-step="6"] .rP .val,
-          .gd .stage[data-step="7"] .rP .val,
-          .gd .stage[data-step="1"] .rS .val, .gd .stage[data-step="2"] .rS .val, .gd .stage[data-step="3"] .rS .val,
-          .gd .stage[data-step="4"] .rS .val, .gd .stage[data-step="5"] .rS .val, .gd .stage[data-step="6"] .rS .val,
-          .gd .stage[data-step="7"] .rS .val,
-          .gd .stage[data-step="2"] .rB .val, .gd .stage[data-step="3"] .rB .val, .gd .stage[data-step="4"] .rB .val,
-          .gd .stage[data-step="5"] .rB .val, .gd .stage[data-step="6"] .rB .val, .gd .stage[data-step="7"] .rB .val,
-          .gd .stage[data-step="3"] .rO .val, .gd .stage[data-step="4"] .rO .val, .gd .stage[data-step="5"] .rO .val,
-          .gd .stage[data-step="6"] .rO .val, .gd .stage[data-step="7"] .rO .val,
-          .gd .stage[data-step="4"] .rW .wa, .gd .stage[data-step="5"] .rW .wa, .gd .stage[data-step="6"] .rW .wa,
-          .gd .stage[data-step="7"] .rW .wb,
-          .gd .stage[data-step="5"] .rD .val, .gd .stage[data-step="6"] .rD .val, .gd .stage[data-step="7"] .rD .val{ opacity:1; }
-
-          .gd .stage[data-step="1"] .rP .ph, .gd .stage[data-step="2"] .rP .ph, .gd .stage[data-step="3"] .rP .ph,
-          .gd .stage[data-step="4"] .rP .ph, .gd .stage[data-step="5"] .rP .ph, .gd .stage[data-step="6"] .rP .ph,
-          .gd .stage[data-step="7"] .rP .ph,
-          .gd .stage[data-step="1"] .rS .ph, .gd .stage[data-step="2"] .rS .ph, .gd .stage[data-step="3"] .rS .ph,
-          .gd .stage[data-step="4"] .rS .ph, .gd .stage[data-step="5"] .rS .ph, .gd .stage[data-step="6"] .rS .ph,
-          .gd .stage[data-step="7"] .rS .ph,
-          .gd .stage[data-step="2"] .rB .ph, .gd .stage[data-step="3"] .rB .ph, .gd .stage[data-step="4"] .rB .ph,
-          .gd .stage[data-step="5"] .rB .ph, .gd .stage[data-step="6"] .rB .ph, .gd .stage[data-step="7"] .rB .ph,
-          .gd .stage[data-step="3"] .rO .ph, .gd .stage[data-step="4"] .rO .ph, .gd .stage[data-step="5"] .rO .ph,
-          .gd .stage[data-step="6"] .rO .ph, .gd .stage[data-step="7"] .rO .ph,
-          .gd .stage[data-step="4"] .rW .ph, .gd .stage[data-step="5"] .rW .ph, .gd .stage[data-step="6"] .rW .ph,
-          .gd .stage[data-step="7"] .rW .ph,
-          .gd .stage[data-step="5"] .rD .ph, .gd .stage[data-step="6"] .rD .ph, .gd .stage[data-step="7"] .rD .ph{ opacity:0; }
-
-          /* the roll happens on the step the field is being filled, and the ring with it */
-          .gd .stage[data-step="1"] .rP .val, .gd .stage[data-step="1"] .rS .val,
-          .gd .stage[data-step="2"] .rB .val, .gd .stage[data-step="3"] .rO .val,
-          .gd .stage[data-step="4"] .rW .wa, .gd .stage[data-step="7"] .rW .wb{ animation:gdRollIn .8s ease-out both; }
-          .gd .stage[data-step="1"] .rP, .gd .stage[data-step="1"] .rS,
-          .gd .stage[data-step="2"] .rB, .gd .stage[data-step="2"] .fabbox,
-          .gd .stage[data-step="4"] .rW, .gd .stage[data-step="4"] .rD,
-          .gd .stage[data-step="7"] .rW{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
-          .gd .stage[data-step="6"] .qbox{ border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-wash); }
-
-          /* drop lands part-way through step 4, once the width has been talked about */
-          .gd .stage[data-step="4"] .rD .val{ animation:gdRollIn .8s ease-out 6s both; }
-          .gd .stage[data-step="4"] .rD .ph{ animation:gdPhOut .01s linear 6s forwards; }
-
-          /* fabric: two placeholders and two values in one box */
-          .gd .fabbox{ background:var(--surface); border-color:var(--border-strong,#c7ccd4); }
-          .gd .fabbox .p1{ display:none; }
-          .gd .stage[data-step="1"] .fabbox .p1{ display:inline; }
-          .gd .stage:not([data-step="0"]) .fabbox .p0{ display:none; }
-          .gd .stage[data-step="2"] .fabbox .vft{ opacity:1; animation:gdRollIn .8s ease-out both; }
-          .gd .stage[data-step="3"] .fabbox .vfp, .gd .stage[data-step="4"] .fabbox .vfp,
-          .gd .stage[data-step="5"] .fabbox .vfp, .gd .stage[data-step="6"] .fabbox .vfp,
-          .gd .stage[data-step="7"] .fabbox .vfp{ opacity:1; }
-
-          /* quantity is a real number box, pre-set to 1 */
-          .gd .q2{ display:none; }
-          .gd .stage[data-step="6"] .q1, .gd .stage[data-step="7"] .q1{ display:none; }
-          .gd .stage[data-step="6"] .q2, .gd .stage[data-step="7"] .q2{ display:inline; }',
+          @media (max-width:640px){
+            .gd .sc{ min-height:450px; }
+            .gd .side2, .gd .two{ grid-template-columns:1fr; }
+          }',
         'demo'    => '
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / instaprice</span></div>
             <div class="app">
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
-                <a class="ipcta on">&#9889; InstaPrice</a>
                 <div class="navh">Work</div>
                 <a>Dashboard</a><a>Calendar</a>
                 <div class="navh">Retail</div>
-                <a>Customers</a>
-                <div class="navh">Setup</div>
+                <a>Customers</a><a>Quotes</a><a>Orders</a>
+                <div class="navh">Setup <span class="chev">&#9662;</span></div>
                 <a>Products</a><a>Settings</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
-                <div class="ipform">
-                  <div class="card-t">InstaPrice</div>
-                  <p class="ipsub">Quick price &mdash; no customer details needed.</p>
-
-                  <!-- Product + System -->
-                  <div class="frow">
-                    <div class="fld">
-                      <label>Product</label>
-                      <div class="box selb rP"><span class="ph">Choose product&hellip;</span><span class="val">25mm Venetian</span></div>
-                      <div class="ddlist">
-                        <div class="oglbl">Venetian Blinds</div>
-                        <div class="ddopt on">25mm Venetian</div>
-                        <div class="ddopt">50mm Wood Venetian</div>
-                        <div class="oglbl">Roller Blinds</div>
-                        <div class="ddopt">Bev Roller Blinds</div>
-                      </div>
-                    </div>
-                    <div class="fld">
-                      <label>System</label>
-                      <div class="box selb dis rS"><span class="ph">Choose product first</span><span class="val">Bev 25mm</span></div>
-                      <p class="ipnote sysnote">landed on this product&rsquo;s default system</p>
-                    </div>
+                <!-- 0 — poster -->
+                <div class="sc" data-scene="0">
+                  <div class="pt">InstaPrice</div><div class="psub">Quick price &mdash; no customer details needed.</div>
+                  <div class="side2">
+                    <div class="frm">' . $topPicked . $dims('1200', '1400', '') . '</div>
+                    <div>' . $panel() . $btns . '</div>
                   </div>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fourteen short chapters, at an easy pace.</p>
+                </div>
 
-                  <!-- Band + Fabric (whole row disappears on a no-fabric product) -->
-                  <div class="frow mt">
-                    <div class="fld">
-                      <label>Band</label>
-                      <div class="box selb rB"><span class="ph">All bands</span><span class="val">A</span></div>
-                    </div>
-                    <div class="fld">
-                      <label>Fabric</label>
-                      <div class="box fabbox">
-                        <span class="ph p0">Choose product first</span>
-                        <span class="ph p1">Type to search fabrics&hellip;</span>
-                        <span class="val vft">aspen</span>
-                        <span class="val vfp">Aspen / Auburn</span>
+                <!-- 1 — what it is -->
+                <div class="sc" data-scene="1" data-len="23">
+                  <div class="sct a-fade" style="--d:.2s">A real price, in thirty seconds</div>
+                  <div class="hdrrow">
+                    <div class="mnu a-fly" style="--d:8.5s"><span class="nw">+ New</span><span class="ip a-ring" style="--d:10s">&#9889; InstaPrice</span>
+                      <small>Work</small><span class="it">Dashboard</span><span class="it">Calendar</span></div>
+                    <div style="flex:1;min-width:14rem">
+                      <div class="chip a-pop" style="--d:1.5s">&#128222; &ldquo;Roughly how much would that be?&rdquo;</div>
+                      <div class="pt a-fade" style="--d:12s;margin-top:.8rem">InstaPrice</div>
+                      <div class="psub a-fade" style="--d:12.3s">Quick price &mdash; no customer details needed.</div>
+                      <div class="two" style="margin-top:.5rem">
+                        <div class="card a-rise" style="--d:14.6s"><h4>InstaPrice</h4>&pound;77.00</div>
+                        <div class="card a-rise" style="--d:15.5s"><h4>Quote builder</h4>&pound;77.00</div>
                       </div>
-                      <div class="fabres">
-                        <div class="frw on"><div class="fname2">Aspen / Auburn</div><div class="fmeta2">Louvolite &middot; Code 1234</div></div>
-                        <div class="frw"><div class="fname2">Aspen / Ivory</div><div class="fmeta2">Louvolite &middot; Code 1237</div></div>
-                      </div>
+                      <span class="chip a-pop" style="--d:18.5s;margin-top:.6rem">Same pricing &mdash; the real figure, not a guess</span>
                     </div>
-                  </div>
-
-                  <!-- Options, built from this product / system / fabric -->
-                  <div class="optblk">
-                    <div class="opt">
-                      <label>Control side</label>
-                      <div class="box selb rO"><span class="ph">&mdash; Select &mdash;</span><span class="val">Left</span></div>
-                    </div>
-                    <div class="opt">
-                      <label>Headrail <span class="req">*</span></label>
-                      <div class="box selb rO"><span class="ph">&mdash; Select &mdash;</span><span class="val">Vogue</span></div>
-                      <div class="optchild">
-                        <div class="opt">
-                          <label>Chain type</label>
-                          <div class="box selb rO"><span class="ph">&mdash; Select &mdash;</span><span class="val">Metal</span></div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="opt">
-                      <label>Bracket Type</label>
-                      <div class="multibox">
-                        <span class="mrow"><span class="tick on">&check;</span> Box</span>
-                        <span class="mrow"><span class="tick">&check;</span> Top Fix</span>
-                      </div>
-                    </div>
-                    <div class="opt">
-                      <label>Fit Height</label>
-                      <div class="box numin"><span class="ph">mm</span></div>
-                    </div>
-                  </div>
-
-                  <!-- Measurement unit (second cell is empty on the real screen too) -->
-                  <div class="frow mt">
-                    <div class="fld">
-                      <label>Measurement unit</label>
-                      <div class="box selb"><span class="valv">Millimetres (mm)</span></div>
-                    </div>
-                    <div class="fld"></div>
-                  </div>
-
-                  <!-- Dimensions + quantity + the grey echo line -->
-                  <div class="fld mt">
-                    <label>Dimensions (mm) &amp; quantity</label>
-                    <div class="dims">
-                      <div>
-                        <div class="dcap">Width</div>
-                        <div class="box dimbox rW"><span class="ph">Width</span><span class="val wa">1200</span><span class="val wb">3200</span></div>
-                      </div>
-                      <div>
-                        <div class="dcap">Drop</div>
-                        <div class="box dimbox rD"><span class="ph">Drop</span><span class="val">1400</span></div>
-                      </div>
-                      <div>
-                        <div class="dcap">Qty</div>
-                        <div class="box dimbox qbox"><span class="valv q1">1</span><span class="valv q2">2</span></div>
-                      </div>
-                    </div>
-                    <div class="echo"><span class="e1">Using 1200 &times; 1400 mm</span><span class="e2">Using 3200 &times; 1400 mm</span></div>
-                  </div>
-
-                  <!-- The price panel -->
-                  <div class="ipp">
-                    <div class="pidle">Choose a product and enter a size to see the price.</div>
-                    <div class="pstill">Still need: drop.</div>
-                    <div class="perrbox">Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</div>
-                    <div class="pbrk">
-                      <div class="iprow traderow"><span class="lbl">Trade discount</span>
-                        <span class="amt"><span class="s5">12.50% (&minus;&pound;7.71)</span><span class="s6">12.50% (&minus;&pound;15.42)</span></span></div>
-                      <div class="iprow"><span class="lbl">Price</span><span class="amt">&pound;54.00</span></div>
-                      <div class="iprow edit"><span class="lbl">Discount %</span>
-                        <span class="numbox"><span class="s5">10.00</span><span class="s6">15.00</span></span></div>
-                      <div class="iprow"><span class="lbl">Discounted price</span>
-                        <span class="amt"><span class="s5">&pound;48.60</span><span class="s6">&pound;45.90</span></span></div>
-                      <div class="iprow edit"><span class="lbl">Mark up %</span>
-                        <span class="numbox"><span class="s5">100.00</span><span class="s6">120.00</span></span></div>
-                      <div class="iprow ipsell"><span class="lbl">Sell price</span>
-                        <span class="amt"><span class="s5">&pound;97.20</span><span class="s6">&pound;201.96</span></span></div>
-                      <div class="iptot"><span class="s6">2 &times; &pound;100.98 each</span></div>
-                    </div>
-                  </div>
-
-                  <div class="btnrow">
-                    <span class="pbtn">Turn into full quote &rarr;</span>
-                    <span class="sbtn">Reset</span>
                   </div>
                 </div>
 
-                <!-- Step 8: it is a real quote now -->
-                <div class="qbscene">
-                  <div class="okbanner"><span>&check;</span> Quote BEV-2026-0042 started from InstaPrice &mdash; add the customer details (and any more blinds) below.</div>
-                  <div class="stickybar">Quote BEV-2026-0042 <span class="spill">draft</span><span class="stot">Total &pound;233.28</span></div>
-
-                  <!-- Customer details is a collapsible block and it ARRIVES CLOSED:
-                       all you get is this one summary line. -->
-                  <div class="cdet">
-                    <div class="csum"><span class="tri">&#9662;</span>Customer: Quick price (add customer)
-                      <span class="cshint">(click to edit)</span></div>
-                    <p class="ipnote">this line is all you land on &mdash; click it to open the form underneath</p>
-                    <div class="cbody">
-                      <div class="frow">
-                        <div class="fld"><label>Linked customer</label>
-                          <div class="box"><span class="ph">Type to search by name, town, or postcode...</span></div>
-                          <p class="ipnote">Type to filter &mdash; leave blank to unlink.</p>
-                        </div>
-                        <div class="fld"><label>Customer name <span class="req">*</span></label>
-                          <div class="box qbcust"><span class="valv">Quick price (add customer)</span></div>
-                          <p class="ipnote">rename this now &mdash; it is how the quote shows in your list</p>
-                        </div>
-                      </div>
-                      <p class="ipnote">Email, Phone, Mobile (with &ldquo;Mobile is on WhatsApp&rdquo;) and the address
-                        follow underneath.</p>
+                <!-- 2 — nothing kept -->
+                <div class="sc" data-scene="2" data-len="22">
+                  <div class="sct a-fade" style="--d:.2s">Nothing is kept</div>
+                  <div class="nope">
+                    <span class="a-pop" style="--d:2s">Customer</span><span class="a-pop" style="--d:2.6s">Room names</span>
+                    <span class="a-pop" style="--d:3.2s">Notes</span><span class="a-pop" style="--d:5.5s">Saving</span>
+                  </div>
+                  <div class="side2" style="margin-top:.8rem">
+                    <div class="frm">
+                      <div class="g2">' . $f('Product', '<span class="swap"><span class="a-out" style="--d:14s">Roller Blind</span><span class="gph a-fade" style="--d:14.1s">Choose product&hellip;</span></span>', 'sel') . $f('System', '<span class="swap"><span class="a-out" style="--d:14s">Bev Roller</span><span class="gph a-fade" style="--d:14.1s">Choose product first</span></span>', 'sel') . '</div>
+                      <div class="g2">' . $f('Band', 'All bands', 'sel') . $f('Fabric', '<span class="swap"><span class="a-out" style="--d:14s">Sunset / Ivory</span><span class="gph a-fade" style="--d:14.1s">Choose product first</span></span>') . '</div>
+                      <div class="fact"><span class="btns a-press a-ring" style="--d:13.2s">Reset</span></div>
+                    </div>
+                    <div>
+                      <div style="display:grid"><div class="a-out" style="--d:14s;grid-area:1/1">' . $panel() . '</div>
+                        <div class="pp idle a-fade" style="--d:14.2s;grid-area:1/1;align-self:start">Choose a product and enter a size to see the price.</div></div>
                     </div>
                   </div>
-
-                  <div class="qline">
-                    <table class="qitems">
-                      <thead><tr><th>#</th><th>Description</th><th>Size</th><th class="n">Qty</th><th class="n">Unit</th><th class="n">Total</th></tr></thead>
-                      <tbody><tr>
-                        <td>1</td>
-                        <td><b>25mm Venetian</b> &mdash; Bev 25mm<br>Band A &mdash; Louvolite &mdash; Aspen / Auburn</td>
-                        <td>1200 &times; 1400 mm</td>
-                        <td class="n">2</td><td class="n">&pound;97.20</td><td class="n">&pound;194.40</td>
-                      </tr></tbody>
-                    </table>
-                    <span style="display:block;color:var(--err)">re-priced at the product&rsquo;s own 10.00% / 100.00% &mdash; the 15 / 120 you typed did not come with it</span></div>
+                  <span class="chip a-pop" style="--d:16.8s;margin-top:.7rem">Sell price is before VAT &mdash; VAT joins on a real quote</span>
                 </div>
 
-                <div class="caps">
-                  <b class="c1"><span class="n">1</span> Pick the product &mdash; the System fills itself in.</b>
-                  <b class="c2"><span class="n">2</span> Type a few letters, pick the fabric from the list.</b>
-                  <b class="c3"><span class="n">3</span> Only the options this blind can actually have.</b>
-                  <b class="c4"><span class="n">4</span> Size and quantity &mdash; and check the grey line underneath.</b>
-                  <b class="c5"><span class="n">5</span> The price, worked out line by line.</b>
-                  <b class="c6"><span class="n">6</span> Change either rate and watch the price move.</b>
-                  <b class="c7 err"><span class="n">7</span> Off the end of the price table &mdash; fix the size.</b>
-                  <b class="c8 good"><span class="n">8</span> A real quote &mdash; click the Customer line open and rename it.</b>
+                <!-- 3 — product then system -->
+                <div class="sc" data-scene="3" data-len="23">
+                  <div class="sct a-fade" style="--d:.2s">Product first, then System</div>
+                  <div class="frm">
+                    <div class="g2">
+                      <div class="fg"><span class="fl">Product</span><span class="ib sel a-ring" style="--d:0.5s"><span class="swap"><span class="gph a-out" style="--d:7.7s">Choose product&hellip;</span><span class="a-fade" style="--d:7.8s">Roller Blind</span></span></span>
+                        <div class="drop a-mid" style="--d:2.5s;--d2:7.6s"><div class="og">Rollers</div><div class="hit">Roller Blind</div><div class="og">Verticals</div><div>Vertical Blind</div><div class="og">Other</div><div>Headrail</div></div></div>
+                      <div class="fg"><span class="fl">System</span><span class="ib sel a-ring" style="--d:9.5s"><span class="swap"><span class="gph a-out" style="--d:9.2s">Choose product first</span><span class="a-fade" style="--d:9.3s">Bev Roller</span></span></span></div>
+                    </div>
+                  </div>
+                  <div style="margin-top:7.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                    <span class="chip a-pop" style="--d:11.5s">Lands on the product&rsquo;s usual system</span>
+                    <span class="chip a-pop" style="--d:16.5s">Price &amp; options can differ per system</span></div>
+                  <div class="a-move" style="--fx:70%;--fy:90%;--tx:20%;--ty:4.6rem;--d:4.5s;--md:1.6s">' . $ptr . '</div>
                 </div>
+
+                <!-- 4 — band then fabric -->
+                <div class="sc" data-scene="4" data-len="25">
+                  <div class="sct a-fade" style="--d:.2s">Band, then Fabric</div>
+                  <div class="frm">
+                    <div class="g2">' . $f('Product', 'Roller Blind', 'sel') . $f('System', 'Bev Roller', 'sel') . '</div>
+                    <div class="g2">
+                      ' . $f('Band', 'All bands', 'sel', 'a-ring', '--d:1.5s') . '
+                      <div class="fg"><span class="fl"><span class="swap"><span class="a-out" style="--d:20.5s">Fabric</span><span class="a-fade" style="--d:20.6s">Colour</span></span></span>
+                        <span class="ib a-ring" style="--d:8.8s"><span class="swap"><span class="gph a-out" style="--d:11.1s">Type to search fabrics&hellip;</span><span class="a-mid" style="--d:11.2s;--d2:18.1s"><span class="a-type" style="--d:11.2s;--ts:3;--tt:.5s">Sun</span></span><span class="a-fade" style="--d:18.2s">Sunset / Ivory</span></span></span>
+                        <div class="drop a-mid" style="--d:12.5s;--d2:18s"><div class="hit">Sunset / Ivory<small>Louvolite &middot; Code SW-104</small></div><div>Sunset / Charcoal<small>Louvolite &middot; Code SW-109</small></div><div>Sunbury / White<small>Decora &middot; Code SB-01</small></div></div></div>
+                    </div>
+                  </div>
+                  <div style="margin-top:6.8rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                    <span class="chip a-pop" style="--d:4s">All bands = search everything</span>
+                    <span class="chip a-pop" style="--d:20.8s">Labels follow the product: Fabric, Colour, Slat&hellip;</span></div>
+                </div>
+
+                <!-- 5 — order matters -->
+                <div class="sc" data-scene="5" data-len="22">
+                  <div class="sct a-fade" style="--d:.2s">Work down the screen, in order</div>
+                  <div class="frm">
+                    <div class="g2">' . $f('Product', 'Roller Blind', 'sel') . '<div class="fg"><span class="fl">System</span><span class="ib sel a-ring" style="--d:2.5s"><span class="swap"><span class="a-out" style="--d:4s">Bev Roller</span><span class="a-fade" style="--d:4s">Bev Roller Plus</span></span></span></div></div>
+                    <div class="g2">' . $f('Band', 'All bands', 'sel') . '<div class="fg"><span class="fl">Fabric</span><span class="ib"><span class="swap"><span class="a-out" style="--d:6.8s">Sunset / Ivory</span><span class="gph a-fade" style="--d:6.9s">Type to search fabrics&hellip;</span></span></span></div></div>
+                  </div>
+                  <span class="chip a-pop" style="--d:10.1s;margin-top:.7rem">Fabric cleared &mdash; so it is never priced on the wrong system</span>
+                  <div class="frm a-rise" style="--d:14.1s;margin-top:.9rem">
+                    <div class="g2">' . $f('Product', 'Headrail', 'sel') . $f('System', 'Vogue', 'sel') . '</div>
+                    <div class="g2" style="opacity:.35"><div class="fg"><span class="fl" style="text-decoration:line-through">Band</span></div><div class="fg"><span class="fl" style="text-decoration:line-through">Fabric</span></div></div>
+                  </div>
+                  <span class="chip a-pop" style="--d:18s;margin-top:.5rem">No fabric? The row disappears.</span>
+                </div>
+
+                <!-- 6 — options -->
+                <div class="sc" data-scene="6" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">Options &mdash; only what fits</div>
+                  <div class="frm">
+                    <div class="g2">
+                      ' . $f('Control Side <em class="rq a-ring" style="--d:9.4s">*</em>', 'Left', 'sel', 'a-rise', '--d:2s') . '
+                      ' . $f('Bottom Bar', 'Chained', 'sel', 'a-rise', '--d:2.6s') . '
+                    </div>
+                    <div class="fg a-rise" style="--d:12.1s"><span class="fl">Extras</span>
+                      <div><span class="ck"><i><span class="a-pop" style="--d:13s">&#10003;</span></i>Child safety cleat</span><span class="ck"><i></i>Spring assist</span></div></div>
+                    ' . $f('Fascia Options', 'LL Cassette', 'sel', 'a-rise', '--d:15.5s') . '
+                    <div class="ind a-fly" style="--d:17s">' . $f('Fascia Sizing', 'Standard fascia', 'sel') . '</div>
+                  </div>
+                  <span class="chip a-pop" style="--d:19.3s;margin-top:.7rem">Expected one is missing? Check the fabric.</span>
+                </div>
+
+                <!-- 7 — size -->
+                <div class="sc" data-scene="7" data-len="25">
+                  <div class="sct a-fade" style="--d:.2s">The size, and the line that checks it</div>
+                  <div class="frm">
+                    <div class="g2"><div class="fg"><span class="fl">Measurement unit</span><span class="ib sel a-ring" style="--d:1.5s">Millimetres (mm)</span></div><div></div></div>
+                    <div class="fg"><span class="fl">Dimensions (mm) &amp; quantity</span>
+                      <div class="dims">
+                        <div class="fg"><span class="cap">Width</span><span class="ib a-ring" style="--d:8.7s"><span class="swap"><span class="a-mid" style="--d:9.5s;--d2:13.5s"><span class="a-type" style="--d:9.5s;--ts:4;--tt:.5s">1.2m</span></span><span class="a-fade" style="--d:13.5s">1.2m</span></span></span></div>
+                        <div class="fg"><span class="cap">Drop</span><span class="ib"><span class="a-type" style="--d:11.8s;--ts:4;--tt:.5s">1400</span></span></div>
+                        <div class="fg q"><span class="cap">Qty</span><span class="ib"><span class="gph">Qty</span></span></div>
+                      </div>
+                      <div class="echo a-ring" style="--d:18.6s"><span class="a-fade" style="--d:14.5s">Using 1200 &times; 1400 mm</span></div></div>
+                  </div>
+                  <div style="margin-top:.8rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                    <span class="chip a-pop" style="--d:5s">1400 &rarr; read in mm</span>
+                    <span class="chip a-pop" style="--d:11s">1.2m &rarr; the unit you type wins</span>
+                    <span class="chip a-pop" style="--d:22s">Spot a stray nought here</span></div>
+                </div>
+
+                <!-- 8 — breakdown -->
+                <div class="sc" data-scene="8" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">The price, as a sum you can follow</div>
+                  <div class="side2">
+                    <div class="frm">' . $dims('1200', '<span class="a-type" style="--d:5s;--ts:4;--tt:.5s">1400</span>', '', '<span class="a-fade" style="--d:5.8s">Using 1200 &times; 1400 mm</span>') . '</div>
+                    <div style="display:grid">
+                      <div class="pp idle a-out" style="--d:6.3s;grid-area:1/1;align-self:start">Still need: drop.</div>
+                      <div class="pp a-fade" style="--d:6.4s;grid-area:1/1;align-self:start">
+                        <div class="pr a-fly" style="--d:7.5s"><span class="l">Price</span><span class="v">&pound;45.00</span></div>
+                        <div class="pr ed a-fly" style="--d:16s"><span class="l">Discount %</span><span class="pct">10.00</span></div>
+                        <div class="pr a-fly" style="--d:17.2s"><span class="l">Discounted price</span><span class="v">&pound;41.00</span></div>
+                        <div class="pr ed a-fly" style="--d:18.6s"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
+                        <div class="pr sell a-fly" style="--d:19.6s"><span class="l">Sell price</span><span class="v a-ring" style="--d:20.6s">&pound;77.00</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 9 — haggling -->
+                <div class="sc" data-scene="9" data-len="25">
+                  <div class="sct a-fade" style="--d:.2s">The amber rates are yours to play with</div>
+                  <div class="side2">
+                    <div class="pp">
+                      <div class="pr"><span class="l">Price</span><span class="v">&pound;45.00</span></div>
+                      <div class="pr ed"><span class="l">Discount %</span><span class="pct a-ring" style="--d:7.6s"><span class="swap"><span class="a-out" style="--d:8.6s">10.00</span><span class="a-type" style="--d:8.7s;--ts:5;--tt:.6s">15.00</span></span></span></div>
+                      <div class="pr"><span class="l">Discounted price</span><span class="v"><span class="swap"><span class="a-out" style="--d:9.4s">&pound;41.00</span><span class="a-fade" style="--d:9.4s">&pound;39.00</span></span></span></div>
+                      <div class="pr ed"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
+                      <div class="pr sell"><span class="l">Sell price</span><span class="v"><span class="swap"><span class="a-out" style="--d:9.7s">&pound;77.00</span><span class="a-fade" style="--d:9.7s">&pound;73.00</span></span></span></div>
+                    </div>
+                    <div>
+                      <span class="chip a-pop" style="--d:3.2s">Starts on this product&rsquo;s saved rates</span>
+                      <div style="margin-top:.5rem"><span class="chip a-pop" style="--d:11.8s">&#129309; Five percent more costs you &pound;4.00</span></div>
+                      <div style="margin-top:.5rem"><span class="chip a-pop" style="--d:19.3s">One-off &mdash; never saved back</span></div>
+                      <div style="margin-top:.5rem"><span class="chip a-pop" style="--d:21s">Change product &rarr; back to the usual rates</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 10 — quantity -->
+                <div class="sc" data-scene="10" data-len="18">
+                  <div class="sct a-fade" style="--d:.2s">More than one</div>
+                  <div class="side2">
+                    <div class="frm"><div class="dims">
+                      <div class="fg"><span class="cap">Width</span><span class="ib">1200</span></div>
+                      <div class="fg"><span class="cap">Drop</span><span class="ib">1400</span></div>
+                      <div class="fg q"><span class="cap">Qty</span><span class="ib a-ring" style="--d:1s"><span class="swap"><span class="gph a-out" style="--d:2.4s">Qty</span><span class="a-type" style="--d:2.5s;--ts:1;--tt:.2s">2</span></span></span></div></div>
+                      <span class="chip a-pop" style="--d:4s;align-self:flex-start">Empty Qty counts as one</span></div>
+                    <div class="pp">
+                      <div class="pr"><span class="l">Price</span><span class="v">&pound;45.00</span></div>
+                      <div class="pr ed"><span class="l">Discount %</span><span class="pct">10.00</span></div>
+                      <div class="pr"><span class="l">Discounted price</span><span class="v">&pound;41.00</span></div>
+                      <div class="pr ed"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
+                      <div class="pr sell"><span class="l">Sell price</span><span class="v"><span class="swap"><span class="a-out" style="--d:7s">&pound;77.00</span><span class="a-fade a-ring" style="--d:7s">&pound;154.00</span></span></span></div>
+                      <div class="tot"><span class="a-fade" style="--d:11s">2 &times; &pound;77.00 each</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 11 — who sees what -->
+                <div class="sc" data-scene="11" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">Two lines depend on who you are</div>
+                  <div class="two">
+                    <div class="a-rise" style="--d:2.4s"><div class="fl" style="margin-bottom:.3rem">Allowed to see costs</div>' . $panel(['trade' => '<span class="l a-ring" style="--d:7s">Trade discount</span><span class="v">12.50% (&minus;&pound;5.71)</span>']) . '</div>
+                    <div class="a-rise" style="--d:20.4s"><div class="fl" style="margin-bottom:.3rem">Without cost access</div>' . $panel(['markrow' => false]) . '</div>
+                  </div>
+                  <span class="chip a-pop" style="--d:11s;margin-top:.7rem">Green line = your buying discount, already inside the Price</span>
+                </div>
+
+                <!-- 12 — won\'t price -->
+                <div class="sc" data-scene="12" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">When it won&rsquo;t price</div>
+                  <div class="side2">
+                    <div class="frm"><div class="dims">
+                      <div class="fg"><span class="cap">Width</span><span class="ib a-ring" style="--d:15.8s">3200</span></div>
+                      <div class="fg"><span class="cap">Drop</span><span class="ib">1400</span></div>
+                      <div class="fg q"><span class="cap">Qty</span><span class="ib"><span class="gph">Qty</span></span></div></div>
+                      <div class="echo">Using 3200 &times; 1400 mm</div></div>
+                    <div>
+                      <div class="pp err a-pop" style="--d:5.4s">Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</div>
+                      <div class="fact"><span class="btnp off a-ring" style="--d:12.4s">Turn into full quote &rarr;</span><span class="btns">Reset</span></div>
+                    </div>
+                  </div>
+                  <div style="margin-top:.8rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                    <span class="chip a-pop" style="--d:16.2s">1 &middot; Check the size and the unit</span>
+                    <span class="chip a-pop" style="--d:18.8s">2 &middot; Still right? Extend the table under Products</span></div>
+                </div>
+
+                <!-- 13 — turn into full quote -->
+                <div class="sc" data-scene="13" data-len="24">
+                  <div class="sct a-fade" style="--d:.2s">Turn into full quote</div>
+                  <div class="side2">
+                    <div>' . $panel() . '<div class="fact"><span class="btnp a-press a-ring" style="--d:2.5s">Turn into full quote &rarr;</span><span class="btns">Reset</span></div></div>
+                    <div>
+                      <div class="card a-drop" style="--d:5.3s"><h4>&#128221; A real draft quote &mdash; BEV-2026-0042</h4>made straight away, with its own number</div>
+                      <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.5rem">
+                        <span class="chip a-pop" style="--d:10.5s">Product</span><span class="chip a-pop" style="--d:11s">Fabric</span><span class="chip a-pop" style="--d:11.5s">Options</span>
+                        <span class="chip a-pop" style="--d:12s">Size</span><span class="chip a-pop" style="--d:12.5s">Qty</span></div>
+                      <span class="chip bad a-pop" style="--d:15.4s;margin-top:.5rem">Press it to keep a price &mdash; not to see what happens</span>
+                    </div>
+                  </div>
+                  <span class="chip a-pop" style="--d:19.3s;margin-top:.8rem">No button? You need the <b>Create quotes</b> permission</span>
+                  <div class="a-move" style="--fx:60%;--fy:95%;--tx:18%;--ty:13.6rem;--d:.6s;--md:1.6s">' . $ptr . '</div>
+                </div>
+
+                <!-- 14 — where you land -->
+                <div class="sc" data-scene="14" data-len="23">
+                  <div class="sct a-fade" style="--d:.2s">Where you land</div>
+                  <div class="qsb a-rise" style="--d:.8s">Quote BEV-2026-0042 <span class="pill">draft</span><span class="tt">Total &pound;92.40</span></div>
+                  <div class="ncb a-drop" style="--d:2.3s">&#9888; <span>This quote has <b>no customer yet</b> &mdash; add their details.</span><span class="go">Add customer &darr;</span></div>
+                  <div class="cust a-rise" style="--d:4.5s">
+                    <div class="sm">Customer details <small>&mdash; click to add the customer&rsquo;s contact info</small></div>
+                    <div class="g2">' . $f('Customer name <em class="rq">*</em>', '<span class="a-type" style="--d:8s;--ts:13;--tt:1s">Emma Fletcher</span>', '', 'a-ring', '--d:7s') . $f('Email', '<span class="gph">Email</span>') . '</div>
+                  </div>
+                  <div class="ovr a-rise" style="--d:17.5s">&#9656; Adjust price for this blind &nbsp;<span class="chip a-pop" style="--d:19.5s">Discount % (this blind)</span></div>
+                  <span class="chip bad a-pop" style="--d:10.4s;margin-top:.6rem">Rates you typed over don&rsquo;t come across</span>
+                </div>
+
               </div>
             </div>
           </div>',
         'body'    => '
-          <p><b>InstaPrice</b> is for the moment somebody asks <em>&ldquo;go on then, roughly what would that cost?&rdquo;</em> You open it from
-             the coloured <b>&#9889; InstaPrice</b> box in the left-hand sidebar, just under <b>+ New</b> &mdash; everybody sees it. Pick a product,
-             put a size in, read the price out. It runs the <b>same pricing engine as the quote builder</b>, so it is not a guess.</p>
-          <p><b>What it deliberately hasn&rsquo;t got.</b> No customer, no rooms, no notes, no Wally tax (WT charge) box, no VAT line, and
-             <b>no saving</b> &mdash; nothing you type here is recorded anywhere, and leaving the page loses it. The big <b>Sell price</b> is the
-             <b>ex-VAT</b> selling figure; VAT only joins in once it is a real quote. <b>Reset</b> empties the lot and starts again.</p>
+          <p><b>InstaPrice</b> is for the moment somebody asks <em>&ldquo;go on then, roughly what would that cost?&rdquo;</em> Open it from the
+             coloured <b>&#9889; InstaPrice</b> button near the top of the left-hand menu, just under <b>+ New</b> &mdash; everybody sees it. The page
+             is headed <b>InstaPrice</b>, <em>&ldquo;Quick price &mdash; no customer details needed.&rdquo;</em> It runs the <b>same pricing as the quote
+             builder</b>, so it is not a guess.</p>
+          <p><b>What it deliberately hasn&rsquo;t got.</b> No customer, no rooms, no notes, no VAT line, and <b>no saving</b> &mdash; nothing you type
+             here is recorded anywhere, and leaving the page loses it. The big <b>Sell price</b> is the <b>ex-VAT</b> selling figure; VAT only joins in
+             once it is a real quote. <b>Reset</b> empties the lot (<em>&ldquo;Choose a product and enter a size to see the price.&rdquo;</em>).</p>
 
           <ul class="steps">
-            <li><b>Product, then System.</b> The <b>Product</b> dropdown groups your live products under their <b>category</b> headings, so scroll
-                to the right heading (anything without a category sits under <b>Other</b>, at the bottom). The <b>System</b> box next to it starts
-                greyed out reading <b>&ldquo;Choose product first&rdquo;</b>; pick a product and it wakes up on that product&rsquo;s <b>default
-                system</b>, with a blank <b>&ldquo;&mdash; Choose system &mdash;&rdquo;</b> entry above the list if you ever want none of them.
-                Change it only if this job is the other one &mdash; the price, the bands and the options can all differ per system.
-                (A product with no systems set up simply reads <b>&ldquo;&mdash; No systems &mdash;&rdquo;</b>.)</li>
-            <li><b>Band, then Fabric.</b> <b>Band</b> is a price tier: leave it on <b>&ldquo;All bands&rdquo;</b> and search the lot, or pick a band
-                to narrow the search down. <b>Fabric</b> is a <b>search box, not a dropdown</b> &mdash; type two or three letters and the matches
-                drop down underneath with the supplier and code, then click one. Nothing matching? It says <b>&ldquo;No matching fabrics.&rdquo;</b>
-                &mdash; and if the search itself falls over, <b>&ldquo;Could not search.&rdquo;</b> Once you have picked, the box holds that
-                fabric&rsquo;s <b>name and colour</b>, so clicking back into it shows you the <b>whole list</b> again to switch colour (the text
-                is pre-selected, so your first keystroke replaces it rather than tacking on the end). Both boxes above it wipe your choice, so
-                work down the screen in order: changing the <b>Band</b> clears the fabric <b>and drops the list straight back open</b> on the new
-                band, while changing the <b>System</b> clears it and <b>leaves the list shut</b> &mdash; click back into the box to search again.
-                These two labels follow the product
-                &mdash; the fabric one is whatever that product calls its material (<b>Fabric</b> on rollers and romans, <b>Colour</b> on a metal
-                venetian, <b>Slat</b> or <b>Finish</b> on a wood one), and the band one can be renamed too (a wood venetian might call it
-                <b>Tape / String</b>).</li>
-            <li><b>Options.</b> Whatever this product offers appears next, and only what <em>this</em> product, <em>this</em> system and
-                <em>this</em> fabric can actually have. Sensible ones are <b>already chosen</b> for you; where there is no sensible default the
-                dropdown starts on <b>&ldquo;&mdash; Select &mdash;&rdquo;</b>. A red <b>*</b> means you must answer it. Some options are
-                <b>tick-boxes</b> (pick any combination), some are just a <b>number box</b> with its own caption in it, and some open a second
-                option <b>indented underneath</b> once you have picked the parent. If an option you expected isn&rsquo;t there, nine times out of
-                ten it is the <b>fabric</b> &mdash; that choice is set up for other colours, or other bands. Pure measurement boxes are left out
-                here on purpose: they don&rsquo;t move the price.</li>
-            <li><b>Unit, size and quantity.</b> <b>Measurement unit</b> starts on whatever your company works in (Settings &rarr; Measurements) and
-                offers <b>Millimetres (mm)</b>, <b>Centimetres (cm)</b>, <b>Metres (m)</b> and <b>Inches (in)</b>. A <b>bare number is read in that
-                unit</b> &mdash; but if you <b>type the unit on the end</b> it wins, so <code>60&quot;</code>, <code>1.5m</code> and
-                <code>150cm</code> all work whatever the box says. Underneath, the little grey line shows what the system is really using &mdash;
-                <b>&ldquo;Using 1200 &times; 1400 mm&rdquo;</b> &mdash; which is your last chance to spot a stray nought or the wrong unit.
-                <b>Qty</b> starts at 1 and simply multiplies the Sell price.</li>
-            <li><b>Read the breakdown.</b> Until you have filled everything in, the panel just tells you what is outstanding &mdash;
-                <b>&ldquo;Still need: product, fabric, width, drop.&rdquo;</b>, shrinking as you go. Then it becomes a sum you can follow, top to
-                bottom: <b>Price</b> (this blind at this size with its options) &rarr; <b>Discount %</b> &rarr; <b>Discounted price</b> &rarr;
-                <b>Mark up %</b> &rarr; <b>Sell price</b>, big, at the bottom. With more than one blind a small grey line reads
-                <b>&ldquo;2 &times; &pound;100.98 each&rdquo;</b> under the total.</li>
-            <li><b>Turn it into a quote.</b> Happy with it and they have said yes? <b>Turn into full quote &rarr;</b> lifts the whole spec into the
-                quote builder so you can add the customer and the rest of the blinds.</li>
+            <li><b>Product, then System.</b> The <b>Product</b> dropdown (<em>Choose product&hellip;</em>) groups your products under their
+                <b>category</b> headings (anything without one sits under <b>Other</b>). The <b>System</b> box starts greyed out reading
+                <b>&ldquo;Choose product first&rdquo;</b>; pick a product and it lands on that product&rsquo;s <b>default system</b>. Change it only if this
+                job needs a different one &mdash; the price, the bands and the options can all differ per system.</li>
+            <li><b>Band, then Fabric.</b> <b>Band</b> narrows the search: leave it on <b>&ldquo;All bands&rdquo;</b> to search the lot. <b>Fabric</b> is a
+                <b>search box, not a dropdown</b> &mdash; type two or three letters and matches drop down with the supplier and code underneath
+                (<em>Louvolite &middot; Code SW-104</em>); click one. Nothing matching says <b>&ldquo;No matching fabrics.&rdquo;</b>; a search that fails says
+                <b>&ldquo;Could not search.&rdquo;</b> Clicking back into a picked fabric shows the whole list again, to switch colour. These two labels follow
+                the product &mdash; the fabric one may read <b>Colour</b>, <b>Slat</b> or <b>Finish</b>, and the band one can be renamed too.</li>
+            <li><b>Work down in order.</b> Changing the <b>System</b> or the <b>Band</b> after picking a fabric clears the fabric, so it can never be
+                priced on the wrong system. Products with no fabric (a headrail, a track) hide the <b>Band and Fabric row entirely</b>.</li>
+            <li><b>Options.</b> Only what <em>this</em> product, <em>this</em> system and <em>this</em> fabric can have. Sensible ones are <b>already
+                chosen</b>; with no default the dropdown starts on <b>&ldquo;&mdash; Select &mdash;&rdquo;</b>. A red <b>*</b> means you must answer it.
+                Some options are <b>tick-boxes</b>, some a <b>number box</b>, and some open a second option <b>indented underneath</b> once you pick the
+                parent. If an option you expected isn&rsquo;t there, it is usually the <b>fabric</b>. Pure measurement boxes are left out here: they
+                don&rsquo;t move the price.</li>
+            <li><b>Unit, size and quantity.</b> <b>Measurement unit</b> starts on what your company works in (Settings &rarr; Measurements):
+                <b>Millimetres (mm)</b>, <b>Centimetres (cm)</b>, <b>Metres (m)</b> or <b>Inches (in)</b>. Under <b>Dimensions (mm) &amp; quantity</b>
+                are <b>Width</b>, <b>Drop</b> and <b>Qty</b>. A bare number is read in the chosen unit, but a unit typed on the end wins &mdash;
+                <code>60&quot;</code>, <code>1.5m</code>, <code>150cm</code>. The grey line underneath shows what it is really using &mdash;
+                <b>&ldquo;Using 1200 &times; 1400 mm&rdquo;</b>. <b>Qty</b> left empty counts as one.</li>
+            <li><b>Read the breakdown.</b> Until everything is in, the panel says what is outstanding &mdash; <b>&ldquo;Still need: product, fabric,
+                width, drop.&rdquo;</b>, shrinking as you go. Then it is a sum, top to bottom: <b>Price</b> (this blind at this size with its options)
+                &rarr; <b>Discount %</b> &rarr; <b>Discounted price</b> &rarr; <b>Mark up %</b> &rarr; <b>Sell price</b>. The discount and mark-up apply to
+                the blind; the options are added at their own price. With a quantity over one, the Sell price is the total and a grey line reads
+                <b>&ldquo;2 &times; &pound;77.00 each&rdquo;</b>.</li>
+            <li><b>Turn it into a quote.</b> <b>Turn into full quote &rarr;</b> lifts the spec into the quote builder (details below).</li>
           </ul>
 
-          <p><b>How the form changes shape</b> &mdash; nothing is broken, it is following the product:</p>
-          <ul class="steps">
-            <li><b>No-fabric products</b> (a headrail, a track, spares) hide the <b>Band and Fabric row entirely</b> &mdash; they price on system and
-                size alone.</li>
-            <li><b>Width-only products</b> have <b>no Drop box</b>; the echo reads <b>&ldquo;Using 1524 mm wide&rdquo;</b>.</li>
-            <li><b>Per-slat products</b> have <b>no Width box</b> &mdash; they are priced by drop, one slat at a time, and the echo reads
-                <b>&ldquo;Using 900 mm drop (per slat)&rdquo;</b>.</li>
-            <li><b>Per square metre products</b> (shutters) show the area instead: <b>&ldquo;Area: 2.40 m&sup2;&rdquo;</b>, and
-                <b>&ldquo;Area: 2.40 m&sup2; (billed at min 3.00 m&sup2;)&rdquo;</b> when the job is under the minimum charge.</li>
-          </ul>
+          <p><b>How the form changes shape</b> &mdash; nothing is broken, it is following the product: <b>width-only</b> products have no Drop box
+             (<b>&ldquo;Using 1524 mm wide&rdquo;</b>); <b>per-slat</b> products have no Width box (<b>&ldquo;Using 900 mm drop (per slat)&rdquo;</b>);
+             <b>per square metre</b> products show the area (<b>&ldquo;Area: 2.40 m&sup2;&rdquo;</b>, or <b>&ldquo;(billed at min 3.00 m&sup2;)&rdquo;</b> under
+             the minimum).</p>
 
-          <div class="heads"><span class="hi">&#9888;</span><div><b>The green &ldquo;Trade discount&rdquo; line is not the customer&rsquo;s
-             discount.</b> When it appears at the top of the panel &mdash; e.g. <b>12.50% (&minus;&pound;7.71)</b> &mdash; that is <b>your</b>
-             standing buying discount from your supplier on that product, system and band. It is <b>already inside the Price underneath</b>; it is
-             there for your information only, and only people allowed to see cost figures ever see it at all. The customer&rsquo;s discount is the
-             amber <b>Discount %</b> box below it.</div></div>
+          <p><b>The amber rates are yours to play with.</b> <b>Discount %</b> and <b>Mark up %</b> arrive filled in from that <b>product and
+             system&rsquo;s own saved rates</b> (Mark up falls back to your default in <b>Settings</b>; Discount with no saved rate starts at
+             <b>0.00</b>). Type over either and the figures below <b>move as you type</b>. It is a <b>one-off</b>: never written back to the product,
+             and it <b>springs back</b> the moment you change product or system. If your company works in <b>margin</b>, the second box reads
+             <b>Margin %</b> instead.</p>
 
-          <p><b>The two amber boxes are yours to play with.</b> <b>Discount %</b> and <b>Mark up %</b> arrive already filled in from that
-             <b>product and system&rsquo;s own saved rates</b>. The two behave differently when a product has no rate of its own: <b>Mark up %</b>
-             falls back to <b>Settings &rarr; Default margins</b> (the <b>Default price-table markup&nbsp;%</b> box), while <b>Discount %</b> has no
-             tenant-wide default at all &mdash; no saved row means it simply starts at <b>0.00</b>. Type straight over either one and the figures
-             below <b>move as you type</b> &mdash; no waiting, no saving &mdash; which is exactly what you want when somebody is haggling and you
-             need to know what another five percent really costs you. Three things to know: it is a <b>one-off</b> for this figure, it is
-             <b>never written back to the product</b>, and it <b>springs back to the usual rates</b> the moment you change the product or the
-             system. And &mdash; this one catches people out &mdash; <b>it does not survive the conversion either</b>: see the warning below. If
-             your company works in <b>margin</b> rather than markup, the second box is labelled <b>Margin %</b> instead &mdash; same money,
-             different way of typing it.</p>
-
-          <div class="heads"><span class="hi">&#9888;</span><div><b>A rate you typed over does NOT carry onto the quote.</b>
-             <b>Turn into full quote</b> sends the product, system, fabric, options, size, quantity and unit &mdash; and nothing else. The server
-             prices the new line from scratch, which means it resolves <b>that product and system&rsquo;s own saved Discount % and Mark up %</b>
-             all over again. So if you knocked the price about on this screen while you were haggling, the quote line comes out at the
-             <em>standard</em> rates, not the ones on your screen. Say the deal out loud before you press it, then put the agreed figures back on
-             the quote line itself: open the blind in the quote builder and use <b>Adjust price for this blind</b>, which has its own
-             <b>Discount % (this blind)</b> and <b>Markup % (this blind)</b> boxes &mdash; note the spelling changes over there, one word,
-             <b>Markup</b>, and it reads <b>Margin % (this blind)</b> on a margin company. (That panel, like the green Trade discount line, is
-             only shown to admins and to users allowed to see cost figures.)</div></div>
-
-          <p><b>Roller blinds sharing one fascia.</b> Pick the multi-blind choice on a roller and the screen changes: the <b>Width</b> box locks
-             itself to a grey italic <b>&ldquo;multi blind&rdquo;</b> (each blind carries its own width instead), and a small table headed
-             <b>&ldquo;Blinds in this fascia&rdquo;</b> appears under the price &mdash; <b>Blind &middot; Width &middot; Drop &middot; Price</b>, one
-             row per blind, each with its own drop box you can leave blank for <b>&ldquo;same&rdquo;</b>, and a <b>Total</b>. Underneath it fit-checks
-             for you: <b>&ldquo;&#10003; Fits: 2400 mm in 2500 mm&rdquo;</b>, or <b>&ldquo;&#9888; Won&rsquo;t fit: 2600 mm vs fascia 2500 mm&rdquo;</b>,
-             or <b>&ldquo;Tip: enter a Fascia width to fit-check.&rdquo;</b> if you haven&rsquo;t given it one. The main panel then just reads
-             <b>&ldquo;3 blinds &middot; &pound;312.00 total&rdquo;</b>. You cannot convert while it does not fit, and if you somehow get past that on
-             a stale figure the server says the same thing again: <b>&ldquo;Those blinds won&rsquo;t fit: they total 2600 mm but the fascia is only
-             2500 mm.&rdquo;</b> On conversion each blind becomes <b>its own line, grouped together</b>, with the fascia charged <b>once</b>.</p>
+          <div class="heads"><span class="hi">&#9888;</span><div><b>Who sees what.</b> The <b>Mark up %</b> row and the green <b>Trade discount</b> line
+             are only shown to admins and people allowed to see costs. The green line &mdash; e.g. <b>12.50% (&minus;&pound;5.71)</b> &mdash; is
+             <b>your</b> standing buying discount from your supplier; it is <b>already inside the Price</b> and there for information only. The
+             customer&rsquo;s discount is the amber <b>Discount %</b>.</div></div>
 
           <div class="oops"><b>What the panel says, and what to do about it:</b>
              <ul style="margin:.4rem 0 0;padding-left:1.15rem">
-               <li><code>Still need: fabric, drop.</code> &mdash; nothing wrong; just keep filling in. (On a multi-blind fascia it reads
-                   <code>Still need: product, fabric, a shared drop, at least 2 blind widths.</code>)</li>
-               <li><code>Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</code> &mdash; that band&rsquo;s grid stops short of
-                   the size you asked for. Either the size is wrong, or somebody needs to extend the table under <b>Products</b>. (Width-only and
-                   per-slat products say <code>Width 3200 mm exceeds the largest entry in this price list.</code> and
-                   <code>Drop 2600 mm exceeds the largest entry in this per-slat rate list.</code>)</li>
-               <li><code>No price table for 25mm Venetian band A on system &lsquo;Bev 25mm&rsquo;.</code> &mdash; that band has <b>no grid at all</b>
-                   on that system yet. Same for <code>No price table set up for Headrail for system &lsquo;Vogue&rsquo;.</code> and
-                   <code>No &pound;/m&sup2; rate set for Shutters in this price list.</code></li>
-               <li><code>Could not get a price &mdash; try again.</code> &mdash; the connection blinked. Change something and it will re-price.
-                   (On a multi-blind fascia the same stumble reads <code>Could not price the group &mdash; try again.</code>, or
-                   <code>Could not price the group.</code> if the server answered but not with a group price.)</li>
-               <li><code>Fabric is required.</code> / <code>Width must be greater than zero.</code> / <code>Drop must be greater than zero.</code>
-                   &mdash; something the engine needs is missing or zero.</li>
-               <li><code>Fabric not found or inactive.</code> / <code>Fabric belongs to a different product.</code> &mdash; the fabric you picked
-                   has since been switched off, or you changed product with a stale choice still in the box. Re-pick it.</li>
+               <li><code>Still need: fabric, drop.</code> &mdash; nothing wrong; keep filling in.</li>
+               <li><code>Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</code> &mdash; the band&rsquo;s grid stops short of that
+                   size. Check the size and the unit; if they are right, the table needs extending under <b>Products</b>.</li>
+               <li><code>No price table for &hellip;</code> &mdash; that band has <b>no grid at all</b> on that system yet.</li>
+               <li><code>Could not get a price &mdash; try again.</code> &mdash; the connection blinked. Change something and it re-prices.</li>
              </ul>
              While the panel is red, <b>Turn into full quote</b> goes grey. Fix the figure and the price comes straight back.</div>
 
-          <p><b>What &ldquo;Turn into full quote&rdquo; really does &mdash; read this bit.</b> It does not open a scratch pad. It <b>creates a
-             genuine draft quote</b>: it takes the next <b>quote number</b> (your prefix, the year and a four-digit run &mdash; <code>BEV-2026-0042</code>),
-             snapshots your current <b>VAT rate</b>, re-prices the line and copies all its options across, stamps the <b>measurement unit</b> you
-             were working in so the builder opens the same way, and drops you on the quote builder with a green message naming the quote. The
-             customer is a placeholder reading <b>&ldquo;Quick price (add customer)&rdquo;</b> &mdash; and that is exactly how it will sit in your
-             quotes list until you change it, so <b>rename it straight away</b>. Press that button to <b>keep</b> a price, not to see what happens;
-             if you clicked it by mistake, delete the draft from your quotes list rather than leaving litter behind. If the server cannot manage it
-             you will come back to InstaPrice with a red bar reading <code>Could not price that: &hellip;</code>,
-             <code>Could not read the size &mdash; go back and try again.</code> or <code>Could not start the quote &mdash; please try again.</code>
-             &mdash; nothing will have been created. (A multi-blind fascia that trips over on one of its blinds says
-             <code>Could not price a blind in the group: &hellip;</code> instead.)</p>
+          <p><b>Roller blinds sharing one fascia.</b> Pick the multi-blind fascia choice on a roller and the <b>Width</b> box locks to a grey
+             <b>&ldquo;multi blind&rdquo;</b>; a table headed <b>&ldquo;Blinds in this fascia&rdquo;</b> appears (<b>Blind &middot; Width &middot; Drop
+             &middot; Price</b>, drop left blank for <b>&ldquo;same&rdquo;</b>) with a fit-check underneath, and the panel reads
+             <b>&ldquo;3 blinds &middot; &pound;312.00 total&rdquo;</b>. On conversion each blind becomes its own line, grouped, with the fascia charged once.</p>
 
-          <p><b>Where you land, and why it looks empty.</b> The quote builder opens on a slim bar reading <b>Quote BEV-2026-0042</b> with a
-             <b>draft</b> pill and the total, the green message underneath &mdash; and then a <b>closed</b> Customer details block. That total
-             in the bar is <b>VAT included</b>, so it reads higher than the ex-VAT <b>Sell price</b> you were just looking at on InstaPrice.
-             All you see of
-             it is one summary line: <b>&ldquo;Customer: Quick price (add customer) <em>(click to edit)</em>&rdquo;</b>. <b>Click that line</b> and
-             the form unfolds: <b>Linked customer</b> first (a type-to-search box reading <b>&ldquo;Type to search by name, town, or
-             postcode...&rdquo;</b>, which ties the quote to a customer you already have &mdash; <em>leave blank to unlink</em>), then
-             <b>Customer name *</b>, which is the box holding the placeholder. Overtype that, then <b>Email</b>, <b>Phone</b>, <b>Mobile</b> and the
-             address underneath, and press <b>Save details</b> at the bottom of the block.</p>
+          <p><b>What &ldquo;Turn into full quote&rdquo; really does.</b> It <b>creates a genuine draft quote</b> straight away: the next quote number
+             (<code>BEV-2026-0042</code>), your current VAT rate, the line re-priced with all its options, and the unit you were working in. It sends the
+             product, system, fabric, options, size, quantity and unit &mdash; <b>not</b> any rate you typed over: the line is priced at that product and
+             system&rsquo;s <b>standard</b> rates. Press it to <b>keep</b> a price; if you clicked it by mistake, delete the draft from your quotes list. If the
+             server cannot manage it you come back to InstaPrice with a red bar &mdash; <code>Could not price that: &hellip;</code>,
+             <code>Could not read the size &mdash; go back and try again.</code> or <code>Could not start the quote &mdash; please try again.</code> &mdash;
+             and nothing is created.</p>
 
-          <p><b>No &ldquo;Turn into full quote&rdquo; button at all?</b> That is not a fault either. The button is only drawn for admins and for
-             users with the <b>Create quotes</b> permission &mdash; everybody else can price all day but cannot keep it. An admin can switch that on
-             under <b>Setup &rarr; Users</b>, on your user, with the tick-box marked <b>Create quotes</b>. (Post without it and you simply get
-             <code>You don&rsquo;t have permission to create quotes.</code>)</p>',
+          <p><b>Where you land.</b> The quote builder opens with the bar <b>Quote BEV-2026-0042</b>, a <b>draft</b> pill and the total (VAT included, so
+             higher than the ex-VAT Sell price). An amber bar says <b>&ldquo;This quote has no customer yet &mdash; add their details.&rdquo;</b> with
+             <b>Add customer &darr;</b>, and the <b>Customer details</b> form is already open with <b>Customer name *</b> empty. Fill it in (or pick them in
+             <b>Linked customer</b>) and press <b>Save details</b>. Until you do, the quotes list shows the placeholder name
+             <b>&ldquo;Quick price (add customer)&rdquo;</b>. To put a haggled rate back, open the blind and use <b>Adjust price for this blind</b>
+             (<b>Discount % (this blind)</b>, <b>Markup % (this blind)</b> &mdash; shown to admins and people allowed to see costs).</p>
+
+          <p><b>No &ldquo;Turn into full quote&rdquo; button?</b> It is only shown to admins and users with the <b>Create quotes</b> permission
+             (<b>Setup &rarr; Users</b>). Everybody else can price all day but cannot keep it.</p>',
         'script'  => [
-            ['0:00', 'Product picked; System fills itself.',
-                'Everything starts with the Product box. Your products are grouped under their categories, so scroll to the right heading and pick one. The moment you do, the System box next to it wakes up and lands on that product\'s usual system — change it only if this job is the other one, and remember the price can be different for each.', 1],
-            ['0:16', 'Band narrowed; fabric searched and picked.',
-                'Next the fabric. Band is a price tier — leave it on All bands and search everything, or pick a band to narrow it down. Then just type two or three letters into the Fabric box; matches drop down underneath with the supplier and the code, and you click the one you want. If nothing matches it says so, in plain words: no matching fabrics. And these two labels change with the product — they are whatever that product calls its material, so a metal venetian might say Colour and a wood one Slat or Finish. Careful with the order, by the way: changing the system or the band afterwards clears the fabric and makes you pick again. On a headrail or a track there is no fabric at all, so the whole row disappears.', 2],
-            ['0:40', 'Options appear, most already answered.',
-                'Now the options. These are not a fixed list — the screen only offers what this product, this system and this fabric can actually have, and sensible ones are already chosen for you. A red star means you must answer it. Some options open a second one underneath, indented, once you have picked the parent. And if an option you expected is not there, nine times out of ten it is the fabric — that choice is set up for other colours.', 3],
-            ['1:00', 'Unit, width, drop, quantity, echo line.',
-                'Sizes. The unit box starts on whatever your company works in, and plain numbers are read in that unit — so with millimetres chosen, twelve hundred means twelve hundred millimetres. You can also type sixty inches, or one point five metres, and it will take the hint. Until you have filled everything in, the panel below just tells you what is still missing: still need, drop. And once it is all in, that little grey line underneath tells you what the system is really using — using twelve hundred by fourteen hundred millimetres — so a stray nought or the wrong unit shows itself before it becomes a wrong price.', 4],
-            ['1:24', 'The breakdown, line by line.',
-                'And there is your price, shown as a sum you can follow. Price is what this blind costs at that size with its options. Discount percent and Mark up percent arrive already filled in from that product\'s own settings. Discounted price is the middle step, and Sell price at the bottom, in big letters, is what you would charge. If you see a green Trade discount line at the top, that is your own buying discount from your supplier — it is already inside the Price above, it is shown for your information only, and only people allowed to see cost figures ever see it. And if your company works in margin rather than markup, that second box is labelled Margin percent instead — same money either way.', 5],
-            ['1:56', 'Rates typed over; quantity raised to two.',
-                'Those two amber boxes are yours to play with. Type over them and the price changes as you type — handy when someone is haggling and you want to know what a bit more discount really costs you. It is a one-off, just for this figure: nothing is saved back to the product, it springs back to the usual rates the moment you change product or system, and — worth knowing before you press the button — it does not travel onto the quote either. Put the quantity up and the big number becomes the total for all of them, with the each-price underneath. Nothing on this screen is stored anywhere — Reset wipes it and you start again.', 6],
-            ['2:20', 'Size off the end of the table; panel goes red.',
-                'If a size falls outside the grid you have loaded, InstaPrice will not guess. The panel goes red and tells you exactly why — size three thousand two hundred by fourteen hundred millimetres exceeds the largest cell in this price table — and the quote button goes grey until it is fixed. That is not a fault on this screen: it means the price table for that band stops short of that size, and somebody needs to add it under Products. Bring the size back inside the table and the price comes straight back.', 7],
-            ['2:44', 'Converted: a real draft quote, customer block closed.',
-                'They have said yes. Click Turn into full quote and the whole thing lifts straight into the quote builder — same product, same fabric, same options, same size, same quantity, and it opens in the unit you were working in. One thing does not come with it: the rates. The new line is priced from the product and system\'s own saved discount and mark-up, so anything you typed over while you were haggling is gone — put it back on the line itself, under Adjust price for this blind. The green message names the new quote number. And the customer? All you can see is one closed line reading customer, quick price, add customer, click to edit. Click it, and the form opens: linked customer first, then the customer name box holding that placeholder. Overtype it and save details — right now, before you forget. Then carry on as normal: add the rest of the blinds, and send it. One word of warning — that button makes a real quote the moment you press it, number and all. Press it to keep a price, not to see what happens; if you did not mean to, delete the draft from your quotes list.', 8],
+            ['1', 'A real price, in thirty seconds', 'InstaPrice is for the moment someone asks, roughly how much would that be? On the phone, or standing in their front room. Open it from the InstaPrice button near the top of the menu, just under New. It uses the very same pricing as the quote builder. So the figure you read out is the real figure, not a guess.', 1],
+            ['2', 'Nothing is kept',                 'InstaPrice keeps nothing. There is no customer, no room names and no notes, and nothing you type is saved anywhere. Leave the page, and it is gone. That is the point: it is quick. Reset empties every box, ready for the next one. And the price it shows is before VAT. VAT only joins in on a real quote.', 2],
+            ['3', 'Product first, then System',      'Start with the Product box. Your products are grouped under their categories, so scroll to the right heading, and pick one. The System box next to it then wakes up, on that product\'s usual system. Only change it if this job needs a different one, because the price and the options can differ between systems.', 3],
+            ['4', 'Band, then Fabric',               'Next, the fabric. Band is a price group. Leave it on All bands to search everything, or pick a band to narrow the list. The Fabric box is a search box. Type two or three letters, and the matches drop down, with the supplier and code underneath. Click the one you want. On some products, these boxes have other names, like Colour, or Slat.', 4],
+            ['5', 'Work down in order',              'Work down the screen in order. If you change the system or the band after picking a fabric, the fabric is cleared, and you pick it again. That stops a fabric being priced on the wrong system. And on a product with no fabric at all, such as a headrail, the band and fabric boxes simply disappear.', 5],
+            ['6', 'Options, only what fits',         'Now the options. You only see what this product, this system and this fabric can have, and sensible choices are already picked. A red star means you must answer it. Some options are tick boxes, some are a number to type, and some open a second option underneath. If one you expected is missing, it is usually the fabric.', 6],
+            ['7', 'The size',                        'Then the size. The Measurement unit starts on whatever your company works in, so a plain number is read in that unit. But you can type the unit on the end, like one point two m, and that wins. Under the boxes, a grey line shows what it is really using. Using twelve hundred by fourteen hundred millimetres. Check it, to catch a stray nought.', 7],
+            ['8', 'The price, as a sum',             'Until everything is filled in, the panel just says what is missing. Still need: drop. Fill that in, and the price appears as a sum you can follow, from the top down. Price is this blind at this size, with its options. Then Discount percent, the Discounted price, the Mark up, and the Sell price, at the bottom, in big letters.', 8],
+            ['9', 'The amber rates',                 'The two amber rates are yours to play with. They start on the rates saved for this product and system. Type over them, and the sum below changes as you type. That is handy when someone is haggling, and you want to know what another five percent really costs you. It is a one-off. Nothing is saved back, and it resets when you change the product.', 9],
+            ['10', 'More than one',                  'If they want more than one, type it in the Qty box. Leave it empty, and it counts as one. The big Sell price becomes the total for all of them. And a small grey line underneath shows the price of each one. Two times seventy seven pounds, each.', 10],
+            ['11', 'Who sees what',                  'Two lines depend on who you are. If you are allowed to see costs, you see the Mark up box, and sometimes a green Trade discount line at the top. That green line is your own buying discount from your supplier. It is already inside the Price, so it is just for your information. People without cost access see neither of them.', 11],
+            ['12', 'When it won\'t price',            'If a size is bigger than the price table goes, InstaPrice will not guess. The panel turns red, and tells you why: the size exceeds the largest cell in this price table. The quote button goes grey until it is fixed. So check the size, and the unit, first. If they are right, the price table needs extending, under Products.', 12],
+            ['13', 'Turn into full quote',           'When they say yes, click Turn into full quote. Be clear what that does. It makes a real draft quote, straight away, with its own quote number. It copies the product, fabric, options, size and quantity across. So press it to keep a price, not to see what happens. If you have no such button, you need the Create quotes permission.', 13],
+            ['14', 'Where you land',                 'You land in the quote builder. An amber bar says the quote has no customer yet, and the customer form is open and empty, ready to fill in. One thing does not come across: any rate you typed over while haggling. The line uses the usual rates. To change one blind, open it, and use Adjust price for this blind.', 14],
         ],
 ];
