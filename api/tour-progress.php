@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * POST JSON {v: visit id (16 hex), e: event, s: step, r: referrer, src: tag}.
  * Always answers 204 — a stats hiccup must never surface on the tour. The
- * X-Tour-Event header says what happened (saved / bot / invalid /
+ * X-Tour-Progress header says what happened (saved / bot / invalid /
  * error:<type>) so the beacon can be checked from outside; it carries no data.
  */
 
@@ -49,5 +49,5 @@ if (tour_stats_is_bot($ua)) {
     }
 }
 
-header('X-Tour-Event: ' . $status);
+header('X-Tour-Progress: ' . $status);
 http_response_code(204);
