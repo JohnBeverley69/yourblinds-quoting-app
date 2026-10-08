@@ -14,14 +14,14 @@ declare(strict_types=1);
  *     line from _partials/calendar_money.php; shown only to user_can_see_money());
  *   - map_provider: "🧭 Navigation app" radios Google Maps / Waze
  *     (_partials/maps.php — the embedded run map stays Google);
- *   - ampm_slots: "🕘 Booking time slots" + a LIST of windows (Name / From /
+ *   - ampm_slots: "🕘 Booking time slots" + a LIST of time slots (Name / From /
  *     To / Bookings / day, "✕ Remove", "+ Add a time slot", max AMPM_MAX_WINDOWS
  *     = 6, new rows default to 2 a day, defaults Morning 09:00–13:00 and
  *     Afternoon 13:00–17:00 at 4 a day), with the handler's exact messages.
  * The booking side is calendar/new.php ("+ Book Appointment" → "Book
  * appointment"): exact Time + Duration (mins) when slots are off; "Time slot"
  * cards with "N of M left" / "Full" and the "Email the customer their
- * appointment window" tick when on.
+ * appointment time slot" tick when on.
  *
  * v2: one SCENE per script line (data-scene = the line's step); data-len is
  * worked out from the line itself (characters ÷ 13.6).
@@ -33,12 +33,12 @@ $script = [
     ['3',  'Paid, and who sees it',       'Once a job is settled, it shows a tick, PAID, and a balance of nothing. And do not worry about your fitters. Only people allowed to see money see these figures: admins, and anyone with Can see money ticked on the Users page. Everyone else sees the calendar without them. Press Save, and it says, Calendar will show order value plus balance.', 3],
     ['4',  'Navigation app',              'Second, your Navigation app. There are two round buttons: Google Maps, which is the default, or Waze. When someone taps an address on My Schedule or the day calendar, it opens in the app you pick here. So choose Waze if your fitters like it for live traffic. Press Save, and it says, Address links will now open in Waze.', 4],
     ['5',  'One small exception',         'One small exception. The little route map drawn inside Today\'s run is always a Google map, because Waze cannot be shown inside another page. But every address you tap, on My Schedule or the day calendar, still opens in the app you chose.', 5],
-    ['6',  'An exact time, or a window',  'Third, and the biggest: Booking time slots. This changes how you book a quote visit, to measure up. Left unticked, you book an exact time, with a duration, like ten past eleven for an hour. Tick it, and you offer a window instead, such as Morning or Afternoon. The customer is given the window, never an exact hour. Fittings are not affected.', 6],
-    ['7',  'Your windows',                'Underneath the tick is one row for each window. Out of the box there are two: Morning, nine till one, and Afternoon, one till five, each holding four bookings a day. Every row has a Name, which is what the customer sees, a From time, a To time, and Bookings per day. Change them to suit your own hours.', 7],
-    ['8',  'Bookings per day',            'Bookings per day is your limit for that window, anything from one to ninety nine. Each window has its own limit, so six mornings and three afternoons is perfectly fine. Once a window is full on a given day, it cannot be booked any more. So you never promise more visits than you can do.', 8],
-    ['9',  'Add or remove a window',      'Need an evening? Click Add a time slot. A new empty row appears, ready for a name and times. Say, Evening, six till eight. You can have up to six windows. To take one away, click Remove on its row. Bookings already in it keep their label. You must keep at least one. Then press Save.', 9],
-    ['10', 'Saving, and what it checks',  'When you save, the windows are put in time order, and a green bar says, Booking time slots saved. If something does not add up, you get a red bar starting, Time slots not saved, and it tells you why. Every slot needs a name, and each one needs a From time before its To time.', 10],
-    ['11', 'Booking with windows',        'Now book a quote visit, from Book Appointment on the calendar. Instead of a time, you get Time slot, with one choice for each window, its hours, and how many are left that day. A full window says Full, and cannot be picked. Below is a tick to email the customer their appointment window. Pick one, and press Book appointment.', 11],
+    ['6',  'An exact time, or a time slot',  'Third, and the biggest: Booking time slots. This changes how you book a quote visit, to measure up. Left unticked, you book an exact time, with a duration, like ten past eleven for an hour. Tick it, and you offer a time slot instead, such as Morning or Afternoon. The customer is given the time slot, never an exact hour. Fittings are not affected.', 6],
+    ['7',  'Your time slots',                'Underneath the tick is one row for each window. Out of the box there are two: Morning, nine till one, and Afternoon, one till five, each holding four bookings a day. Every row has a Name, which is what the customer sees, a From time, a To time, and Bookings per day. Change them to suit your own hours.', 7],
+    ['8',  'Bookings per day',            'Bookings per day is your limit for that time slot, anything from one to ninety nine. Each time slot has its own limit, so six mornings and three afternoons is perfectly fine. Once a time slot is full on a given day, it cannot be booked any more. So you never promise more visits than you can do.', 8],
+    ['9',  'Add or remove a time slot',      'Need an evening? Click Add a time slot. A new empty row appears, ready for a name and times. Say, Evening, six till eight. You can have up to six windows. To take one away, click Remove on its row. Bookings already in it keep their label. You must keep at least one. Then press Save.', 9],
+    ['10', 'Saving, and what it checks',  'When you save, the time slots are put in time order, and a green bar says, Booking time slots saved. If something does not add up, you get a red bar starting, Time slots not saved, and it tells you why. Every slot needs a name, and each one needs a From time before its To time.', 10],
+    ['11', 'Booking with time slots',        'Now book a quote visit, from Book Appointment on the calendar. Instead of a time, you get Time slot, with one choice for each time slot, its hours, and how many are left that day. A full time slot says Full, and cannot be picked. Below is a tick to email the customer their appointment window. Pick one, and press Book appointment.', 11],
 ];
 $L = static fn (int $n): string => (string) round(mb_strlen($script[$n - 1][2]) / 13.6);
 
@@ -49,7 +49,7 @@ $tk   = '<span class="tick on">&#10003;</span>';
 $tk0  = '<span class="tick"></span>';
 $save = static fn (string $cls = '', string $st = '', string $more = '') => '<div class="fact"><span class="btnp ' . $cls . '" style="' . $st . '">Save</span>' . $more . '</div>';
 
-// One window row. Each value may be HTML (for animations).
+// One time slot row. Each value may be HTML (for animations).
 $row = static function (string $name, string $from, string $to, string $cap, string $cls = '', string $st = '', string $rm = '') {
     return '<div class="wrow ' . $cls . '" style="' . $st . '">'
          . '<div class="wf w-n"><span class="lab">Name</span><div class="inp">' . $name . '</div></div>'
@@ -59,7 +59,7 @@ $row = static function (string $name, string $from, string $to, string $cap, str
          . '<span class="btns sm rm ' . $rm . '">&#10005; Remove</span></div>';
 };
 $slotHint = '<p class="hintg">When booking a <b>quote (measure) visit</b>, offer a time slot such as <b>Morning</b>, <b>Afternoon</b> or <b>Evening</b>
-    instead of an exact time &mdash; so the customer is given a window, never an exact hour. Name each slot, set its <b>times</b> and how many
+    instead of an exact time &mdash; so the customer is given a time slot, never an exact hour. Name each slot, set its <b>times</b> and how many
     bookings it holds <b>per day</b>; once a slot is full it can&rsquo;t be booked. Add or remove slots to suit you (up to 6). Fittings are unaffected.</p>';
 $moneyHint = '<p class="hintg">On the month, week and day calendars, each job linked to a quote shows its order value, amount received (deposit + payments)
     and outstanding balance &mdash; with a PAID badge once it&rsquo;s settled.</p>';
@@ -78,10 +78,10 @@ return [
         'title'   => 'Calendar options',
         'eyebrow' => 'Settings · Company',
         'v'       => 2,
-        'blurb'   => 'Money on jobs, your map app, and booking windows — Morning, Afternoon, Evening — with your own times and limits.',
+        'blurb'   => 'Money on jobs, your map app, and booking time slots — Morning, Afternoon, Evening — with your own times and limits.',
         'lede'    => 'The <b>Calendar</b> section at the bottom of the <b>Company</b> tab holds three separate settings: whether jobs on
                       the calendar show their <b>money</b>, which <b>navigation app</b> an address opens in, and whether quote visits
-                      are booked at an <b>exact time</b> or in <b>time slots</b> (windows such as Morning, Afternoon and Evening, with
+                      are booked at an <b>exact time</b> or in <b>time slots</b> (such as Morning, Afternoon and Evening, with
                       your own hours and a limit per day). Each has its own <b>Save</b>. To get there: <b>Setup</b> &rarr;
                       <b>Settings</b> &rarr; <b>Company</b>, then scroll to the bottom.',
         'open'    => '/admin/settings.php',
@@ -127,7 +127,7 @@ return [
           .gd .rd{ width:14px; height:14px; border-radius:50%; border:1.5px solid var(--border-strong,#9aa3af); display:inline-grid; place-items:center; box-sizing:border-box; background:var(--surface); }
           .gd .rd i{ grid-area:1/1; width:6px; height:6px; border-radius:50%; background:var(--accent); display:block; }
 
-          /* window rows */
+          /* time slot rows */
           .gd .wrow{ display:flex; flex-wrap:wrap; align-items:flex-end; gap:.35rem .55rem; margin-top:.45rem; }
           .gd .wf{ min-width:0; } .gd .w-n{ width:6.2rem; } .gd .w-t{ width:4.6rem; } .gd .w-c{ width:5.4rem; }
           .gd .rm{ margin-bottom:.1rem; }
@@ -283,22 +283,22 @@ return [
                   </div>
                 </div>
 
-                <!-- 6 — exact time or a window -->
+                <!-- 6 — exact time or a time slot -->
                 <div class="sc" data-scene="6" data-len="' . $L(6) . '">
                   <div class="secbox a-rise" style="--d:.5s"><label class="ckl"><span class="tick a-sel" style="--d:13.5s">&#10003;</span> &#128344; Booking time slots</label></div>
                   <div class="two" style="margin-top:.7rem">
                     <div class="bk a-rise" style="--d:6s"><div class="ttl">Unticked &mdash; an exact time</div>
                       <div class="bkrow"><div><span class="lab">Time <span class="req">*</span></span><div class="inp">' . $type('11:10', 9, 5, .5) . '</div></div>
                         <div><span class="lab">Duration (mins)</span><div class="inp">' . $type('60', 10.5, 2, .3) . '</div></div></div></div>
-                    <div class="bk a-rise" style="--d:14s"><div class="ttl">Ticked &mdash; a window</div><span class="lab">Time slot <span class="req">*</span></span>
+                    <div class="bk a-rise" style="--d:14s"><div class="ttl">Ticked &mdash; a time slot</div><span class="lab">Time slot <span class="req">*</span></span>
                       <div class="opts"><div class="opt a-fly" style="--d:15s"><span class="rd"></span>Morning <span class="rg">(9am&ndash;1pm)</span></div>
                         <div class="opt a-fly" style="--d:15.6s"><span class="rd"></span>Afternoon <span class="rg">(1pm&ndash;5pm)</span></div></div></div>
                   </div>
-                  <div class="chips"><span class="chip a-pop" style="--d:19.5s">The customer gets a window, never an exact hour</span>
+                  <div class="chips"><span class="chip a-pop" style="--d:19.5s">The customer gets a time slot, never an exact hour</span>
                     <span class="chip good a-pop" style="--d:23.5s">Fittings unaffected</span></div>
                 </div>
 
-                <!-- 7 — your windows -->
+                <!-- 7 — your time slots -->
                 <div class="sc" data-scene="7" data-len="' . $L(7) . '">
                   <div class="secbox"><label class="ckl">' . $tk . ' &#128344; Booking time slots</label>
                     ' . $row('<span class="a-ring" style="--d:13s">Morning</span>', '<span class="stack"><span class="a-out" style="--d:20s">09:00</span><span class="a-fade" style="--d:20.2s">08:00</span></span>',
@@ -333,7 +333,7 @@ return [
                     <div class="a-drop" style="--d:3.5s">' . $row($type('Evening', 5.5, 7, .5), $type('18:00', 7, 5, .4), $type('20:00', 8, 5, .4), '2') . '</div>
                     <div class="fact"><span class="btns sm a-press a-ring" style="--d:2s">+ Add a time slot</span></div>' . $save('a-press', '--d:20s') . '</div>
                   <div class="chips">
-                    <span class="chip a-pop" style="--d:10s">Up to 6 windows</span>
+                    <span class="chip a-pop" style="--d:10s">Up to 6 time slots</span>
                     <span class="chip a-pop" style="--d:15s">Removed? Its bookings keep their label</span>
                     <span class="chip bad a-pop" style="--d:18s">Keep at least one</span>
                   </div>
@@ -351,7 +351,7 @@ return [
                   <div class="flash err a-fly" style="--d:17s">Time slots not saved: &ldquo;Evening&rdquo; needs a From time before its To time.</div>
                 </div>
 
-                <!-- 11 — booking with windows -->
+                <!-- 11 — booking with time slots -->
                 <div class="sc" data-scene="11" data-len="' . $L(11) . '">
                   <div class="flash a-pop" style="--d:24.5s">Appointment booked for Mrs Patel on 24 Sep 2026, Morning (8am&ndash;12:30pm).</div>
                   <div class="bk a-rise" style="--d:1s"><div class="lg">Appointment</div>
@@ -363,8 +363,8 @@ return [
                       <div class="opt full a-fly" style="--d:6.6s"><span class="rd"></span>Afternoon <span class="rg">(1pm&ndash;5pm)</span><span class="cnt a-ring" style="--d:13s">Full</span></div>
                       <div class="opt a-fly" style="--d:7.2s"><span class="rd"></span>Evening <span class="rg">(6pm&ndash;8pm)</span><span class="cnt">2 of 2 left</span></div>
                     </div>
-                    <p class="hintg">The customer is given this window, never an exact time. Each window holds a set number of quote visits per day (change the times and limits in Settings &rarr; Calendar).</p>
-                    <label class="ckl a-fade" style="--d:17s;margin-top:.4rem;font-weight:400;font-size:.68rem">' . $tk . ' Email the customer their appointment window (needs an email above)</label>
+                    <p class="hintg">The customer is given this time slot, never an exact time. Each time slot holds a set number of quote visits per day (change the times and limits in Settings &rarr; Calendar).</p>
+                    <label class="ckl a-fade" style="--d:17s;margin-top:.4rem;font-weight:400;font-size:.68rem">' . $tk . ' Email the customer their appointment time slot (needs an email above)</label>
                     <div class="fact"><span class="btnp a-press a-ring" style="--d:23s">Book appointment</span></div>
                   </div>
                 </div>
@@ -398,17 +398,17 @@ return [
           <p><b>&#128344; Booking time slots</b> &mdash; how a <b>quote (measure) visit</b> is booked.</p>
           <ul class="steps">
             <li><b>Unticked</b> (the default): <b>Book appointment</b> asks for an exact <b>Time</b> and a <b>Duration (mins)</b>.</li>
-            <li><b>Ticked</b>: you offer a <b>window</b> instead &mdash; the customer is given the window, never an exact hour.
+            <li><b>Ticked</b>: you offer a <b>time slot</b> instead &mdash; the customer is given the time slot, never an exact hour.
                 <b>Fittings are unaffected</b>.</li>
-            <li><b>One row per window</b>, each with <b>Name</b> (what the customer sees), <b>From</b> and <b>To</b> (time boxes &mdash;
+            <li><b>One row per time slot</b>, each with <b>Name</b> (what the customer sees), <b>From</b> and <b>To</b> (time boxes &mdash;
                 use the little clock or type <code>08:00</code>) and <b>Bookings / day</b> (<b>1 to 99</b>). Out of the box:
                 <b>Morning 09:00&ndash;13:00</b> and <b>Afternoon 13:00&ndash;17:00</b>, <b>4 a day</b> each.</li>
-            <li><b>Every limit is separate</b> &mdash; six mornings and three afternoons is fine. Once a window is full for a day it
+            <li><b>Every limit is separate</b> &mdash; six mornings and three afternoons is fine. Once a time slot is full for a day it
                 can&rsquo;t be booked.</li>
             <li><b>+ Add a time slot</b> adds an empty row (its Bookings / day starts at 2) &mdash; e.g. <i>Evening</i>, 18:00 to 20:00.
                 Up to <b>six</b>; the button stops working at six. <b>&#10005; Remove</b> takes a row away (not the last one); bookings
-                already in a removed window keep their label.</li>
-            <li><b>Save</b> puts the windows in time order and says <b>&ldquo;Booking time slots saved.&rdquo;</b> (or <b>&ldquo;Booking
+                already in a removed time slot keep their label.</li>
+            <li><b>Save</b> puts the time slots in time order and says <b>&ldquo;Booking time slots saved.&rdquo;</b> (or <b>&ldquo;Booking
                 time slots are off.&rdquo;</b> when unticked).</li>
           </ul>
           <div class="oops"><b>&ldquo;Time slots not saved: &hellip;&rdquo;</b> Nothing was changed; fix the one thing it names and
@@ -417,17 +417,17 @@ return [
 
           <p><b>Booking with windows.</b> On the calendar, <b>+ Book Appointment</b> opens <b>Book appointment</b>. Under
              <b>Appointment</b> you set the <b>Date</b> and <b>Assigned to</b>, and the time picker is replaced by <b>Time slot
-             <span class="req">*</span></b>: one choice per window, with its hours and a live count for that day &mdash;
-             <code>4 of 6 left</code>. Change the date and the counts follow. A window with no room left reads <code>Full</code> and
-             can&rsquo;t be picked. Underneath is a tick, already on: <b>&ldquo;Email the customer their appointment window (needs an
+             <span class="req">*</span></b>: one choice per time slot, with its hours and a live count for that day &mdash;
+             <code>4 of 6 left</code>. Change the date and the counts follow. A time slot with no room left reads <code>Full</code> and
+             can&rsquo;t be picked. Underneath is a tick, already on: <b>&ldquo;Email the customer their appointment time slot (needs an
              email above)&rdquo;</b>. Book it and you get, for example, <b>&ldquo;Appointment booked for Mrs Patel on 24 Sep 2026,
              Morning (8am&ndash;12:30pm).&rdquo;</b></p>
-          <div class="oops"><b>Two refusals on the booking screen.</b> No window chosen: <b>&ldquo;Please choose a time slot.&rdquo;</b>
-             The window filled up while you were typing: <b>&ldquo;Afternoon (1pm&ndash;5pm) is fully booked on 24 Sep 2026. Please choose
-             another window or another day.&rdquo;</b> Neither loses your typing.</div>
+          <div class="oops"><b>Two refusals on the booking screen.</b> No time slot chosen: <b>&ldquo;Please choose a time slot.&rdquo;</b>
+             The time slot filled up while you were typing: <b>&ldquo;Afternoon (1pm&ndash;5pm) is fully booked on 24 Sep 2026. Please choose
+             another time slot or another day.&rdquo;</b> Neither loses your typing.</div>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Worth knowing.</b>
-             <br>&bull; <b>Set your windows before you start booking.</b> A window&rsquo;s wording comes from <i>today&rsquo;s</i>
+             <br>&bull; <b>Set your time slots before you start booking.</b> A time slot&rsquo;s wording comes from <i>today&rsquo;s</i>
              settings, so if you change Morning&rsquo;s hours, bookings already in Morning describe themselves with the new hours.
              <br>&bull; If a save fails with <b>&ldquo;Could not save: &hellip; &mdash; have you run &hellip;?&rdquo;</b>, a database update
              hasn&rsquo;t been run yet &mdash; nothing you can fix here; tell whoever looks after the system.

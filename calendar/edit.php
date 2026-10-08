@@ -263,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = ampm_window_label($slotWindow)
                         . ' is fully booked on '
                         . (new DateTimeImmutable($f['appointment_date']))->format('j M Y')
-                        . '. Please choose another window or another day.';
+                        . '. Please choose another time slot or another day.';
                 }
             } else {
                 // Free-time mode — normalise to HH:MM:SS for storage.
@@ -641,14 +641,14 @@ $ampmAvail = $useAmpm
                                 <?php endforeach; ?>
                             </div>
                             <p style="margin:0.4rem 0 0;color:var(--text-faint);font-size:0.8125rem;">
-                                The customer is given this window, never an exact time. Each window holds a set number of
+                                The customer is given this time slot, never an exact time. Each time slot holds a set number of
                                 quote visits per day (change the times and limits in Settings → Calendar).
                             </p>
                             <?php if (!empty($appt['cust_email'])): ?>
                             <label class="checkbox-row" for="notify_customer" style="margin-top:0.75rem">
                                 <input type="checkbox" id="notify_customer" name="notify_customer" value="1"
                                        <?= !empty($_POST['notify_customer']) ? 'checked' : '' ?>>
-                                Email the customer their appointment window
+                                Email the customer their appointment time slot
                                 (to <?= e((string) $appt['cust_email']) ?>)
                             </label>
                             <?php endif; ?>

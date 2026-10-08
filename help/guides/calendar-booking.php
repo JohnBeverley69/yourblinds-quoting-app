@@ -595,14 +595,14 @@ return [
                       <span class="slot a-ring" style="--d:15.6s"><span class="rd on"></span><span>Afternoon <span class="rg">(1pm&ndash;5pm)</span></span><span class="lf">4 of 4 left</span></span>
                       <span class="slot"><span class="rd"></span><span>Evening <span class="rg">(6pm&ndash;8pm)</span></span><span class="lf">2 of 2 left</span></span>
                     </div>
-                    <p class="fh">The customer is given this window, never an exact time.</p>
-                    <span class="ck a-ring" style="--d:21.6s"><span class="tk on">&check;</span> Email the customer their appointment window (needs an email above)</span>
+                    <p class="fh">The customer is given this time slot, never an exact time.</p>
+                    <span class="ck a-ring" style="--d:21.6s"><span class="tk on">&check;</span> Email the customer their appointment time slot (needs an email above)</span>
                   </div>
                 </div>
 
                 <!-- 14 — when a slot is full -->
                 <div class="sc" data-scene="14" data-len="25">
-                  <div class="errb a-fade" style="--d:17.8s">Afternoon (1pm&ndash;5pm) is fully booked on 9 Oct 2026. Please choose another window or another day.</div>
+                  <div class="errb a-fade" style="--d:17.8s">Afternoon (1pm&ndash;5pm) is fully booked on 9 Oct 2026. Please choose another time slot or another day.</div>
                   <div class="fs">
                     <div class="lg">Appointment</div>
                     <div class="g2"><div><span class="fl">Date <span class="rq">*</span></span><div class="ib2 a-ring" style="--d:12.4s"><span class="stk"><span class="a-out" style="--d:13.6s">08/10/2026</span><span class="a-fade" style="--d:13.6s">09/10/2026</span></span></div></div>
@@ -745,10 +745,10 @@ return [
             <li><b>Appointment &mdash; time slots.</b> With <b>&#128344; Booking time slots</b> ticked in <b>Settings &rarr; Calendar</b> (each slot
                 has a <b>Name</b>, <b>From</b>, <b>To</b> and <b>Bookings / day</b>; <b>+ Add a time slot</b> up to six), measure visits use a
                 <b>Time slot</b> instead: one radio card per slot, e.g. <b>Afternoon (1pm&ndash;5pm) &middot; 3 of 4 left</b>. <em>&ldquo;The
-                customer is given this window, never an exact time.&rdquo;</em> A full slot reads <b>Full</b>, is greyed out and can&rsquo;t be
-                picked; changing the date refreshes the counts. <b>Email the customer their appointment window (needs an email above)</b> is
+                customer is given this time slot, never an exact time.&rdquo;</em> A full slot reads <b>Full</b>, is greyed out and can&rsquo;t be
+                picked; changing the date refreshes the counts. <b>Email the customer their appointment time slot (needs an email above)</b> is
                 ticked to start with. Saving re-checks the space: <em>&ldquo;Afternoon (1pm&ndash;5pm) is fully booked on 8 Oct 2026. Please choose
-                another window or another day.&rdquo;</em> Cancelled and no-show visits give their place back; fittings never count.</li>
+                another time slot or another day.&rdquo;</em> Cancelled and no-show visits give their place back; fittings never count.</li>
           </ul>
           <p>Booked, you&rsquo;re back on the calendar with <em>&ldquo;Appointment booked for Angela Reed on 8 Oct 2026, Afternoon
              (1pm&ndash;5pm).&rdquo;</em> Open a measure appointment and <b>Start quote</b> begins the quote from it.</p>
