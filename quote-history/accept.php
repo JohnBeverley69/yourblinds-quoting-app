@@ -215,7 +215,8 @@ if ($action === 'accept') {
             $subject = sprintf('Thank you for accepting quote %s', (string) $quote['quote_number']);
             $body    = legal_render_tokens($template, $ctx);
 
-            mailer_send($custEmail, $subject, $body);
+            require_once __DIR__ . '/../_partials/tenant_mail.php';
+            mailer_send($custEmail, $subject, $body, null, null, tenant_mail_opts($pdo, (int) $quote['client_id']));
         }
     }
 

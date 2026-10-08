@@ -85,7 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'emai
         $body .= "\nIf you have any questions about your account please reply to this email.\n\nKind regards,\n" . ($facName !== '' ? $facName : 'Accounts');
         $fname = 'Statement-' . preg_replace('/[^A-Za-z0-9._-]/', '_', (string) ($bundle['ctx']['account_name'] ?? 'account')) . '-' . $pAsAt . '.pdf';
 
-        $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $fname, 'mime' => 'application/pdf']);
+        require_once __DIR__ . '/../_partials/tenant_mail.php';
+        $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $fname, 'mime' => 'application/pdf'],
+                          null, tenant_mail_opts($pdo, $factory));
         ar_log_statement_email($pdo, $factory, $accId, $pAsAt, $email, $closing, $ok ? 'sent' : 'failed', $userId);
         $ok ? $sent++ : $fail++;
     }

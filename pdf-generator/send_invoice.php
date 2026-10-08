@@ -22,6 +22,7 @@ require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../_partials/calendar_money.php';
 require __DIR__ . '/pdf.php';
 require_once __DIR__ . '/../_partials/send_quota.php';
+require_once __DIR__ . '/../_partials/tenant_mail.php';
 
 requireLogin();
 
@@ -131,7 +132,9 @@ $ok = mailer_send(
         'content'  => $pdfBytes,
         'filename' => $filename,
         'mime'     => 'application/pdf',
-    ]
+    ],
+    null,
+    tenant_mail_opts(db(), (int) $user['client_id'])
 );
 
 if ($ok) {
