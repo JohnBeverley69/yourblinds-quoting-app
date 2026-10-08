@@ -991,13 +991,13 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         </div>
         <?php else: ?>
         <div class="quote-sticky-bar">
-            <span class="qsb-left">New quote <span class="status-pill status-draft">on this tablet</span></span>
+            <span class="qsb-left">New quote <span class="status-pill status-draft">on this device</span></span>
             <span class="qsb-total" id="yb-prov-ref"></span>
         </div>
         <div class="page-header" style="margin-bottom:0.6rem">
             <div>
                 <h1 class="page-title" style="margin:0">New quote</h1>
-                <p class="page-subtitle" style="margin:0">Started with no signal. It gets its quote number when the signal is back &mdash; everything here is kept on this tablet until then.</p>
+                <p class="page-subtitle" style="margin:0">Started with no signal. It gets its quote number when the signal is back &mdash; everything here is kept on this device until then.</p>
             </div>
         </div>
         <?php endif; /* !$offlineTemplate: sticky bar, actions, header */ ?>
@@ -2566,8 +2566,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             return pd;
         } catch (err) {
             var hit = cacheGet('pd.' + pid);
-            if (hit && hit.v) return hit.v;   // no signal: use the copy on this tablet
-            // …or the full set saved when this tablet was set up for offline.
+            if (hit && hit.v) return hit.v;   // no signal: use the copy on this device
+            // …or the full set saved when this device was set up for offline.
             if (window.ybEngine && ybEngine.pickers) {
                 var kept = await ybEngine.pickers.productData(pid);
                 if (kept) return kept;
@@ -2702,9 +2702,9 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         } catch (err) {
             // With no signal, say why and what fixes it.
             var noSig = window.ybOffline && !ybOffline.online;
-            setIdle(systemSel, noSig ? 'Not saved on this tablet' : 'Failed to load');
+            setIdle(systemSel, noSig ? 'Not saved on this device' : 'Failed to load');
             fabricSearch.placeholder = noSig
-                ? 'Not saved on this tablet — with signal, tap Work offline → Update now'
+                ? 'Not saved on this device — with signal, tap Work offline → Update now'
                 : 'Failed to load';
             console.error(err);
         }
@@ -2743,7 +2743,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             rememberFabrics(fabricCacheKey(), data.fabrics || []);
             renderFabricResults(data.fabrics || []);
         } catch (err) {
-            // No signal: search the copy kept on this tablet instead. The full
+            // No signal: search the copy kept on this device instead. The full
             // list saved at set-up comes first (it has every fabric); the
             // lists remembered from earlier searches are the fallback.
             var full = (window.ybEngine && ybEngine.pickers) ? await ybEngine.pickers.fabrics(productSel.value) : [];
@@ -2753,7 +2753,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 return;
             }
             fabricResults.innerHTML = '<div class="empty">' + (window.ybOffline && !ybOffline.online
-                ? 'No signal, and this list isn’t saved on the tablet yet.'
+                ? 'No signal, and this list isn’t saved on this device yet.'
                 : 'Could not search fabrics.') + '</div>';
             fabricResults.hidden = false;
             console.error(err);
@@ -3776,7 +3776,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     // First no-signal price on this page: the engine is starting up
                     // (a second or two, longer on a very cheap tablet).
                     previewBox.className   = 'idle';
-                    previewBox.textContent = 'Getting prices ready on this tablet…';
+                    previewBox.textContent = 'Getting prices ready on this device…';
                 }
                 return await ybEngine.preview(params.toString());
             }
@@ -3786,19 +3786,19 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
     function offlinePriceNote(data) {
         var d = data.catalogue_date ? new Date(data.catalogue_date + 'T12:00:00') : null;
         var stale = window.ybEngine && ybEngine.status().stale;
-        return '<em style="color:' + (stale ? '#8a4b00' : 'inherit') + '">tablet price'
+        return '<em style="color:' + (stale ? '#8a4b00' : 'inherit') + '">offline price'
              + (stale && d ? ' from ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' }) : '')
              + ' — checked when sent</em>';
     }
 
     // No signal: the price can't be worked out right now, but the blind can
-    // still be saved. It's kept on this tablet and priced + added when the
+    // still be saved. It's kept on this device and priced + added when the
     // signal is back (the server checks it then, exactly as it does today).
     function noSignalPreview() {
         if (!window.ybOffline || ybOffline.online) return false;
         previewBox.className   = 'idle';
         previewBox.textContent = 'No signal — the price will show when the signal is back. '
-                               + 'You can still save this blind: it’s kept on this tablet and added then.';
+                               + 'You can still save this blind: it’s kept on this device and added then.';
         setSubmitDisabled(false);
         return true;
     }
@@ -3988,7 +3988,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
     }
 
     // ---- Never lose a blind -----------------------------------------------
-    // The line form autosaves to this tablet as it's filled in, and saving goes
+    // The line form autosaves to this device as it's filled in, and saving goes
     // in the background: with signal it's saved as before; with no signal (or
     // signed out) it's kept on the tablet in the "waiting to send" list below
     // and sent automatically when the signal is back (_partials/offline_guard.php).
@@ -4129,19 +4129,19 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         var item = OFF.outbox.add({
             scope: quoteId, action: action, pairs: pairs, kind: 'line',
             itemId: itemIdIn ? itemIdIn.value : '', draft: snap, tabletPrice: lastTabletPrice,
-            summary: describeLine(snap) + (lastTabletPrice !== null ? ' · £' + lastTabletPrice.toFixed(2) + ' (tablet price)' : '')
+            summary: describeLine(snap) + (lastTabletPrice !== null ? ' · £' + lastTabletPrice.toFixed(2) + ' (offline price)' : '')
         });
         if (!item) {
             previewBox.className   = 'error';
-            previewBox.textContent = 'This tablet is out of storage space, so the blind could not be kept. '
+            previewBox.textContent = 'This device is out of storage space, so the blind could not be kept. '
                                    + 'Leave it on screen and save again when there’s signal.';
             setSubmitDisabled(false);
             return;
         }
         previewBox.className   = 'idle';
         previewBox.textContent = res.kind === 'login'
-            ? '✓ Kept on this tablet. You’ve been signed out — sign in again and it will be sent.'
-            : '✓ Kept on this tablet — it’ll be added when the signal is back'
+            ? '✓ Kept on this device. You’ve been signed out — sign in again and it will be sent.'
+            : '✓ Kept on this device — it’ll be added when the signal is back'
               + (lastTabletPrice !== null ? ' (the server checks the price then).' : ' and priced then.');
         if (itemIdIn) {
             OFF.draft.clear(draftKey);
@@ -4181,7 +4181,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         outboxPanel.innerHTML = '';
         if (!items.length && !createErr) return;
         var head = document.createElement('strong');
-        head.textContent = 'Kept on this tablet, not on the quote yet (' + items.length + ')';
+        head.textContent = 'Kept on this device, not on the quote yet (' + items.length + ')';
         outboxPanel.appendChild(head);
         if (createErr) {
             var ce = document.createElement('div');
@@ -4233,7 +4233,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             del.type = 'button'; del.textContent = it.kind === 'send' ? 'Don’t send' : 'Delete';
             del.addEventListener('click', function () {
                 if (confirm(it.kind === 'send' ? 'Cancel this email? It hasn’t been sent.'
-                                               : 'Delete this from the tablet? It hasn’t been saved to the quote.')) OFF.outbox.remove(it.id);
+                                               : 'Delete this from this device? It hasn’t been saved to the quote.')) OFF.outbox.remove(it.id);
             });
             row.appendChild(del);
             outboxPanel.appendChild(row);
@@ -4446,7 +4446,7 @@ window.__editingBlind__ = <?= json_encode([
 <?php endif; ?>
 
 <script>
-// Never lose the customer details either: autosaved on this tablet, and a save
+// Never lose the customer details either: autosaved on this device, and a save
 // with no signal waits in the tablet's outbox (_partials/offline_guard.php).
 (function () {
     var f = document.querySelector('form[action="/quote-builder/save_details.php"]');
@@ -4480,7 +4480,7 @@ window.__editingBlind__ = <?= json_encode([
             if (!name.trim()) { alert('Type the customer’s name — the quote needs it.'); return; }
             ybOffline.prov.setDetails(pid, pairs);
             var btn = f.querySelector('button[type=submit]');
-            if (btn) { var old = btn.textContent; btn.textContent = '✓ Kept on this tablet'; setTimeout(function () { btn.textContent = old; }, 2000); }
+            if (btn) { var old = btn.textContent; btn.textContent = '✓ Kept on this device'; setTimeout(function () { btn.textContent = old; }, 2000); }
         });
         return;
     }

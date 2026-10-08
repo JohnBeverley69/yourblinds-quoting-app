@@ -423,7 +423,7 @@ $activeNav = 'order-history';
 </div>
 
 <script>
-// Never lose a new customer's details: autosaved on this tablet. With no signal,
+// Never lose a new customer's details: autosaved on this device. With no signal,
 // a tablet set up for offline starts the quote on the tablet; anywhere else the
 // form waits, with everything kept.
 (function () {
@@ -433,7 +433,7 @@ $activeNav = 'order-history';
         // the quote on the tablet instead (it gets its number when the signal is back).
         offlineStart: true,
         needsSignal: 'No signal right now. A new quote needs signal to be created, but everything you’ve '
-                   + 'typed is kept on this tablet. Tap “Create quote” again when the signal is back.'
+                   + 'typed is kept on this device. Tap “Create quote” again when the signal is back.'
     });
 })();
 </script>

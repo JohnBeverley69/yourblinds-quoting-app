@@ -193,16 +193,16 @@ HTML,
     [
         'nav'   => 'Offline', 'icon' => '📶', 'secs' => 10,
         'title' => 'No signal? Keep on selling.',
-        'body'  => 'Farmhouse in the hills, or a basement flat with no bars? It doesn\'t matter. Set your tablet up for offline while you\'re on Wi-Fi, and from then on it keeps working wherever you are. It prices every blind on the tablet itself, using exactly the same pricing as the server, starts brand-new quotes, and even queues the email to your customer. Nothing is lost. The moment the signal comes back, it all sends itself, and every price is checked again on the way up.',
-        'tier'  => 'Tablets — set up first, on Wi-Fi',
+        'body'  => 'Farmhouse in the hills, or a basement flat with no bars? It doesn\'t matter. Set your tablet or phone up for offline while you\'re on Wi-Fi, and from then on it keeps working wherever you are. It prices every blind on the device itself, using exactly the same pricing as the server, starts brand-new quotes, and even queues the email to your customer. Nothing is lost. The moment the signal comes back, it all sends itself, and every price is checked again on the way up.',
+        'tier'  => 'Tablets and phones — set up first, on Wi-Fi',
         'mock'  => <<<'HTML'
 <div class="hw-tab">
   <div class="hw-body hw-offline">
     <div class="hw-net">
-      <span class="hw-net-off a-out" style="--d:5.2s">&#128245; No signal &mdash; working on this tablet</span>
+      <span class="hw-net-off a-out" style="--d:5.2s">&#128245; No signal &mdash; working on this device</span>
       <span class="hw-net-on a-fade" style="--d:5.2s">&#128246; Signal back &mdash; sending&hellip;</span>
     </div>
-    <div class="hw-q-head"><b>New quote &middot; Mr &amp; Mrs Hughes</b><span class="hw-mini">On this tablet</span></div>
+    <div class="hw-q-head"><b>New quote &middot; Mr &amp; Mrs Hughes</b><span class="hw-mini">On this device</span></div>
     <div class="hw-line a-fade" style="--d:.7s">
       <span class="hw-room">Study</span>
       <span class="hw-what">Roller blind &middot; 1000 &times; 1400<em><i class="hw-sw" style="background:#d6c9a8"></i>Oat</em></span>

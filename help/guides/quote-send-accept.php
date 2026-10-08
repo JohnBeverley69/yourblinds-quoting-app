@@ -439,8 +439,8 @@ return [
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>A shared link sends the quote by itself.</b> The first time a <b>person</b> opens the
              public link, a quote still in <b>draft</b> is flipped to <b>sent</b> and dated (link previews in WhatsApp, Outlook and the like don&rsquo;t count).
-             So don&rsquo;t paste the link anywhere until you&rsquo;re happy with the quote. <b>No signal?</b> On a tablet set up for offline, the red button can
-             queue the email until the signal is back &mdash; see <b>&ldquo;Working offline on a tablet&rdquo;</b>.</div></div>
+             So don&rsquo;t paste the link anywhere until you&rsquo;re happy with the quote. <b>No signal?</b> On a tablet or phone set up for offline, the red button can
+             queue the email until the signal is back &mdash; see <b>&ldquo;Working offline on a tablet or phone&rdquo;</b>.</div></div>
 
           <p><b>What lands in their inbox.</b> A plain-text email. Subject <em>&ldquo;Your quote BEV-2026-0042 from Beverley Blinds&rdquo;</em>; then
              &ldquo;Hello Emma Fletcher,&rdquo; (the full name on the quote), &ldquo;Please find your quote (BEV-2026-0042) attached as a PDF.&rdquo;, your

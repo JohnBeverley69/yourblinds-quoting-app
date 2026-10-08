@@ -574,7 +574,7 @@ return [
           <div class="heads"><span class="hi">&#9888;</span><div><b>You can&rsquo;t lose a half-typed blind.</b> The blind form is kept on the device as
              you fill it in. If the page reloads or the tablet dies, the next time you open the quote a yellow bar offers <em>&ldquo;You have an unsaved blind
              from 10:42 (&hellip;).&rdquo;</em> with <b>Put it back</b> and <b>Discard</b>. And if the server turns a blind down when you save it, what you
-             typed stays on screen with the reason in red. <b>No signal?</b> See the guide <b>&ldquo;Working offline on a tablet&rdquo;</b>.</div></div>
+             typed stays on screen with the reason in red. <b>No signal?</b> See the guide <b>&ldquo;Working offline on a tablet or phone&rdquo;</b>.</div></div>
 
           <div class="oops"><b>&ldquo;Quote is locked (status: sent). Reopen it to add blinds.&rdquo;</b> Only a <b>draft</b> can be changed. The banner says
              <em>&ldquo;This quote is in sent state and is read-only. Use Reopen as draft above to edit it.&rdquo;</em> Click <b>Reopen as draft</b> in Quote

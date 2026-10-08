@@ -218,7 +218,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         var server = parseFloat(m[1].replace(/,/g, ''));
         if (Math.abs(server - item.tabletPrice) < 0.005) return;
         var a = flags();
-        a.push({ id: uid(), scope: item.scope, summary: item.summary.replace(/ · £[\d.,]+ \(tablet price\)$/, ''),
+        a.push({ id: uid(), scope: item.scope, summary: item.summary.replace(/ · £[\d.,]+ \((?:offline|tablet) price\)$/, ''),
                  tablet: item.tabletPrice, server: server, at: Date.now() });
         lsSet(FLAGS_KEY, a);
     }
@@ -238,7 +238,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             if (item.scope.indexOf('p:') === 0 && item.kind !== 'create') continue;
             // An email to the customer (John, 2026-09-28: "option B") goes only
             // once everything else for that quote has been sent, and not at all
-            // if the server priced any blind differently from the tablet: then
+            // if the server priced any blind differently from this device: then
             // it's HELD for someone to check the quote and press Send now.
             if (item.kind === 'send') {
                 var others = all().some(function (i) { return i.scope === item.scope && i.kind !== 'send' && i.id !== item.id; });
@@ -283,7 +283,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         var nWait = waiting === 1 ? '1 saved change' : waiting + ' saved changes';
         if (netDown) {
             cls = 'is-off';
-            txt = 'No signal — anything you save is kept on this tablet'
+            txt = 'No signal — anything you save is kept on this device'
                 + (waiting ? ' (' + nWait + ' waiting)' : '') + '.'
                 + (SIMULATE ? ' <a href="#" onclick="ybOffline.simulate(false);return false;">(Pretend mode — turn off)</a>' : '');
         } else if (loginNeeded && waiting) {
@@ -302,7 +302,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             cls = 'is-warn';
             var f0 = flags()[0];
             txt = flags().length + (flags().length === 1 ? ' blind was' : ' blinds were')
-                + ' priced differently by the server than on the tablet — <a href="/quote-builder/edit.php?id='
+                + ' priced differently by the server than on this device — <a href="/quote-builder/edit.php?id='
                 + encodeURIComponent(f0.scope) + '">check the quote</a>.';
         } else if (rejected.length) {
             cls = 'is-warn';
@@ -367,13 +367,13 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { alert('Type the customer’s email address first.'); return; }
             if (!confirm('No signal. Send this quote to ' + to + ' automatically when the signal is back?\n\n'
                        + 'It goes once all its blinds have been sent. If the server prices any blind differently '
-                       + 'from the tablet, it waits for you to check the quote first.')) return;
+                       + 'from this device, it waits for you to check the quote first.')) return;
             var pairs = fieldPairs(form).concat([['client_ref', 's' + uid()]]);
             var idIn = form.querySelector('[name="id"]');
             var item = outbox.add({ scope: idIn ? idIn.value : '', kind: 'send', action: form.getAttribute('action'),
                                     pairs: pairs, summary: 'Email the quote to ' + to });
-            alert(item ? '✓ Kept on this tablet — the email goes when the signal is back.'
-                       : 'This tablet is out of storage space, so the email couldn’t be kept. Send it when you have signal.');
+            alert(item ? '✓ Kept on this device — the email goes when the signal is back.'
+                       : 'This device is out of storage space, so the email couldn’t be kept. Send it when you have signal.');
             return;
         }
         alert('No signal — this needs signal. Nothing has been changed; try again when you’re back in signal.');
@@ -446,7 +446,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
                             return;
                         }
                     }
-                    alert(opts.needsSignal || 'No signal right now. Everything you typed is kept on this tablet; try again when the signal is back.');
+                    alert(opts.needsSignal || 'No signal right now. Everything you typed is kept on this device; try again when the signal is back.');
                 }
                 // Online: a normal submit. The draft is kept (flagged) until the
                 // page it lands on says it went through, so a failed send loses nothing.
@@ -466,7 +466,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
             if (res.kind === 'rejected') { alert(res.message); return; }
             var item = outbox.add({ scope: opts.scope, action: form.getAttribute('action'), pairs: pairs,
                                     summary: opts.summary ? opts.summary() : 'Saved changes' });
-            if (!item) { alert('This tablet is out of storage space, so this could not be kept. Please try again with signal.'); return; }
+            if (!item) { alert('This device is out of storage space, so this could not be kept. Please try again with signal.'); return; }
             draft.clear(key);
             initial = JSON.stringify(snapshot());
             if (res.kind === 'login') loginNeeded = true;
@@ -530,13 +530,13 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         else swTell({ type: 'user', uid: USER_ID });
     }
 
-    // This page came from the tablet's saved copy (no signal): say so.
+    // This page came from this device's saved copy (no signal): say so.
     if (window.__ybSavedCopy && location.search.indexOf('offline_template') === -1) {
         document.addEventListener('DOMContentLoaded', function () {
             var host = document.querySelector('main') || document.body;
             var note = document.createElement('div');
             note.className = 'yb-restore-bar';
-            note.textContent = 'No signal — this is the copy saved on this tablet at ' + when(window.__ybSavedCopy)
+            note.textContent = 'No signal — this is the copy saved on this device at ' + when(window.__ybSavedCopy)
                 + '. Anything you change is kept here and sent when the signal is back.';
             host.insertBefore(note, host.firstChild);
         });
@@ -551,7 +551,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     };
     if (SIMULATE) swTell({ type: 'simulate-offline', on: true });
 
-    // On a quote whose blinds the server priced differently from the tablet:
+    // On a quote whose blinds the server priced differently from this device:
     // list them, with both prices. The server's price is the one on the quote.
     document.addEventListener('DOMContentLoaded', function () {
         var qm = /\/quote-builder\/edit\.php$/.test(location.pathname) && new URLSearchParams(location.search).get('id');
@@ -584,11 +584,11 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
         box.style.flexDirection = 'column';
         box.style.alignItems = 'stretch';
         var h = document.createElement('strong');
-        h.textContent = 'Priced differently when sent from the tablet — the quote uses the server’s price:';
+        h.textContent = 'Priced differently when sent from this device — the quote uses the server’s price:';
         box.appendChild(h);
         mineFlags.forEach(function (f) {
             var row = document.createElement('div');
-            row.textContent = f.summary + ': £' + f.tablet.toFixed(2) + ' on the tablet → £' + f.server.toFixed(2) + ' now.';
+            row.textContent = f.summary + ': £' + f.tablet.toFixed(2) + ' on this device → £' + f.server.toFixed(2) + ' now.';
             box.appendChild(row);
         });
         var okBtn = document.createElement('button');
