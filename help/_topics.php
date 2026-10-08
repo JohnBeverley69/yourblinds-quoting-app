@@ -300,16 +300,16 @@ return [
       account</strong> or <strong>Create a separate account anyway</strong>. Take the existing one unless they
       really are two different businesses.</p>'],
 
-    ['all', 'Quoting', 'Does it work with no signal (offline)?', 'offline no signal no internet wifi flight mode tablet measure away from office rural dead spot works offline set up for offline tablet price kept on this tablet sync send later',
-     '<p><strong>Yes &mdash; on a tablet you have set up for it.</strong> With no signal a set-up tablet opens the quotes you have looked at, prices every blind on the tablet itself, starts brand-new quotes, and can queue the quote email. It all goes up by itself when the signal is back, and the server checks every price again.</p>
+    ['all', 'Quoting', 'Does it work with no signal (offline)?', 'offline no signal no internet wifi flight mode tablet phone measure away from office rural dead spot works offline set up for offline offline price kept on this device sync send later',
+     '<p><strong>Yes &mdash; on a tablet or phone you have set up for it.</strong> With no signal a set-up device opens the quotes you have looked at, prices every blind on the device itself, starts brand-new quotes, and can queue the quote email. It all goes up by itself when the signal is back, and the server checks every price again.</p>
       <ul>
       <li><strong>Set it up first, on Wi-Fi:</strong> open the menu, scroll to the bottom, tap <strong>&#128246; Work offline: set up</strong> &rarr; <strong>Set up for offline</strong> (about 20&nbsp;MB, once). The button then reads <strong>Offline ready</strong>. It only appears on touch screens.</li>
-      <li><strong>Open the quotes you&rsquo;ll need while you have signal</strong> &mdash; the tablet keeps a copy of each quote you open, for 14 days.</li>
-      <li><strong>With no signal</strong> an orange bar says so. Add blinds as normal: the price is marked <em>&ldquo;tablet price &mdash; checked when sent&rdquo;</em> and <strong>Save</strong> keeps the blind on the tablet. <strong>+ New</strong> starts a quote on the tablet that gets its number later.</li>
+      <li><strong>Open the quotes you&rsquo;ll need while you have signal</strong> &mdash; the device keeps a copy of each quote you open, for 14 days.</li>
+      <li><strong>With no signal</strong> an orange bar says so. Add blinds as normal: the price is marked <em>&ldquo;offline price &mdash; checked when sent&rdquo;</em> and <strong>Save</strong> keeps the blind on the device. <strong>+ New</strong> starts a quote on the device that gets its number later.</li>
       <li><strong>When the signal is back</strong> everything sends itself. If the server prices a blind differently you are told on the quote, and a queued email is held until you press <strong>Send now</strong>.</li>
       <li><strong>Needs signal regardless:</strong> PDFs, changing status, deleting and deposits &mdash; those buttons say so rather than failing.</li>
       </ul>
-      <p>Even without setting a tablet up, nothing you type is lost if the signal drops mid-quote: blinds you save wait on the device and are sent when the signal returns (they&rsquo;re priced then). The full walkthrough is the guide <strong>Working offline on a tablet</strong>.</p>'],
+      <p>Even without setting a tablet up, nothing you type is lost if the signal drops mid-quote: blinds you save wait on the device and are sent when the signal returns (they&rsquo;re priced then). The full walkthrough is the guide <strong>Working offline on a tablet or phone</strong>.</p>'],
 
     // ---- Calendar & customers ------------------------------------------
     ['all', 'Calendar & customers', 'Booking jobs on the calendar', 'calendar appointment booking book fit fitting measure survey visit month week day view maps waze directions everyone just me mine my schedule my diary pending fitting drag drop tray issue flag status no show today run legend colours',
@@ -1085,7 +1085,7 @@ return [
       </ul>
       <p>It changes nothing about your data, your prices or what a customer sees — only how this screen is laid out.</p>
       <p><strong>Worth knowing:</strong> the setting is <strong>per device</strong>, remembered in this browser for a
-      year. Turning it off on the office PC will not turn it off on the tablet or the phone, and a colleague signing in
+      year. Turning it off on the office PC will not turn it off on the device or the phone, and a colleague signing in
       on their own machine is unaffected.</p>'],
 
     ['admin', 'Settings', 'What do the ticks on the Users page actually do?', 'users permissions roles create quotes orders view all customer jobs view costs fittings only dashboard panels leaderboard gross profit hidden missing menu active sign in',

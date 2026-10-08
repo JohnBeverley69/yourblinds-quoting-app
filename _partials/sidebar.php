@@ -556,7 +556,8 @@ window.addEventListener('pageshow', function (e) {
     var label = document.getElementById('ybOfflineLabel');
     var panel = document.getElementById('ybOfflinePanel');
     if (!btn || !label || !panel || !window.ybEngine) return;
-    // Offline mode is for tablets (John, 2026-09-26); a device already set up
+    // Offline mode is for touch devices — tablets and phones (John, 2026-10-08;
+    // tablet-only before); a device already set up
     // always shows it so it can be updated or turned off.
     if (!ybEngine.enabled() && !window.matchMedia('(pointer: coarse)').matches) return;
     btn.hidden = false;

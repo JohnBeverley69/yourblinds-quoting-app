@@ -1,6 +1,6 @@
 // Offline prices on the tablet — window.ybEngine.
 //
-// "Set up this tablet for offline" downloads, once, over WiFi:
+// "Set up this device for offline" downloads, once, over WiFi:
 //   • PHP 8.3 as WebAssembly (the same build as the /offline/proof.php check),
 //   • the pricing code itself (offline/engine_bundle.php: the server's own files),
 //   • this user's catalogue (offline/catalogue.php).
@@ -74,7 +74,7 @@
     if (memo[url]) return memo[url];
     memo[url] = url;   // a cycle falls back to the network URL (none in practice)
     var hit = await cache.match(url);
-    if (!hit) throw new Error('Offline files incomplete — set this tablet up again with signal.');
+    if (!hit) throw new Error('Offline files incomplete — set this device up again with signal.');
     var base = lsGet(k('base.' + url)) || url;
     var text = await hit.text();
     for (var s of specsOf(text)) {
@@ -185,7 +185,7 @@
     // Quote pages open with no signal too: switch on the page-saving helper and
     // save the screens a salesperson starts from.
     if (window.ybOffline && ybOffline.swEnable) {
-        progress('Saving the quote screens on this tablet…');
+        progress('Saving the quote screens on this device…');
         // Plus the quote that's open now, if it is one (set-up can start from any page).
         var here = /^\/quote-builder\/edit\.php$/.test(location.pathname) && /[?&]id=\d+/.test(location.search)
           ? [location.pathname + location.search] : [];
@@ -274,7 +274,7 @@
       var cache = await caches.open(CACHE);
       var get = async function (key) {
         var hit = await cache.match(key);
-        if (!hit) throw new Error('Offline files missing — set this tablet up again with signal.');
+        if (!hit) throw new Error('Offline files missing — set this device up again with signal.');
         return hit;
       };
       var workerSrc = await (await get(WORKER)).text();
@@ -363,12 +363,12 @@
     var txt = document.createElement('span');
     var btns = [];
     if (!s.enabled) {
-      txt.textContent = 'Prices with no signal: not set up on this tablet.';
+      txt.textContent = 'Prices with no signal: not set up on this device.';
       btns.push(['Set up for offline', async function (b) {
         b.disabled = true;
         try {
           var r = await setup(function (m) { txt.textContent = m; });
-          txt.textContent = '✓ Ready — ' + (r.rows || 0).toLocaleString() + ' prices kept on this tablet.';
+          txt.textContent = '✓ Ready — ' + (r.rows || 0).toLocaleString() + ' prices kept on this device.';
           setTimeout(changed, 2500);
         } catch (e) { txt.textContent = 'Not set up: ' + e.message; b.disabled = false; }
       }]);
@@ -393,7 +393,7 @@
         changed();
       }]);
       btns.push(['Turn off', function () {
-        if (confirm('Stop keeping prices on this tablet? You can set it up again any time with signal.')) turnOff();
+        if (confirm('Stop keeping prices on this device? You can set it up again any time with signal.')) turnOff();
       }]);
     }
     el.appendChild(txt);
