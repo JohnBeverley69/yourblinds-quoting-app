@@ -931,7 +931,9 @@ function ar_email_account_document(PDO $pdo, int $factory, int $accountId, strin
     if (function_exists('app_setting_on') && app_setting_on('email_paused')) {
         return ['ok' => false, 'email' => $email, 'message' => 'Emails are paused (testing mode) — nothing was sent. Turn the pause off in Master admin to send for real.'];
     }
-    $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $filename, 'mime' => 'application/pdf']);
+    require_once __DIR__ . '/tenant_mail.php';
+    $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $filename, 'mime' => 'application/pdf'],
+                      null, tenant_mail_opts($pdo, $factory));
     return $ok
         ? ['ok' => true,  'email' => $email, 'message' => 'Emailed to ' . $email . '.']
         : ['ok' => false, 'email' => $email, 'message' => 'The email to ' . $email . ' could not be sent (mail server error) — try again shortly.'];
