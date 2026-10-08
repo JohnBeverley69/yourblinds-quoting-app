@@ -226,7 +226,7 @@ HTML,
     [
         'nav'   => 'Sign', 'icon' => '✍️', 'secs' => 9,
         'title' => 'Send it. They sign it. Done.',
-        'body'  => 'Email the quote as a smart PDF, or send it straight to WhatsApp. Your customer opens it on their phone, types their name to accept, and sees exactly what deposit is due and how to pay. They get a thank-you email, and you get a signed-off job without chasing a single bit of paperwork.',
+        'body'  => 'Email the quote as a smart PDF, or send it straight to WhatsApp. Your customer opens it on whatever they have to hand, phone, tablet or computer, types their name to accept, and sees exactly what deposit is due and how to pay. They get a thank-you email, and you get a signed-off job without chasing a single bit of paperwork.',
         'tier'  => '',
         'mock'  => <<<'HTML'
 <div class="hw-split">

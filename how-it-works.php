@@ -32,7 +32,7 @@ $sceneCount = count($SCENES);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>How it works &middot; YourBlinds</title>
-    <meta name="description" content="See how YourBlinds runs a blinds business from the first phone call to getting paid — booking, calendar, route, measuring, quotes customers sign on their phone, supplier orders, fitting and invoices.">
+    <meta name="description" content="See how YourBlinds runs a blinds business from the first phone call to getting paid — booking, calendar, route, measuring, quotes customers accept on any phone, tablet or computer, supplier orders, fitting and invoices.">
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         .hw-wrap { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
