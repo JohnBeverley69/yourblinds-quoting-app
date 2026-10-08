@@ -41,7 +41,7 @@ return [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a window like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking in windows? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a time slot like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking by time slot? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
         'tier'  => 'Postcode finder on Silver & Gold',
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
@@ -50,7 +50,7 @@ return [
     <div class="hw-row"><label>Customer</label><div class="hw-in"><span class="a-type" style="--d:.8s">Mrs Priya Patel</span></div></div>
     <div class="hw-row"><label>Postcode</label><div class="hw-in"><span class="a-type" style="--d:1.6s">LS17 6AB</span><em class="hw-mini a-pop" style="--d:2.3s">Find address</em></div></div>
     <div class="hw-row"><label>Address</label><div class="hw-in"><span class="a-fade" style="--d:2.7s">14 Elm Grove, Leeds</span></div></div>
-    <div class="hw-row"><label>When</label><div class="hw-chips"><span class="hw-seg"><i>Exact time</i><i class="on">Windows</i></span><span class="hw-chip a-sel" style="--d:3.4s">Morning</span><span class="hw-chip">Afternoon</span><span class="hw-chip">Evening</span></div></div>
+    <div class="hw-row"><label>When</label><div class="hw-chips"><span class="hw-seg"><i>Exact time</i><i class="on">Time slots</i></span><span class="hw-chip a-sel" style="--d:3.4s">Morning</span><span class="hw-chip">Afternoon</span><span class="hw-chip">Evening</span></div></div>
     <div class="hw-row"><label>Who&rsquo;s going</label><div class="hw-in"><span class="a-type" style="--d:4s">Sam &middot; Sales</span></div></div>
     <div class="hw-row"><label></label><div class="hw-tick a-fade" style="--d:4.6s">&#9745; Email the customer their slot</div></div>
     <div class="hw-row"><label></label><div class="hw-btn a-press" style="--d:5.2s">Book appointment</div></div>
