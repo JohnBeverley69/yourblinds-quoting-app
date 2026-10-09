@@ -168,8 +168,18 @@ function dc_recalc_delivery(PDO $pdo, int $factory, int $accountId, string $date
             $orderNet[(int) $o['id']] = (float) $o['wholesale_total'];
         }
     }
+    // Remake orders (John 2026-10-09): never carry a delivery charge and don't count
+    // towards the delivery's value. A delivery of nothing but remakes is free.
+    $remake = [];
+    if (is_file(__DIR__ . '/remakes.php')) {
+        require_once __DIR__ . '/remakes.php';
+        $remake = rm_remake_orders($pdo, array_map(static fn ($n) => (int) $n['source_quote_id'], $notes));
+    }
+    $isRemake = static fn (array $n): bool => isset($remake[(int) $n['source_quote_id']]);
+    $paying = array_filter($notes, static fn ($n) => !$isRemake($n));
+
     $net = 0.0;
-    foreach ($notes as $n) $net += (float) ($orderNet[(int) $n['source_quote_id']] ?? 0);
+    foreach ($paying as $n) $net += (float) ($orderNet[(int) $n['source_quote_id']] ?? 0);
     $net = round($net, 2);
 
     // A waive / custom amount set from the tray applies to the whole delivery.
@@ -178,7 +188,7 @@ function dc_recalc_delivery(PDO $pdo, int $factory, int $accountId, string $date
         if ($n['carriage_override'] !== null) { $override = round((float) $n['carriage_override'], 2); break; }
     }
     $terms  = dc_account_terms($pdo, $accountId);
-    $charge = $override ?? dc_charge_for($method, $net, $terms['no_charge']);
+    $charge = $paying ? ($override ?? dc_charge_for($method, $net, $terms['no_charge'])) : 0.0;
 
     // Which notes are already invoiced? Their carriage is settled on the invoice.
     $invoiced = [];
@@ -203,7 +213,7 @@ function dc_recalc_delivery(PDO $pdo, int $factory, int $accountId, string $date
     } else {
         // Park the whole charge on the first note not yet invoiced.
         $bearer = 0;
-        foreach ($notes as $n) if (!isset($invoiced[(int) $n['id']])) { $bearer = (int) $n['id']; break; }
+        foreach ($paying as $n) if (!isset($invoiced[(int) $n['id']])) { $bearer = (int) $n['id']; break; }
         foreach ($notes as $n) {
             if (isset($invoiced[(int) $n['id']])) continue;
             $set->execute([(int) $n['id'] === $bearer ? $charge : 0, (int) $n['id']]);
