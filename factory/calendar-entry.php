@@ -19,7 +19,18 @@ $id      = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 $entry   = oc_get($pdo, $factory, $id);
 $err     = '';
 
-$weekOf = static fn (string $d): string => '/factory/calendar.php?week=' . date('Y-m-d', strtotime('monday this week', strtotime($d)));
+// Tolerates a date it can't parse. On the inline-error path the catch merges
+// $_POST over $entry, so a posted-empty entry_date lands here as '' —
+// strtotime('') is false, and strtotime()'s $baseTimestamp is ?int under
+// strict_types, so the page 500'd on exactly the error it was written to show
+// inline. Falls back to the plain calendar link.
+$weekOf = static function (string $d): string {
+    $ts = $d === '' ? false : strtotime($d);
+    if ($ts === false) return '/factory/calendar.php';
+    $mon = strtotime('monday this week', $ts);
+    if ($mon === false) return '/factory/calendar.php';
+    return '/factory/calendar.php?week=' . date('Y-m-d', $mon);
+};
 
 if ($entry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
