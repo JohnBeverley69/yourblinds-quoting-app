@@ -19,6 +19,13 @@ require __DIR__ . '/../_partials/factory_poll.php';
 
 requireFactory();
 
+// Every row action bar the Worksheet link goes to an office-only screen:
+// edit-order, order-suppliers, boughtin-received and set-status are all
+// requireFactoryOffice(). Rendering them to a floor login offered buttons that
+// 403 on click — #852 gated the destinations and left the buttons. Worksheet
+// and the expand chevron stay: the floor is meant to read and print tickets.
+$ioOffice = !function_exists('factory_user_is_office') || factory_user_is_office();
+
 $pdo    = db();
 $MASTER = current_factory_id();
 
@@ -467,8 +474,11 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php endif; ?>
                     </span>
                     <span class="io-actions">
+                        <?php if ($ioOffice): ?>
                         <a class="io-btn edit" href="/factory/edit-order.php?order=<?= $qid ?>">Edit</a>
+                        <?php endif; ?>
                         <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
+                        <?php if ($ioOffice): /* office-only row actions */ ?>
                         <?php if ($boughtinQty > 0 && !$supReceived): ?>
                             <a class="io-btn" href="/factory/order-suppliers.php?id=<?= $qid ?>" title="Order the bought-in items from their supplier"><?= $supOrdered ? '📦 Bought-in' : '📦 Order bought-in' ?></a>
                         <?php endif; ?>
@@ -519,6 +529,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php elseif ($next !== null && $next[0] === 'dispatched'): ?>
                             <span class="io-btn advance" style="opacity:.45;cursor:not-allowed" title="Not ready to dispatch yet — every blind must be made and every bought-in item received first">Dispatch</span>
                         <?php endif; ?>
+                        <?php endif; /* $ioOffice */ ?>
                         <span class="io-chev" aria-hidden="true">&#9654;</span>
                     </span>
                 </div>

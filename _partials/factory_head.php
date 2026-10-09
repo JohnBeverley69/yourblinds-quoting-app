@@ -61,17 +61,29 @@ $factoryNavItems = [
     'scan'       => ['/factory/scan-log.php',        'Scan log'],
 ];
 // Profit moved to the Factory Console's Accounts menu (2026-10-09).
+//
+// Worksheets and Label sheet are for everyone: both are requireFactory(), and
+// the floor is meant to read and print them (only the designer's POSTs went
+// office-only, #957). Allowances is no longer a top-level tab — the best-fit
+// charts live under a product's Build Rules page ("Best fit charts →"), scoped
+// to that product, so the charts and the rules using them can't drift apart.
 $factoryNavItems += [
-    'areas'      => ['/factory/production-areas.php', 'Production areas'],
-    'routes'     => ['/factory/routes.php',          'Routes'],
-    'build'      => ['/factory/build-rules-v2.php',  'Build rules'],
-    // Allowances is no longer a top-level tab — the best-fit charts now live under a
-    // product's Build Rules page ("Best fit charts →"), scoped to that product, so the
-    // charts and the rules that use them can't drift apart on two separate screens.
     'worksheets' => ['/factory/worksheets.php',      'Worksheets'],
     'labelsheet' => ['/factory/label-test-sheet.php', 'Label sheet'],
-    'settings'   => ['/factory/settings.php',        'Settings'],
 ];
+// Office only. All four 403 a floor login — production-areas, routes,
+// build-rules-v2 and settings are every one requireFactoryOffice() — so putting
+// them in the workshop's own top bar offered four dead ends to the people least
+// able to do anything about them. #852 took the powers off floor logins but
+// left the doors on display.
+if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
+    $factoryNavItems += [
+        'areas'      => ['/factory/production-areas.php', 'Production areas'],
+        'routes'     => ['/factory/routes.php',          'Routes'],
+        'build'      => ['/factory/build-rules-v2.php',  'Build rules'],
+        'settings'   => ['/factory/settings.php',        'Settings'],
+    ];
+}
 ?><!doctype html>
 <html lang="en">
 <head>
