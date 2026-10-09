@@ -11,7 +11,8 @@ declare(strict_types=1);
  * Mirrors /instaprice/index.php (the signed-in quick-price screen: Product /
  * System, Band / Fabric search, options, Measurement unit, Dimensions &
  * quantity, the "Using …" echo, the price panel and its editable rates, the
- * Trade discount row, Reset and "Turn into full quote →"), /instaprice/to-quote.php
+ * Trade discount row, the cost eye beside Sell price (customer view, from
+ * _partials/cost_reveal.php), Reset and "Turn into full quote →"), /instaprice/to-quote.php
  * (the conversion and its errors) and where it lands on /quote-builder/edit.php
  * (the amber "no customer yet" bar and the open customer form). Every label,
  * button and message is copied from those files.
@@ -28,11 +29,19 @@ $f = static fn (string $label, string $box, string $kind = '', string $cls = '',
     '<div class="fg ' . $cls . '" style="' . $style . '"><span class="fl">' . $label . '</span><span class="ib ' . $kind . '">' . $box . '</span></div>';
 $ph = static fn (string $t): string => '<span class="gph">' . $t . '</span>';
 
-/** The price panel. $rows overrides individual values; each is inner HTML. */
-$panel = static function (array $v = []): string {
+// The cost eye (copied from _partials/cost_reveal.php: an unlabelled eye icon beside Sell price).
+$eye = '<span class="eye"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></span>';
+/** The eye being tapped: ring at $r, presses at $p1 (and $p2 if given). One animation class per element, so nested. */
+$eyeTap = static fn (string $r, string $p1, string $p2 = ''): string =>
+    '<span class="eyew a-ring" style="--d:' . $r . 's"><span class="eyew a-press" style="--d:' . $p1 . 's">'
+    . ($p2 !== '' ? '<span class="eyew a-press" style="--d:' . $p2 . 's">' . $eye . '</span>' : $eye) . '</span></span>';
+
+/** The price panel (as a cost-viewer sees it with the eye tapped). $rows overrides individual values; each is inner HTML.
+ *  'eye' => false for someone without cost access (no eye, no Mark up row). */
+$panel = static function (array $v = []) use ($eye): string {
     $d = $v + [
         'trade' => '', 'price' => '&pound;45.00', 'disc' => '10.00', 'dprice' => '&pound;41.00',
-        'mark' => '100.00', 'sell' => '&pound;77.00', 'each' => '', 'cls' => '', 'style' => '', 'markrow' => true,
+        'mark' => '100.00', 'sell' => '&pound;77.00', 'each' => '', 'cls' => '', 'style' => '', 'markrow' => true, 'eye' => true,
     ];
     return '<div class="pp ' . $d['cls'] . '" style="' . $d['style'] . '">'
         . ($d['trade'] !== '' ? '<div class="pr trade">' . $d['trade'] . '</div>' : '')
@@ -40,7 +49,7 @@ $panel = static function (array $v = []): string {
         . '<div class="pr ed"><span class="l">Discount %</span><span class="pct">' . $d['disc'] . '</span></div>'
         . '<div class="pr"><span class="l">Discounted price</span><span class="v">' . $d['dprice'] . '</span></div>'
         . ($d['markrow'] ? '<div class="pr ed"><span class="l">Mark up %</span><span class="pct">' . $d['mark'] . '</span></div>' : '')
-        . '<div class="pr sell"><span class="l">Sell price</span><span class="v">' . $d['sell'] . '</span></div>'
+        . '<div class="pr sell"><span class="l">Sell price' . ($d['eye'] ? ' ' . $eye : '') . '</span><span class="v">' . $d['sell'] . '</span></div>'
         . '<div class="tot">' . $d['each'] . '</div></div>';
 };
 
@@ -132,6 +141,10 @@ return [
           .gd .pr.sell .v{ font-weight:800; font-size:1.15rem; color:var(--accent); }
           .gd .pr.trade .l, .gd .pr.trade .v{ color:#065f46; }
           :root[data-theme="dark"] .gd .pr.trade .l, :root[data-theme="dark"] .gd .pr.trade .v{ color:#34d399; }
+          .gd .eye{ display:inline-flex; width:14px; height:14px; vertical-align:middle; margin:0 .15rem; color:var(--ink); opacity:.45; }
+          .gd .eye svg{ width:100%; height:100%; }
+          .gd .eyew{ display:inline-flex; vertical-align:middle; border-radius:5px; }
+          .gd .ppstack{ display:grid; max-width:22rem; } .gd .ppstack > *{ grid-area:1/1; align-self:start; }
           .gd .tot{ font-size:.66rem; color:var(--faint); text-align:right; min-height:.4rem; }
 
           .gd .side2{ display:grid; grid-template-columns:1.1fr 1fr; gap:1rem; align-items:start; }
@@ -185,7 +198,7 @@ return [
                     <div class="frm">' . $topPicked . $dims('1200', '1400', '') . '</div>
                     <div>' . $panel() . $btns . '</div>
                   </div>
-                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fourteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — what it is -->
@@ -311,26 +324,48 @@ return [
                     <span class="chip a-pop" style="--d:22s">Spot a stray nought here</span></div>
                 </div>
 
-                <!-- 8 — breakdown -->
-                <div class="sc" data-scene="8" data-len="24">
+                <!-- 8 — costs stay hidden -->
+                <div class="sc" data-scene="8" data-len="28">
+                  <div class="sct a-fade" style="--d:.2s">Costs stay hidden &mdash; until you tap the eye</div>
+                  <div class="side2">
+                    <div class="frm">' . $dims('1200', '<span class="a-type" style="--d:4.6s;--ts:4;--tt:.5s">1400</span>', '', '<span class="a-fade" style="--d:5.3s">Using 1200 &times; 1400 mm</span>') . '</div>
+                    <div class="ppstack">
+                      <div class="pp idle a-out" style="--d:5.8s">Still need: drop.</div>
+                      <div class="pp a-fade" style="--d:5.9s">
+                        <div class="pr sell" style="border-top:0;margin-top:0;padding-top:.25rem"><span class="l">Sell price ' . $eyeTap('14', '21', '23.9') . '</span><span class="v a-ring" style="--d:8.4s">&pound;77.00</span></div>
+                      </div>
+                      <div class="a-mid" style="--d:21.3s;--d2:24.2s">' . $panel() . '</div>
+                    </div>
+                  </div>
+                  <div style="margin-top:.8rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                    <span class="chip a-pop" style="--d:10.5s">&#128274; At first: just the Sell price</span>
+                    <span class="chip a-pop" style="--d:15.8s">The customer may be watching the screen</span>
+                    <span class="chip a-pop" style="--d:21.6s">Tap = show &middot; tap again = hide</span>
+                    <span class="chip a-pop" style="--d:25.8s">Every page starts hidden</span></div>
+                </div>
+
+                <!-- 9 — breakdown -->
+                <div class="sc" data-scene="9" data-len="28">
                   <div class="sct a-fade" style="--d:.2s">The price, as a sum you can follow</div>
                   <div class="side2">
-                    <div class="frm">' . $dims('1200', '<span class="a-type" style="--d:5s;--ts:4;--tt:.5s">1400</span>', '', '<span class="a-fade" style="--d:5.8s">Using 1200 &times; 1400 mm</span>') . '</div>
-                    <div style="display:grid">
-                      <div class="pp idle a-out" style="--d:6.3s;grid-area:1/1;align-self:start">Still need: drop.</div>
-                      <div class="pp a-fade" style="--d:6.4s;grid-area:1/1;align-self:start">
-                        <div class="pr a-fly" style="--d:7.5s"><span class="l">Price</span><span class="v">&pound;45.00</span></div>
-                        <div class="pr ed a-fly" style="--d:16s"><span class="l">Discount %</span><span class="pct">10.00</span></div>
-                        <div class="pr a-fly" style="--d:17.2s"><span class="l">Discounted price</span><span class="v">&pound;41.00</span></div>
-                        <div class="pr ed a-fly" style="--d:18.6s"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
-                        <div class="pr sell a-fly" style="--d:19.6s"><span class="l">Sell price</span><span class="v a-ring" style="--d:20.6s">&pound;77.00</span></div>
-                      </div>
+                    <div class="pp">
+                      <div class="pr a-ring" style="--d:2.6s"><span class="l">Price</span><span class="v">&pound;45.00</span></div>
+                      <div class="pr ed a-ring" style="--d:6.5s"><span class="l">Discount %</span><span class="pct">10.00</span></div>
+                      <div class="pr a-ring" style="--d:8.8s"><span class="l">Discounted price</span><span class="v">&pound;41.00</span></div>
+                      <div class="pr ed a-ring" style="--d:10.1s"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
+                      <div class="pr sell"><span class="l">Sell price ' . $eye . '</span><span class="v a-ring" style="--d:12s">&pound;77.00</span></div>
+                    </div>
+                    <div>
+                      <span class="chip a-pop" style="--d:3.6s">This blind, this size, with its options</span>
+                      <div style="margin-top:.5rem"><span class="chip a-pop" style="--d:15.3s">Discount + mark up: the blind only</span></div>
+                      <div style="margin-top:.5rem"><span class="chip a-pop" style="--d:18.5s">Options at their own price</span></div>
+                      <div class="a-rise" style="--d:22.1s;margin-top:.7rem"><div class="fl" style="margin-bottom:.3rem">Without cost access &mdash; no eye</div>' . $panel(['markrow' => false, 'eye' => false]) . '</div>
                     </div>
                   </div>
                 </div>
 
-                <!-- 9 — haggling -->
-                <div class="sc" data-scene="9" data-len="25">
+                <!-- 10 — haggling -->
+                <div class="sc" data-scene="10" data-len="25">
                   <div class="sct a-fade" style="--d:.2s">The amber rates are yours to play with</div>
                   <div class="side2">
                     <div class="pp">
@@ -338,7 +373,7 @@ return [
                       <div class="pr ed"><span class="l">Discount %</span><span class="pct a-ring" style="--d:7.6s"><span class="swap"><span class="a-out" style="--d:8.6s">10.00</span><span class="a-type" style="--d:8.7s;--ts:5;--tt:.6s">15.00</span></span></span></div>
                       <div class="pr"><span class="l">Discounted price</span><span class="v"><span class="swap"><span class="a-out" style="--d:9.4s">&pound;41.00</span><span class="a-fade" style="--d:9.4s">&pound;39.00</span></span></span></div>
                       <div class="pr ed"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
-                      <div class="pr sell"><span class="l">Sell price</span><span class="v"><span class="swap"><span class="a-out" style="--d:9.7s">&pound;77.00</span><span class="a-fade" style="--d:9.7s">&pound;73.00</span></span></span></div>
+                      <div class="pr sell"><span class="l">Sell price ' . $eye . '</span><span class="v"><span class="swap"><span class="a-out" style="--d:9.7s">&pound;77.00</span><span class="a-fade" style="--d:9.7s">&pound;73.00</span></span></span></div>
                     </div>
                     <div>
                       <span class="chip a-pop" style="--d:3.2s">Starts on this product&rsquo;s saved rates</span>
@@ -349,8 +384,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 10 — quantity -->
-                <div class="sc" data-scene="10" data-len="18">
+                <!-- 11 — quantity -->
+                <div class="sc" data-scene="11" data-len="18">
                   <div class="sct a-fade" style="--d:.2s">More than one</div>
                   <div class="side2">
                     <div class="frm"><div class="dims">
@@ -363,24 +398,24 @@ return [
                       <div class="pr ed"><span class="l">Discount %</span><span class="pct">10.00</span></div>
                       <div class="pr"><span class="l">Discounted price</span><span class="v">&pound;41.00</span></div>
                       <div class="pr ed"><span class="l">Mark up %</span><span class="pct">100.00</span></div>
-                      <div class="pr sell"><span class="l">Sell price</span><span class="v"><span class="swap"><span class="a-out" style="--d:7s">&pound;77.00</span><span class="a-fade a-ring" style="--d:7s">&pound;154.00</span></span></span></div>
+                      <div class="pr sell"><span class="l">Sell price ' . $eye . '</span><span class="v"><span class="swap"><span class="a-out" style="--d:7s">&pound;77.00</span><span class="a-fade a-ring" style="--d:7s">&pound;154.00</span></span></span></div>
                       <div class="tot"><span class="a-fade" style="--d:11s">2 &times; &pound;77.00 each</span></div>
                     </div>
                   </div>
                 </div>
 
-                <!-- 11 — who sees what -->
-                <div class="sc" data-scene="11" data-len="24">
+                <!-- 12 — who sees what -->
+                <div class="sc" data-scene="12" data-len="24">
                   <div class="sct a-fade" style="--d:.2s">Two lines depend on who you are</div>
                   <div class="two">
-                    <div class="a-rise" style="--d:2.4s"><div class="fl" style="margin-bottom:.3rem">Allowed to see costs</div>' . $panel(['trade' => '<span class="l a-ring" style="--d:7s">Trade discount</span><span class="v">12.50% (&minus;&pound;5.71)</span>']) . '</div>
-                    <div class="a-rise" style="--d:20.4s"><div class="fl" style="margin-bottom:.3rem">Without cost access</div>' . $panel(['markrow' => false]) . '</div>
+                    <div class="a-rise" style="--d:2.4s"><div class="fl" style="margin-bottom:.3rem">Allowed to see costs &mdash; eye tapped</div>' . $panel(['trade' => '<span class="l a-ring" style="--d:8.7s">Trade discount</span><span class="v">12.50% (&minus;&pound;5.71)</span>']) . '</div>
+                    <div class="a-rise" style="--d:21.2s"><div class="fl" style="margin-bottom:.3rem">Without cost access &mdash; no eye</div>' . $panel(['markrow' => false, 'eye' => false]) . '</div>
                   </div>
-                  <span class="chip a-pop" style="--d:11s;margin-top:.7rem">Green line = your buying discount, already inside the Price</span>
+                  <span class="chip a-pop" style="--d:12s;margin-top:.7rem">Green line = your buying discount, already inside the Price</span>
                 </div>
 
-                <!-- 12 — won\'t price -->
-                <div class="sc" data-scene="12" data-len="24">
+                <!-- 13 — won\'t price -->
+                <div class="sc" data-scene="13" data-len="24">
                   <div class="sct a-fade" style="--d:.2s">When it won&rsquo;t price</div>
                   <div class="side2">
                     <div class="frm"><div class="dims">
@@ -398,8 +433,8 @@ return [
                     <span class="chip a-pop" style="--d:18.8s">2 &middot; Still right? Extend the table under Products</span></div>
                 </div>
 
-                <!-- 13 — turn into full quote -->
-                <div class="sc" data-scene="13" data-len="24">
+                <!-- 14 — turn into full quote -->
+                <div class="sc" data-scene="14" data-len="24">
                   <div class="sct a-fade" style="--d:.2s">Turn into full quote</div>
                   <div class="side2">
                     <div>' . $panel() . '<div class="fact"><span class="btnp a-press a-ring" style="--d:2.5s">Turn into full quote &rarr;</span><span class="btns">Reset</span></div></div>
@@ -415,8 +450,8 @@ return [
                   <div class="a-move" style="--fx:60%;--fy:95%;--tx:18%;--ty:13.6rem;--d:.6s;--md:1.6s">' . $ptr . '</div>
                 </div>
 
-                <!-- 14 — where you land -->
-                <div class="sc" data-scene="14" data-len="23">
+                <!-- 15 — where you land -->
+                <div class="sc" data-scene="15" data-len="23">
                   <div class="sct a-fade" style="--d:.2s">Where you land</div>
                   <div class="qsb a-rise" style="--d:.8s">Quote BEV-2026-0042 <span class="pill">draft</span><span class="tt">Total &pound;92.40</span></div>
                   <div class="ncb a-drop" style="--d:2.3s">&#9888; <span>This quote has <b>no customer yet</b> &mdash; add their details.</span><span class="go">Add customer &darr;</span></div>
@@ -424,7 +459,7 @@ return [
                     <div class="sm">Customer details <small>&mdash; click to add the customer&rsquo;s contact info</small></div>
                     <div class="g2">' . $f('Customer name <em class="rq">*</em>', '<span class="a-type" style="--d:8s;--ts:13;--tt:1s">Emma Fletcher</span>', '', 'a-ring', '--d:7s') . $f('Email', '<span class="gph">Email</span>') . '</div>
                   </div>
-                  <div class="ovr a-rise" style="--d:17.5s">&#9656; Adjust price for this blind &nbsp;<span class="chip a-pop" style="--d:19.5s">Discount % (this blind)</span></div>
+                  <div class="ovr a-rise" style="--d:17.5s">' . $eyeTap('19.6', '20.4') . ' <span class="a-fade" style="--d:21s">&#9656; Adjust price for this blind</span> &nbsp;<span class="chip a-pop" style="--d:22s">Discount % (this blind)</span></div>
                   <span class="chip bad a-pop" style="--d:10.4s;margin-top:.6rem">Rates you typed over don&rsquo;t come across</span>
                 </div>
 
@@ -466,7 +501,8 @@ return [
                 width, drop.&rdquo;</b>, shrinking as you go. Then it is a sum, top to bottom: <b>Price</b> (this blind at this size with its options)
                 &rarr; <b>Discount %</b> &rarr; <b>Discounted price</b> &rarr; <b>Mark up %</b> &rarr; <b>Sell price</b>. The discount and mark-up apply to
                 the blind; the options are added at their own price. With a quantity over one, the Sell price is the total and a grey line reads
-                <b>&ldquo;2 &times; &pound;77.00 each&rdquo;</b>.</li>
+                <b>&ldquo;2 &times; &pound;77.00 each&rdquo;</b>. If you are allowed to see costs, most of that sum <b>starts hidden</b> (see
+                <b>Costs stay hidden</b> below).</li>
             <li><b>Turn it into a quote.</b> <b>Turn into full quote &rarr;</b> lifts the spec into the quote builder (details below).</li>
           </ul>
 
@@ -481,8 +517,14 @@ return [
              and it <b>springs back</b> the moment you change product or system. If your company works in <b>margin</b>, the second box reads
              <b>Margin %</b> instead.</p>
 
+          <div class="heads"><span class="hi">&#128065;</span><div><b>Costs stay hidden.</b> Prices are often worked out with the customer looking
+             at the screen. So if you are an admin or allowed to see costs, every time the page opens the panel shows <b>only the Sell price</b>, with a
+             small, unlabelled <b>eye</b> icon beside it. <b>Price</b>, <b>Discount %</b>, <b>Discounted price</b>, <b>Mark up %</b> and the green
+             <b>Trade discount</b> line stay hidden until you tap the eye; tap it again to hide them. It is never remembered &mdash; the next page
+             starts hidden again. People without cost access have no eye: they see Price, Discount %, Discounted price and Sell price straight away.</div></div>
+
           <div class="heads"><span class="hi">&#9888;</span><div><b>Who sees what.</b> The <b>Mark up %</b> row and the green <b>Trade discount</b> line
-             are only shown to admins and people allowed to see costs. The green line &mdash; e.g. <b>12.50% (&minus;&pound;5.71)</b> &mdash; is
+             are only shown to admins and people allowed to see costs (once the eye is tapped). The green line &mdash; e.g. <b>12.50% (&minus;&pound;5.71)</b> &mdash; is
              <b>your</b> standing buying discount from your supplier; it is <b>already inside the Price</b> and there for information only. The
              customer&rsquo;s discount is the amber <b>Discount %</b>.</div></div>
 
@@ -514,7 +556,8 @@ return [
              <b>Add customer &darr;</b>, and the <b>Customer details</b> form is already open with <b>Customer name *</b> empty. Fill it in (or pick them in
              <b>Linked customer</b>) and press <b>Save details</b>. Until you do, the quotes list shows the placeholder name
              <b>&ldquo;Quick price (add customer)&rdquo;</b>. To put a haggled rate back, open the blind and use <b>Adjust price for this blind</b>
-             (<b>Discount % (this blind)</b>, <b>Markup % (this blind)</b> &mdash; shown to admins and people allowed to see costs).</p>
+             (<b>Discount % (this blind)</b>, <b>Markup % (this blind)</b> &mdash; for admins and people allowed to see costs, and hidden there too until
+             you tap the eye in the price line or beside <b>Total</b>).</p>
 
           <p><b>No &ldquo;Turn into full quote&rdquo; button?</b> It is only shown to admins and users with the <b>Create quotes</b> permission
              (<b>Setup &rarr; Users</b>). Everybody else can price all day but cannot keep it.</p>',
@@ -526,12 +569,13 @@ return [
             ['5', 'Work down in order',              'Work down the screen in order. If you change the system or the band after picking a fabric, the fabric is cleared, and you pick it again. That stops a fabric being priced on the wrong system. And on a product with no fabric at all, such as a headrail, the band and fabric boxes simply disappear.', 5],
             ['6', 'Options, only what fits',         'Now the options. You only see what this product, this system and this fabric can have, and sensible choices are already picked. A red star means you must answer it. Some options are tick boxes, some are a number to type, and some open a second option underneath. If one you expected is missing, it is usually the fabric.', 6],
             ['7', 'The size',                        'Then the size. The Measurement unit starts on whatever your company works in, so a plain number is read in that unit. But you can type the unit on the end, like one point two m, and that wins. Under the boxes, a grey line shows what it is really using. Using twelve hundred by fourteen hundred millimetres. Check it, to catch a stray nought.', 7],
-            ['8', 'The price, as a sum',             'Until everything is filled in, the panel just says what is missing. Still need: drop. Fill that in, and the price appears as a sum you can follow, from the top down. Price is this blind at this size, with its options. Then Discount percent, the Discounted price, the Mark up, and the Sell price, at the bottom, in big letters.', 8],
-            ['9', 'The amber rates',                 'The two amber rates are yours to play with. They start on the rates saved for this product and system. Type over them, and the sum below changes as you type. That is handy when someone is haggling, and you want to know what another five percent really costs you. It is a one-off. Nothing is saved back, and it resets when you change the product.', 9],
-            ['10', 'More than one',                  'If they want more than one, type it in the Qty box. Leave it empty, and it counts as one. The big Sell price becomes the total for all of them. And a small grey line underneath shows the price of each one. Two times seventy seven pounds, each.', 10],
-            ['11', 'Who sees what',                  'Two lines depend on who you are. If you are allowed to see costs, you see the Mark up box, and sometimes a green Trade discount line at the top. That green line is your own buying discount from your supplier. It is already inside the Price, so it is just for your information. People without cost access see neither of them.', 11],
-            ['12', 'When it won\'t price',            'If a size is bigger than the price table goes, InstaPrice will not guess. The panel turns red, and tells you why: the size exceeds the largest cell in this price table. The quote button goes grey until it is fixed. So check the size, and the unit, first. If they are right, the price table needs extending, under Products.', 12],
-            ['13', 'Turn into full quote',           'When they say yes, click Turn into full quote. Be clear what that does. It makes a real draft quote, straight away, with its own quote number. It copies the product, fabric, options, size and quantity across. So press it to keep a price, not to see what happens. If you have no such button, you need the Create quotes permission.', 13],
-            ['14', 'Where you land',                 'You land in the quote builder. An amber bar says the quote has no customer yet, and the customer form is open and empty, ready to fill in. One thing does not come across: any rate you typed over while haggling. The line uses the usual rates. To change one blind, open it, and use Adjust price for this blind.', 14],
+            ['8', 'Costs stay hidden',               'Until everything is filled in, the panel says what is missing. Fill in the last box, and the price appears. If you are allowed to see costs, you see only the big Sell price at first, with a small eye beside it. The rest stays hidden, because the customer may be looking at the screen. Tap the eye, and the whole sum appears. Tap it again to hide it. Each new page starts hidden again.', 8],
+            ['9', 'The price, as a sum',             'Here is the sum, from the top down. Price is this blind at this size, with its options. Then Discount percent, and the Discounted price. Then the Mark up, and the Sell price at the bottom, in big letters. The discount and the mark up apply to the blind, and the options are added at their own price. Without cost access there is no eye and no Mark up, and the rest shows straight away.', 9],
+            ['10', 'The amber rates',                'The two amber rates are yours to play with. They start on the rates saved for this product and system. Type over them, and the sum below changes as you type. That is handy when someone is haggling, and you want to know what another five percent really costs you. It is a one-off. Nothing is saved back, and it resets when you change the product.', 10],
+            ['11', 'More than one',                  'If they want more than one, type it in the Qty box. Leave it empty, and it counts as one. The big Sell price becomes the total for all of them. And a small grey line underneath shows the price of each one. Two times seventy seven pounds, each.', 11],
+            ['12', 'Who sees what',                  'Two lines depend on who you are. If you are allowed to see costs, the eye also shows the Mark up box, and sometimes a green Trade discount line at the top. That green line is your own buying discount from your supplier. It is already inside the Price, so it is just for your information. People without cost access never see either of them, and have no eye.', 12],
+            ['13', 'When it won\'t price',            'If a size is bigger than the price table goes, InstaPrice will not guess. The panel turns red, and tells you why: the size exceeds the largest cell in this price table. The quote button goes grey until it is fixed. So check the size, and the unit, first. If they are right, the price table needs extending, under Products.', 13],
+            ['14', 'Turn into full quote',           'When they say yes, click Turn into full quote. Be clear what that does. It makes a real draft quote, straight away, with its own quote number. It copies the product, fabric, options, size and quantity across. So press it to keep a price, not to see what happens. If you have no such button, you need the Create quotes permission.', 14],
+            ['15', 'Where you land',                 'You land in the quote builder. An amber bar says the quote has no customer yet, and the customer form is open and empty, ready to fill in. One thing does not come across: any rate you typed over while haggling. The line uses the usual rates. To change one blind, open it, tap the small eye, and use Adjust price for this blind.', 15],
         ],
 ];

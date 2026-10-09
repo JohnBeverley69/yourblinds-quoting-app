@@ -16,7 +16,10 @@ declare(strict_types=1);
  * _partials/sidebar.php (which menu entries each permission shows),
  * _partials/bookable_users.php (Sales / Fitter = who is offered on a
  * measure / fitting) and dashboard/index.php (panel gating).
- * Every label, button and message is copied from those files.
+ * Every label, button and message is copied from those files. While Admin is
+ * ticked the grant ticks show ticked + greyed with the #perm-admin-note text
+ * (both screens; Fittings only stays editable; unticking Admin restores the
+ * person's own ticks) - commit 8783b1d.
  *
  * v2: one SCENE per script line (data-scene = the line's step).
  */
@@ -114,6 +117,11 @@ return [
           .gd .cb .tick{ width:15px; height:15px; font-size:.6rem; }
           .gd .rolebox{ display:flex; flex-wrap:wrap; gap:.4rem .8rem; padding:.45rem .55rem; border:1px solid var(--border-strong,#c7ccd4); border-radius:8px; background:var(--surface); max-width:32rem; }
           .gd .permrow{ display:flex; flex-wrap:wrap; gap:.45rem .9rem; max-width:32rem; padding:.2rem 0; }
+          .gd .permrow.lock .cb:not(:last-child){ opacity:.5; }
+          .gd .stk{ display:grid; } .gd .stk > *{ grid-area:1/1; }
+          .gd .anote{ margin:0 0 .4rem; font-size:.64rem; color:#1f3b5b; background:#eef4fb; border-radius:6px; padding:.35rem .55rem; line-height:1.45; max-width:32rem; }
+          :root[data-theme="dark"] .gd .anote{ color:#bfdbfe; background:rgba(59,130,246,.14); }
+          @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .gd .anote{ color:#bfdbfe; background:rgba(59,130,246,.14); } }
           .gd .lab{ font-size:.68rem; font-weight:600; color:var(--ink); margin:.55rem 0 .25rem; }
           .gd .fs{ border:1px solid var(--line); border-radius:10px; padding:.55rem .7rem; max-width:32rem; margin:.5rem 0; position:relative; }
           .gd .fs .lg{ position:absolute; top:-.5rem; left:.6rem; background:var(--surface); padding:0 .35rem; font-size:.62rem; font-weight:700; color:#1f3b5b; letter-spacing:.05em; text-transform:uppercase; }
@@ -173,7 +181,7 @@ return [
                   <div class="lab">Roles</div>' . $roles() . '
                   <div class="lab">Permissions</div>' . $perms() . '
                   <span class="btnp" style="margin-top:.4rem">Add user</span>
-                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fourteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — the page, two jobs -->
@@ -289,8 +297,34 @@ return [
                   </div>
                 </div>
 
-                <!-- 9 — Add user -->
-                <div class="sc" data-scene="9" data-len="19">
+                <!-- 9 — Admin overrides the permission ticks -->
+                <div class="sc" data-scene="9" data-len="26">
+                  <div class="sct a-fade" style="--d:.2s">Admin ticked &rarr; the permission ticks are locked on</div>
+                  <div class="lab">Roles</div>
+                  <div class="stk" style="position:relative">
+                    ' . $roles(['Sales' => 'on'], 'a-out" style="--d:.9s') . '
+                    ' . $roles(['Admin' => 'on', 'Sales' => 'on'], 'a-fade" style="--d:.9s') . '
+                    <div class="a-move" style="--fx:12rem;--fy:2.5rem;--tx:.55rem;--ty:.55rem;--d:0s;--md:.8s">' . $ptr . '</div>
+                  </div>
+                  <div class="lab">Permissions</div>
+                  <p class="anote a-fade" style="--d:8.7s"><b>Admin</b> is ticked, so this person can always do everything below
+                    (except <b>Fittings only</b>, which is a restriction you choose). Untick Admin to use these ticks instead.</p>
+                  <div class="stk">
+                    ' . $perms(['Create quotes' => 'on'], false, 'a-out" style="--d:4s') . '
+                    ' . $perms(['Create quotes' => 'on', 'Create orders' => 'on', 'View all customer jobs' => 'on', 'View costs' => 'on'], false, 'lock a-fade" style="--d:4s') . '
+                  </div>
+                  <div class="chips">
+                    <span class="chip a-pop" style="--d:10.8s">An admin can always do it all</span>
+                    <span class="chip ok a-pop" style="--d:17.1s">Fittings only stays editable</span>
+                  </div>
+                  <div class="blk a-rise" style="--d:19.9s;margin-top:.6rem;max-width:32rem"><h4>Untick Admin &rarr; their own ticks come back</h4>
+                    ' . $roles(['Sales' => 'on']) . '
+                    <div class="permrow" style="margin-top:.3rem">' . $cb('Create quotes', '21.8') . $cb('Create orders') . $cb('View all customer jobs') . $cb('View costs') . $cb('Fittings only') . '</div>
+                    <p class="a-fade" style="--d:24.8s">Just as you left them &mdash; kept safe while Admin was on.</p></div>
+                </div>
+
+                <!-- 10 — Add user -->
+                <div class="sc" data-scene="10" data-len="19">
                   <div class="bnr a-drop" style="--d:3s">User added.</div>
                   <span class="btnp a-press" style="--d:1.5s">Add user</span>
                   <div class="secttl" style="margin-top:.7rem">Existing users (<span class="sw"><span class="a-out" style="--d:5s">3</span><span class="a-fade" style="--d:5.1s">4</span></span>)</div>
@@ -302,8 +336,8 @@ return [
                     <span class="chip a-pop" style="--d:15.5s">&ldquo;never&rdquo; = not signed in yet</span></div>
                 </div>
 
-                <!-- 10 — the edit page -->
-                <div class="sc" data-scene="10" data-len="16">
+                <!-- 11 — the edit page -->
+                <div class="sc" data-scene="11" data-len="16">
                   <div class="pt a-fade" style="--d:.2s">Dave Perry</div><div class="psub"><span class="lnk">&larr; Back to users</span></div>
                   <div class="g2 a-rise" style="--d:1.5s">' . $field('First name', 'Dave') . $field('Last name', 'Perry')
                     . $field('Email ' . $opt, 'dave@demoblinds.co.uk') . $field('Username', '') . '
@@ -315,8 +349,8 @@ return [
                   <p class="scs a-fade" style="--d:13.5s;margin-top:.6rem">Further down: <b>Can see money</b>, the <b>Dashboard</b> box, <b>Active</b>, <b>Home address</b> and the <b>Danger zone</b>.</p>
                 </div>
 
-                <!-- 11 — can see money -->
-                <div class="sc" data-scene="11" data-len="21">
+                <!-- 12 — can see money -->
+                <div class="sc" data-scene="12" data-len="21">
                   <div class="sct a-fade" style="--d:.2s">Can see money &mdash; on the Edit page only</div>
                   ' . $perms(['Create quotes' => 'on', 'Fittings only' => 'on'], true) . '
                   <div class="a-move" style="--fx:85%;--fy:90%;--tx:5%;--ty:3.3rem;--d:2s;--md:1.6s">' . $ptr . '</div>
@@ -328,8 +362,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 12 — dashboard box -->
-                <div class="sc" data-scene="12" data-len="23">
+                <!-- 13 — dashboard box -->
+                <div class="sc" data-scene="13" data-len="23">
                   <div class="sct a-fade" style="--d:.2s">The Dashboard box</div>
                   <div class="fs a-rise" style="--d:1s"><span class="lg">Dashboard</span>
                     <p>Which Dashboard panels this user can see. Admins always see everything; these checkboxes only apply to non-admin users. Tick none to hide the Dashboard menu entry entirely for this user. <b>Gross profit</b> also requires the <i>View costs</i> permission above. The <b>Revenue &amp; KPIs</b> panel follows <i>Can see money</i> above.</p>
@@ -342,8 +376,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 13 — active + home address -->
-                <div class="sc" data-scene="13" data-len="18">
+                <!-- 14 — active + home address -->
+                <div class="sc" data-scene="14" data-len="18">
                   <div class="sct a-fade" style="--d:.2s">Active, and a home address</div>
                   <div class="a-rise" style="--d:1s">' . $cb('Active (can sign in)', 'on') . '</div>
                   <div class="chips"><span class="chip a-pop" style="--d:3s">Untick &rarr; they can&rsquo;t sign in</span>
@@ -355,8 +389,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 14 — save, danger zone, protected from yourself -->
-                <div class="sc" data-scene="14" data-len="20">
+                <!-- 15 — save, danger zone, protected from yourself -->
+                <div class="sc" data-scene="15" data-len="20">
                   <div class="bnr a-drop" style="--d:2.5s">User updated.</div>
                   <div><span class="btnp a-press" style="--d:1.2s">Save changes</span> <span class="btns">Cancel</span></div>
                   <div class="dz a-rise" style="--d:6s"><h5>Danger zone</h5>
@@ -405,7 +439,7 @@ return [
                 booking never gets stuck.)</li>
             <li><b>Office</b> is for your office staff. Like Sales and Fitter it says who someone is; what they can see and do comes
                 from the <b>Permissions</b>.</li>
-            <li>On the <b>factory account</b> there is an eighth tick, <b>Factory</b>, and a <b>Production area</b> box (see below).</li>
+            <li>On the <b>factory account</b> there is a fifth tick, <b>Factory</b>, and a <b>Production area</b> box (see below).</li>
           </ul>
 
           <p class="prose"><b>3) Permissions &mdash; who sees what</b></p>
@@ -420,6 +454,13 @@ return [
             <li><b>The menu fact:</b> with <b>none</b> of <em>Create quotes</em>, <em>Create orders</em> or <em>View all customer jobs</em>
                 ticked, <b>Customers, Quotes, Orders, Payments and Pipeline</b> all disappear from that person&rsquo;s menu &mdash; right for
                 a fitter, who reaches the job from the calendar instead.</li>
+            <li><b>Admin overrides the ticks.</b> While <b>Admin</b> is ticked (on the Add user form <em>and</em> the Edit page), the
+                permission ticks before <b>Fittings only</b> &mdash; <b>Create quotes</b>, <b>Create orders</b>, <b>View all customer jobs</b>,
+                <b>View costs</b> and, on Edit, <b>Can see money</b> &mdash; show <b>ticked and greyed out</b>, under a blue note:
+                &ldquo;<em><b>Admin</b> is ticked, so this person can always do everything below (except <b>Fittings only</b>, which is a
+                restriction you choose). Untick Admin to use these ticks instead.</em>&rdquo; That is simply the truth on screen: an admin can
+                do all of those things everywhere, whatever the boxes say. <b>Fittings only</b> stays editable. <b>Untick Admin</b> and the
+                person&rsquo;s <b>own saved ticks</b> come back exactly as they were &mdash; they are kept while Admin is on.</li>
           </ul>
 
           <p>Press <b>Add user</b> and the page comes back with a green <b>User added.</b>, and the new row in <b>Existing users</b>
@@ -485,11 +526,12 @@ return [
             ['6',  'What Sales and Fitter do',        'Sales and Fitter have one job each. When you book a measure, the people offered are your sales people. When you book a fitting, they are your fitters. Office is for your office staff. Like the others, it says who someone is. What they can actually see and do is set by the permissions.', 6],
             ['7',  'Permissions: creating, and seeing all', 'Permissions are what really decide what people can do. Create quotes is ticked to start with. Create orders lets them turn work into orders. View all customer jobs is really a filter. Without it, the calendar, customers, orders and payments only show the jobs assigned to that person.', 7],
             ['8',  'Costs, fittings, and the menu',   'View costs shows your cost and profit figures, so leave it off for a fitter. Fittings only keeps their calendar to fitting jobs, and hides your measures. And if none of the first three boxes is ticked, Customers, Quotes, Orders, Payments and Pipeline all disappear from their menu. A fitter gets to the job from the calendar instead.', 8],
-            ['9',  'Add user',                        'Press Add user. A green bar says User added, and they join the list below, in name order. You can see their roles, an active badge, and their last login. That says never, until they first sign in. It is a quick way to spot a login nobody has used yet.', 9],
-            ['10', 'The Edit page',                   'Click Edit, and you get the whole form back, filled in. The password box now says New password. Leave it blank, and they keep the one they have. Further down are the parts the add form does not have. Let us go through them.', 10],
-            ['11', 'Can see money',                   'First, Can see money. It sits with the permissions, but only on the Edit page. It covers order values, payments, balances and revenue. A new user starts without it. So for office or sales staff who take payments, tick it here. Leave it off for fitters. Admins can always see money.', 11],
-            ['12', 'The Dashboard box',               'Next, the Dashboard box. Tick the panels this person may see: the sales team leaderboard, product mix, gross profit, and recent wins. Gross profit also needs View costs. And because every panel shows money, they all need Can see money too. Without it, there is no Dashboard at all, and they land on the calendar.', 12],
-            ['13', 'Active, and home address',        'Active is the on and off switch for signing in. If you untick it, they just see the usual wrong password message, so do tell them. Their home address is where Today\'s run starts and ends on the calendar map. Leave it blank for office staff.', 13],
-            ['14', 'Save, delete, and your own login', 'Press Save changes, and a green bar says User updated. At the very bottom, in the Danger zone, is Delete user. It asks first, and it is permanent, though their quotes are kept. And on your own login, you cannot untick your own admin, switch yourself off, or delete yourself.', 14],
+            ['9',  'Admin overrides the ticks',       'Tick Admin, and something changes in the permissions. The boxes before Fittings only all turn ticked, and greyed out, with a blue note above them. That is because an admin can always do everything they cover, whatever the boxes say. Fittings only stays yours to choose. Untick Admin again, and the person\'s own ticks come straight back, just as you left them.', 9],
+            ['10', 'Add user',                        'Press Add user. A green bar says User added, and they join the list below, in name order. You can see their roles, an active badge, and their last login. That says never, until they first sign in. It is a quick way to spot a login nobody has used yet.', 10],
+            ['11', 'The Edit page',                   'Click Edit, and you get the whole form back, filled in. The password box now says New password. Leave it blank, and they keep the one they have. Further down are the parts the add form does not have. Let us go through them.', 11],
+            ['12', 'Can see money',                   'First, Can see money. It sits with the permissions, but only on the Edit page. It covers order values, payments, balances and revenue. A new user starts without it. So for office or sales staff who take payments, tick it here. Leave it off for fitters. Admins can always see money.', 12],
+            ['13', 'The Dashboard box',               'Next, the Dashboard box. Tick the panels this person may see: the sales team leaderboard, product mix, gross profit, and recent wins. Gross profit also needs View costs. And because every panel shows money, they all need Can see money too. Without it, there is no Dashboard at all, and they land on the calendar.', 13],
+            ['14', 'Active, and home address',        'Active is the on and off switch for signing in. If you untick it, they just see the usual wrong password message, so do tell them. Their home address is where Today\'s run starts and ends on the calendar map. Leave it blank for office staff.', 14],
+            ['15', 'Save, delete, and your own login', 'Press Save changes, and a green bar says User updated. At the very bottom, in the Danger zone, is Delete user. It asks first, and it is permanent, though their quotes are kept. And on your own login, you cannot untick your own admin, switch yourself off, or delete yourself.', 15],
         ],
 ];

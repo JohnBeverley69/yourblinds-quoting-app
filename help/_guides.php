@@ -70,6 +70,7 @@ $ORDER = [
     'instaprice-quick',
     'quote-build',
     'quote-send-accept',
+    'quote-new-order',
     'quote-offline',
     'quote-order-invoice',
     'orders-list',

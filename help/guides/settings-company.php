@@ -9,8 +9,11 @@ declare(strict_types=1);
  * lede, open, v, css, demo, body, script.
  *
  * Mirrors the "Company details" section on the Company tab of
- * /admin/settings.php (the ten boxes in their real rows, the Save button and
- * the "Company details saved." flash), the sidebar's who-you-are block
+ * /admin/settings.php (the eleven boxes in their real rows - VAT % sits beside
+ * the VAT number, greyed out until a number is typed, filled with 20 or the
+ * stored positive rate, with its always-visible note - the Save button and
+ * the "Company details saved." flash; the company save stores the rate, 0
+ * without a number, and lifts unsent drafts at 0% to it), the sidebar's who-you-are block
  * (_partials/sidebar.php .app-sidebar-user), the letterhead built by
  * pdf-generator/pdf.php (name, address lines, "town postcode", county, phone,
  * email, "VAT No.") and the public quote page quote-history/public.php (same
@@ -23,34 +26,39 @@ declare(strict_types=1);
 
 $script = [
     ['1',  'What these details are for',   'Your company details are your letterhead. Your name, your address, and how to reach you, are printed at the top of every quote, every invoice and every receipt you send. Your customer sees them on the quote page they open on their phone, tablet or computer, too. Fill them in once, properly, and everything that leaves the system looks like it came from you.', 1],
-    ['2',  'Getting there',                'To get there, look at the menu down the left. Click Setup to open that section, and then click Settings. A row of seven tabs runs along the top of the page. Click Company, the first one. The first panel on it is Company details. It is just ten plain typing boxes. Nothing to tick, and nothing to pick from a list.', 2],
+    ['2',  'Getting there',                'To get there, look at the menu down the left. Click Setup to open that section, and then click Settings. A row of seven tabs runs along the top of the page. Click Company, the first one. The first panel on it is Company details. It is just eleven plain typing boxes. Nothing to tick, and nothing to pick from a list.', 2],
     ['3',  'Company name',                 'Start at the top, with Company name. It has a little red star, which means it must be filled in. This is the name that heads every quote, invoice and receipt, and it sits at the top of your terms and privacy pages too. So type it exactly as you want customers to read it.', 3],
     ['4',  'Contact name, email and phone','Next to it is Contact name. That is the real person a customer asks for when they ring. Underneath are Email and Phone. These two are printed on your paperwork, so the customer knows how to get hold of you. On a phone or a tablet, the Phone box brings up the number keypad, which makes it quicker to type.', 4],
     ['5',  'The email is printed, not the sender', 'One thing about that Email box. It is the address printed on the page. It is not the address your quote emails are sent from. That is set on the Quoting tab, under Email from name, and Reply-to email. So changing the box here will not change who your quote emails seem to come from.', 5],
     ['6',  'VAT number',                   'Next is VAT number. The screen tells you itself: leave it blank if your business is not VAT registered. If you are registered, type it in. It then prints as VAT number, under your phone and email, on every quote PDF, and on your invoices and receipts too. Leave it empty, and that line simply is not there.', 6],
-    ['7',  'Your address',                 'Now your address. Address line one has a whole row to itself. Put the unit or the building first. Address line two sits on its own row underneath, for the estate or the street. Do not need line two? Leave it empty. Empty boxes are dropped when the address is printed, so you never get a gap. There is no need to type N A, or a dash.', 7],
-    ['8',  'Town, county and postcode',    'The last three boxes sit side by side: Town, County and Postcode. Just put each one in its own box. When your letterhead is printed, the town and the postcode are joined together on one line, with the county underneath. You do not have to arrange anything. The system lays it out for you.', 8],
-    ['9',  'Save, and check it took',      'When you have finished, click Save company details, at the bottom. The page reloads, and a green bar across the top says, Company details saved. Now look at the top of the menu on the left. Under your own name, it shows your company name and your role. That company name changes as soon as you save. That is how you know it went in.', 9],
-    ['10', 'You cannot blank the name',    'One thing that catches people out. You cannot empty the company name. Clear the box and save, and the old name quietly comes back, with the same green message. The system would rather keep the name it has than send out a quote with no name on it. So to change it, simply type the new name straight over the top.', 10],
-    ['11', 'Where it all ends up',         'And here is where it all ends up. On your quote, invoice and receipt PDFs, it sits at the top left: your name, your address, then phone, email and VAT number. The quote page your customer opens online shows the same block, but it stops at your email, so the VAT number is only on the PDF. Set it once, and come back if you move, or register for VAT.', 11],
+    ['7',  'VAT percent, right beside it', 'Right beside it is VAT percent. While the VAT number box is empty, this one is greyed out, and the note under it says, Add a VAT number to charge VAT. Type your VAT number, and the box wakes up, already filled in with twenty, the UK standard rate. If your rate is different, just type over it. Your number and your rate now sit side by side.', 7],
+    ['8',  'What saving does to VAT',      'When you save, your VAT rate is saved with everything else. New quotes use that rate, and quotes you have already made keep their own. There is one helpful exception. Draft quotes that have not been sent yet, and still have no VAT on them, are brought up to your rate for you. And if you clear the VAT number and save, VAT is switched off, and the rate goes back to nought.', 8],
+    ['9',  'Your address',                 'Now your address. Address line one has a whole row to itself. Put the unit or the building first. Address line two sits on its own row underneath, for the estate or the street. Do not need line two? Leave it empty. Empty boxes are dropped when the address is printed, so you never get a gap. There is no need to type N A, or a dash.', 9],
+    ['10', 'Town, county and postcode',    'The last three boxes sit side by side: Town, County and Postcode. Just put each one in its own box. When your letterhead is printed, the town and the postcode are joined together on one line, with the county underneath. You do not have to arrange anything. The system lays it out for you.', 10],
+    ['11', 'Save, and check it took',      'When you have finished, click Save company details, at the bottom. The page reloads, and a green bar across the top says, Company details saved. Now look at the top of the menu on the left. Under your own name, it shows your company name and your role. That company name changes as soon as you save. That is how you know it went in.', 11],
+    ['12', 'You cannot blank the name',    'One thing that catches people out. You cannot empty the company name. Clear the box and save, and the old name quietly comes back, with the same green message. The system would rather keep the name it has than send out a quote with no name on it. So to change it, simply type the new name straight over the top.', 12],
+    ['13', 'Where it all ends up',         'And here is where it all ends up. On your quote, invoice and receipt PDFs, it sits at the top left: your name, your address, then phone, email and VAT number. The quote page your customer opens online shows the same block, but it stops at your email, so the VAT number is only on the PDF. Set it once, and come back if you move, or register for VAT.', 13],
 ];
 $L = static fn (int $n): string => (string) round(mb_strlen($script[$n - 1][2]) / 13.6);
 
 $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
 
-// The ten boxes, in the real rows. $v = what is in each box (HTML); $c = extra
-// class per box (e.g. a ring). Keys: cn ct em ph vat a1 a2 tw co pc.
+// The eleven boxes, in the real rows. $v = what is in each box (HTML); $c = extra
+// class per box (e.g. a ring). Keys: cn ct em ph vat vp a1 a2 tw co pc.
+// VAT % (vp) is greyed out ("dis") whenever the VAT number box is empty.
 $VAL = ['cn' => 'Demo Blinds Ltd', 'ct' => 'Sarah Jones', 'em' => 'hello@demoblinds.co.uk', 'ph' => '01632 960123',
-        'vat' => 'GB123456789', 'a1' => 'Unit 4, Mill Court', 'a2' => 'Riverside Estate', 'tw' => 'Kendal', 'co' => 'Cumbria', 'pc' => 'LA9 6AB'];
+        'vat' => 'GB123456789', 'vp' => '20', 'a1' => 'Unit 4, Mill Court', 'a2' => 'Riverside Estate', 'tw' => 'Kendal', 'co' => 'Cumbria', 'pc' => 'LA9 6AB'];
 $form = static function (array $v = [], array $c = [], string $foot = '') use ($VAL): string {
-    $box = static function (string $k, string $label) use ($v, $c, $VAL): string {
-        $in = array_key_exists($k, $v) ? $v[$k] : $VAL[$k];
-        return '<div class="fg"><span class="lab">' . $label . '</span><div class="inp ' . ($c[$k] ?? '') . '">' . $in . '</div></div>';
+    $vatOff = !array_key_exists('vat', $v) ? false : ($v['vat'] === '' || str_contains($v['vat'], 'class="ph"'));
+    $box = static function (string $k, string $label) use ($v, $c, $VAL, $vatOff): string {
+        $in  = array_key_exists($k, $v) ? $v[$k] : $VAL[$k];
+        $cls = ($c[$k] ?? '') . ($k === 'vp' && $vatOff ? ' dis' : '');
+        return '<div class="fg"><span class="lab">' . $label . '</span><div class="inp ' . $cls . '">' . $in . '</div></div>';
     };
     return '<div class="secbox"><div class="sech">Company details</div>'
          . '<div class="r r2">' . $box('cn', 'Company name <span class="req">*</span>') . $box('ct', 'Contact name') . '</div>'
          . '<div class="r r2">' . $box('em', 'Email') . $box('ph', 'Phone') . '</div>'
-         . '<div class="r">' . $box('vat', 'VAT number') . '</div>'
+         . '<div class="r r2">' . $box('vat', 'VAT number') . $box('vp', 'VAT %') . '</div>'
          . '<div class="r">' . $box('a1', 'Address line 1') . '</div>'
          . '<div class="r">' . $box('a2', 'Address line 2') . '</div>'
          . '<div class="r r3">' . $box('tw', 'Town') . $box('co', 'County') . $box('pc', 'Postcode') . '</div>'
@@ -58,6 +66,7 @@ $form = static function (array $v = [], array $c = [], string $foot = '') use ($
 };
 $empty = array_fill_keys(array_keys($VAL), '');
 $empty['vat'] = '<span class="ph">e.g. GB123456789</span>';
+$empty['vp']  = '20';
 $type = static fn (string $txt, float $d, int $steps = 16, float $tt = 1.0): string =>
     '<span class="a-type" style="--d:' . $d . 's;--ts:' . $steps . ';--tt:' . $tt . 's">' . $txt . '</span>';
 
@@ -87,8 +96,8 @@ return [
         'title'   => 'Your company details',
         'eyebrow' => 'Settings · Company',
         'v'       => 2,
-        'blurb'   => 'All ten boxes on the Company tab, in order — and the letterhead they build on every quote, invoice and legal page.',
-        'lede'    => 'These ten boxes are your <b>letterhead</b>. Your name, your contact details, your VAT number and your
+        'blurb'   => 'All eleven boxes on the Company tab, in order — including the VAT % beside your VAT number — and the letterhead they build on every quote, invoice and legal page.',
+        'lede'    => 'These eleven boxes are your <b>letterhead</b>, plus the <b>VAT rate</b> your quotes charge. Your name, your contact details, your VAT number and your
                       address are printed at the top-left of every quote, invoice and receipt PDF you send &mdash; and all
                       of it bar the VAT line on the quote page your customer opens on their phone. This guide goes through
                       every box <b>slowly</b>, one at a time, in the order you meet them. To get there: <b>Setup</b> &rarr;
@@ -117,6 +126,12 @@ return [
           .gd .inp > span{ grid-area:1/1; }
           .gd .inp .ph{ color:var(--faint); }
           .gd .inp.focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+          .gd .inp.dis{ background:var(--panel); color:var(--faint); border-color:var(--line); }
+          .gd .stk{ display:grid; } .gd .stk > *{ grid-area:1/1; }
+          .gd .vnote{ font-size:.58rem; color:var(--soft); line-height:1.4; margin-top:.15rem; }
+          .gd .tot{ display:grid; grid-template-columns:auto auto; gap:.1rem 0; font-size:.66rem; color:var(--ink); }
+          .gd .tot b{ text-align:right; font-variant-numeric:tabular-nums; padding-left:1rem; }
+          .gd .tot .g{ font-weight:800; border-top:1px solid var(--line); padding-top:.1rem; }
           .gd .hintg{ font-size:.58rem; color:var(--faint); line-height:1.4; margin-top:.15rem; }
           .gd .fact{ margin-top:.5rem; position:relative; }
           .gd .btnp{ display:inline-flex; align-items:center; gap:.3rem; background:var(--accent); color:#fff; border-radius:7px; padding:.32rem .75rem; font-size:.72rem; font-weight:700; }
@@ -188,13 +203,13 @@ return [
                 <!-- 0 — poster -->
                 <div class="sc" data-scene="0">
                   ' . $head . $tabs() . $form() . '
-                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; eleven short chapters, one box at a time.</p>
+                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; thirteen short chapters, one box at a time.</p>
                 </div>
 
                 <!-- 1 — what it is for -->
                 <div class="sc" data-scene="1" data-len="' . $L(1) . '">
                   <div class="sct a-fade" style="--d:.2s">Your letterhead</div>
-                  <p class="scs a-fade" style="--d:.5s">Ten boxes in Settings &rarr; printed on everything you send.</p>
+                  <p class="scs a-fade" style="--d:.5s">Eleven boxes in Settings &rarr; printed on everything you send.</p>
                   <div class="split">
                     <div class="paper a-rise" style="--d:1s;max-width:17rem">
                       <div class="plogo a-pop" style="--d:2s">DB</div>
@@ -230,7 +245,7 @@ return [
                   <div class="split">
                     <div class="a-rise" style="--d:14s">' . $form($empty) . '</div>
                     <div class="side2">
-                      <span class="chip a-pop" style="--d:17.5s">Ten plain typing boxes</span>
+                      <span class="chip a-pop" style="--d:17.5s">Eleven plain typing boxes</span>
                       <span class="chip a-pop" style="--d:20.5s">Nothing to tick &middot; nothing to pick</span>
                     </div>
                   </div>
@@ -284,9 +299,13 @@ return [
                     <div>
                       <div class="secbox">
                         <div class="sech">Company details</div>
-                        <span class="lab">VAT number</span>
-                        <div class="inp focus a-ring" style="--d:1s"><span class="ph a-out" style="--d:9.5s">e.g. GB123456789</span>' . $type('GB123456789', 10, 11, .8) . '</div>
-                        <div class="hintg a-fade" style="--d:3s">Leave blank if your business isn&rsquo;t VAT-registered. When set, it appears below your contact details on every quote PDF.</div>
+                        <div class="r r2">
+                          <div class="fg"><span class="lab">VAT number</span>
+                            <div class="inp focus a-ring" style="--d:1s"><span class="ph a-out" style="--d:9.5s">e.g. GB123456789</span>' . $type('GB123456789', 10, 11, .8) . '</div>
+                            <div class="hintg a-fade" style="--d:3s">Leave blank if your business isn&rsquo;t VAT-registered. When set, it appears below your contact details on every quote PDF.</div></div>
+                          <div class="fg"><span class="lab">VAT %</span>
+                            <div class="stk"><div class="inp dis a-out" style="--d:10.8s">20</div><div class="inp a-fade" style="--d:10.8s">20</div></div></div>
+                        </div>
                       </div>
                     </div>
                     <div class="side2">
@@ -297,8 +316,65 @@ return [
                   </div>
                 </div>
 
-                <!-- 7 — address lines -->
+                <!-- 7 — VAT % beside the number -->
                 <div class="sc" data-scene="7" data-len="' . $L(7) . '">
+                  <div class="split">
+                    <div>
+                      <div class="secbox">
+                        <div class="sech">Company details</div>
+                        <div class="r r2">
+                          <div class="fg"><span class="lab">VAT number</span>
+                            <div class="inp a-ring" style="--d:11s"><span class="ph a-out" style="--d:11.6s">e.g. GB123456789</span>' . $type('GB123456789', 11.6, 11, .8) . '</div></div>
+                          <div class="fg a-ring" style="--d:2.4s;border-radius:6px"><span class="lab">VAT %</span>
+                            <div class="stk">
+                              <div class="inp dis a-out" style="--d:12.9s">20</div>
+                              <div class="inp focus a-fade" style="--d:12.9s"><span class="a-out" style="--d:20.4s">20</span><span class="a-fade" style="--d:20.6s">' . $type('17.5', 20.6, 4, .4) . '</span></div>
+                            </div>
+                            <div class="stk">
+                              <div class="vnote a-out" style="--d:12.9s">Add a VAT number to charge VAT.</div>
+                              <div class="vnote a-fade" style="--d:13s">UK standard rate is 20%. New quotes use this rate; existing quotes keep theirs.</div>
+                            </div></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="side2">
+                      <span class="chip a-pop" style="--d:4.9s">No VAT number &rarr; greyed out</span>
+                      <span class="chip a-pop" style="--d:8.8s">&ldquo;Add a VAT number to charge VAT.&rdquo;</span>
+                      <span class="chip good a-pop" style="--d:14.3s">&#10003; Filled in with 20 &mdash; the UK standard rate</span>
+                      <span class="chip a-pop" style="--d:18.2s">Different rate? Type over it</span>
+                      <span class="chip good a-pop" style="--d:21.8s">Number and rate, side by side</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 8 — what saving does to VAT -->
+                <div class="sc" data-scene="8" data-len="' . $L(8) . '">
+                  <div class="flash a-pop" style="--d:1.6s">Company details saved.</div>
+                  <div class="split">
+                    <div class="side2">
+                      ' . $saveBtn('a-press', '--d:1s') . '
+                      <span class="chip a-pop" style="--d:4.4s">New quotes &rarr; your rate</span>
+                      <span class="chip a-pop" style="--d:6.3s">Quotes you&rsquo;ve made &rarr; keep their own</span>
+                      <div class="mini a-rise" style="--d:12.3s"><h4>Draft quote, not sent yet</h4>
+                        <div class="tot"><span>Subtotal</span><b>&pound;400.00</b>
+                          <span class="stk"><span class="a-out" style="--d:17.6s">VAT (0%)</span><span class="a-fade" style="--d:17.6s">VAT (20%)</span></span>
+                          <b class="stk"><span class="a-out" style="--d:17.6s">&pound;0.00</span><span class="a-fade" style="--d:17.6s">&pound;80.00</span></b>
+                          <span class="g">Total</span>
+                          <b class="g stk"><span class="a-out" style="--d:17.6s">&pound;400.00</span><span class="a-fade" style="--d:17.6s">&pound;480.00</span></b></div>
+                        <div class="chips" style="margin-top:.35rem"><span class="chip good a-pop" style="--d:18s">&#10003; brought up to your rate</span></div></div>
+                    </div>
+                    <div class="side2">
+                      <div class="mini a-rise" style="--d:20.4s"><h4>VAT number cleared, then saved</h4>
+                        <div class="r r2" style="margin:0"><div class="fg"><span class="lab">VAT number</span><div class="inp"><span class="ph">e.g. GB123456789</span></div></div>
+                          <div class="fg"><span class="lab">VAT %</span><div class="inp dis">20</div></div></div>
+                        <div class="vnote">Add a VAT number to charge VAT.</div></div>
+                      <span class="chip bad a-pop" style="--d:23.5s">VAT switched off &mdash; the rate is saved as 0</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 9 — address lines -->
+                <div class="sc" data-scene="9" data-len="' . $L(9) . '">
                   <div class="split">
                     <div>' . $form(['a1' => $type('Unit 4, Mill Court', 3.5, 18, 1), 'a2' => $type('Riverside Estate', 7.5, 16, 1), 'tw' => '', 'co' => '', 'pc' => ''],
                                    ['a1' => 'focus a-ring" style="--d:2s', 'a2' => 'a-ring" style="--d:6.5s']) . '</div>
@@ -311,8 +387,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 8 — town, county, postcode -->
-                <div class="sc" data-scene="8" data-len="' . $L(8) . '">
+                <!-- 10 — town, county, postcode -->
+                <div class="sc" data-scene="10" data-len="' . $L(10) . '">
                   <div class="split">
                     <div>' . $form(['tw' => $type('Kendal', 3, 6, .5), 'co' => $type('Cumbria', 3.8, 7, .5), 'pc' => $type('LA9 6AB', 4.6, 7, .5)],
                                    ['tw' => 'a-ring" style="--d:2.5s', 'co' => 'a-ring" style="--d:3.3s', 'pc' => 'a-ring" style="--d:4.1s']) . '</div>
@@ -324,8 +400,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 9 — save -->
-                <div class="sc" data-scene="9" data-len="' . $L(9) . '">
+                <!-- 11 — save -->
+                <div class="sc" data-scene="11" data-len="' . $L(11) . '">
                   <div class="flash a-pop" style="--d:6s">Company details saved.</div>
                   <div class="split">
                     <div>' . $form([], [], $saveBtn('a-press a-ring', '--d:3.5s', '<div class="a-move" style="--fx:14rem;--fy:-7rem;--tx:6rem;--ty:.7rem;--d:1s;--md:2s">' . $ptr . '</div>')) . '</div>
@@ -338,8 +414,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 10 — cannot blank the name -->
-                <div class="sc" data-scene="10" data-len="' . $L(10) . '">
+                <!-- 12 — cannot blank the name -->
+                <div class="sc" data-scene="12" data-len="' . $L(12) . '">
                   <div class="sct a-fade" style="--d:.2s">The company name can&rsquo;t be emptied</div>
                   <div class="secbox a-rise" style="--d:1s;max-width:22rem;margin-top:.5rem">
                     <span class="lab">Company name <span class="req">*</span></span>
@@ -355,8 +431,8 @@ return [
                   </div>
                 </div>
 
-                <!-- 11 — where it ends up -->
-                <div class="sc" data-scene="11" data-len="' . $L(11) . '">
+                <!-- 13 — where it ends up -->
+                <div class="sc" data-scene="13" data-len="' . $L(13) . '">
                   <div class="split">
                     <div><div class="ptag a-fade" style="--d:1s">Quote, invoice &amp; receipt PDF</div>
                       ' . $paper(['cn' => ['a-fly', 2.5], 'a1' => ['a-fly', 3.5], 'a2' => ['a-fly', 3.8], 'tp' => ['a-fly', 4.1], 'co' => ['a-fly', 4.4],
@@ -378,7 +454,7 @@ return [
              <b>Settings</b>, with &ldquo;Company details and per-quote defaults.&rdquo; underneath, and a row of seven tabs:
              <b>Company</b> &middot; Quoting &middot; Legal &middot; Status colours &middot; Suppliers &middot; Accounting &middot;
              Back up data. Settings remembers the tab you used last, so if another one is showing, click <b>Company</b>.
-             The first panel on it is <b>Company details</b> &mdash; ten plain typing boxes, nothing to tick, nothing to choose
+             The first panel on it is <b>Company details</b> &mdash; eleven plain typing boxes, nothing to tick, nothing to choose
              from a list.</p>
 
           <p><b>Work down the form.</b> They are in this order on screen:</p>
@@ -400,6 +476,13 @@ return [
                 online quote page your customer opens &mdash; that page stops at your email address. Empty, the line simply
                 isn&rsquo;t there. <em>(With <b>Compact mode</b> on, that grey advice line is hidden &mdash; the box works the
                 same.)</em></li>
+            <li><b>VAT %</b> &mdash; on the same row, to the <b>right</b> of VAT number. It is the rate your quotes charge, so the
+                number and the rate live side by side. While the VAT number box is empty it is <b>greyed out</b>, with the note
+                &ldquo;<em>Add a VAT number to charge VAT.</em>&rdquo; &mdash; you can&rsquo;t charge VAT unless you&rsquo;re
+                VAT-registered. Type a VAT number and it opens straight away, filled in with <b>20</b> (the UK standard rate)
+                or with your own rate if you&rsquo;ve set one before, and the note becomes &ldquo;<em>UK standard rate is 20%.
+                New quotes use this rate; existing quotes keep theirs.</em>&rdquo; Different rate? Type over it (decimals such
+                as 17.5 are fine). That note always shows, even in Compact mode.</li>
             <li><b>Address line 1</b> &mdash; full width, on its own row. Unit or building first. Up to 150.</li>
             <li><b>Address line 2</b> &mdash; its own row underneath. Estate, or street. Don&rsquo;t need it? Leave it empty
                 &mdash; empty boxes are dropped when the address is printed, so you won&rsquo;t get a blank gap. Never type
@@ -414,6 +497,13 @@ return [
              YourBlinds name there is your own name, and under that your company name and your role, like
              &ldquo;Demo Blinds Ltd &middot; admin&rdquo;. That company name changes the moment you save: that&rsquo;s your proof
              it went in.</p>
+
+          <p><b>What saving does to VAT.</b> The same Save stores your <b>VAT %</b>. With a VAT number, the rate in the box is
+             used (left empty, it counts as 20). <b>New quotes</b> use it; quotes you&rsquo;ve already made <b>keep the rate they
+             were made with</b> &mdash; except <b>draft quotes not yet sent that still have no VAT (0%)</b>, which are brought up
+             to your rate and their totals worked out again. <b>Clear the VAT number and save</b>, and VAT is switched off: the
+             rate is stored as <b>0</b>, so new quotes show a total with no VAT line. (The VAT % used to sit on the Quoting tab
+             under Quote defaults; that spot now just says it&rsquo;s set here.)</p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>You can&rsquo;t empty the company name.</b> Clear that box,
              hit Save, and the old name quietly comes back &mdash; with the same green &ldquo;Company details saved.&rdquo;
