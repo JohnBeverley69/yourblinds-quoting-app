@@ -79,7 +79,7 @@ $radio = static fn (string $label, string $cls = '', string $style = ''): string
 
 $tabs = static function (string $active, string $waiting = '1') : string {
     $h = '<div class="rtabs">';
-    foreach (['waiting' => 'Waiting for approval' . ($waiting !== '' ? ' <b>' . $waiting . '</b>' : ''), 'open' => 'In progress', 'done' => 'Done', 'report' => 'Report'] as $k => $l) {
+    foreach (['overview' => 'Overview', 'waiting' => 'Waiting for approval' . ($waiting !== '' ? ' <b>' . $waiting . '</b>' : ''), 'open' => 'In progress', 'done' => 'Done', 'report' => 'Report'] as $k => $l) {
         $h .= '<span class="' . ($k === $active ? 'on' : '') . '">' . $l . '</span>';
     }
     return $h . '</div>';
@@ -187,9 +187,10 @@ return [
           .gd .acard .ln{ margin-top:.35rem; font-size:.62rem; }
 
           /* incoming row + invoice */
-          .gd .iorow{ display:grid; grid-template-columns:2fr 1.6fr 1fr; gap:.4rem; align-items:center; padding:.45rem .6rem; border-radius:9px; font-size:.66rem;
+          .gd .iorow{ display:grid; grid-template-columns:1.7fr 1.4fr 1.5fr; gap:.4rem; align-items:center; padding:.45rem .6rem; border-radius:9px; font-size:.66rem;
                       border:1px solid var(--line); margin-bottom:.35rem; color:var(--ink); }
           .gd .iorow.pu{ border-left:4px solid #7c3aed; background:rgba(124,58,237,.09); }
+          .gd .iorow .iost{ display:inline-flex; align-items:center; gap:.3rem; flex-wrap:wrap; }
           .gd .iorow.rd2{ border-left:4px solid #e11d48; background:rgba(225,29,72,.06); }
           .gd .inv{ border:1px solid var(--line); border-radius:10px; background:var(--surface); font-size:.62rem; overflow:hidden; }
           .gd .inv div{ display:grid; grid-template-columns:3fr .5fr .9fr; gap:.3rem; padding:.3rem .55rem; border-top:1px solid var(--line); color:var(--ink); }
@@ -413,9 +414,9 @@ return [
                   <span class="chip a-pop" style="' . $d(11, 'same account') . '">Same account &middot; same blinds</span>
                   <div style="margin-top:.7rem">
                     <div class="lg a-fade" style="' . $d(11, 'It goes through') . ';margin-bottom:.3rem">Incoming orders</div>
-                    <div class="iorow rd2 a-fly" style="' . $d(11, 'It goes through', .3) . '"><span><b>ABC-2026-0041</b></span><span>ABC Blinds</span><span class="fpill">New</span></div>
-                    <div class="iorow pu a-fly" style="' . $d(11, 'A purple REMAKE') . '"><span><b>ABC-2026-0038-R1</b> <span class="a-pop" style="' . $d(11, 'A purple REMAKE', .4) . '">' . $rmb . '</span></span><span>ABC Blinds</span><span class="fpill">New</span></div>
-                    <div class="iorow a-fly" style="' . $d(11, 'It goes through', .6) . '"><span><b>HUG-2026-0012</b></span><span>Hughes Interiors</span><span class="fpill">In production</span></div>
+                    <div class="iorow rd2 a-fly" style="' . $d(11, 'It goes through', .3) . '"><span><b>ABC-2026-0041</b></span><span>ABC Blinds</span><span class="iost"><span class="fpill">New</span></span></div>
+                    <div class="iorow pu a-fly" style="' . $d(11, 'A purple REMAKE') . '"><span><b>ABC-2026-0038-R1</b></span><span>ABC Blinds</span><span class="iost"><span class="a-pop" style="' . $d(11, 'A purple REMAKE', .4) . '">' . $rmb . '</span><span class="fpill">New</span></span></div>
+                    <div class="iorow a-fly" style="' . $d(11, 'It goes through', .6) . '"><span><b>HUG-2026-0012</b></span><span>Hughes Interiors</span><span class="iost"><span class="fpill">In production</span></span></div>
                   </div>
                   <p class="scs a-fade" style="' . $d(11, 'and a purple row') . ';margin-top:.4rem">The purple is the <b>Remake</b> colour in Factory settings. Once it has gone out, it takes the normal colours.</p>
                 </div>
@@ -532,13 +533,15 @@ return [
                 &hellip;</em> with your reason.</li>
           </ul>
 
-          <p><b>In the factory.</b> In <b>Incoming orders</b> the remake order carries a purple <b>REMAKE</b> badge and its row takes the
+          <p><b>In the factory.</b> In <b>Incoming orders</b> the remake order carries a purple <b>REMAKE</b> badge (in the status column, just before its stage) and its row takes the
              <b>Remake</b> colour (purple unless changed in <b>Factory settings</b>) until it is dispatched. The Orders list shows the badge too.</p>
 
           <p><b>On the invoice.</b> A remake order bills <b>exactly the charge you decided</b>, spread over its blinds by value, and every line
              reads <b>REMAKE &mdash; &hellip;</b>. A free remake (our fault, or a supplier claim) shows as <b>&pound;0</b> lines.</p>
 
           <ul class="steps">
+            <li><b>Overview</b> &mdash; where the page opens: this month at a glance (remakes, blinds, cost to us, <em>Full report</em>), then
+                <b>Waiting for approval</b>, <b>In progress</b> and <b>Done in the last 30 days</b>, each with its count. The tabs below show one list at a time.</li>
             <li><b>In progress</b> &mdash; approved remakes not dispatched yet: Remake (with <em>from &hellip;</em>, the date and any due date),
                 Account (<em>reported by them</em> if the account raised it), Blinds, Reason (and photo), Who pays, Cost, Status.</li>
             <li><b>Done</b> &mdash; dispatched, or <b>Declined</b> with the reason given.</li>

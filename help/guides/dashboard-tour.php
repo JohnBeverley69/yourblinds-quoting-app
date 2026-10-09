@@ -17,7 +17,11 @@ declare(strict_types=1);
  * dash_view_* panel ticks, View costs). The window is measured on
  * quotes.created_at; Revenue (won) = quotes.total (VAT + WT charge
  * included); Gross profit = net sell âˆ’ price-table cost basis, less any
- * agreed-price discount. Every label and message is copied from that file.
+ * agreed-price discount. Direct orders (New order) stay out of the sales /
+ * profit figures unless they carry a "Sold for" price (sold_for_gross in
+ * revenue, sold_for_net − subtotal in profit; never in close rate or the
+ * team's quote counts) and are shown on the "Direct orders — no selling
+ * price" tile. Every label and message is copied from that file.
  *
  * v2: one SCENE per script line (data-scene = the line's step).
  */
@@ -140,6 +144,9 @@ return [
           .gd .ktile.rev .kval{ color:#16a34a; } .gd .ktile.rate .kval{ color:#d97706; }
           .gd .ksub{ font-size:.56rem; color:var(--faint); margin-top:.1rem; }
 
+          .gd .dorow{ display:grid; grid-template-columns:13rem 1fr; gap:.6rem; align-items:center; max-width:34rem; margin-top:.6rem; }
+          .gd .dotile .klbl{ line-height:1.3; }
+
           .gd .lbflex{ display:flex; gap:.7rem; align-items:center; flex-wrap:wrap; }
           .gd .lbwrap{ flex:1 1 18rem; min-width:0; }
           .gd table.lbt{ width:100%; border-collapse:collapse; font-size:.64rem; }
@@ -213,6 +220,7 @@ return [
           @media (max-width:640px){
             .gd .sc{ min-height:470px; }
             .gd .kgrid, .gd .mgrid{ grid-template-columns:1fr 1fr; }
+            .gd .dorow{ grid-template-columns:1fr; }
             .gd .uprow{ grid-template-columns:3.4rem 1fr 4.4rem; } .gd .upq{ display:none; }
             .gd .rrow{ grid-template-columns:1fr 4.2rem; } .gd .rrow .ru, .gd .rrow .rdate{ display:none; }
             .gd .wrow{ grid-template-columns:1fr 1fr; } .gd .warr{ display:none; } .gd .wres{ grid-column:1 / -1; }
@@ -360,15 +368,23 @@ return [
                 </div>
 
                 <!-- 9 â€” revenue (won) -->
-                <div class="sc" data-scene="9" data-len="22">
+                <div class="sc" data-scene="9" data-len="30">
                   <div class="sct a-fade" style="--d:.2s">Revenue (won)</div>
                   ' . $kpis(['a-ring', '', '', '']) . '
-                  <div class="chips">
-                    <span class="chip a-pop" style="--d:4s">accepted</span><span class="chip a-pop" style="--d:4.6s">ordered</span>
-                    <span class="chip a-pop" style="--d:5.2s">invoiced</span><span class="chip a-pop" style="--d:5.8s">paid</span>
-                    <span class="chip ok a-pop" style="--d:10s">The customer&rsquo;s full figure &mdash; <b>VAT included</b></span>
-                    <span class="chip a-pop" style="--d:14.5s">and any Wally tax (WT charge)</span>
-                    <span class="chip bad a-pop" style="--d:19s">So it will never match Gross profit</span>
+                  <div class="chips" style="margin-top:.3rem">
+                    <span class="chip a-pop" style="--d:6s">accepted</span><span class="chip a-pop" style="--d:7.5s">ordered</span>
+                    <span class="chip a-pop" style="--d:8.2s">invoiced</span><span class="chip a-pop" style="--d:9s">paid</span>
+                    <span class="chip ok a-pop" style="--d:11s">The customer&rsquo;s full figure &mdash; <b>VAT included</b></span>
+                    <span class="chip a-pop" style="--d:13.6s">and any Wally tax (WT charge)</span>
+                    <span class="chip bad a-pop" style="--d:16.5s">So it will never match Gross profit</span>
+                  </div>
+                  <div class="dorow">
+                    <div class="a-rise" style="--d:18.4s"><div class="ktile dotile a-ring" style="--d:27.8s"><div class="klbl">Direct orders &mdash; no selling price</div><div class="kval">&pound;412.60</div>
+                      <div class="ksub">3 orders at your cost, ex VAT &middot; not counted in revenue or profit until you add what you sold them for</div></div></div>
+                    <div class="chips" style="margin-top:0">
+                      <span class="chip a-pop" style="--d:19.5s"><span>Placed with <b>New order</b>, straight to us</span></span>
+                      <span class="chip ok a-pop" style="--d:22.4s"><span>Add a <b>Sold for</b> on the order &rarr; it counts</span></span>
+                    </div>
                   </div>
                 </div>
 
@@ -561,6 +577,10 @@ return [
                 are left out, as they might yet land (<em>&ldquo;12 of 20 decided&rdquo;</em>; with none decided it shows <b>&mdash;</b> and
                 <em>&ldquo;no decided quotes yet&rdquo;</em>). <b>Jobs in period</b> is the same won count, written large (<em>&ldquo;accepted
                 &amp; beyond&rdquo;</em>).</li>
+            <li><b>Direct orders &mdash; no selling price</b> &mdash; a fifth tile that only appears if you have placed orders straight with
+                us using <b>New order</b> and haven&rsquo;t said what you sold them for. It shows what you pay us for them (<em>&ldquo;3 orders
+                at your cost, ex VAT &middot; not counted in revenue or profit until you add what you sold them for&rdquo;</em>), counting
+                placed orders (ordered, fitted, invoiced or paid) in the same window and for the same person. See the box below.</li>
             <li><b>Sales team</b> &mdash; everyone who raised a quote in the window, richest first, with &#129351; &#129352; &#129353; on the
                 top three. <b>Pipeline</b> = got as far as sending; <b>Decided</b> = the customer has answered; <b>Won</b> = turned into work;
                 <b>Close rate</b> = Won out of Decided; <b>Revenue</b> = their share of the money. Beside it, <b>Revenue share</b> draws the
@@ -577,11 +597,23 @@ return [
                 yet.&rdquo;</em></li>
           </ul>
 
+          <div class="heads"><span class="hi">&#163;</span><div><b>Direct orders and your figures.</b> An order placed with <b>New order</b>
+             only knows what you pay us &mdash; not what your customer is paying you &mdash; so on its own it would book your cost as a sale
+             and drag your margin down. So, until it has a <b>Sold for</b> price, a direct order is <b>kept out</b> of Revenue (won), Average
+             order value, Jobs in period, the Sales team revenue, What&rsquo;s selling and Gross profit, and sits on the <b>Direct orders &mdash;
+             no selling price</b> tile instead. Type a <b>Sold for</b> on the order (on the New order screen, or later on the order itself &mdash;
+             see <a href="/help/guide.php?g=quote-new-order"><b>Placing an order with us</b></a>) and it counts as a sale: in revenue at that
+             price <b>including VAT</b> (like a quote&rsquo;s total), and in gross profit as the Sold for price <b>ex VAT</b> minus what you pay
+             us. <b>Close rate</b>, and the Pipeline / Decided / Won counts in Sales team, always leave direct orders out &mdash; they were never
+             quotes.</div></div>
+
           <div class="oops"><b>&ldquo;These numbers don&rsquo;t add up&rdquo; &mdash; the usual ones:</b>
             <ul style="margin:.4rem 0 0;padding-left:1.15rem">
               <li><b>Gross profit will never match Revenue (won).</b> Revenue includes VAT and the Wally tax; Gross profit is net of both.
                   Don&rsquo;t subtract one from the other.</li>
               <li><b>A job you won is missing.</b> The window goes by the day the quote was <b>started</b>. Widen it or click <b>All time</b>.</li>
+              <li><b>An order you placed with us isn&rsquo;t in Revenue.</b> It has no <b>Sold for</b> price yet &mdash; it is on the
+                  <b>Direct orders &mdash; no selling price</b> tile. Add what you sold it for on the order.</li>
               <li><b>A panel has vanished.</b> That is permission, not data &mdash; see below.</li>
               <li><b>The Revenue share ring has vanished.</b> You are filtered to one person in <b>View:</b>. Set it back to <b>All sales team</b>.</li>
             </ul>
@@ -602,7 +634,7 @@ return [
             ['6',  'One salesperson',                 'The View box narrows the whole page to one salesperson. It only lists people who have raised a quote, and it changes the moment you pick a name. Watch what changes. The grey line adds, for Jane Weller. The team panel becomes Their numbers. And the revenue share ring disappears, because one person\'s share of themselves is always all of it. Pick all sales team to come back out.', 6],
             ['7',  'Upcoming jobs',                   'Upcoming jobs is the exception. It ignores the window, and it ignores the person. It shows the next jobs booked on the calendar, soonest first, up to eight of them. Today is in red, so your eye lands on it. Under each customer is the postcode you are driving to, then the fitter. Unassigned is your cue to put somebody on it. If the job is tied to a quote, you see its status and number. Click any row to open it.', 7],
             ['8',  'Earlier today, not closed',       'One more thing about that panel. A job from earlier today that is still marked as booked does not just disappear. It sits in its own group at the top, earlier today, not closed. That is your reminder to go and close it off on the calendar.', 8],
-            ['9',  'Revenue (won)',                   'Now the four big numbers. Revenue, won, is the money from every job that got past accepted. That means accepted, ordered, invoiced or paid. It is the customer\'s full figure, VAT included, and any Wally tax you added is inside it too. So it will never match the gross profit figure further down.', 9],
+            ['9',  'Revenue (won), and direct orders', 'Now the four big numbers. Revenue, won, is the money from every job that got past accepted: accepted, ordered, invoiced or paid. It is the customer\'s full figure, VAT included, and any Wally tax is inside it too, so it will never match gross profit. Orders you place straight with us only count once you add what you sold them for. Until then, they wait on a tile of their own: direct orders, no selling price.', 9],
             ['10', 'Average, close rate, jobs',       'Average order value is that money shared across the won jobs. Close rate is how many you won, out of the ones the customer has actually decided on. Quotes still sitting at sent are left out on purpose, because they might still land. With nothing decided, it just shows a dash. And jobs in period is the won count again, written large.', 10],
             ['11', 'Sales team',                      'Next, who is selling it. Everyone who raised a quote in the window, richest first, with medals for the top three. Pipeline is everything they sent out. Decided is the ones the customer has answered. Won is the ones that turned into work. So a big pipeline with a small decided is not a poor salesperson. It is quotes still in the air. The ring shows each person\'s share of the money.', 11],
             ['12', 'What\'s selling',                 'What\'s selling ranks your top eight products by the money taken, from won jobs only. You get a ring, and a list. A bar shows each product\'s share, with the number of units and the money beside it. This is the panel to look at before you order stock.', 12],
