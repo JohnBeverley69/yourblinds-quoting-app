@@ -1007,3 +1007,10 @@ select optgroup {
     .form-row.cols-3,
     .form-row.cols-epm { grid-template-columns: 1fr; }
 }
+
+/* No up/down spinner arrows on number boxes, anywhere (John, 2026-10-09):
+   nobody scrolls to a price, they type it, and the arrows just eat width.
+   Typing, the keyboard arrows and the phone number pad all still work. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
