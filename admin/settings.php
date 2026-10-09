@@ -117,9 +117,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO client_settings (client_id, vat_percent) VALUES (?, ?)
                      ON DUPLICATE KEY UPDATE vat_percent = VALUES(vat_percent)'
                 )->execute([$clientId, $rate]);
+                // Direct orders are 0% on purpose. new_order.php:89 sets
+                // `direct_order = 1, vat_percent = 0` because the client is buying
+                // at their trade price and the factory puts VAT on its own invoice
+                // to them — the client is not charging their customer VAT through
+                // this order. This backfill exists for RETAIL drafts raised before
+                // VAT was configured, and it was sweeping direct orders up with
+                // them: saving Settings → Company in another tab silently flipped
+                // every draft direct order from 0% to 20% and recomputed its
+                // totals.
+                //
+                // The column is probed rather than named in the WHERE outright:
+                // this whole block is inside a try that only error_logs, so on an
+                // install predating the direct-orders migration an unknown column
+                // would abandon the VAT save altogether and say nothing.
+                $hasDirectCol = false;
+                try { db()->query('SELECT direct_order FROM quotes LIMIT 0'); $hasDirectCol = true; }
+                catch (Throwable $e) { /* pre-migration: no direct orders exist */ }
                 $ds = db()->prepare(
                     "SELECT id FROM quotes
                       WHERE client_id = ? AND status = 'draft' AND COALESCE(vat_percent, 0) = 0"
+                    . ($hasDirectCol ? " AND COALESCE(direct_order, 0) = 0" : '')
                 );
                 $ds->execute([$clientId]);
                 $draftIds = $ds->fetchAll(PDO::FETCH_COLUMN);
