@@ -66,9 +66,35 @@ if (ar_table_ready($pdo, 'factory_ar_invoices')) {
                               WHERE factory_client_id = ? AND status NOT IN ('draft','void') AND issue_date >= ?");
         $st->execute([$factory, $weekStart]);
         $invWeek = (float) $st->fetchColumn();
-        $st = $pdo->prepare("SELECT COALESCE(SUM(total - amount_paid), 0) FROM factory_ar_invoices
-                              WHERE factory_client_id = ? AND status IN ('raised','sent','part_paid')");
-        $st->execute([$factory]);
+        // amount_paid is payment allocations only — ar_recompute_invoice_paid()
+        // deliberately keeps credit notes out of it ("a credit note can still
+        // settle the invoice", factory_ar.php:1573) and reflects them in the
+        // status instead. So owed has to subtract them too, exactly as
+        // ar_open_invoices() does at factory_ar.php:1390 and
+        // ar_account_balance() at :1432. Without it this tile over-stated what
+        // the factory is owed by the credited amount.
+        //
+        // A fully credited invoice turns 'settled' and drops out of the status
+        // filter on its own, so it was only ever the PART-credited ones that
+        // were wrong — which is the hard kind to spot, because the number looks
+        // plausible.
+        // Its own try, falling back to the pre-credit-note formula: the shared
+        // catch below sets BOTH tiles to null, so on an install without
+        // factory_ar_credit_notes this would have taken the week's invoiced
+        // figure down with it.
+        try {
+            $st = $pdo->prepare("SELECT COALESCE(SUM(i.total - i.amount_paid
+                                       - COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
+                                                    WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'), 0)
+                                     ), 0)
+                                   FROM factory_ar_invoices i
+                                  WHERE i.factory_client_id = ? AND i.status IN ('raised','sent','part_paid')");
+            $st->execute([$factory]);
+        } catch (Throwable $e) {
+            $st = $pdo->prepare("SELECT COALESCE(SUM(total - amount_paid), 0) FROM factory_ar_invoices
+                                  WHERE factory_client_id = ? AND status IN ('raised','sent','part_paid')");
+            $st->execute([$factory]);
+        }
         $owed = (float) $st->fetchColumn();
     } catch (Throwable $e) { $invWeek = $owed = null; }
 }
