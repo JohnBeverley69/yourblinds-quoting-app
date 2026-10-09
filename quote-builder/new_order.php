@@ -35,6 +35,7 @@ $ref   = '';
 $label = '';
 $notes = '';
 $error = null;
+$dups  = [];   // earlier jobs with the same reference (warn, don't block)
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
@@ -44,7 +45,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($ref === '') {
         $error = 'Please enter your order reference.';
-    } else {
+    }
+    // Same order keyed in twice (office AND boss, or portal AND phone)? Warn
+    // once with what's already there; "Start order anyway" carries on — a
+    // genuine second order can share a reference.
+    // confirm_dup carries the reference they confirmed — change the reference
+    // and it's checked again.
+    if ($error === null && (string) ($_POST['confirm_dup'] ?? '') !== $ref) {
+        try {
+            $d = db()->prepare(
+                "SELECT quote_number, status, created_at FROM quotes
+                  WHERE client_id = ? AND status <> 'declined'
+                    AND LOWER(TRIM(customer_reference)) = LOWER(?)
+                  ORDER BY created_at DESC LIMIT 5"
+            );
+            $d->execute([$clientId, $ref]);
+            $dups = $d->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) { $dups = []; }
+    }
+    if ($error === null && $dups) {
+        // fall through to the form with the warning
+    } elseif ($error === null) {
         $f = [
             'customer_id' => 0, 'end_customer_name' => '', 'end_customer_email' => '',
             'end_customer_phone' => '', 'end_customer_mobile' => '', 'has_whatsapp' => 0,
@@ -101,6 +122,19 @@ $activeNav = 'order-history';
         <?php if ($error !== null): ?>
             <div class="alert alert-error" role="alert"><?= e($error) ?></div>
         <?php endif; ?>
+        <?php if ($dups): ?>
+            <div class="alert alert-error" role="alert">
+                <strong>You already have <?= count($dups) === 1 ? 'an order' : count($dups) . ' orders' ?> with the reference
+                &ldquo;<?= e($ref) ?>&rdquo;:</strong>
+                <ul style="margin:0.4rem 0 0.4rem 1.1rem;padding:0">
+                    <?php foreach ($dups as $dp): ?>
+                        <li><?= e((string) $dp['quote_number']) ?> &mdash; <?= e((string) $dp['status']) ?>,
+                            started <?= e(date('j M Y', (int) strtotime((string) $dp['created_at']))) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                Is this a new, separate order? If so, press <strong>Start order anyway</strong>. If not, cancel so it isn&rsquo;t made twice.
+            </div>
+        <?php endif; ?>
 
         <section class="section">
             <p class="ui-hint" style="color:#6b7280;font-size:0.9375rem;margin:0 0 1rem">
@@ -109,6 +143,7 @@ $activeNav = 'order-history';
             </p>
             <form method="post" action="/quote-builder/new_order.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
+                <?php if ($dups): ?><input type="hidden" name="confirm_dup" value="<?= e($ref) ?>"><?php endif; ?>
                 <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="customer_reference">Order reference <span class="required">*</span></label>
@@ -130,7 +165,7 @@ $activeNav = 'order-history';
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Start order</button>
+                    <button type="submit" class="btn btn-primary"><?= $dups ? 'Start order anyway' : 'Start order' ?></button>
                     <a href="/orders/index.php" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
