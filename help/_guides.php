@@ -10,7 +10,8 @@ declare(strict_types=1);
  * made every edit a merge conflict and every change unreviewable in a diff.
  *
  * Each guide's fields:
- *   aud     all | admin | super  (who may open it)
+ *   aud     all | admin | super | factory  (who may open it; factory = Factory
+ *           Console office users + the super-admin)
  *   section the Help & guide section it belongs under
  *   title   page + link title
  *   eyebrow small label above the title — "Area · Tab"; help/index.php parses
@@ -79,6 +80,10 @@ $ORDER = [
     'quote-payments',
     'accounts-money',
     'accounts-to-package',
+    // The factory's own office (Factory Console users + super-admin only).
+    'console-orders',
+    'console-remakes',
+    'console-calendar',
 ];
 
 $GUIDES = [];

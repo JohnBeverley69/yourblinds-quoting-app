@@ -29,6 +29,8 @@ $isSuper = function_exists('is_super_admin') && is_super_admin();
 $canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
     if ($aud === 'super') return $isSuper;
     if ($aud === 'admin') return $isAdmin || $isSuper;
+    // Factory Console guides: the factory's office staff (and the super-admin), never an ordinary business.
+    if ($aud === 'factory') return $isSuper || (function_exists('factory_console_user') && factory_console_user());
     return true;
 };
 

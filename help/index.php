@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * Self-contained: topics live in the $TOPICS array below; the search box
  * filters them client-side by title + keywords + body. Topics are tagged by
- * audience (all / admin / super) and only the ones the current user can act on
+ * audience (all / admin / super / factory) and only the ones the current user can act on
  * are rendered. Keep entries short and task-focused; update when features land.
  */
 
@@ -77,6 +77,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 $canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
     if ($aud === 'super') return $isSuper;
     if ($aud === 'admin') return $isAdmin || $isSuper;
+    // Factory Console: the factory's office staff (and the super-admin), never an ordinary business.
+    if ($aud === 'factory') return $isSuper || (function_exists('factory_console_user') && factory_console_user());
     return true; // 'all'
 };
 
