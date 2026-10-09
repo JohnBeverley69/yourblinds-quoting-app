@@ -1225,6 +1225,26 @@ function qb_send_receipt_if_due(PDO $pdo, int $quoteId, int $clientId): bool
 {
     if ($quoteId <= 0 || $clientId <= 0) return false;
 
+    // Never on a direct order. The receipt is a retail artefact: it thanks the
+    // tenant's own customer for settling and is rendered from the quote, so its
+    // figure is quotes.total. On a direct order that total is the BUYING price —
+    // what the tenant pays the factory — while end_customer_email is their own
+    // retail customer, saved for the fitting (save_details.php:59 stores it for
+    // direct orders specifically). /accounts offers direct orders in its payment
+    // picker, so recording payments against one settled it and emailed that
+    // customer a "Receipt" showing the tenant's cost. It hands their margin to
+    // their customer, on their own letterhead.
+    //
+    // Checked on its own, not folded into the SELECT below: direct_order is a
+    // migrated column, and on an install without it that query's catch returns
+    // false and would switch receipts off altogether. No column means no direct
+    // orders, so defaulting to "not one" is right.
+    try {
+        $dq = $pdo->prepare('SELECT COALESCE(direct_order, 0) FROM quotes WHERE id = ? AND client_id = ? LIMIT 1');
+        $dq->execute([$quoteId, $clientId]);
+        if ((int) $dq->fetchColumn() === 1) return false;
+    } catch (Throwable $e) { /* column absent → no direct orders exist here */ }
+
     // Tenant opt-out (default on if the column / row is missing).
     try {
         $fs = $pdo->prepare('SELECT COALESCE(feature_auto_receipt, 1) FROM client_settings WHERE client_id = ? LIMIT 1');
