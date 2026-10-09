@@ -366,16 +366,28 @@ window.addEventListener('pageshow', function (e) {
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
-        <?php if ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)): ?>
-            <!-- Primary CTA — one "New" button, pinned at the top so starting a
-                 quote is one click from any page. For the factory super-admin it
-                 opens the trade/retail launcher (pick an account, enter a one-off,
-                 or a retail sale); for everyone else it's the retail quick-quote. -->
+        <?php if ($hasQuotes && ($canCreateQuotes || $canCreateOrders || $isSuperAdmin)): ?>
+            <!-- Primary CTA — one "New" button, pinned at the top. The factory
+                 super-admin gets the trade/retail launcher. Everyone else gets
+                 Quote and/or Order by permission: Create quotes → New quote,
+                 Create orders → New order (a straight order to us, no retail
+                 customer). Both → New opens a two-item menu; one → straight there. -->
             <div class="sidebar-cta">
-                <a href="<?= $isFactoryOffice ? '/master-admin/new-order.php' : '/quote-builder/new.php' ?>" class="sidebar-cta-btn">
-                    <span aria-hidden="true">+</span>
-                    New
-                </a>
+                <?php if ($isFactoryOffice): ?>
+                    <a href="/master-admin/new-order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
+                <?php elseif ($canCreateQuotes && $canCreateOrders): ?>
+                    <details class="sidebar-new">
+                        <summary class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</summary>
+                        <div class="sidebar-new-menu">
+                            <a href="/quote-builder/new.php">New quote</a>
+                            <a href="/quote-builder/new_order.php">New order</a>
+                        </div>
+                    </details>
+                <?php elseif ($canCreateOrders): ?>
+                    <a href="/quote-builder/new_order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New order</a>
+                <?php else: ?>
+                    <a href="/quote-builder/new.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 

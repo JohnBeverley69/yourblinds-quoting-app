@@ -30,6 +30,31 @@ if (!qb_is_editable($quote)) {
     );
 }
 
+// Direct order: just the order reference (required), an optional name for
+// the labels, the additional reference and notes. No retail customer.
+if (qb_is_direct_order($quote)) {
+    $ref = mb_substr(trim((string) ($_POST['customer_reference'] ?? '')), 0, 100);
+    if ($ref === '') {
+        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'The order reference is required.');
+    }
+    $opt = static function (string $k, int $max): ?string {
+        $v = trim((string) ($_POST[$k] ?? ''));
+        return $v === '' ? null : mb_substr($v, 0, $max);
+    };
+    db()->prepare(
+        'UPDATE quotes SET customer_reference = ?, additional_reference = ?, end_customer_name = ?, notes = ?
+          WHERE id = ? AND client_id = ?'
+    )->execute([
+        $ref,
+        $opt('additional_reference', 100),
+        (string) ($opt('end_customer_name', 150) ?? ''),
+        $opt('notes', 65535),
+        $quoteId,
+        $clientId,
+    ]);
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Order details saved.');
+}
+
 // Trade order (raised FOR a trade account): the customer IS the linked
 // account, whose details are managed on the account itself — this panel only
 // captures the per-order references. Save just those and stop; don't touch the

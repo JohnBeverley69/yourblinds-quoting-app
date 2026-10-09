@@ -46,6 +46,16 @@ $_perms   = current_user_permissions();
 $canViewAll     = $isAdmin || $_perms['can_view_all_customer_jobs'];
 $restrictToMine = !$canViewAll;
 $canCreateQuotes = $isAdmin || $_perms['can_create_quotes'];
+// A restricted user who can place orders also sees the direct orders
+// (quote-builder/new_order.php) — those are theirs to place and track.
+// Guarded so the list still loads before migrate_direct_orders.php has run.
+$mineSql = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+if ($restrictToMine && !empty($_perms['can_create_orders'])) {
+    try {
+        db()->query('SELECT direct_order FROM quotes LIMIT 0');
+        $mineSql = '(' . $mineSql . ' OR direct_order = 1)';
+    } catch (Throwable $e) { /* pre-migration */ }
+}
 
 // Paid Accounts add-on toggles the Outstanding column on/off.
 $accountsEnabled = false;
@@ -143,7 +153,7 @@ if ($q !== '') {
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
 if ($restrictToMine) {
-    $where[]  = 'q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $where[]  = str_replace(['(id IN', 'direct_order'], ['(q.id IN', 'q.direct_order'], preg_replace('/^id IN/', 'q.id IN', $mineSql));
     $params[] = (int) $user['user_id'];
 }
 
@@ -264,7 +274,7 @@ if ($rowIds) {
 $countWhere   = ['client_id = ?'];
 $countParams  = [$clientId];
 if ($restrictToMine) {
-    $countWhere[]   = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+    $countWhere[]   = $mineSql;
     $countParams[]  = (int) $user['user_id'];
 }
 // Chip counts reflect the current (active/archived) view.
@@ -297,7 +307,7 @@ if ($hasArchive) {
     $azParams = array_merge([$clientId], $scopeStatuses);
     if (($tca = $typeClause('')) !== '') $azWhere[] = $tca;
     if ($restrictToMine) {
-        $azWhere[]  = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+        $azWhere[]  = $mineSql;
         $azParams[] = (int) $user['user_id'];
     }
     $azSt = db()->prepare('SELECT COUNT(*) FROM quotes WHERE ' . implode(' AND ', $azWhere));

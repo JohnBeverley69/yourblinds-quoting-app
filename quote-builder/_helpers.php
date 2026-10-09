@@ -72,7 +72,8 @@ function qb_user_can_access_quote(array $quote, array $user, array $perms): bool
 {
     if (($user['role'] ?? '') === 'admin'
         || !empty($perms['can_view_all_customer_jobs'])
-        || !empty($perms['can_create_quotes'])) {
+        || !empty($perms['can_create_quotes'])
+        || (qb_is_direct_order($quote) && !empty($perms['can_create_orders']))) {
         return true;
     }
     $st = db()->prepare(
@@ -82,6 +83,17 @@ function qb_user_can_access_quote(array $quote, array $user, array $perms): bool
     );
     $st->execute([(int) $quote['id'], (int) ($user['user_id'] ?? 0), (int) $quote['client_id']]);
     return (bool) $st->fetchColumn();
+}
+
+/**
+ * A direct ORDER (quote-builder/new_order.php): a trade client placing an order
+ * with the factory, no retail customer and no quoting. Priced at their buying
+ * price (no markup / retail discount), no VAT-to-customer, one "Place order"
+ * step. Raised and handled by Create-orders users.
+ */
+function qb_is_direct_order(array $quote): bool
+{
+    return !empty($quote['direct_order']);
 }
 
 /**

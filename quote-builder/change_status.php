@@ -41,7 +41,10 @@ if (!in_array($target, qb_allowed_transitions($current), true)) {
 // can_create_orders. Admins bypass.
 $isAdmin = ($user['role'] ?? '') === 'admin';
 $_perms  = current_user_permissions();
-if (!qb_user_can_change_to($isAdmin, $_perms, $target)) {
+// A direct order's accept is just the "Place order" step — Create orders is
+// the permission that matters there, not Create quotes.
+$directOrderAccept = qb_is_direct_order($quote) && $target === 'accepted' && !empty($_perms['can_create_orders']);
+if (!$directOrderAccept && !qb_user_can_change_to($isAdmin, $_perms, $target)) {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
