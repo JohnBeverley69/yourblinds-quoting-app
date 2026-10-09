@@ -222,8 +222,8 @@ try {
     // Order-level references.
     $pdo->prepare('UPDATE quotes SET customer_reference = ?, additional_reference = ? WHERE id = ?')
         ->execute([
-            mb_substr(trim((string) ($_POST['customer_reference'] ?? '')), 0, 120),
-            mb_substr(trim((string) ($_POST['additional_reference'] ?? '')), 0, 120),
+            mb_substr(trim((string) ($_POST['customer_reference'] ?? '')), 0, 100),
+            mb_substr(trim((string) ($_POST['additional_reference'] ?? '')), 0, 100),
             $qid,
         ]);
 
