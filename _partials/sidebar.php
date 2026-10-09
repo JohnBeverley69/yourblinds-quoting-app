@@ -281,6 +281,10 @@ if ($isFactoryConsole) {
     require_once __DIR__ . '/remakes.php';
     $_ybRemakesWaiting = rm_waiting_count(db(), ar_factory_id());
     $_ybRemakesLabel   = 'Remakes' . ($_ybRemakesWaiting > 0 ? ' (' . $_ybRemakesWaiting . ' to approve)' : '');
+    // Office calendar: reminders/callbacks due now (incl. carried forward) + remakes due.
+    require_once __DIR__ . '/office_calendar.php';
+    $_ybCalDue   = oc_due_count(db(), ar_factory_id());
+    $_ybCalLabel = 'Calendar' . ($_ybCalDue > 0 ? ' (' . $_ybCalDue . ' due)' : '');
     $navSections = [
         [
             'name'  => 'Work',
@@ -288,6 +292,7 @@ if ($isFactoryConsole) {
                 'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
                 'remakes'           => ['/factory/remakes.php',   $_ybRemakesLabel, true],
+                'office-calendar'   => ['/factory/calendar.php',  $_ybCalLabel,     true],
             ],
         ],
         [
