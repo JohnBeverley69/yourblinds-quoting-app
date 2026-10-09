@@ -216,7 +216,9 @@ if ($action === 'accept') {
             $body    = legal_render_tokens($template, $ctx);
 
             require_once __DIR__ . '/../_partials/tenant_mail.php';
-            mailer_send($custEmail, $subject, $body, null, null, tenant_mail_opts($pdo, (int) $quote['client_id']));
+            // HTML copy shows {{quote_link}} as a short "View your quote" link.
+            mailer_send($custEmail, $subject, $body, null, null,
+                tenant_mail_opts($pdo, (int) $quote['client_id']) + ['links' => [$viewUrl => 'View your quote']]);
         }
     }
 

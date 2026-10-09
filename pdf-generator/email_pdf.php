@@ -97,7 +97,9 @@ $ok = mailer_send(
         'mime'     => 'application/pdf',
     ],
     null,
+    // HTML copy shows a short link instead of the long tokenised address.
     tenant_mail_opts(db(), (int) $user['client_id'])
+        + ['links' => [$publicUrl => 'View and accept your quote']]
 );
 
 if ($ok) {

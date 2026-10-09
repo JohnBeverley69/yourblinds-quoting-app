@@ -3,9 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/middleware.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception as PHPMailerException;
+require_once __DIR__ . '/../mailer.php';
 
 $message = null;
 $error   = null;
@@ -106,28 +104,14 @@ function build_reset_url(string $token): string
 }
 
 /**
- * Send the reset link via SMTP (PHPMailer). Failures are logged, never surfaced
- * to the visitor — the public response stays uniform.
+ * Send the reset link. Goes through the shared mailer_send() so it honours the
+ * global "pause emails" testing switch and the non-production intercept (it
+ * used to build its own PHPMailer and skipped both). Failures are logged by
+ * mailer_send(), never surfaced to the visitor — the public response stays
+ * uniform.
  */
 function send_password_reset_email(string $to, string $resetUrl): void
 {
-    if (!class_exists(PHPMailer::class)) {
-        error_log('[YourBlinds] PHPMailer not installed — run "composer install" to enable email sending.');
-        return;
-    }
-
-    $host     = (string) (env('MAIL_HOST',      'mail.authsmtp.com') ?? 'mail.authsmtp.com');
-    $port     = (int)    (env('MAIL_PORT',      '2525')               ?? 2525);
-    $username = (string) (env('MAIL_USERNAME',  '')                   ?? '');
-    $password = (string) (env('MAIL_PASS',      '')                   ?? '');
-    $from     = (string) (env('MAIL_FROM',      'noreply@yourblinds.uk') ?? 'noreply@yourblinds.uk');
-    $fromName = (string) (env('MAIL_FROM_NAME', 'YourBlinds')         ?? 'YourBlinds');
-
-    if ($host === '' || $username === '' || $password === '') {
-        error_log('[YourBlinds] SMTP not configured — set MAIL_HOST / MAIL_USERNAME / MAIL_PASS in .env');
-        return;
-    }
-
     $body = "Hello,\n\n"
           . "We received a request to reset the password for your YourBlinds account.\n\n"
           . "Use the link below to choose a new password (valid for 1 hour):\n"
@@ -135,35 +119,8 @@ function send_password_reset_email(string $to, string $resetUrl): void
           . "If you didn't ask to reset your password, you can safely ignore this email.\n\n"
           . "— YourBlinds";
 
-    try {
-        $mailer = new PHPMailer(true);
-        $mailer->isSMTP();
-        $mailer->Host       = $host;
-        $mailer->Port       = $port;
-        $mailer->SMTPAuth   = true;
-        $mailer->Username   = $username;
-        $mailer->Password   = $password;
-        // STARTTLS works on the AuthSMTP submission ports (2525/587).
-        // For port 465 use PHPMailer::ENCRYPTION_SMTPS.
-        $mailer->SMTPSecure = $port === 465
-            ? PHPMailer::ENCRYPTION_SMTPS
-            : PHPMailer::ENCRYPTION_STARTTLS;
-        $mailer->CharSet    = 'UTF-8';
-        $mailer->Timeout    = 10;
-
-        $mailer->setFrom($from, $fromName);
-        $mailer->addAddress($to);
-        $mailer->addReplyTo($from, $fromName);
-
-        $mailer->Subject = 'Reset your YourBlinds password';
-        $mailer->Body    = $body;
-
-        $mailer->send();
-    } catch (PHPMailerException $e) {
-        error_log('[YourBlinds] PHPMailer error: ' . $e->getMessage());
-    } catch (Throwable $e) {
-        error_log('[YourBlinds] Email send failed: ' . $e->getMessage());
-    }
+    mailer_send($to, 'Reset your YourBlinds password', $body, null, null,
+        ['links' => [$resetUrl => 'Choose a new password']]);
 }
 ?><!doctype html>
 <html lang="en">
