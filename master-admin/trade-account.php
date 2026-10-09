@@ -471,7 +471,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save discount: ' . $e->getMessage()
-                . ' (has /migrate_trade_discounts.php been run?)';
+                . ' (has /setup/migrations/migrate_trade_discounts.php been run?)';
         }
         header('Location: ' . $redirect);
         exit;
@@ -540,7 +540,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save commission: ' . $e->getMessage()
-                . ' (has /migrate_commissions.php been run?)';
+                . ' (has /setup/migrations/migrate_commissions.php been run?)';
         }
         header('Location: ' . $redirect);
         exit;
@@ -1083,7 +1083,7 @@ $activeNav = 'trade-accounts';
             <?php if (!$tdReady): ?>
                 <div class="alert alert-error" role="alert">
                     The discounts table isn't set up yet — run
-                    <a href="/migrate_trade_discounts.php"><code>/migrate_trade_discounts.php</code></a> (super-admin), then reload.
+                    <a href="/setup/migrations/migrate_trade_discounts.php"><code>/setup/migrations/migrate_trade_discounts.php</code></a> (super-admin), then reload.
                 </div>
             <?php else: ?>
                 <!-- Add / update a discount -->
@@ -1255,7 +1255,7 @@ $activeNav = 'trade-accounts';
             <?php if (!$commReady): ?>
                 <div class="alert alert-error" role="alert">
                     The commission tables aren't set up yet — run
-                    <a href="/migrate_commissions.php"><code>/migrate_commissions.php</code></a> (super-admin), then reload.
+                    <a href="/setup/migrations/migrate_commissions.php"><code>/setup/migrations/migrate_commissions.php</code></a> (super-admin), then reload.
                 </div>
             <?php else: ?>
                 <!-- Add / update a commission -->

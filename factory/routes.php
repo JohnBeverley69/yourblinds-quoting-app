@@ -173,7 +173,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashErr !== ''): ?><div class="rt-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
 <?php if (!$ready): ?>
-  <div class="rt-flash err">The routing tables aren't there yet — run <code>/migrate_factory_routes.php</code>.</div>
+  <div class="rt-flash err">The routing tables aren't there yet — run <code>/setup/migrations/migrate_factory_routes.php</code>.</div>
 <?php else: ?>
 <div class="rt-wrap">
   <div class="rt-card">

@@ -353,7 +353,7 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                 <b>Sandbox (test)</b>, and the card changes from <b>Not set up</b> to <b>Not connected</b>, with a <b>Connect to
                 QuickBooks</b> button.</li>
             <li>If you get <em>&ldquo;Could not save: &hellip; &mdash; have you run migrate_platform_config.php?&rdquo;</em>, the settings
-                table is missing: run <code>/migrate_platform_config.php</code> once, then save again.</li>
+                table is missing: run <code>/setup/migrations/migrate_platform_config.php</code> once, then save again.</li>
           </ul>
           <p>The keys are stored in the <b>database</b> (the <code>platform_config</code> table), not in a file. If a key is set in both the
              database and the server&rsquo;s <code>.env</code>, the one saved here wins. The key that encrypts each client&rsquo;s QuickBooks

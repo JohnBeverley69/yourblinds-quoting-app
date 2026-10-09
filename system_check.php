@@ -351,7 +351,7 @@ try {
         $bad("Product #{$pid} '{$r['pname']}' · option '{$r['ename']}' has '{$r['lbl']}' ×{$r['n']} on {$scope} — duplicate choice");
     }
     if ($dupHits > 0) {
-        echo "      -> clean each product with /migrate_dedup_vertical_choices.php?product_id=N,\n";
+        echo "      -> clean each product with /setup/migrations/migrate_dedup_vertical_choices.php?product_id=N,\n";
         echo "         then push (for 'Bev' mirrors). Affected products: " . implode(', ', array_keys($byProduct)) . "\n";
     } else {
         $okc('no duplicate-label option choices on any product');
@@ -369,4 +369,4 @@ echo $ISSUES === 0
 // This check reads the database. The other half of "is anything broken" is how
 // the screens actually draw, which only a browser can measure — so it lives in
 // its own page rather than here.
-echo "\n  Layouts (pages wider than the window): /layout_check.php — open it in a browser.\n";
+echo "\n  Layouts (pages wider than the window): /setup/tools/layout_check.php — open it in a browser.\n";

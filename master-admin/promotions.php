@@ -330,7 +330,7 @@ $statusOf = static function (array $p) use ($today): array {
             <section class="section">
                 <div class="alert alert-error" role="alert">
                     The promotions table isn't set up yet — run
-                    <a href="/migrate_trade_promotions.php"><code>/migrate_trade_promotions.php</code></a> (super-admin), then reload.
+                    <a href="/setup/migrations/migrate_trade_promotions.php"><code>/setup/migrations/migrate_trade_promotions.php</code></a> (super-admin), then reload.
                 </div>
             </section>
         <?php else: ?>

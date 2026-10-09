@@ -83,7 +83,7 @@ $activeNav = 'remakes';
   </div>
 
   <?php if (!rm_ready($pdo)): ?>
-    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/migrate_remakes.php</code> once, then reload.</div>
+    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/setup/migrations/migrate_remakes.php</code> once, then reload.</div>
   <?php elseif (!$src): ?>
     <div class="alert alert-error" role="alert">That order can’t have a remake — it isn’t a placed order with our blinds on it.
       <a href="/factory/orders.php">Back to orders</a></div>

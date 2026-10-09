@@ -20,7 +20,7 @@ if (!defined('DD_DEFAULT_LEAD_DAYS')) {
     define('DD_DEFAULT_LEAD_DAYS', 10);   // used for a product with no time set
 }
 
-/** True once /migrate_factory_due_dates.php has run. Cached per request. */
+/** True once /setup/migrations/migrate_factory_due_dates.php has run. Cached per request. */
 function dd_ready(PDO $pdo): bool
 {
     static $ready = null;

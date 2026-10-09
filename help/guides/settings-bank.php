@@ -295,7 +295,7 @@ return [
                 <code>e.g. Please use your quote number as the reference</code>). Use it for something the customer needs, such as
                 &ldquo;Bank transfer only&rdquo;. The reference line is added automatically, so you don&rsquo;t need to ask for it here.</li>
             <li><b>Save bank details</b> &mdash; the page reloads and a green <b>&ldquo;Bank / payment details saved.&rdquo;</b> appears at the
-                <b>top</b> of the page. If you see <code>Could not save bank details &mdash; run /migrate_bank_details.php first.</code>, the
+                <b>top</b> of the page. If you see <code>Could not save bank details &mdash; run /setup/migrations/migrate_bank_details.php first.</code>, the
                 database needs a one-off update: pass it to whoever looks after your system.</li>
           </ul>
 

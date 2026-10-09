@@ -25,7 +25,7 @@ csrf_check();
 
 $pdo = db();
 if (!bj_tables_ready($pdo)) {
-    $_SESSION['flash_error'] = 'Floor tracking isn\'t set up yet — run /migrate_factory_blind_jobs.php and /migrate_route_streams.php.';
+    $_SESSION['flash_error'] = 'Floor tracking isn\'t set up yet — run /setup/migrations/migrate_factory_blind_jobs.php and /setup/migrations/migrate_route_streams.php.';
     header('Location: ' . $backTo);
     exit;
 }

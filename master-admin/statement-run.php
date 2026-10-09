@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'emai
         header('Location: ' . $backTo); exit;
     }
     if (!ar_statement_email_ready($pdo)) {
-        $_SESSION['flash_error'] = 'Run /migrate_ar_statement_emails.php first (the send log).';
+        $_SESSION['flash_error'] = 'Run /setup/migrations/migrate_ar_statement_emails.php first (the send log).';
         header('Location: ' . $backTo); exit;
     }
 

@@ -263,7 +263,7 @@ $activeNav = 'support';
         <?php if ($missing): ?>
             <section class="section">
                 <p style="color:var(--text-secondary)">
-                    The support inbox isn't set up yet &mdash; run <strong>/migrate_support_tickets.php</strong> first.
+                    The support inbox isn't set up yet &mdash; run <strong>/setup/migrations/migrate_support_tickets.php</strong> first.
                 </p>
             </section>
 

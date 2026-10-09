@@ -178,7 +178,7 @@ $activeNav = 'remakes';
   <?php endforeach; ?>
 
   <?php if (!$ready): ?>
-    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/migrate_remakes.php</code> once, then reload.</div>
+    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/setup/migrations/migrate_remakes.php</code> once, then reload.</div>
   <?php else: ?>
 
   <nav class="rm-tabs" aria-label="Remakes">

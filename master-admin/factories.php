@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $want     = (int) ($_POST['to'] ?? 0) === 1 ? 1 : 0;
 
     if ($colMissing) {
-        $_SESSION['flash_error'] = 'Run /migrate_client_is_factory.php first.';
+        $_SESSION['flash_error'] = 'Run /setup/migrations/migrate_client_is_factory.php first.';
     } elseif ($clientId <= 0) {
         $_SESSION['flash_error'] = 'No account specified.';
     } elseif ($want === 0 && $clientId === $canonical) {
@@ -122,7 +122,7 @@ $activeNav = 'factories';
             <?php if ($colMissing): ?>
                 <p style="color:var(--text-secondary)">
                     The factory flag isn’t set up yet — run
-                    <strong>/migrate_client_is_factory.php</strong> first.
+                    <strong>/setup/migrations/migrate_client_is_factory.php</strong> first.
                 </p>
             <?php elseif (!$clients): ?>
                 <p style="color:var(--text-secondary)">No accounts found.</p>

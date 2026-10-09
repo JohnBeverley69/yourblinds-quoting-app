@@ -123,7 +123,7 @@ Then open http://localhost:8000/auth/login.php
 There is no seeded admin user (see step 4 — `seed.sql` is not in the repo).
 Create the first login directly in the `client_users` table with a
 `password_hash` produced by PHP's `password_hash()`, then sign in and change
-it via **Admin → Users**. `/grant_super_admin.php` raises an EXISTING login to
+it via **Admin → Users**. `/setup/tools/grant_super_admin.php` raises an EXISTING login to
 super-admin; it will not create one.
 
 ## Project layout

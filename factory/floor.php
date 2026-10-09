@@ -263,7 +263,7 @@ require __DIR__ . '/../_partials/blind_styles.php';
 <?php if ($flashErr !== ''): ?><div class="fl-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
 <?php if (!$ready): ?>
-    <div class="fl-flash err">Floor tracking isn't set up yet &mdash; run <code>/migrate_factory_blind_jobs.php</code>, then move an order to <em>in production</em> on Incoming Orders.</div>
+    <div class="fl-flash err">Floor tracking isn't set up yet &mdash; run <code>/setup/migrations/migrate_factory_blind_jobs.php</code>, then move an order to <em>in production</em> on Incoming Orders.</div>
 <?php elseif (!$rows): ?>
     <div class="fl-empty">Nothing on the floor<?= $showMade ? '' : ' right now' ?>. Open <a href="/factory/incoming-orders.php">Incoming Orders</a> and press <strong>Start production</strong> on an order &mdash; its blinds will appear here.
         <?php if (!$showMade): ?><br><a href="/factory/floor.php?made=1">Show made blinds too</a><?php endif; ?>
