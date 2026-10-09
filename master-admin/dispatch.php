@@ -511,7 +511,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
                            data-counts="<?= $counts ? '1' : '0' ?>"
                            <?= $o['has_dn'] ? '' : 'checked' ?>></td>
                 <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
-                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td><a href="/factory/edit-order.php?order=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
                 <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
                 <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
@@ -556,7 +556,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
               <tr class="dt-row">
                 <td><input type="checkbox" class="dt-tick inv" name="quote_ids[]" value="<?= $qid ?>" checked></td>
                 <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
-                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td><a href="/factory/edit-order.php?order=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
                 <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
                 <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
