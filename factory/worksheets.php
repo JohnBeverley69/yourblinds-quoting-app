@@ -401,6 +401,12 @@ require __DIR__ . '/../_partials/factory_head.php';
 ?>
 <style>
     .ws-head { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; margin:0 0 0.6rem; }
+    /* Both <select>s in the head size themselves to their widest <option>, and
+       a flex child is min-width:auto, so "Bev Vertical Blinds — Fabric Only"
+       made #copy-from 595px and pushed the page 198px wider than the phone it
+       was on (layout_check, /factory/worksheets.php at 420px). flex-wrap gets
+       it onto its own line but can't make it narrower than its own content. */
+    .ws-head select { min-width:0; max-width:100%; }
     .ws-head h1 { font-size:1.6rem; font-weight:700; margin:0; }
     .ws-sub { color:var(--text-muted,#667); margin:0 0 1.2rem; max-width:76ch; line-height:1.55; }
     .ws-flash { padding:0.7rem 1rem; border-radius:10px; margin:0 0 1.2rem; font-size:0.9375rem; }
