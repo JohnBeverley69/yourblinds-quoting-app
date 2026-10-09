@@ -173,6 +173,20 @@ if ($order) {
 }
 $totalLines = count($lines);
 
+// Nothing on this order belongs to the factory, so there is no ticket to
+// print. The lines query above is scoped by product ownership
+// (COALESCE(NULLIF(p.source_client_id,0), p.client_id) = $MASTER), but the
+// order header is loaded with a bare "WHERE q.id = ?" — so with a quote id
+// that belongs to a tenant the factory makes nothing for, $lines came back
+// empty while $order was still populated, and the page printed a sheet
+// carrying that tenant's customer contact and company (line 1167) above
+// "0 lines". requireFactory() limits that to factory staff, but it is still
+// another tenant's customer showing on a page the factory has no part in.
+if ($totalLines === 0) {
+    http_response_code(404);
+    exit('No worksheet for this order.');
+}
+
 // Blinds sharing one fascia (same non-empty fascia_group, 2+ members) are cut
 // with the editable "multiple blinds in one fascia" allowances. Expose that to
 // the build engine as a synthetic "Multiple Blinds in One Fascia = Yes" option
