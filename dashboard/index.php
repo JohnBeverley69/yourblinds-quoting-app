@@ -1124,7 +1124,7 @@ $activeNav = 'dashboard';
             <div class="kpi-tile" title="Orders sent straight through with New order, without a quote. Shown at what you pay for them; kept out of revenue, close rate and profit because the system doesn't know what you sold them for.">
                 <div class="kpi-label">Direct orders</div>
                 <div class="kpi-value">£<?= number_format((float) $directOrders['spend'], 2) ?></div>
-                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> placed without a quote &middot; at your cost, ex VAT &middot; not in the figures above</div>
+                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> placed without a quote &middot; at your cost, ex VAT &middot; not counted in revenue or profit</div>
             </div>
             <?php endif; ?>
         </div>
