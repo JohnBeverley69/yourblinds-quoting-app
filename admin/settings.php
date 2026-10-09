@@ -104,6 +104,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) ($_POST['postcode']     ?? '')) ?: null,
             $clientId,
         ]);
+        // VAT rate follows VAT registration. While there's no VAT number the
+        // Quote-defaults VAT field is disabled and a save there stores 0 — so
+        // adding a number later left the rate at 0 and quotes carried no VAT.
+        // With a number: a 0 rate becomes the UK standard 20% (any positive
+        // rate is kept) and unsent drafts still at 0 are brought up to it.
+        // Without one: the rate is 0, same as the Quote-defaults guard.
+        $vatNo = trim((string) ($_POST['vat_number'] ?? ''));
+        try {
+            if ($vatNo !== '') {
+                db()->prepare(
+                    'INSERT INTO client_settings (client_id, vat_percent) VALUES (?, 20)
+                     ON DUPLICATE KEY UPDATE vat_percent = IF(vat_percent > 0, vat_percent, 20)'
+                )->execute([$clientId]);
+                $rs = db()->prepare('SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1');
+                $rs->execute([$clientId]);
+                $rate = (float) $rs->fetchColumn();
+                $ds = db()->prepare(
+                    "SELECT id FROM quotes
+                      WHERE client_id = ? AND status = 'draft' AND COALESCE(vat_percent, 0) = 0"
+                );
+                $ds->execute([$clientId]);
+                $draftIds = $ds->fetchAll(PDO::FETCH_COLUMN);
+                if ($draftIds && $rate > 0) {
+                    require_once __DIR__ . '/../quote-builder/_helpers.php';
+                    $up = db()->prepare('UPDATE quotes SET vat_percent = ? WHERE id = ? AND client_id = ?');
+                    foreach ($draftIds as $qid) {
+                        $up->execute([$rate, (int) $qid, $clientId]);
+                        qb_recompute_totals((int) $qid);
+                    }
+                }
+            } else {
+                db()->prepare('UPDATE client_settings SET vat_percent = 0 WHERE client_id = ?')
+                    ->execute([$clientId]);
+            }
+        } catch (Throwable $e) {
+            error_log('[YourBlinds] VAT rate sync on company save failed: ' . $e->getMessage());
+        }
         // Refresh session-cached company name in case it changed
         $newName = trim((string) ($_POST['company_name'] ?? ''));
         if ($newName !== '') {
