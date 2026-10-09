@@ -672,6 +672,22 @@ a { color: var(--link); }
 }
 .form-group .required { color: #dc2626; }
 
+/* A <select> sizes itself to its widest <option> and ignores its container, so
+   one long name in a dropdown sets the width of the whole page. As a flex or
+   grid child it's min-width:auto too, which means it can't even be squeezed
+   back. That combination is what pushed /factory/worksheets.php 198px past a
+   420px phone (select#copy-from, 595px) and /factory/build-rules-v2.php 9px
+   past 360px (select#rules-from) — both found by the layout_check sweep.
+   Fixing it per page just waits for the next long option name, so it goes here
+   once, for both shells (the factory head loads this file too).
+   Deliberately max-width and min-width only: a height or width on a broad
+   select selector is what squashed the <select size="6"> postcode picker in
+   #748, and neither of these touches an open dropdown's own list. */
+select {
+    max-width: 100%;
+    min-width: 0;
+}
+
 .form-group input[type="text"],
 .form-group input[type="email"],
 .form-group input[type="tel"],
