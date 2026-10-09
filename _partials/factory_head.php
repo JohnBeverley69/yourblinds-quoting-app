@@ -177,7 +177,11 @@ $factoryNavItems += [
     </nav>
     <div class="factory-user">
         <?php if (!function_exists('current_user_is_workstation') || !current_user_is_workstation()): ?>
-            <a href="/dashboard/index.php" class="factory-back" title="Back to the main app">&larr; App</a>
+            <?php if (function_exists('factory_console_user') && factory_console_user()): ?>
+                <a href="/factory/dashboard.php" class="factory-back" title="Back to the Factory Console">&larr; Console</a>
+            <?php else: ?>
+                <a href="/dashboard/index.php" class="factory-back" title="Back to the main app">&larr; App</a>
+            <?php endif; ?>
         <?php endif; ?>
         <?php if ($factoryIsSuper && count($factoryChoices) > 1): ?>
             <form method="post" action="/factory/act-as.php" class="factory-switch" title="View another factory">

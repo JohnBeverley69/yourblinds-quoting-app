@@ -539,6 +539,17 @@ function factory_user_is_office(): bool
     return !empty(current_user_permissions()['can_create_orders']);
 }
 
+/**
+ * The Factory Console (trade-only office home) is for factory office staff signed in
+ * to the factory account itself: they get the console menu and land on
+ * /factory/dashboard.php instead of the retail-shaped sales screens.
+ */
+function factory_console_user(): bool
+{
+    $cid = (int) ($_SESSION['client_id'] ?? 0);
+    return $cid > 0 && is_factory_client($cid) && factory_user_is_office();
+}
+
 function requireFactoryOffice(): void
 {
     requireFactory();
@@ -709,6 +720,12 @@ function redirect_after_login(): void
     // with dashboard access lands there; everyone else lands on the
     // calendar (where fitters do their day-to-day).
     $user  = current_user();
+
+    // Factory office staff on the factory account land on the Factory Console home.
+    if ($user && factory_console_user()) {
+        header('Location: /factory/dashboard.php');
+        exit;
+    }
 
     // Dedicated factory staff (the 'factory' role on the factory account, and
     // not an admin) land straight on the factory back-office rather than the
