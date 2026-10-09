@@ -3831,7 +3831,12 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             // (a salesperson without "View costs" could read the margin off it).
             // Cost bits are pushed as {c: text}: hidden in customer view
             // until the eye is tapped (see _partials/cost_reveal.php).
-            bits.push({c: 'base £' + Number(data.base_price).toFixed(2)});
+            // base_price arrives AFTER the trade (buying) discount; on a trade line
+            // show the price-table base BEFORE it, so the line reads
+            // base £23.56 · trade discount 15% · £20.03 (not base £20.03 · … £20.03).
+            var listBase = Number(data.base_price)
+                         + (data.trade_discount_percent > 0 ? Number(data.trade_discount_amount || 0) : 0);
+            bits.push({c: 'base £' + listBase.toFixed(2)});
             if (data.extras_total > 0) bits.push({c: '+ extras £' + Number(data.extras_total).toFixed(2)});
             <?php endif; ?>
 
