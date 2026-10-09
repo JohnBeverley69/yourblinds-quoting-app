@@ -657,8 +657,9 @@ return [
           <p><b>Deleting one.</b> At the very bottom of the order screen, <b>Danger zone</b> has <b>Delete order</b>. It asks <em>&ldquo;Delete order
              HUG-2026-0012? This is permanent &mdash; all blinds go too.&rdquo;</em>, then removes the order, its blinds and its calendar
              appointments, and takes you back to the orders list. An order with payments recorded against it can&rsquo;t be deleted until those are
-             removed. Logins with <b>Create orders</b> can delete direct orders. Use it for a draft you no longer need &mdash; once an order has been
-             placed with us, contact the factory instead.</p>
+             removed. Logins with <b>Create orders</b> can delete direct orders. <b>Delete order</b> is only offered on a draft: once it&rsquo;s
+             placed, the Danger zone says to use <b>Reopen as draft</b> first (possible until the factory starts it), and once the factory has
+             started it, to contact them instead.</p>
 
           <div class="heads"><span class="hi">&#163;</span><div><b>New quote or New order? The money side.</b> A <b>quote</b> that runs through the
              system knows both figures &mdash; what your customer pays you and what you pay us &mdash; so the <b>Dashboard</b> can show your

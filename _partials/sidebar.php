@@ -309,6 +309,8 @@ if ($isFactoryConsole) {
                 'bank'           => ['/master-admin/bank.php',           'Bank',           true],
                 'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     true],
                 'commissions'    => ['/master-admin/commissions.php',    'Commissions',    true],
+                // Real manufacturing cost → super-admin only (factory/profit.php requires it).
+                'profit'         => ['/factory/profit.php',              'Profit',         $isSuperAdmin],
             ],
         ],
         [

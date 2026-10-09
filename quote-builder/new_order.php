@@ -36,13 +36,9 @@ $label = '';
 $notes = '';
 $soldFor = '';
 $error = null;
-// Default "inc VAT" tick: on for a VAT-registered business.
-$soldIncVat = false;
-try {
-    $cv = db()->prepare('SELECT vat_number FROM clients WHERE id = ? LIMIT 1');
-    $cv->execute([$clientId]);
-    $soldIncVat = trim((string) ($cv->fetchColumn() ?: '')) !== '';
-} catch (Throwable $e) {}
+// Default "inc VAT" tick: on when the business charges VAT — read from the same
+// VAT rate the Sold for sum uses, so the tick and the maths always agree.
+$soldIncVat = qb_client_vat_percent(db(), $clientId) > 0;
 $dups  = [];   // earlier jobs with the same reference (warn, don't block)
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

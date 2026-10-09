@@ -1451,7 +1451,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 $sfAmt = $quote['sold_for_amount'] ?? null;
                 $sfInc = $sfAmt !== null && $sfAmt !== ''
                     ? !empty($quote['sold_for_inc_vat'])
-                    : trim($clientVatNumber) !== '';
+                    : qb_client_vat_percent(db(), (int) $quote['client_id']) > 0;   // same rate the sum uses
             ?>
             <form method="post" action="/quote-builder/save_sold_for.php" class="form" novalidate
                   style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
@@ -2546,12 +2546,17 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 <h2 class="section-title" style="color:#b91c1c">Danger zone</h2>
             </div>
             <div class="status-actions">
+                <?php $delBlock = qb_delete_block_reason(db(), $quote); ?>
+                <?php if ($delBlock !== ''): ?>
+                <p style="margin:0;color:var(--text-muted)"><?= e($delBlock) ?></p>
+                <?php else: ?>
                 <form method="post" action="/quote-builder/delete.php"
                       data-confirm="Delete <?= $isDirectOrder ? 'order' : 'quote' ?> <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too.">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                     <button type="submit" class="btn btn-danger">Delete <?= $isDirectOrder ? 'order' : 'quote' ?></button>
                 </form>
+                <?php endif; ?>
             </div>
         </section>
         <?php endif; /* !$offlineTemplate: danger zone */ ?>

@@ -421,11 +421,21 @@ $marginPct = $tot['rev_costed'] > 0 ? $profit / $tot['rev_costed'] * 100 : null;
 uasort($byProduct, static fn ($a, $b) => $b['rev'] <=> $a['rev']);   // biggest earners first
 
 $money = static fn ($v) => '£' . number_format((float) $v, 2);
-$factoryTitle = 'Manufacturing profit';
-$factoryNav   = '';
-$factoryWide  = true;
-require __DIR__ . '/../_partials/factory_head.php';
-?>
+// Lives in the Factory Console (Accounts → Profit), not the factory's top bar
+// (John 2026-10-09) — it's a money page, next to Invoices and Statements.
+$activeNav = 'profit';
+?><!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manufacturing profit &middot; Factory Console &middot; YourBlinds</title>
+    <link rel="stylesheet" href="<?= asset('/app.css') ?>">
+</head>
+<body>
+<div class="app-shell">
+<?php require __DIR__ . '/../_partials/sidebar.php'; ?>
+<main class="app-main">
 <style>
   .pf-h { font-size:1.5rem; font-weight:700; margin:0 0 .2rem; }
   .pf-sub { color:var(--text-muted,#667); margin:0 0 1rem; font-size:.92rem; }
@@ -567,4 +577,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <?php endif; ?>
 <?php endif; ?>
 
-<?php require __DIR__ . '/../_partials/factory_foot.php'; ?>
+</main>
+</div>
+</body>
+</html>
