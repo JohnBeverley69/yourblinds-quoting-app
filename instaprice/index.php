@@ -21,6 +21,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/units.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
 require_once __DIR__ . '/../_partials/instaprice_public.php';
+require_once __DIR__ . '/../_partials/cost_reveal.php';
 
 // InstaPrice is a lead-gen hook: anyone can price against the public showcase
 // catalogue WITHOUT logging in. Logged-in tenants get their own catalogue and
@@ -211,6 +212,7 @@ $activeNav = 'instaprice';
         .ip-public-note { font-size:0.85rem; color: var(--text-faint); margin:0.35rem 0 0; }
         .ip-public-note a { color: var(--link); }
     </style>
+<?php if ($ipCanCosts) cost_reveal_assets(); ?>
 </head>
 <body>
 <?php if ($publicMode): ?>
@@ -390,6 +392,11 @@ $activeNav = 'instaprice';
     // The public see the showcase's TRADE price, so they get a mark-up box
     // (starting at 0) to turn it into their own sell price.
     var IP_SHOW_MARKUP = IP_CAN_COSTS || IP_PUBLIC;
+    // Customer view: for cost-viewers the buying-side rows (price, discounts,
+    // markup) are cost-only — hidden until the eye beside Sell price is
+    // tapped (see _partials/cost_reveal.php). Not in the public showcase.
+    var IP_COST = (IP_CAN_COSTS && !IP_PUBLIC) ? ' cost-only' : '';
+    var IP_EYE  = (IP_CAN_COSTS && !IP_PUBLIC && window.YB_COST_EYE) ? ' ' + window.YB_COST_EYE : '';
 
     // Markup vs margin. The breakdown still computes in MARKUP; these only
     // convert the editable rate the tenant sees / types. Mirror of
@@ -1096,14 +1103,14 @@ $activeNav = 'instaprice';
     function renderPricePanel(discDefault, markupDefault) {
         priceBox.className = 'ip-price';
         priceBox.innerHTML =
-            '<div class="ip-row" id="ip-trade-row" hidden><span class="lbl" style="color:#065f46">Trade discount</span><span class="val" id="ip-trade" style="color:#065f46"></span></div>'
-          + '<div class="ip-row"><span class="lbl">' + (IP_PUBLIC ? 'Trade price' : 'Price') + '</span><span class="val" id="ip-base">—</span></div>'
-          + '<div class="ip-row editable"><span class="lbl">Discount %</span>'
+            '<div class="ip-row' + IP_COST + '" id="ip-trade-row" hidden><span class="lbl" style="color:#065f46">Trade discount</span><span class="val" id="ip-trade" style="color:#065f46"></span></div>'
+          + '<div class="ip-row' + IP_COST + '"><span class="lbl">' + (IP_PUBLIC ? 'Trade price' : 'Price') + '</span><span class="val" id="ip-base">—</span></div>'
+          + '<div class="ip-row editable' + IP_COST + '"><span class="lbl">Discount %</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-disc" value="' + discDefault.toFixed(2) + '"></div>'
-          + '<div class="ip-row"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
-          + '<div class="ip-row editable"' + (IP_SHOW_MARKUP ? '' : ' style="display:none"') + '><span class="lbl">' + rateLabel() + '</span>'
+          + '<div class="ip-row' + IP_COST + '"><span class="lbl">Discounted price</span><span class="val" id="ip-disc-price">—</span></div>'
+          + '<div class="ip-row editable' + IP_COST + '"' + (IP_SHOW_MARKUP ? '' : ' style="display:none"') + '><span class="lbl">' + rateLabel() + '</span>'
           +   '<input type="number" step="0.01" class="pct" id="ip-markup" value="' + markupToShown(markupDefault).toFixed(2) + '"></div>'
-          + '<div class="ip-row ip-sell"><span class="lbl">Sell price</span><span class="val" id="ip-sell">—</span></div>'
+          + '<div class="ip-row ip-sell"><span class="lbl">Sell price' + IP_EYE + '</span><span class="val" id="ip-sell">—</span></div>'
           + '<div class="ip-total" id="ip-total"></div>';
         curDisc = discDefault; curMarkup = markupDefault;
         document.getElementById('ip-disc').addEventListener('input', function () {

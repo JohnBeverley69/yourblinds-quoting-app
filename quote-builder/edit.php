@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
 require __DIR__ . '/../_partials/units.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
+require __DIR__ . '/../_partials/cost_reveal.php';
 
 requireLogin();
 
@@ -832,6 +833,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             .extras-grid { grid-template-columns: 1fr; }
         }
     </style>
+    <?php if ($isAdmin || $_perms['can_view_costs']) cost_reveal_assets(); ?>
 </head>
 <body>
 <div class="app-shell">
@@ -1601,7 +1603,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     $ovDiscShown = ($editingItem && $editingItem['discount_percent'] !== null)
                         ? number_format((float) $editingItem['discount_percent'], 2, '.', '') : '';
                 ?>
-                <details class="item-override" id="item-override" <?= $ovMarkupShown !== '' || $ovDiscShown !== '' ? 'open' : '' ?>
+                <details class="item-override cost-only" id="item-override" <?= $ovMarkupShown !== '' || $ovDiscShown !== '' ? 'open' : '' ?>
                          style="margin:0.25rem 0 0.5rem;border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem">
                     <summary style="cursor:pointer;font-size:0.8125rem;color:var(--text-secondary)">
                         Adjust price for this blind
@@ -1796,7 +1798,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                             <?php endforeach; ?>
 
                             <?php if ($wtEnabled || $wtAmount > 0.0049): ?>
-                                <tr class="totals-row" style="color:#9333ea">
+                                <tr class="totals-row cost-only" style="color:#9333ea">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">
                                         WT
                                         <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(internal — never shown to the customer)</span>
@@ -1856,7 +1858,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                 </tr>
                             <?php endif; ?>
                             <tr class="totals-row grand">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">Total</td>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right"><?php if ($isAdmin || $_perms['can_view_costs']) echo cost_reveal_button(); ?> Total</td>
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
                                 <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                             </tr>
@@ -3609,6 +3611,28 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         return out;
     }
 
+    // Live price line. Cost bits ({c: text}) only show while the cost eye is
+    // on; the eye itself appears whenever there are cost bits to reveal.
+    var previewBits = null;
+    function paintPreviewBits() {
+        if (!previewBits) return;
+        var shown = typeof window.ybCostsShown === 'function' && window.ybCostsShown();
+        var hasCost = false;
+        var out = previewBits.filter(function (b) {
+            if (typeof b === 'string') return true;
+            hasCost = true;
+            return shown;
+        }).map(function (b) { return typeof b === 'string' ? b : b.c; });
+        // The marker span tells the toggle handler this box still holds our
+        // price line (any other message replaces innerHTML and drops it).
+        previewBox.innerHTML = out.join(' &middot; ') + (hasCost && window.YB_COST_EYE ? ' ' + window.YB_COST_EYE : '')
+                             + '<span data-yb-bits hidden></span>';
+    }
+    document.addEventListener('yb-costs-toggle', function () {
+        // Only repaint if the box still shows our price line (not an error,
+        // the multi-blind summary, or a newer message).
+        if (previewBox.querySelector('[data-yb-bits]')) paintPreviewBits();
+    });
     async function runPreview() {
         // Roller "Multi blind": several blinds share one fascia. Price the whole
         // group live (fascia once, other extras per blind) with a per-blind
@@ -3709,8 +3733,10 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             <?php if ($isAdmin || $_perms['can_view_costs']): ?>
             // The price-table base is the business's buying price — cost-viewers only
             // (a salesperson without "View costs" could read the margin off it).
-            bits.push('base £' + Number(data.base_price).toFixed(2));
-            if (data.extras_total > 0) bits.push('+ extras £' + Number(data.extras_total).toFixed(2));
+            // Cost bits are pushed as {c: text}: hidden in customer view
+            // until the eye is tapped (see _partials/cost_reveal.php).
+            bits.push({c: 'base £' + Number(data.base_price).toFixed(2)});
+            if (data.extras_total > 0) bits.push({c: '+ extras £' + Number(data.extras_total).toFixed(2)});
             <?php endif; ?>
 
             var priceLast = false;
@@ -3722,18 +3748,18 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 // Show in the tenant's basis (markup stored; margin = k·100/(100+k)).
                 var _mk = Number(data.markup_percent);
                 <?php if ($pricingBasis === 'margin'): ?>
-                bits.push('margin ' + (_mk <= 0 ? 0 : _mk * 100 / (100 + _mk)).toFixed(2) + '%');
+                bits.push({c: 'margin ' + (_mk <= 0 ? 0 : _mk * 100 / (100 + _mk)).toFixed(2) + '%'});
                 <?php else: ?>
-                bits.push('markup ' + _mk.toFixed(2) + '%');
+                bits.push({c: 'markup ' + _mk.toFixed(2) + '%'});
                 <?php endif; ?>
             }
-            if (data.discount_percent > 0) bits.push('discount ' + Number(data.discount_percent).toFixed(2) + '%');
+            if (data.discount_percent > 0) bits.push({c: 'discount ' + Number(data.discount_percent).toFixed(2) + '%'});
             // Trade (buying) discount from the supplier — already baked into the
             // buying price. Show just base → discount % → price; the actual
             // £ knocked off was noise, so it's dropped. Trailing zeros trimmed
             // (15.00% -> 15%). The bold buying price then follows, at the end.
             if (data.trade_discount_percent > 0) {
-                bits.push('trade discount ' + String(+Number(data.trade_discount_percent).toFixed(2)) + '%');
+                bits.push({c: 'trade discount ' + String(+Number(data.trade_discount_percent).toFixed(2)) + '%'});
                 priceLast = true;
             }
             <?php endif; ?>
@@ -3748,7 +3774,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             // actionable, since the engine always rounds up to the
             // nearest price-table cell and that's expected behaviour.
             previewBox.className = 'success';
-            previewBox.innerHTML = bits.join(' &middot; ');
+            previewBits = bits;
+            paintPreviewBits();
             setSubmitDisabled(false);
         } catch (err) {
             if (noSignalPreview()) return;
