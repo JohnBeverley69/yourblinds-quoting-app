@@ -1665,6 +1665,16 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         'trade_price_per_blind'  => $tradePriceUnit,
         'trade_discount_percent' => round($tradeDiscPct, 2),
         'trade_discount_amount'  => $tradeDiscAmt,
+        // Which basis trade_discount_amount is on, because it differs by path
+        // and callers can't tell from the figures alone. 'base' (retail, legacy)
+        // means the discount came off $basePrice at step 7, so base_price is
+        // already net of it and base_price + amount is the price-table base.
+        // 'sell' (a quote raised FOR an account) means $basePrice was left alone
+        // and the discount was taken off the FINAL sell price at step 8, so
+        // base_price IS the price-table base and adding the amount to it
+        // produces a figure that exists nowhere. The live price line in
+        // quote-builder/edit.php was doing exactly that.
+        'trade_discount_basis'   => ($forAccountId > 0 && $tradeDiscPct > 0) ? 'sell' : 'base',
         'extras_applied'     => $extrasApplied,   // ready for quote_item_extras INSERTs
         'extras_total'       => $extrasTotal,
         'subtotal_per_blind' => $subtotalPerBlind,
