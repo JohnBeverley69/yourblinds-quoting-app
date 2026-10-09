@@ -126,6 +126,14 @@ if (bj_tables_ready($pdo) && !empty($ids)) {
 // Possible duplicates: another placed order from the SAME customer (tenant, or
 // trade account on a factory order) carrying the same customer reference.
 // Flagged on the row so the office can catch an order keyed in twice.
+// A remake deliberately carries its original's customer reference —
+// rm_create_remake_order()'s $skip list doesn't drop customer_reference, and
+// shouldn't: the office needs to see which job it belongs to. But that makes
+// every remake look like the same order keyed in twice, so each approved
+// remake flagged its own original and was flagged right back. Neither side is
+// a duplicate, and a warning that fires on every remake is one the office
+// learns to ignore — which is the real cost, because then it misses a genuine
+// double entry.
 $dupBy = [];
 if (!empty($ids)) {
     try {
@@ -137,8 +145,10 @@ if (!empty($ids)) {
                             AND COALESCE(b.account_client_id, 0) = COALESCE(a.account_client_id, 0)
                             AND b.id <> a.id
                             AND b.status IN ($inPlaced)
+                            AND b.remake_of_quote_id IS NULL
                             AND LOWER(TRIM(b.customer_reference)) = LOWER(TRIM(a.customer_reference))
               WHERE a.id IN ($dph) AND TRIM(COALESCE(a.customer_reference, '')) <> ''
+                AND a.remake_of_quote_id IS NULL
               ORDER BY b.created_at"
         );
         $dSt->execute($ids);
