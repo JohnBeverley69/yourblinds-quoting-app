@@ -63,7 +63,7 @@ $canCosts = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
 // the buying price (it's what they pay) without being a cost-viewer. The real
 // entitlement is being able to raise one at all — new_order.php:23's rule.
 $canDirect = is_array($user)
-    && ($isAdmin || !empty(current_user_permissions()['can_create_orders']));
+    && ($isAdmin || is_super_admin() || !empty(current_user_permissions()['can_create_orders']));
 if (!$canDirect) unset($_GET['direct_order']);
 
 // The whole answer lives in _preview_core.php, shared with the tablet's
